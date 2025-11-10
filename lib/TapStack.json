@@ -59,20 +59,6 @@
         }
     },
     "Conditions": {
-        "CreateNATGateway1": {
-            "Fn::Equals": [
-                {
-                    "Fn::FindInMap": [
-                        "EnvironmentConfig",
-                        {
-                            "Ref": "Environment"
-                        },
-                        "NATGateways"
-                    ]
-                },
-                1
-            ]
-        },
         "CreateNATGateway3": {
             "Fn::Equals": [
                 {

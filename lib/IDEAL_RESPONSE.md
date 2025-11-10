@@ -60,10 +60,21 @@ Mappings:
       NATGateways: 3
 
 Conditions:
-  CreateNATGateway1: !Equals [!FindInMap [EnvironmentConfig, !Ref Environment, NATGateways], 1]
-  CreateNATGateway3: !Equals [!FindInMap [EnvironmentConfig, !Ref Environment, NATGateways], 3]
+  CreateNATGateway3:
+    !Equals [!FindInMap [EnvironmentConfig, !Ref Environment, NATGateways], 3]
 
 Resources:
+  # Database Password Secret
+  AuroraDBPassword:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub '${AWS::StackName}-aurora-password'
+      GenerateSecretString:
+        SecretStringTemplate: '{}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+
   # VPC Infrastructure
   VPC:
     Type: AWS::EC2::VPC
@@ -342,8 +353,8 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 8080
-          ToPort: 8080
+          FromPort: 80
+          ToPort: 80
           SourceSecurityGroupId: !Ref ALBSecurityGroup
       Tags:
         - Key: Name
@@ -386,11 +397,11 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub 'tg-${EnvironmentSuffix}'
-      Port: 8080
+      Port: 80
       Protocol: HTTP
       TargetType: ip
       VpcId: !Ref VPC
-      HealthCheckPath: /health
+      HealthCheckPath: /
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
       HealthyThresholdCount: 2
@@ -429,11 +440,12 @@ Resources:
       EngineVersion: '14.6'
       DatabaseName: payments
       MasterUsername: dbadmin
-      MasterUserPassword: TempPassword123!
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DBSecurityGroup
-      BackupRetentionPeriod: !FindInMap [EnvironmentConfig, !Ref Environment, BackupRetention]
+      BackupRetentionPeriod:
+        !FindInMap [EnvironmentConfig, !Ref Environment, BackupRetention]
       PreferredBackupWindow: '03:00-04:00'
       PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
       StorageEncrypted: true
@@ -448,7 +460,8 @@ Resources:
   AuroraInstance1:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
+      DBInstanceClass:
+        !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       DBClusterIdentifier: !Ref AuroraCluster
       Engine: aurora-postgresql
       PubliclyAccessible: false
@@ -459,7 +472,8 @@ Resources:
   AuroraInstance2:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceClass: !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
+      DBInstanceClass:
+        !FindInMap [EnvironmentConfig, !Ref Environment, DBInstanceClass]
       DBClusterIdentifier: !Ref AuroraCluster
       Engine: aurora-postgresql
       PubliclyAccessible: false
@@ -483,7 +497,8 @@ Resources:
     Type: AWS::SQS::Queue
     Properties:
       QueueName: !Sub 'payment-queue-${EnvironmentSuffix}'
-      MessageRetentionPeriod: !FindInMap [EnvironmentConfig, !Ref Environment, SQSRetention]
+      MessageRetentionPeriod:
+        !FindInMap [EnvironmentConfig, !Ref Environment, SQSRetention]
       VisibilityTimeout: 300
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt PaymentDLQ.Arn
@@ -592,7 +607,7 @@ Resources:
         - Name: payment-service
           Image: nginx:latest
           PortMappings:
-            - ContainerPort: 8080
+            - ContainerPort: 80
               Protocol: tcp
           Environment:
             - Name: ENVIRONMENT
@@ -631,7 +646,7 @@ Resources:
             - !Ref ECSSecurityGroup
       LoadBalancers:
         - ContainerName: payment-service
-          ContainerPort: 8080
+          ContainerPort: 80
           TargetGroupArn: !Ref ALBTargetGroup
 
   # CloudWatch Log Group
@@ -639,7 +654,8 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/ecs/payment-service-${EnvironmentSuffix}'
-      RetentionInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
+      RetentionInDays:
+        !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
 
   # S3 Buckets for Logs
   ApplicationLogBucket:
@@ -656,7 +672,8 @@ Resources:
         Rules:
           - Id: DeleteOldLogs
             Status: Enabled
-            ExpirationInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
+            ExpirationInDays:
+              !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -684,7 +701,8 @@ Resources:
         Rules:
           - Id: DeleteOldLogs
             Status: Enabled
-            ExpirationInDays: !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
+            ExpirationInDays:
+              !FindInMap [EnvironmentConfig, !Ref Environment, LogRetention]
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -709,7 +727,8 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: !FindInMap [EnvironmentConfig, !Ref Environment, AlarmThreshold]
+      Threshold:
+        !FindInMap [EnvironmentConfig, !Ref Environment, AlarmThreshold]
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: ClusterName
@@ -727,7 +746,8 @@ Resources:
       Statistic: Average
       Period: 300
       EvaluationPeriods: 2
-      Threshold: !FindInMap [EnvironmentConfig, !Ref Environment, AlarmThreshold]
+      Threshold:
+        !FindInMap [EnvironmentConfig, !Ref Environment, AlarmThreshold]
       ComparisonOperator: GreaterThanThreshold
       Dimensions:
         - Name: ClusterName
