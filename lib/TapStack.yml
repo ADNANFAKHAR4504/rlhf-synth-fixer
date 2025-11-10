@@ -2,19 +2,49 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure and Highly Available Web Application with AWS Best Practices'
 
 Parameters:
+  ProjectName:
+    Type: String
+    Default: tapstack
+    Description: Project name (lowercase only)
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
   KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-    
+    Type: String
+    Default: ''
+    Description: (Optional) EC2 Key Pair for SSH access. Leave empty to launch without SSH access.
+
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
-    
+
   AdminEmail:
     Type: String
+    Default: admin@example.com
     Description: Email address for CloudTrail and Config notifications
     AllowedPattern: '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    ConstraintDescription: Must be a valid email address
+
+  CreateNATGateways:
+    Type: String
+    Default: 'false'
+    Description: Create NAT Gateways for private subnet internet access (requires 2 EIPs, ~$64/month)
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  CreateAWSConfig:
+    Type: String
+    Default: 'false'
+    Description: Create AWS Config resources (only 1 Config recorder/delivery channel allowed per region)
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
+  ShouldCreateAWSConfig: !Equals [!Ref CreateAWSConfig, 'true']
 
 Mappings:
   SubnetConfig:
@@ -110,6 +140,7 @@ Resources:
 
   NATGateway1EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
@@ -121,6 +152,7 @@ Resources:
 
   NATGateway2EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
@@ -132,6 +164,7 @@ Resources:
 
   NATGateway1:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NATGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -143,6 +176,7 @@ Resources:
 
   NATGateway2:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NATGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -194,6 +228,7 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -217,6 +252,7 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -318,7 +354,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-EC2-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -369,7 +404,6 @@ Resources:
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-Lambda-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -404,7 +438,6 @@ Resources:
   CloudTrailRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${AWS::StackName}-CloudTrail-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -429,8 +462,8 @@ Resources:
 
   ConfigRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateAWSConfig
     Properties:
-      RoleName: !Sub '${AWS::StackName}-Config-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -439,7 +472,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
       Policies:
         - PolicyName: ConfigS3Policy
           PolicyDocument:
@@ -462,25 +495,11 @@ Resources:
         - Key: Environment
           Value: Production
 
-  # ==================== IAM Password Policy ====================
-  IAMPasswordPolicy:
-    Type: AWS::IAM::AccountPasswordPolicy
-    Properties:
-      MinimumPasswordLength: 14
-      RequireSymbols: true
-      RequireNumbers: true
-      RequireUppercaseCharacters: true
-      RequireLowercaseCharacters: true
-      AllowUsersToChangePassword: true
-      MaxPasswordAge: 90
-      PasswordReusePrevention: 24
-      HardExpiry: false
-
   # ==================== S3 Buckets ====================
   ApplicationS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-bucket-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-app-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -507,7 +526,7 @@ Resources:
   CloudTrailS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -551,7 +570,7 @@ Resources:
   ConfigS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-config-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-config-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -601,7 +620,7 @@ Resources:
   LoggingS3Bucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-logs-${AWS::AccountId}'
+      BucketName: !Sub '${ProjectName}-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -611,15 +630,37 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerPreferred
       LifecycleConfiguration:
         Rules:
           - Id: DeleteOldLogs
             Status: Enabled
             ExpirationInDays: 30
-      AccessControl: LogDeliveryWrite
       Tags:
         - Key: Environment
           Value: Production
+
+  LoggingS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref LoggingS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:PutObject
+            Resource: !Sub '${LoggingS3Bucket.Arn}/*'
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt LoggingS3Bucket.Arn
 
   # ==================== CloudWatch Log Groups ====================
   CloudTrailLogGroup:
@@ -659,15 +700,17 @@ Resources:
   # ==================== AWS Config ====================
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldCreateAWSConfig
     Properties:
       Name: !Sub '${AWS::StackName}-Recorder'
-      RoleArn: !GetAtt ConfigRole.Arn
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: ShouldCreateAWSConfig
     Properties:
       Name: !Sub '${AWS::StackName}-DeliveryChannel'
       S3BucketName: !Ref ConfigS3Bucket
@@ -675,17 +718,10 @@ Resources:
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
 
-  ConfigRecorderStatus:
-    Type: AWS::Config::ConfigurationRecorderStatus
-    Properties:
-      ConfigurationRecorderName: !Ref ConfigRecorder
-      IsEnabled: true
-    DependsOn:
-      - ConfigDeliveryChannel
-
   # ==================== Config Rules ====================
   RequiredTagsRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
     Properties:
       ConfigRuleName: !Sub '${AWS::StackName}-required-tags'
       Description: Checks whether resources have the required Environment tag
@@ -695,27 +731,29 @@ Resources:
       InputParameters:
         tag1Key: Environment
         tag1Value: Production
-    DependsOn: ConfigRecorderStatus
+    DependsOn: ConfigRecorder
 
   S3BucketEncryptionRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
     Properties:
       ConfigRuleName: !Sub '${AWS::StackName}-s3-encryption'
       Description: Checks that S3 buckets have encryption enabled
       Source:
         Owner: AWS
         SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
-    DependsOn: ConfigRecorderStatus
+    DependsOn: ConfigRecorder
 
   MFAEnabledRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldCreateAWSConfig
     Properties:
       ConfigRuleName: !Sub '${AWS::StackName}-mfa-enabled'
       Description: Checks that MFA is enabled for IAM users
       Source:
         Owner: AWS
         SourceIdentifier: MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS
-    DependsOn: ConfigRecorderStatus
+    DependsOn: ConfigRecorder
 
   # ==================== DynamoDB Table ====================
   ApplicationDynamoDBTable:
@@ -838,22 +876,22 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: t3.micro
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
         UserData:
-          Fn::Base64: !Sub |
+          Fn::Base64: |
             #!/bin/bash
             yum update -y
             yum install -y httpd
             systemctl start httpd
             systemctl enable httpd
-            
+
             # Create health check endpoint
             echo "OK" > /var/www/html/health
-            
+
             # Install CloudWatch Agent
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U ./amazon-cloudwatch-agent.rpm
