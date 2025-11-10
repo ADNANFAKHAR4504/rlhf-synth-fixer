@@ -3,6 +3,40 @@ Description: Production-ready infrastructure with HA, security, and compliance
   features for PCI DSS payment processing application
 
 # ============================================================================
+# MAPPINGS - Region-specific configurations
+# ============================================================================
+Mappings:
+  RegionAZs:
+    us-east-1:
+      AZ1: us-east-1a
+      AZ2: us-east-1b
+      AZ3: us-east-1c
+    us-east-2:
+      AZ1: us-east-2a
+      AZ2: us-east-2b
+      AZ3: us-east-2c
+    us-west-1:
+      AZ1: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1c
+    us-west-2:
+      AZ1: us-west-2a
+      AZ2: us-west-2b
+      AZ3: us-west-2c
+    eu-west-1:
+      AZ1: eu-west-1a
+      AZ2: eu-west-1b
+      AZ3: eu-west-1c
+    eu-central-1:
+      AZ1: eu-central-1a
+      AZ2: eu-central-1b
+      AZ3: eu-central-1c
+    ap-south-1:
+      AZ1: ap-south-1a
+      AZ2: ap-south-1b
+      AZ3: ap-south-1c
+
+# ============================================================================
 # METADATA - Interface for better parameter organization in Console
 # ============================================================================
 Metadata:
@@ -19,10 +53,11 @@ Metadata:
           default: Network Configuration - IMPORTANT
         Parameters:
           - VPCCIDR
-          - AvailabilityZone1
-          - AvailabilityZone2
-          - AvailabilityZone3
           - NumberOfAvailabilityZones
+          - UseCustomAZs
+          - CustomAZ1
+          - CustomAZ2
+          - CustomAZ3
           - EnableNATGatewayHA
       - Label:
           default: Application Configuration
@@ -57,12 +92,16 @@ Metadata:
         default: Deployment Environment
       VPCCIDR:
         default: VPC CIDR Block
-      AvailabilityZone1:
-        default: First Availability Zone (Required)
-      AvailabilityZone2:
-        default: Second Availability Zone (Required for 2+ AZs)
-      AvailabilityZone3:
-        default: Third Availability Zone (Required for 3 AZs)
+      NumberOfAvailabilityZones:
+        default: Number of Availability Zones
+      UseCustomAZs:
+        default: Use Custom AZ Names?
+      CustomAZ1:
+        default: Custom First Availability Zone
+      CustomAZ2:
+        default: Custom Second Availability Zone
+      CustomAZ3:
+        default: Custom Third Availability Zone
 
 # ============================================================================
 # PARAMETERS
@@ -98,27 +137,12 @@ Parameters:
     MinLength: 1
     MaxLength: 50
 
-  # Network Parameters - EXPLICIT AZ SELECTION
+  # Network Parameters
   VPCCIDR:
     Type: String
     Default: 10.0.0.0/16
     Description: CIDR block for VPC
     AllowedPattern: ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/16$
-
-  AvailabilityZone1:
-    Type: String
-    Default: ''
-    Description: First Availability Zone (REQUIRED). Default is sa-east-1a for sa-east-1 region
-
-  AvailabilityZone2:
-    Type: String
-    Default: ''
-    Description: Second Availability Zone (REQUIRED for 2+ AZs, leave empty if using only 1 AZ)
-
-  AvailabilityZone3:
-    Type: String
-    Default: ''
-    Description: Third Availability Zone (REQUIRED for 3 AZs, leave empty if using only 1 or 2 AZs)
 
   NumberOfAvailabilityZones:
     Type: Number
@@ -127,9 +151,30 @@ Parameters:
       - 1
       - 2
       - 3
-    Description: |
-      Number of availability zones to deploy resources across.
-      Must match the AZ parameters above. ALB and RDS require at least 2 AZs.
+    Description: Number of availability zones to deploy resources across. ALB and RDS require at least 2 AZs.
+
+  UseCustomAZs:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Set to true if you want to specify custom AZ names, otherwise uses region defaults
+
+  CustomAZ1:
+    Type: String
+    Default: ''
+    Description: Custom first AZ (only used if UseCustomAZs is true)
+
+  CustomAZ2:
+    Type: String
+    Default: ''
+    Description: Custom second AZ (only used if UseCustomAZs is true)
+
+  CustomAZ3:
+    Type: String
+    Default: ''
+    Description: Custom third AZ (only used if UseCustomAZs is true)
 
   EnableNATGatewayHA:
     Type: String
@@ -137,8 +182,7 @@ Parameters:
     AllowedValues:
       - 'true'
       - 'false'
-    Description: Enable NAT Gateway in all AZs for HA (false uses single NAT for
-      dev/staging)
+    Description: Enable NAT Gateway in all AZs for HA (false uses single NAT for dev/staging)
 
   # Application Parameters
   InstanceType:
@@ -211,7 +255,7 @@ Parameters:
   SSLCertificateArn:
     Type: String
     Default: ''
-    Description: ARN of the SSL certificate in ACM for HTTPS listener (leave empty to disable HTTPS, or provide a valid certificate ARN in the deployment region)
+    Description: ARN of the SSL certificate in ACM for HTTPS listener (leave empty to disable HTTPS)
     AllowedPattern: ^$|^arn:aws:acm:[a-z0-9-]+:[0-9]+:certificate/[a-f0-9-]+$
 
   LogRetentionDays:
@@ -280,6 +324,9 @@ Conditions:
     - !Equals
       - !Ref KeyPairName
       - ''
+  UseCustomAZSelection: !Equals
+    - !Ref UseCustomAZs
+    - 'true'
   HasTwoAZs: !Equals
     - !Ref NumberOfAvailabilityZones
     - 2
@@ -289,27 +336,8 @@ Conditions:
   HasAtLeastTwoAZs: !Or
     - !Condition HasTwoAZs
     - !Condition HasThreeAZs
-  UseAZ2: !And
-    - !Condition HasAtLeastTwoAZs
-    - !Not
-      - !Or
-        - !Equals
-          - !Ref AvailabilityZone2
-          - ''
-        - !Equals
-          - !Ref AvailabilityZone2
-          - 'none'
-  UseAZ3: !And
-    - !Condition HasThreeAZs
-    - !Condition UseAZ2
-    - !Not
-      - !Or
-        - !Equals
-          - !Ref AvailabilityZone3
-          - ''
-        - !Equals
-          - !Ref AvailabilityZone3
-          - 'none'
+  UseAZ2: !Condition HasAtLeastTwoAZs
+  UseAZ3: !Condition HasThreeAZs
   EnableHighAvailabilityNAT: !And
     - !Equals
       - !Ref EnableNATGatewayHA
@@ -389,7 +417,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone1
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ1
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ1
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -418,7 +452,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone2
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ2
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ2
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -447,7 +487,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone3
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ3
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ3
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -476,7 +522,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone1
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ1
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ1
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-1
@@ -504,7 +556,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone2
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ2
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-2
@@ -532,7 +590,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone3
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ3
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ3
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-App-Subnet-3
@@ -560,7 +624,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone1
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ1
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ1
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-1
@@ -588,7 +658,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone2
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ2
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ2
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-2
@@ -616,7 +692,13 @@ Resources:
           - !Ref VPCCIDR
           - 16
           - 8
-      AvailabilityZone: !Ref AvailabilityZone3
+      AvailabilityZone: !If
+        - UseCustomAZSelection
+        - !Ref CustomAZ3
+        - !FindInMap
+          - RegionAZs
+          - !Ref AWS::Region
+          - AZ3
       Tags:
         - Key: Name
           Value: !Sub ${ProjectName}-${Environment}-Private-DB-Subnet-3
@@ -2541,10 +2623,7 @@ Outputs:
   DeploymentNotes:
     Description: Important deployment information
     Value: !Sub |
-      Stack deployed with ${NumberOfAvailabilityZones} AZ(s). 
-      AZ1: ${AvailabilityZone1}
-      AZ2: ${AvailabilityZone2}
-      AZ3: ${AvailabilityZone3}
-      ALB and RDS require at least 2 AZs to be created.
+      Stack deployed with ${NumberOfAvailabilityZones} AZ(s)
+      ${ProjectName} ${Environment} Infrastructure Deployment
     Export:
       Name: !Sub ${ProjectName}-${Environment}-Notes
