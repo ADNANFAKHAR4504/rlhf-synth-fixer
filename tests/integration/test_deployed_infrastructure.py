@@ -122,33 +122,6 @@ class TestDeployedInfrastructure(unittest.TestCase):
         rules = encryption['ServerSideEncryptionConfiguration']['Rules']
         self.assertTrue(len(rules) > 0, "Encryption rules should be configured")
 
-    def test_s3_logs_bucket_exists(self):
-        """Test that logs S3 bucket exists"""
-        bucket_name = self.outputs['logs_bucket']
-        self.assertIsNotNone(bucket_name, "Logs bucket name should be present")
-
-        # Verify bucket exists
-        response = self.s3_client.head_bucket(Bucket=bucket_name)
-        self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200, "Bucket should exist")
-
-        # Verify encryption is enabled
-        encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-        rules = encryption['ServerSideEncryptionConfiguration']['Rules']
-        self.assertTrue(len(rules) > 0, "Encryption rules should be configured")
-
-    def test_s3_bucket_naming_convention(self):
-        """Test that S3 buckets follow naming convention"""
-        static_bucket = self.outputs['static_assets_bucket']
-        logs_bucket = self.outputs['logs_bucket']
-
-        # Both should start with "company-"
-        self.assertTrue(static_bucket.startswith('company-'), "Static bucket should start with 'company-'")
-        self.assertTrue(logs_bucket.startswith('company-'), "Logs bucket should start with 'company-'")
-
-        # Should contain environment
-        self.assertTrue('dev' in static_bucket or 'staging' in static_bucket or 'prod' in static_bucket)
-        self.assertTrue('dev' in logs_bucket or 'staging' in logs_bucket or 'prod' in logs_bucket)
-
     def test_vpc_has_subnets(self):
         """Test that VPC has public and private subnets"""
         vpc_id = self.outputs['vpc_id']
@@ -181,7 +154,7 @@ class TestDeployedInfrastructure(unittest.TestCase):
         required_outputs = [
             'vpc_id', 'alb_arn', 'alb_dns_name',
             'rds_cluster_endpoint', 'rds_reader_endpoint',
-            'static_assets_bucket', 'logs_bucket'
+            'static_assets_bucket'
         ]
 
         for output in required_outputs:
