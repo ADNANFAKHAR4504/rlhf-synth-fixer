@@ -107,7 +107,6 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
     if (fs.existsSync(OUTPUTS_PATH)) {
       const outputsContent = fs.readFileSync(OUTPUTS_PATH, 'utf8');
       outputs = JSON.parse(outputsContent);
-      console.log('Loaded stack outputs:', Object.keys(outputs));
     } else {
       throw new Error(`Stack outputs file not found at ${OUTPUTS_PATH}. Please deploy the stack first.`);
     }
@@ -196,14 +195,21 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
       const listenerResponse = await awsClients.elbv2.send(listenerCommand);
 
       const httpsListener = listenerResponse.Listeners?.find(listener => listener.Port === 443);
-      expect(httpsListener).toBeDefined();
-      expect(httpsListener?.Protocol).toBe('HTTPS');
-      expect(httpsListener?.Certificates && httpsListener.Certificates.length).toBeGreaterThan(0);
-
       const httpListener = listenerResponse.Listeners?.find(listener => listener.Port === 80);
+      
       expect(httpListener).toBeDefined();
-      expect(httpListener?.DefaultActions?.[0]?.Type).toBe('redirect');
-      expect(httpListener?.DefaultActions?.[0]?.RedirectConfig?.Protocol).toBe('HTTPS');
+      
+      // HTTPS listener only exists if certificate is provided (UseHTTPS condition)
+      if (httpsListener) {
+        expect(httpsListener.Protocol).toBe('HTTPS');
+        expect(httpsListener.Certificates && httpsListener.Certificates.length).toBeGreaterThan(0);
+        // If HTTPS exists, HTTP should redirect to HTTPS
+        expect(httpListener?.DefaultActions?.[0]?.Type).toBe('redirect');
+        expect(httpListener?.DefaultActions?.[0]?.RedirectConfig?.Protocol).toBe('HTTPS');
+      } else {
+        // If no HTTPS listener (certificate not provided), HTTP should forward directly
+        expect(httpListener?.DefaultActions?.[0]?.Type).toBe('forward');
+      }
     });
 
     test('ALB security group allows traffic to application security group', async () => {
@@ -549,12 +555,12 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
 
   describe('B → E: EC2 Instances → CloudWatch Metrics → Alarms', () => {
     test('EC2 CPU metrics trigger CloudWatch alarms', async () => {
-      // Verify High CPU alarm exists
-      const alarmCommand = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'HighCPU',
-      });
+      // Verify High CPU alarm exists 
+      const alarmCommand = new DescribeAlarmsCommand({});
       const alarmResponse = await awsClients.cloudwatch.send(alarmCommand);
-      const cpuAlarm = alarmResponse.MetricAlarms?.find((a: any) => a.AlarmName?.includes('HighCPU'));
+      const cpuAlarm = alarmResponse.MetricAlarms?.find((a: any) => 
+        a.AlarmName?.includes('HighCPU')
+      );
       expect(cpuAlarm).toBeDefined();
 
       // Verify alarm is configured to monitor ASG CPU
@@ -609,13 +615,21 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
 
   describe('C → E: Aurora Database → CloudWatch Metrics → Alarms', () => {
     test('Aurora database connection metrics trigger CloudWatch alarms', async () => {
-      const alarmCommand = new DescribeAlarmsCommand({
-        AlarmNamePrefix: 'DB-HighConnections',
-      });
-      const alarmResponse = await awsClients.cloudwatch.send(alarmCommand);
-      const dbAlarm = alarmResponse.MetricAlarms?.find(a => a.AlarmName?.includes('DB-HighConnections'));
-      expect(dbAlarm).toBeDefined();
+      // Database alarm only exists if UseAZ2 is true (at least 2 AZs)
+      // Alarm name pattern is ${ProjectName}-${Environment}-DB-HighConnections
+      if (!outputs.AuroraClusterEndpoint || outputs.AuroraClusterEndpoint === 'SingleAZMode - RDS requires at least 2 AZs') {
+        // Skip test if Aurora cluster doesn't exist (single AZ mode)
+        return;
+      }
 
+      const alarmCommand = new DescribeAlarmsCommand({});
+      const alarmResponse = await awsClients.cloudwatch.send(alarmCommand);
+      const dbAlarm = alarmResponse.MetricAlarms?.find(a => 
+        a.AlarmName?.includes('DB-HighConnections')
+      );
+      
+      // Alarm only exists when UseAZ2 is true
+      expect(dbAlarm).toBeDefined();
       // Verify alarm monitors Aurora cluster
       expect(dbAlarm?.Dimensions?.some(d => d.Name === 'DBClusterIdentifier')).toBe(true);
       expect(dbAlarm?.AlarmActions?.some(action => action.includes('sns'))).toBe(true);
@@ -734,7 +748,6 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
           Key: testObj.key,
         });
         await awsClients.s3.send(deleteCommand);
-        console.log(`Cleaned up S3 object: ${testObj.bucket}/${testObj.key}`);
       } catch (error) {
         console.error(`Failed to delete S3 object ${testObj.bucket}/${testObj.key}:`, error);
       }
@@ -748,7 +761,6 @@ describe('TapStack End-to-End Integration Tests - Resource Interactions', () => 
           logStreamName: testStream.logStreamName,
         });
         await awsClients.logs.send(deleteStreamCommand);
-        console.log(`Cleaned up log stream: ${testStream.logGroupName}/${testStream.logStreamName}`);
       } catch (error) {
         console.error(`Failed to delete log stream ${testStream.logGroupName}/${testStream.logStreamName}:`, error);
       }
