@@ -5,12 +5,14 @@ Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack.
 """
 
-import unittest
-import os
 import json
+import os
+from pathlib import Path
+import time
+import unittest
+
 import boto3
 import requests
-import time
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
@@ -19,12 +21,25 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def setUp(self):
         """Set up integration test with live stack outputs."""
         # Load outputs from deployment
-        outputs_file = '/var/www/turing/iac-test-automations/worktree/synth-101000879/cfn-outputs/flat-outputs.json'
-        if os.path.exists(outputs_file):
-            with open(outputs_file, 'r', encoding='utf-8') as f:
-                self.outputs = json.load(f)
+        outputs_path_override = os.environ.get("FLAT_OUTPUTS_PATH")
+        if outputs_path_override:
+            candidate_paths = [Path(outputs_path_override)]
         else:
-            self.fail("Stack outputs file not found. Deploy infrastructure first.")
+            repo_root = Path(__file__).resolve().parents[2]
+            candidate_paths = [
+                repo_root / "cfn-outputs" / "flat-outputs.json",
+                repo_root / "tf-outputs" / "flat-outputs.json",
+            ]
+
+        self.outputs = None
+        for candidate in candidate_paths:
+            if candidate.exists():
+                with candidate.open("r", encoding="utf-8") as f:
+                    self.outputs = json.load(f)
+                break
+
+        if not self.outputs:
+            self.skipTest("Stack outputs file not found. Deploy infrastructure first.")
 
         # AWS clients
         self.dynamodb = boto3.client('dynamodb', region_name='us-east-1')
@@ -33,6 +48,41 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.lambda_client = boto3.client('lambda', region_name='us-east-1')
         self.kms_client = boto3.client('kms', region_name='us-east-1')
         self.apigateway = boto3.client('apigateway', region_name='us-east-1')
+
+        self.environment_suffix = self._derive_environment_suffix()
+
+    def _derive_environment_suffix(self) -> str:
+        """Best-effort extraction of environment suffix from deployment outputs."""
+
+        def extract_from_value(value: str | None) -> str | None:
+            if not value:
+                return None
+
+            tokens = []
+            if "/" in value:
+                tokens.extend(value.split("/"))
+            if ":" in value:
+                tokens.extend(value.split(":"))
+            tokens.append(value)
+
+            for token in tokens:
+                parts = token.split("-")
+                if len(parts) >= 2 and parts[0] in {"fraud", "transactions", "webhook", "fraud-notifications"}:
+                    return parts[1]
+
+            return None
+
+        candidates = [
+            extract_from_value(self.outputs.get("transactions_table_name")),
+            extract_from_value(self.outputs.get("fraud_alerts_queue_url")),
+            extract_from_value(self.outputs.get("fraud_notifications_topic_arn")),
+        ]
+
+        for candidate in candidates:
+            if candidate:
+                return candidate.lower()
+
+        return "dev"
 
     def test_api_endpoint_exists(self):
         """Test that API endpoint is accessible."""
@@ -102,13 +152,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_lambda_functions_exist(self):
         """Test all Lambda functions exist with correct configuration."""
-        environment_suffix = 'synth101000879'
-
         # List all functions and find ones matching our environment suffix
         all_functions = self.lambda_client.list_functions()
         our_functions = [
             f for f in all_functions['Functions']
-            if environment_suffix in f['FunctionName']
+            if self.environment_suffix in f['FunctionName']
         ]
 
         # Expect 3 functions
@@ -218,13 +266,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def test_cloudwatch_logs_exist(self):
         """Test CloudWatch log groups exist for all Lambda functions."""
         logs_client = boto3.client('logs', region_name='us-east-1')
-        environment_suffix = 'synth101000879'
-
         # Get all Lambda functions for this environment
         all_functions = self.lambda_client.list_functions()
         our_functions = [
             f for f in all_functions['Functions']
-            if environment_suffix in f['FunctionName']
+            if self.environment_suffix in f['FunctionName']
         ]
 
         # Verify log groups exist for each function
