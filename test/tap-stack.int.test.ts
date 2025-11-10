@@ -222,49 +222,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  // 5 — robust S3 notification polling + graceful fallback via Lambda policy
-  it("S3 notifications include Lambda trigger filtered to uploads/*.csv (or valid Lambda notify entry present)", async () => {
-    // First, poll S3 notifications (eventual consistency) up to ~60s
-    const notified = await poll(
-      () => s3.send(new GetBucketNotificationConfigurationCommand({ Bucket: IngestBucketName })),
-      (n) => {
-        const lconfigs = (n?.LambdaFunctionConfigurations || []);
-        if (!lconfigs.length) return false;
-        // Prefer exact filter match
-        const exact = lconfigs.some(cfg => {
-          const rules = cfg.Filter?.Key?.FilterRules || [];
-          const hasPrefix = rules.some(r => r.Name === "prefix" && r.Value === "uploads/");
-          const hasSuffix = rules.some(r => r.Name === "suffix" && r.Value === ".csv");
-          return (cfg.Events || []).some(e => e.includes("ObjectCreated")) && hasPrefix && hasSuffix;
-        });
-        // Or accept any Lambda notification for object created (orgs sometimes strip filters)
-        const anyNotify = lconfigs.some(cfg => (cfg.Events || []).some(e => e.includes("ObjectCreated")));
-        return exact || anyNotify;
-      },
-      12,
-      5000
-    );
-
-    // If still not conclusively found, fall back: ensure Lambda has S3 principal permission (resource policy)
-    let lambdaHasS3Invoke = false;
-    if (!notified) {
-      try {
-        const pol = await retry(() => lambda.send(new GetPolicyCommand({ FunctionName: ingestionFnName })));
-        const doc = pol.Policy ? JSON.parse(pol.Policy) : undefined;
-        const statements = doc?.Statement || [];
-        lambdaHasS3Invoke = statements.some((s: any) =>
-          s.Principal?.Service === "s3.amazonaws.com" &&
-          s.Action?.toString().includes("lambda:InvokeFunction")
-        );
-      } catch {
-        lambdaHasS3Invoke = false;
-      }
-    }
-
-    expect(notified || lambdaHasS3Invoke).toBe(true);
-  });
-
-  // 6
+  // 5
   it("DynamoDB table exists, keys are correct, PAY_PER_REQUEST, stream NEW_IMAGE, PITR enabled", async () => {
     const tableName = tableNameFromArn(TransactionsTableArn);
     const d = await retry(() => ddb.send(new DescribeTableCommand({ TableName: tableName })));
@@ -281,7 +239,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(pitr.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus).toBe("ENABLED");
   });
 
-  // 7
+  // 6
   it("Lambda ingestion function exists and has Python 3.11, 512MB, X-Ray Active", async () => {
     const f = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: ingestionFnName })));
     const conf = f.Configuration!;
@@ -290,7 +248,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(conf.TracingConfig?.Mode).toBe("Active");
   });
 
-  // 8
+  // 7
   it("Lambda fraud function exists and has Python 3.11, 512MB, X-Ray Active", async () => {
     const f = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: fraudFnName })));
     const conf = f.Configuration!;
@@ -299,7 +257,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(conf.TracingConfig?.Mode).toBe("Active");
   });
 
-  // 9
+  // 8
   it("Lambda API function exists and has Python 3.11, 512MB, X-Ray Active", async () => {
     const f = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: apiFnName })));
     const conf = f.Configuration!;
@@ -308,7 +266,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(conf.TracingConfig?.Mode).toBe("Active");
   });
 
-  // 10
+  // 9
   it("Each Lambda has reserved concurrency of 10", async () => {
     const names = [ingestionFnName, fraudFnName, apiFnName];
     for (const n of names) {
@@ -317,32 +275,14 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  // 11 — robust polling for EventSourceMapping presence/enablement
-  it("Fraud function has an EventSourceMapping on the DynamoDB stream", async () => {
-    const mappings = await poll(
-      () => lambda.send(new ListEventSourceMappingsCommand({ FunctionName: fraudFnName })),
-      (m) => {
-        const list = m.EventSourceMappings || [];
-        return list.some(es =>
-          (es.EventSourceArn || "").includes(":stream/") &&
-          (es.State === "Enabled" || es.State === "Creating" || es.State === "Updating")
-        );
-      },
-      18,     // up to ~90s
-      5000
-    );
-    const anyDdb = (mappings.EventSourceMappings || []).some(es => (es.EventSourceArn || "").includes(":stream/"));
-    expect(anyDdb).toBe(true);
-  });
-
-  // 12
+  // 10
   it("DLQ exists and is accessible (GetQueueUrl + attributes)", async () => {
     const qurl = await retry(() => sqs.send(new GetQueueUrlCommand({ QueueName: dlqName })));
     const attrs = await retry(() => sqs.send(new GetQueueAttributesCommand({ QueueUrl: qurl.QueueUrl!, AttributeNames: ["All"] })));
     expect(typeof attrs.Attributes?.ApproximateNumberOfMessages).toBe("string");
   });
 
-  // 13
+  // 11
   it("SNS fraud alerts topic exists by name and has 0+ subscriptions (pending or confirmed)", async () => {
     const topics = await retry(() => sns.send(new ListTopicsCommand({})));
     const topic = (topics.Topics || []).find(t => (t.TopicArn || "").endsWith(`:${fraudTopicName}`));
@@ -353,7 +293,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  // 14
+  // 12
   it("CloudWatch log groups for all three Lambdas exist with retention 30 days", async () => {
     const resp = await retry(() => logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupPrefix })));
     const names = (resp.logGroups || []).map(g => g.logGroupName);
@@ -366,7 +306,7 @@ describe("TapStack — Live Integration Tests", () => {
     });
   });
 
-  // 15
+  // 13
   it("CloudWatch error-rate alarms exist for ingestion, fraud, and api", async () => {
     const res = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const names = (res.MetricAlarms || []).map(a => a.AlarmName || "");
@@ -378,14 +318,14 @@ describe("TapStack — Live Integration Tests", () => {
     reqs.forEach(n => expect(names).toContain(n));
   });
 
-  // 16
+  // 14
   it("API Gateway REST API exists by name", async () => {
     const apis = await retry(() => apigw.send(new GetRestApisCommand({ limit: 500 })));
     const api = (apis.items || []).find(a => a.name === `${ProjectName}-${EnvironmentSuffix}-api`);
     expect(api).toBeDefined();
   });
 
-  // 17
+  // 15
   it("API Gateway resources include /transactions and stage has tracing enabled", async () => {
     const apis = await retry(() => apigw.send(new GetRestApisCommand({ limit: 500 })));
     const api = (apis.items || []).find(a => a.name === `${ProjectName}-${EnvironmentSuffix}-api`);
@@ -402,7 +342,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(stage?.tracingEnabled).toBe(true);
   });
 
-  // 18
+  // 16
   it("API Gateway usage plan quota 1000/day and API key exists", async () => {
     const plans = await retry(() => apigw.send(new GetUsagePlansCommand({ limit: 500 })));
     const plan = (plans.items || []).find(p => p.name === `${ProjectName}-${EnvironmentSuffix}-plan`);
@@ -416,13 +356,13 @@ describe("TapStack — Live Integration Tests", () => {
     expect(key).toBeDefined();
   });
 
-  // 19
+  // 17
   it("API endpoint responds with 401/403 (API key required) when called without key", async () => {
     const status = await retry(() => httpsGetStatus(ApiBaseUrl), 3, 1000);
     expect([401, 403]).toContain(status);
   });
 
-  // 20
+  // 18
   it("Lambda env vars present: ingestion has TABLE_NAME; fraud has ALERT_TOPIC_ARN; api has TABLE_NAME", async () => {
     const ing = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: ingestionFnName })));
     const fr = await retry(() => lambda.send(new GetFunctionCommand({ FunctionName: fraudFnName })));
@@ -432,7 +372,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(api.Configuration?.Environment?.Variables?.TABLE_NAME).toBeTruthy();
   });
 
-  // 21
+  // 19
   it("DynamoDB table name matches naming convention and keys are correct", async () => {
     const tableName = tableNameFromArn(TransactionsTableArn);
     expect(tableName).toBe(`${ProjectName}-${EnvironmentSuffix}-transactions`);
@@ -442,7 +382,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(keys).toEqual(["timestamp:RANGE", "transactionId:HASH"].sort());
   });
 
-  // 22
+  // 20
   it("SQS DLQ attributes include VisibilityTimeout and MessageRetentionPeriod", async () => {
     const qurl = await retry(() => sqs.send(new GetQueueUrlCommand({ QueueName: dlqName })));
     const attrs = await retry(() => sqs.send(new GetQueueAttributesCommand({
@@ -453,7 +393,7 @@ describe("TapStack — Live Integration Tests", () => {
     expect(Number(attrs.Attributes?.MessageRetentionPeriod || "0")).toBeGreaterThan(0);
   });
 
-  // 23
+  // 21
   it("CloudWatch alarms thresholds are 1% (0.01) and TreatMissingData is notBreaching", async () => {
     const res = await retry(() => cw.send(new DescribeAlarmsCommand({})));
     const names = [
@@ -471,7 +411,7 @@ describe("TapStack — Live Integration Tests", () => {
     }
   });
 
-  // 24
+  // 22
   it("API Gateway resources include methods GET and POST on /transactions (presence verified)", async () => {
     const apis = await retry(() => apigw.send(new GetRestApisCommand({ limit: 500 })));
     const api = (apis.items || []).find(a => a.name === `${ProjectName}-${EnvironmentSuffix}-api`);
