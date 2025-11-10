@@ -11,18 +11,22 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "\"VPC\"",
-    "\"EC2\"",
-    "\"RDS\"",
-    "\"S3\"",
-    "\"ALB\"",
-    "\"WAF\"",
-    "\"KMS\"",
-    "\"IAM\"",
-    "\"CloudWatch\"",
-    "\"NAT Gateway\"",
-    "\"Internet Gateway\"",
-    "\"VPC Flow Logs\"",
-    "\"EBS\""
-  ]
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "ALB",
+    "WAF",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "EIP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
 }
