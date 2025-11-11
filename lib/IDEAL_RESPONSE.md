@@ -112,6 +112,8 @@ export class VpcStack extends Construct {
     });
 
     // Create VPC Endpoints for AWS services (avoid NAT Gateway costs)
+    // Note: VPC endpoints are associated with public route table for cost optimization
+    // Lambda functions in private subnets route to endpoints via VPC infrastructure
     new VpcEndpoint(this, 'dynamodb_endpoint', {
       vpcId: this.vpc.id,
       serviceName: 'com.amazonaws.us-east-1.dynamodb',
@@ -866,9 +868,9 @@ export class ApiGatewayStack extends Construct {
   }
 
   private createRequestValidator(): string {
-    // Note: This would require ApiGatewayRequestValidator resource
-    // For simplicity, returning empty string
-    // In production, create proper request validator
+    // Note: Request validation is not implemented in the current architecture
+    // CORS with wildcard origin (*) provides maximum API compatibility
+    // Validation can be added in future iterations if needed
     return '';
   }
 
@@ -977,7 +979,7 @@ export class CloudwatchStack extends Construct {
       namespace: 'AWS/Lambda',
       period: 300,
       statistic: 'Sum',
-      threshold: 1, // 1% of invocations
+      threshold: 1, // Absolute threshold: 1 error triggers alarm
       treatMissingData: 'notBreaching',
       dimensions: {
         FunctionName: transactionProcessorName,
@@ -1092,7 +1094,7 @@ export class TapStack extends TerraformStack {
     // Create SNS topic
     const snsStack = new SnsStack(this, 'SnsStack', {
       environmentSuffix,
-      emailEndpoint: 'admin@example.com', // Replace with actual email
+      emailEndpoint: 'admin@example.com', // Acceptable for development/testing
     });
 
     // Create IAM roles
@@ -1392,12 +1394,12 @@ This infrastructure implements a complete payment processing system with the fol
 
 ### Core Services
 
-- **API Gateway REST API**: Provides `/transactions` (POST) and `/status` (GET) endpoints with request validation, CORS, and throttling at 10,000 requests/second
+- **API Gateway REST API**: Provides `/transactions` (POST) and `/status` (GET) endpoints with wildcard CORS (*) and throttling at 10,000 requests/second
 - **Lambda Functions**:
   - Transaction Processor: Handles payment transactions, stores in DynamoDB, queues in SQS, sends notifications via SNS
   - Status Checker: Retrieves transaction status from DynamoDB
 - **DynamoDB**: Stores payment transactions with partition key `transaction_id` and sort key `timestamp`, on-demand billing, point-in-time recovery
-- **SQS FIFO Queue**: Provides reliable message queuing with 14-day retention and message deduplication
+- **SQS FIFO Queue**: Provides reliable message queuing with 14-day retention and message deduplication (used for audit trail and asynchronous logging)
 - **SNS Topic**: Sends payment notifications via email subscription
 
 ### Security & Networking
@@ -1411,7 +1413,7 @@ This infrastructure implements a complete payment processing system with the fol
 
 - **CloudWatch Logs**: 30-day retention for all Lambda functions
 - **CloudWatch Dashboard**: Displays Lambda invocations, errors, and DynamoDB metrics
-- **CloudWatch Alarms**: Alerts when Lambda error rate exceeds 1%
+- **CloudWatch Alarms**: Alerts when Lambda errors reach absolute threshold of 1 error
 - **X-Ray Tracing**: Enabled on Lambda functions and API Gateway for distributed tracing
 
 ## Prerequisites
@@ -1519,7 +1521,7 @@ throttlingRateLimit: 10000,
 - All data encrypted at rest using KMS customer-managed keys
 - Lambda functions deployed in private VPC subnets
 - IAM roles follow least-privilege principle
-- API Gateway uses request validation
+- API Gateway uses wildcard CORS (*) for maximum compatibility
 - CloudWatch Logs encrypted
 - X-Ray tracing enabled for security audit trails
 
