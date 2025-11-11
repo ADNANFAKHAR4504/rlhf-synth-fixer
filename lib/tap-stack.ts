@@ -117,21 +117,18 @@ export class TapStack extends cdk.Stack {
     const apiRepo = new ecr.Repository(this, 'ApiRepository', {
       repositoryName: `fraud-api-${environmentSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      emptyOnDelete: true,
       imageScanOnPush: true,
     });
 
     const workerRepo = new ecr.Repository(this, 'WorkerRepository', {
       repositoryName: `fraud-worker-${environmentSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      emptyOnDelete: true,
       imageScanOnPush: true,
     });
 
     const jobRepo = new ecr.Repository(this, 'JobRepository', {
       repositoryName: `fraud-job-${environmentSuffix}`,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      emptyOnDelete: true,
       imageScanOnPush: true,
     });
 
@@ -390,9 +387,14 @@ export class TapStack extends cdk.Stack {
       desiredCount: 2,
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
-      circuitBreaker: {
+      // corrected property name and enabled the circuit breaker with rollback
+      deploymentCircuitBreaker: {
+        enable: true,
         rollback: true,
       },
+      // allow warm-up time before ALB health checks are enforced to avoid false negatives
+      healthCheckGracePeriod: cdk.Duration.seconds(300),
+      platformVersion: ecs.FargatePlatformVersion.LATEST,
       cloudMapOptions: {
         name: 'api',
         cloudMapNamespace: namespace,
@@ -442,23 +444,6 @@ export class TapStack extends cdk.Stack {
     });
 
     // Worker Service
-    //const workerService = new ecs.FargateService(this, 'WorkerService', {
-    //  serviceName: `fraud-worker-${environmentSuffix}`,
-    //  cluster,
-    //  taskDefinition: workerTaskDef,
-    //  desiredCount: 1,
-    //  minHealthyPercent: 0,
-    //  maxHealthyPercent: 200,
-    //  circuitBreaker: {
-    //    rollback: true,
-    //  },
-    //  cloudMapOptions: {
-    //    name: 'worker',
-    //    cloudMapNamespace: namespace,
-    //  },
-    //  enableExecuteCommand: true,
-    //});
-
     const workerService = new ecs.FargateService(this, 'WorkerService', {
       serviceName: `fraud-worker-${environmentSuffix}`,
       cluster,
@@ -466,17 +451,19 @@ export class TapStack extends cdk.Stack {
       desiredCount: 1,
       minHealthyPercent: 0,
       maxHealthyPercent: 200,
-      circuitBreaker: {
-        rollback: false, // Disable circuit breaker rollback to avoid stack failure
+      // keep circuit breaker enabled in production — allow warmup first
+      deploymentCircuitBreaker: {
+        enable: true,
+        rollback: true,
       },
-      healthCheckGracePeriod: cdk.Duration.seconds(120),
+      healthCheckGracePeriod: cdk.Duration.seconds(300),
+      platformVersion: ecs.FargatePlatformVersion.LATEST,
       cloudMapOptions: {
         name: 'worker',
         cloudMapNamespace: namespace,
       },
       enableExecuteCommand: true,
     });
-
 
     // Auto-scaling for Worker service
     const workerScaling = workerService.autoScaleTaskCount({
@@ -521,7 +508,7 @@ export class TapStack extends cdk.Stack {
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'API Service - Task Count',
+        title: 'API Service - CPU / Memory',
         left: [apiService.metricCpuUtilization()],
         right: [apiService.metricMemoryUtilization()],
       })
@@ -529,7 +516,7 @@ export class TapStack extends cdk.Stack {
 
     dashboard.addWidgets(
       new cloudwatch.GraphWidget({
-        title: 'Worker Service - Task Count',
+        title: 'Worker Service - CPU / Memory',
         left: [workerService.metricCpuUtilization()],
         right: [workerService.metricMemoryUtilization()],
       })
