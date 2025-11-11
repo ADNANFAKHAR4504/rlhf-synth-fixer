@@ -32,5 +32,8 @@
     "IAM Role for Scheduled Analysis Lambda",
     "IAM Policy Attachments",
     "X-Ray Tracing Configuration"
-  ]
+  ],
+  "training_quality": 9,
+  "background": "Deploy a serverless transaction anomaly detection system in us-east-1 using a single TapStack.yml template. The stack provisions a REST API Gateway with throttled POST endpoints for webhook ingestion, multiple Lambda functions for ingestion, anomaly detection, and scheduled pattern analysis (all ARM64 with X-Ray tracing and DLQs), an on-demand DynamoDB table for transaction history, SQS for buffering during peak loads, and SNS for alert notifications. It includes CloudWatch dashboards and alarms for latency, error rate, and DynamoDB capacity. All components follow the AWS Well-Architected Framework with least-privilege IAM roles, environment-tagged resources, and fully managed, event-driven architecture for secure, real-time financial anomaly detection."
 }
+

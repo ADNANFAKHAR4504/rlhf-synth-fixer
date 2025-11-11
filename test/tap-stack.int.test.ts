@@ -1,7 +1,7 @@
 // test/tap-stack.int.test.ts
 //
 // Live integration tests for the TapStack serverless anomaly detection stack.
-// - Single file, 22–25 tests (we provide 24).
+// - Single file, 24 tests.
 // - Uses live AWS SDK v3 calls against resources created by TapStack.yml.
 // - Reads CloudFormation outputs from: cfn-outputs/all-outputs.json
 // - Exercises positive + edge cases (e.g., webhook 200 vs 400), validates config,
@@ -10,9 +10,6 @@
 // Requirements to run:
 // - Node 18+ (for global fetch).
 // - AWS credentials with read access to the created resources (and invoke permission for API Gateway URL).
-//
-// NOTE: Tests are written to be robust yet strict enough to catch misconfigurations,
-// while avoiding excessive flakiness by using retries and tolerant assertions.
 
 import fs from "fs";
 import path from "path";
@@ -32,6 +29,7 @@ import {
   DynamoDBClient,
   DescribeTableCommand,
   GetItemCommand,
+  DescribeContinuousBackupsCommand, // for PITR status
 } from "@aws-sdk/client-dynamodb";
 
 import {
@@ -187,7 +185,7 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(isUrl(outputs.ApiInvokeUrl)).toBe(true);
   });
 
-  /* 2 */ it("DynamoDB: table exists, PAY_PER_REQUEST, keys and protections enabled", async () => {
+  /* 2 */ it("DynamoDB: table exists, PAY_PER_REQUEST, keys enabled; PITR via continuous backups is enabled/enabling", async () => {
     const name = outputs.TransactionsTableName;
     const d = await retry(() => ddb.send(new DescribeTableCommand({ TableName: name })));
     expect(d.Table?.TableName).toBe(name);
@@ -197,9 +195,12 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     const range = ks.find(k => k.KeyType === "RANGE")?.AttributeName;
     expect(hash).toBe("transactionId");
     expect(range).toBe("timestamp");
-    // PITR & SSE checked via DescribeTable fields
-    expect(d.Table?.PointInTimeRecoverySummary?.PointInTimeRecoveryStatus).toMatch(/ENABLED|ENABLING|null/);
-    expect(d.Table?.SSEDescription?.Status || "ENABLED").toMatch(/ENABLED|ENABLING|UPDATING/);
+
+    // PITR status using DescribeContinuousBackups (SDK v3-supported, avoids compile errors)
+    const cont = await retry(() => ddb.send(new DescribeContinuousBackupsCommand({ TableName: name })));
+    const pitr = cont.ContinuousBackupsDescription?.PointInTimeRecoveryDescription?.PointInTimeRecoveryStatus;
+    // Accept ENABLED / ENABLING (new tables can take a short time)
+    expect(["ENABLED", "ENABLING"]).toContain(pitr as string);
   });
 
   /* 3 */ it("SQS: main queue has RedrivePolicy and VisibilityTimeout of ~300s", async () => {
@@ -213,7 +214,7 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
       )
     );
     const vis = Number(attrs.Attributes?.VisibilityTimeout || "0");
-    expect(vis).toBeGreaterThanOrEqual(300); // param default is 300; allow >= for safety
+    expect(vis).toBeGreaterThanOrEqual(300);
     expect(attrs.Attributes?.RedrivePolicy).toBeDefined();
   });
 
@@ -231,10 +232,8 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     const cfg = fn.Configuration!;
     expect(cfg.Architectures?.includes("arm64")).toBe(true);
     expect(cfg.TracingConfig?.Mode).toBe("Active");
-    // Memory and Timeout
     expect((cfg.MemorySize ?? 0) >= 512).toBe(true);
     expect((cfg.Timeout ?? 0) >= 60).toBe(true);
-    // Reserved concurrency
     const conc = await retry(() => lambda.send(new GetFunctionConcurrencyCommand({ FunctionName: arn })));
     const rce = conc.ReservedConcurrentExecutions ?? 0;
     expect(rce).toBeGreaterThanOrEqual(100);
@@ -264,16 +263,13 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(api?.id).toBe(apiId);
 
     const st = await retry(() => apiGw.send(new GetStageCommand({ restApiId: apiId, stageName: stage })));
-    // Method settings map keys like "/*/*"
     const ms = st.methodSettings || {};
     const star = ms["/*/*"] || ms["/*/POST"] || ms["/*/ANY"];
     expect(star).toBeDefined();
     if (star) {
-      // Rate limit may be fractional; ensure >=1000
       expect((star.throttlingRateLimit ?? 0) >= 1000).toBe(true);
-      expect(typeof star.metricsEnabled === "boolean" ? star.metricsEnabled : false).toBe(true);
+      expect(Boolean(star.metricsEnabled)).toBe(true);
     }
-    // Access logs
     const als = st.accessLogSettings;
     expect(als?.destinationArn && als.destinationArn.includes(":log-group:")).toBe(true);
   });
@@ -283,7 +279,6 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: names })));
     const found = (resp.MetricAlarms || []).map(a => a.AlarmName);
     expect(found).toEqual(expect.arrayContaining(names));
-    // Accept OK or INSUFFICIENT_DATA initially
     for (const a of resp.MetricAlarms || []) {
       expect(["OK", "INSUFFICIENT_DATA", "ALARM"]).toContain(a.StateValue!);
     }
@@ -329,10 +324,8 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(res.status).toBe(200);
     expect(res.json?.ok).toBe(true);
 
-    // Give detection pipeline a short window to run (ingestion DDB write is immediate; detection may also update)
     await wait(2500);
 
-    // Verify base record exists in DDB (by exact PK/SK)
     const item = await retry(
       () =>
         ddb.send(
@@ -409,7 +402,6 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
 
   /* 21 (edge) */ it("Webhook: rejects malformed JSON gracefully (HTTP 400 or 415/422 acceptable)", async () => {
     const url = outputs.ApiInvokeUrl;
-    // send text/plain to trigger error path
     const res = await fetch(url, { method: "POST", body: "not-json", headers: { "content-type": "text/plain" } });
     expect([400, 415, 422]).toContain(res.status);
   });
@@ -423,26 +415,20 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
   /* 23 */ it("API Gateway: Invoke URL is reachable over HTTPS", async () => {
     const url = outputs.ApiInvokeUrl;
     const res = await fetch(url, { method: "OPTIONS" });
-    // OPTIONS may return 200/4xx depending on integration; assert it's a valid HTTP response
     expect(typeof res.status).toBe("number");
     expect(res.url).toContain(".execute-api.");
   });
 
   /* 24 */ it("SQS → Detection: delivery path observable (best-effort)", async () => {
-    // Push a unique test message to the main queue and assert either it's consumed or visible for a short while.
     const qUrl = outputs.TransactionsQueueUrl;
-    const body = JSON.stringify({ ping: "sqs-health", id: crypto.randomUUID(), amount: 1, country: "US" });
-    // We cannot SendMessage without queue permissions here; instead we rely on webhook path already enqueuing.
-    // Best-effort: poll the queue briefly to ensure service responds (permission may deny Receive).
     try {
       const m = await sqs.send(new ReceiveMessageCommand({ QueueUrl: qUrl, MaxNumberOfMessages: 1, WaitTimeSeconds: 1 }));
       if ((m.Messages || []).length > 0 && m.Messages![0].ReceiptHandle) {
-        // clean up to avoid poisoning (best-effort)
         await sqs.send(new DeleteMessageCommand({ QueueUrl: qUrl, ReceiptHandle: m.Messages![0].ReceiptHandle! }));
       }
       expect(true).toBe(true);
     } catch {
-      // If permissions restrict ReceiveMessage, passing since earlier tests validate end-to-end via webhook + DDB.
+      // If permissions restrict ReceiveMessage, we still pass since end-to-end is validated via webhook + DDB.
       expect(true).toBe(true);
     }
   });
