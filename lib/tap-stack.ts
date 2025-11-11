@@ -477,11 +477,6 @@ export class TapStack extends cdk.Stack {
       enableExecuteCommand: true,
     });
 
-    (workerService.node.defaultChild as cdk.CfnResource).cfnOptions = {
-      // Prevent stack rollback on this resource failure
-      deletionPolicy: cdk.CfnDeletionPolicy.RETAIN,
-      updateReplacePolicy: cdk.CfnDeletionPolicy.RETAIN,
-    };
 
     // Auto-scaling for Worker service
     const workerScaling = workerService.autoScaleTaskCount({
