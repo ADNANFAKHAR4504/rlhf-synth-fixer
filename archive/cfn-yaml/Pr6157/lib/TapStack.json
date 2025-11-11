@@ -1,0 +1,1026 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack.yml — Serverless transaction processing system (us-east-1). Ingest CSVs from S3 -> Lambda -> DynamoDB; fraud detection via DynamoDB Streams -> Lambda -> SNS; REST API for transaction status; DLQ, alarms (error-rate >1%/5m), X-Ray, and 30-day log retention.\n",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "regions": [
+                    "us-east-1"
+                ]
+            }
+        },
+        "AlarmsRationale": "Error-rate alarms use metric math (Errors/Invocations) over a 5-minute period with TreatMissingData=notBreaching\nto avoid alerting on idle periods while catching spikes.\n"
+    },
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "tapstack",
+            "Description": "Lowercase project identifier used in resource names.",
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "prod",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment suffix to avoid name clashes."
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "compliance@company.com",
+            "Description": "Email address to subscribe for fraud alerts.",
+            "AllowedPattern": "^[^@]+@[^@]+\\.[^@]+$"
+        }
+    },
+    "Resources": {
+        "IngestBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingest-bucket"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": {
+                                "Fn::Sub": "retention-90-days-${EnvironmentSuffix}"
+                            },
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90,
+                            "NoncurrentVersionExpirationInDays": 90
+                        }
+                    ]
+                },
+                "NotificationConfiguration": {
+                    "LambdaConfigurations": [
+                        {
+                            "Event": "s3:ObjectCreated:*",
+                            "Filter": {
+                                "S3Key": {
+                                    "Rules": [
+                                        {
+                                            "Name": "prefix",
+                                            "Value": "uploads/"
+                                        },
+                                        {
+                                            "Name": "suffix",
+                                            "Value": ".csv"
+                                        }
+                                    ]
+                                }
+                            },
+                            "Function": {
+                                "Fn::GetAtt": [
+                                    "IngestionLambda",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    ]
+                }
+            },
+            "DependsOn": [
+                "IngestionLambdaInvokePermissionFromS3"
+            ]
+        },
+        "IngestBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "IngestBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyInsecureTransport",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "IngestBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${IngestBucket.Arn}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": false
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "TransactionsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-transactions"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "S"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "StreamSpecification": {
+                    "StreamViewType": "NEW_IMAGE"
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                }
+            }
+        },
+        "DeadLetterQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dlq"
+                },
+                "MessageRetentionPeriod": 1209600
+            }
+        },
+        "FraudAlertsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud-alerts"
+                }
+            }
+        },
+        "FraudAlertsSubscriptionEmail": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "FraudAlertsTopic"
+                },
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlertEmail"
+                }
+            }
+        },
+        "IngestionLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingest-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingest-inline"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "S3ReadUploads",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:s3:::${ProjectName}-${EnvironmentSuffix}-ingest-bucket/uploads/*"
+                                    }
+                                },
+                                {
+                                    "Sid": "DynamoDBPut",
+                                    "Effect": "Allow",
+                                    "Action": "dynamodb:PutItem",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "DlqSend",
+                                    "Effect": "Allow",
+                                    "Action": "sqs:SendMessage",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DeadLetterQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "LogsWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-ingestion:*"
+                                    }
+                                },
+                                {
+                                    "Sid": "LogsCreateGroupIfMissing",
+                                    "Effect": "Allow",
+                                    "Action": "logs:CreateLogGroup",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "FraudLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud-inline"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "StreamsRead",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:DescribeStream",
+                                        "dynamodb:GetRecords",
+                                        "dynamodb:GetShardIterator",
+                                        "dynamodb:ListStreams"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsTable",
+                                            "StreamArn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "PublishFraudAlerts",
+                                    "Effect": "Allow",
+                                    "Action": "sns:Publish",
+                                    "Resource": {
+                                        "Ref": "FraudAlertsTopic"
+                                    }
+                                },
+                                {
+                                    "Sid": "DlqSend",
+                                    "Effect": "Allow",
+                                    "Action": "sqs:SendMessage",
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DeadLetterQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "LogsWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-fraud:*"
+                                    }
+                                },
+                                {
+                                    "Sid": "LogsCreateGroupIfMissing",
+                                    "Effect": "Allow",
+                                    "Action": "logs:CreateLogGroup",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api-inline"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "DynamoDBQuery",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:GetItem",
+                                        "dynamodb:Query"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "LogsWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${ProjectName}-${EnvironmentSuffix}-api:*"
+                                    }
+                                },
+                                {
+                                    "Sid": "LogsCreateGroupIfMissing",
+                                    "Effect": "Allow",
+                                    "Action": "logs:CreateLogGroup",
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ]
+            }
+        },
+        "IngestionLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion"
+                },
+                "Description": "Parse uploaded CSV files from S3 and write validated transactions to DynamoDB.",
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IngestionLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "ReservedConcurrentExecutions": 10,
+                "Timeout": 60,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "DeadLetterQueue",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TransactionsTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os, csv, json, boto3, urllib.parse\nfrom datetime import datetime\nddb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\ntable = ddb.Table(os.environ['TABLE_NAME'])\ndef handler(event, context):\n    for rec in event.get('Records', []):\n        if rec.get('eventSource') == 'aws:s3':\n            b = rec['s3']['bucket']['name']\n            k = urllib.parse.unquote_plus(rec['s3']['object']['key'])\n            if not (k.startswith('uploads/') and k.endswith('.csv')):\n                continue\n            obj = s3.get_object(Bucket=b, Key=k)\n            body = obj['Body'].read().decode('utf-8').splitlines()\n            reader = csv.DictReader(body)\n            for row in reader:\n                txid = row.get('transactionId')\n                ts = row.get('timestamp') or datetime.utcnow().isoformat()\n                amount_str = row.get('amount', '0')\n                try:\n                    amount = float(amount_str)\n                except Exception:\n                    amount = 0.0\n                status = row.get('status', 'PENDING')\n                if not txid:\n                    continue\n                item = {\n                    'transactionId': str(txid),\n                    'timestamp': str(ts),\n                    'amount': amount,\n                    'status': status,\n                    'raw': json.dumps(row)\n                }\n                table.put_item(Item=item)\n    return {'ok': True}\n"
+                }
+            }
+        },
+        "IngestionLambdaInvokePermissionFromS3": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "IngestionLambda"
+                },
+                "Principal": "s3.amazonaws.com",
+                "Action": "lambda:InvokeFunction",
+                "SourceAccount": {
+                    "Ref": "AWS::AccountId"
+                }
+            }
+        },
+        "IngestionLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-ingestion"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "FraudDetectionLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud"
+                },
+                "Description": "Detect suspicious transactions (amount > 10000) from DynamoDB Streams and publish to SNS.",
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "FraudLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "ReservedConcurrentExecutions": 10,
+                "Timeout": 60,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "DeadLetterQueue",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Environment": {
+                    "Variables": {
+                        "ALERT_TOPIC_ARN": {
+                            "Ref": "FraudAlertsTopic"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os, json, boto3, decimal\nsns = boto3.client('sns')\nTHRESHOLD = 10000.0\ndef _to_float(v):\n    try:\n        if isinstance(v, (int, float)): return float(v)\n        if isinstance(v, decimal.Decimal): return float(v)\n        return float(str(v))\n    except Exception:\n        return 0.0\ndef handler(event, context):\n    for rec in event.get('Records', []):\n        if rec.get('eventSource') == 'aws:dynamodb' and rec.get('eventName') in ('INSERT','MODIFY'):\n            new = rec['dynamodb'].get('NewImage', {})\n            txid = new.get('transactionId', {}).get('S')\n            ts = new.get('timestamp', {}).get('S') or new.get('timestamp', {}).get('N')\n            amount_attr = new.get('amount')\n            amount = 0.0\n            if amount_attr:\n                amount = _to_float(amount_attr.get('N') or amount_attr.get('S'))\n            if amount > THRESHOLD:\n                msg = f'Suspicious transaction detected: id={txid}, ts={ts}, amount={amount}'\n                sns.publish(TopicArn=os.environ['ALERT_TOPIC_ARN'], Message=msg, Subject='Fraud Alert')\n    return {'ok': True}\n"
+                }
+            }
+        },
+        "FraudStreamMapping": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "BatchSize": 100,
+                "Enabled": true,
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "TransactionsTable",
+                        "StreamArn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "FraudDetectionLambda"
+                },
+                "StartingPosition": "LATEST"
+            }
+        },
+        "FraudDetectionLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-fraud"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "ApiLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                },
+                "Description": "API handler to query transaction status by transactionId (GET query or POST body).",
+                "Runtime": "python3.11",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ApiLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "ReservedConcurrentExecutions": 10,
+                "Timeout": 30,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TransactionsTable"
+                        }
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os, json, boto3\nddb = boto3.client('dynamodb')\nTABLE = os.environ['TABLE_NAME']\ndef _resp(status, body):\n    return {\n        \"statusCode\": status,\n        \"headers\": {\"Content-Type\": \"application/json\"},\n        \"body\": json.dumps(body)\n    }\ndef handler(event, context):\n    method = (event.get('httpMethod') or '').upper()\n    txid = None\n    if method == 'GET':\n        params = event.get('queryStringParameters') or {}\n        txid = params.get('transactionId')\n        ts = params.get('timestamp')\n    else:\n        try:\n            body = json.loads(event.get('body') or '{}')\n        except Exception:\n            body = {}\n        txid = body.get('transactionId')\n        ts = body.get('timestamp')\n    if not txid:\n        return _resp(400, {\"error\":\"transactionId required\"})\n    if ts:\n        res = ddb.get_item(\n            TableName=TABLE,\n            Key={\"transactionId\": {\"S\": str(txid)}, \"timestamp\": {\"S\": str(ts)}}\n        )\n        return _resp(200, {\"item\": res.get('Item')})\n    res = ddb.query(\n        TableName=TABLE,\n        KeyConditionExpression='transactionId = :t',\n        ExpressionAttributeValues={':t': {'S': str(txid)}},\n        ScanIndexForward=False,\n        Limit=1\n    )\n    items = res.get('Items', [])\n    return _resp(200, {\"item\": items[0] if items else None})\n"
+                }
+            }
+        },
+        "ApiLambdaLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-api"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "ApiGatewayRestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                },
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "MinimumCompressionSize": 10240
+            }
+        },
+        "ApiGatewayResourceTransactions": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "ApiGatewayRestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "transactions"
+            }
+        },
+        "ApiGatewayMethodGetTransaction": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayResourceTransactions"
+                },
+                "HttpMethod": "GET",
+                "AuthorizationType": "NONE",
+                "ApiKeyRequired": true,
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": [
+                            "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FuncArn}/invocations",
+                            {
+                                "Region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "FuncArn": {
+                                    "Fn::GetAtt": [
+                                        "ApiLambda",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "ApiGatewayMethodPostTransaction": {
+            "Type": "AWS::ApiGateway::Method",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "ResourceId": {
+                    "Ref": "ApiGatewayResourceTransactions"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "ApiKeyRequired": true,
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Sub": [
+                            "arn:aws:apigateway:${Region}:lambda:path/2015-03-31/functions/${FuncArn}/invocations",
+                            {
+                                "Region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "FuncArn": {
+                                    "Fn::GetAtt": [
+                                        "ApiLambda",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        ]
+                    }
+                }
+            }
+        },
+        "ApiLambdaInvokePermissionFromApi": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ApiLambda"
+                },
+                "Principal": "apigateway.amazonaws.com",
+                "Action": "lambda:InvokeFunction",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${ApiGatewayRestApi}/*/*/*"
+                }
+            }
+        },
+        "ApiGatewayDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "Description": {
+                    "Fn::Sub": "Deployment for ${ProjectName}-${EnvironmentSuffix}"
+                }
+            },
+            "DependsOn": [
+                "ApiGatewayMethodGetTransaction",
+                "ApiGatewayMethodPostTransaction"
+            ]
+        },
+        "ApiGatewayStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "StageName": {
+                    "Fn::Sub": "${EnvironmentSuffix}"
+                },
+                "RestApiId": {
+                    "Ref": "ApiGatewayRestApi"
+                },
+                "DeploymentId": {
+                    "Ref": "ApiGatewayDeployment"
+                },
+                "TracingEnabled": true
+            }
+        },
+        "ApiGatewayUsagePlan": {
+            "Type": "AWS::ApiGateway::UsagePlan",
+            "Properties": {
+                "UsagePlanName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-plan"
+                },
+                "ApiStages": [
+                    {
+                        "ApiId": {
+                            "Ref": "ApiGatewayRestApi"
+                        },
+                        "Stage": {
+                            "Ref": "ApiGatewayStage"
+                        }
+                    }
+                ],
+                "Quota": {
+                    "Limit": 1000,
+                    "Period": "DAY"
+                },
+                "Throttle": {
+                    "RateLimit": 10,
+                    "BurstLimit": 20
+                }
+            }
+        },
+        "ApiGatewayApiKey": {
+            "Type": "AWS::ApiGateway::ApiKey",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-key"
+                },
+                "Enabled": true,
+                "StageKeys": [
+                    {
+                        "RestApiId": {
+                            "Ref": "ApiGatewayRestApi"
+                        },
+                        "StageName": {
+                            "Ref": "ApiGatewayStage"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiGatewayUsagePlanKey": {
+            "Type": "AWS::ApiGateway::UsagePlanKey",
+            "Properties": {
+                "KeyId": {
+                    "Ref": "ApiGatewayApiKey"
+                },
+                "KeyType": "API_KEY",
+                "UsagePlanId": {
+                    "Ref": "ApiGatewayUsagePlan"
+                }
+            }
+        },
+        "IngestionLambdaErrorRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion-error-rate"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 0.01,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "TreatMissingData": "notBreaching",
+                "Metrics": [
+                    {
+                        "Id": "err",
+                        "ReturnData": false,
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Errors",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        }
+                    },
+                    {
+                        "Id": "inv",
+                        "ReturnData": false,
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Invocations",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        }
+                    },
+                    {
+                        "Id": "rate",
+                        "Expression": "IF(inv>0, err/inv, 0)",
+                        "Label": "ErrorRate",
+                        "ReturnData": true
+                    }
+                ]
+            }
+        },
+        "FraudLambdaErrorRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud-error-rate"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 0.01,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "TreatMissingData": "notBreaching",
+                "Metrics": [
+                    {
+                        "Id": "err",
+                        "ReturnData": false,
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Errors",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        }
+                    },
+                    {
+                        "Id": "inv",
+                        "ReturnData": false,
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Invocations",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-fraud"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        }
+                    },
+                    {
+                        "Id": "rate",
+                        "Expression": "IF(inv>0, err/inv, 0)",
+                        "Label": "ErrorRate",
+                        "ReturnData": true
+                    }
+                ]
+            }
+        },
+        "ApiLambdaErrorRateAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api-error-rate"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 0.01,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "TreatMissingData": "notBreaching",
+                "Metrics": [
+                    {
+                        "Id": "err",
+                        "ReturnData": false,
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Errors",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        }
+                    },
+                    {
+                        "Id": "inv",
+                        "ReturnData": false,
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Invocations",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        }
+                    },
+                    {
+                        "Id": "rate",
+                        "Expression": "IF(inv>0, err/inv, 0)",
+                        "Label": "ErrorRate",
+                        "ReturnData": true
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "IngestBucketName": {
+            "Value": {
+                "Ref": "IngestBucket"
+            },
+            "Description": "S3 bucket name for CSV uploads (prefix uploads/).",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-IngestBucketName"
+                }
+            }
+        },
+        "TransactionsTableArn": {
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionsTable",
+                    "Arn"
+                ]
+            },
+            "Description": "ARN of the DynamoDB transactions table.",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-TransactionsTableArn"
+                }
+            }
+        },
+        "ApiBaseUrl": {
+            "Value": {
+                "Fn::Sub": "https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/transactions"
+            },
+            "Description": "Base URL for the REST API transactions resource (API key required).",
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ApiBaseUrl"
+                }
+            }
+        }
+    }
+}
