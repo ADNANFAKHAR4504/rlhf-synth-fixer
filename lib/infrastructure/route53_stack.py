@@ -33,7 +33,7 @@ class Route53Stack(pulumi.ComponentResource):
             resource_path="/health",
             fqdn=primary_endpoint.apply(lambda ep: ep.replace("https://", "").replace("http://", "").split("/")[0]),
             port=443,
-            request_interval=60,  # WRONG! Should be 30
+            request_interval=30,
             failure_threshold=3,
             measure_latency=True,
             tags={**tags, 'Name': f"trading-health-check-{environment_suffix}"},
