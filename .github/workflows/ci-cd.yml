@@ -622,31 +622,31 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    # needs:
-    #   [
-    #     detect-metadata,
-    #     integration-tests-live,
-    #     analysis,
-    #     cicd-pipeline-optimization,
-    #   ]
+    needs:
+      [
+        detect-metadata,
+        integration-tests-live,
+        analysis,
+        cicd-pipeline-optimization,
+      ]
     # For Infrastructure Analysis/Monitoring OR CI/CD Pipeline: Allow int-tests to be skipped
     # For all other subject labels: Require int-tests to succeed
-    # if: |
-    #   always() && !cancelled() &&
-    #   (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
-    #   (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
-    #   (
-    #     (
-    #       (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
-    #        contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)) &&
-    #       (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
-    #     ) ||
-    #     (
-    #       !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
-    #       !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
-    #       needs.integration-tests-live.result == 'success'
-    #     )
-    #   )
+    if: |
+      always() && !cancelled() &&
+      (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
+      (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
+      (
+        (
+          (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
+           contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)) &&
+          (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
+        ) ||
+        (
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+          needs.integration-tests-live.result == 'success'
+        )
+      )
     permissions:
       contents: write
       pull-requests: write
