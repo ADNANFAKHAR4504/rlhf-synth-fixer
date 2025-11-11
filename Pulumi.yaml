@@ -1,4 +1,4 @@
-name: flask-app-infrastructure
+name: TapStack
 runtime: python
 description: Containerized Flask application infrastructure with ECS Fargate, RDS, and auto-scaling
 main: lib/__main__.py
