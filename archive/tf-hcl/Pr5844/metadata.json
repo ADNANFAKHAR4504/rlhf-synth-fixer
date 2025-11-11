@@ -11,6 +11,34 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["iam", "kms", "s3", "rds", "lambda", "cloudwatch", "securityhub", "vpc"],
-  "training_quality": 9.5
+  "aws_services": [
+    "CloudWatch",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "Kms",
+    "Lambda",
+    "RDS",
+    "Route53",
+    "S3",
+    "SNS",
+    "VPC",
+    "cloudwatch",
+    "eventbridge",
+    "iam",
+    "kms",
+    "lambda",
+    "rds",
+    "route53",
+    "s3",
+    "sns",
+    "vpc"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
