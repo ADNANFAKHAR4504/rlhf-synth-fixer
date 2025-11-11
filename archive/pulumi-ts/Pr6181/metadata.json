@@ -1,0 +1,27 @@
+{
+  "po_id": "mfm20",
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "startedAt": "2025-11-10T16:13:00Z",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

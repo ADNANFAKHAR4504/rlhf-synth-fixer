@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000218",
+  "team": "1",
+  "startedAt": "2025-11-04T05:44:29.288Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "Amazon Aurora",
+    "Amazon RDS",
+    "Amazon EC2",
+    "AWS IAM",
+    "AWS KMS",
+    "AWS Lambda",
+    "Amazon EventBridge",
+    "Amazon SNS",
+    "Amazon Route 53",
+    "Amazon S3",
+    "Amazon CloudWatch",
+    "Amazon CloudWatch Logs",
+    "Amazon VPC"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}
