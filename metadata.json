@@ -1,4 +1,5 @@
 {
+  "author" : "raaj1021",
   "taskId": "m0p3q5",
   "po_id": "m0p3q5",
   "platform": "pulumi",
@@ -27,5 +28,5 @@
     "EventBridge",
     "Kinesis"
   ],
-  "training_quality": 9
+  "training_quality": 10
 }

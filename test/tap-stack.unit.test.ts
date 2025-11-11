@@ -305,11 +305,11 @@ describe('DnsStack', () => {
     stack = new DnsStack('test-dns', {
       environmentSuffix: testEnvSuffix,
       tags: testTags,
-      domainName: 'example.com',
-      primaryAlbDns: computeStack.primaryAlbDnsName,
-      drAlbDns: computeStack.drAlbDnsName,
+      primaryAlbDnsName: computeStack.primaryAlbDnsName,
+      drAlbDnsName: computeStack.drAlbDnsName,
+      primaryAlbZoneId: computeStack.primaryAlbZoneId,
+      drAlbZoneId: computeStack.drAlbZoneId,
       primaryProvider: networkStack.primaryProvider,
-      drProvider: networkStack.drProvider,
     });
   });
 
@@ -610,11 +610,11 @@ describe('Integration - Full Stack Creation', () => {
     const dnsStack = new DnsStack('integration-dns', {
       environmentSuffix: envSuffix,
       tags,
-      domainName: 'example.com',
-      primaryAlbDns: computeStack.primaryAlbDnsName,
-      drAlbDns: computeStack.drAlbDnsName,
+      primaryAlbDnsName: computeStack.primaryAlbDnsName,
+      drAlbDnsName: computeStack.drAlbDnsName,
+      primaryAlbZoneId: computeStack.primaryAlbZoneId,
+      drAlbZoneId: computeStack.drAlbZoneId,
       primaryProvider: networkStack.primaryProvider,
-      drProvider: networkStack.drProvider,
     });
 
     const monitoringStack = new MonitoringStack('integration-monitoring', {

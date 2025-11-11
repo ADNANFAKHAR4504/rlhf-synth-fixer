@@ -1109,7 +1109,7 @@ export class DnsStack extends pulumi.ComponentResource {
 
     // Create hosted zone in primary region
     const hostedZone = new aws.route53.Zone(`payments-zone-${environmentSuffix}`, {
-      name: `payments-${environmentSuffix}.example.com`,
+      name: `payments-${environmentSuffix}.internal`,
       comment: 'Managed by Pulumi for DR setup',
       tags: pulumi.all([tags]).apply(([t]) => ({
         ...t,
@@ -1150,7 +1150,7 @@ export class DnsStack extends pulumi.ComponentResource {
     // Primary failover record
     new aws.route53.Record(`primary-record-${environmentSuffix}`, {
       zoneId: hostedZone.zoneId,
-      name: `payments-${environmentSuffix}.example.com`,
+      name: `payments-${environmentSuffix}.internal`,
       type: 'A',
       setIdentifier: `primary-${environmentSuffix}`,
       failoverRoutingPolicies: [{
@@ -1167,7 +1167,7 @@ export class DnsStack extends pulumi.ComponentResource {
     // DR failover record
     new aws.route53.Record(`dr-record-${environmentSuffix}`, {
       zoneId: hostedZone.zoneId,
-      name: `payments-${environmentSuffix}.example.com`,
+      name: `payments-${environmentSuffix}.internal`,
       type: 'A',
       setIdentifier: `dr-${environmentSuffix}`,
       failoverRoutingPolicies: [{
