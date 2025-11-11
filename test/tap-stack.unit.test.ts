@@ -47,6 +47,8 @@ describe('TapStack', () => {
       expect(stack.primarySnsTopicArn).toBeDefined();
       expect(stack.standbySnsTopicArn).toBeDefined();
       expect(stack.primaryHealthCheckId).toBeDefined();
+      expect(stack.hostedZoneId).toBeDefined();
+      expect(stack.domainName).toBeDefined();
       expect(stack.applicationUrl).toBeDefined();
     });
 
@@ -657,6 +659,8 @@ describe('TapStack', () => {
         stack.primarySnsTopicArn,
         stack.standbySnsTopicArn,
         stack.primaryHealthCheckId,
+        stack.hostedZoneId,
+        stack.domainName,
         stack.applicationUrl,
       ]).apply(([
         primaryVpcId,
@@ -669,6 +673,8 @@ describe('TapStack', () => {
         primarySnsTopicArn,
         standbySnsTopicArn,
         primaryHealthCheckId,
+        hostedZoneId,
+        domainName,
         applicationUrl,
       ]) => {
         expect(primaryVpcId).toBeDefined();
@@ -681,6 +687,8 @@ describe('TapStack', () => {
         expect(primarySnsTopicArn).toBeDefined();
         expect(standbySnsTopicArn).toBeDefined();
         expect(primaryHealthCheckId).toBeDefined();
+        expect(hostedZoneId).toBeDefined();
+        expect(domainName).toBeDefined();
         expect(applicationUrl).toBeDefined();
         done();
       });

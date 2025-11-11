@@ -61,6 +61,8 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly standbySnsTopicArn: pulumi.Output<string>;
   public readonly primaryHealthCheckId: pulumi.Output<string>;
   public readonly applicationUrl: pulumi.Output<string>;
+  public readonly hostedZoneId: pulumi.Output<string>;
+  public readonly domainName: pulumi.Output<string>;
 
   /**
   * Creates a new TapStack component with multi-region failover infrastructure.
@@ -1084,6 +1086,69 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
       { provider: primaryProvider, parent: this }
     );
 
+    // ============================================
+    // DNS FAILOVER SYSTEM
+    // ============================================
+
+    // Create Route 53 hosted zone for DNS-based failover
+    const hostedZone = new aws.route53.Zone(
+      `hosted-zone-${environmentSuffix}`,
+      {
+        name: `trading-app-${environmentSuffix}.example.com`,
+        tags: {
+          Name: `hosted-zone-${environmentSuffix}`,
+          Environment: 'Production',
+          ...tags,
+        },
+      },
+      { parent: this }
+    );
+
+    // Create weighted DNS record for primary region
+    const _primaryDnsRecord = new aws.route53.Record(
+      `primary-dns-record-${environmentSuffix}`,
+      {
+        zoneId: hostedZone.zoneId,
+        name: `trading-app-${environmentSuffix}.example.com`,
+        type: 'A',
+        aliases: [
+          {
+            name: primaryAlb.dnsName,
+            zoneId: primaryAlb.zoneId,
+            evaluateTargetHealth: true,
+          },
+        ],
+        setIdentifier: 'primary',
+        weightedRoutingPolicy: {
+          weight: 100,
+        },
+        healthCheckId: primaryHealthCheck.id,
+      },
+      { parent: this }
+    );
+
+    // Create weighted DNS record for standby region
+    const _standbyDnsRecord = new aws.route53.Record(
+      `standby-dns-record-${environmentSuffix}`,
+      {
+        zoneId: hostedZone.zoneId,
+        name: `trading-app-${environmentSuffix}.example.com`,
+        type: 'A',
+        aliases: [
+          {
+            name: standbyAlb.dnsName,
+            zoneId: standbyAlb.zoneId,
+            evaluateTargetHealth: false,
+          },
+        ],
+        setIdentifier: 'standby',
+        weightedRoutingPolicy: {
+          weight: 0,
+        },
+      },
+      { parent: this }
+    );
+
     // Set public outputs
     this.primaryVpcId = primaryVpc.id;
     this.standbyVpcId = standbyVpc.id;
@@ -1095,7 +1160,9 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
     this.primarySnsTopicArn = primarySnsTopic.arn;
     this.standbySnsTopicArn = standbySnsTopic.arn;
     this.primaryHealthCheckId = primaryHealthCheck.id;
-    this.applicationUrl = pulumi.interpolate`http://${primaryAlb.dnsName}`;
+    this.hostedZoneId = hostedZone.zoneId;
+    this.domainName = hostedZone.name;
+    this.applicationUrl = pulumi.interpolate`http://${hostedZone.name}`;
 
     // Register outputs
     this.registerOutputs({
@@ -1109,6 +1176,8 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
       primarySnsTopicArn: this.primarySnsTopicArn,
       standbySnsTopicArn: this.standbySnsTopicArn,
       primaryHealthCheckId: this.primaryHealthCheckId,
+      hostedZoneId: this.hostedZoneId,
+      domainName: this.domainName,
       applicationUrl: this.applicationUrl,
     });
   }

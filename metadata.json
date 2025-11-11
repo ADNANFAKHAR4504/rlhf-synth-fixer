@@ -10,7 +10,17 @@
     "Failure Recovery Automation"
   ],
   "po_id": "6w00k",
-  "aws_services": [],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ALB",
+    "Auto Scaling",
+    "Route53",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "IAM"
+  ],
   "region": "us-east-1",
   "author": "mayanksethi-turing",
   "reviewer": "raghav-turing",
