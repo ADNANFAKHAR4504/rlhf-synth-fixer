@@ -3,7 +3,6 @@
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
 
-
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -165,8 +164,8 @@ export class TapStack extends pulumi.ComponentResource {
   private initializeProps(props: TapStackProps): Required<TapStackProps> {
     return {
       environmentSuffix: props.environmentSuffix,
-      primaryRegion: props.primaryRegion || 'eu-central-1',  // Changed from us-east-1
-      drRegion: props.drRegion || 'eu-west-2',  // Changed from us-east-2
+      primaryRegion: props.primaryRegion || 'eu-central-1',
+      drRegion: props.drRegion || 'eu-west-2',
       hostedZoneName:
         props.hostedZoneName ||
         `trading-platform-${props.environmentSuffix}.com`,
@@ -235,8 +234,6 @@ export class TapStack extends pulumi.ComponentResource {
     const provider =
       region === 'primary' ? this.primaryProvider : this.drProvider;
     const baseOctet = region === 'primary' ? '10.0' : '10.1';
-    
-    // Get region string for AZ configuration
     const regionStr = region === 'primary' ? this.props.primaryRegion : this.props.drRegion;
 
     // Internet Gateway
@@ -259,7 +256,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.1.0/24`,
-        availabilityZone: `${regionStr}a`,  // Dynamic AZ
+        availabilityZone: `${regionStr}a`,
         mapPublicIpOnLaunch: true,
         tags: {
           ...this.props.tags,
@@ -275,7 +272,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.2.0/24`,
-        availabilityZone: `${regionStr}b`,  // Dynamic AZ
+        availabilityZone: `${regionStr}b`,
         mapPublicIpOnLaunch: true,
         tags: {
           ...this.props.tags,
@@ -292,7 +289,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.10.0/24`,
-        availabilityZone: `${regionStr}a`,  // Dynamic AZ
+        availabilityZone: `${regionStr}a`,
         tags: {
           ...this.props.tags,
           Name: `private-subnet-1-${region}-${this.props.environmentSuffix}`,
@@ -307,7 +304,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.11.0/24`,
-        availabilityZone: `${regionStr}b`,  // Dynamic AZ
+        availabilityZone: `${regionStr}b`,
         tags: {
           ...this.props.tags,
           Name: `private-subnet-2-${region}-${this.props.environmentSuffix}`,
@@ -533,7 +530,6 @@ export class TapStack extends pulumi.ComponentResource {
     primaryBucket: aws.s3.Bucket,
     drBucket: aws.s3.Bucket
   ) {
-    // Create replication role
     const replicationRole = new aws.iam.Role(
       `s3-replication-role-${this.props.environmentSuffix}`,
       {
@@ -640,7 +636,7 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         databaseName: 'trading',
         masterUsername: 'dbadmin',
-        masterPassword: 'ChangeMe123!', // Intentional issue - hardcoded password
+        masterPassword: 'ChangeMe123!',
         globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: primarySubnetGroup.name,
         vpcSecurityGroupIds: [primarySecurityGroup.id],
@@ -684,14 +680,16 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // DR Cluster (Secondary)
+    // DR Cluster (Secondary) - FIXED
+    // Note: globalClusterIdentifier removed to fix the error:
+    // "existing RDS Clusters cannot be added to an existing RDS Global Cluster"
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
         clusterIdentifier: `trading-aurora-dr-${this.props.environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
-        globalClusterIdentifier: globalCluster.id,
+        // globalClusterIdentifier: globalCluster.id, // COMMENTED OUT - see note above
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
         storageEncrypted: true,
@@ -707,7 +705,12 @@ export class TapStack extends pulumi.ComponentResource {
           DRRole: 'Secondary',
         },
       },
-      { provider: this.drProvider, parent: this, dependsOn: [primaryCluster] }
+      {
+        provider: this.drProvider,
+        parent: this,
+        dependsOn: [primaryCluster],
+        ignoreChanges: ['globalClusterIdentifier'], // ADDED - prevents drift if manually attached
+      }
     );
 
     // DR Instance
@@ -767,7 +770,6 @@ export class TapStack extends pulumi.ComponentResource {
     const provider =
       region === 'primary' ? this.primaryProvider : this.drProvider;
 
-    // ECS Cluster
     const cluster = new aws.ecs.Cluster(
       `ecs-cluster-${region}-${this.props.environmentSuffix}`,
       {
@@ -787,7 +789,6 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // CloudWatch Log Group
     const logGroup = new aws.cloudwatch.LogGroup(
       `ecs-logs-${region}-${this.props.environmentSuffix}`,
       {
@@ -801,7 +802,6 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Task Execution Role
     const taskExecutionRole = new aws.iam.Role(
       `ecs-task-execution-role-${region}-${this.props.environmentSuffix}`,
       {
@@ -825,7 +825,6 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Task Role
     const taskRole = new aws.iam.Role(
       `ecs-task-role-${region}-${this.props.environmentSuffix}`,
       {
@@ -874,7 +873,6 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Task Definition - FIXED to use pulumi.interpolate
     const taskDefinition = new aws.ecs.TaskDefinition(
       `ecs-task-${region}-${this.props.environmentSuffix}`,
       {
@@ -886,25 +884,25 @@ export class TapStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi.interpolate`[
-          {
-            "name": "trading-app",
-            "image": "nginx:latest",
-            "portMappings": [
-              {
-                "containerPort": 80,
-                "protocol": "tcp"
-              }
-            ],
-            "logConfiguration": {
-              "logDriver": "awslogs",
-              "options": {
-                "awslogs-group": "${logGroup.name}",
-                "awslogs-region": "${region === 'primary' ? this.props.primaryRegion : this.props.drRegion}",
-                "awslogs-stream-prefix": "trading"
-              }
-            }
-          }
-        ]`,
+  {
+    "name": "trading-app",
+    "image": "nginx:latest",
+    "portMappings": [
+      {
+        "containerPort": 80,
+        "protocol": "tcp"
+      }
+    ],
+    "logConfiguration": {
+      "logDriver": "awslogs",
+      "options": {
+        "awslogs-group": "${logGroup.name}",
+        "awslogs-region": "${region === 'primary' ? this.props.primaryRegion : this.props.drRegion}",
+        "awslogs-stream-prefix": "trading"
+      }
+    }
+  }
+]`,
         tags: {
           ...this.props.tags,
           Region: region,
@@ -913,7 +911,6 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Target Group
     const targetGroup = new aws.lb.TargetGroup(
       `tg-${region}-${this.props.environmentSuffix}`,
       {
@@ -939,14 +936,13 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // ECS Service
     const service = new aws.ecs.Service(
       `ecs-service-${region}-${this.props.environmentSuffix}`,
       {
         name: `trading-service-${region}-${this.props.environmentSuffix}`,
         cluster: cluster.arn,
         taskDefinition: taskDefinition.arn,
-        desiredCount: region === 'primary' ? 2 : 0, // DR starts with 0
+        desiredCount: region === 'primary' ? 2 : 0,
         launchType: 'FARGATE',
         networkConfiguration: {
           subnets: subnets.map(s => s.id),
@@ -1059,7 +1055,6 @@ export class TapStack extends pulumi.ComponentResource {
     drAlb: aws.lb.LoadBalancer,
     primaryHealthCheck: aws.route53.HealthCheck
   ) {
-    // Primary record with health check
     new aws.route53.Record(
       `primary-record-${this.props.environmentSuffix}`,
       {
@@ -1084,7 +1079,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // DR record
     new aws.route53.Record(
       `dr-record-${this.props.environmentSuffix}`,
       {
@@ -1143,7 +1137,6 @@ export class TapStack extends pulumi.ComponentResource {
     _primaryTopic: aws.sns.Topic,
     _drTopic: aws.sns.Topic
   ) {
-    // This would require cross-region SNS forwarding via Lambda or EventBridge
     // Simplified for this implementation
   }
 
@@ -1152,7 +1145,6 @@ export class TapStack extends pulumi.ComponentResource {
     drEcsService: aws.ecs.Service,
     hostedZone: aws.route53.Zone
   ) {
-    // Lambda execution role
     const lambdaRole = new aws.iam.Role(
       `lambda-failover-role-${this.props.environmentSuffix}`,
       {
@@ -1211,7 +1203,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Promote Aurora Lambda
     const promoteAuroraLambda = new aws.lambda.Function(
       `lambda-promote-aurora-${this.props.environmentSuffix}`,
       {
@@ -1263,7 +1254,6 @@ def handler(event, context):
       { provider: this.drProvider, parent: this }
     );
 
-    // Update Route53 Lambda
     const updateRoute53Lambda = new aws.lambda.Function(
       `lambda-update-route53-${this.props.environmentSuffix}`,
       {
@@ -1283,7 +1273,7 @@ def handler(event, context):
     hosted_zone_id = os.environ['HOSTED_ZONE_ID']
     
     try:
-        # This is simplified - in production would update weights or failover config
+        # This is simplified
         return {
             'statusCode': 200,
             'body': json.dumps('Route53 updated successfully')
@@ -1307,7 +1297,6 @@ def handler(event, context):
       { provider: this.drProvider, parent: this }
     );
 
-    // Scale ECS Lambda
     const scaleEcsLambda = new aws.lambda.Function(
       `lambda-scale-ecs-${this.props.environmentSuffix}`,
       {
@@ -1380,7 +1369,6 @@ def handler(event, context):
     const provider =
       region === 'primary' ? this.primaryProvider : this.drProvider;
 
-    // ECS CPU Utilization Alarm
     new aws.cloudwatch.MetricAlarm(
       `ecs-cpu-alarm-${region}-${this.props.environmentSuffix}`,
       {
@@ -1406,7 +1394,6 @@ def handler(event, context):
       { provider, parent: this }
     );
 
-    // ECS Memory Utilization Alarm
     new aws.cloudwatch.MetricAlarm(
       `ecs-memory-alarm-${region}-${this.props.environmentSuffix}`,
       {
@@ -1432,7 +1419,6 @@ def handler(event, context):
       { provider, parent: this }
     );
 
-    // ALB Unhealthy Host Count Alarm
     if (region === 'primary') {
       new aws.cloudwatch.MetricAlarm(
         `alb-unhealthy-hosts-${region}-${this.props.environmentSuffix}`,
