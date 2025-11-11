@@ -325,6 +325,7 @@ export class DatabaseMigrationStack extends Construct {
     );
 
     // Enable backtrack (72 hours)
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const cfnCluster = auroraCluster.node.defaultChild as rds.CfnDBCluster;
     //cfnCluster.backtrackWindow = 259200; // 72 hours in seconds
 
@@ -426,10 +427,14 @@ export class DatabaseMigrationStack extends Construct {
       // create the role at top-level (tap-stack) with roleName: 'dms-vpc-role' and pass it in.
 
       // Create as a iam.Role instance so we can call addManagedPolicy / addToPolicy safely.
-      const createdRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
-        assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
-        roleName: `dms-vpc-role-${environmentSuffix}`,
-      });
+      const createdRole = new iam.Role(
+        this,
+        `DmsVpcRole-${environmentSuffix}`,
+        {
+          assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
+          roleName: `dms-vpc-role-${environmentSuffix}`,
+        }
+      );
       createdDmsVpcRole = true;
 
       // Attach required managed policy and inline permissions
@@ -492,7 +497,7 @@ export class DatabaseMigrationStack extends Construct {
         replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
         replicationSubnetGroupDescription:
           'Subnet group for DMS replication instance',
-        subnetIds: prodPrivateSubnets.map((subnet) => subnet.subnetId),
+        subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
       }
     );
 
@@ -935,61 +940,12 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     );
 
     // ==============================
-    // 16. Stack Outputs
+    // 16. Export Public Properties
     // ==============================
 
+    // Export key resource information as public properties
+    // (Outputs are defined at the TapStack level)
     this.auroraClusterEndpoint = auroraCluster.clusterEndpoint.hostname;
     this.dmsTaskArn = dmsTask.ref;
-
-    // Get stack reference for creating outputs
-    const stack = cdk.Stack.of(this);
-
-    new cdk.CfnOutput(stack, 'AuroraClusterEndpoint', {
-      value: auroraCluster.clusterEndpoint.hostname,
-      description: 'Aurora MySQL cluster writer endpoint',
-      exportName: `aurora-endpoint-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'AuroraClusterReaderEndpoint', {
-      value: auroraCluster.clusterReadEndpoint.hostname,
-      description: 'Aurora MySQL cluster reader endpoint',
-      exportName: `aurora-reader-endpoint-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'AuroraClusterIdentifier', {
-      value: auroraCluster.clusterIdentifier,
-      description: 'Aurora MySQL cluster identifier',
-      exportName: `aurora-cluster-id-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'DmsTaskArn', {
-      value: dmsTask.ref,
-      description: 'DMS migration task ARN',
-      exportName: `dms-task-arn-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'DmsReplicationInstanceArn', {
-      value: dmsReplicationInstance.ref,
-      description: 'DMS replication instance ARN',
-      exportName: `dms-instance-arn-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'ValidationLambdaArn', {
-      value: validationLambda.functionArn,
-      description: 'Data validation Lambda function ARN',
-      exportName: `validation-lambda-arn-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'AlarmTopicArn', {
-      value: alarmTopic.topicArn,
-      description: 'SNS topic ARN for migration alarms',
-      exportName: `alarm-topic-arn-${environmentSuffix}`,
-    });
-
-    new cdk.CfnOutput(stack, 'TargetSecretArn', {
-      value: targetDbSecret.secretArn,
-      description: 'Target Aurora database credentials secret ARN',
-      exportName: `target-secret-arn-${environmentSuffix}`,
-    });
   }
 }

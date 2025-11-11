@@ -1,7 +1,10 @@
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
-import { DatabaseMigrationStack, DatabaseMigrationStackProps } from './database-migration-stack';
+import {
+  DatabaseMigrationStack,
+  DatabaseMigrationStackProps,
+} from './database-migration-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -21,7 +24,9 @@ export class TapStack extends cdk.Stack {
       roleName: `dms-vpc-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
       managedPolicies: [
-        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonDMSVPCManagementRole'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonDMSVPCManagementRole'
+        ),
       ],
     });
 
@@ -31,6 +36,42 @@ export class TapStack extends cdk.Stack {
       dmsVpcRole, // add this prop to DatabaseMigrationStack props (or dmsVpcRoleArn: dmsVpcRole.roleArn)
     };
 
-    new DatabaseMigrationStack(this, 'DatabaseMigration', dmProps);
+    const dbMigration = new DatabaseMigrationStack(
+      this,
+      'DatabaseMigration',
+      dmProps
+    );
+
+    // ==============================
+    // Stack Outputs
+    // ==============================
+
+    new cdk.CfnOutput(this, 'AuroraClusterEndpoint', {
+      value: dbMigration.auroraClusterEndpoint,
+      description: 'Aurora MySQL cluster writer endpoint',
+      exportName: `aurora-endpoint-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DmsTaskArn', {
+      value: dbMigration.dmsTaskArn,
+      description: 'DMS migration task ARN',
+      exportName: `dms-task-arn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DmsVpcRoleArn', {
+      value: dmsVpcRole.roleArn,
+      description: 'DMS VPC management role ARN',
+      exportName: `dms-vpc-role-arn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EnvironmentSuffix', {
+      value: environmentSuffix,
+      description: 'Environment suffix used for resource naming',
+    });
+
+    new cdk.CfnOutput(this, 'Region', {
+      value: cdk.Stack.of(this).region,
+      description: 'AWS region where stack is deployed',
+    });
   }
 }

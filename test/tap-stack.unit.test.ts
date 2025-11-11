@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Unit Tests', () => {
@@ -13,7 +13,7 @@ describe('TapStack Unit Tests', () => {
       environmentSuffix: 'test',
       env: {
         account: '123456789012',
-        region: 'eu-central-1',
+        region: 'eu-west-2',
       },
     });
     template = Template.fromStack(stack);
@@ -26,7 +26,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('Stack has correct region', () => {
-      expect(stack.region).toBe('eu-central-1');
+      expect(stack.region).toBe('eu-west-2');
     });
 
     test('Stack tags are applied', () => {
