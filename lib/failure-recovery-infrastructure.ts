@@ -297,8 +297,8 @@ export class FailureRecoveryInfrastructure extends Construct {
       handler: 'index.handler',
       role: logProcessorRole,
       code: lambda.Code.fromInline(`
-const AWS = require('aws-sdk');
-const s3 = new AWS.S3();
+const { S3Client, HeadObjectCommand, PutObjectTaggingCommand } = require('@aws-sdk/client-s3');
+const s3Client = new S3Client();
 
 exports.handler = async (event) => {
     console.log('Processing log files...');
@@ -313,19 +313,19 @@ exports.handler = async (event) => {
                 console.log(\`Processing log file: \${bucket}/\${key}\`);
                 
                 // Get object metadata
-                const params = {
+                const headParams = {
                     Bucket: bucket,
                     Key: key
                 };
                 
-                const metadata = await s3.headObject(params).promise();
+                const metadata = await s3Client.send(new HeadObjectCommand(headParams));
                 console.log(\`File size: \${metadata.ContentLength} bytes\`);
                 
                 // Add log processing logic here
                 // For example: parse access logs, extract metrics, send to CloudWatch
                 
                 // Tag processed objects
-                await s3.putObjectTagging({
+                const tagParams = {
                     Bucket: bucket,
                     Key: key,
                     Tagging: {
@@ -340,7 +340,9 @@ exports.handler = async (event) => {
                             }
                         ]
                     }
-                }).promise();
+                };
+                
+                await s3Client.send(new PutObjectTaggingCommand(tagParams));
                 
                 console.log(\`Successfully processed: \${key}\`);
             }
