@@ -26,6 +26,6 @@
     "CloudWatchLogs"
   ],
   "author": "aj-turing",
-  "region": "ap-southeast-1",
+  "region": "us-east-1",
   "training_quality": 10
 }
