@@ -1,0 +1,3 @@
+name: environment-migration
+runtime: nodejs
+description: Environment migration infrastructure with database and container deployment, blue-green support, and weighted routing
