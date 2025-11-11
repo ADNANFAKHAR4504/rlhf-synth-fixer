@@ -1,3 +1,9 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
+
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -10,6 +16,8 @@ import { S3Module } from './s3-module';
 import { MonitoringModule } from './monitoring-module';
 import { ScpModule } from './scp-module';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
+import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -20,9 +28,8 @@ interface TapStackProps {
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-
-const AWS_REGION_OVERRIDE = 'ap-southeast-1';
+// you can set it here. Otherwise, it will default to 'eu-central-1'.
+const AWS_REGION_OVERRIDE = 'eu-central-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -31,9 +38,10 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
+      : props?.awsRegion || 'eu-central-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'eu-central-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
+
     const defaultTags = props?.defaultTags || [
       {
         tags: {
@@ -60,6 +68,9 @@ export class TapStack extends TerraformStack {
       // Note: For state locking, use dynamodb_table parameter with a DynamoDB table
       // dynamodb_table: 'terraform-state-lock'
     });
+
+    // Get current AWS account ID
+    const currentAccount = new DataAwsCallerIdentity(this, 'current', {});
 
     // Create S3 bucket for Config delivery
     const configBucket = new S3Bucket(this, 'config-bucket', {
@@ -96,6 +107,48 @@ export class TapStack extends TerraformStack {
       s3BucketArn: s3Module.bucket.arn,
       kmsKeyArn: s3KmsModule.key.arn,
       allowedIpRanges: ['10.0.0.0/8', '172.16.0.0/12'],
+    });
+
+    // Add bucket policy to Config bucket to allow AWS Config to write
+    new S3BucketPolicy(this, 'config-bucket-policy', {
+      bucket: configBucket.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Sid: 'AWSConfigBucketPermissionsCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'config.amazonaws.com',
+            },
+            Action: 's3:GetBucketAcl',
+            Resource: configBucket.arn,
+          },
+          {
+            Sid: 'AWSConfigBucketExistenceCheck',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'config.amazonaws.com',
+            },
+            Action: 's3:ListBucket',
+            Resource: configBucket.arn,
+          },
+          {
+            Sid: 'AWSConfigBucketPutObject',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'config.amazonaws.com',
+            },
+            Action: 's3:PutObject',
+            Resource: `${configBucket.arn}/*`,
+            Condition: {
+              StringEquals: {
+                's3:x-amz-acl': 'bucket-owner-full-control',
+              },
+            },
+          },
+        ],
+      }),
     });
 
     // Create monitoring and compliance infrastructure

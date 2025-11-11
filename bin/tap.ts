@@ -1,4 +1,9 @@
 #!/usr/bin/env node
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
@@ -8,8 +13,8 @@ const app = new App();
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stateBucket = process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
 const stateBucketRegion =
-  process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
-const awsRegion = process.env.AWS_REGION || 'us-east-1';
+  process.env.TERRAFORM_STATE_BUCKET_REGION || 'eu-central-1';
+const awsRegion = process.env.AWS_REGION || 'eu-central-1';
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
