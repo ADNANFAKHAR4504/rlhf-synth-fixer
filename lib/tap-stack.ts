@@ -24,7 +24,6 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   // Accept an array here because `bin/tap.ts` constructs defaultTags as an array
-  // (one or more AwsProviderDefaultTags blocks). We'll pick the first element
   defaultTags?: AwsProviderDefaultTags[];
 }
 
