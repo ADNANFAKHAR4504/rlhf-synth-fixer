@@ -1,0 +1,10 @@
+node_modules
+cdk.out
+coverage
+*.js
+*.d.ts
+worktree
+archive
+subcategory-references
+dist
+bin
