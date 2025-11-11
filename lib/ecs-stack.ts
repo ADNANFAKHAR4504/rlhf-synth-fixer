@@ -7,6 +7,7 @@ export interface EcsStackArgs {
   privateSubnetIds: pulumi.Output<string[]>;
   databaseEndpoint: pulumi.Output<string>;
   databaseSecretArn: pulumi.Output<string>;
+  region?: pulumi.Output<string>;
   tags: pulumi.Input<{ [key: string]: string }>;
 }
 
@@ -31,8 +32,12 @@ export class EcsStack extends pulumi.ComponentResource {
       vpcId,
       privateSubnetIds,
       databaseSecretArn,
+      region,
       tags,
     } = args;
+
+    // Get region from args or default to us-east-1
+    const awsRegion = region || pulumi.output('us-east-1');
 
     // ECS Cluster
     const cluster = new aws.ecs.Cluster(
@@ -242,8 +247,13 @@ export class EcsStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
-          .all([ecrRepo.repositoryUrl, databaseSecretArn, logGroup.name])
-          .apply(([repoUrl, secretArn, logGroupName]) =>
+          .all([
+            ecrRepo.repositoryUrl,
+            databaseSecretArn,
+            logGroup.name,
+            awsRegion,
+          ])
+          .apply(([repoUrl, secretArn, logGroupName, region]) =>
             JSON.stringify([
               {
                 name: 'payment-app',
@@ -277,7 +287,7 @@ export class EcsStack extends pulumi.ComponentResource {
                   logDriver: 'awslogs',
                   options: {
                     'awslogs-group': logGroupName,
-                    'awslogs-region': 'ap-southeast-1',
+                    'awslogs-region': region,
                     'awslogs-stream-prefix': 'ecs',
                   },
                 },
@@ -298,7 +308,7 @@ export class EcsStack extends pulumi.ComponentResource {
                   logDriver: 'awslogs',
                   options: {
                     'awslogs-group': logGroupName,
-                    'awslogs-region': 'ap-southeast-1',
+                    'awslogs-region': region,
                     'awslogs-stream-prefix': 'xray',
                   },
                 },

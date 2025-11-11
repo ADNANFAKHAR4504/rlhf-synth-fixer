@@ -59,6 +59,7 @@ export class TapStack extends pulumi.ComponentResource {
         privateSubnetIds: vpcStack.privateSubnetIds,
         databaseEndpoint: databaseStack.clusterEndpoint,
         databaseSecretArn: databaseStack.databaseSecretArn,
+        region,
         tags,
       },
       { parent: this }
