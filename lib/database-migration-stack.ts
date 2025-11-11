@@ -346,7 +346,7 @@ export class DatabaseMigrationStack extends Construct {
       `SourceRdsParameterGroup-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_43,
+          version: rds.MysqlEngineVersion.VER_8_0_34,
         }),
         description: 'Parameter group for source RDS MySQL instance',
         parameters: {
@@ -362,7 +362,7 @@ export class DatabaseMigrationStack extends Construct {
       `SourceRdsInstance-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_43,
+          version: rds.MysqlEngineVersion.VER_8_0_34,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
