@@ -332,58 +332,6 @@ const _auroraInstance = new aws.rds.ClusterInstance(
   }
 );
 
-// DMS VPC Role - Required by AWS DMS to access VPC resources
-const dmsVpcRole = new aws.iam.Role('dms-vpc-role', {
-  name: 'dms-vpc-role',
-  assumeRolePolicy: JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Principal: {
-          Service: 'dms.amazonaws.com',
-        },
-        Action: 'sts:AssumeRole',
-      },
-    ],
-  }),
-  tags: {
-    Name: 'dms-vpc-role',
-    Environment: environmentSuffix,
-  },
-});
-
-new aws.iam.RolePolicyAttachment('dms-vpc-policy', {
-  role: dmsVpcRole.name,
-  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole',
-});
-
-// DMS CloudWatch Logs Role
-const dmsCloudwatchRole = new aws.iam.Role('dms-cloudwatch-logs-role', {
-  name: 'dms-cloudwatch-logs-role',
-  assumeRolePolicy: JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Principal: {
-          Service: 'dms.amazonaws.com',
-        },
-        Action: 'sts:AssumeRole',
-      },
-    ],
-  }),
-  tags: {
-    Name: 'dms-cloudwatch-logs-role',
-    Environment: environmentSuffix,
-  },
-});
-
-new aws.iam.RolePolicyAttachment('dms-cloudwatch-policy', {
-  role: dmsCloudwatchRole.name,
-  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole',
-});
-
 // DMS Subnet Group
 const dmsSubnetGroup = new aws.dms.ReplicationSubnetGroup(
   `dms-subnet-group-${environmentSuffix}`,
@@ -395,8 +343,7 @@ const dmsSubnetGroup = new aws.dms.ReplicationSubnetGroup(
       Name: `dms-subnet-group-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
-  },
-  { dependsOn: [dmsVpcRole] }
+  }
 );
 
 // DMS Replication Instance
