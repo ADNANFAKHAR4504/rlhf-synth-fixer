@@ -8,7 +8,7 @@ The business needs this infrastructure deployed to the us-east-1 region with thr
 
 ## What we need to build
 
-Create a multi-environment infrastructure management system using **CDKTF with TypeScript** for the fintech payment processing platform. The solution must support three isolated environments (dev, staging, prod) in the us-east-1 region with consistent configuration across all environments.
+Create a multi-environment infrastructure management system using **CDKTF with ts** for the fintech payment processing platform. The solution must support three isolated environments (dev, staging, prod) in the us-east-1 region with consistent configuration across all environments.
 
 ### Core Requirements
 
@@ -60,7 +60,7 @@ Create a multi-environment infrastructure management system using **CDKTF with T
 
 ### Technical Requirements
 
-- All infrastructure defined using **CDKTF with TypeScript**
+- All infrastructure defined using **CDKTF with ts**
 - Use Terraform 1.5+ with AWS provider 5.x
 - All resources must be modular and reusable
 - Resource names must include environmentSuffix for uniqueness
@@ -102,12 +102,12 @@ Implement consistent tagging across all resources:
 - Isolation: No connectivity between environments
 - Destroyability: All resources can be destroyed cleanly via terraform destroy
 - Resource Naming: All resources include environmentSuffix in their names
-- Code Quality: TypeScript code is well-structured, modular, and documented
+- Code Quality: ts code is well-structured, modular, and documented
 - State Management: Remote state with locking working correctly
 
 ## What to deliver
 
-- Complete CDKTF TypeScript implementation
+- Complete CDKTF ts implementation
 - Modular stack supporting multiple environments via configuration
 - VPC with subnets, NAT gateways, and VPC endpoints
 - RDS PostgreSQL instances with KMS encryption

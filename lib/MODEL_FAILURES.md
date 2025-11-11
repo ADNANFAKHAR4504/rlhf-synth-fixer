@@ -11,7 +11,7 @@ This document details all issues found in the initial MODEL_RESPONSE and how the
 **Impact**: Without state locking, multiple deployments could corrupt the Terraform state file, leading to infrastructure inconsistencies and potential data loss.
 
 **Fix**: Added DynamoDB table creation with proper configuration:
-```typescript
+```ts
 const stateLockTable = new DynamodbTable(this, 'state-lock-table', {
   name: `tap-state-lock-${config.environmentSuffix}`,
   billingMode: 'PAY_PER_REQUEST',
@@ -46,7 +46,7 @@ new S3Backend(this, {
 **Impact**: ECS tasks would fail to start or run properly. The tasks need execution roles to pull images and task roles to interact with AWS services.
 
 **Fix**: Added two IAM roles with proper permissions:
-```typescript
+```ts
 // Task Execution Role - for ECS to pull images and write logs
 const ecsTaskExecutionRole = new IamRole(this, 'ecs-task-execution-role', {
   name: `payment-ecs-task-execution-role-${config.environmentSuffix}`,
@@ -113,7 +113,7 @@ const taskDefinition = new EcsTaskDefinition(this, 'ecs-task-definition', {
 **Impact**: VPC endpoint creation would fail, or endpoints would be created with incorrect security posture.
 
 **Fix**: Created dedicated security group for VPC endpoints:
-```typescript
+```ts
 const vpcEndpointSecurityGroup = new SecurityGroup(this, 'vpc-endpoint-sg', {
   name: `payment-vpc-endpoint-sg-${config.environmentSuffix}`,
   description: 'Security group for VPC Endpoints',
@@ -155,7 +155,7 @@ new VpcEndpoint(this, 'ecr-api-endpoint', {
 **Impact**: HTTPS listener creation would fail immediately, preventing the load balancer from accepting HTTPS traffic.
 
 **Fix**: Added ACM certificate creation:
-```typescript
+```ts
 const certificate = new AcmCertificate(this, 'alb-certificate', {
   domainName: `payment-platform-${config.environmentSuffix}.example.com`,
   validationMethod: 'DNS',
@@ -195,7 +195,7 @@ new AlbListener(this, 'alb-listener-https', {
 **Impact**: Bucket creation would fail with "BucketAlreadyExists" error, blocking the entire deployment.
 
 **Fix**: Added timestamp to ensure global uniqueness:
-```typescript
+```ts
 const timestamp = Date.now().toString();
 const assetsBucket = new S3Bucket(this, 'assets-bucket', {
   bucket: `payment-assets-${config.environmentSuffix}-${timestamp}`,
@@ -214,7 +214,7 @@ const assetsBucket = new S3Bucket(this, 'assets-bucket', {
 **Impact**: Security vulnerabilities, potential data exposure, and difficulty in destroying infrastructure during testing.
 
 **Fix**: Added comprehensive S3 security configurations:
-```typescript
+```ts
 // Block public access
 new S3BucketPublicAccessBlock(this, 'assets-bucket-public-access-block', {
   bucket: assetsBucket.id,
@@ -252,7 +252,7 @@ const assetsBucket = new S3Bucket(this, 'assets-bucket', {
 **Impact**: Users accessing the site via HTTP would get connection refused errors instead of being redirected to HTTPS.
 
 **Fix**: Added HTTP listener with redirect action:
-```typescript
+```ts
 // Added HTTP ingress rule to ALB security group
 new SecurityGroupRule(this, 'alb-ingress-http', {
   type: 'ingress',
@@ -296,7 +296,7 @@ new AlbListener(this, 'alb-listener-http', {
 **Impact**: Poor resource organization, difficulty tracking costs, and non-compliance with tagging requirements.
 
 **Fix**: Added consistent tags to all resources:
-```typescript
+```ts
 tags: {
   Name: `resource-name-${config.environmentSuffix}`,
   Project: 'PaymentPlatform',
@@ -312,7 +312,7 @@ tags: {
 **Impact**: Backups wouldn't match the documented retention strategy (1 day for dev, 7 for staging, 30 for prod).
 
 **Fix**: Added backup retention to environment config:
-```typescript
+```ts
 interface EnvironmentConfig {
   dbInstanceClass: string;
   dbAllocatedStorage: number;
@@ -340,7 +340,7 @@ new DbInstance(this, 'rds-instance', {
 **Impact**: Reduced security posture, non-compliance with security best practices.
 
 **Fix**: Enabled key rotation:
-```typescript
+```ts
 const rdsKmsKey = new KmsKey(this, 'rds-kms-key', {
   description: `RDS encryption key for payment platform ${config.environmentSuffix}`,
   deletionWindowInDays: 10,
@@ -366,7 +366,7 @@ new KmsAlias(this, 'rds-kms-alias', {
 **Impact**: This would create invalid Terraform expressions and cause deployment failures.
 
 **Fix**: Used CDKTF Fn.element helper function:
-```typescript
+```ts
 // Changed from:
 availabilityZone: `\${${availabilityZones.fqn}.names[0]}`
 
@@ -381,7 +381,7 @@ availabilityZone: Fn.element(availabilityZones.names, 0)
 **Impact**: Reduced monitoring capabilities, making it harder to troubleshoot performance issues.
 
 **Fix**: Enabled Container Insights:
-```typescript
+```ts
 const ecsCluster = new EcsCluster(this, 'ecs-cluster', {
   name: `payment-cluster-${config.environmentSuffix}`,
   setting: [
@@ -401,7 +401,7 @@ const ecsCluster = new EcsCluster(this, 'ecs-cluster', {
 **Impact**: Tasks might be terminated before they finish initializing, leading to deployment failures.
 
 **Fix**: Added health check grace period:
-```typescript
+```ts
 new EcsService(this, 'ecs-service', {
   // ... other config
   healthCheckGracePeriodSeconds: 60,
@@ -417,7 +417,7 @@ new EcsService(this, 'ecs-service', {
 **Impact**: Slow deployments and extended downtime during updates.
 
 **Fix**: Set appropriate deregistration delay:
-```typescript
+```ts
 const targetGroup = new AlbTargetGroup(this, 'alb-target-group', {
   // ... other config
   deregistrationDelay: '30',
@@ -443,7 +443,7 @@ const targetGroup = new AlbTargetGroup(this, 'alb-target-group', {
 **Impact**: Potential state management issues and difficulty adding/removing rules dynamically.
 
 **Fix**: Changed to use separate SecurityGroupRule resources:
-```typescript
+```ts
 // Changed from inline rules to:
 const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
   name: `payment-rds-sg-${config.environmentSuffix}`,
@@ -482,7 +482,7 @@ new SecurityGroupRule(this, 'rds-egress', {
 **Impact**: Potential race condition during infrastructure creation.
 
 **Fix**: Added explicit dependency:
-```typescript
+```ts
 const natGateway = new NatGateway(this, 'nat-gateway', {
   allocationId: natEip.id,
   subnetId: publicSubnet1.id,
@@ -502,7 +502,7 @@ const natGateway = new NatGateway(this, 'nat-gateway', {
 **Impact**: Would cause compilation errors.
 
 **Fix**: Added to imports:
-```typescript
+```ts
 import { TerraformStack, S3Backend, Fn } from 'cdktf';
 ```
 
@@ -527,7 +527,7 @@ import { TerraformStack, S3Backend, Fn } from 'cdktf';
 **Impact**: Application wouldn't know which environment it's running in.
 
 **Fix**: Added environment variables:
-```typescript
+```ts
 containerDefinitions: JSON.stringify([
   {
     name: 'payment-app',
@@ -550,7 +550,7 @@ containerDefinitions: JSON.stringify([
 **Impact**: Deployments would fail with "InvalidAllocationID.NotFound" errors when trying to associate Elastic IPs with NAT Gateways.
 
 **Fix**: Added unique suffixes to NAT Gateway and Elastic IP:
-```typescript
+```ts
 // Create EIP for NAT Gateway
 const natEip = new Eip(this, 'nat-eip', {
   domain: 'vpc',
@@ -581,7 +581,7 @@ const natGateway = new NatGateway(this, 'nat-gateway', {
 **Impact**: Reduced code maintainability and readability.
 
 **Fix**: Added comprehensive JSDoc comments:
-```typescript
+```ts
 /**
  * Get environment-specific configuration based on environment suffix
  * @param env Environment name (dev, staging, prod)
@@ -606,7 +606,7 @@ interface EnvironmentConfig {
 **Impact**: Deployment would fail at the RDS creation step. AWS only supports specific minor versions of PostgreSQL, and version 14.7 was not among them.
 
 **Fix**: Changed the engine version to use the major version only:
-```typescript
+```ts
 // Before:
 engineVersion: '14.7',
 
@@ -623,7 +623,7 @@ This allows AWS to automatically select the latest available minor version withi
 **Impact**: Deployment would timeout waiting for ACM certificate validation (5+ minutes), then fail when creating the HTTPS ALB listener. This blocks the entire deployment process.
 
 **Fix**: For synthetic testing purposes, simplified the ALB configuration to use HTTP-only:
-```typescript
+```ts
 // Removed:
 // - ACM certificate creation
 // - HTTPS listener (port 443)

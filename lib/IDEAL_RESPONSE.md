@@ -1,10 +1,10 @@
 # Multi-Environment Infrastructure with CDKTF - Production Ready
 
-This implementation provides a production-ready multi-environment infrastructure setup using CDKTF with TypeScript for a fintech payment processing platform. All issues from the initial implementation have been addressed.
+This implementation provides a production-ready multi-environment infrastructure setup using CDKTF with ts for a fintech payment processing platform. All issues from the initial implementation have been addressed.
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack, S3Backend, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
