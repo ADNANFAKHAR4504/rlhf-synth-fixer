@@ -394,7 +394,7 @@ describe('Infrastructure Integration Tests', () => {
             const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
             // List of keys that contain auto-generated IDs that don't include env suffix
-            const excludedKeys = ['auroraClusterId', 'ecrRepositoryUrl'];
+            const excludedKeys = ['auroraClusterId', 'ecrRepositoryUrl', 'route53ZoneId'];
 
             for (const [key, value] of Object.entries(outputs)) {
                 // Skip ARNs, URLs, endpoints, and auto-generated IDs
