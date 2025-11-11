@@ -1,6 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import { Construct } from 'constructs';
 import { DatabaseMigrationStack, DatabaseMigrationStackProps } from './database-migration-stack';
 
 interface TapStackProps extends cdk.StackProps {
@@ -16,9 +16,9 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Create DMS VPC management role with the conventional name.
+    // Create DMS VPC management role with environment-specific name to avoid conflicts
     const dmsVpcRole = new iam.Role(this, 'DmsVpcRole', {
-      roleName: 'dms-vpc-role', // keep the conventional name so DMS/other tools can find it
+      roleName: `dms-vpc-role-${environmentSuffix}`,
       assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonDMSVPCManagementRole'),
