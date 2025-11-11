@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-10T20:49:51+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "po_id": "p7rvd",
   "aws_services": [
     "VPC",
@@ -18,5 +20,6 @@
     "CloudWatch Logs"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "rajendra-s-aws"
 }
