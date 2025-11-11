@@ -242,26 +242,36 @@ class DmsStack(pulumi.ComponentResource):
     def _create_dms_iam_roles(self):
         """Create required IAM roles for DMS service."""
 
-        # DMS VPC Management Role
-        dms_vpc_role = aws.iam.Role(
-            f"dms-vpc-role-{self.environment_suffix}",
-            name=f"dms-vpc-role-{self.environment_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "dms.amazonaws.com"
-                    }
-                }]
-            }),
-            tags={
-                **self.tags,
-                'Name': f"dms-vpc-role-{self.environment_suffix}"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+        invoke_opts = pulumi.InvokeOptions(parent=self)
+
+        try:
+            existing_vpc_role = aws.iam.get_role(name="dms-vpc-role", opts=invoke_opts)
+            dms_vpc_role = aws.iam.Role.get(
+                f"dms-vpc-role-{self.environment_suffix}",
+                existing_vpc_role.name,
+                opts=ResourceOptions(parent=self)
+            )
+        except Exception:
+            dms_vpc_role = aws.iam.Role(
+                f"dms-vpc-role-{self.environment_suffix}",
+                name="dms-vpc-role",
+                path="/service-role/",
+                assume_role_policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "dms.amazonaws.com"
+                        }
+                    }]
+                }),
+                tags={
+                    **self.tags,
+                    'Name': f"dms-vpc-role-{self.environment_suffix}"
+                },
+                opts=ResourceOptions(parent=self, ignore_changes=["name", "path"])
+            )
 
         aws.iam.RolePolicyAttachment(
             f"dms-vpc-policy-attachment-{self.environment_suffix}",
@@ -270,26 +280,34 @@ class DmsStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=dms_vpc_role)
         )
 
-        # DMS CloudWatch Logs Role
-        dms_cloudwatch_role = aws.iam.Role(
-            f"dms-cloudwatch-role-{self.environment_suffix}",
-            name=f"dms-cloudwatch-logs-role-{self.environment_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "dms.amazonaws.com"
-                    }
-                }]
-            }),
-            tags={
-                **self.tags,
-                'Name': f"dms-cloudwatch-role-{self.environment_suffix}"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+        try:
+            existing_cloudwatch_role = aws.iam.get_role(name="dms-cloudwatch-logs-role", opts=invoke_opts)
+            dms_cloudwatch_role = aws.iam.Role.get(
+                f"dms-cloudwatch-role-{self.environment_suffix}",
+                existing_cloudwatch_role.name,
+                opts=ResourceOptions(parent=self)
+            )
+        except Exception:
+            dms_cloudwatch_role = aws.iam.Role(
+                f"dms-cloudwatch-role-{self.environment_suffix}",
+                name="dms-cloudwatch-logs-role",
+                path="/service-role/",
+                assume_role_policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "dms.amazonaws.com"
+                        }
+                    }]
+                }),
+                tags={
+                    **self.tags,
+                    'Name': f"dms-cloudwatch-role-{self.environment_suffix}"
+                },
+                opts=ResourceOptions(parent=self, ignore_changes=["name", "path"])
+            )
 
         aws.iam.RolePolicyAttachment(
             f"dms-cloudwatch-policy-attachment-{self.environment_suffix}",
