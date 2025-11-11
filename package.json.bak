@@ -23,7 +23,10 @@
     "build:strict": "tsc",
     "start": "ts-node cli/create-task.ts",
     "lint": "eslint .",
+<<<<<<< HEAD
+=======
     "synth": "cdk synth --all",
+>>>>>>> b89341bbdb (fix: deploy and test issues)
     "format": "prettier --write 'lib/*.{ts,tsx}' 'bin/*.{ts,tsx}' 'test/*.{ts,tsx}' 'cli/*.{ts,tsx}'",
     "format:check": "prettier --check 'lib/*.{ts,tsx}'",
     "format-all": "npm run format && npm run lint",
@@ -36,6 +39,12 @@
     "test:integration-js": "jest --testPathPattern=\\.int\\.test\\.mjs$ --testTimeout=30000",
     "test:integration-cdktf": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
     "cdk": "cdk",
+<<<<<<< HEAD
+    "synth": "cdk synth --all",
+    "deploy": "cdk deploy",
+    "diff": "cdk diff",
+    "destroy": "cdk destroy"
+=======
     "cdk:synth": "npx cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:deploy": "npx cdk deploy --all --require-approval never --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
@@ -82,6 +91,7 @@
     "localstack:tf:cleanup": "./scripts/localstack-terraform-cleanup.sh",
     "release": "semantic-release",
     "prepare": "husky"
+>>>>>>> b89341bbdb (fix: deploy and test issues)
   },
   "devDependencies": {
     "@aws-sdk/client-api-gateway": "^3.913.0",
@@ -94,13 +104,21 @@
     "@aws-sdk/client-cloudformation": "^3.883.0",
     "@aws-sdk/client-cloudfront": "^3.883.0",
     "@aws-sdk/client-cloudtrail": "^3.901.0",
+<<<<<<< HEAD
+    "@aws-sdk/client-cloudwatch": "^3.927.0",
+=======
     "@aws-sdk/client-cloudwatch": "^3.914.0",
+>>>>>>> b89341bbdb (fix: deploy and test issues)
     "@aws-sdk/client-cloudwatch-logs": "^3.901.0",
     "@aws-sdk/client-codebuild": "^3.864.0",
     "@aws-sdk/client-codecommit": "^3.864.0",
     "@aws-sdk/client-codedeploy": "^3.864.0",
     "@aws-sdk/client-codepipeline": "^3.864.0",
+<<<<<<< HEAD
+    "@aws-sdk/client-config-service": "^3.927.0",
+=======
     "@aws-sdk/client-config-service": "^3.883.0",
+>>>>>>> b89341bbdb (fix: deploy and test issues)
     "@aws-sdk/client-database-migration-service": "^3.917.0",
     "@aws-sdk/client-dynamodb": "^3.883.0",
     "@aws-sdk/client-ec2": "^3.913.0",
@@ -114,7 +132,11 @@
     "@aws-sdk/client-firehose": "^3.901.0",
     "@aws-sdk/client-glue": "^3.904.0",
     "@aws-sdk/client-guardduty": "^3.902.0",
+<<<<<<< HEAD
+    "@aws-sdk/client-iam": "^3.927.0",
+=======
     "@aws-sdk/client-iam": "^3.901.0",
+>>>>>>> b89341bbdb (fix: deploy and test issues)
     "@aws-sdk/client-iot": "^3.915.0",
     "@aws-sdk/client-kinesis": "^3.914.0",
     "@aws-sdk/client-kms": "^3.913.0",
@@ -136,7 +158,11 @@
     "@aws-sdk/client-servicediscovery": "^3.856.0",
     "@aws-sdk/client-sesv2": "^3.901.0",
     "@aws-sdk/client-sfn": "^3.914.0",
+<<<<<<< HEAD
+    "@aws-sdk/client-sns": "^3.927.0",
+=======
     "@aws-sdk/client-sns": "^3.855.0",
+>>>>>>> b89341bbdb (fix: deploy and test issues)
     "@aws-sdk/client-sqs": "^3.848.0",
     "@aws-sdk/client-ssm": "^3.848.0",
     "@aws-sdk/client-sts": "^3.862.0",
@@ -213,7 +239,10 @@
     "@aws-sdk/client-iot-data-plane": "^3.926.0",
     "@aws-sdk/client-opensearch": "^3.906.0",
     "@aws-sdk/client-s3": "^3.884.0",
+<<<<<<< HEAD
+=======
     "@aws-sdk/client-sns": "^3.855.0",
+>>>>>>> b89341bbdb (fix: deploy and test issues)
     "@aws-sdk/client-sqs": "^3.879.0",
     "@aws-sdk/client-ssm": "^3.879.0",
     "@aws-sdk/client-timestream-query": "^3.914.0",
