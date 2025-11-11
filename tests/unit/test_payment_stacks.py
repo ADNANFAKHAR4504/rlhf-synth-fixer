@@ -113,9 +113,9 @@ class TestPaymentProcessingStacks(unittest.TestCase):
         subnets = template.find_resources("AWS::EC2::Subnet")
         assert len(subnets) >= 6
 
-    @mark.it("NetworkStack creates NAT instances")
+    @mark.it("NetworkStack creates NAT Gateways")
     def test_network_stack_nat_instances(self):
-        """Test NAT instance creation"""
+        """Test NAT Gateway creation for private subnet internet access"""
         stack = NetworkStack(
             self.parent_stack,
             f"NetworkStack{self.env_suffix}",
@@ -123,14 +123,13 @@ class TestPaymentProcessingStacks(unittest.TestCase):
         )
         template = Template.from_stack(stack)
 
-        # Should create NAT instances (one per AZ, typically 2-3 depending on region)
-        nat_instances = template.find_resources("AWS::EC2::Instance")
-        assert len(nat_instances) >= 2, "Should create at least 2 NAT instances"
+        # Should create NAT Gateways (one per AZ, typically 2-3 depending on region)
+        nat_gateways = template.find_resources("AWS::EC2::NatGateway")
+        assert len(nat_gateways) >= 2, "Should create at least 2 NAT Gateways"
 
-        # Verify NAT instance configuration
-        template.has_resource_properties("AWS::EC2::Instance", {
-            "SourceDestCheck": False
-        })
+        # Verify Elastic IPs are created for NAT Gateways
+        eips = template.find_resources("AWS::EC2::EIP")
+        assert len(eips) >= 2, "Should create at least 2 Elastic IPs for NAT Gateways"
 
     @mark.it("NetworkStack creates ALB")
     def test_network_stack_alb(self):

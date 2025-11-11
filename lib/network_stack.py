@@ -33,13 +33,13 @@ class NetworkStack(NestedStack):
 
         env_suffix = props.environment_suffix
 
-        # VPC with 3 AZs - NAT instances will be added manually for cost optimization
+        # VPC with 3 AZs and NAT Gateways for internet access from private subnets
         self.vpc = ec2.Vpc(
             self,
             f"PaymentVPC-{env_suffix}",
             vpc_name=f"payment-vpc-{env_suffix}",
             max_azs=3,
-            nat_gateways=0,  # Use NAT instances instead for cost optimization
+            nat_gateways=3,  # One NAT Gateway per AZ for high availability
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name=f"Public-{env_suffix}",
@@ -59,70 +59,8 @@ class NetworkStack(NestedStack):
             ]
         )
 
-        # Create NAT instances for cost optimization (one per AZ)
-        # NAT instances are significantly cheaper than NAT Gateways
-        nat_instance_security_group = ec2.SecurityGroup(
-            self,
-            f"NATInstanceSG-{env_suffix}",
-            vpc=self.vpc,
-            description="Security group for NAT instances",
-            allow_all_outbound=True
-        )
-
-        nat_instance_security_group.add_ingress_rule(
-            ec2.Peer.ipv4(self.vpc.vpc_cidr_block),
-            ec2.Port.all_traffic(),
-            "Allow all traffic from VPC"
-        )
-
-        # Get the latest Amazon Linux 2 AMI
-        nat_ami = ec2.MachineImage.latest_amazon_linux2()
-
-        # Create NAT instance in each public subnet
-        public_subnets = self.vpc.public_subnets
-        for i, subnet in enumerate(public_subnets):
-            nat_instance = ec2.Instance(
-                self,
-                f"NATInstance{i+1}-{env_suffix}",
-                instance_type=ec2.InstanceType.of(
-                    ec2.InstanceClass.T3,
-                    ec2.InstanceSize.MICRO
-                ),
-                machine_image=nat_ami,
-                vpc=self.vpc,
-                vpc_subnets=ec2.SubnetSelection(subnets=[subnet]),
-                security_group=nat_instance_security_group,
-                source_dest_check=False,  # Required for NAT
-            )
-
-            # Add user data to configure NAT functionality
-            nat_instance.add_user_data(
-                "#!/bin/bash",
-                "yum install -y iptables-services",
-                "systemctl enable iptables",
-                "systemctl start iptables",
-                "echo 'net.ipv4.ip_forward = 1' >> /etc/sysctl.conf",
-                "sysctl -p",
-                "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-                "service iptables save"
-            )
-
-            # Update route tables for private subnets to use NAT instance
-            # Find the corresponding private subnet for this AZ
-            az = subnet.availability_zone
-            private_subnets = [s for s in self.vpc.private_subnets
-                              if s.availability_zone == az and s.subnet_id in
-                              [ps.subnet_id for ps in self.vpc.select_subnets(
-                                  subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS).subnets]]
-
-            for private_subnet in private_subnets:
-                ec2.CfnRoute(
-                    self,
-                    f"NATRoute{i+1}-{env_suffix}-{private_subnet.node.id}",
-                    route_table_id=private_subnet.route_table.route_table_id,
-                    destination_cidr_block="0.0.0.0/0",
-                    instance_id=nat_instance.instance_id
-                )
+        # NAT Gateways are automatically created by CDK VPC construct
+        # when nat_gateways > 0 is specified
 
         # Security Groups
         self.alb_security_group = ec2.SecurityGroup(
