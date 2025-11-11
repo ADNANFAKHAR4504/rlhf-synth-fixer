@@ -1,0 +1,35 @@
+{
+  "po_id": "101000839",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-05T13:42:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "serverless",
+    "fintech",
+    "lambda",
+    "dynamodb",
+    "s3",
+    "api-gateway"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "API Gateway",
+    "IAM",
+    "CloudWatch",
+    "X-Ray"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iamarpit-turing",
+  "dockerS3Location": ""
+}

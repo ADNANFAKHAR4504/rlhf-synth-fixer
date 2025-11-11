@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "typescript",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000329",
+  "team": "1",
+  "startedAt": "2025-11-01T11:49:41.359Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "training_quality": 9,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}
