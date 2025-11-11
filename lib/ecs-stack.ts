@@ -242,8 +242,8 @@ export class EcsStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
-          .all([ecrRepo.repositoryUrl, databaseSecretArn])
-          .apply(([repoUrl, secretArn]) =>
+          .all([ecrRepo.repositoryUrl, databaseSecretArn, logGroup.name])
+          .apply(([repoUrl, secretArn, logGroupName]) =>
             JSON.stringify([
               {
                 name: 'payment-app',
@@ -276,7 +276,7 @@ export class EcsStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': logGroup.name,
+                    'awslogs-group': logGroupName,
                     'awslogs-region': 'ap-southeast-1',
                     'awslogs-stream-prefix': 'ecs',
                   },
@@ -297,7 +297,7 @@ export class EcsStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': logGroup.name,
+                    'awslogs-group': logGroupName,
                     'awslogs-region': 'ap-southeast-1',
                     'awslogs-stream-prefix': 'xray',
                   },

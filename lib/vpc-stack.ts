@@ -257,7 +257,9 @@ export class VpcStack extends pulumi.ComponentResource {
     this.databaseSubnetIds = pulumi.output(databaseSubnets.map(s => s.id));
     this.privateSubnetCidrs = pulumi
       .all(privateSubnets.map(s => s.cidrBlock))
-      .apply(cidrs => cidrs.filter((cidr): cidr is string => cidr !== undefined));
+      .apply(cidrs =>
+        cidrs.filter((cidr): cidr is string => cidr !== undefined)
+      );
 
     this.registerOutputs({
       vpcId: this.vpcId,
