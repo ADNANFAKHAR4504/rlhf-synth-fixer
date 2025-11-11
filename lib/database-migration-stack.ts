@@ -423,21 +423,23 @@ export class DatabaseMigrationStack extends Construct {
 
     if (!resolvedDmsVpcRole) {
       // Create role in this construct (fallback). If you want a conventional name visible outside,
-      // create the role at top-level (tap-stack.ts) with roleName: 'dms-vpc-role' and pass it in.
-      resolvedDmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
+      // create the role at top-level (tap-stack) with roleName: 'dms-vpc-role' and pass it in.
+
+      // Create as a iam.Role instance so we can call addManagedPolicy / addToPolicy safely.
+      const createdRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
         assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
         roleName: `dms-vpc-role-${environmentSuffix}`,
       });
       createdDmsVpcRole = true;
 
-      // Attach required managed policy and inline permissions only when we created the role here.
-      resolvedDmsVpcRole.addManagedPolicy(
+      // Attach required managed policy and inline permissions
+      createdRole.addManagedPolicy(
         iam.ManagedPolicy.fromAwsManagedPolicyName(
           'service-role/AmazonDMSVPCManagementRole'
         )
       );
 
-      resolvedDmsVpcRole.addToPolicy(
+      createdRole.addToPolicy(
         new iam.PolicyStatement({
           effect: iam.Effect.ALLOW,
           actions: [
@@ -458,6 +460,9 @@ export class DatabaseMigrationStack extends Construct {
           resources: ['*'],
         })
       );
+
+      // assign the created Role to the resolvedDmsVpcRole variable (typed as IRole)
+      resolvedDmsVpcRole = createdRole;
     }
 
     // DMS CloudWatch Logs Role (required for DMS logging) - create as before
