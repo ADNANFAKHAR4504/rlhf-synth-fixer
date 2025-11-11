@@ -1,0 +1,25 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000894",
+  "team": "synth",
+  "startedAt": "2025-11-11T04:56:27+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Database",
+    "Aurora",
+    "RDS",
+    "Security",
+    "High Availability"
+  ],
+  "aws_services": [
+    "RDS Aurora",
+    "AWS Secrets Manager",
+    "CloudWatch",
+    "KMS",
+    "VPC"
+  ],
+  "training_quality": 9
+}
