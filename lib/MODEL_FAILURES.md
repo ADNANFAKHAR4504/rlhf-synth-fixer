@@ -377,4 +377,4 @@ This task provides valuable training data for improving the model's understandin
 *Generated: 2025-11-10*
 *Task: cdt0v - Serverless Transaction Processing System*
 *Platform: AWS CDK with TypeScript*
-*Region: ap-southeast-1*
+*Region: us-east-1

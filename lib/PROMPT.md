@@ -1,6 +1,6 @@
 Hey team,
 
-We need to build a serverless transaction processing system for a financial services company that handles customer transaction data in real-time for fraud detection. The business is dealing with variable loads during peak trading hours and needs something that stays cost-efficient while maintaining reliability. I've been asked to create this using **AWS CDK with TypeScript** and deploy it to the ap-southeast-1 region.
+We need to build a serverless transaction processing system for a financial services company that handles customer transaction data in real-time for fraud detection. The business is dealing with variable loads during peak trading hours and needs something that stays cost-efficient while maintaining reliability. I've been asked to create this using **AWS CDK with TypeScript** and deploy it to the us-east-1 region.
 
 The system needs to process transactions through an API, validate them, store the data, and run asynchronous audit logging. Everything must be PCI DSS compliant, which means we need proper security controls, encryption, and monitoring throughout. The business also wants daily transaction summaries generated automatically.
 
@@ -62,7 +62,7 @@ Create a serverless transaction processing system using **AWS CDK with TypeScrip
 - Use **CloudWatch** for monitoring and alarms
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-environment-suffix`
-- Deploy to **ap-southeast-1** region
+- Deploy to **us-east-1** region
 - All resources must be destroyable (no Retain policies)
 
 ### Security and Compliance

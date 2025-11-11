@@ -1,4 +1,5 @@
 import fs from 'fs';
+import path from 'path';
 import {
   DynamoDBClient,
   ScanCommand,
@@ -23,9 +24,12 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Get environment suffix and region from environment variables
+// Get environment suffix from environment variable or default
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'ap-southeast-1';
+
+// Read region from AWS_REGION file or environment variable
+const regionFilePath = path.join(__dirname, '..', 'lib', 'AWS_REGION');
+const region = process.env.AWS_REGION || fs.readFileSync(regionFilePath, 'utf8').trim();
 
 // Initialize AWS clients
 const dynamoDBClient = new DynamoDBClient({ region });

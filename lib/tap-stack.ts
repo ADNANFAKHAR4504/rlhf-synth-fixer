@@ -8,6 +8,7 @@ import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { SqsEventSource } from 'aws-cdk-lib/aws-lambda-event-sources';
+import { NodejsFunction } from 'aws-cdk-lib/aws-lambda-nodejs';
 import { Construct } from 'constructs';
 import * as path from 'path';
 
@@ -78,17 +79,14 @@ export class TapStack extends cdk.Stack {
     });
 
     // Process Transaction Lambda
-    const processTransactionFn = new lambda.Function(
+    const processTransactionFn = new NodejsFunction(
       this,
       'ProcessTransaction',
       {
         functionName: `processTransaction-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         architecture: lambda.Architecture.ARM_64,
-        handler: 'index.handler',
-        code: lambda.Code.fromAsset(
-          path.join(__dirname, 'lambda', 'processTransaction')
-        ),
+        entry: path.join(__dirname, 'lambda', 'processTransaction', 'index.ts'),
         layers: [sharedLayer],
         environment: {
           TABLE_NAME: transactionTable.tableName,
@@ -96,6 +94,11 @@ export class TapStack extends cdk.Stack {
         },
         timeout: cdk.Duration.seconds(30),
         reservedConcurrentExecutions: 100,
+        bundling: {
+          minify: true,
+          sourceMap: false,
+          target: 'es2020',
+        },
       }
     );
 
@@ -123,20 +126,22 @@ export class TapStack extends cdk.Stack {
     );
 
     // Audit Transaction Lambda
-    const auditTransactionFn = new lambda.Function(this, 'AuditTransaction', {
+    const auditTransactionFn = new NodejsFunction(this, 'AuditTransaction', {
       functionName: `auditTransaction-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       architecture: lambda.Architecture.ARM_64,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, 'lambda', 'auditTransaction')
-      ),
+      entry: path.join(__dirname, 'lambda', 'auditTransaction', 'index.ts'),
       layers: [sharedLayer],
       environment: {
         BUCKET_NAME: reportsBucket.bucketName,
       },
       timeout: cdk.Duration.seconds(60),
       reservedConcurrentExecutions: 100,
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2020',
+      },
     });
 
     // Add SQS trigger to audit function
@@ -237,20 +242,22 @@ export class TapStack extends cdk.Stack {
     });
 
     // Daily Summary Lambda
-    const dailySummaryFn = new lambda.Function(this, 'DailySummary', {
+    const dailySummaryFn = new NodejsFunction(this, 'DailySummary', {
       functionName: `dailySummary-${environmentSuffix}`,
       runtime: lambda.Runtime.NODEJS_18_X,
       architecture: lambda.Architecture.ARM_64,
-      handler: 'index.handler',
-      code: lambda.Code.fromAsset(
-        path.join(__dirname, 'lambda', 'dailySummary')
-      ),
+      entry: path.join(__dirname, 'lambda', 'dailySummary', 'index.ts'),
       layers: [sharedLayer],
       environment: {
         TABLE_NAME: transactionTable.tableName,
         BUCKET_NAME: reportsBucket.bucketName,
       },
       timeout: cdk.Duration.minutes(5),
+      bundling: {
+        minify: true,
+        sourceMap: false,
+        target: 'es2020',
+      },
     });
 
     // Add target to EventBridge rule
