@@ -24,5 +24,11 @@
     "Amazon RDS Aurora",
     "Amazon SQS",
     "AWS Systems Manager Parameter Store"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
 }
