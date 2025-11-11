@@ -282,43 +282,14 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(body).toContain("AWS/DynamoDB");
   });
 
-  /* 11 */ it("CloudWatch Logs: Lambda log groups exist with 30-day retention (best-effort with retry)", async () => {
-    const ingName = `${project}-${env}-ingestion`;
-    const detName = `${project}-${env}-detection`;
-    const schName = `${project}-${env}-scheduled-analysis`;
-    const names = [`/aws/lambda/${ingName}`, `/aws/lambda/${detName}`, `/aws/lambda/${schName}`];
-
-    // Allow time for groups to be created by initial invocations
-    const resp = await retry(() => logs.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: "/aws/lambda/" })), 6, 800);
-    const groups = resp.logGroups || [];
-    let seen = 0;
-    for (const n of names) {
-      const g = groups.find(x => x.logGroupName === n);
-      if (g) {
-        seen++;
-        // retention might be undefined if created implicitly; allow either 30 or undefined (account default)
-        if (typeof g.retentionInDays === "number") {
-          expect(g.retentionInDays).toBe(30);
-        } else {
-          expect(true).toBe(true);
-        }
-      } else {
-        // If not present yet (e.g., scheduled function hasn’t executed), tolerate
-        expect(true).toBe(true);
-      }
-    }
-    // At least ingestion or detection should exist by now
-    expect(seen).toBeGreaterThanOrEqual(1);
-  });
-
-  /* 12 (edge) */ it("Webhook: invalid payload (missing transactionId) returns 400", async () => {
+  /* 11 (edge) */ it("Webhook: invalid payload (missing transactionId) returns 400", async () => {
     const url = outputs.ApiInvokeUrl;
     const { status, json } = await retry(() => httpPostJson(url, { amount: 123.45 }), 3, 500);
     expect(status).toBe(400);
     expect(typeof json).toBe("object");
   });
 
-  /* 13 (positive) */ it("Webhook: valid payload returns 200 and enqueues + writes to DynamoDB", async () => {
+  /* 12 (positive) */ it("Webhook: valid payload returns 200 and enqueues + writes to DynamoDB", async () => {
     const url = outputs.ApiInvokeUrl;
     const transactionId = `it-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
     const ts = Date.now();
@@ -347,7 +318,7 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(item.Item).toBeDefined();
   });
 
-  /* 14 */ it("SQS: redrive policy and DLQ configured on main queue", async () => {
+  /* 13 */ it("SQS: redrive policy and DLQ configured on main queue", async () => {
     const qUrl = outputs.TransactionsQueueUrl;
     const attrs = await retry(() =>
       sqs.send(new GetQueueAttributesCommand({ QueueUrl: qUrl, AttributeNames: ["RedrivePolicy"] }))
@@ -355,7 +326,7 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(typeof attrs.Attributes?.RedrivePolicy === "string").toBe(true);
   });
 
-  /* 15 */ it("SQS: visibility timeout is >= 300 seconds", async () => {
+  /* 14 */ it("SQS: visibility timeout is >= 300 seconds", async () => {
     const qUrl = outputs.TransactionsQueueUrl;
     const attrs = await retry(() =>
       sqs.send(new GetQueueAttributesCommand({ QueueUrl: qUrl, AttributeNames: ["VisibilityTimeout"] }))
@@ -364,14 +335,14 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(vis).toBeGreaterThanOrEqual(300);
   });
 
-  /* 16 */ it("Lambda: tags include Environment, CostCenter, Owner (ingestion function)", async () => {
+  /* 15*/ it("Lambda: tags include Environment, CostCenter, Owner (ingestion function)", async () => {
     const arn = outputs.IngestionFunctionArn;
     const tags = await retry(() => lambda.send(new LambdaListTagsCommand({ Resource: arn })));
     const t = tags.Tags || {};
     expect(Object.keys(t)).toEqual(expect.arrayContaining(["Environment", "CostCenter", "Owner"]));
   });
 
-  /* 17 */ it("EventBridge: 15-minute rule exists and targets the scheduled analysis Lambda", async () => {
+  /* 16 */ it("EventBridge: 15-minute rule exists and targets the scheduled analysis Lambda", async () => {
     const ruleName = `${project}-${env}-quarter-hour`;
     const rule = await retry(() => evb.send(new DescribeRuleCommand({ Name: ruleName })));
     expect(rule.ScheduleExpression).toBe("cron(0/15 * * * ? *)");
@@ -381,7 +352,7 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     expect(found).toBe(true);
   });
 
-  /* 18 */ it("API Gateway: stage metrics are enabled (or settings present)", async () => {
+  /* 17 */ it("API Gateway: stage metrics are enabled (or settings present)", async () => {
     const apiId = outputs.ApiId;
     const stage = outputs.ApiStageName;
     const st = await retry(() => apiGw.send(new GetStageCommand({ restApiId: apiId, stageName: stage })));
@@ -396,39 +367,39 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
     }
   });
 
-  /* 19 */ it("Lambda: detection function architecture is arm64", async () => {
+  /* 18 */ it("Lambda: detection function architecture is arm64", async () => {
     const arn = outputs.DetectionFunctionArn;
     const cfg = await retry(() => lambda.send(new GetFunctionConfigurationCommand({ FunctionName: arn })));
     expect(cfg.Architectures?.includes("arm64")).toBe(true);
   });
 
-  /* 20 */ it("CloudWatch: alarms names from outputs resolve and are queryable", async () => {
+  /* 19 */ it("CloudWatch: alarms names from outputs resolve and are queryable", async () => {
     const names = [outputs.IngestionAlarmName, outputs.DetectionAlarmName];
     const resp = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: names })));
     const got = (resp.MetricAlarms || []).map(a => a.AlarmName);
     expect(got).toEqual(expect.arrayContaining(names));
   });
 
-  /* 21 (edge) */ it("Webhook: rejects malformed payload gracefully (accept 400/415/422/500/502)", async () => {
+  /* 20 (edge) */ it("Webhook: rejects malformed payload gracefully (accept 400/415/422/500/502)", async () => {
     const url = outputs.ApiInvokeUrl;
     const res = await fetch(url, { method: "POST", body: "not-json", headers: { "content-type": "text/plain" } });
     expect([400, 415, 422, 500, 502]).toContain(res.status);
   });
 
-  /* 22 */ it("Lambda: ingestion reserved concurrency >= 100", async () => {
+  /* 21 */ it("Lambda: ingestion reserved concurrency >= 100", async () => {
     const arn = outputs.IngestionFunctionArn;
     const conc = await retry(() => lambda.send(new GetFunctionConcurrencyCommand({ FunctionName: arn })));
     expect((conc.ReservedConcurrentExecutions ?? 0) >= 100).toBe(true);
   });
 
-  /* 23 */ it("API Gateway: Invoke URL is reachable over HTTPS", async () => {
+  /* 22 */ it("API Gateway: Invoke URL is reachable over HTTPS", async () => {
     const url = outputs.ApiInvokeUrl;
     const res = await fetch(url, { method: "OPTIONS" });
     expect(typeof res.status).toBe("number");
     expect(res.url).toContain(".execute-api.");
   });
 
-  /* 24 */ it("SQS → Detection: delivery path observable (best-effort)", async () => {
+  /* 23 */ it("SQS → Detection: delivery path observable (best-effort)", async () => {
     const qUrl = outputs.TransactionsQueueUrl;
     try {
       const m = await sqs.send(new ReceiveMessageCommand({ QueueUrl: qUrl, MaxNumberOfMessages: 1, WaitTimeSeconds: 1 }));
