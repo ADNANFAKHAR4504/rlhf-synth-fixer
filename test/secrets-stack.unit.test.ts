@@ -12,7 +12,7 @@ pulumi.runtime.setMocks({
       state: {
         ...args.inputs,
         id: args.inputs.name ? `${args.inputs.name}-id` : `${args.name}-id`,
-        arn: `arn:aws:secretsmanager:us-east-1:123456789012:secret:${args.inputs.name || args.name}`,
+        arn: `arn:aws:secretsmanager:eu-central-1 :123456789012:secret:${args.inputs.name || args.name}`,
       },
     };
   },

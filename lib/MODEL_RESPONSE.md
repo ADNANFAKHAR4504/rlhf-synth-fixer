@@ -70,7 +70,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
-    const region = args.region || 'us-east-1';
+    const region = args.region || 'eu-central-1 ';
 
     // Create VPC and networking infrastructure
     const networkStack = new NetworkStack(`tap-network-${environmentSuffix}`, {
@@ -1209,7 +1209,7 @@ const defaultTags = {
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
-  region: 'us-east-1',
+  region: 'eu-central-1 ',
 });
 
 // Export stack outputs
@@ -1277,8 +1277,8 @@ npm install
 # Set environment suffix (optional, defaults to 'dev')
 pulumi config set env production
 
-# Set AWS region (optional, defaults to 'us-east-1')
-pulumi config set aws:region us-east-1
+# Set AWS region (optional, defaults to 'eu-central-1 ')
+pulumi config set aws:region eu-central-1 
 ```
 
 ### 3. Build and Push Container Images
@@ -1287,7 +1287,7 @@ Before deploying, you need to build Docker images for your services:
 
 ```bash
 # Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <account-id>.dkr.ecr.us-east-1.amazonaws.com
+aws ecr get-login-password --region eu-central-1  | docker login --username AWS --password-stdin <account-id>.dkr.ecr.eu-central-1 .amazonaws.com
 
 # Build and push API service
 docker build -t api-service:latest ./services/api

@@ -24,7 +24,7 @@ Create a Pulumi TypeScript program to deploy a containerized microservices archi
 
 ## Technical Details
 
-Production-grade container orchestration infrastructure in us-east-1 using ECS Fargate for serverless container management, Application Load Balancer for traffic distribution, ECR for container registry, and CloudWatch for monitoring. Requires Pulumi CLI 3.x with TypeScript, Node.js 16+, Docker installed for local builds. VPC spans 2 availability zones with public subnets for ALB and private subnets for ECS tasks. NAT gateways enable outbound internet access for containers. RDS PostgreSQL in private subnet for persistent storage.
+Production-grade container orchestration infrastructure in eu-central-1  using ECS Fargate for serverless container management, Application Load Balancer for traffic distribution, ECR for container registry, and CloudWatch for monitoring. Requires Pulumi CLI 3.x with TypeScript, Node.js 16+, Docker installed for local builds. VPC spans 2 availability zones with public subnets for ALB and private subnets for ECS tasks. NAT gateways enable outbound internet access for containers. RDS PostgreSQL in private subnet for persistent storage.
 
 ## Special Requirements
 

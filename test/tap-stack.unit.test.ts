@@ -42,22 +42,22 @@ describe('TapStack', () => {
 
     // Mock EcrStack
     (EcrStack as unknown as jest.Mock).mockImplementation(() => ({
-      apiRepositoryUrl: pulumi.output('123456789012.dkr.ecr.us-east-1.amazonaws.com/api-service-test'),
-      workerRepositoryUrl: pulumi.output('123456789012.dkr.ecr.us-east-1.amazonaws.com/worker-service-test'),
-      schedulerRepositoryUrl: pulumi.output('123456789012.dkr.ecr.us-east-1.amazonaws.com/scheduler-service-test'),
+      apiRepositoryUrl: pulumi.output('123456789012.dkr.ecr.eu-central-1 .amazonaws.com/api-service-test'),
+      workerRepositoryUrl: pulumi.output('123456789012.dkr.ecr.eu-central-1 .amazonaws.com/worker-service-test'),
+      schedulerRepositoryUrl: pulumi.output('123456789012.dkr.ecr.eu-central-1 .amazonaws.com/scheduler-service-test'),
       registerOutputs: jest.fn(),
     }));
 
     // Mock SecretsStack
     (SecretsStack as unknown as jest.Mock).mockImplementation(() => ({
-      dbSecretArn: pulumi.output('arn:aws:secretsmanager:us-east-1:123456789012:secret:db-credentials-test'),
-      apiKeySecretArn: pulumi.output('arn:aws:secretsmanager:us-east-1:123456789012:secret:api-keys-test'),
+      dbSecretArn: pulumi.output('arn:aws:secretsmanager:eu-central-1 :123456789012:secret:db-credentials-test'),
+      apiKeySecretArn: pulumi.output('arn:aws:secretsmanager:eu-central-1 :123456789012:secret:api-keys-test'),
       registerOutputs: jest.fn(),
     }));
 
     // Mock EcsStack
     (EcsStack as unknown as jest.Mock).mockImplementation(() => ({
-      albDnsName: pulumi.output('alb-test.us-east-1.elb.amazonaws.com'),
+      albDnsName: pulumi.output('alb-test.eu-central-1 .elb.amazonaws.com'),
       clusterName: pulumi.output('ecs-cluster-test'),
       registerOutputs: jest.fn(),
     }));
@@ -246,7 +246,7 @@ describe('TapStack', () => {
       const args = {
         environmentSuffix: 'test',
         tags: { key: 'value' },
-        region: 'us-east-1',
+        region: 'eu-central-1 ',
       };
       const stack = new TapStack('test-stack', args);
       expect(stack).toBeDefined();

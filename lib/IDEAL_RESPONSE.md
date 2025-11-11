@@ -95,7 +95,7 @@ npm install
 
 ```bash
 # Set AWS region
-pulumi config set aws:region us-east-1
+pulumi config set aws:region eu-central-1 
 
 # Set environment suffix (optional, defaults to 'dev')
 export ENVIRONMENT_SUFFIX=synth2f9fv
@@ -176,7 +176,7 @@ aws secretsmanager update-secret \
 
 ## Cost Estimation
 
-### Monthly Baseline (us-east-1, 24/7 operation)
+### Monthly Baseline (eu-central-1 , 24/7 operation)
 
 - **NAT Gateways**: 2 × $32.40 = $64.80
 - **ECS Fargate**: 6 tasks × (0.5 vCPU + 1 GB) × $0.04048/vCPU-hour × 730 hours ≈ $89

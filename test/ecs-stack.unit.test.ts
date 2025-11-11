@@ -12,8 +12,8 @@ pulumi.runtime.setMocks({
       state: {
         ...args.inputs,
         id: args.inputs.name ? `${args.inputs.name}-id` : `${args.name}-id`,
-        arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
-        dnsName: args.type.includes('loadbalancer') ? `${args.name}.us-east-1.elb.amazonaws.com` : undefined,
+        arn: `arn:aws:${args.type}:eu-central-1 :123456789012:${args.name}`,
+        dnsName: args.type.includes('loadbalancer') ? `${args.name}.eu-central-1 .elb.amazonaws.com` : undefined,
       },
     };
   },
@@ -28,11 +28,11 @@ describe('EcsStack', () => {
     vpcId: pulumi.output('vpc-123'),
     publicSubnetIds: [pulumi.output('subnet-pub-1'), pulumi.output('subnet-pub-2')],
     privateSubnetIds: [pulumi.output('subnet-priv-1'), pulumi.output('subnet-priv-2')],
-    apiEcrUrl: pulumi.output('123456789012.dkr.ecr.us-east-1.amazonaws.com/api-service-test'),
-    workerEcrUrl: pulumi.output('123456789012.dkr.ecr.us-east-1.amazonaws.com/worker-service-test'),
-    schedulerEcrUrl: pulumi.output('123456789012.dkr.ecr.us-east-1.amazonaws.com/scheduler-service-test'),
-    dbSecretArn: pulumi.output('arn:aws:secretsmanager:us-east-1:123456789012:secret:db-credentials-test'),
-    apiKeySecretArn: pulumi.output('arn:aws:secretsmanager:us-east-1:123456789012:secret:api-keys-test'),
+    apiEcrUrl: pulumi.output('123456789012.dkr.ecr.eu-central-1 .amazonaws.com/api-service-test'),
+    workerEcrUrl: pulumi.output('123456789012.dkr.ecr.eu-central-1 .amazonaws.com/worker-service-test'),
+    schedulerEcrUrl: pulumi.output('123456789012.dkr.ecr.eu-central-1 .amazonaws.com/scheduler-service-test'),
+    dbSecretArn: pulumi.output('arn:aws:secretsmanager:eu-central-1 :123456789012:secret:db-credentials-test'),
+    apiKeySecretArn: pulumi.output('arn:aws:secretsmanager:eu-central-1 :123456789012:secret:api-keys-test'),
   };
 
   describe('constructor', () => {

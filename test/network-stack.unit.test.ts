@@ -12,7 +12,7 @@ pulumi.runtime.setMocks({
       state: {
         ...args.inputs,
         id: args.inputs.name ? `${args.inputs.name}-id` : `${args.name}-id`,
-        arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
+        arn: `arn:aws:${args.type}:eu-central-1 :123456789012:${args.name}`,
       },
     };
   },

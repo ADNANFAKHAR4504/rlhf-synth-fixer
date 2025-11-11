@@ -12,8 +12,8 @@ pulumi.runtime.setMocks({
       state: {
         ...args.inputs,
         id: args.inputs.name ? `${args.inputs.name}-id` : `${args.name}-id`,
-        arn: `arn:aws:ecr:us-east-1:123456789012:repository/${args.inputs.name || args.name}`,
-        repositoryUrl: `123456789012.dkr.ecr.us-east-1.amazonaws.com/${args.inputs.name || args.name}`,
+        arn: `arn:aws:ecr:eu-central-1 :123456789012:repository/${args.inputs.name || args.name}`,
+        repositoryUrl: `123456789012.dkr.ecr.eu-central-1 .amazonaws.com/${args.inputs.name || args.name}`,
       },
     };
   },
