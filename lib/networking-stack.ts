@@ -1,10 +1,11 @@
-import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { Subnet } from '@cdktf/provider-aws/lib/subnet';
+import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Construct } from 'constructs';
 
 export interface NetworkingStackProps {
   environment: string;
@@ -23,6 +24,11 @@ export class NetworkingStack extends Construct {
     super(scope, id);
 
     const { environment, cidrBlock } = props;
+
+    // Query available availability zones dynamically
+    const availableAzs = new DataAwsAvailabilityZones(this, 'available-azs', {
+      state: 'available',
+    });
 
     // Create VPC
     this.vpc = new Vpc(this, 'vpc', {
@@ -43,18 +49,18 @@ export class NetworkingStack extends Construct {
       },
     });
 
-    // Create Public Subnets (2 AZs)
+    // Create Public Subnets (2 AZs) - use first 2 available AZs
     this.publicSubnets = [];
-    const azs = ['us-east-1a', 'us-east-1b'];
+    const azs = [0, 1];
 
-    azs.forEach((az, index) => {
-      const subnet = new Subnet(this, `public-subnet-${index}`, {
+    azs.forEach((azIndex) => {
+      const subnet = new Subnet(this, `public-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
-        cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${index}.0/24`,
-        availabilityZone: az,
+        cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex}.0/24`,
+        availabilityZone: `\${${availableAzs.fqn}.names[${azIndex}]}`,
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: `public-subnet-${environment}-${az}`,
+          Name: `public-subnet-${environment}-\${${availableAzs.fqn}.names[${azIndex}]}`,
         },
       });
       this.publicSubnets.push(subnet);
@@ -62,13 +68,13 @@ export class NetworkingStack extends Construct {
 
     // Create Private Subnets (2 AZs)
     this.privateSubnets = [];
-    azs.forEach((az, index) => {
-      const subnet = new Subnet(this, `private-subnet-${index}`, {
+    azs.forEach((azIndex) => {
+      const subnet = new Subnet(this, `private-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
-        cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${index + 10}.0/24`,
-        availabilityZone: az,
+        cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex + 10}.0/24`,
+        availabilityZone: `\${${availableAzs.fqn}.names[${azIndex}]}`,
         tags: {
-          Name: `private-subnet-${environment}-${az}`,
+          Name: `private-subnet-${environment}-\${${availableAzs.fqn}.names[${azIndex}]}`,
         },
       });
       this.privateSubnets.push(subnet);
