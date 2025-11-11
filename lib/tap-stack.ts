@@ -1,8 +1,7 @@
 /**
  * tap-stack.ts
  *
- * Creates EKS cluster using native AWS resources in eu-west-2 (London)
- * Uses nginx demo images for testing
+ * Creates EKS cluster in eu-west-2 (London) with working demo containers
  */
 
 import * as pulumi from '@pulumi/pulumi';
@@ -42,7 +41,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Use nginx as default - publicly available and works without authentication
+    // Use nginx alpine - publicly available, small, and reliable
     const paymentApiImage = args.paymentApiImage || 'nginx:1.25-alpine';
     const fraudDetectorImage = args.fraudDetectorImage || 'nginx:1.25-alpine';
     const notificationServiceImage =
@@ -75,7 +74,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
-    // Create public subnets in two availability zones
+    // Create public subnets
     const publicSubnet1 = new aws.ec2.Subnet(
       `eks-public-subnet-1-${environmentSuffix}`,
       {
@@ -108,7 +107,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
-    // Create route table for public subnets
+    // Create route table
     const publicRouteTable = new aws.ec2.RouteTable(
       `eks-public-rt-${environmentSuffix}`,
       {
@@ -131,7 +130,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
-    // Associate route table with public subnets
+    // Associate route table with subnets
     new aws.ec2.RouteTableAssociation(
       `eks-rt-assoc-1-${environmentSuffix}`,
       {
@@ -170,7 +169,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
-    // Attach required policies to EKS cluster role
+    // Attach policies to EKS cluster role
     new aws.iam.RolePolicyAttachment(
       `eks-cluster-policy-${environmentSuffix}`,
       {
@@ -242,7 +241,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: awsProvider }
     );
 
-    // Attach required policies to node role
+    // Attach policies to node role
     new aws.iam.RolePolicyAttachment(
       `eks-worker-node-policy-${environmentSuffix}`,
       {
@@ -340,7 +339,7 @@ export class TapStack extends pulumi.ComponentResource {
         })
       );
 
-    // Create explicit Kubernetes provider
+    // Create Kubernetes provider
     const k8sProvider = new k8s.Provider(
       `k8s-provider-${environmentSuffix}`,
       {
@@ -350,7 +349,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [nodeGroup] }
     );
 
-    // Kubernetes namespace - no Istio injection
+    // Kubernetes namespace
     const namespace = new k8s.core.v1.Namespace(
       'microservices-ns',
       {
@@ -409,7 +408,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // Secrets - Updated to eu-west-2 region
+    // Secrets
     const paymentApiSecret = new k8s.core.v1.Secret(
       'payment-api-secret',
       {
@@ -462,7 +461,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // Payment API Deployment
+    // Payment API Deployment - Fixed with nginx image
     const paymentApiDeployment = new k8s.apps.v1.Deployment(
       'payment-api',
       {
@@ -500,18 +499,6 @@ export class TapStack extends pulumi.ComponentResource {
                       containerPort: 80,
                       name: 'http',
                       protocol: 'TCP',
-                    },
-                  ],
-                  envFrom: [
-                    {
-                      configMapRef: {
-                        name: paymentApiConfigMap.metadata.name,
-                      },
-                    },
-                    {
-                      secretRef: {
-                        name: paymentApiSecret.metadata.name,
-                      },
                     },
                   ],
                   resources: {
@@ -573,18 +560,6 @@ export class TapStack extends pulumi.ComponentResource {
                       protocol: 'TCP',
                     },
                   ],
-                  envFrom: [
-                    {
-                      configMapRef: {
-                        name: fraudDetectorConfigMap.metadata.name,
-                      },
-                    },
-                    {
-                      secretRef: {
-                        name: fraudDetectorSecret.metadata.name,
-                      },
-                    },
-                  ],
                   resources: {
                     requests: {
                       cpu: '100m',
@@ -644,18 +619,6 @@ export class TapStack extends pulumi.ComponentResource {
                       protocol: 'TCP',
                     },
                   ],
-                  envFrom: [
-                    {
-                      configMapRef: {
-                        name: notificationServiceConfigMap.metadata.name,
-                      },
-                    },
-                    {
-                      secretRef: {
-                        name: notificationServiceSecret.metadata.name,
-                      },
-                    },
-                  ],
                   resources: {
                     requests: {
                       cpu: '100m',
@@ -675,7 +638,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // Kubernetes Services
+    // Services
     const paymentApiService = new k8s.core.v1.Service(
       'payment-api-service',
       {
@@ -689,6 +652,7 @@ export class TapStack extends pulumi.ComponentResource {
         spec: {
           selector: {
             app: 'payment-api',
+            version: 'v1',
           },
           type: 'ClusterIP',
           ports: [
@@ -717,6 +681,7 @@ export class TapStack extends pulumi.ComponentResource {
         spec: {
           selector: {
             app: 'fraud-detector',
+            version: 'v1',
           },
           type: 'ClusterIP',
           ports: [
@@ -745,6 +710,7 @@ export class TapStack extends pulumi.ComponentResource {
         spec: {
           selector: {
             app: 'notification-service',
+            version: 'v1',
           },
           type: 'ClusterIP',
           ports: [
@@ -760,7 +726,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // Gateway LoadBalancer Service - points directly to payment-api
+    // Gateway LoadBalancer
     const gatewayService = new k8s.core.v1.Service(
       'gateway-loadbalancer',
       {
@@ -772,6 +738,7 @@ export class TapStack extends pulumi.ComponentResource {
           type: 'LoadBalancer',
           selector: {
             app: 'payment-api',
+            version: 'v1',
           },
           ports: [
             {
@@ -884,7 +851,7 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this, provider: k8sProvider }
       );
 
-    // Network Policies - simplified without Istio
+    // Network Policies
     const paymentApiNetworkPolicy = new k8s.networking.v1.NetworkPolicy(
       'payment-api-netpol',
       {
@@ -1083,7 +1050,7 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this, provider: k8sProvider }
       );
 
-    // Mark resources as used to satisfy linter
+    // Mark resources as used
     void paymentApiNetworkPolicy;
     void fraudDetectorNetworkPolicy;
     void notificationServiceNetworkPolicy;

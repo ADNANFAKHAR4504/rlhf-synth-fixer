@@ -12,38 +12,27 @@
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
-// Initialize Pulumi configuration for the current stack.
 const config = new pulumi.Config();
 
-// Get the environment suffix from the CI, Pulumi config, defaulting to 'dev'.
 const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('environmentSuffix') || 'dev';
 
-// Get container image URIs from config - Updated to eu-west-2 (London)
-const paymentApiImage =
-  config.get('paymentApiImage') ||
-  '123456789012.dkr.ecr.eu-west-2.amazonaws.com/payment-api:latest';
+// Use nginx alpine as default - publicly available
+const paymentApiImage = config.get('paymentApiImage') || 'nginx:1.25-alpine';
 const fraudDetectorImage =
-  config.get('fraudDetectorImage') ||
-  '123456789012.dkr.ecr.eu-west-2.amazonaws.com/fraud-detector:latest';
+  config.get('fraudDetectorImage') || 'nginx:1.25-alpine';
 const notificationServiceImage =
-  config.get('notificationServiceImage') ||
-  '123456789012.dkr.ecr.eu-west-2.amazonaws.com/notification-service:latest';
+  config.get('notificationServiceImage') || 'nginx:1.25-alpine';
 
-// Get metadata from environment variables for tagging purposes.
-// These are often injected by CI/CD systems.
 const repository = config.get('repository') || 'unknown';
 const commitAuthor = config.get('commitAuthor') || 'unknown';
 
-// Define a set of default tags to apply to all resources.
 const defaultTags = {
   Environment: environmentSuffix,
   Repository: repository,
   Author: commitAuthor,
 };
 
-// Instantiate the main stack component for the infrastructure.
-// This encapsulates all the resources for the Kubernetes microservices deployment.
 const stack = new TapStack('TapStack', {
   environmentSuffix,
   paymentApiImage,
@@ -52,7 +41,6 @@ const stack = new TapStack('TapStack', {
   tags: defaultTags,
 });
 
-// Export stack outputs
 export const clusterName = stack.clusterName;
 export const kubeconfig = stack.kubeconfig;
 export const namespaceName = stack.namespaceName;
