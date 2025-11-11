@@ -3,6 +3,7 @@ import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
+import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Fn } from 'cdktf';
@@ -105,77 +106,111 @@ export class NetworkingStack extends Construct {
       });
     });
 
-    // Create Security Groups
+    // Create Security Groups (without cross-referencing ingress rules)
     this.albSecurityGroup = new SecurityGroup(this, 'alb-sg', {
-      name: `alb-sg-${environment}`,
+      namePrefix: `alb-sg-${environment}-`,
       description: 'Security group for ALB',
       vpcId: this.vpc.id,
-      ingress: [
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-        {
-          fromPort: 443,
-          toPort: 443,
-          protocol: 'tcp',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
+      tags: {
+        Name: `alb-sg-${environment}`,
+        Environment: environment,
+      },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     this.ecsSecurityGroup = new SecurityGroup(this, 'ecs-sg', {
-      name: `ecs-sg-${environment}`,
+      namePrefix: `ecs-sg-${environment}-`,
       description: 'Security group for ECS tasks',
       vpcId: this.vpc.id,
-      ingress: [
-        {
-          fromPort: 80,
-          toPort: 80,
-          protocol: 'tcp',
-          securityGroups: [this.albSecurityGroup.id],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
+      tags: {
+        Name: `ecs-sg-${environment}`,
+        Environment: environment,
+      },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
     });
 
     this.rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
-      name: `rds-sg-${environment}`,
+      namePrefix: `rds-sg-${environment}-`,
       description: 'Security group for RDS',
       vpcId: this.vpc.id,
-      ingress: [
-        {
-          fromPort: 5432,
-          toPort: 5432,
-          protocol: 'tcp',
-          securityGroups: [this.ecsSecurityGroup.id],
-        },
-      ],
-      egress: [
-        {
-          fromPort: 0,
-          toPort: 0,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-        },
-      ],
+      tags: {
+        Name: `rds-sg-${environment}`,
+        Environment: environment,
+      },
+      lifecycle: {
+        createBeforeDestroy: true,
+      },
+    });
+
+    // Create Security Group Rules separately to avoid circular dependencies
+    // ALB Security Group Rules
+    new SecurityGroupRule(this, 'alb-ingress-http', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'alb-ingress-https', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'alb-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.albSecurityGroup.id,
+    });
+
+    // ECS Security Group Rules
+    new SecurityGroupRule(this, 'ecs-ingress-from-alb', {
+      type: 'ingress',
+      fromPort: 80,
+      toPort: 80,
+      protocol: 'tcp',
+      sourceSecurityGroupId: this.albSecurityGroup.id,
+      securityGroupId: this.ecsSecurityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'ecs-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.ecsSecurityGroup.id,
+    });
+
+    // RDS Security Group Rules
+    new SecurityGroupRule(this, 'rds-ingress-from-ecs', {
+      type: 'ingress',
+      fromPort: 5432,
+      toPort: 5432,
+      protocol: 'tcp',
+      sourceSecurityGroupId: this.ecsSecurityGroup.id,
+      securityGroupId: this.rdsSecurityGroup.id,
+    });
+
+    new SecurityGroupRule(this, 'rds-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      cidrBlocks: ['0.0.0.0/0'],
+      securityGroupId: this.rdsSecurityGroup.id,
     });
   }
 }
