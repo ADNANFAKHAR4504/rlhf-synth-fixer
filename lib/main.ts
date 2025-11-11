@@ -1,5 +1,14 @@
 import { Construct } from 'constructs';
-import { App, TerraformStack, TerraformOutput, S3Backend, Fn } from 'cdktf';
+import {
+  App,
+  TerraformStack,
+  TerraformOutput,
+  S3Backend,
+  Fn,
+  TerraformAsset,
+  AssetType,
+} from 'cdktf';
+import * as path from 'path';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -409,7 +418,12 @@ class PaymentProcessingStack extends TerraformStack {
     });
 
     // FIX 7: Lambda function name now includes environmentSuffix
-    // FIX 8: Using proper Lambda deployment package path
+    // FIX 8: Using proper Lambda deployment package with TerraformAsset
+    const lambdaAsset = new TerraformAsset(this, 'lambda_asset', {
+      path: path.resolve(__dirname, 'lambda-deployment.zip'),
+      type: AssetType.FILE,
+    });
+
     const paymentProcessorLambda = new LambdaFunction(
       this,
       'payment_processor',
@@ -433,8 +447,8 @@ class PaymentProcessingStack extends TerraformStack {
             S3_BUCKET: transactionLogsBucket.bucket,
           },
         },
-        filename: 'lib/lambda-deployment.zip',
-        sourceCodeHash: Fn.filebase64sha256('lib/lambda-deployment.zip'),
+        filename: lambdaAsset.path,
+        sourceCodeHash: lambdaAsset.assetHash,
         tags: {
           Name: `payment-processor-${config.environment}-${environmentSuffix}`,
           Environment: config.environment,
