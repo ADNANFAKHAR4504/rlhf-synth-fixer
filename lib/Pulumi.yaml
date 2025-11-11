@@ -1,7 +1,1 @@
-name: flask-app-infrastructure
-runtime: python
-description: Containerized Flask application infrastructure with ECS Fargate, RDS, and auto-scaling
-config:
-  environmentSuffix:
-    description: Environment suffix for resource naming
-    default: dev
+../Pulumi.yaml

@@ -3,9 +3,16 @@ Containerized Flask Application Infrastructure
 Pulumi Python implementation for ECS Fargate deployment with auto-scaling
 """
 
+import os
+import sys
 import pulumi
 import pulumi_aws as aws
 import json
+
+# Add lib directory to path
+lib_path = os.path.join(os.path.dirname(__file__), 'lib')
+sys.path.insert(0, lib_path)
+
 from vpc import create_vpc
 from ecr import create_ecr_repository
 from rds import create_rds_instance
