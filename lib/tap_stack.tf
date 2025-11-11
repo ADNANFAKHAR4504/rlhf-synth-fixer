@@ -687,7 +687,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # AWS Config Delivery Channel
@@ -767,20 +767,17 @@ resource "aws_config_config_rule" "access_keys_rotated" {
   })
 }
 
-# Auto-remediation for S3 encryption
-resource "aws_config_remediation_configuration" "s3_encryption" {
-  config_rule_name = aws_config_config_rule.s3_bucket_server_side_encryption_enabled.name
+# Note: Auto-remediation for S3 encryption can be configured manually
+# through the AWS Console or with custom SSM documents
+# The Config rule will still detect and report non-compliant resources
 
-  resource_type    = "AWS::S3::Bucket"
-  target_type      = "SSM_DOCUMENT"
-  target_id        = "arn:aws:ssm:${var.aws_region}::document/AWS-PublishSNSNotification"
-  target_version   = "1"
-
-  parameter {
-    name           = "AutomationAssumeRole"
-    static_value   = aws_iam_role.config.arn
-  }
-
-  automatic                = true
-  maximum_automatic_attempts = 3
-}
+# Custom remediation can be added here if needed:
+# resource "aws_config_remediation_configuration" "s3_encryption" {
+#   config_rule_name = aws_config_config_rule.s3_bucket_server_side_encryption_enabled.name
+#   resource_type    = "AWS::S3::Bucket"
+#   target_type      = "SSM_DOCUMENT"
+#   target_id        = "custom-s3-encryption-document"
+#   target_version   = "1"
+#   automatic        = true
+#   maximum_automatic_attempts = 3
+# }
