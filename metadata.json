@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-11T13:24:17+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "Security & Compliance",
+  ],
   "po_id": "x61li1",
   "aws_services": [
     "VPC",
@@ -26,6 +28,6 @@
     "ECR",
     "NAT"
   ],
-  "region": "ap-southeast-1",
+  "region": "eu-central-2",
   "training_quality": 10
 }
