@@ -25,8 +25,8 @@ class TapStackArgs:
         self,
         environment_suffix: Optional[str] = None,
         tags: Optional[dict] = None,
-        primary_region: str = "us-east-1",
-        secondary_region: str = "us-east-2",
+        primary_region: str = "eu-central-1",
+        secondary_region: str = "eu-central-2",
         domain_name: Optional[str] = None
     ):
         self.environment_suffix = environment_suffix or 'dev'

@@ -6,7 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-11T13:47:26+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "subject_labels": [],
+  "subject_labels": ["Failure Recovery Automation"],
   "po_id": "l6a00t",
   "aws_services": [
     "Route53",
@@ -21,5 +21,7 @@
     "EventBridge"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "emmanuel-turing"
 }
