@@ -17,7 +17,6 @@ export interface ApiGatewayStackProps {
   transactionProcessorInvokeArn: string;
   statusCheckerArn: string;
   statusCheckerInvokeArn: string;
-  region: string;
 }
 
 export class ApiGatewayStack extends Construct {
@@ -33,10 +32,9 @@ export class ApiGatewayStack extends Construct {
       transactionProcessorInvokeArn,
       statusCheckerArn,
       statusCheckerInvokeArn,
-      region,
     } = props;
 
-    // Get current AWS region dynamically instead of using fallback
+    // Get current AWS region dynamically
     const currentRegion = new DataAwsRegion(this, 'current_region', {});
 
     // Create REST API

@@ -9,7 +9,6 @@ export interface CloudwatchStackProps {
   statusCheckerName: string;
   dynamodbTableName: string;
   snsTopicArn: string;
-  region: string;
 }
 
 export class CloudwatchStack extends Construct {
@@ -22,7 +21,6 @@ export class CloudwatchStack extends Construct {
       statusCheckerName,
       dynamodbTableName,
       snsTopicArn,
-      region,
     } = props;
 
     // Get current AWS region dynamically for dashboard metrics

@@ -28,7 +28,11 @@ export class IamStack extends Construct {
     } = props;
 
     // Get current AWS account ID and region
-    const currentAccount = new DataAwsCallerIdentity(this, 'current_account', {});
+    const currentAccount = new DataAwsCallerIdentity(
+      this,
+      'current_account',
+      {}
+    );
     const currentRegion = new DataAwsRegion(this, 'current_region', {});
 
     // IAM role for transaction processor Lambda
