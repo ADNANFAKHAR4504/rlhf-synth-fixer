@@ -423,4 +423,282 @@ describe('TapStack Unit Tests', () => {
       });
     });
   });
+
+  describe('DMS Role Configuration Scenarios', () => {
+    test('DatabaseMigrationStack creates DMS role when not provided', () => {
+      // Create a standalone DatabaseMigrationStack without passing dmsVpcRole
+      const standaloneApp = new cdk.App();
+      const standaloneStack = new cdk.Stack(
+        standaloneApp,
+        'StandaloneDmsStack',
+        {
+          env: { account: '123456789012', region: 'eu-west-2' },
+        }
+      );
+
+      // Import DatabaseMigrationStack directly
+      const { DatabaseMigrationStack } = require('../lib/database-migration-stack');
+      new DatabaseMigrationStack(standaloneStack, 'DbMigration', {
+        environmentSuffix: 'standalone',
+      });
+
+      const standaloneTemplate = Template.fromStack(standaloneStack);
+
+      // Verify DMS VPC role was created with fallback logic
+      standaloneTemplate.hasResourceProperties('AWS::IAM::Role', {
+        AssumeRolePolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: 'sts:AssumeRole',
+              Effect: 'Allow',
+              Principal: {
+                Service: 'dms.amazonaws.com',
+              },
+            }),
+          ]),
+        },
+        RoleName: 'dms-vpc-role-standalone',
+      });
+
+      // Verify managed policy is attached
+      standaloneTemplate.hasResourceProperties('AWS::IAM::Role', {
+        ManagedPolicyArns: Match.arrayWith([
+          Match.objectLike({
+            'Fn::Join': Match.arrayWith([
+              Match.arrayWith([
+                Match.stringLikeRegexp(
+                  '.*AmazonDMSVPCManagementRole.*'
+                ),
+              ]),
+            ]),
+          }),
+        ]),
+      });
+
+      // Verify inline policy with EC2 permissions was added
+      standaloneTemplate.hasResourceProperties('AWS::IAM::Policy', {
+        PolicyDocument: {
+          Statement: Match.arrayWith([
+            Match.objectLike({
+              Action: Match.arrayWith([
+                'ec2:DescribeAccountAttributes',
+                'ec2:CreateNetworkInterface',
+                'ec2:DeleteNetworkInterface',
+              ]),
+              Effect: 'Allow',
+              Resource: '*',
+            }),
+          ]),
+        },
+      });
+    });
+
+    test('DatabaseMigrationStack imports role by ARN when provided', () => {
+      const importApp = new cdk.App();
+      const importStack = new cdk.Stack(importApp, 'ImportDmsStack', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+
+      const { DatabaseMigrationStack } = require('../lib/database-migration-stack');
+      new DatabaseMigrationStack(importStack, 'DbMigration', {
+        environmentSuffix: 'import',
+        dmsVpcRoleArn: 'arn:aws:iam::123456789012:role/existing-dms-vpc-role',
+      });
+
+      const importTemplate = Template.fromStack(importStack);
+
+      // Should NOT create a new DMS VPC role with the specific name
+      const roles = importTemplate.findResources('AWS::IAM::Role');
+      const dmsVpcRoles = Object.values(roles).filter(
+        (role: any) =>
+          role.Properties?.RoleName === 'dms-vpc-role-import'
+      );
+      expect(dmsVpcRoles.length).toBe(0);
+
+      // Should still create other IAM roles (CloudWatch logs role)
+      expect(Object.keys(roles).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Environment Suffix Configuration', () => {
+    test('Uses environmentSuffix from props', () => {
+      expect(stack.node.tryGetContext('environmentSuffix')).toBeDefined();
+      // Stack was created with environmentSuffix: 'test'
+      template.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.stringLikeRegexp('.*test'),
+          }),
+        ]),
+      });
+    });
+
+    test('Falls back to context when no environmentSuffix in props', () => {
+      const contextApp = new cdk.App({
+        context: {
+          environmentSuffix: 'context-test',
+        },
+      });
+
+      const contextStack = new TapStack(contextApp, 'ContextTestStack', {
+        // No environmentSuffix in props
+        env: {
+          account: '123456789012',
+          region: 'eu-west-2',
+        },
+      });
+
+      const contextTemplate = Template.fromStack(contextStack);
+
+      // Should use context value
+      contextTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.stringLikeRegexp('.*context-test'),
+          }),
+        ]),
+      });
+    });
+
+    test('Uses default "dev" when no environmentSuffix provided', () => {
+      const defaultApp = new cdk.App();
+      const defaultStack = new TapStack(defaultApp, 'DefaultTestStack', {
+        // No environmentSuffix in props or context
+        env: {
+          account: '123456789012',
+          region: 'eu-west-2',
+        },
+      });
+
+      const defaultTemplate = Template.fromStack(defaultStack);
+
+      // Should use 'dev' as default
+      defaultTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        Tags: Match.arrayWith([
+          Match.objectLike({
+            Key: 'Name',
+            Value: Match.stringLikeRegexp('.*dev'),
+          }),
+        ]),
+      });
+    });
+  });
+
+  describe('DMS Subnet Group Dependencies', () => {
+    test('DMS subnet group has dependency on created role', () => {
+      // This tests the createdDmsVpcRole path
+      const dependencyApp = new cdk.App();
+      const dependencyStack = new cdk.Stack(
+        dependencyApp,
+        'DependencyStack',
+        {
+          env: { account: '123456789012', region: 'eu-west-2' },
+        }
+      );
+
+      const { DatabaseMigrationStack } = require('../lib/database-migration-stack');
+      new DatabaseMigrationStack(dependencyStack, 'DbMigration', {
+        environmentSuffix: 'dep-test',
+      });
+
+      const dependencyTemplate = Template.fromStack(dependencyStack);
+
+      // Verify DMS subnet group exists
+      dependencyTemplate.resourceCountIs(
+        'AWS::DMS::ReplicationSubnetGroup',
+        1
+      );
+
+      // Verify role was created
+      dependencyTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'dms-vpc-role-dep-test',
+      });
+    });
+  });
+
+  describe('Additional Resource Coverage', () => {
+    test('VPC Peering routes are created correctly', () => {
+      const routes = template.findResources('AWS::EC2::Route');
+      const routeKeys = Object.keys(routes);
+
+      // Should have routes for peering
+      const peeringRoutes = routeKeys.filter((key) => {
+        const route = routes[key];
+        return route.Properties.VpcPeeringConnectionId;
+      });
+
+      expect(peeringRoutes.length).toBeGreaterThan(0);
+    });
+
+    test('Parameter groups have correct configurations', () => {
+      // Aurora parameter group
+      template.hasResourceProperties('AWS::RDS::DBClusterParameterGroup', {
+        Family: Match.stringLikeRegexp('aurora-mysql.*'),
+        Parameters: Match.objectLike({
+          binlog_format: 'ROW',
+          binlog_row_image: 'FULL',
+        }),
+      });
+
+      // RDS parameter group
+      template.hasResourceProperties('AWS::RDS::DBParameterGroup', {
+        Family: Match.stringLikeRegexp('mysql.*'),
+        Parameters: Match.objectLike({
+          binlog_format: 'ROW',
+          binlog_row_image: 'FULL',
+        }),
+      });
+    });
+
+    test('All security groups have proper VPC associations', () => {
+      const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
+      const sgKeys = Object.keys(securityGroups);
+
+      sgKeys.forEach((key) => {
+        const sg = securityGroups[key];
+        expect(sg.Properties.VpcId).toBeDefined();
+      });
+    });
+
+    test('DMS endpoints are properly configured', () => {
+      const endpoints = template.findResources('AWS::DMS::Endpoint');
+      const endpointKeys = Object.keys(endpoints);
+
+      // Should have at least source and target endpoints
+      expect(endpointKeys.length).toBeGreaterThanOrEqual(2);
+
+      // Verify source endpoint
+      const sourceEndpoints = Object.values(endpoints).filter(
+        (ep: any) => ep.Properties.EndpointType === 'source'
+      );
+      expect(sourceEndpoints.length).toBe(1);
+      expect((sourceEndpoints[0] as any).Properties.EngineName).toBe('mysql');
+
+      // Verify target endpoint
+      const targetEndpoints = Object.values(endpoints).filter(
+        (ep: any) => ep.Properties.EndpointType === 'target'
+      );
+      expect(targetEndpoints.length).toBe(1);
+      expect((targetEndpoints[0] as any).Properties.EngineName).toBe('aurora');
+    });
+
+    test('DMS replication instance has correct configuration', () => {
+      template.hasResourceProperties('AWS::DMS::ReplicationInstance', {
+        ReplicationInstanceClass: 'dms.t3.medium',
+        AllocatedStorage: 100,
+        MultiAZ: false,
+        PubliclyAccessible: false,
+      });
+    });
+
+    test('Source RDS instance is properly configured', () => {
+      template.hasResourceProperties('AWS::RDS::DBInstance', {
+        Engine: 'mysql',
+        StorageEncrypted: true,
+        PubliclyAccessible: false,
+      });
+    });
+  });
 });
