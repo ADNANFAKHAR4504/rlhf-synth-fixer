@@ -57,6 +57,11 @@ export class S3Stack extends Construct {
         {
           id: 'transition-to-ia',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: '',
+            },
+          ],
           transition: [
             {
               days: lifecycleDays,
@@ -67,6 +72,11 @@ export class S3Stack extends Construct {
         {
           id: 'expire-old-versions',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: '',
+            },
+          ],
           noncurrentVersionExpiration: [
             {
               noncurrentDays: lifecycleDays * 2,
