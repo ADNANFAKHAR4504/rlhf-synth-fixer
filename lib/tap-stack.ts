@@ -464,18 +464,24 @@ export class TapStack extends cdk.Stack {
       cluster,
       taskDefinition: workerTaskDef,
       desiredCount: 1,
-      minHealthyPercent: 0, // Allow deployment with no healthy tasks initially
+      minHealthyPercent: 0,
       maxHealthyPercent: 200,
       circuitBreaker: {
-        rollback: false, // Disable rollback on failure to prevent deployment failure
+        rollback: false, // Disable circuit breaker rollback to avoid stack failure
       },
-      healthCheckGracePeriod: cdk.Duration.seconds(120), // Allow time for tasks to become healthy
+      healthCheckGracePeriod: cdk.Duration.seconds(120),
       cloudMapOptions: {
         name: 'worker',
         cloudMapNamespace: namespace,
       },
       enableExecuteCommand: true,
     });
+
+    (workerService.node.defaultChild as cdk.CfnResource).cfnOptions = {
+      // Prevent stack rollback on this resource failure
+      deletionPolicy: cdk.CfnDeletionPolicy.RETAIN,
+      updateReplacePolicy: cdk.CfnDeletionPolicy.RETAIN,
+    };
 
     // Auto-scaling for Worker service
     const workerScaling = workerService.autoScaleTaskCount({
