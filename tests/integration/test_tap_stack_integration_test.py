@@ -257,10 +257,13 @@ class TestDeployedInfrastructure(unittest.TestCase):
 
         response = self.cloudwatch_client.describe_alarms()
 
+        # Extract environment suffix from cluster name (e.g., "flask-cluster-dev" -> "dev")
+        env_suffix = cluster_name.split('-')[-1] if '-' in cluster_name else ''
+
         # Filter alarms related to this ECS service
         ecs_alarms = [alarm for alarm in response['MetricAlarms']
                       if 'ecs' in alarm['AlarmName'].lower() and
-                      'synthv5kei' in alarm['AlarmName'].lower()]
+                      env_suffix in alarm['AlarmName'].lower()]
 
         self.assertGreaterEqual(len(ecs_alarms), 2, "Expected at least 2 CloudWatch alarms")
 
@@ -310,13 +313,17 @@ class TestDeployedInfrastructure(unittest.TestCase):
     def test_resource_tags_include_environment_suffix(self):
         """Test resources are tagged with EnvironmentSuffix"""
         vpc_id = self.outputs['vpc_id']
+        cluster_name = self.outputs['ecs_cluster_name']
 
         response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
         vpc = response['Vpcs'][0]
 
         tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
         self.assertIn('EnvironmentSuffix', tags)
-        self.assertEqual(tags['EnvironmentSuffix'], 'synthv5kei')
+
+        # Extract expected environment suffix from cluster name
+        expected_suffix = cluster_name.split('-')[-1] if '-' in cluster_name else 'dev'
+        self.assertEqual(tags['EnvironmentSuffix'], expected_suffix)
 
 
 if __name__ == '__main__':
