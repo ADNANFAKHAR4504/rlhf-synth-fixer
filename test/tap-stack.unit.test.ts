@@ -14,7 +14,7 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
-    console.log(`[MOCK] Creating resource: ${args.type} - ${args.name}`);
+    // console.log(`[MOCK] Creating resource: ${args.type} - ${args.name}`);
     const outputs: any = { ...args.inputs };
 
     // Mock VPC outputs
@@ -160,7 +160,7 @@ pulumi.runtime.setMocks({
         namespace: args.inputs.metadata?.namespace || 'default',
       };
       outputs.spec = args.inputs.spec;
-      console.log(`[MOCK] HPA created: ${outputs.metadata.name}`);
+      // console.log(`[MOCK] HPA created: ${outputs.metadata.name}`);
     }
 
     // Mock Kubernetes NetworkPolicy
