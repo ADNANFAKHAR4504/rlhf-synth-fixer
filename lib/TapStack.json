@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "Hub-and-Spoke Network Architecture with Transit Gateway for Department Migration",
+    "Description": "Hub-and-Spoke Network Architecture with Transit Gateway for Department Migration - Designed for eu-west-2 (London)",
     "Metadata": {
         "AWS::CloudFormation::Interface": {
             "ParameterGroups": [
@@ -33,6 +33,23 @@
                 "staging",
                 "production",
                 "migration"
+            ]
+        }
+    },
+    "Rules": {
+        "RegionCheck": {
+            "Assertions": [
+                {
+                    "Assert": {
+                        "Fn::Equals": [
+                            {
+                                "Ref": "AWS::Region"
+                            },
+                            "eu-west-2"
+                        ]
+                    },
+                    "AssertDescription": "This template is designed for eu-west-2 (London) region only. Please deploy to eu-west-2."
+                }
             ]
         }
     },
