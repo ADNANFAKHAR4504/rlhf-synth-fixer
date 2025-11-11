@@ -5,6 +5,7 @@ import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-assoc
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
+import { Fn } from 'cdktf';
 import { Construct } from 'constructs';
 
 export interface NetworkingStackProps {
@@ -54,13 +55,14 @@ export class NetworkingStack extends Construct {
     const azs = [0, 1];
 
     azs.forEach((azIndex) => {
+      const azName = Fn.element(availableAzs.names, azIndex);
       const subnet = new Subnet(this, `public-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex}.0/24`,
-        availabilityZone: `\${${availableAzs.fqn}.names[${azIndex}]}`,
+        availabilityZone: azName,
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: `public-subnet-${environment}-\${${availableAzs.fqn}.names[${azIndex}]}`,
+          Name: `public-subnet-${environment}-${azIndex}`,
         },
       });
       this.publicSubnets.push(subnet);
@@ -69,12 +71,13 @@ export class NetworkingStack extends Construct {
     // Create Private Subnets (2 AZs)
     this.privateSubnets = [];
     azs.forEach((azIndex) => {
+      const azName = Fn.element(availableAzs.names, azIndex);
       const subnet = new Subnet(this, `private-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex + 10}.0/24`,
-        availabilityZone: `\${${availableAzs.fqn}.names[${azIndex}]}`,
+        availabilityZone: azName,
         tags: {
-          Name: `private-subnet-${environment}-\${${availableAzs.fqn}.names[${azIndex}]}`,
+          Name: `private-subnet-${environment}-${azIndex}`,
         },
       });
       this.privateSubnets.push(subnet);
