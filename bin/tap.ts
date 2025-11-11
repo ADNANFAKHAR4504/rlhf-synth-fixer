@@ -21,6 +21,6 @@ new TapStack(app, stackName, {
   environmentSuffix: environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: 'eu-central-1', // Target region
+    region: 'eu-central-2', // Target region
   },
 });

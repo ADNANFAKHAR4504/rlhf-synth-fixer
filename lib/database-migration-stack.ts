@@ -297,8 +297,8 @@ export class DatabaseMigrationStack extends Construct {
         securityGroups: [auroraSecurityGroup],
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T3,
-            ec2.InstanceSize.MEDIUM
+            ec2.InstanceClass.R5,
+            ec2.InstanceSize.LARGE
           ),
           instanceIdentifier: `aurora-writer-${environmentSuffix}`,
           enablePerformanceInsights: true,
@@ -309,8 +309,8 @@ export class DatabaseMigrationStack extends Construct {
         readers: [
           rds.ClusterInstance.provisioned('reader', {
             instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.T3,
-              ec2.InstanceSize.MEDIUM
+              ec2.InstanceClass.R5,
+              ec2.InstanceSize.LARGE
             ),
             instanceIdentifier: `aurora-reader-${environmentSuffix}`,
             enablePerformanceInsights: true,
@@ -377,8 +377,8 @@ export class DatabaseMigrationStack extends Construct {
           version: rds.MysqlEngineVersion.VER_8_0_40,
         }),
         instanceType: ec2.InstanceType.of(
-          ec2.InstanceClass.T3,
-          ec2.InstanceSize.SMALL
+          ec2.InstanceClass.R5,
+          ec2.InstanceSize.LARGE
         ),
         credentials: rds.Credentials.fromSecret(sourceDbSecret),
         databaseName: props.sourceDbName || 'migrationdb',
