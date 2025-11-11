@@ -26,5 +26,11 @@
     "IAM"
   ],
   "po_id": "w3h7f0",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
