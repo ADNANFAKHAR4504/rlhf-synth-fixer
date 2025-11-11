@@ -190,9 +190,9 @@ describe('Terraform Integration Tests - ECS Fargate Application', () => {
       const expectedAzCount = configuredAzCount && configuredAzCount > 0
         ? Math.min(configuredAzCount, subnets.length)
         : Math.min(
-            subnets.length,
-            Math.max(publicSubnetIds.length, privateSubnetIds.length, 1)
-          );
+          subnets.length,
+          Math.max(publicSubnetIds.length, privateSubnetIds.length, 1)
+        );
       expect(azs.size).toBeGreaterThanOrEqual(Math.max(expectedAzCount, 1));
     });
 
@@ -984,9 +984,14 @@ describe('Terraform Integration Tests - ECS Fargate Application', () => {
         outputs.min_tasks ?? outputs.minTasks,
         scalingTargetResponse.ScalableTargets?.[0]?.MinCapacity ?? desiredTaskCount
       ) ?? 1;
+      const configuredMaxTasks = outputs.max_tasks ?? outputs.maxTasks;
+      const scalingTargetMax = scalingTargetResponse.ScalableTargets?.[0]?.MaxCapacity;
+      const fallbackMax = scalingTargetMax !== undefined
+        ? scalingTargetMax
+        : (desiredTaskCount !== 0 ? desiredTaskCount : undefined);
       const scalingMaxCapacity = parseNumberOutput(
-        outputs.max_tasks ?? outputs.maxTasks,
-        scalingTargetResponse.ScalableTargets?.[0]?.MaxCapacity ?? desiredTaskCount || scalingMinCapacity
+        configuredMaxTasks,
+        fallbackMax !== undefined ? fallbackMax : scalingMinCapacity
       ) ?? scalingMinCapacity;
 
       console.log(`  ℹ Current ECS service state:`);
@@ -997,7 +1002,7 @@ describe('Terraform Integration Tests - ECS Fargate Application', () => {
       console.log(`    - Max capacity: ${scalingMaxCapacity}`);
 
       // Verify task count is within configured range
-      const allowedMinimum = Math.max(1, Math.min(scalingMinCapacity, desiredTaskCount || scalingMinCapacity));
+      const allowedMinimum = Math.max(1, Math.min(scalingMinCapacity, desiredTaskCount ?? scalingMinCapacity));
       const tolerance = 1;
       expect(observedRunning).toBeGreaterThanOrEqual(Math.max(allowedMinimum - tolerance, 1));
       expect(observedRunning).toBeLessThanOrEqual(Math.max(scalingMaxCapacity, allowedMinimum));
