@@ -91,7 +91,7 @@ class DmsStack(pulumi.ComponentResource):
             replication_subnet_group_id=self.dms_subnet_group.replication_subnet_group_id,
             multi_az=False,  # Single AZ for cost optimization
             publicly_accessible=False,
-            engine_version="3.4.7",
+            engine_version="3.5.1",
             auto_minor_version_upgrade=True,
             apply_immediately=True,
             tags={
