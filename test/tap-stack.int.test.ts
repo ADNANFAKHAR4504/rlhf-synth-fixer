@@ -14,7 +14,11 @@ describe('TapStack Integration Tests', () => {
     );
 
     if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+      const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
+      // Extract stack outputs from nested structure
+      // The structure is { "TapStack<suffix>": { outputs } }
+      const stackName = Object.keys(rawOutputs)[0];
+      outputs = rawOutputs[stackName];
     }
   });
 
