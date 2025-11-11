@@ -4,6 +4,7 @@
  * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
  * configuration based on the deployment environment.
  */
+
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -30,7 +31,7 @@ const defaultTags = {
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
-  region: 'us-east-1',
+  region: 'eu-central-1', // Changed to Frankfurt
 });
 
 // Export stack outputs

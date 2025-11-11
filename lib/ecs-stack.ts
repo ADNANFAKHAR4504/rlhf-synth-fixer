@@ -3,6 +3,7 @@
  *
  * Creates ECS cluster, ALB, ECS services, task definitions, and auto-scaling policies.
  */
+
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -476,7 +477,11 @@ export class EcsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Get current AWS region
+    const currentRegion = aws.getRegionOutput();
+
     // Create task definitions for each service
+    // FIXED: Using pulumi.all to properly resolve all Output values including log group names and region
     const apiTaskDefinition = new aws.ecs.TaskDefinition(
       `api-task-${environmentSuffix}`,
       {
@@ -488,8 +493,8 @@ export class EcsStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
-          .all([apiEcrUrl, dbSecretArn, apiKeySecretArn])
-          .apply(([ecrUrl, dbArn, apiArn]) =>
+          .all([apiEcrUrl, dbSecretArn, apiKeySecretArn, apiLogGroup.name, currentRegion.name])
+          .apply(([ecrUrl, dbArn, apiArn, logGroupName, region]) =>
             JSON.stringify([
               {
                 name: 'api-service',
@@ -514,8 +519,8 @@ export class EcsStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': apiLogGroup.name,
-                    'awslogs-region': aws.config.region!,
+                    'awslogs-group': logGroupName,
+                    'awslogs-region': region,
                     'awslogs-stream-prefix': 'ecs',
                   },
                 },
@@ -541,8 +546,8 @@ export class EcsStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
-          .all([workerEcrUrl, dbSecretArn, apiKeySecretArn])
-          .apply(([ecrUrl, dbArn, apiArn]) =>
+          .all([workerEcrUrl, dbSecretArn, apiKeySecretArn, workerLogGroup.name, currentRegion.name])
+          .apply(([ecrUrl, dbArn, apiArn, logGroupName, region]) =>
             JSON.stringify([
               {
                 name: 'worker-service',
@@ -567,8 +572,8 @@ export class EcsStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': workerLogGroup.name,
-                    'awslogs-region': aws.config.region!,
+                    'awslogs-group': logGroupName,
+                    'awslogs-region': region,
                     'awslogs-stream-prefix': 'ecs',
                   },
                 },
@@ -594,8 +599,8 @@ export class EcsStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi
-          .all([schedulerEcrUrl, dbSecretArn, apiKeySecretArn])
-          .apply(([ecrUrl, dbArn, apiArn]) =>
+          .all([schedulerEcrUrl, dbSecretArn, apiKeySecretArn, schedulerLogGroup.name, currentRegion.name])
+          .apply(([ecrUrl, dbArn, apiArn, logGroupName, region]) =>
             JSON.stringify([
               {
                 name: 'scheduler-service',
@@ -620,8 +625,8 @@ export class EcsStack extends pulumi.ComponentResource {
                 logConfiguration: {
                   logDriver: 'awslogs',
                   options: {
-                    'awslogs-group': schedulerLogGroup.name,
-                    'awslogs-region': aws.config.region!,
+                    'awslogs-group': logGroupName,
+                    'awslogs-region': region,
                     'awslogs-stream-prefix': 'ecs',
                   },
                 },
