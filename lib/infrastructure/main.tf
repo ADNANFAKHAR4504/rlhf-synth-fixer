@@ -311,7 +311,7 @@ resource "aws_network_acl_rule" "private_inbound_ephemeral" {
   egress         = false
   protocol       = "tcp"
   rule_action    = "allow"
-  cidr_block     = "0.0.0.0/0"
+  cidr_block     = var.vpc_cidr
   from_port      = 1024
   to_port        = 65535
 }
@@ -582,7 +582,7 @@ resource "aws_eks_node_group" "main" {
   scaling_config {
     desired_size = 3
     max_size     = 5
-    min_size     = 1
+    min_size     = 2
   }
 
   instance_types = ["t3.medium"]
@@ -663,7 +663,7 @@ resource "aws_s3_bucket" "terraform_state" {
   }
 
   lifecycle {
-    prevent_destroy = false
+    prevent_destroy = var.environment == "prod" ? true : false
   }
 }
 
@@ -715,8 +715,45 @@ resource "aws_dynamodb_table" "terraform_locks" {
   }
 
   lifecycle {
+    prevent_destroy = var.environment == "prod" ? true : false
+  }
+}
+
+# ==================== RDS Monitoring IAM Role ====================
+resource "aws_iam_role" "rds_monitoring" {
+  name = "${var.db_cluster_identifier}-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-monitoring-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
     prevent_destroy = false
   }
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring" {
+  role       = aws_iam_role.rds_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
 }
 
 resource "aws_kms_key" "rds" {
@@ -790,6 +827,18 @@ resource "aws_rds_cluster" "main" {
   skip_final_snapshot             = true
   deletion_protection             = false
 
+  # Backup configuration
+  backup_retention_period         = 7
+  preferred_backup_window         = "03:00-04:00"
+  preferred_maintenance_window    = "sun:04:00-sun:05:00"
+
+  # Monitoring and logging
+  enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
+  performance_insights_enabled    = true
+  performance_insights_kms_key_id = aws_kms_key.rds.arn
+
   tags = {
     Name        = var.db_cluster_identifier
     Environment = var.environment
@@ -801,7 +850,7 @@ resource "aws_rds_cluster" "main" {
   }
 
   lifecycle {
-    prevent_destroy = false
+    prevent_destroy = var.environment == "prod" ? true : false
   }
 }
 
@@ -888,6 +937,15 @@ resource "aws_elasticache_cluster" "main" {
   num_cache_nodes      = 1
   subnet_group_name    = aws_elasticache_subnet_group.main.name
   security_group_ids   = [aws_security_group.cache.id]
+  port                 = 6379
+
+  # Enable encryption
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+
+  # Enable authentication
+  auth_token = random_password.redis_auth_token.result
+  auth_token_update_strategy = "ROTATE"
 
   tags = {
     Name        = var.cache_cluster_id
@@ -898,6 +956,16 @@ resource "aws_elasticache_cluster" "main" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# Generate Redis auth token
+resource "random_password" "redis_auth_token" {
+  length  = 32
+  special = true
 
   lifecycle {
     prevent_destroy = false
@@ -1465,6 +1533,25 @@ resource "aws_iam_policy" "circleci_prod" {
   }
 }
 
+# ==================== SNS Topic for Alerts ====================
+resource "aws_sns_topic" "alerts" {
+  name = "${var.environment}-infrastructure-alerts"
+
+  tags = {
+    Name        = "${var.environment}-alerts-topic"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
 # ==================== CloudWatch Monitoring ====================
 # EKS Cluster CPU Utilization Alarm
 resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
@@ -1477,7 +1564,7 @@ resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors EKS cluster CPU utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     ClusterName = var.cluster_name
@@ -1509,7 +1596,7 @@ resource "aws_cloudwatch_metric_alarm" "eks_memory_utilization" {
   statistic           = "Average"
   threshold           = "85"
   alarm_description   = "This metric monitors EKS cluster memory utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     ClusterName = var.cluster_name
@@ -1541,7 +1628,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors RDS CPU utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DBClusterIdentifier = var.db_cluster_identifier
@@ -1573,7 +1660,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_space" {
   statistic           = "Average"
   threshold           = "2000000000" # 2GB in bytes
   alarm_description   = "This metric monitors RDS free storage space"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DBClusterIdentifier = var.db_cluster_identifier
@@ -1605,7 +1692,7 @@ resource "aws_cloudwatch_metric_alarm" "cache_cpu_utilization" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors ElastiCache CPU utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     CacheClusterId = var.cache_cluster_id
@@ -1637,7 +1724,7 @@ resource "aws_cloudwatch_metric_alarm" "cache_freeable_memory" {
   statistic           = "Average"
   threshold           = "100000000" # 100MB in bytes
   alarm_description   = "This metric monitors ElastiCache freeable memory"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     CacheClusterId = var.cache_cluster_id
