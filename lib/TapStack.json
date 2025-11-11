@@ -1,0 +1,1629 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "TapStack — Serverless transaction anomaly detection (brand-new stack). Core: API Gateway (REST), Lambda, DynamoDB. Optional: SQS buffer. Implements throttled POST webhook ingestion, validation/parsing, SQS buffering, SQS-driven anomaly detection, scheduled pattern analysis, SNS alerting, CloudWatch dashboards/alarms/logs, X-Ray tracing, DLQs (14 days), and least-privilege IAM. Region target: us-east-1.\n",
+    "Metadata": {
+        "cfn-lint": {
+            "config": {
+                "regions": [
+                    "us-east-1"
+                ]
+            }
+        }
+    },
+    "Parameters": {
+        "ProjectName": {
+            "Type": "String",
+            "Default": "tapstack",
+            "Description": "Short, lower-case slug for the project (letters, numbers, hyphens).",
+            "AllowedPattern": "^[a-z0-9]([a-z0-9-]{0,28}[a-z0-9])?$",
+            "ConstraintDescription": "Use lower-case letters, numbers, hyphens; 1-30 chars; cannot start/end with a hyphen."
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "prod-us",
+            "Description": "Environment suffix used in all names (e.g., prod-us, staging-us, qa, dev-eu1).",
+            "AllowedPattern": "^[a-z0-9](?:[a-z0-9-]{1,30}[a-z0-9])$",
+            "ConstraintDescription": "2-32 chars; lower-case letters, numbers, hyphens; cannot start/end with a hyphen."
+        },
+        "Owner": {
+            "Type": "String",
+            "Default": "risk-eng",
+            "Description": "Owner tag value."
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Default": "cc-1234",
+            "Description": "Cost center tag value."
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "alerts@example.com",
+            "Description": "Email address for SNS alerts subscription."
+        },
+        "ApiThrottleRps": {
+            "Type": "Number",
+            "Default": 1000,
+            "MinValue": 50,
+            "MaxValue": 5000,
+            "Description": "API Gateway steady-state requests per second limit (stage/method)."
+        },
+        "ApiThrottleBurst": {
+            "Type": "Number",
+            "Default": 2000,
+            "MinValue": 100,
+            "MaxValue": 10000,
+            "Description": "API Gateway burst limit."
+        },
+        "LambdaReservedConcurrency": {
+            "Type": "Number",
+            "Default": 100,
+            "MinValue": 1,
+            "MaxValue": 1000,
+            "Description": "Reserved concurrent executions for each Lambda."
+        },
+        "LambdaMemoryIngestion": {
+            "Type": "Number",
+            "Default": 512,
+            "AllowedValues": [
+                128,
+                256,
+                512,
+                1024,
+                1536,
+                2048,
+                3072
+            ],
+            "Description": "Memory size (MB) for ingestion Lambda."
+        },
+        "LambdaTimeoutIngestion": {
+            "Type": "Number",
+            "Default": 60,
+            "MinValue": 1,
+            "MaxValue": 900,
+            "Description": "Timeout (seconds) for ingestion Lambda."
+        },
+        "SqsVisibilityTimeoutSeconds": {
+            "Type": "Number",
+            "Default": 300,
+            "MinValue": 30,
+            "MaxValue": 43200,
+            "Description": "SQS visibility timeout for transaction queue (seconds)."
+        }
+    },
+    "Mappings": {},
+    "Resources": {
+        "TransactionsTable": {
+            "Type": "AWS::DynamoDB::Table",
+            "Properties": {
+                "TableName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-transactions"
+                },
+                "BillingMode": "PAY_PER_REQUEST",
+                "AttributeDefinitions": [
+                    {
+                        "AttributeName": "transactionId",
+                        "AttributeType": "S"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "AttributeType": "N"
+                    }
+                ],
+                "KeySchema": [
+                    {
+                        "AttributeName": "transactionId",
+                        "KeyType": "HASH"
+                    },
+                    {
+                        "AttributeName": "timestamp",
+                        "KeyType": "RANGE"
+                    }
+                ],
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "SSESpecification": {
+                    "SSEEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionsDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-txq-dlq"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "TransactionsQueue": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-txq"
+                },
+                "VisibilityTimeout": {
+                    "Ref": "SqsVisibilityTimeoutSeconds"
+                },
+                "RedrivePolicy": {
+                    "deadLetterTargetArn": {
+                        "Fn::GetAtt": [
+                            "TransactionsDLQ",
+                            "Arn"
+                        ]
+                    },
+                    "maxReceiveCount": 5
+                },
+                "MessageRetentionPeriod": 1209600,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "AlertsTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-alerts"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "AlertsSubscriptionEmail": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "TopicArn": {
+                    "Ref": "AlertsTopic"
+                },
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlertEmail"
+                }
+            }
+        },
+        "IngestionLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-ingestion"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DetectionLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-detection"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ScheduledAnalysisLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${EnvironmentSuffix}-scheduled-analysis"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ApiAccessLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/apigateway/${ProjectName}-${EnvironmentSuffix}-access"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "IngestionLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "LambdaTrust",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion-ddb-sqs"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "DdbWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DescribeTable"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SqsSendToMainQueue",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SqsSendToDLQ",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "IngestionLambdaDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DetectionLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "LambdaTrust",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection-ddb-sqs"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "SqsReceive",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:ReceiveMessage",
+                                        "sqs:DeleteMessage",
+                                        "sqs:GetQueueAttributes",
+                                        "sqs:ChangeMessageVisibility"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsQueue",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "DdbWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:PutItem",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:DescribeTable"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SqsSendToDLQ",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "DetectionLambdaDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ScheduledAnalysisLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-scheduled-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "LambdaTrust",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-scheduled-ddb-sqs"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "DdbReadWrite",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "dynamodb:Query",
+                                        "dynamodb:Scan",
+                                        "dynamodb:UpdateItem",
+                                        "dynamodb:PutItem",
+                                        "dynamodb:DescribeTable"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "TransactionsTable",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "SqsSendToDLQ",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sqs:SendMessage"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ScheduledAnalysisLambdaDLQ",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "IngestionLambdaDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion-dlq"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "DetectionLambdaDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection-dlq"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "ScheduledAnalysisLambdaDLQ": {
+            "Type": "AWS::SQS::Queue",
+            "Properties": {
+                "QueueName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-scheduled-dlq"
+                },
+                "MessageRetentionPeriod": 1209600,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "IngestionDLQPolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "IngestionLambdaDLQ"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowLambdaServiceToSendIngestionDLQ",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sqs:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "IngestionLambdaDLQ",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnEquals": {
+                                    "aws:SourceArn": {
+                                        "Fn::GetAtt": [
+                                            "IngestionFunction",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "DetectionDLQPolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "DetectionLambdaDLQ"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowLambdaServiceToSendDetectionDLQ",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sqs:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "DetectionLambdaDLQ",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnEquals": {
+                                    "aws:SourceArn": {
+                                        "Fn::GetAtt": [
+                                            "DetectionFunction",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ScheduledDLQPolicy": {
+            "Type": "AWS::SQS::QueuePolicy",
+            "Properties": {
+                "Queues": [
+                    {
+                        "Ref": "ScheduledAnalysisLambdaDLQ"
+                    }
+                ],
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AllowLambdaServiceToSendScheduledDLQ",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sqs:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ScheduledAnalysisLambdaDLQ",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnEquals": {
+                                    "aws:SourceArn": {
+                                        "Fn::GetAtt": [
+                                            "ScheduledAnalysisFunction",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "AllowEventBridgeToSendScheduledDLQ",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "events.amazonaws.com"
+                            },
+                            "Action": "sqs:SendMessage",
+                            "Resource": {
+                                "Fn::GetAtt": [
+                                    "ScheduledAnalysisLambdaDLQ",
+                                    "Arn"
+                                ]
+                            },
+                            "Condition": {
+                                "ArnEquals": {
+                                    "aws:SourceArn": {
+                                        "Fn::GetAtt": [
+                                            "ScheduledRuleQuarterHour",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "IngestionFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion"
+                },
+                "Architectures": [
+                    "arm64"
+                ],
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IngestionLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": {
+                    "Ref": "LambdaMemoryIngestion"
+                },
+                "Timeout": {
+                    "Ref": "LambdaTimeoutIngestion"
+                },
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "ReservedConcurrentExecutions": {
+                    "Ref": "LambdaReservedConcurrency"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "TABLE_ARN": {
+                            "Fn::GetAtt": [
+                                "TransactionsTable",
+                                "Arn"
+                            ]
+                        },
+                        "TX_QUEUE_URL": {
+                            "Ref": "TransactionsQueue"
+                        },
+                        "PROJECT_NAME": {
+                            "Ref": "ProjectName"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "IngestionLambdaDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json, os, time, boto3\nddb = boto3.client('dynamodb')\nsqs = boto3.client('sqs')\nTABLE_NAME = os.getenv('TABLE_NAME')\nTX_QUEUE_URL = os.getenv('TX_QUEUE_URL')\ndef handler(event, context):\n    try:\n        body = event.get('body') or '{}'\n        data = json.loads(body)\n        txn_id = data.get('transactionId')\n        ts = data.get('timestamp') or int(time.time()*1000)\n        if not txn_id:\n            return {\"statusCode\": 400, \"body\": json.dumps({\"error\":\"transactionId required\"})}\n        ddb.put_item(\n            TableName=TABLE_NAME,\n            Item={\n                'transactionId': {'S': str(txn_id)},\n                'timestamp': {'N': str(int(ts))},\n                'payload': {'S': json.dumps(data)}\n            }\n        )\n        sqs.send_message(QueueUrl=TX_QUEUE_URL, MessageBody=json.dumps(data))\n        return {\"statusCode\": 200, \"body\": json.dumps({\"ok\": True, \"transactionId\": txn_id})}\n    except Exception as e:\n        raise\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            },
+            "DependsOn": [
+                "IngestionLogGroup"
+            ]
+        },
+        "DetectionFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection"
+                },
+                "Architectures": [
+                    "arm64"
+                ],
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "DetectionLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "Timeout": 60,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "ReservedConcurrentExecutions": {
+                    "Ref": "LambdaReservedConcurrency"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "PROJECT_NAME": {
+                            "Ref": "ProjectName"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "DetectionLambdaDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import json, os, boto3\nddb = boto3.client('dynamodb')\nTABLE_NAME = os.getenv('TABLE_NAME')\ndef is_anomalous(txn):\n    amount = float(txn.get('amount', 0))\n    return amount > 10000.0 or (txn.get('country') and txn['country'] not in ['US','CA','GB'])\ndef handler(event, context):\n    for record in event.get('Records', []):\n        payload = json.loads(record['body'])\n        anomalous = is_anomalous(payload)\n        ddb.put_item(\n            TableName=TABLE_NAME,\n            Item={\n                'transactionId': {'S': str(payload.get('transactionId'))},\n                'timestamp': {'N': str(payload.get('timestamp', 0))},\n                'anomaly': {'S': 'yes' if anomalous else 'no'}\n            }\n        )\n    return {\"ok\": True}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            },
+            "DependsOn": [
+                "DetectionLogGroup"
+            ]
+        },
+        "DetectionEventSource": {
+            "Type": "AWS::Lambda::EventSourceMapping",
+            "Properties": {
+                "EventSourceArn": {
+                    "Fn::GetAtt": [
+                        "TransactionsQueue",
+                        "Arn"
+                    ]
+                },
+                "FunctionName": {
+                    "Ref": "DetectionFunction"
+                },
+                "BatchSize": 10,
+                "MaximumBatchingWindowInSeconds": 5,
+                "Enabled": true
+            }
+        },
+        "ScheduledAnalysisFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-scheduled-analysis"
+                },
+                "Architectures": [
+                    "arm64"
+                ],
+                "Runtime": "python3.12",
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ScheduledAnalysisLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "MemorySize": 512,
+                "Timeout": 120,
+                "TracingConfig": {
+                    "Mode": "Active"
+                },
+                "ReservedConcurrentExecutions": {
+                    "Ref": "LambdaReservedConcurrency"
+                },
+                "Environment": {
+                    "Variables": {
+                        "TABLE_NAME": {
+                            "Ref": "TransactionsTable"
+                        },
+                        "PROJECT_NAME": {
+                            "Ref": "ProjectName"
+                        },
+                        "ENVIRONMENT_SUFFIX": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                },
+                "DeadLetterConfig": {
+                    "TargetArn": {
+                        "Fn::GetAtt": [
+                            "ScheduledAnalysisLambdaDLQ",
+                            "Arn"
+                        ]
+                    }
+                },
+                "Code": {
+                    "ZipFile": "import os, time\ndef handler(event, context):\n    return {\"ok\": True, \"ts\": int(time.time())}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            },
+            "DependsOn": [
+                "ScheduledAnalysisLogGroup"
+            ]
+        },
+        "ScheduledRuleQuarterHour": {
+            "Type": "AWS::Events::Rule",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-quarter-hour"
+                },
+                "ScheduleExpression": "cron(0/15 * * * ? *)",
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Id": "ScheduledAnalysisTarget",
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "ScheduledAnalysisFunction",
+                                "Arn"
+                            ]
+                        },
+                        "DeadLetterConfig": {
+                            "Arn": {
+                                "Fn::GetAtt": [
+                                    "ScheduledAnalysisLambdaDLQ",
+                                    "Arn"
+                                ]
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "PermissionEventsToScheduledAnalysis": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "ScheduledAnalysisFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "ScheduledRuleQuarterHour",
+                        "Arn"
+                    ]
+                }
+            }
+        },
+        "RestApi": {
+            "Type": "AWS::ApiGateway::RestApi",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api"
+                },
+                "EndpointConfiguration": {
+                    "Types": [
+                        "REGIONAL"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "RestApiWebhookResource": {
+            "Type": "AWS::ApiGateway::Resource",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ParentId": {
+                    "Fn::GetAtt": [
+                        "RestApi",
+                        "RootResourceId"
+                    ]
+                },
+                "PathPart": "webhook"
+            }
+        },
+        "IngestionInvokePermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Properties": {
+                "FunctionName": {
+                    "Ref": "IngestionFunction"
+                },
+                "Action": "lambda:InvokeFunction",
+                "Principal": "apigateway.amazonaws.com",
+                "SourceArn": {
+                    "Fn::Sub": "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApi}/*/POST/webhook"
+                }
+            }
+        },
+        "RestApiMethodPostWebhook": {
+            "Type": "AWS::ApiGateway::Method",
+            "DependsOn": [
+                "IngestionInvokePermission"
+            ],
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "ResourceId": {
+                    "Ref": "RestApiWebhookResource"
+                },
+                "HttpMethod": "POST",
+                "AuthorizationType": "NONE",
+                "Integration": {
+                    "Type": "AWS_PROXY",
+                    "IntegrationHttpMethod": "POST",
+                    "Uri": {
+                        "Fn::Join": [
+                            "",
+                            [
+                                "arn:aws:apigateway:",
+                                {
+                                    "Ref": "AWS::Region"
+                                },
+                                ":lambda:path/2015-03-31/functions/",
+                                {
+                                    "Fn::GetAtt": [
+                                        "IngestionFunction",
+                                        "Arn"
+                                    ]
+                                },
+                                "/invocations"
+                            ]
+                        ]
+                    }
+                },
+                "MethodResponses": [
+                    {
+                        "StatusCode": "200"
+                    }
+                ]
+            }
+        },
+        "RestApiDeployment": {
+            "Type": "AWS::ApiGateway::Deployment",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "Description": {
+                    "Fn::Sub": "Deployment for ${ProjectName}-${EnvironmentSuffix}"
+                }
+            },
+            "DependsOn": [
+                "RestApiMethodPostWebhook"
+            ]
+        },
+        "RestApiStage": {
+            "Type": "AWS::ApiGateway::Stage",
+            "Properties": {
+                "RestApiId": {
+                    "Ref": "RestApi"
+                },
+                "StageName": {
+                    "Ref": "EnvironmentSuffix"
+                },
+                "DeploymentId": {
+                    "Ref": "RestApiDeployment"
+                },
+                "TracingEnabled": true,
+                "MethodSettings": [
+                    {
+                        "ResourcePath": "/*",
+                        "HttpMethod": "*",
+                        "ThrottlingBurstLimit": {
+                            "Ref": "ApiThrottleBurst"
+                        },
+                        "ThrottlingRateLimit": {
+                            "Ref": "ApiThrottleRps"
+                        },
+                        "MetricsEnabled": true,
+                        "DataTraceEnabled": false,
+                        "LoggingLevel": "INFO"
+                    }
+                ],
+                "AccessLogSetting": {
+                    "DestinationArn": {
+                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:${ApiAccessLogGroup}"
+                    },
+                    "Format": "{ \"requestId\":\"$context.requestId\",\"ip\":\"$context.identity.sourceIp\",\"caller\":\"$context.identity.caller\",\"user\":\"$context.identity.user\",\"requestTime\":\"$context.requestTime\",\"httpMethod\":\"$context.httpMethod\",\"resourcePath\":\"$context.resourcePath\",\"status\":\"$context.status\",\"protocol\":\"$context.protocol\",\"responseLength\":\"$context.responseLength\",\"integrationLatency\":\"$context.integrationLatency\",\"requestLatency\":\"$context.requestLatency\" }\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    }
+                ]
+            }
+        },
+        "MonitoringDashboard": {
+            "Type": "AWS::CloudWatch::Dashboard",
+            "Properties": {
+                "DashboardName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-dashboard"
+                },
+                "DashboardBody": {
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"width\": 24,\n      \"height\": 6,\n      \"properties\": {\n        \"title\": \"API Latency (p95) — ${ProjectName}-${EnvironmentSuffix}\",\n        \"metrics\": [\n          [ \"AWS/ApiGateway\", \"Latency\", \"ApiName\", \"${ProjectName}-${EnvironmentSuffix}-api\", \"Stage\", \"${EnvironmentSuffix}\", { \"stat\": \"p95\" } ]\n        ],\n        \"period\": 60,\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"width\": 24,\n      \"height\": 6,\n      \"properties\": {\n        \"title\": \"Lambda Invocations & Duration — Ingestion / Detection\",\n        \"metrics\": [\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${ProjectName}-${EnvironmentSuffix}-ingestion\" ],\n          [ \".\", \"Duration\", \".\", \".\", { \"stat\": \"p95\" } ],\n          [ \"AWS/Lambda\", \"Invocations\", \"FunctionName\", \"${ProjectName}-${EnvironmentSuffix}-detection\" ],\n          [ \".\", \"Duration\", \".\", \".\", { \"stat\": \"p95\" } ]\n        ],\n        \"period\": 60,\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"width\": 24,\n      \"height\": 6,\n      \"properties\": {\n        \"title\": \"DynamoDB Consumed Capacity\",\n        \"metrics\": [\n          [ \"AWS/DynamoDB\", \"ConsumedReadCapacityUnits\", \"TableName\", \"${ProjectName}-${EnvironmentSuffix}-transactions\" ],\n          [ \".\", \"ConsumedWriteCapacityUnits\", \".\", \".\" ]\n        ],\n        \"period\": 60,\n        \"region\": \"${AWS::Region}\",\n        \"view\": \"timeSeries\"\n      }\n    }\n  ]\n}\n"
+                }
+            }
+        },
+        "AlarmIngestionErrorRate": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion-error-rate"
+                },
+                "AlarmDescription": "Triggers when ingestion Lambda error rate exceeds 1% over 5 minutes.",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 1,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "TreatMissingData": "notBreaching",
+                "Metrics": [
+                    {
+                        "Id": "e",
+                        "Label": "ErrorRate%",
+                        "Expression": "IF(invocations>0,(errors/invocations)*100,0)",
+                        "ReturnData": true
+                    },
+                    {
+                        "Id": "errors",
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Errors",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        },
+                        "ReturnData": false
+                    },
+                    {
+                        "Id": "invocations",
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Invocations",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-ingestion"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        },
+                        "ReturnData": false
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertsTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "AlertsTopic"
+                    }
+                ]
+            }
+        },
+        "AlarmDetectionErrorRate": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection-error-rate"
+                },
+                "AlarmDescription": "Triggers when detection Lambda error rate exceeds 1% over 5 minutes.",
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Threshold": 1,
+                "EvaluationPeriods": 1,
+                "DatapointsToAlarm": 1,
+                "TreatMissingData": "notBreaching",
+                "Metrics": [
+                    {
+                        "Id": "e",
+                        "Label": "ErrorRate%",
+                        "Expression": "IF(invocations>0,(errors/invocations)*100,0)",
+                        "ReturnData": true
+                    },
+                    {
+                        "Id": "errors",
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Errors",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        },
+                        "ReturnData": false
+                    },
+                    {
+                        "Id": "invocations",
+                        "MetricStat": {
+                            "Metric": {
+                                "Namespace": "AWS/Lambda",
+                                "MetricName": "Invocations",
+                                "Dimensions": [
+                                    {
+                                        "Name": "FunctionName",
+                                        "Value": {
+                                            "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-detection"
+                                        }
+                                    }
+                                ]
+                            },
+                            "Period": 300,
+                            "Stat": "Sum"
+                        },
+                        "ReturnData": false
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertsTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "AlertsTopic"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "ApiId": {
+            "Description": "REST API ID",
+            "Value": {
+                "Ref": "RestApi"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api-id"
+                }
+            }
+        },
+        "ApiInvokeUrl": {
+            "Description": "Invoke URL for the API stage",
+            "Value": {
+                "Fn::Sub": "https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${EnvironmentSuffix}/webhook"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${EnvironmentSuffix}-api-url"
+                }
+            }
+        },
+        "ApiStageName": {
+            "Description": "API stage name",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            }
+        },
+        "TransactionsTableName": {
+            "Description": "DynamoDB Transactions table name",
+            "Value": {
+                "Ref": "TransactionsTable"
+            }
+        },
+        "TransactionsTableArn": {
+            "Description": "DynamoDB Transactions table ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionsTable",
+                    "Arn"
+                ]
+            }
+        },
+        "TransactionsQueueUrl": {
+            "Description": "SQS Transactions queue URL",
+            "Value": {
+                "Ref": "TransactionsQueue"
+            }
+        },
+        "TransactionsQueueArn": {
+            "Description": "SQS Transactions queue ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TransactionsQueue",
+                    "Arn"
+                ]
+            }
+        },
+        "AlertsTopicArn": {
+            "Description": "SNS Alerts topic ARN",
+            "Value": {
+                "Ref": "AlertsTopic"
+            }
+        },
+        "IngestionFunctionArn": {
+            "Description": "Ingestion Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "IngestionFunction",
+                    "Arn"
+                ]
+            }
+        },
+        "DetectionFunctionArn": {
+            "Description": "Detection Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "DetectionFunction",
+                    "Arn"
+                ]
+            }
+        },
+        "ScheduledAnalysisFunctionArn": {
+            "Description": "Scheduled Analysis Lambda ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ScheduledAnalysisFunction",
+                    "Arn"
+                ]
+            }
+        },
+        "DashboardName": {
+            "Description": "CloudWatch Dashboard name",
+            "Value": {
+                "Ref": "MonitoringDashboard"
+            }
+        },
+        "IngestionAlarmName": {
+            "Description": "Ingestion Lambda error-rate alarm",
+            "Value": {
+                "Ref": "AlarmIngestionErrorRate"
+            }
+        },
+        "DetectionAlarmName": {
+            "Description": "Detection Lambda error-rate alarm",
+            "Value": {
+                "Ref": "AlarmDetectionErrorRate"
+            }
+        }
+    }
+}

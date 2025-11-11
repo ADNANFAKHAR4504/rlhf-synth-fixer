@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912207",
+  "team": "3",
+  "startedAt": "2025-11-11T09:36:39.162Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway REST API",
+    "API Gateway Stage",
+    "API Gateway Method",
+    "API Gateway Deployment",
+    "Lambda Ingestion Function",
+    "Lambda Detection Function",
+    "Lambda Scheduled Analysis Function",
+    "DynamoDB Table",
+    "SQS Queue",
+    "SQS Dead Letter Queue",
+    "SNS Topic",
+    "SNS Subscription",
+    "CloudWatch Log Group",
+    "CloudWatch Dashboard",
+    "CloudWatch Alarm",
+    "EventBridge Rule",
+    "IAM Role for Ingestion Lambda",
+    "IAM Role for Detection Lambda",
+    "IAM Role for Scheduled Analysis Lambda",
+    "IAM Policy Attachments",
+    "X-Ray Tracing Configuration"
+  ]
+}
