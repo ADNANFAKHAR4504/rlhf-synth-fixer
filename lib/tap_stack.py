@@ -393,7 +393,7 @@ class TapStack(Stack):
             replication_instance_class="dms.c5.large",
             replication_instance_identifier=f"payment-dms-{self.environment_suffix}",
             allocated_storage=100,
-            engine_version="3.5.2",
+            engine_version="3.5.4",
             multi_az=False,
             publicly_accessible=False,
             replication_subnet_group_identifier=dms_subnet_group.replication_subnet_group_identifier,
