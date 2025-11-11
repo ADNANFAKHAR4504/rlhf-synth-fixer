@@ -27,7 +27,6 @@ describe('ApiGatewayStack', () => {
       transactionProcessorInvokeArn: TRANSACTION_PROCESSOR_INVOKE_ARN,
       statusCheckerArn: STATUS_CHECKER_ARN,
       statusCheckerInvokeArn: STATUS_CHECKER_INVOKE_ARN,
-      region: 'us-west-2',
     });
 
     expect(apiGatewayStack).toBeDefined();
@@ -35,7 +34,7 @@ describe('ApiGatewayStack', () => {
     expect(apiGatewayStack.apiUrl).toBeDefined();
   });
 
-  test('ApiGatewayStack uses default region when region is empty string', () => {
+  test('ApiGatewayStack uses dynamic region detection', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackDefaultRegion');
 
@@ -45,12 +44,11 @@ describe('ApiGatewayStack', () => {
       transactionProcessorInvokeArn: TRANSACTION_PROCESSOR_INVOKE_ARN,
       statusCheckerArn: STATUS_CHECKER_ARN,
       statusCheckerInvokeArn: STATUS_CHECKER_INVOKE_ARN,
-      region: '',
     });
 
     expect(apiGatewayStack).toBeDefined();
     expect(apiGatewayStack.api).toBeDefined();
-    expect(apiGatewayStack.apiUrl).toContain('eu-central-1');
+    expect(apiGatewayStack.apiUrl).toBeDefined();
   });
 
   test('ApiGatewayStack creates transactions endpoint', () => {
@@ -63,7 +61,6 @@ describe('ApiGatewayStack', () => {
       transactionProcessorInvokeArn: TRANSACTION_PROCESSOR_INVOKE_ARN,
       statusCheckerArn: STATUS_CHECKER_ARN,
       statusCheckerInvokeArn: STATUS_CHECKER_INVOKE_ARN,
-      region: 'us-east-1',
     });
 
     const synthesized = Testing.synth(stack);
@@ -81,7 +78,6 @@ describe('ApiGatewayStack', () => {
       transactionProcessorInvokeArn: TRANSACTION_PROCESSOR_INVOKE_ARN,
       statusCheckerArn: STATUS_CHECKER_ARN,
       statusCheckerInvokeArn: STATUS_CHECKER_INVOKE_ARN,
-      region: 'eu-west-1',
     });
 
     const synthesized = Testing.synth(stack);
@@ -99,7 +95,6 @@ describe('ApiGatewayStack', () => {
       transactionProcessorInvokeArn: TRANSACTION_PROCESSOR_INVOKE_ARN,
       statusCheckerArn: STATUS_CHECKER_ARN,
       statusCheckerInvokeArn: STATUS_CHECKER_INVOKE_ARN,
-      region: 'us-east-2',
     });
 
     const synthesized = Testing.synth(stack);

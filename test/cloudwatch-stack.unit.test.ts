@@ -11,48 +11,45 @@ describe('CloudwatchStack', () => {
   test('CloudwatchStack instantiates with all required props', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStack');
-    
+
     const cloudwatchStack = new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'test',
       transactionProcessorName: 'transaction-processor-test',
       statusCheckerName: 'status-checker-test',
       dynamodbTableName: 'transactions-test',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'us-west-2',
     });
 
     expect(cloudwatchStack).toBeDefined();
   });
 
-  test('CloudwatchStack uses default region when region is empty', () => {
+  test('CloudwatchStack uses dynamic region detection', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackDefaultRegion');
-    
+
     const cloudwatchStack = new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'default-region',
       transactionProcessorName: 'transaction-processor-default',
       statusCheckerName: 'status-checker-default',
       dynamodbTableName: 'transactions-default',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: '',
     });
 
     expect(cloudwatchStack).toBeDefined();
     const synthesized = Testing.synth(stack);
-    expect(synthesized).toContain('eu-central-1');
+    expect(synthesized).toContain('aws_region');
   });
 
   test('CloudwatchStack creates dashboard', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackDashboard');
-    
+
     new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'prod',
       transactionProcessorName: 'transaction-processor-prod',
       statusCheckerName: 'status-checker-prod',
       dynamodbTableName: 'transactions-prod',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'ap-south-1',
     });
 
     const synthesized = Testing.synth(stack);
@@ -63,14 +60,13 @@ describe('CloudwatchStack', () => {
   test('CloudwatchStack creates Lambda invocation metrics', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackMetrics');
-    
+
     new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'staging',
       transactionProcessorName: 'transaction-processor-staging',
       statusCheckerName: 'status-checker-staging',
       dynamodbTableName: 'transactions-staging',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'us-east-1',
     });
 
     const synthesized = Testing.synth(stack);
@@ -81,14 +77,13 @@ describe('CloudwatchStack', () => {
   test('CloudwatchStack creates Lambda error metrics', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackErrors');
-    
+
     new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'dev',
       transactionProcessorName: 'transaction-processor-dev',
       statusCheckerName: 'status-checker-dev',
       dynamodbTableName: 'transactions-dev',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'eu-west-1',
     });
 
     const synthesized = Testing.synth(stack);
@@ -98,14 +93,13 @@ describe('CloudwatchStack', () => {
   test('CloudwatchStack creates DynamoDB capacity metrics', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackDynamoDB');
-    
+
     new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'capacity-test',
       transactionProcessorName: 'transaction-processor-capacity',
       statusCheckerName: 'status-checker-capacity',
       dynamodbTableName: 'transactions-capacity',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'us-east-2',
     });
 
     const synthesized = Testing.synth(stack);
@@ -117,14 +111,13 @@ describe('CloudwatchStack', () => {
   test('CloudwatchStack creates transaction processor alarm', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackAlarm1');
-    
+
     new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'alarm-test',
       transactionProcessorName: 'transaction-processor-alarm',
       statusCheckerName: 'status-checker-alarm',
       dynamodbTableName: 'transactions-alarm',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'ap-southeast-1',
     });
 
     const synthesized = Testing.synth(stack);
@@ -135,14 +128,13 @@ describe('CloudwatchStack', () => {
   test('CloudwatchStack creates status checker alarm', () => {
     const app = Testing.app();
     stack = new TerraformStack(app, 'TestStackAlarm2');
-    
+
     new CloudwatchStack(stack, 'CloudwatchStack', {
       environmentSuffix: 'status-alarm',
       transactionProcessorName: 'transaction-processor-status',
       statusCheckerName: 'status-checker-status',
       dynamodbTableName: 'transactions-status',
       snsTopicArn: 'arn:aws:sns:us-east-1:123456789012:notifications',
-      region: 'ca-central-1',
     });
 
     const synthesized = Testing.synth(stack);
