@@ -1,6 +1,6 @@
 {
-  "platform": "CDK",
-  "language": "TypeScript",
+  "platform": "cdk",
+  "language": "ts",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",

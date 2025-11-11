@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -17,6 +17,60 @@ describe('TapStack Zero-Trust Security', () => {
     });
     stack = new TapStack(app, 'TestTapStack');
     template = Template.fromStack(stack);
+  });
+
+  describe('Environment Suffix Handling', () => {
+    test('Uses provided environmentSuffix in resource names', () => {
+      // Test with the current environmentSuffix from the outer scope
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: `alias/logs-key-${environmentSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: `alias/s3-key-${environmentSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: `finance-data-${environmentSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: `finance-role-${environmentSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        TopicName: `security-alerts-${environmentSuffix}`,
+      });
+
+      template.hasResourceProperties('AWS::CloudWatch::Alarm', {
+        AlarmName: `unauthorized-api-calls-${environmentSuffix}`,
+      });
+    });
+
+    test('Defaults to "dev" when environmentSuffix is not provided in context', () => {
+      // Create app explicitly without environmentSuffix in context
+      const appWithoutContext = new cdk.App({
+        context: {},
+      });
+      const stackWithoutContext = new TapStack(
+        appWithoutContext,
+        'TestTapStackNoContext'
+      );
+      const templateWithoutContext = Template.fromStack(stackWithoutContext);
+
+      // Verify that resources use 'dev' as default when no context is provided
+      templateWithoutContext.hasResourceProperties('AWS::KMS::Alias', {
+        AliasName: 'alias/logs-key-dev',
+      });
+
+      templateWithoutContext.hasResourceProperties('AWS::DynamoDB::Table', {
+        TableName: 'finance-data-dev',
+      });
+
+      templateWithoutContext.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'finance-role-dev',
+      });
+    });
   });
 
   describe('KMS Encryption Keys', () => {
