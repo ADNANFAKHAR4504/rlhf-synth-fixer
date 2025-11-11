@@ -2,8 +2,6 @@
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
-
-
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -17,7 +15,6 @@ import { MonitoringModule } from './monitoring-module';
 import { ScpModule } from './scp-module';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketPolicy } from '@cdktf/provider-aws/lib/s3-bucket-policy';
-import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 interface TapStackProps {
   environmentSuffix?: string;
@@ -28,8 +25,8 @@ interface TapStackProps {
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'ap-southeast-1'.
-const AWS_REGION_OVERRIDE = 'ap-southeast-1';
+// you can set it via environment variable AWS_REGION_OVERRIDE. Otherwise, it will use the prop or default to 'ap-southeast-1'.
+const AWS_REGION_OVERRIDE = process.env.AWS_REGION_OVERRIDE || '';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -41,7 +38,6 @@ export class TapStack extends TerraformStack {
       : props?.awsRegion || 'ap-southeast-1';
     const stateBucketRegion = props?.stateBucketRegion || 'ap-southeast-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
-
     const defaultTags = props?.defaultTags || [
       {
         tags: {
@@ -70,7 +66,6 @@ export class TapStack extends TerraformStack {
     });
 
     // Get current AWS account ID
-
     // Create S3 bucket for Config delivery
     const configBucket = new S3Bucket(this, 'config-bucket', {
       bucket: `aws-config-delivery-${environmentSuffix}`,
