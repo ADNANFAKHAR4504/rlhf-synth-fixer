@@ -300,7 +300,7 @@ const auroraCluster = new aws.rds.Cluster(
   {
     engine: 'aurora-postgresql',
     engineMode: 'provisioned',
-    engineVersion: '15.3',
+    engineVersion: '15.5',
     databaseName: 'migrationdb',
     masterUsername: 'admin',
     masterPassword: dbPassword,
@@ -324,7 +324,7 @@ const _auroraInstance = new aws.rds.ClusterInstance(
     clusterIdentifier: auroraCluster.id,
     instanceClass: 'db.serverless',
     engine: 'aurora-postgresql',
-    engineVersion: '15.3',
+    engineVersion: '15.5',
     tags: {
       Name: `aurora-instance-${environmentSuffix}`,
       Environment: environmentSuffix,
