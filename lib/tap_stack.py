@@ -34,13 +34,12 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('custom:infrastructure:TapStack', name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
-        
+
         # Get region from AWS_REGION environment variable, default to eu-central-1
         self.region = os.getenv('AWS_REGION', 'eu-central-1')
-        
-        # Dynamically fetch available AZs for the current region
-        availability_zones = aws.get_availability_zones(state="available")
-        self.azs = availability_zones.names[:3]  # Use first 3 available AZs
+
+        # Use fixed availability zones for eu-central-1 as required
+        self.azs = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
 
         # Create VPC
         self.vpc = self._create_vpc()

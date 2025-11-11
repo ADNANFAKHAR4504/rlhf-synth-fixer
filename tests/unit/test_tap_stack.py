@@ -59,12 +59,6 @@ class MyMocks(pulumi.runtime.Mocks):
     
     def call(self, args: pulumi.runtime.MockCallArgs):
         """Mock function calls like get_availability_zones."""
-        if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
-            # Return mocked availability zones
-            return {
-                "names": ["eu-central-1a", "eu-central-1b", "eu-central-1c"],
-                "zoneIds": ["euc1-az1", "euc1-az2", "euc1-az3"],
-            }
         return {}
 
 
@@ -113,7 +107,7 @@ def test_tap_stack_initialization():
         # Verify basic properties
         assert stack.environment_suffix == "test123"
         assert stack.region == os.getenv('AWS_REGION', 'eu-central-1')
-        assert len(stack.azs) == 3
+        assert stack.azs == ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
         assert all(isinstance(az, str) for az in stack.azs)
         
         return {}
@@ -317,6 +311,26 @@ def test_environment_suffix_in_resources():
     args = TapStackArgs(environment_suffix="unique123")
     return check_suffix(args)
 
+
+@pytest.mark.unit
+@pulumi.runtime.test
+def test_availability_zones():
+    """Test that correct availability zones are configured."""
+    
+    def check_azs(args):
+        stack = TapStack(name="test-stack", args=args)
+        
+        # Verify AZs are the expected eu-central-1 set
+        expected_azs = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
+        assert stack.azs == expected_azs
+        for az in stack.azs:
+            assert isinstance(az, str)
+            assert az.startswith("eu-central-1")
+            
+        return {}
+    
+    args = TapStackArgs(environment_suffix="test-az")
+    return check_azs(args)
 
 
 @pytest.mark.unit

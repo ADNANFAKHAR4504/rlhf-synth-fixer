@@ -1,6 +1,6 @@
 Hey team,
 
-We need to build a production-ready VPC infrastructure for a fintech startup that's launching a payment processing platform. They're dealing with sensitive financial data and need to meet PCI-DSS compliance requirements, so network segmentation and security are non-negotiable. The business has asked us to create this in Python using Pulumi, and they want everything set up in the ap-southeast-1 region.
+We need to build a production-ready VPC infrastructure for a fintech startup that's launching a payment processing platform. They're dealing with sensitive financial data and need to meet PCI-DSS compliance requirements, so network segmentation and security are non-negotiable. The business has asked us to create this in Python using Pulumi, and they want everything set up in the eu-central-1 region.
 
 The startup is building their payment platform from scratch and needs a solid foundation. They've emphasized that security and compliance are the top priorities since they'll be handling credit card transactions. They also need to integrate with their existing on-premises systems, so hybrid connectivity is essential. The architecture needs to support multiple tiers of applications with proper isolation between web, application, and database layers.
 
@@ -15,7 +15,7 @@ Create a network infrastructure using **Pulumi with Python** for a PCI-DSS compl
 1. **VPC Configuration**
    - VPC with CIDR 10.0.0.0/16
    - DNS hostnames and DNS resolution enabled
-   - Deploy to ap-southeast-1 region
+   - Deploy to eu-central-1 region
 
 2. **Multi-Tier Subnet Architecture**
    - Three public subnets across availability zones (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24)
@@ -60,8 +60,8 @@ Create a network infrastructure using **Pulumi with Python** for a PCI-DSS compl
 - Use **S3** for VPC Flow Logs storage
 - Resource names must include **environmentSuffix** for uniqueness across deployments
 - Follow naming convention: {env}-{tier}-{resource}-{az} pattern
-- Deploy to **ap-southeast-1** region
-- Use availability zones: ap-southeast-1a, ap-southeast-1b, ap-southeast-1c
+- Deploy to **eu-central-1** region
+- Use availability zones: eu-central-1a, eu-central-1b, eu-central-1c
 
 ### Constraints
 

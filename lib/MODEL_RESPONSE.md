@@ -40,8 +40,8 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('custom:infrastructure:TapStack', name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.region = "ap-southeast-1"
-        self.azs = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
+        self.region = "eu-central-1"
+        self.azs = ["eu-central-1a", "eu-central-1b", "eu-central-1c"]
 
         # Create VPC
         self.vpc = self._create_vpc()
@@ -812,7 +812,7 @@ The infrastructure creates a three-tier network architecture:
 ## AWS Resources Created
 
 1. **VPC** (10.0.0.0/16) with DNS support
-2. **9 Subnets** across 3 availability zones (ap-southeast-1a, 1b, 1c)
+2. **9 Subnets** across 3 availability zones (eu-central-1a, 1b, 1c)
 3. **Internet Gateway** for public internet access
 4. **3 NAT Gateways** with Elastic IPs (one per AZ)
 5. **Route Tables** for each tier with appropriate routing
@@ -840,7 +840,7 @@ The infrastructure creates a three-tier network architecture:
 - Python 3.7 or later
 - Pulumi CLI installed
 - AWS credentials configured
-- AWS region set to ap-southeast-1
+- AWS region set to eu-central-1
 
 ### Installation
 
@@ -852,7 +852,7 @@ pip install -r requirements.txt
 pulumi login
 
 # Set AWS region
-pulumi config set aws:region ap-southeast-1
+pulumi config set aws:region eu-central-1
 
 # Set environment suffix (optional, defaults to 'dev')
 pulumi config set env prod

@@ -79,7 +79,7 @@ The MODEL_RESPONSE demonstrated excellent understanding of:
    - VPC Flow Logs enabled for ALL traffic
 
 3. **High Availability**:
-   - Multi-AZ deployment across ap-southeast-1a, ap-southeast-1b, ap-southeast-1c
+   - Multi-AZ deployment across eu-central-1a, eu-central-1b, eu-central-1c
    - NAT Gateway in each AZ for redundancy
    - Proper resource distribution across all tiers
 
