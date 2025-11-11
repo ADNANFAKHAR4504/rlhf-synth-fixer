@@ -2,7 +2,7 @@
 
 ## Summary
 
-A clean, deployable CloudFormation solution for us-east-1 that reliably enables AWS Config without ordering races. The design creates the S3 logging bucket and policy first, then **the Configuration Recorder**, then **the Delivery Channel**, and finally starts the recorder via a small Lambda-backed custom resource that polls until both are ready. All other existing, working infrastructure remains unchanged.
+A clean, deployable **CFN** solution for us-east-1 that reliably enables AWS Config without ordering races. The design creates the S3 logging bucket and policy first, then **the Configuration Recorder**, then **the Delivery Channel**, and finally starts the recorder via a small Lambda-backed custom resource that polls until both are ready. All other existing, working infrastructure remains unchanged.
 
 ## What This Delivers
 
@@ -39,7 +39,7 @@ A clean, deployable CloudFormation solution for us-east-1 that reliably enables 
 
 The stack deploys cleanly in us-east-1, and AWS Config starts recording without `NoAvailableDeliveryChannelException` or S3 name/ACL issues. The approach is robust against eventual consistency and safe across reruns and updates.
 
-```yaml
+```cfn-yaml
 AWS&#8203;TemplateFormatVersion: '2010-09-09'
 Description: 'TapStack - Secure and compliant AWS infrastructure with complete foundational components (us-east-1 only)'
 
