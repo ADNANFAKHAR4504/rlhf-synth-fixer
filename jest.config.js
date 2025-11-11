@@ -14,6 +14,8 @@ module.exports = {
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
+    '<rootDir>/lib/**/*.yml',
+    '<rootDir>/lib/**/*.yaml',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.js',
