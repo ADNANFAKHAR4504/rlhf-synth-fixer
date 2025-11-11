@@ -29,7 +29,7 @@ if [ "$PLATFORM" = "cdk" ]; then
   npx cdk list --json > cdk-stacks.json
   
   # possible regions to search (comma-separated, can be overridden by env var)
-  POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,ap-southeast-1,ap-northeast-1"}
+  POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,ap-southeast-2,ap-southeast-1,ap-northeast-1"}
   
   echo "Getting all CloudFormation stacks..."
   echo "Searching for stacks containing: TapStack${ENVIRONMENT_SUFFIX}"
