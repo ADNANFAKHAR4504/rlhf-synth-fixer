@@ -1,6 +1,6 @@
 # Secure Serverless API with KMS-Encrypted CloudWatch Logs
 
-This implementation creates a secure serverless API using Pulumi with TypeScript, demonstrating proper KMS encryption configuration for CloudWatch Logs in the ap-southeast-1 region.
+This implementation creates a secure serverless API using Pulumi with ts, demonstrating proper KMS encryption configuration for CloudWatch Logs in the ap-southeast-1 region.
 
 ## Architecture Overview
 

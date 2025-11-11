@@ -4,11 +4,11 @@ We need to build a secure serverless API with proper encryption and audit loggin
 
 The business wants this to be a template that other teams can follow, so it needs to demonstrate best practices for security hardening while keeping things serverless and cost-effective. We've had issues in the past where CloudWatch Logs encryption failed during deployment because the KMS key policy didn't include the proper service principal permissions, so that's something we need to get right this time.
 
-I've been asked to create this infrastructure using **Pulumi with TypeScript**. The team is comfortable with this stack, and it integrates well with our existing deployment pipelines.
+I've been asked to create this infrastructure using **Pulumi with ts**. The team is comfortable with this stack, and it integrates well with our existing deployment pipelines.
 
 ## What we need to build
 
-Create a secure serverless API infrastructure using **Pulumi with TypeScript** that demonstrates proper KMS encryption configuration for CloudWatch Logs in the ap-southeast-1 region.
+Create a secure serverless API infrastructure using **Pulumi with ts** that demonstrates proper KMS encryption configuration for CloudWatch Logs in the ap-southeast-1 region.
 
 ### Core Requirements
 
@@ -31,7 +31,7 @@ Create a secure serverless API infrastructure using **Pulumi with TypeScript** t
 
 ### Technical Requirements
 
-- All infrastructure defined using **Pulumi with TypeScript**
+- All infrastructure defined using **Pulumi with ts**
 - Use **Lambda** for compute (Node.js 18.x or later runtime)
 - Use **API Gateway** for the REST API endpoint
 - Use **KMS** for encryption key management
@@ -68,12 +68,12 @@ The KMS key policy must include a statement that allows the CloudWatch Logs serv
 - **Compliance**: KMS key policy includes proper CloudWatch Logs service permissions
 - **Reliability**: Deployment succeeds without KMS permission errors
 - **Resource Naming**: All resources include environmentSuffix for deployment isolation
-- **Code Quality**: TypeScript with proper types, well-tested, documented
+- **Code Quality**: ts with proper types, well-tested, documented
 - **Cost Optimization**: All resources are serverless with appropriate retention policies
 
 ## What to deliver
 
-- Complete Pulumi TypeScript implementation
+- Complete Pulumi ts implementation
 - Lambda function with sample API handler
 - API Gateway REST API configuration
 - KMS key with proper CloudWatch Logs service permissions
