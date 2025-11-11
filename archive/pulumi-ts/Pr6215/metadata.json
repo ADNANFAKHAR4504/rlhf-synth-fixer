@@ -30,5 +30,10 @@
   },
   "training_quality": 9,
   "author": "mayanksethi-turing",
-  "reviewer": "raghav-turing"
+  "reviewer": "raghav-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
