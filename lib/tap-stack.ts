@@ -14,6 +14,7 @@
 * - Standby region: eu-central-1 (Frankfurt) with 1 instance
 * - Direct ALB DNS routing (no custom domain)
 * - DynamoDB global table for session replication
+* - Route53 health checks for monitoring
 * - CloudWatch alarms and SNS notifications
 *
 * Note: Many resources are assigned to variables but not directly referenced.
@@ -60,8 +61,6 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly primarySnsTopicArn: pulumi.Output<string>;
   public readonly standbySnsTopicArn: pulumi.Output<string>;
   public readonly primaryHealthCheckId: pulumi.Output<string>;
-  public readonly hostedZoneId: pulumi.Output<string>;
-  public readonly domainName: pulumi.Output<string>;
   public readonly applicationUrl: pulumi.Output<string>;
 
   /**
@@ -1036,24 +1035,10 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
     );
 
     // ============================================
-    // DNS FAILOVER SYSTEM
+    // HEALTH CHECK FOR MONITORING
     // ============================================
 
-    // Create Route 53 hosted zone for DNS-based failover
-    const hostedZone = new aws.route53.Zone(
-      `hosted-zone-${environmentSuffix}`,
-      {
-        name: `trading-app-${environmentSuffix}.example.com`,
-        tags: {
-          Name: `hosted-zone-${environmentSuffix}`,
-          Environment: 'Production',
-          ...tags,
-        },
-      },
-      { parent: this }
-    );
-
-    // Create Route 53 health check for primary ALB
+    // Create Route 53 health check for primary ALB monitoring
     const primaryHealthCheck = new aws.route53.HealthCheck(
       `primary-health-check-${environmentSuffix}`,
       {
@@ -1071,55 +1056,6 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
         },
       },
       { parent: this }
-    );
-
-    // Create weighted DNS record for primary region (100% weight with health check)
-    const primaryDnsRecord = new aws.route53.Record(
-      `primary-dns-record-${environmentSuffix}`,
-      {
-        zoneId: hostedZone.zoneId,
-        name: `trading-app-${environmentSuffix}.example.com`,
-        type: 'A',
-        aliases: [
-          {
-            name: primaryAlb.dnsName,
-            zoneId: primaryAlb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
-        healthCheckId: primaryHealthCheck.id,
-        setIdentifier: `primary-${environmentSuffix}`,
-        weightedRoutingPolicies: [
-          {
-            weight: 100,
-          },
-        ],
-      },
-      { parent: this }
-    );
-
-    // Create weighted DNS record for standby region (0% weight for failover only)
-    const standbyDnsRecord = new aws.route53.Record(
-      `standby-dns-record-${environmentSuffix}`,
-      {
-        zoneId: hostedZone.zoneId,
-        name: `trading-app-${environmentSuffix}.example.com`,
-        type: 'A',
-        aliases: [
-          {
-            name: standbyAlb.dnsName,
-            zoneId: standbyAlb.zoneId,
-            evaluateTargetHealth: true,
-          },
-        ],
-        setIdentifier: `standby-${environmentSuffix}`,
-        weightedRoutingPolicies: [
-          {
-            weight: 0,
-          },
-        ],
-      },
-      { provider: standbyProvider, parent: this }
     );
 
     // Create CloudWatch alarm for primary health check
@@ -1161,9 +1097,7 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
     this.primarySnsTopicArn = primarySnsTopic.arn;
     this.standbySnsTopicArn = standbySnsTopic.arn;
     this.primaryHealthCheckId = primaryHealthCheck.id;
-    this.hostedZoneId = hostedZone.zoneId;
-    this.domainName = hostedZone.name;
-    this.applicationUrl = pulumi.interpolate`http://trading-app-${environmentSuffix}.example.com`;
+    this.applicationUrl = pulumi.interpolate`http://${primaryAlb.dnsName}`;
 
     // Register outputs
     this.registerOutputs({
@@ -1177,8 +1111,6 @@ echo "Standby Region (Frankfurt) - Trading Application" > /var/www/html/index.ht
       primarySnsTopicArn: this.primarySnsTopicArn,
       standbySnsTopicArn: this.standbySnsTopicArn,
       primaryHealthCheckId: this.primaryHealthCheckId,
-      hostedZoneId: this.hostedZoneId,
-      domainName: this.domainName,
       applicationUrl: this.applicationUrl,
     });
   }

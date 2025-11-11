@@ -47,8 +47,6 @@ describe('TapStack', () => {
       expect(stack.primarySnsTopicArn).toBeDefined();
       expect(stack.standbySnsTopicArn).toBeDefined();
       expect(stack.primaryHealthCheckId).toBeDefined();
-      expect(stack.hostedZoneId).toBeDefined();
-      expect(stack.domainName).toBeDefined();
       expect(stack.applicationUrl).toBeDefined();
     });
 
@@ -179,31 +177,12 @@ describe('TapStack', () => {
       });
     });
 
-    it('should expose hostedZoneId output', (done) => {
-      pulumi.output(stack.hostedZoneId).apply(hostedZoneId => {
-        expect(hostedZoneId).toBeDefined();
-        expect(typeof hostedZoneId).toBe('string');
-        done();
-      });
-    });
-
-    it('should expose domainName output', (done) => {
-      pulumi.output(stack.domainName).apply(domainName => {
-        expect(domainName).toBeDefined();
-        expect(typeof domainName).toBe('string');
-        expect(domainName).toContain('trading-app');
-        expect(domainName).toContain('example.com');
-        done();
-      });
-    });
-
-    it('should expose applicationUrl output with http protocol and custom domain', (done) => {
+    it('should expose applicationUrl output with http protocol and ALB DNS', (done) => {
       pulumi.output(stack.applicationUrl).apply(appUrl => {
         expect(appUrl).toBeDefined();
         expect(typeof appUrl).toBe('string');
         expect(appUrl).toContain('http://');
-        expect(appUrl).toContain('trading-app');
-        expect(appUrl).toContain('example.com');
+        expect(appUrl).toContain('.elb.amazonaws.com');
         done();
       });
     });
@@ -405,10 +384,9 @@ describe('TapStack', () => {
       });
     });
 
-    it('should create application URL based on custom domain', (done) => {
+    it('should create application URL based on ALB DNS', (done) => {
       pulumi.output(stack.applicationUrl).apply((appUrl) => {
-        expect(appUrl).toContain('trading-app');
-        expect(appUrl).toContain('example.com');
+        expect(appUrl).toContain('.elb.amazonaws.com');
         expect(appUrl).toMatch(/^http:\/\//);
         done();
       });
@@ -534,7 +512,7 @@ describe('TapStack', () => {
       const stack = new TapStack('test-outputs-registered', {
         environmentSuffix: 'output-test',
       });
-      
+
       pulumi.all([
         stack.primaryVpcId,
         stack.standbyVpcId,
@@ -651,11 +629,9 @@ describe('TapStack', () => {
       });
     });
 
-    it('should use custom domain name in application URL', (done) => {
+    it('should use ALB DNS name in application URL', (done) => {
       pulumi.output(stack.applicationUrl).apply((url) => {
-        expect(url).toContain('trading-app');
-        expect(url).toContain('example.com');
-        expect(url).not.toContain('.elb.amazonaws.com');
+        expect(url).toContain('.elb.amazonaws.com');
         done();
       });
     });
@@ -682,8 +658,6 @@ describe('TapStack', () => {
         stack.primarySnsTopicArn,
         stack.standbySnsTopicArn,
         stack.primaryHealthCheckId,
-        stack.hostedZoneId,
-        stack.domainName,
         stack.applicationUrl,
       ]).apply(([
         primaryVpcId,
@@ -696,8 +670,6 @@ describe('TapStack', () => {
         primarySnsTopicArn,
         standbySnsTopicArn,
         primaryHealthCheckId,
-        hostedZoneId,
-        domainName,
         applicationUrl,
       ]) => {
         expect(primaryVpcId).toBeDefined();
@@ -710,8 +682,6 @@ describe('TapStack', () => {
         expect(primarySnsTopicArn).toBeDefined();
         expect(standbySnsTopicArn).toBeDefined();
         expect(primaryHealthCheckId).toBeDefined();
-        expect(hostedZoneId).toBeDefined();
-        expect(domainName).toBeDefined();
         expect(applicationUrl).toBeDefined();
         done();
       });
