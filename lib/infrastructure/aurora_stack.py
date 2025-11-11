@@ -165,6 +165,11 @@ class AuroraStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=secondary_provider)
         )
 
+        secondary_kms = aws.kms.get_key(
+            key_id="alias/aws/rds",
+            opts=pulumi.InvokeOptions(parent=self, provider=secondary_provider)
+        )
+
         # BUG #8: Missing storage_encrypted=True on secondary cluster
         self.secondary_cluster = aws.rds.Cluster(
             f"trading-cluster-secondary-{environment_suffix}",
@@ -174,7 +179,8 @@ class AuroraStack(pulumi.ComponentResource):
             db_subnet_group_name=self.secondary_subnet_group.name,
             vpc_security_group_ids=[self.secondary_security_group.id],
             global_cluster_identifier=self.global_cluster.id,
-            # storage_encrypted=True,  # MISSING!
+            kms_key_id=secondary_kms.arn,
+            storage_encrypted=True,
             backup_retention_period=7,
             tags={**tags, 'Name': f"trading-cluster-secondary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=secondary_provider, depends_on=[self.primary_cluster])
