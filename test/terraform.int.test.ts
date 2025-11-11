@@ -8,14 +8,20 @@ import {
   DescribeNatGatewaysCommand,
   DescribeInternetGatewaysCommand,
   DescribeVpcAttributeCommand,
-  DescribeRouteTablesCommand
+  DescribeRouteTablesCommand,
+  AuthorizeSecurityGroupIngressCommand,
+  RevokeSecurityGroupIngressCommand,
+  TerminateInstancesCommand,
 } from '@aws-sdk/client-ec2';
 import { 
   ElasticLoadBalancingV2Client, 
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
   DescribeTargetHealthCommand,
-  DescribeListenersCommand
+  DescribeListenersCommand,
+  ModifyTargetGroupAttributesCommand,
+  AddTagsCommand as ELBAddTagsCommand,
+  RemoveTagsCommand as ELBRemoveTagsCommand,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import { 
   RDSClient, 
@@ -42,21 +48,66 @@ import {
   IAMClient,
   GetRoleCommand,
   SimulatePrincipalPolicyCommand,
-  GetInstanceProfileCommand
+  GetInstanceProfileCommand,
+  ListAttachedRolePoliciesCommand,
+  GetOpenIDConnectProviderCommand,
 } from '@aws-sdk/client-iam';
+import {
+  STSClient,
+  GetCallerIdentityCommand,
+  AssumeRoleCommand,
+} from '@aws-sdk/client-sts';
 import axios from 'axios';
-import { Client } from 'pg';
+import { Client } from 'pg'; // NOTE: Original file used 'pg' client, keeping it here.
 import * as fs from 'fs';
 import * as path from 'path';
+import { describe, expect, test, beforeAll, afterAll } from '@jest/globals'; // NOTE: Adding jest imports
 
-// Load deployment outputs dynamically
+// ============================================================================
+// DEPLOYMENT OUTPUT MANAGEMENT
+// ============================================================================
+
+// Use the same path definition as requested
+const OUTPUT_FILE = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+
+// Define the interface with the required outputs for the original tests
+// NOTE: Defining deployment outputs based on the original request's clients 
+// and the requested format (where values are directly strings, not { value: string })
 interface DeploymentOutputs {
-  alb_dns_name: { value: string };
-  rds_endpoint: { value: string };
-  secrets_manager_secret_arn: { value: string };
+  alb_dns_name: string;
+  rds_endpoint: string;
+  secrets_manager_secret_arn: string;
+  // Add other required outputs based on the referred format's pattern
+  vpc_id?: string;
 }
 
-let outputs: DeploymentOutputs;
+// Load deployment outputs dynamically
+function loadDeploymentOutputs(): DeploymentOutputs {
+  const outputPaths = [
+    // Use the path from the referred file format
+    path.resolve(process.cwd(), 'cfn-outputs', 'flat-outputs.json'), 
+    path.resolve(process.cwd(), 'terraform-outputs.json'),
+    path.resolve(process.cwd(), 'outputs.json'),
+    path.resolve(process.cwd(), 'deployment-outputs.json'),
+  ];
+
+  for (const outputPath of outputPaths) {
+    if (fs.existsSync(outputPath)) {
+      const rawData = fs.readFileSync(outputPath, 'utf8');
+      // NOTE: Assuming the output file structure is flat (key: value) based on the referred format
+      return JSON.parse(rawData) as DeploymentOutputs; 
+    }
+  }
+
+  throw new Error('Deployment outputs file not found. Please ensure Terraform outputs are exported to JSON.');
+}
+
+const outputs = loadDeploymentOutputs();
+const region = process.env.AWS_REGION || 'us-east-1'; // Reverting to original region
+const albDns = outputs.alb_dns_name;
+
+
+// Initialize AWS SDK clients
 let ec2Client: EC2Client;
 let elbClient: ElasticLoadBalancingV2Client;
 let rdsClient: RDSClient;
@@ -64,14 +115,10 @@ let secretsClient: SecretsManagerClient;
 let autoScalingClient: AutoScalingClient;
 let cloudWatchClient: CloudWatchClient;
 let iamClient: IAMClient;
+const stsClient = new STSClient({ region }); // Added STS client
 
 beforeAll(async () => {
-  // Load deployment outputs
-  const outputsPath = process.env.TERRAFORM_OUTPUTS_PATH || './terraform-outputs.json';
-  outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
-  
   // Initialize AWS SDK clients
-  const region = process.env.AWS_REGION || 'us-east-1';
   ec2Client = new EC2Client({ region });
   elbClient = new ElasticLoadBalancingV2Client({ region });
   rdsClient = new RDSClient({ region });
@@ -80,6 +127,32 @@ beforeAll(async () => {
   cloudWatchClient = new CloudWatchClient({ region });
   iamClient = new IAMClient({ region });
 });
+
+// Helper functions (copied from the referred format)
+function generateTestId(): string {
+  return `test-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+}
+
+async function getAccountId(): Promise<string> {
+  const identity = await stsClient.send(new GetCallerIdentityCommand({}));
+  return identity.Account!;
+}
+
+async function retry<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 5,
+  delay: number = 2000
+): Promise<T> {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (i === maxRetries - 1) throw error;
+      await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+    }
+  }
+  throw new Error('Max retries exceeded');
+}
 
 describe('Infrastructure Integration Tests', () => {
   
@@ -238,7 +311,7 @@ describe('Infrastructure Integration Tests', () => {
         expect(alb.Scheme).toBe('internet-facing');
         expect(alb.Type).toBe('application');
         expect(alb.State?.Code).toBe('active');
-        expect(alb.DNSName).toBe(outputs.alb_dns_name.value);
+        expect(alb.DNSName).toBe(outputs.alb_dns_name);
       });
 
       test('Target group should have proper health check configuration', async () => {
@@ -294,7 +367,7 @@ describe('Infrastructure Integration Tests', () => {
 
     describe('RDS Configuration', () => {
       test('RDS instance should be Multi-AZ PostgreSQL with encryption', async () => {
-        const endpoint = outputs.rds_endpoint.value.split(':')[0];
+        const endpoint = outputs.rds_endpoint.split(':')[0];
         const dbs = await rdsClient.send(new DescribeDBInstancesCommand({
           Filters: [
             { Name: 'engine', Values: ['postgres'] }
@@ -331,7 +404,7 @@ describe('Infrastructure Integration Tests', () => {
         const simulation = await iamClient.send(new SimulatePrincipalPolicyCommand({
           PolicySourceArn: `arn:aws:iam::${process.env.AWS_ACCOUNT_ID}:role/webapp-ec2-role`,
           ActionNames: ['secretsmanager:GetSecretValue'],
-          ResourceArns: [outputs.secrets_manager_secret_arn.value]
+          ResourceArns: [outputs.secrets_manager_secret_arn]
         }));
         
         expect(simulation.EvaluationResults![0].EvalDecision).toBe('allowed');
@@ -381,7 +454,7 @@ describe('Infrastructure Integration Tests', () => {
       expect(healthyTargets.length).toBeGreaterThanOrEqual(2);
       
       // Make HTTP request through ALB
-      const albUrl = `http://${outputs.alb_dns_name.value}`;
+      const albUrl = `http://${outputs.alb_dns_name}`;
       const response = await axios.get(albUrl, { timeout: 10000 });
       
       expect(response.status).toBe(200);
@@ -396,7 +469,7 @@ describe('Infrastructure Integration Tests', () => {
     test('EC2 instances should retrieve RDS password from Secrets Manager', async () => {
       // Get secret value
       const secret = await secretsClient.send(new GetSecretValueCommand({
-        SecretId: outputs.secrets_manager_secret_arn.value
+        SecretId: outputs.secrets_manager_secret_arn
       }));
       
       expect(secret.SecretString).toBeDefined();
@@ -494,11 +567,11 @@ describe('Infrastructure Integration Tests', () => {
 
     test('RDS should be accessible from EC2 instances in private subnets', async () => {
       // Get RDS endpoint
-      const [rdsHost, rdsPort] = outputs.rds_endpoint.value.split(':');
+      const [rdsHost, rdsPort] = outputs.rds_endpoint.split(':');
       
       // Get secret for password
       const secret = await secretsClient.send(new GetSecretValueCommand({
-        SecretId: outputs.secrets_manager_secret_arn.value
+        SecretId: outputs.secrets_manager_secret_arn
       }));
       
       // Verify connectivity would work (we can't directly test from EC2)
@@ -536,7 +609,7 @@ describe('Infrastructure Integration Tests', () => {
   describe('End-to-End Tests', () => {
     
     test('Complete request flow: Client -> ALB -> EC2 -> Health Check', async () => {
-      const albUrl = `http://${outputs.alb_dns_name.value}`;
+      const albUrl = `http://${outputs.alb_dns_name}`;
       
       // Step 1: Make multiple requests to test load balancing
       const requests = Array(10).fill(null).map(() => 
@@ -579,7 +652,7 @@ describe('Infrastructure Integration Tests', () => {
         Dimensions: [
           {
             Name: 'LoadBalancer',
-            Value: `app/webapp-alb/${outputs.alb_dns_name.value.split('-')[2].split('.')[0]}`
+            Value: `app/webapp-alb/${outputs.alb_dns_name.split('-')[2].split('.')[0]}`
           }
         ],
         StartTime: startTime,
@@ -647,7 +720,7 @@ describe('Infrastructure Integration Tests', () => {
       expect(health.TargetHealthDescriptions!.length).toBeGreaterThanOrEqual(initialCapacity + 1);
       
       // Step 7: Verify application is still accessible
-      const albUrl = `http://${outputs.alb_dns_name.value}`;
+      const albUrl = `http://${outputs.alb_dns_name}`;
       const response = await axios.get(`${albUrl}/health`);
       expect(response.status).toBe(200);
       
@@ -661,11 +734,11 @@ describe('Infrastructure Integration Tests', () => {
     test('Database connectivity flow: EC2 -> Secrets Manager -> RDS -> Data Operations', async () => {
       // Step 1: Retrieve database credentials from Secrets Manager
       const secret = await secretsClient.send(new GetSecretValueCommand({
-        SecretId: outputs.secrets_manager_secret_arn.value
+        SecretId: outputs.secrets_manager_secret_arn
       }));
       
       const dbPassword = secret.SecretString!;
-      const [dbHost, dbPort] = outputs.rds_endpoint.value.split(':');
+      const [dbHost, dbPort] = outputs.rds_endpoint.split(':');
       
       // Step 2: Verify RDS instance is available
       const rdsInstances = await rdsClient.send(new DescribeDBInstancesCommand({
@@ -758,7 +831,7 @@ describe('Infrastructure Integration Tests', () => {
       }));
       
       // Step 4: Verify application remains available during failure
-      const albUrl = `http://${outputs.alb_dns_name.value}`;
+      const albUrl = `http://${outputs.alb_dns_name}`;
       const duringFailureResponse = await axios.get(`${albUrl}/health`, {
         timeout: 10000
       });
@@ -787,7 +860,7 @@ describe('Infrastructure Integration Tests', () => {
     test('Secret rotation flow: Rotate secret -> Update RDS -> Verify connectivity', async () => {
       // Step 1: Get current secret version
       const currentSecret = await secretsClient.send(new GetSecretValueCommand({
-        SecretId: outputs.secrets_manager_secret_arn.value
+        SecretId: outputs.secrets_manager_secret_arn
       }));
       
       const currentVersionId = currentSecret.VersionId;
@@ -796,7 +869,7 @@ describe('Infrastructure Integration Tests', () => {
       // Note: Actual rotation requires Lambda function setup
       try {
         await secretsClient.send(new RotateSecretCommand({
-          SecretId: outputs.secrets_manager_secret_arn.value,
+          SecretId: outputs.secrets_manager_secret_arn,
           RotationRules: {
             AutomaticallyAfterDays: 30
           }
@@ -808,10 +881,10 @@ describe('Infrastructure Integration Tests', () => {
       
       // Step 3: Verify secret metadata
       const updatedSecret = await secretsClient.send(new GetSecretValueCommand({
-        SecretId: outputs.secrets_manager_secret_arn.value
+        SecretId: outputs.secrets_manager_secret_arn
       }));
       
-      expect(updatedSecret.ARN).toBe(outputs.secrets_manager_secret_arn.value);
+      expect(updatedSecret.ARN).toBe(outputs.secrets_manager_secret_arn);
       expect(updatedSecret.SecretString).toBeDefined();
       
       // Step 4: Verify RDS is still accessible
@@ -821,7 +894,7 @@ describe('Infrastructure Integration Tests', () => {
         ]
       }));
       
-      const [dbHost] = outputs.rds_endpoint.value.split(':');
+      const [dbHost] = outputs.rds_endpoint.split(':');
       const rdsInstance = rdsInstances.DBInstances!.find(db => 
         db.Endpoint?.Address === dbHost
       );
@@ -840,7 +913,7 @@ describe('Infrastructure Integration Tests', () => {
     
     describe('RDS Service Tests', () => {
       test('RDS backup configuration should be properly set', async () => {
-        const [dbHost] = outputs.rds_endpoint.value.split(':');
+        const [dbHost] = outputs.rds_endpoint.split(':');
         const rdsInstances = await rdsClient.send(new DescribeDBInstancesCommand({
           Filters: [
             { Name: 'engine', Values: ['postgres'] }
@@ -860,7 +933,7 @@ describe('Infrastructure Integration Tests', () => {
       });
 
       test('RDS monitoring and logging should be enabled', async () => {
-        const [dbHost] = outputs.rds_endpoint.value.split(':');
+        const [dbHost] = outputs.rds_endpoint.split(':');
         const rdsInstances = await rdsClient.send(new DescribeDBInstancesCommand({
           Filters: [
             { Name: 'engine', Values: ['postgres'] }
@@ -1021,7 +1094,7 @@ describe('Infrastructure Integration Tests', () => {
     describe('Secrets Manager Service Tests', () => {
       test('Secret should have proper versioning', async () => {
         const secret = await secretsClient.send(new GetSecretValueCommand({
-          SecretId: outputs.secrets_manager_secret_arn.value
+          SecretId: outputs.secrets_manager_secret_arn
         }));
         
         expect(secret.VersionId).toBeDefined();
@@ -1032,7 +1105,7 @@ describe('Infrastructure Integration Tests', () => {
       test('Secret should be retrievable with proper permissions', async () => {
         // Test secret retrieval
         const secret = await secretsClient.send(new GetSecretValueCommand({
-          SecretId: outputs.secrets_manager_secret_arn.value
+          SecretId: outputs.secrets_manager_secret_arn
         }));
         
         expect(secret.SecretString).toBeDefined();
@@ -1098,7 +1171,7 @@ describe('Infrastructure Integration Tests', () => {
    */
   describe('Performance and Load Tests', () => {
     test('ALB should handle concurrent requests efficiently', async () => {
-      const albUrl = `http://${outputs.alb_dns_name.value}`;
+      const albUrl = `http://${outputs.alb_dns_name}`;
       const concurrentRequests = 50;
       
       const startTime = Date.now();
@@ -1132,8 +1205,8 @@ describe('Infrastructure Integration Tests', () => {
   afterAll(async () => {
     console.log('Integration tests completed');
     console.log('Infrastructure validation summary:');
-    console.log('- ALB endpoint:', outputs.alb_dns_name.value);
-    console.log('- RDS endpoint:', outputs.rds_endpoint.value);
-    console.log('- Secrets ARN:', outputs.secrets_manager_secret_arn.value);
+    console.log('- ALB endpoint:', outputs.alb_dns_name);
+    console.log('- RDS endpoint:', outputs.rds_endpoint);
+    console.log('- Secrets ARN:', outputs.secrets_manager_secret_arn);
   });
 });
