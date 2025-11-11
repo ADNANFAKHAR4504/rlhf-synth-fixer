@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-01-11T01:33:00Z",
   "subtask": "Security, Compliance, and Governance",
-  "subject_labels": ["Security Configuration as Code"],
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
   "aws_services": [
     "Lambda",
     "API Gateway",
@@ -16,5 +18,11 @@
     "IAM"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
