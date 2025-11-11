@@ -9,16 +9,19 @@ import unittest
 import os
 import json
 import boto3
+import pytest
 from botocore.exceptions import ClientError
 
 
+@pytest.mark.integration
+@pytest.mark.live
 class TestTapStackLiveIntegration(unittest.TestCase):
     """Integration tests against live deployed Pulumi stack."""
 
     @classmethod
     def setUpClass(cls):
         """Set up integration test with live stack outputs."""
-        cls.region = os.getenv('AWS_REGION', 'ap-southeast-1')
+        cls.region = os.getenv('AWS_REGION', 'eu-central-1')
 
         # Load stack outputs
         outputs_file = 'cfn-outputs/flat-outputs.json'
@@ -26,7 +29,19 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             raise FileNotFoundError(f"Outputs file not found: {outputs_file}")
 
         with open(outputs_file, 'r') as f:
-            cls.outputs = json.load(f)
+            raw_outputs = json.load(f)
+
+        # Parse JSON-encoded strings from outputs
+        cls.outputs = {}
+        for key, value in raw_outputs.items():
+            # Try to parse JSON strings, otherwise use as-is
+            if isinstance(value, str) and value.startswith('['):
+                try:
+                    cls.outputs[key] = json.loads(value)
+                except json.JSONDecodeError:
+                    cls.outputs[key] = value
+            else:
+                cls.outputs[key] = value
 
         # Initialize AWS clients
         cls.ec2_client = boto3.client('ec2', region_name=cls.region)
@@ -59,8 +74,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_public_subnets_configuration(self):
         """Test public subnets are in correct AZs and have proper routing."""
-        public_subnet_ids = self.outputs['public_subnet_ids'].split(',')
-        azs = self.outputs['availability_zones'].split(',')
+        public_subnet_ids = self.outputs['public_subnet_ids']
+        azs = self.outputs['availability_zones']
 
         # Verify we have 3 public subnets
         self.assertEqual(len(public_subnet_ids), 3)
@@ -85,8 +100,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_private_subnets_configuration(self):
         """Test private application subnets are in correct AZs."""
-        private_subnet_ids = self.outputs['private_subnet_ids'].split(',')
-        azs = self.outputs['availability_zones'].split(',')
+        private_subnet_ids = self.outputs['private_subnet_ids']
+        azs = self.outputs['availability_zones']
 
         # Verify we have 3 private subnets
         self.assertEqual(len(private_subnet_ids), 3)
@@ -107,8 +122,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_database_subnets_configuration(self):
         """Test database subnets are in correct AZs."""
-        database_subnet_ids = self.outputs['database_subnet_ids'].split(',')
-        azs = self.outputs['availability_zones'].split(',')
+        database_subnet_ids = self.outputs['database_subnet_ids']
+        azs = self.outputs['availability_zones']
 
         # Verify we have 3 database subnets
         self.assertEqual(len(database_subnet_ids), 3)
@@ -129,8 +144,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_nat_gateways_deployed(self):
         """Test that NAT Gateways are deployed in each public subnet."""
-        nat_gateway_ids = self.outputs['nat_gateway_ids'].split(',')
-        public_subnet_ids = self.outputs['public_subnet_ids'].split(',')
+        nat_gateway_ids = self.outputs['nat_gateway_ids']
+        public_subnet_ids = self.outputs['public_subnet_ids']
 
         # Verify we have 3 NAT Gateways
         self.assertEqual(len(nat_gateway_ids), 3)
@@ -165,7 +180,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def test_public_route_table_configuration(self):
         """Test public subnets route to Internet Gateway."""
         vpc_id = self.outputs['vpc_id']
-        public_subnet_ids = self.outputs['public_subnet_ids'].split(',')
+        public_subnet_ids = self.outputs['public_subnet_ids']
 
         # Get route tables for public subnets
         response = self.ec2_client.describe_route_tables(
@@ -190,8 +205,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def test_private_route_table_configuration(self):
         """Test private subnets route to NAT Gateways."""
         vpc_id = self.outputs['vpc_id']
-        private_subnet_ids = self.outputs['private_subnet_ids'].split(',')
-        nat_gateway_ids = self.outputs['nat_gateway_ids'].split(',')
+        private_subnet_ids = self.outputs['private_subnet_ids']
+        nat_gateway_ids = self.outputs['nat_gateway_ids']
 
         # Get route tables for private subnets
         response = self.ec2_client.describe_route_tables(
@@ -215,7 +230,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
     def test_database_route_table_no_internet(self):
         """Test database subnets have no direct internet access."""
         vpc_id = self.outputs['vpc_id']
-        database_subnet_ids = self.outputs['database_subnet_ids'].split(',')
+        database_subnet_ids = self.outputs['database_subnet_ids']
 
         # Get route tables for database subnets
         response = self.ec2_client.describe_route_tables(
@@ -311,7 +326,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         """Test that Transit Gateway is attached to VPC."""
         tgw_attachment_id = self.outputs['transit_gateway_attachment_id']
         vpc_id = self.outputs['vpc_id']
-        private_subnet_ids = self.outputs['private_subnet_ids'].split(',')
+        private_subnet_ids = self.outputs['private_subnet_ids']
 
         response = self.ec2_client.describe_transit_gateway_vpc_attachments(
             TransitGatewayAttachmentIds=[tgw_attachment_id]
@@ -360,7 +375,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_multi_az_deployment(self):
         """Test that resources are deployed across 3 availability zones."""
-        azs = self.outputs['availability_zones'].split(',')
+        azs = self.outputs['availability_zones']
 
         # Verify 3 AZs
         self.assertEqual(len(azs), 3)
@@ -373,9 +388,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
         # Verify subnets span all AZs
         all_subnet_ids = (
-            self.outputs['public_subnet_ids'].split(',') +
-            self.outputs['private_subnet_ids'].split(',') +
-            self.outputs['database_subnet_ids'].split(',')
+            self.outputs['public_subnet_ids'] +
+            self.outputs['private_subnet_ids'] +
+            self.outputs['database_subnet_ids']
         )
 
         response = self.ec2_client.describe_subnets(SubnetIds=all_subnet_ids)
