@@ -8,12 +8,15 @@
   "startedAt": "2025-11-11T14:08:28.066Z",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Serverless Infrastructure (Functions as Code)"
+    "Serverless Infrastructure (Functions as Code)",
+    "Container Orchestration (ECS/Fargate)",
+    "CI/CD Pipeline Automation"
   ],
   "aws_services": [
+    "VPC",
+    "EC2",
     "KMS",
     "S3",
-    "EC2",
     "IAM",
     "CodeBuild",
     "CodePipeline",

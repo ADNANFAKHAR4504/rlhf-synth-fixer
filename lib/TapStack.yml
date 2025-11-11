@@ -20,27 +20,31 @@ Parameters:
     Type: String
     Default: 'finance-123'
     Description: Cost center for billing purposes
-    
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC for isolated CodeBuild projects
-    
-  PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: Private subnets for CodeBuild VPC configuration
-    
-  PrivateRouteTableId:
+
+  VpcCidr:
     Type: String
-    Description: Private route table ID for VPC endpoints
-    
+    Default: '10.0.0.0/16'
+    Description: CIDR block for VPC
+    AllowedPattern: ^(\d{1,3}\.){3}\d{1,3}/\d{1,2}$
+
+  CreateVpcEndpoints:
+    Type: String
+    Default: 'true'
+    Description: Create VPC endpoints for ECR, S3, CloudWatch (required for private subnet connectivity)
+    AllowedValues:
+      - 'true'
+      - 'false'
+
   EcsClusterName:
     Type: String
     Description: Target ECS Cluster for deployment
-    
+    Default: 'default'
+
   EcsServiceName:
     Type: String
     Description: Target ECS Service for deployment
-    
+    Default: 'payment-service'
+
   SlackWebhookUrl:
     Type: String
     Description: Webhook URL for Slack notifications (leave empty to disable notifications)
@@ -49,8 +53,116 @@ Parameters:
 
 Conditions:
   HasSlackWebhook: !Not [!Equals [!Ref SlackWebhookUrl, '']]
+  ShouldCreateVpcEndpoints: !Equals [!Ref CreateVpcEndpoints, 'true']
 
 Resources:
+  # VPC for isolated CodeBuild
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-payment-service-vpc'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Private Subnets for CodeBuild
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [0, !Cidr [!Ref VpcCidr, 4, 8]]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-payment-service-private-subnet-1'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Select [1, !Cidr [!Ref VpcCidr, 4, 8]]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-payment-service-private-subnet-2'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Internet Gateway for public internet access
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-payment-service-igw'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Route Table for Private Subnets (with internet route)
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-payment-service-private-rt'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  DefaultRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
   # KMS Key for encryption
   ArtifactsKey:
     Type: AWS::KMS::Key
@@ -157,18 +269,16 @@ Resources:
               Bool:
                 'aws:SecureTransport': 'false'
   
-  # Security Group for CodeBuild in VPC
+  # Security Group for CodeBuild and ECS in VPC
   CodeBuildSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupDescription: Security group for CodeBuild projects
-      VpcId: !Ref VpcId
+      GroupDescription: Security group for CodeBuild projects and ECS tasks
+      VpcId: !Ref VPC
       SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
+        - IpProtocol: -1
           CidrIp: 0.0.0.0/0
-          Description: Allow HTTPS to VPC endpoints
+          Description: Allow all outbound traffic
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -180,6 +290,7 @@ Resources:
   # VPC Endpoints for CodeBuild without internet access
   S3VpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
     Properties:
       PolicyDocument:
         Version: '2012-10-17'
@@ -196,53 +307,65 @@ Resources:
               - 'arn:aws:s3:::codebuild-*'
               - 'arn:aws:s3:::aws-codedeploy-*'
       RouteTableIds:
-        - !Ref PrivateRouteTableId
+        - !Ref PrivateRouteTable
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
 
   EcrApiVpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
     Properties:
       PrivateDnsEnabled: true
       SecurityGroupIds:
         - !Ref CodeBuildSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       VpcEndpointType: Interface
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
 
   EcrDkrVpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
     Properties:
       PrivateDnsEnabled: true
       SecurityGroupIds:
         - !Ref CodeBuildSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       VpcEndpointType: Interface
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
 
   LogsVpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
     Properties:
       PrivateDnsEnabled: true
       SecurityGroupIds:
         - !Ref CodeBuildSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       VpcEndpointType: Interface
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
 
   CodeBuildVpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateVpcEndpoints
     Properties:
       PrivateDnsEnabled: true
       SecurityGroupIds:
         - !Ref CodeBuildSecurityGroup
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.codebuild'
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
       VpcEndpointType: Interface
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
   
   # IAM Role for CodeBuild
   CodeBuildServiceRole:
@@ -255,8 +378,6 @@ Resources:
             Principal:
               Service: codebuild.amazonaws.com
             Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AmazonECR-FullAccess'
       Policies:
         - PolicyName: CodeBuildServiceRolePolicy
           PolicyDocument:
@@ -287,6 +408,18 @@ Resources:
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
+                Resource: '*'
+              - Sid: AllowECROperations
+                Effect: Allow
+                Action:
+                  - 'ecr:GetAuthorizationToken'
+                  - 'ecr:BatchCheckLayerAvailability'
+                  - 'ecr:GetDownloadUrlForLayer'
+                  - 'ecr:BatchGetImage'
+                  - 'ecr:PutImage'
+                  - 'ecr:InitiateLayerUpload'
+                  - 'ecr:UploadLayerPart'
+                  - 'ecr:CompleteLayerUpload'
                 Resource: '*'
               - Sid: AllowVPCOperations
                 Effect: Allow
@@ -360,15 +493,6 @@ Resources:
                 Resource:
                   - !GetAtt BuildProject.Arn
                   - !GetAtt TestProject.Arn
-              - Sid: AllowCodeDeployOperations
-                Effect: Allow
-                Action:
-                  - 'codedeploy:CreateDeployment'
-                  - 'codedeploy:GetDeployment'
-                  - 'codedeploy:GetDeploymentConfig'
-                  - 'codedeploy:GetApplicationRevision'
-                  - 'codedeploy:RegisterApplicationRevision'
-                Resource: '*'
               - Sid: AllowECSOperations
                 Effect: Allow
                 Action:
@@ -406,27 +530,6 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
 
-  # IAM Role for CodeDeploy
-  CodeDeployServiceRole:
-    Type: AWS::IAM::Role
-    Properties:
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: codedeploy.amazonaws.com
-            Action: 'sts:AssumeRole'
-      ManagedPolicyArns:
-        - 'arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS'
-      Tags:
-        - Key: Environment
-          Value: !Ref EnvironmentName
-        - Key: Team
-          Value: !Ref TeamName
-        - Key: CostCenter
-          Value: !Ref CostCenter
-  
   # Build Project for Build Stage
   BuildProject:
     Type: AWS::CodeBuild::Project
@@ -442,8 +545,10 @@ Resources:
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         PrivilegedMode: true
       VpcConfig:
-        VpcId: !Ref VpcId
-        Subnets: !Ref PrivateSubnetIds
+        VpcId: !Ref VPC
+        Subnets:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
         SecurityGroupIds:
           - !Ref CodeBuildSecurityGroup
       Source:
@@ -477,8 +582,10 @@ Resources:
         Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
         PrivilegedMode: true
       VpcConfig:
-        VpcId: !Ref VpcId
-        Subnets: !Ref PrivateSubnetIds
+        VpcId: !Ref VPC
+        Subnets:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
         SecurityGroupIds:
           - !Ref CodeBuildSecurityGroup
       Source:
@@ -497,12 +604,18 @@ Resources:
         - Key: CostCenter
           Value: !Ref CostCenter
   
-  # CodeDeploy Application and Deployment Group
-  CodeDeployApplication:
-    Type: AWS::CodeDeploy::Application
+  # ECS Cluster
+  EcsCluster:
+    Type: AWS::ECS::Cluster
     Properties:
-      ApplicationName: !Sub 'payment-service-${EnvironmentName}'
-      ComputePlatform: ECS
+      ClusterName: !Ref EcsClusterName
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+          Base: 1
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -510,32 +623,88 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
-  CodeDeployDeploymentGroup:
-    Type: AWS::CodeDeploy::DeploymentGroup
+
+  # ECS Task Execution Role (must be created before Task Definition)
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
     Properties:
-      ApplicationName: !Ref CodeDeployApplication
-      DeploymentGroupName: !Sub 'payment-service-${EnvironmentName}-dg'
-      DeploymentConfigName: CodeDeployDefault.ECSAllAtOnce
-      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
-      ECSServices:
-        - ClusterName: !Ref EcsClusterName
-          ServiceName: !Ref EcsServiceName
-      BlueGreenDeploymentConfiguration:
-        DeploymentReadyOption:
-          ActionOnTimeout: CONTINUE_DEPLOYMENT
-          WaitTimeInMinutes: 0
-        TerminateBlueInstancesOnDeploymentSuccess:
-          Action: TERMINATE
-          TerminationWaitTimeInMinutes: 5
-      DeploymentStyle:
-        DeploymentOption: WITH_TRAFFIC_CONTROL
-        DeploymentType: BLUE_GREEN
-      AutoRollbackConfiguration:
-        Enabled: true
-        Events:
-          - DEPLOYMENT_FAILURE
-          - DEPLOYMENT_STOP_ON_ALARM
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+
+  # CloudWatch Logs Group for ECS
+  EcsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/ecs/${EcsServiceName}'
+      RetentionInDays: 7
+
+  # ECS Task Definition
+  EcsTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub '${EcsServiceName}-family'
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt EcsTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: !Sub '${EcsServiceName}-container'
+          Image: public.ecr.aws/docker/library/nginx:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 80
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref EcsLogGroup
+              awslogs-region: !Ref 'AWS::Region'
+              awslogs-stream-prefix: ecs
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # ECS Service
+  EcsService:
+    Type: AWS::ECS::Service
+    Properties:
+      ServiceName: !Ref EcsServiceName
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref EcsTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          Subnets:
+            - !Ref PrivateSubnet1
+            - !Ref PrivateSubnet2
+          SecurityGroups:
+            - !Ref CodeBuildSecurityGroup
+          AssignPublicIp: ENABLED
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 100
+        DeploymentCircuitBreaker:
+          Enable: true
+          Rollback: true
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -604,19 +773,13 @@ Resources:
               ActionTypeId:
                 Category: Deploy
                 Owner: AWS
-                Provider: CodeDeployToECS
+                Provider: ECS
                 Version: '1'
               Configuration:
-                ApplicationName: !Ref CodeDeployApplication
-                DeploymentGroupName: !Ref CodeDeployDeploymentGroup
-                TaskDefinitionTemplateArtifact: TestOutput
-                TaskDefinitionTemplatePath: taskdef.json
-                AppSpecTemplateArtifact: TestOutput
-                AppSpecTemplatePath: appspec.yml
-                Image1ArtifactName: BuildOutput
-                Image1ContainerName: IMAGE1_NAME
+                ClusterName: !Ref EcsCluster
+                ServiceName: !Ref EcsService
+                FileName: imagedefinitions.json
               InputArtifacts:
-                - Name: TestOutput
                 - Name: BuildOutput
       Tags:
         - Key: Environment
@@ -806,11 +969,11 @@ Outputs:
   KmsKeyId:
     Description: KMS Key for artifact encryption
     Value: !Ref ArtifactsKey
-  
-  CodeDeployApplicationName:
-    Description: CodeDeploy application name
-    Value: !Ref CodeDeployApplication
-  
-  CodeDeployDeploymentGroupName:
-    Description: CodeDeploy deployment group name
-    Value: !Ref CodeDeployDeploymentGroup
+
+  EcsClusterName:
+    Description: ECS Cluster name
+    Value: !Ref EcsCluster
+
+  EcsServiceName:
+    Description: ECS Service name
+    Value: !GetAtt EcsService.Name
