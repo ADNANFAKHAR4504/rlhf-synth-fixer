@@ -27,7 +27,7 @@ export class NetworkingStack extends Construct {
     const { environment, cidrBlock, availabilityZones } = props;
 
     // Use provided AZs or query dynamically
-    const azList = availabilityZones || ['us-east-1a', 'us-east-1c'];
+    const azList = availabilityZones || ['us-west-2a', 'us-west-2b'];
 
     // Create VPC
     this.vpc = new Vpc(this, 'vpc', {

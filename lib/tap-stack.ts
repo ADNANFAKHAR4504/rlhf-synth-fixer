@@ -14,7 +14,7 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags[];
 }
 
-const AWS_REGION_OVERRIDE = '';
+const AWS_REGION_OVERRIDE = 'us-west-2'; // Change to fresh region
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
