@@ -31,5 +31,11 @@
     "Updated container image reference to use built Docker image",
     "Reorganized container files to lib/container/",
     "Aurora version confirmed at 15.8"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
