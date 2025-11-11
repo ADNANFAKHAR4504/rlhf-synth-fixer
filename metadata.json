@@ -1,0 +1,25 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T13:47:26+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [],
+  "po_id": "l6a00t",
+  "aws_services": [
+    "Route53",
+    "Aurora",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "APIGateway",
+    "CloudWatch",
+    "SNS",
+    "Synthetics",
+    "EventBridge"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10
+}
