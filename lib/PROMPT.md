@@ -1,6 +1,6 @@
 Hey team,
 
-We need to deploy a secure payment processing web application for a fintech startup that handles sensitive financial data. The business is launching their payment platform and needs infrastructure that meets PCI DSS compliance standards while maintaining high availability across multiple regions. I've been asked to create this infrastructure using **Pulumi with TypeScript** and deploy it to the ap-southeast-1 region.
+We need to deploy a secure payment processing web application for a fintech startup that handles sensitive financial data. The business is launching their payment platform and needs infrastructure that meets PCI DSS compliance standards while maintaining high availability across multiple regions. I've been asked to create this infrastructure using **Pulumi with ts** and deploy it to the us-west-2 region.
 
 The application processes payments for customers and needs to be highly available, secure, and compliant with strict financial regulations. The team wants us to ensure that all data is encrypted at rest and in transit, credentials are automatically rotated, and we have comprehensive audit trails for compliance purposes. They're looking for a production-grade setup that can handle the demands of a payment processing system.
 
@@ -8,7 +8,7 @@ This is a critical system that will be processing real financial transactions, s
 
 ## What we need to build
 
-Create a secure payment processing infrastructure using **Pulumi with TypeScript** for a fintech application in the ap-southeast-1 region.
+Create a secure payment processing infrastructure using **Pulumi with ts** for a fintech application in the us-west-2 region.
 
 ### Core Requirements
 
@@ -60,7 +60,7 @@ Create a secure payment processing infrastructure using **Pulumi with TypeScript
 
 ### Technical Requirements
 
-- All infrastructure defined using **Pulumi with TypeScript**
+- All infrastructure defined using **Pulumi with ts**
 - Use Amazon VPC for networking isolation
 - Use Application Load Balancer for HTTPS termination with ACM
 - Use Amazon ECS Fargate for container orchestration
@@ -72,8 +72,8 @@ Create a secure payment processing infrastructure using **Pulumi with TypeScript
 - Use CloudWatch for logging and monitoring
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **ap-southeast-1** region
-- Node.js 18+ and TypeScript 5.x for development
+- Deploy to **us-west-2** region
+- Node.js 18+ and ts 5.x for development
 - Pulumi CLI 3.x for deployment
 
 ### Constraints
@@ -100,11 +100,11 @@ Create a secure payment processing infrastructure using **Pulumi with TypeScript
 - **Security**: Encryption at rest and in transit, IAM least privilege, credentials rotated automatically
 - **Compliance**: VPC Flow Logs enabled, CloudWatch Logs with 7-year retention, all resources properly tagged
 - **Resource Naming**: All resources include environmentSuffix variable for uniqueness
-- **Code Quality**: TypeScript with strong typing, proper error handling, well-documented
+- **Code Quality**: ts with strong typing, proper error handling, well-documented
 
 ## What to deliver
 
-- Complete Pulumi TypeScript implementation with proper project structure
+- Complete Pulumi ts implementation with proper project structure
 - VPC with 3 public and 3 private subnets across 3 availability zones
 - Application Load Balancer with HTTPS listeners and ACM certificate integration
 - ECS Fargate cluster with auto-scaling configuration

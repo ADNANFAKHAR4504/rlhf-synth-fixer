@@ -1,6 +1,6 @@
 # Payment Processing Infrastructure
 
-This Pulumi TypeScript project deploys a secure, PCI DSS-compliant payment processing infrastructure on AWS.
+This Pulumi ts project deploys a secure, PCI DSS-compliant payment processing infrastructure on AWS.
 
 ## Architecture
 
@@ -19,7 +19,7 @@ The infrastructure includes:
 
 - Pulumi CLI 3.x
 - Node.js 18+
-- TypeScript 5.x
+- ts 5.x
 - AWS CLI configured with appropriate credentials
 - AWS account with permissions to create the required resources
 
@@ -29,7 +29,7 @@ Set the required configuration:
 
 ```bash
 pulumi config set environmentSuffix <unique-suffix>
-pulumi config set aws:region ap-southeast-1
+pulumi config set aws:region us-west-2
 ```
 
 ## Deployment
@@ -67,7 +67,7 @@ After deployment, the following outputs will be available:
 
 1. **Push container image to ECR**:
 ```bash
-aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin <ecr-url>
+aws ecr get-login-password --region us-west-2 | docker login --username AWS --password-stdin <ecr-url>
 docker build -t payment-app .
 docker tag payment-app:latest <ecr-url>:v1.0.0
 docker push <ecr-url>:v1.0.0

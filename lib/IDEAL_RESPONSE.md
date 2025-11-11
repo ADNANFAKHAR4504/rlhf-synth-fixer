@@ -1,6 +1,6 @@
 # Payment Processing Infrastructure - Production-Ready Implementation
 
-This document contains the production-ready implementation for the secure payment processing infrastructure using Pulumi with TypeScript, deployed to the ap-southeast-1 region.
+This document contains the production-ready implementation for the secure payment processing infrastructure using Pulumi with ts, deployed to the us-west-2 region.
 
 ## Architecture Overview
 
@@ -17,14 +17,14 @@ The infrastructure implements a secure, PCI DSS-compliant payment processing pla
 
 ## File: index.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 
 const config = new pulumi.Config();
 const environmentSuffix = config.require('environmentSuffix');
-const region = aws.config.region || 'ap-southeast-1';
+const region = aws.config.region || 'us-west-2';
 
 // Tags for all resources
 const tags = {
@@ -895,7 +895,7 @@ export const flowLogsBucketName = flowLogsBucket.bucket;
 
 ### Compliance with Requirements
 - All resource names include environmentSuffix for uniqueness
-- Deployed to ap-southeast-1 region
+- Deployed to us-west-2 region
 - All resources fully destroyable (skipFinalSnapshot: true, no Retain policies)
 - PostgreSQL 14.6 for database engine
 - FARGATE launch type for serverless container orchestration
@@ -905,14 +905,14 @@ export const flowLogsBucketName = flowLogsBucket.bucket;
 
 ### Prerequisites
 - Pulumi CLI 3.x installed
-- Node.js 18+ and TypeScript 5.x
+- Node.js 18+ and ts 5.x
 - AWS CLI configured with appropriate credentials
 - AWS account with permissions for all required services
 
 ### Configuration
 ```bash
 pulumi config set environmentSuffix <unique-suffix>
-pulumi config set aws:region ap-southeast-1
+pulumi config set aws:region us-west-2
 ```
 
 ### Deploy
