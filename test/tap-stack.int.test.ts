@@ -976,7 +976,6 @@ describe('EKS Stack CDKTF Integration Tests', () => {
 
       expect(nodeGroupResponse.nodegroup?.status).toBe('ACTIVE');
       
-      // Step 4: If we have kube access, check nodes are Ready
       if (k8sApi) {
         try {
           const nodesResponse = await k8sApi.listNode();
