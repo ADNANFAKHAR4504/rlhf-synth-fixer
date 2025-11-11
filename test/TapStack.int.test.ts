@@ -22,27 +22,48 @@ describe('Hub-and-Spoke CloudFormation Integration Tests', () => {
   const region = getRegion();
   const ec2Client = new EC2Client({ region });
   const cfnClient = new CloudFormationClient({ region });
-  const stackName = `TapStack-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
+  const envSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+  const candidateStackNames = [`TapStack-${envSuffix}`, `TapStack${envSuffix}`];
+  let stackName = '';
 
   beforeAll(async () => {
-    console.log(`Looking for stack: ${stackName} in region: ${region}`);
+    console.log(`Looking for stack candidates: ${candidateStackNames.join(', ')} in region: ${region}`);
     console.log(`AWS_REGION env var: ${process.env.AWS_REGION}`);
     console.log(`ENVIRONMENT_SUFFIX env var: ${process.env.ENVIRONMENT_SUFFIX}`);
-    
-    try {
-      const command = new DescribeStacksCommand({ StackName: stackName });
-      const response = await cfnClient.send(command);
-      const stack = response.Stacks?.[0];
 
-      outputs = (stack?.Outputs || []).reduce((acc: StackOutputs, output) => {
-        if (output.OutputKey && output.OutputValue) {
-          acc[output.OutputKey] = output.OutputValue;
+    // Try each candidate name until we find the deployed stack
+    for (const candidate of candidateStackNames) {
+      try {
+        const command = new DescribeStacksCommand({ StackName: candidate });
+        const response = await cfnClient.send(command);
+        const stack = response.Stacks?.[0];
+
+        if (stack) {
+          stackName = candidate;
+          outputs = (stack.Outputs || []).reduce((acc: StackOutputs, output) => {
+            if (output.OutputKey && output.OutputValue) {
+              acc[output.OutputKey] = output.OutputValue;
+            }
+            return acc;
+          }, {});
+
+          console.log(`Found deployed stack: ${stackName}`);
+          break;
         }
-        return acc;
-      }, {});
-    } catch (error: any) {
-      console.error(`Failed to load stack outputs from ${stackName} in region ${region}:`, error.message);
-      throw error;
+      } catch (error: any) {
+        // If stack doesn't exist, continue to next candidate. Otherwise rethrow.
+        const msg = error?.message || '';
+        if (msg.includes('does not exist') || (error?.name === 'ValidationError')) {
+          console.log(`Stack ${candidate} not found in region ${region}, trying next candidate`);
+          continue;
+        }
+        console.error(`Error while checking stack ${candidate}:`, msg);
+        throw error;
+      }
+    }
+
+    if (!stackName) {
+      throw new Error(`Failed to find deployed stack in region ${region}. Tried: ${candidateStackNames.join(', ')}`);
     }
   });
 

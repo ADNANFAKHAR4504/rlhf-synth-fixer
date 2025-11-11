@@ -23,6 +23,7 @@
     "IAM"
   ],
   "author": "iamarpit-turing",
+  "region": "eu-south-1",
   "reviewer": "chriscrsov",
   "training_quality": 10
 }
