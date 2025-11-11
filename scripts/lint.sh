@@ -111,11 +111,12 @@ elif [ "$PLATFORM" = "tf" ] && [ "$LANGUAGE" = "hcl" ]; then
         exit 1
     fi
 
-    # Initialize terraform if needed
-    if [ ! -d ".terraform" ]; then
-        echo "📦 Initializing Terraform..."
-        terraform init -backend=false
-    fi
+    # --- START OF CORRECTION ---
+    # Initialization MUST run to download providers (aws, random, etc.)
+    # We use -reconfigure to force initialization and -backend=false to skip S3 connection.
+    echo "📦 Initializing Terraform and ensuring providers are downloaded..."
+    terraform init -backend=false -reconfigure -input=false
+    # --- END OF CORRECTION ---
 
     # Validate terraform configuration
     echo "🔍 Validating Terraform configuration..."
