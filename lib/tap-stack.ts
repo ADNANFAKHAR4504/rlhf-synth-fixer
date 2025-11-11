@@ -6,6 +6,7 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as path from 'path';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface TapStackArgs {
@@ -485,7 +486,11 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'provided.al2',
         handler: 'bootstrap',
         role: webhookRole.arn,
-        code: new pulumi.asset.FileArchive('./lib/lambda/webhook-processor'),
+        code: new pulumi.asset.AssetArchive({
+          bootstrap: new pulumi.asset.FileAsset(
+            path.join(__dirname, 'lambda/webhook-processor/bootstrap')
+          ),
+        }),
         environment: {
           variables: {
             SNS_TOPIC_ARN: paymentTopic.arn,
@@ -510,7 +515,11 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'provided.al2',
         handler: 'bootstrap',
         role: transactionRole.arn,
-        code: new pulumi.asset.FileArchive('./lib/lambda/transaction-recorder'),
+        code: new pulumi.asset.AssetArchive({
+          bootstrap: new pulumi.asset.FileAsset(
+            path.join(__dirname, 'lambda/transaction-recorder/bootstrap')
+          ),
+        }),
         environment: {
           variables: {
             DYNAMODB_TABLE: transactionsTable.name,
@@ -535,7 +544,11 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'provided.al2',
         handler: 'bootstrap',
         role: fraudRole.arn,
-        code: new pulumi.asset.FileArchive('./lib/lambda/fraud-detector'),
+        code: new pulumi.asset.AssetArchive({
+          bootstrap: new pulumi.asset.FileAsset(
+            path.join(__dirname, 'lambda/fraud-detector/bootstrap')
+          ),
+        }),
         environment: {
           variables: {
             ENVIRONMENT: environmentSuffix,
