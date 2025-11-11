@@ -1,12 +1,11 @@
-import { Construct } from "constructs";
-import * as aws from "@cdktf/provider-aws";
-import { DataAwsCallerIdentity } from "@cdktf/provider-aws/lib/data-aws-caller-identity";
-import { DataAwsIamPolicyDocument } from "@cdktf/provider-aws/lib/data-aws-iam-policy-document";
-import { IamRole } from "@cdktf/provider-aws/lib/iam-role";
-import { IamRolePolicyAttachment } from "@cdktf/provider-aws/lib/iam-role-policy-attachment";
-import { IamPolicy } from "@cdktf/provider-aws/lib/iam-policy";
-import { IamOpenidConnectProvider } from "@cdktf/provider-aws/lib/iam-openid-connect-provider";
-import { DataTlsCertificate } from "@cdktf/provider-tls/lib/data-tls-certificate";
+import { Construct } from 'constructs';
+import * as aws from '@cdktf/provider-aws';
+import { DataAwsIamPolicyDocument } from '@cdktf/provider-aws/lib/data-aws-iam-policy-document';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
+import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
+import { IamOpenidConnectProvider } from '@cdktf/provider-aws/lib/iam-openid-connect-provider';
+import { DataTlsCertificate } from '@cdktf/provider-tls/lib/data-tls-certificate';
 
 export interface VpcConfig {
   vpcCidr: string;
@@ -44,10 +43,10 @@ export class NetworkModule extends Construct {
   constructor(scope: Construct, id: string, config: VpcConfig) {
     super(scope, id);
 
-    const azs = ["us-east-1a", "us-east-1b", "us-east-1c"];
+    const azs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
 
     // Create VPC
-    this.vpc = new aws.vpc.Vpc(this, "vpc", {
+    this.vpc = new aws.vpc.Vpc(this, 'vpc', {
       cidrBlock: config.vpcCidr,
       enableDnsHostnames: true,
       enableDnsSupport: true,
@@ -58,7 +57,7 @@ export class NetworkModule extends Construct {
     });
 
     // Internet Gateway
-    const igw = new aws.internetGateway.InternetGateway(this, "igw", {
+    const igw = new aws.internetGateway.InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -81,8 +80,9 @@ export class NetworkModule extends Construct {
         tags: {
           ...config.tags,
           Name: `${config.tags.Environment}-public-${azs[i]}`,
-          "kubernetes.io/role/elb": "1",
-          [`kubernetes.io/cluster/${config.tags.Environment}-eks-cluster`]: "shared",
+          'kubernetes.io/role/elb': '1',
+          [`kubernetes.io/cluster/${config.tags.Environment}-eks-cluster`]:
+            'shared',
         },
       });
       this.publicSubnets.push(publicSubnet);
@@ -95,15 +95,16 @@ export class NetworkModule extends Construct {
         tags: {
           ...config.tags,
           Name: `${config.tags.Environment}-private-${azs[i]}`,
-          "kubernetes.io/role/internal-elb": "1",
-          [`kubernetes.io/cluster/${config.tags.Environment}-eks-cluster`]: "shared",
+          'kubernetes.io/role/internal-elb': '1',
+          [`kubernetes.io/cluster/${config.tags.Environment}-eks-cluster`]:
+            'shared',
         },
       });
       this.privateSubnets.push(privateSubnet);
 
       // EIP for NAT Gateway
       const eip = new aws.eip.Eip(this, `nat-eip-${i}`, {
-        domain: "vpc",
+        domain: 'vpc',
         tags: {
           ...config.tags,
           Name: `${config.tags.Environment}-nat-eip-${i}`,
@@ -111,19 +112,23 @@ export class NetworkModule extends Construct {
       });
 
       // NAT Gateway
-      const natGateway = new aws.natGateway.NatGateway(this, `nat-gateway-${i}`, {
-        allocationId: eip.id,
-        subnetId: publicSubnet.id,
-        tags: {
-          ...config.tags,
-          Name: `${config.tags.Environment}-nat-${i}`,
-        },
-      });
+      const natGateway = new aws.natGateway.NatGateway(
+        this,
+        `nat-gateway-${i}`,
+        {
+          allocationId: eip.id,
+          subnetId: publicSubnet.id,
+          tags: {
+            ...config.tags,
+            Name: `${config.tags.Environment}-nat-${i}`,
+          },
+        }
+      );
       this.natGateways.push(natGateway);
     }
 
     // Route tables
-    const publicRouteTable = new aws.routeTable.RouteTable(this, "public-rt", {
+    const publicRouteTable = new aws.routeTable.RouteTable(this, 'public-rt', {
       vpcId: this.vpc.id,
       tags: {
         ...config.tags,
@@ -131,40 +136,52 @@ export class NetworkModule extends Construct {
       },
     });
 
-    new aws.route.Route(this, "public-route", {
+    new aws.route.Route(this, 'public-route', {
       routeTableId: publicRouteTable.id,
-      destinationCidrBlock: "0.0.0.0/0",
+      destinationCidrBlock: '0.0.0.0/0',
       gatewayId: igw.id,
     });
 
     // Associate public subnets with public route table
     this.publicSubnets.forEach((subnet, i) => {
-      new aws.routeTableAssociation.RouteTableAssociation(this, `public-rta-${i}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rta-${i}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
     });
 
     // Private route tables (one per AZ for HA)
     this.privateSubnets.forEach((subnet, i) => {
-      const privateRouteTable = new aws.routeTable.RouteTable(this, `private-rt-${i}`, {
-        vpcId: this.vpc.id,
-        tags: {
-          ...config.tags,
-          Name: `${config.tags.Environment}-private-rt-${i}`,
-        },
-      });
+      const privateRouteTable = new aws.routeTable.RouteTable(
+        this,
+        `private-rt-${i}`,
+        {
+          vpcId: this.vpc.id,
+          tags: {
+            ...config.tags,
+            Name: `${config.tags.Environment}-private-rt-${i}`,
+          },
+        }
+      );
 
       new aws.route.Route(this, `private-route-${i}`, {
         routeTableId: privateRouteTable.id,
-        destinationCidrBlock: "0.0.0.0/0",
+        destinationCidrBlock: '0.0.0.0/0',
         natGatewayId: this.natGateways[i].id,
       });
 
-      new aws.routeTableAssociation.RouteTableAssociation(this, `private-rta-${i}`, {
-        subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
-      });
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rta-${i}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
     });
   }
 }
@@ -178,54 +195,70 @@ export class IamModule extends Construct {
     super(scope, id);
 
     // EKS Cluster IAM Role
-    const eksAssumeRolePolicy = new DataAwsIamPolicyDocument(this, "eks-assume-role", {
-      statement: [{
-        actions: ["sts:AssumeRole"],
-        principals: [{
-          type: "Service",
-          identifiers: ["eks.amazonaws.com"],
-        }],
-      }],
-    });
+    const eksAssumeRolePolicy = new DataAwsIamPolicyDocument(
+      this,
+      'eks-assume-role',
+      {
+        statement: [
+          {
+            actions: ['sts:AssumeRole'],
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['eks.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
-    this.eksClusterRole = new IamRole(this, "eks-cluster-role", {
+    this.eksClusterRole = new IamRole(this, 'eks-cluster-role', {
       name: `${config.clusterName}-cluster-role`,
       assumeRolePolicy: eksAssumeRolePolicy.json,
       tags: config.tags,
     });
 
-    new IamRolePolicyAttachment(this, "eks-cluster-policy", {
+    new IamRolePolicyAttachment(this, 'eks-cluster-policy', {
       role: this.eksClusterRole.name!,
-      policyArn: "arn:aws:iam::aws:policy/AmazonEKSClusterPolicy",
+      policyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy',
     });
 
-    new IamRolePolicyAttachment(this, "eks-vpc-resource-controller", {
+    new IamRolePolicyAttachment(this, 'eks-vpc-resource-controller', {
       role: this.eksClusterRole.name!,
-      policyArn: "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController",
+      policyArn: 'arn:aws:iam::aws:policy/AmazonEKSVPCResourceController',
     });
 
     // EKS Node IAM Role
-    const nodeAssumeRolePolicy = new DataAwsIamPolicyDocument(this, "node-assume-role", {
-      statement: [{
-        actions: ["sts:AssumeRole"],
-        principals: [{
-          type: "Service",
-          identifiers: ["ec2.amazonaws.com"],
-        }],
-      }],
-    });
+    const nodeAssumeRolePolicy = new DataAwsIamPolicyDocument(
+      this,
+      'node-assume-role',
+      {
+        statement: [
+          {
+            actions: ['sts:AssumeRole'],
+            principals: [
+              {
+                type: 'Service',
+                identifiers: ['ec2.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
-    this.eksNodeRole = new IamRole(this, "eks-node-role", {
+    this.eksNodeRole = new IamRole(this, 'eks-node-role', {
       name: `${config.clusterName}-node-role`,
       assumeRolePolicy: nodeAssumeRolePolicy.json,
       tags: config.tags,
     });
 
     const nodePolicies = [
-      "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy",
-      "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy",
-      "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly",
-      "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+      'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy',
+      'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy',
+      'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
+      'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
     ];
 
     nodePolicies.forEach((policyArn, i) => {
@@ -237,12 +270,12 @@ export class IamModule extends Construct {
   }
 
   public setupOidcProvider(cluster: aws.eksCluster.EksCluster): void {
-    const tlsCert = new DataTlsCertificate(this, "tls-cert", {
+    const tlsCert = new DataTlsCertificate(this, 'tls-cert', {
       url: cluster.identity.get(0).oidc.get(0).issuer,
     });
 
-    this.oidcProvider = new IamOpenidConnectProvider(this, "oidc-provider", {
-      clientIdList: ["sts.amazonaws.com"],
+    this.oidcProvider = new IamOpenidConnectProvider(this, 'oidc-provider', {
+      clientIdList: ['sts.amazonaws.com'],
       thumbprintList: [tlsCert.certificates.get(0).sha1Fingerprint],
       url: cluster.identity.get(0).oidc.get(0).issuer,
       tags: cluster.tags,
@@ -266,39 +299,52 @@ export class IrsaRoleModule extends Construct {
   ) {
     super(scope, id);
 
-    const assumeRolePolicy = new DataAwsIamPolicyDocument(this, "assume-role-policy", {
-      statement: [{
-        actions: ["sts:AssumeRoleWithWebIdentity"],
-        principals: [{
-          type: "Federated",
-          identifiers: [oidcProviderArn],
-        }],
-        condition: [{
-          test: "StringEquals",
-          variable: `${oidcProviderUrl.replace("https://", "")}:sub`,
-          values: [`system:serviceaccount:${namespace}:${serviceAccount}`],
-        }, {
-          test: "StringEquals",
-          variable: `${oidcProviderUrl.replace("https://", "")}:aud`,
-          values: ["sts.amazonaws.com"],
-        }],
-      }],
-    });
+    const assumeRolePolicy = new DataAwsIamPolicyDocument(
+      this,
+      'assume-role-policy',
+      {
+        statement: [
+          {
+            actions: ['sts:AssumeRoleWithWebIdentity'],
+            principals: [
+              {
+                type: 'Federated',
+                identifiers: [oidcProviderArn],
+              },
+            ],
+            condition: [
+              {
+                test: 'StringEquals',
+                variable: `${oidcProviderUrl.replace('https://', '')}:sub`,
+                values: [
+                  `system:serviceaccount:${namespace}:${serviceAccount}`,
+                ],
+              },
+              {
+                test: 'StringEquals',
+                variable: `${oidcProviderUrl.replace('https://', '')}:aud`,
+                values: ['sts.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
-    this.role = new IamRole(this, "role", {
+    this.role = new IamRole(this, 'role', {
       name,
       assumeRolePolicy: assumeRolePolicy.json,
       tags,
     });
 
     if (policyDocument) {
-      const policy = new IamPolicy(this, "policy", {
+      const policy = new IamPolicy(this, 'policy', {
         name: `${name}-policy`,
         policy: policyDocument,
         tags,
       });
 
-      new IamRolePolicyAttachment(this, "policy-attachment", {
+      new IamRolePolicyAttachment(this, 'policy-attachment', {
         role: this.role.name!,
         policyArn: policy.arn,
       });
@@ -321,26 +367,37 @@ export class WorkloadRoleModule extends Construct {
   ) {
     super(scope, id);
 
-    const assumeRolePolicy = new DataAwsIamPolicyDocument(this, "assume-role-policy", {
-      statement: [{
-        actions: ["sts:AssumeRoleWithWebIdentity"],
-        principals: [{
-          type: "Federated",
-          identifiers: [oidcProviderArn],
-        }],
-        condition: [{
-          test: "StringLike",
-          variable: `${oidcProviderUrl.replace("https://", "")}:sub`,
-          values: [`system:serviceaccount:${namespace}:*`],
-        }, {
-          test: "StringEquals",
-          variable: `${oidcProviderUrl.replace("https://", "")}:aud`,
-          values: ["sts.amazonaws.com"],
-        }],
-      }],
-    });
+    const assumeRolePolicy = new DataAwsIamPolicyDocument(
+      this,
+      'assume-role-policy',
+      {
+        statement: [
+          {
+            actions: ['sts:AssumeRoleWithWebIdentity'],
+            principals: [
+              {
+                type: 'Federated',
+                identifiers: [oidcProviderArn],
+              },
+            ],
+            condition: [
+              {
+                test: 'StringLike',
+                variable: `${oidcProviderUrl.replace('https://', '')}:sub`,
+                values: [`system:serviceaccount:${namespace}:*`],
+              },
+              {
+                test: 'StringEquals',
+                variable: `${oidcProviderUrl.replace('https://', '')}:aud`,
+                values: ['sts.amazonaws.com'],
+              },
+            ],
+          },
+        ],
+      }
+    );
 
-    this.role = new IamRole(this, "role", {
+    this.role = new IamRole(this, 'role', {
       name,
       assumeRolePolicy: assumeRolePolicy.json,
       tags,
