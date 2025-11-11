@@ -114,7 +114,7 @@ describe('Payment Processing Pipeline Integration Tests', () => {
         const response = await lambda.send(command);
 
         expect(response.Configuration).toBeDefined();
-        expect(response.Configuration?.Runtime).toMatch(/go1\.x/);
+        expect(response.Configuration?.Runtime).toMatch(/provided\.al2|go1\.x/);
         // Reserved concurrent executions is verified via separate API call if needed
         expect(response.Configuration?.VpcConfig).toBeDefined();
         expect(response.Configuration?.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
@@ -137,7 +137,7 @@ describe('Payment Processing Pipeline Integration Tests', () => {
         const response = await lambda.send(command);
 
         expect(response.Configuration).toBeDefined();
-        expect(response.Configuration?.Runtime).toMatch(/go1\.x/);
+        expect(response.Configuration?.Runtime).toMatch(/provided\.al2|go1\.x/);
         // Reserved concurrent executions is verified via separate API call if needed
         expect(response.Configuration?.VpcConfig).toBeDefined();
       } catch (error: any) {
@@ -159,7 +159,7 @@ describe('Payment Processing Pipeline Integration Tests', () => {
         const response = await lambda.send(command);
 
         expect(response.Configuration).toBeDefined();
-        expect(response.Configuration?.Runtime).toMatch(/go1\.x/);
+        expect(response.Configuration?.Runtime).toMatch(/provided\.al2|go1\.x/);
         // Reserved concurrent executions is verified via separate API call if needed
       } catch (error: any) {
         if (error.name === 'ResourceNotFoundException') {

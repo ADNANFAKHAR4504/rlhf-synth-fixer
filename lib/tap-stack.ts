@@ -25,15 +25,56 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
 
-    // Get current region from environment or default to us-east-2
-    const regionName = process.env.AWS_REGION || 'us-east-2';
+    // Get current region and account ID
+    const regionName = aws.getRegionOutput({}, { parent: this }).name;
+    const accountId = aws.getCallerIdentityOutput(
+      {},
+      { parent: this }
+    ).accountId;
+    const azs = aws.getAvailabilityZonesOutput(
+      { state: 'available' },
+      { parent: this }
+    );
 
-    // KMS Key for encryption
+    // KMS Key for encryption with proper CloudWatch Logs permissions
     const kmsKey = new aws.kms.Key(
       `payment-kms-${environmentSuffix}`,
       {
         description: 'KMS key for payment processing pipeline encryption',
         enableKeyRotation: true,
+        policy: pulumi.all([regionName, accountId]).apply(([region, account]) =>
+          JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Sid: 'Enable IAM User Permissions',
+                Effect: 'Allow',
+                Principal: { AWS: `arn:aws:iam::${account}:root` },
+                Action: 'kms:*',
+                Resource: '*',
+              },
+              {
+                Sid: 'Allow CloudWatch Logs',
+                Effect: 'Allow',
+                Principal: { Service: `logs.${region}.amazonaws.com` },
+                Action: [
+                  'kms:Encrypt',
+                  'kms:Decrypt',
+                  'kms:ReEncrypt*',
+                  'kms:GenerateDataKey*',
+                  'kms:CreateGrant',
+                  'kms:DescribeKey',
+                ],
+                Resource: '*',
+                Condition: {
+                  ArnLike: {
+                    'kms:EncryptionContext:aws:logs:arn': `arn:aws:logs:${region}:${account}:log-group:*`,
+                  },
+                },
+              },
+            ],
+          })
+        ),
         tags: { ...tags, Name: `payment-kms-${environmentSuffix}` },
       },
       { parent: this }
@@ -60,13 +101,13 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Private subnets for Lambda functions
+    // Private subnets for Lambda functions (use dynamic AZs)
     const privateSubnet1 = new aws.ec2.Subnet(
       `payment-private-subnet-1-${environmentSuffix}`,
       {
         vpcId: vpc.id,
         cidrBlock: '10.0.1.0/24',
-        availabilityZone: 'us-east-2a',
+        availabilityZone: azs.names[0],
         tags: {
           ...tags,
           Name: `payment-private-subnet-1-${environmentSuffix}`,
@@ -80,7 +121,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: '10.0.2.0/24',
-        availabilityZone: 'us-east-2b',
+        availabilityZone: azs.names[1],
         tags: {
           ...tags,
           Name: `payment-private-subnet-2-${environmentSuffix}`,
@@ -104,22 +145,6 @@ export class TapStack extends pulumi.ComponentResource {
           },
         ],
         tags: { ...tags, Name: `payment-lambda-sg-${environmentSuffix}` },
-      },
-      { parent: this }
-    );
-
-    // VPC Endpoints for AWS services (to avoid NAT Gateway)
-    new aws.ec2.VpcEndpoint(
-      `payment-dynamodb-endpoint-${environmentSuffix}`,
-      {
-        vpcId: vpc.id,
-        serviceName: `com.amazonaws.${regionName}.dynamodb`,
-        vpcEndpointType: 'Gateway',
-        routeTableIds: [vpc.mainRouteTableId],
-        tags: {
-          ...tags,
-          Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
-        },
       },
       { parent: this }
     );
