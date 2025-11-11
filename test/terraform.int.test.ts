@@ -820,7 +820,7 @@ describe('Infrastructure Integration Tests', () => {
       // (In real scenario, this would take the health check grace period)
       
       // Step 6: Verify recovery - all targets healthy again
-      await new Promise(resolve => setTimeout(resolve, 30000));
+      await new Promise(resolve => setTimeout(resolve, 60000));
       
       const finalHealth = await elbClient.send(new DescribeTargetHealthCommand({
         TargetGroupArn: targetGroupArn
