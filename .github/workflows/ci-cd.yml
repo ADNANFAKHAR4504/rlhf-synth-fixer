@@ -703,13 +703,7 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    # needs:
-    #   [
-    #     detect-metadata,
-    #     integration-tests-live,
-    #     analysis,
-    #     cicd-pipeline-optimization,
-    #   ]
+    needs: [detect-metadata]
     # For Infrastructure Analysis/Monitoring OR CI/CD Pipeline: Allow int-tests to be skipped
     # For all other subject labels: Require int-tests to succeed
     if: |
