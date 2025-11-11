@@ -43,8 +43,7 @@ class StorageStack(NestedStack):
             encryption_key=props.kms_key,
             versioned=True,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         # Primary document storage bucket
@@ -81,8 +80,7 @@ class StorageStack(NestedStack):
                     enabled=True
                 )
             ],
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True
+            removal_policy=RemovalPolicy.DESTROY
         )
 
         CfnOutput(

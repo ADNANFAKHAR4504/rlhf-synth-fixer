@@ -11,7 +11,7 @@ app = cdk.App()
 
 # Get environment suffix from context
 environment_suffix = app.node.try_get_context('environmentSuffix') or 'dev'
-STACK_NAME = f"PaymentProcessingStack{environment_suffix}"
+STACK_NAME = f"TapStack{environment_suffix}"
 
 repository_name = os.getenv('REPOSITORY', 'unknown')
 commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
@@ -27,7 +27,7 @@ props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region='ap-southeast-1'
+        region=os.getenv('AWS_REGION') or os.getenv('CDK_DEFAULT_REGION')
     )
 )
 

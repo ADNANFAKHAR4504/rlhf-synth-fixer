@@ -33,13 +33,13 @@ class NetworkStack(NestedStack):
 
         env_suffix = props.environment_suffix
 
-        # VPC with 3 AZs
+        # VPC with 3 AZs and NAT Gateways for internet access from private subnets
         self.vpc = ec2.Vpc(
             self,
             f"PaymentVPC-{env_suffix}",
             vpc_name=f"payment-vpc-{env_suffix}",
             max_azs=3,
-            nat_gateways=0,  # Will use NAT instances instead
+            nat_gateways=3,  # One NAT Gateway per AZ for high availability
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name=f"Public-{env_suffix}",
@@ -59,39 +59,8 @@ class NetworkStack(NestedStack):
             ]
         )
 
-        # Create NAT instances for each AZ
-        nat_instance_type = ec2.InstanceType.of(
-            ec2.InstanceClass.T3,
-            ec2.InstanceSize.MICRO
-        )
-
-        nat_ami = ec2.MachineImage.latest_amazon_linux(
-            generation=ec2.AmazonLinuxGeneration.AMAZON_LINUX_2
-        )
-
-        for i, public_subnet in enumerate(self.vpc.public_subnets[:3]):
-            nat_instance = ec2.Instance(
-                self,
-                f"NATInstance-{i}-{env_suffix}",
-                instance_name=f"nat-instance-{i}-{env_suffix}",
-                instance_type=nat_instance_type,
-                machine_image=nat_ami,
-                vpc=self.vpc,
-                vpc_subnets=ec2.SubnetSelection(subnets=[public_subnet]),
-                source_dest_check=False,
-                user_data=ec2.UserData.for_linux()
-            )
-
-            # Configure NAT instance
-            nat_instance.user_data.add_commands(
-                "yum install -y iptables-services",
-                "systemctl enable iptables",
-                "systemctl start iptables",
-                "echo 'net.ipv4.ip_forward=1' >> /etc/sysctl.conf",
-                "sysctl -p",
-                "iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE",
-                "service iptables save"
-            )
+        # NAT Gateways are automatically created by CDK VPC construct
+        # when nat_gateways > 0 is specified
 
         # Security Groups
         self.alb_security_group = ec2.SecurityGroup(
@@ -254,61 +223,49 @@ class NetworkStack(NestedStack):
             web_acl_arn=web_acl.attr_arn
         )
 
-        # VPC Endpoints - Commented out due to AWS quota limits in test accounts
-        # These would normally be included for cost optimization and security
-        # but are not essential for the core payment processing requirements
+        # VPC Endpoints - Required for ECS to pull container images from ECR
 
-        # # S3 Gateway Endpoint
-        # self.vpc.add_gateway_endpoint(
-        #     f"S3Endpoint-{env_suffix}",
-        #     service=ec2.GatewayVpcEndpointAwsService.S3,
-        #     subnets=[
-        #         ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-        #         ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
-        #     ]
-        # )
+        # S3 Gateway Endpoint - Required for ECR image layers
+        self.vpc.add_gateway_endpoint(
+            f"S3Endpoint-{env_suffix}",
+            service=ec2.GatewayVpcEndpointAwsService.S3,
+            subnets=[
+                ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+                ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
+            ]
+        )
 
-        # # DynamoDB Gateway Endpoint
-        # self.vpc.add_gateway_endpoint(
-        #     f"DynamoDBEndpoint-{env_suffix}",
-        #     service=ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-        #     subnets=[
-        #         ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-        #         ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_ISOLATED)
-        #     ]
-        # )
+        # ECR API Interface Endpoint
+        self.vpc.add_interface_endpoint(
+            f"ECRApiEndpoint-{env_suffix}",
+            service=ec2.InterfaceVpcEndpointAwsService.ECR,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
+        )
 
-        # # ECR API Interface Endpoint
-        # self.vpc.add_interface_endpoint(
-        #     f"ECRApiEndpoint-{env_suffix}",
-        #     service=ec2.InterfaceVpcEndpointAwsService.ECR,
-        #     private_dns_enabled=True,
-        #     subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
-        # )
+        # ECR Docker Interface Endpoint
+        self.vpc.add_interface_endpoint(
+            f"ECRDockerEndpoint-{env_suffix}",
+            service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
+        )
 
-        # # ECR Docker Interface Endpoint
-        # self.vpc.add_interface_endpoint(
-        #     f"ECRDockerEndpoint-{env_suffix}",
-        #     service=ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
-        #     private_dns_enabled=True,
-        #     subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
-        # )
+        # Secrets Manager Interface Endpoint
+        self.vpc.add_interface_endpoint(
+            f"SecretsManagerEndpoint-{env_suffix}",
+            service=ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
+        )
 
-        # # Secrets Manager Interface Endpoint
-        # self.vpc.add_interface_endpoint(
-        #     f"SecretsManagerEndpoint-{env_suffix}",
-        #     service=ec2.InterfaceVpcEndpointAwsService.SECRETS_MANAGER,
-        #     private_dns_enabled=True,
-        #     subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
-        # )
-
-        # # CloudWatch Logs Interface Endpoint
-        # self.vpc.add_interface_endpoint(
-        #     f"CloudWatchLogsEndpoint-{env_suffix}",
-        #     service=ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-        #     private_dns_enabled=True,
-        #     subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
-        # )
+        # CloudWatch Logs Interface Endpoint
+        self.vpc.add_interface_endpoint(
+            f"CloudWatchLogsEndpoint-{env_suffix}",
+            service=ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+            private_dns_enabled=True,
+            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)
+        )
 
         CfnOutput(
             self,
