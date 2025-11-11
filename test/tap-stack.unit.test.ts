@@ -24,9 +24,9 @@ jest.mock('aws-cdk-lib/aws-lambda-nodejs', () => {
 });
 
 import { Template } from 'aws-cdk-lib/assertions';
-import { TapStack } from '../lib/tap-stack';
-import { PaymentMonitoringStack } from '../lib/payment-monitoring-stack';
 import { LogProcessingConstruct } from '../lib/constructs/log-processing';
+import { PaymentMonitoringStack } from '../lib/payment-monitoring-stack';
+import { TapStack } from '../lib/tap-stack';
 
 function buildAppAndStacks(
   ctx?: Record<string, any>,

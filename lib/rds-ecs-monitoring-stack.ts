@@ -1,0 +1,94 @@
+import * as cdk from 'aws-cdk-lib';
+import { Construct } from 'constructs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+
+export interface RdsEcsMonitoringStackProps extends cdk.StackProps {
+  readonly dbIdentifier?: string;
+  readonly ecsServiceName?: string;
+  readonly clusterName?: string;
+}
+
+export class RdsEcsMonitoringStack extends cdk.Stack {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: RdsEcsMonitoringStackProps
+  ) {
+    super(scope, id, props);
+
+    const dbId = props?.dbIdentifier ?? 'payment-db';
+    const ecsService = props?.ecsServiceName ?? 'payment-service';
+    const cluster = props?.clusterName ?? 'payment-cluster';
+
+    const cpuUtilization = new cloudwatch.Metric({
+      namespace: 'AWS/ECS',
+      metricName: 'CPUUtilization',
+      dimensionsMap: { ServiceName: ecsService, ClusterName: cluster },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(1),
+    });
+
+    const memoryUtilization = new cloudwatch.Metric({
+      namespace: 'AWS/ECS',
+      metricName: 'MemoryUtilization',
+      dimensionsMap: { ServiceName: ecsService, ClusterName: cluster },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(1),
+    });
+
+    const dbConnections = new cloudwatch.Metric({
+      namespace: 'AWS/RDS',
+      metricName: 'DatabaseConnections',
+      dimensionsMap: { DBInstanceIdentifier: dbId },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(1),
+    });
+
+    const dbCpu = new cloudwatch.Metric({
+      namespace: 'AWS/RDS',
+      metricName: 'CPUUtilization',
+      dimensionsMap: { DBInstanceIdentifier: dbId },
+      statistic: 'Average',
+      period: cdk.Duration.minutes(1),
+    });
+
+    const dashboard = new cloudwatch.Dashboard(this, 'RdsEcsDashboard', {
+      dashboardName: `${dbId}-rds-ecs-dashboard`,
+    });
+
+    dashboard.addWidgets(
+      new cloudwatch.GraphWidget({
+        title: 'ECS CPU Utilization',
+        left: [cpuUtilization],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'ECS Memory Utilization',
+        left: [memoryUtilization],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'RDS Connections',
+        left: [dbConnections],
+      }),
+      new cloudwatch.GraphWidget({
+        title: 'RDS CPU Utilization',
+        left: [dbCpu],
+      })
+    );
+
+    new cloudwatch.Alarm(this, 'HighEcsCpuAlarm', {
+      metric: cpuUtilization,
+      threshold: 80,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'ECS CPU utilization > 80%',
+    });
+
+    new cloudwatch.Alarm(this, 'HighDbConnectionsAlarm', {
+      metric: dbConnections,
+      threshold: 100,
+      evaluationPeriods: 2,
+      comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
+      alarmDescription: 'RDS DB connections high (>100)',
+    });
+  }
+}
