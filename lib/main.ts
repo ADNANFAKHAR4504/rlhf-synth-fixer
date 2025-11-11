@@ -434,7 +434,7 @@ class PaymentProcessingStack extends TerraformStack {
           },
         },
         filename: 'lib/lambda-deployment.zip',
-        sourceCodeHash: "${filebase64sha256('lib/lambda-deployment.zip')}",
+        sourceCodeHash: Fn.filebase64sha256('lib/lambda-deployment.zip'),
         tags: {
           Name: `payment-processor-${config.environment}-${environmentSuffix}`,
           Environment: config.environment,
