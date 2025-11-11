@@ -2,11 +2,7 @@
 
 This document analyzes the infrastructure code generation failures identified in the MODEL_RESPONSE.md compared to the corrected IDEAL_RESPONSE.md. The analysis focuses on AWS CloudFormation YAML implementation for a multi-environment payment processing system.
 
-## Critical Failures
-
 ### 1. Incorrect NAT Gateway Configuration
-
-**Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: The model created NAT Gateways unconditionally in all 3 availability zones regardless of environment:
 
@@ -39,7 +35,8 @@ Mappings:
       NATGateways: 3
 
 Conditions:
-  CreateNATGateway3: !Equals [!FindInMap [EnvironmentConfig, !Ref Environment, NATGateways], 3]
+  CreateNATGateway3:
+    !Equals [!FindInMap [EnvironmentConfig, !Ref Environment, NATGateways], 3]
 
 NATGateway2EIP:
   Type: AWS::EC2::EIP
@@ -63,7 +60,7 @@ PaymentQueue:
   Type: AWS::SQS::Queue
   Properties:
     QueueName: !Sub 'payment-queue-${EnvironmentSuffix}'
-    MessageRetentionPeriod: 345600  # Hardcoded to 4 days
+    MessageRetentionPeriod: 345600 # Hardcoded to 4 days
 ```
 
 **IDEAL_RESPONSE Fix**: Made retention period dynamic using CloudFormation mappings:
@@ -72,17 +69,18 @@ PaymentQueue:
 Mappings:
   EnvironmentConfig:
     dev:
-      SQSRetention: 86400      # 1 day
+      SQSRetention: 86400 # 1 day
     staging:
-      SQSRetention: 345600     # 4 days
+      SQSRetention: 345600 # 4 days
     prod:
-      SQSRetention: 1209600    # 14 days
+      SQSRetention: 1209600 # 14 days
 
 PaymentQueue:
   Type: AWS::SQS::Queue
   Properties:
     QueueName: !Sub 'payment-queue-${EnvironmentSuffix}'
-    MessageRetentionPeriod: !FindInMap [EnvironmentConfig, !Ref Environment, SQSRetention]
+    MessageRetentionPeriod:
+      !FindInMap [EnvironmentConfig, !Ref Environment, SQSRetention]
 ```
 
 **Root Cause**: Model didn't fully internalize the PROMPT requirement "Set message retention: 1 day (dev), 4 days (staging), 14 days (prod)". It recognized the need for environment parity in compute resources but failed to apply the same principle to SQS configuration.
@@ -95,8 +93,6 @@ PaymentQueue:
 
 ### 3. Insecure Database Credentials
 
-**Impact Level**: Critical
-
 **MODEL_RESPONSE Issue**: The model used a weak, easily guessable password and a reserved database username:
 
 ```yaml
@@ -104,8 +100,8 @@ AuroraCluster:
   Type: AWS::RDS::DBCluster
   Properties:
     DatabaseName: payments
-    MasterUsername: admin        # Reserved word in PostgreSQL
-    MasterUserPassword: ChangeMe123456  # Weak, obvious password
+    MasterUsername: admin # Reserved word in PostgreSQL
+    MasterUserPassword: ChangeMe123456 # Weak, obvious password
 ```
 
 **IDEAL_RESPONSE Fix**: Changed to a non-reserved username and stronger password (should use AWS Secrets Manager in production):
@@ -115,8 +111,8 @@ AuroraCluster:
   Type: AWS::RDS::DBCluster
   Properties:
     DatabaseName: payments
-    MasterUsername: dbadmin      # Not a reserved word
-    MasterUserPassword: TempPassword123!  # Stronger password
+    MasterUsername: dbadmin # Not a reserved word
+    MasterUserPassword: TempPassword123! # Stronger password
 ```
 
 **Root Cause**: Model generated a common default username without checking RDS PostgreSQL reserved words. Additionally, it created an insecure password pattern ("ChangeMe" prefix signals placeholder password).
@@ -150,7 +146,7 @@ AuroraCluster:
   Type: AWS::RDS::DBCluster
   Properties:
     Engine: aurora-postgresql
-    StorageEncrypted: true  # Added encryption
+    StorageEncrypted: true # Added encryption
 ```
 
 **Root Cause**: Model didn't infer the security requirement from the payment processing context. PROMPT states this is for "payment processing system" and "transaction storage" which should have triggered encryption by default.
@@ -330,17 +326,17 @@ Outputs:
 ```yaml
 Outputs:
   VPCId: ...
-  PublicSubnet1Id: ...  # Added all 6 subnets
+  PublicSubnet1Id: ... # Added all 6 subnets
   LoadBalancerDNS: ...
-  LoadBalancerArn: ...  # Added ARNs
+  LoadBalancerArn: ... # Added ARNs
   DatabaseEndpoint: ...
-  DatabasePort: ...     # Added port
+  DatabasePort: ... # Added port
   QueueURL: ...
-  QueueArn: ...        # Added ARN
-  DLQUrl: ...          # Added DLQ
+  QueueArn: ... # Added ARN
+  DLQUrl: ... # Added DLQ
   ECSClusterName: ...
-  ECSClusterArn: ...   # Added ARN
-  ECSServiceName: ...  # Added service
+  ECSClusterArn: ... # Added ARN
+  ECSServiceName: ... # Added service
   NATGatewayCount: ... # Added NAT info
 ```
 
@@ -363,7 +359,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     MinLength: 3
-    MaxLength: 10  # Too short for many naming patterns
+    MaxLength: 10 # Too short for many naming patterns
 ```
 
 **IDEAL_RESPONSE Fix**: Increased to 30 characters to support longer environment identifiers:
@@ -373,7 +369,7 @@ Parameters:
   EnvironmentSuffix:
     Type: String
     MinLength: 3
-    MaxLength: 30  # Supports longer suffixes like "dev-test-101000872"
+    MaxLength: 30 # Supports longer suffixes like "dev-test-101000872"
 ```
 
 **Root Cause**: Model chose an arbitrary low value without considering real-world naming conventions. CI/CD systems often generate longer suffixes including PR numbers, branch names, or build IDs.
@@ -384,7 +380,7 @@ Parameters:
 
 ## Summary
 
-- **Total failures**: 3 Critical, 4 High, 3 Medium, 1 Low
+- **Total failures**: 4 High, 3 Medium, 1 Low
 - **Primary knowledge gaps**:
   1. Environment-specific cost optimization (NAT Gateway conditionals)
   2. Security best practices for financial systems (encryption, public access blocking, secure credentials)
@@ -397,6 +393,7 @@ Parameters:
   - AWS service-specific constraints (reserved words, encryption defaults)
 
 **Training Recommendation**: This task provides excellent training signal for teaching models to:
+
 1. Optimize costs through environment-specific conditionals
 2. Apply security controls comprehensively for sensitive workloads
 3. Implement ALL specified requirements, not just the prominent ones
