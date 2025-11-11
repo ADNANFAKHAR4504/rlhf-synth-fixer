@@ -1,4 +1,5 @@
 {
+  "author": "raaj1021",
   "platform": "pulumi",
   "language": "ts",
   "complexity": "hard",
@@ -6,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-10T16:07:22+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "po_id": "9iqix",
   "aws_services": [
     "API Gateway",
