@@ -483,9 +483,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `webhook-processor-${environmentSuffix}`,
         runtime: aws.lambda.Runtime.Go1dx,
-        handler: 'main',
+        handler: 'bootstrap',
         role: webhookRole.arn,
-        code: new pulumi.asset.FileArchive('./lib/lambda/webhook-processor'),
+        code: new pulumi.asset.AssetArchive({
+          bootstrap: new pulumi.asset.FileAsset(
+            './lib/lambda/webhook-processor/bootstrap'
+          ),
+        }),
         environment: {
           variables: {
             SNS_TOPIC_ARN: paymentTopic.arn,
@@ -508,9 +512,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `transaction-recorder-${environmentSuffix}`,
         runtime: aws.lambda.Runtime.Go1dx,
-        handler: 'main',
+        handler: 'bootstrap',
         role: transactionRole.arn,
-        code: new pulumi.asset.FileArchive('./lib/lambda/transaction-recorder'),
+        code: new pulumi.asset.AssetArchive({
+          bootstrap: new pulumi.asset.FileAsset(
+            './lib/lambda/transaction-recorder/bootstrap'
+          ),
+        }),
         environment: {
           variables: {
             DYNAMODB_TABLE: transactionsTable.name,
@@ -533,9 +541,13 @@ export class TapStack extends pulumi.ComponentResource {
       {
         name: `fraud-detector-${environmentSuffix}`,
         runtime: aws.lambda.Runtime.Go1dx,
-        handler: 'main',
+        handler: 'bootstrap',
         role: fraudRole.arn,
-        code: new pulumi.asset.FileArchive('./lib/lambda/fraud-detector'),
+        code: new pulumi.asset.AssetArchive({
+          bootstrap: new pulumi.asset.FileAsset(
+            './lib/lambda/fraud-detector/bootstrap'
+          ),
+        }),
         environment: {
           variables: {
             ENVIRONMENT: environmentSuffix,
