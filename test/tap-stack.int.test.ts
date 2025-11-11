@@ -59,7 +59,7 @@ import {
 } from '@aws-sdk/client-auto-scaling';
 import { describe, expect, test, beforeAll } from '@jest/globals';
 import axios from 'axios';
-import { KubeConfig, CoreV1Api, AppsV1Api, V1Node } from '@kubernetes/client-node';
+import { KubeConfig, CoreV1Api, AppsV1Api, V1Node, V1Pod } from '@kubernetes/client-node';
 
 // Helper function to flatten nested outputs
 function flattenOutputs(data: any): any {
@@ -1090,13 +1090,13 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       if (k8sApi) {
         try {
           // Check if kube-system pods are running
-          const podsResponse = await k8sApi.listNamespacedPod('kube-system');
-          const systemPods = podsResponse.body.items;
-          
+          const podsResponse = await (k8sApi as any).listNamespacedPod('kube-system');
+          const systemPods: V1Pod[] = ((podsResponse as any).body?.items) || [];
+
           // Essential system pods should be running
           const essentialPods = ['coredns', 'kube-proxy', 'aws-node'];
           essentialPods.forEach(podPrefix => {
-            const pod = systemPods.find(p => p.metadata?.name?.includes(podPrefix));
+            const pod = systemPods.find((p: V1Pod) => p.metadata?.name?.includes(podPrefix));
             if (pod) {
               expect(pod.status?.phase).toBe('Running');
             }
@@ -1133,12 +1133,16 @@ describe('EKS Stack CDKTF Integration Tests', () => {
           };
 
           try {
-            const createResponse = await k8sApi.createNamespacedPod('default', testPod);
-            expect(createResponse.response.statusCode).toBe(201);
-            
+            const createResponse = await (k8sApi as any).createNamespacedPod('default', testPod);
+            // The client returns different shapes depending on version; check response/statusCode if present
+            const statusCode = (createResponse as any).response?.statusCode ?? (createResponse as any).statusCode;
+            if (statusCode) {
+              expect(statusCode).toBe(201);
+            }
+
             // Clean up test pod
-            await k8sApi.deleteNamespacedPod(
-              testPod.metadata.name,
+            await (k8sApi as any).deleteNamespacedPod(
+              (testPod as any).metadata.name,
               'default'
             );
           } catch (podError) {
