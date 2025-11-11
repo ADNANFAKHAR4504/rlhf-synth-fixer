@@ -204,7 +204,7 @@ describe('WebApp Infrastructure Terraform Tests', () => {
 
     it('should create Target Group with health check', () => {
       expect(has(/resource\s+"aws_lb_target_group"\s+"main"\s*{/)).toBe(true);
-      expect(has(/name\s*=\s*"\$\{var\.project_name\}-tg"/)).toBe(true);
+      expect(has(/name\s*=\s*"\$\{var\.project_name\}-tg-new"/)).toBe(true);
       expect(has(/port\s*=\s*3000/)).toBe(true);
       expect(has(/protocol\s*=\s*"HTTP"/)).toBe(true);
       expect(has(/vpc_id\s*=\s*aws_vpc\.main\.id/)).toBe(true);
