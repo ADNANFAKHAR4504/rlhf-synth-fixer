@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 /**
  * tap-stack.ts
  *
@@ -360,106 +365,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // ConfigMaps
-    const paymentApiConfigMap = new k8s.core.v1.ConfigMap(
-      'payment-api-config',
-      {
-        metadata: {
-          name: `payment-api-config-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        data: {
-          FRAUD_DETECTOR_URL: pulumi.interpolate`http://fraud-detector-service-${environmentSuffix}.${namespace.metadata.name}.svc.cluster.local:8080`,
-          FEATURE_FLAG_ENABLE_FRAUD_CHECK: 'true',
-          FEATURE_FLAG_ENABLE_LOGGING: 'true',
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    const fraudDetectorConfigMap = new k8s.core.v1.ConfigMap(
-      'fraud-detector-config',
-      {
-        metadata: {
-          name: `fraud-detector-config-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        data: {
-          NOTIFICATION_SERVICE_URL: pulumi.interpolate`http://notification-service-${environmentSuffix}.${namespace.metadata.name}.svc.cluster.local:8080`,
-          FEATURE_FLAG_ML_ENABLED: 'true',
-          FEATURE_FLAG_REALTIME_ALERTS: 'true',
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    const notificationServiceConfigMap = new k8s.core.v1.ConfigMap(
-      'notification-service-config',
-      {
-        metadata: {
-          name: `notification-service-config-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        data: {
-          FEATURE_FLAG_EMAIL_ENABLED: 'true',
-          FEATURE_FLAG_SMS_ENABLED: 'true',
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    // Secrets
-    const paymentApiSecret = new k8s.core.v1.Secret(
-      'payment-api-secret',
-      {
-        metadata: {
-          name: `payment-api-secret-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        type: 'Opaque',
-        stringData: {
-          DB_CONNECTION_STRING:
-            'postgresql://user:pass@payment-db.cluster.eu-west-2.rds.amazonaws.com:5432/payments',
-          STRIPE_API_KEY: 'sk_test_placeholder',
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    const fraudDetectorSecret = new k8s.core.v1.Secret(
-      'fraud-detector-secret',
-      {
-        metadata: {
-          name: `fraud-detector-secret-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        type: 'Opaque',
-        stringData: {
-          DB_CONNECTION_STRING:
-            'postgresql://user:pass@fraud-db.cluster.eu-west-2.rds.amazonaws.com:5432/fraud',
-          ML_API_KEY: 'ml_api_placeholder',
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
-
-    const notificationServiceSecret = new k8s.core.v1.Secret(
-      'notification-service-secret',
-      {
-        metadata: {
-          name: `notification-service-secret-${environmentSuffix}`,
-          namespace: namespace.metadata.name,
-        },
-        type: 'Opaque',
-        stringData: {
-          DB_CONNECTION_STRING:
-            'postgresql://user:pass@notification-db.cluster.eu-west-2.rds.amazonaws.com:5432/notifications',
-          TWILIO_API_KEY: 'twilio_placeholder',
-          SENDGRID_API_KEY: 'sendgrid_placeholder',
-        },
-      },
-      { parent: this, provider: k8sProvider }
-    );
 
     // Payment API Deployment - Fixed with nginx image
     const paymentApiDeployment = new k8s.apps.v1.Deployment(

@@ -7,7 +7,10 @@
   "startedAt": "2025-11-10T21:00:53+05:30",
   "completedAt": "2025-11-10T21:35:00+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment", "Serverless Infrastructure (Functions as Code)"],
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "po_id": "myew9",
   "aws_services": [],
   "region": "us-east-1",
@@ -25,5 +28,7 @@
     "istio_version": "1.19",
     "kubernetes_version": "1.28"
   },
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "reviewer": "raghav-turing"
 }
