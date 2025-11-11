@@ -134,17 +134,20 @@ jobs:
           command: |
             cd infrastructure
             terraform init -backend=false
-            terraform validate
+            terraform validate -json > ../reports/terraform-validate.json
+            terraform validate 2>&1 | tee ../reports/terraform-validate.log
       - run:
           name: TFLint
           command: |
             curl -L "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip" > tflint.zip
             unzip tflint.zip
-            ./tflint --recursive
+            ./tflint --recursive --format=json > ../reports/tflint-report.json
+            ./tflint --recursive 2>&1 | tee ../reports/tflint.log
       - run:
           name: TFSec security scan
           command: |
-            docker run --rm -v "$(pwd)":/src aquasec/tfsec:latest /src
+            docker run --rm -v "$(pwd)":/src aquasec/tfsec:latest /src --format=json > reports/tfsec-report.json
+            docker run --rm -v "$(pwd)":/src aquasec/tfsec:latest /src 2>&1 | tee reports/tfsec.log
       - run:
           name: Checkov scan
           command: |
@@ -662,10 +665,13 @@ jobs:
 workflows:
   version: 2
   
-  # Main build and deploy workflow
+  # Main CI/CD pipeline workflow
+  # Implements a comprehensive build-test-deploy-verify pipeline
+  # with progressive delivery: dev -> staging (blue-green) -> production (rolling/canary)
   build-test-deploy:
     jobs:
-      # Validation phase (parallel)
+      # Phase 1: Parallel validation (code quality, security, infrastructure)
+      # These jobs run in parallel to catch issues early
       - code-validation:
           context: aws-dev
       - infrastructure-validation:
@@ -673,7 +679,8 @@ workflows:
       - dependency-scan:
           context: aws-dev
       
-      # Build phase (parallel for each service)
+      # Phase 2: Parallel service builds (8 microservices)
+      # Each service builds independently to maximize parallelism
       - build-services:
           name: build-api-gateway
           service-name: api-gateway
@@ -731,7 +738,8 @@ workflows:
             - code-validation
             - dependency-scan
       
-      # Testing phase (parallel)
+      # Phase 3: Comprehensive testing (unit, integration, e2e, security)
+      # Tests run in parallel where possible, with proper dependencies
       - unit-tests:
           context: aws-dev
           requires:
@@ -756,7 +764,7 @@ workflows:
           requires:
             - code-validation
       
-      # Infrastructure deployment
+      # Phase 4: Infrastructure deployment (dev environment)
       - terraform-deploy:
           name: deploy-infrastructure-dev
           environment: dev
@@ -764,7 +772,7 @@ workflows:
           requires:
             - infrastructure-validation
       
-      # Dev deployment
+      # Phase 5: Application deployment (dev)
       - deploy-dev:
           context: aws-dev
           requires:
@@ -774,7 +782,7 @@ workflows:
             - e2e-tests
             - security-scan
       
-      # Dev validation
+      # Phase 6: Dev environment validation and monitoring
       - validate-deployment:
           name: validate-dev
           environment: dev
@@ -800,14 +808,15 @@ workflows:
           requires:
             - deploy-dev
       
-      # Performance testing
+      # Phase 7: Performance testing (post-deployment)
       - performance-tests:
           context: aws-dev
           requires:
             - validate-dev
             - compliance-check-dev
       
-      # Staging infrastructure
+      # Phase 8: Staging environment promotion
+      # Only proceeds if dev validation passes
       - terraform-deploy:
           name: deploy-infrastructure-staging
           environment: staging
@@ -816,13 +825,12 @@ workflows:
             - validate-dev
             - performance-tests
       
-      # Staging deployment
       - deploy-staging-blue-green:
           context: aws-staging
           requires:
             - deploy-infrastructure-staging
       
-      # Staging validation
+      # Phase 9: Staging validation
       - validate-deployment:
           name: validate-staging
           environment: staging
@@ -848,7 +856,8 @@ workflows:
           requires:
             - deploy-staging-blue-green
       
-      # Production approval gate
+      # Phase 10: Production approval gate
+      # Manual approval required before production deployment
       - hold-production:
           type: approval
           requires:
@@ -856,7 +865,7 @@ workflows:
             - compliance-check-staging
             - smoke-test-staging
       
-      # Production infrastructure
+      # Phase 11: Production deployment
       - terraform-deploy:
           name: deploy-infrastructure-prod
           environment: production
@@ -864,7 +873,6 @@ workflows:
           requires:
             - hold-production
       
-      # Production deployment (rolling)
       - deploy-production:
           name: deploy-prod-rolling
           deployment-type: rolling
@@ -875,7 +883,7 @@ workflows:
             branches:
               only: main
       
-      # Production validation
+      # Phase 12: Production validation and monitoring
       - validate-deployment:
           name: validate-prod
           environment: production
@@ -901,7 +909,8 @@ workflows:
           requires:
             - deploy-prod-rolling
 
-  # Rollback workflow (manual trigger)
+  # Emergency rollback workflow
+  # Manually triggered for production incidents
   emergency-rollback:
     jobs:
       - hold-rollback:
