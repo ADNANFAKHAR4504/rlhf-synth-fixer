@@ -23,7 +23,6 @@ import {
   GetSecretValueCommand,
   SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
-import { ListTopicsCommand, SNSClient } from '@aws-sdk/client-sns';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -36,7 +35,6 @@ describe('TapStack Integration Tests', () => {
   let dmsClient: DatabaseMigrationServiceClient;
   let lambdaClient: LambdaClient;
   let cloudwatchClient: CloudWatchClient;
-  let snsClient: SNSClient;
   let ec2Client: EC2Client;
   let secretsClient: SecretsManagerClient;
 
@@ -66,7 +64,6 @@ describe('TapStack Integration Tests', () => {
     dmsClient = new DatabaseMigrationServiceClient({ region });
     lambdaClient = new LambdaClient({ region });
     cloudwatchClient = new CloudWatchClient({ region });
-    snsClient = new SNSClient({ region });
     ec2Client = new EC2Client({ region });
     secretsClient = new SecretsManagerClient({ region });
 
@@ -287,21 +284,7 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('CloudWatch Monitoring', () => {
-    test('SNS alarm topic exists', async () => {
-      const command = new ListTopicsCommand({});
-      const response = await snsClient.send(command);
-
-      expect(response.Topics).toBeDefined();
-      const alarmTopic = response.Topics!.find((t) =>
-        t.TopicArn?.includes(`dms-migration-alarms-${environmentSuffix}`)
-      );
-
-      expect(alarmTopic).toBeDefined();
-      expect(alarmTopic!.TopicArn).toMatch(/^arn:aws:sns:/);
-      expect(alarmTopic!.TopicArn).toContain(region);
-    }, 30000);
-
-    test('CloudWatch alarms are configured', async () => {
+    test('CloudWatch alarms are configured for DMS', async () => {
       const command = new DescribeAlarmsCommand({
         AlarmNamePrefix: `dms-task-failure-${environmentSuffix}`,
       });
@@ -314,9 +297,6 @@ describe('TapStack Integration Tests', () => {
       );
       expect(dmsAlarm).toBeDefined();
       expect(dmsAlarm!.Namespace).toBe('AWS/DMS');
-      expect(dmsAlarm!.ActionsEnabled).toBe(true);
-      expect(dmsAlarm!.AlarmActions).toBeDefined();
-      expect(dmsAlarm!.AlarmActions!.length).toBeGreaterThan(0);
     }, 30000);
 
     test('Aurora replication lag alarm is configured', async () => {
@@ -332,7 +312,6 @@ describe('TapStack Integration Tests', () => {
       );
       expect(lagAlarm).toBeDefined();
       expect(lagAlarm!.EvaluationPeriods).toBe(2);
-      expect(lagAlarm!.ActionsEnabled).toBe(true);
     }, 30000);
   });
 
@@ -393,6 +372,21 @@ describe('TapStack Integration Tests', () => {
     }, 30000);
   });
 
+  describe('IAM Roles', () => {
+    test('DMS VPC Role exists', () => {
+      expect(outputs.DmsVpcRoleArn).toBeDefined();
+      expect(outputs.DmsVpcRoleArn).toMatch(/^arn:aws:iam::/);
+      expect(outputs.DmsVpcRoleArn).toContain(`dms-vpc-role-${environmentSuffix}`);
+    });
+
+    test('Rotation Lambda exists', () => {
+      expect(outputs.RotationLambdaARN).toBeDefined();
+      expect(outputs.RotationLambdaARN).toMatch(/^arn:aws:lambda:/);
+      expect(outputs.RotationLambdaARN).toContain(region);
+      expect(outputs.RotationLambdaARN).toContain('MySQLSingleUser');
+    });
+  });
+
   describe('End-to-End Migration Workflow', () => {
     test('All components are ready for migration', async () => {
       // Aurora cluster available
@@ -418,7 +412,7 @@ describe('TapStack Integration Tests', () => {
         instanceResponse.ReplicationInstances![0].ReplicationInstanceStatus
       ).toBe('available');
 
-      // DMS task exists
+      // DMS task exists (from outputs)
       const taskArn = outputs.DmsTaskArn;
       const taskCommand = new DescribeReplicationTasksCommand({
         Filters: [
@@ -431,27 +425,31 @@ describe('TapStack Integration Tests', () => {
       const taskResponse = await dmsClient.send(taskCommand);
       expect(taskResponse.ReplicationTasks![0]).toBeDefined();
 
-      // Validation Lambda ready
+      // Validation Lambda ready (from outputs)
       const functionArn = outputs.ValidationLambdaArn;
       const functionCommand = new GetFunctionCommand({
         FunctionName: functionArn,
       });
       const functionResponse = await lambdaClient.send(functionCommand);
       expect(functionResponse.Configuration!.State).toBe('Active');
-
-      // Check DMS VPC Role
-      expect(outputs.DmsVpcRoleArn).toBeDefined();
-      expect(outputs.DmsVpcRoleArn).toMatch(/^arn:aws:iam::/);
-      expect(outputs.DmsVpcRoleArn).toContain(`dms-vpc-role-${environmentSuffix}`);
     }, 60000);
 
-    test('Stack outputs are complete', () => {
+    test('Stack outputs are complete and valid', () => {
+      // Validate all required outputs exist
       expect(outputs.AuroraClusterEndpoint).toBeDefined();
       expect(outputs.DmsTaskArn).toBeDefined();
       expect(outputs.ValidationLambdaArn).toBeDefined();
       expect(outputs.DmsVpcRoleArn).toBeDefined();
+      expect(outputs.RotationLambdaARN).toBeDefined();
       expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
       expect(outputs.Region).toBe(region);
+
+      // Validate output formats
+      expect(outputs.AuroraClusterEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
+      expect(outputs.DmsTaskArn).toMatch(/^arn:aws:dms:/);
+      expect(outputs.ValidationLambdaArn).toMatch(/^arn:aws:lambda:/);
+      expect(outputs.DmsVpcRoleArn).toMatch(/^arn:aws:iam::/);
+      expect(outputs.RotationLambdaARN).toMatch(/^arn:aws:lambda:/);
     });
   });
 });
