@@ -96,7 +96,7 @@ describe('TapStack', () => {
       expect(endpointStr).toContain('s3');
     });
 
-    test('should create DynamoDB interface endpoint', () => {
+    test('should create DynamoDB gateway endpoint', () => {
       const endpoints = template.findResources('AWS::EC2::VPCEndpoint');
       const endpointStr = JSON.stringify(endpoints);
       expect(endpointStr).toContain('dynamodb');
@@ -296,7 +296,7 @@ describe('TapStack', () => {
         ReleaseLabel: 'emr-6.9.0',
         Type: 'SPARK',
         MaximumCapacity: {
-          Cpu: '100 vCPUs',
+          Cpu: '100 vCPU',
           Memory: '300 GB',
         },
         AutoStartConfiguration: {

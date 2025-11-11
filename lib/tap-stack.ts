@@ -48,9 +48,8 @@ export class TapStack extends cdk.Stack {
       service: ec2.GatewayVpcEndpointAwsService.S3,
     });
 
-    vpc.addInterfaceEndpoint('DynamoDBEndpoint', {
-      service: ec2.InterfaceVpcEndpointAwsService.DYNAMODB,
-      privateDnsEnabled: true,
+    vpc.addGatewayEndpoint('DynamoDBEndpoint', {
+      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
     });
 
     // 🔹 Security Group for EMR
@@ -196,7 +195,7 @@ export class TapStack extends cdk.Stack {
       releaseLabel: 'emr-6.9.0',
       type: 'SPARK',
       maximumCapacity: {
-        cpu: '100 vCPUs',
+        cpu: '100 vCPU',
         memory: '300 GB',
       },
       networkConfiguration: {
@@ -398,6 +397,7 @@ exports.handler = async (event) => {
         ApplicationId: emrApp.attrApplicationId,
         ExecutionRoleArn: emrRole.roleArn,
         Name: stepfunctions.JsonPath.stringAt('$.jobId'),
+        ClientToken: stepfunctions.JsonPath.stringAt('$.jobId'),
         JobDriver: {
           SparkSubmit: {
             EntryPoint: 's3://fraud-analysis-scripts/fraud-detection.py',

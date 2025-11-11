@@ -10,12 +10,20 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "training_quality": 8,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "S3",
+    "DynamoDB",
+    "EMR Serverless",
     "Lambda",
+    "Step Functions",
     "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "SNS",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudFormation"
   ]
 }
