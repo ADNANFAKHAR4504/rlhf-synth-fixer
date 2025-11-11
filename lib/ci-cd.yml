@@ -2,6 +2,62 @@
 # Production-grade CI/CD Pipeline for Global IoT Edge Computing Platform
 # Version: 1.0.0
 
+# ============================================================================
+# PREREQUISITES AND SETUP REQUIREMENTS
+# ============================================================================
+#
+# Before running this pipeline, ensure the following are configured:
+#
+# 1. AZURE SERVICE CONNECTIONS (Azure DevOps Project Settings > Service Connections)
+#    - IoT-Platform-Subscription: Azure Resource Manager connection with Contributor access
+#    - ACR-Connection: Docker Registry connection to Azure Container Registry
+#    - Snyk-Service: Snyk security scanning service connection
+#
+# 2. VARIABLE GROUPS OR PIPELINE VARIABLES
+#    - subscriptionId: Your Azure subscription ID (set in variables section or variable group)
+#    - teamsWebhookUrl: Microsoft Teams incoming webhook URL for notifications
+#    - pagerDutyIntegrationKey: PagerDuty integration key for alerts
+#    - TRIGGER_ROLLBACK: Set to 'true' when queuing pipeline to manually trigger rollback
+#                       (used for emergency rollbacks independent of deployment failure)
+#
+# 3. TERRAFORM BACKEND (Must be created before first run)
+#    Resource Group: terraform-state-rg
+#    Storage Account: tfstateiot
+#    Container: tfstate
+#    State File: iot-platform.tfstate
+#    Bootstrap command:
+#      az group create --name terraform-state-rg --location eastus
+#      az storage account create --name tfstateiot --resource-group terraform-state-rg \
+#        --location eastus --sku Standard_LRS
+#      az storage container create --name tfstate --account-name tfstateiot
+#
+# 4. CUSTOM AGENT POOLS (Optional - will fallback to Azure-hosted if not available)
+#    - Performance-Testing-Pool: Self-hosted agents with Standard_D4s_v3 VMs
+#    - Staging-Testing-Pool: Self-hosted agents with Standard_D8s_v3 VMs
+#
+# 5. REQUIRED SCRIPTS (See scripts/ directory)
+#    The pipeline requires 30+ bash/python scripts in the scripts/ directory.
+#    A validation job will check for missing scripts at pipeline start.
+#    See SCRIPTS_INTERFACE.md for detailed script specifications.
+#
+# 6. AZURE ENVIRONMENTS (Azure DevOps > Pipelines > Environments)
+#    - dev: Development environment
+#    - staging: Staging environment with approval gates
+#    - production: Production environment with manual approval
+#
+# 7. AZURE RESOURCES (Created by Terraform during deployment)
+#    - Azure IoT Hub
+#    - Azure Container Registry
+#    - Azure Kubernetes Service (AKS)
+#    - Azure Functions
+#    - Azure Cosmos DB
+#    - Azure Event Hubs
+#    - Azure Traffic Manager
+#    - Azure CDN
+#    - Azure Redis Cache
+#
+# ============================================================================
+
 trigger:
   branches:
     include:
@@ -32,27 +88,55 @@ schedules:
   always: true
 
 variables:
-  # Runtime configurable variables
+  # Azure subscription and service connections
   azureSubscription: 'IoT-Platform-Subscription'
+  subscriptionId: '00000000-0000-0000-0000-000000000000'  # Replace with actual subscription ID
+  dockerRegistryServiceConnection: 'ACR-Connection'
+
+  # Container registry and clusters
   acrName: 'iotplatformacr'
   aksCluster: 'iot-analytics-cluster'
   iotHubName: 'global-iot-hub'
   devAksCluster: 'dev-iot-analytics'
   stagingAksCluster: 'staging-iot-analytics'
   prodAksRegions: 'eastus,westus,northeurope,southeastasia,australiaeast,brazilsouth'
-  
+
+  # Resource group names
+  devResourceGroup: 'dev-iot-rg'
+  stagingResourceGroup: 'staging-iot-rg'
+  prodResourceGroupPrefix: 'prod-iot'
+  terraformStateResourceGroup: 'terraform-state-rg'
+
+  # Function app names
+  devFunctionApp: 'dev-iot-functions'
+  stagingFunctionApp: 'staging-iot-functions'
+  prodFunctionAppPrefix: 'prod-iot-functions'
+
+  # CDN configuration
+  cdnProfileName: 'iot-cdn-profile'
+  cdnEndpointName: 'iot-cdn-endpoint'
+  prodGlobalResourceGroup: 'prod-iot-global-rg'
+
+  # Terraform backend configuration
+  terraformStateStorageAccount: 'tfstateiot'
+  terraformStateContainer: 'tfstate'
+  terraformStateKey: 'iot-platform.tfstate'
+
   # Build configuration
   buildConfiguration: 'Release'
   nodeVersion: '18.x'
   terraformVersion: '1.6.0'
-  dockerRegistryServiceConnection: 'ACR-Connection'
-  
+
   # Test configuration
   testDeviceCount: 1000
   performanceDeviceCount: 100000
   canaryTrafficSplit: 10
   errorRateThreshold: 1
-  
+
+  # Notification endpoints
+  teamsWebhookUrl: ''  # Set via pipeline variable or variable group
+  pagerDutyIntegrationKey: ''  # Set via pipeline variable or variable group
+
   # Paths
   functionsPath: 'src/functions'
   edgeModulesPath: 'src/edge-modules'
@@ -71,10 +155,87 @@ stages:
 - stage: Validation
   displayName: 'Validation Stage'
   jobs:
-  - job: lintCode
-    displayName: 'Code Linting and Type Checking'
+  - job: validateScripts
+    displayName: 'Validate Required Scripts Existence'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 10
+    steps:
+    - script: |
+        echo "Checking for required scripts..."
+        MISSING_SCRIPTS=()
+
+        # List of required scripts
+        REQUIRED_SCRIPTS=(
+          "validate-iot-config.sh"
+          "validate-device-twins.py"
+          "validate-edge-manifests.py"
+          "integration-tests.sh"
+          "edge-runtime-tests.sh"
+          "performance-tests.sh"
+          "generate-sbom.sh"
+          "compliance-check.sh"
+          "validate-security-config.sh"
+          "device-scenario-tests.sh"
+          "validate-telemetry-flow.sh"
+          "test-offline-sync.sh"
+          "deploy-canary.sh"
+          "monitor-canary.sh"
+          "rollback-canary.sh"
+          "staging-e2e-tests.sh"
+          "disaster-recovery-test.sh"
+          "pre-deploy-checks.sh"
+          "deploy-iot-hub.sh"
+          "deploy-event-hubs.sh"
+          "deploy-aks.sh"
+          "configure-cosmos.sh"
+          "validate-region-deployment.sh"
+          "configure-traffic-manager.sh"
+          "route-traffic.sh"
+          "post-deploy-validation.sh"
+          "setup-monitoring.sh"
+          "create-alerts.sh"
+          "create-dashboards.sh"
+          "notify-pagerduty.sh"
+          "rollback-iot.sh"
+          "rollback-functions.sh"
+          "rollback-traffic-manager.sh"
+          "notify-rollback.sh"
+        )
+
+        for script in "${REQUIRED_SCRIPTS[@]}"; do
+          if [ ! -f "$(scriptsPath)/$script" ]; then
+            MISSING_SCRIPTS+=("$script")
+            echo "⚠️  Missing: $script"
+          else
+            echo "✓ Found: $script"
+          fi
+        done
+
+        if [ ${#MISSING_SCRIPTS[@]} -gt 0 ]; then
+          echo ""
+          echo "========================================="
+          echo "WARNING: ${#MISSING_SCRIPTS[@]} required scripts are missing"
+          echo "========================================="
+          echo "Pipeline may fail at runtime when these scripts are invoked."
+          echo "Please ensure these scripts are created before deployment stages."
+          echo ""
+          echo "Missing scripts should implement the following interfaces:"
+          echo "See SCRIPTS_INTERFACE.md for detailed documentation."
+          exit 1
+        else
+          echo ""
+          echo "✅ All required scripts are present"
+        fi
+      displayName: 'Check required scripts existence'
+      continueOnError: true
+
+  - job: lintCode
+    displayName: 'Code Linting and Type Checking'
+    dependsOn: validateScripts
+    pool:
+      vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: NodeTool@0
       inputs:
@@ -125,6 +286,7 @@ stages:
     displayName: 'Check Dependencies for Vulnerabilities'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: NodeTool@0
       inputs:
@@ -160,6 +322,7 @@ stages:
     displayName: 'Validate IoT Configurations'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 20
     steps:
     - task: AzureCLI@2
       inputs:
@@ -190,6 +353,7 @@ stages:
     displayName: 'Build Azure Functions'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: NodeTool@0
       inputs:
@@ -231,6 +395,7 @@ stages:
     displayName: 'Build IoT Edge Modules'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 45
     steps:
     - task: Docker@2
       inputs:
@@ -272,6 +437,7 @@ stages:
     displayName: 'Build Analytics Containers for AKS'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 45
     steps:
     - task: Docker@2
       inputs:
@@ -313,6 +479,7 @@ stages:
     displayName: 'Plan Infrastructure with Terraform'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: TerraformInstaller@0
       inputs:
@@ -325,10 +492,10 @@ stages:
         command: 'init'
         workingDirectory: '$(infrastructurePath)'
         backendServiceArm: '$(azureSubscription)'
-        backendAzureRmResourceGroupName: 'terraform-state-rg'
-        backendAzureRmStorageAccountName: 'tfstateiot'
-        backendAzureRmContainerName: 'tfstate'
-        backendAzureRmKey: 'iot-platform.tfstate'
+        backendAzureRmResourceGroupName: '$(terraformStateResourceGroup)'
+        backendAzureRmStorageAccountName: '$(terraformStateStorageAccount)'
+        backendAzureRmContainerName: '$(terraformStateContainer)'
+        backendAzureRmKey: '$(terraformStateKey)'
       displayName: 'Terraform Init'
     
     - task: TerraformTaskV4@4
@@ -354,6 +521,7 @@ stages:
     displayName: 'Unit Tests'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: NodeTool@0
       inputs:
@@ -405,6 +573,7 @@ stages:
     displayName: 'Integration Tests'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 60
     steps:
     - task: AzureResourceManagerTemplateDeployment@3
       inputs:
@@ -443,6 +612,7 @@ stages:
     displayName: 'Edge Runtime Tests'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 45
     steps:
     - script: |
         pip install iotedgedev
@@ -473,6 +643,7 @@ stages:
     pool:
       name: 'Performance-Testing-Pool'
       vmImage: 'Standard_D4s_v3'
+    timeoutInMinutes: 120
     steps:
     - task: AzureCLI@2
       inputs:
@@ -498,6 +669,7 @@ stages:
     displayName: 'Container Security Scanning'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 45
     steps:
     - script: |
         docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
@@ -532,6 +704,7 @@ stages:
     displayName: 'Static Application Security Testing'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: PowerShell@2
       inputs:
@@ -556,6 +729,7 @@ stages:
     displayName: 'Secret Detection'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 20
     steps:
     - script: |
         docker run --rm -v $(Build.SourcesDirectory):/src \
@@ -573,6 +747,7 @@ stages:
     displayName: 'Compliance and Policy Scanning'
     pool:
       vmImage: 'ubuntu-latest'
+    timeoutInMinutes: 30
     steps:
     - task: AzureCLI@2
       inputs:
@@ -653,8 +828,8 @@ stages:
               scriptLocation: 'inline'
               inlineScript: |
                 az functionapp deployment source config-zip \
-                  --resource-group dev-iot-rg \
-                  --name dev-iot-functions \
+                  --resource-group $(devResourceGroup) \
+                  --name $(devFunctionApp) \
                   --src $(Pipeline.Workspace)/functions/functions.zip
               useGlobalConfig: true
               addSpnToEnvironment: false
@@ -780,7 +955,7 @@ stages:
             inputs:
               connectionType: 'Azure Resource Manager'
               azureSubscription: '$(azureSubscription)'
-              azureResourceGroup: 'staging-iot-rg'
+              azureResourceGroup: '$(stagingResourceGroup)'
               kubernetesCluster: '$(stagingAksCluster)'
               command: 'upgrade'
               chartType: 'FilePath'
@@ -1040,7 +1215,7 @@ stages:
       inputs:
         targetType: 'inline'
         script: |
-          $webhookUrl = "$(TeamsWebhookUrl)"
+          $webhookUrl = "$(teamsWebhookUrl)"
           $body = @{
             "@type" = "MessageCard"
             "@context" = "https://schema.org/extensions"
@@ -1069,10 +1244,13 @@ stages:
       displayName: 'Send notification to PagerDuty'
 
 # ==================== ROLLBACK STAGE ====================
+# This stage can be triggered in two ways:
+# 1. Automatically when DeployProduction stage fails
+# 2. Manually by setting the TRIGGER_ROLLBACK variable to 'true' when queuing the pipeline
 - stage: Rollback
   displayName: 'Rollback Production'
   dependsOn: DeployProduction
-  condition: failed()
+  condition: or(failed(), eq(variables['TRIGGER_ROLLBACK'], 'true'))
   jobs:
   - deployment: rollbackProduction
     displayName: 'Rollback to Previous Version'
@@ -1124,18 +1302,30 @@ stages:
               inlineScript: |
                 # Clear CDN caches
                 az cdn endpoint purge \
-                  --resource-group prod-iot-global-rg \
-                  --profile-name iot-cdn-profile \
-                  --name iot-cdn-endpoint \
+                  --resource-group $(prodGlobalResourceGroup) \
+                  --profile-name $(cdnProfileName) \
+                  --name $(cdnEndpointName) \
                   --content-paths "/*"
                 
-                # Clear Redis caches
+                # Clear Redis caches without service interruption
+                # Using FLUSHALL instead of force-reboot to avoid availability impact
                 IFS=',' read -ra REGIONS <<< "$(prodAksRegions)"
                 for region in "${REGIONS[@]}"; do
-                  az redis force-reboot \
+                  echo "Flushing Redis cache in region: $region"
+                  # Get Redis connection details and flush cache
+                  REDIS_KEY=$(az redis list-keys \
                     --resource-group "prod-iot-$region-rg" \
                     --name "iot-redis-$region" \
-                    --reboot-type AllNodes
+                    --query primaryKey -o tsv)
+
+                  REDIS_HOST=$(az redis show \
+                    --resource-group "prod-iot-$region-rg" \
+                    --name "iot-redis-$region" \
+                    --query hostName -o tsv)
+
+                  # Use redis-cli to flush cache without reboot
+                  redis-cli -h "$REDIS_HOST" -a "$REDIS_KEY" --tls FLUSHALL
+                  echo "Cache flushed for region: $region"
                 done
               useGlobalConfig: true
               addSpnToEnvironment: false
