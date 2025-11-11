@@ -28,8 +28,8 @@ interface TapStackProps {
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'eu-central-1'.
-const AWS_REGION_OVERRIDE = 'eu-central-1';
+// you can set it here. Otherwise, it will default to 'ap-southeast-1'.
+const AWS_REGION_OVERRIDE = 'ap-southeast-1';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -38,8 +38,8 @@ export class TapStack extends TerraformStack {
     const environmentSuffix = props?.environmentSuffix || 'dev';
     const awsRegion = AWS_REGION_OVERRIDE
       ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'eu-central-1';
-    const stateBucketRegion = props?.stateBucketRegion || 'eu-central-1';
+      : props?.awsRegion || 'ap-southeast-1';
+    const stateBucketRegion = props?.stateBucketRegion || 'ap-southeast-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 
     const defaultTags = props?.defaultTags || [
@@ -70,7 +70,6 @@ export class TapStack extends TerraformStack {
     });
 
     // Get current AWS account ID
-    const currentAccount = new DataAwsCallerIdentity(this, 'current', {});
 
     // Create S3 bucket for Config delivery
     const configBucket = new S3Bucket(this, 'config-bucket', {
