@@ -17,7 +17,7 @@ env = cdk.Environment(
 
 TapStack(
     app,
-    f"TapStack-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
     env=env,
     description=f"Flask API ECS Fargate infrastructure with ALB and Aurora PostgreSQL ({environment_suffix})",
