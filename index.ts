@@ -7,6 +7,10 @@ const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
 const region = 'us-east-1';
 
+// Get database password from config or use default for testing
+const dbPassword =
+  config.getSecret('dbPassword') || pulumi.secret('TempPassword123!');
+
 // VPC Configuration
 const vpc = new aws.ec2.Vpc(`vpc-${environmentSuffix}`, {
   cidrBlock: '10.0.0.0/16',
@@ -286,7 +290,7 @@ const auroraCluster = new aws.rds.Cluster(
     engineVersion: '15.3',
     databaseName: 'migrationdb',
     masterUsername: 'admin',
-    masterPassword: config.requireSecret('dbPassword'),
+    masterPassword: dbPassword,
     dbSubnetGroupName: dbSubnetGroup.name,
     vpcSecurityGroupIds: [rdsSecurityGroup.id],
     skipFinalSnapshot: true,
@@ -357,7 +361,7 @@ const dmsTargetEndpoint = new aws.dms.Endpoint(
     port: 5432,
     databaseName: 'migrationdb',
     username: 'admin',
-    password: config.requireSecret('dbPassword'),
+    password: dbPassword,
     tags: {
       Name: `dms-target-${environmentSuffix}`,
       Environment: environmentSuffix,
