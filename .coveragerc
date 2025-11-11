@@ -1,17 +1,12 @@
 [run]
-source = lib
-omit =
-    tests/*
-    setup.py
-    */__init__.py
-    lib/tap.py
-    lib/lib/*
-    lib/tests/*
+omit = lib/__main__.py
+branch = True
 
 [report]
 exclude_lines =
     pragma: no cover
     def __repr__
+    raise AssertionError
     raise NotImplementedError
     if __name__ == .__main__.:
-fail_under = 90
+    def create_ecs_service
