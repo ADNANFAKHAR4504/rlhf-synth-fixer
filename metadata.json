@@ -1,0 +1,28 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6315",
+  "team": "5",
+  "startedAt": "2025-11-11T16:29:31.319Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeCommit",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECS",
+    "ALB",
+    "CloudFormation",
+    "S3",
+    "KMS",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "IAM"
+  ]
+}
