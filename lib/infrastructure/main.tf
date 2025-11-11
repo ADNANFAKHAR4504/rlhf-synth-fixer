@@ -6,8 +6,12 @@ terraform {
     }
   }
 
-  backend "local" {
-    path = "terraform.tfstate"
+  backend "s3" {
+    bucket         = "iac-test-automations-terraform-state-${data.aws_caller_identity.current.account_id}"
+    key            = "${var.environment}/terraform.tfstate"
+    region         = var.region
+    encrypt        = true
+    dynamodb_table = "iac-test-automations-terraform-locks-${data.aws_caller_identity.current.account_id}"
   }
 }
 
@@ -32,6 +36,16 @@ resource "aws_vpc" "main" {
   enable_dns_hostnames = true
   enable_dns_support   = true
 
+  tags = {
+    Name        = "${var.environment}-vpc"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -45,6 +59,14 @@ resource "aws_subnet" "private" {
   availability_zone = data.aws_availability_zones.available.names[count.index]
 
   tags = {
+    Name        = "${var.environment}-private-subnet-${count.index + 1}"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+    Type        = "private"
     "kubernetes.io/role/internal-elb" = "1"
   }
 
@@ -62,6 +84,14 @@ resource "aws_subnet" "public" {
   map_public_ip_on_launch = true
 
   tags = {
+    Name        = "${var.environment}-public-subnet-${count.index + 1}"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+    Type        = "public"
     "kubernetes.io/role/elb" = "1"
   }
 
@@ -72,6 +102,16 @@ resource "aws_subnet" "public" {
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.environment}-igw"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -84,6 +124,16 @@ resource "aws_nat_gateway" "main" {
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
 
+  tags = {
+    Name        = "${var.environment}-nat-gw-${count.index + 1}"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -93,6 +143,16 @@ resource "aws_eip" "nat" {
   count = 3
 
   domain = "vpc"
+
+  tags = {
+    Name        = "${var.environment}-nat-eip-${count.index + 1}"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -109,6 +169,17 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
 
+  tags = {
+    Name        = "${var.environment}-private-rt-${count.index + 1}"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+    Type        = "private"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -120,6 +191,17 @@ resource "aws_route_table" "public" {
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
+  }
+
+  tags = {
+    Name        = "${var.environment}-public-rt"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+    Type        = "public"
   }
 
   lifecycle {
@@ -141,6 +223,172 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
+# ==================== Network ACLs ====================
+resource "aws_network_acl" "private" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.environment}-private-nacl"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+    Type        = "private"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_network_acl" "public" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.environment}-public-nacl"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+    Type        = "public"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# Private NACL rules - restrictive inbound, allow all outbound
+resource "aws_network_acl_rule" "private_inbound_http" {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 100
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.vpc_cidr
+  from_port      = 80
+  to_port        = 80
+}
+
+resource "aws_network_acl_rule" "private_inbound_https" {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 110
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.vpc_cidr
+  from_port      = 443
+  to_port        = 443
+}
+
+resource "aws_network_acl_rule" "private_inbound_mysql" {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 120
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.vpc_cidr
+  from_port      = 3306
+  to_port        = 3306
+}
+
+resource "aws_network_acl_rule" "private_inbound_redis" {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 130
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = var.vpc_cidr
+  from_port      = 6379
+  to_port        = 6379
+}
+
+resource "aws_network_acl_rule" "private_inbound_ephemeral" {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 140
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 1024
+  to_port        = 65535
+}
+
+resource "aws_network_acl_rule" "private_outbound_all" {
+  network_acl_id = aws_network_acl.private.id
+  rule_number    = 100
+  egress         = true
+  protocol       = "-1"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 0
+  to_port        = 0
+}
+
+# Public NACL rules - allow HTTP/HTTPS inbound, allow all outbound
+resource "aws_network_acl_rule" "public_inbound_http" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 100
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 80
+  to_port        = 80
+}
+
+resource "aws_network_acl_rule" "public_inbound_https" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 110
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 443
+  to_port        = 443
+}
+
+resource "aws_network_acl_rule" "public_inbound_ephemeral" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 120
+  egress         = false
+  protocol       = "tcp"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 1024
+  to_port        = 65535
+}
+
+resource "aws_network_acl_rule" "public_outbound_all" {
+  network_acl_id = aws_network_acl.public.id
+  rule_number    = 100
+  egress         = true
+  protocol       = "-1"
+  rule_action    = "allow"
+  cidr_block     = "0.0.0.0/0"
+  from_port      = 0
+  to_port        = 0
+}
+
+# Associate NACLs with subnets
+resource "aws_network_acl_association" "private" {
+  count = 3
+
+  network_acl_id = aws_network_acl.private.id
+  subnet_id      = aws_subnet.private[count.index].id
+}
+
+resource "aws_network_acl_association" "public" {
+  count = 3
+
+  network_acl_id = aws_network_acl.public.id
+  subnet_id      = aws_subnet.public[count.index].id
+}
+
 # ==================== EKS ====================
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.cluster_name}-cluster-role"
@@ -157,6 +405,16 @@ resource "aws_iam_role" "eks_cluster" {
       }
     ]
   })
+
+  tags = {
+    Name        = "${var.cluster_name}-cluster-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "kubernetes"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -175,6 +433,16 @@ resource "aws_eks_cluster" "main" {
 
   vpc_config {
     subnet_ids = aws_subnet.private[*].id
+  }
+
+  tags = {
+    Name        = var.cluster_name
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "kubernetes"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
   }
 
   lifecycle {
@@ -197,6 +465,16 @@ resource "aws_iam_role" "eks_node" {
       }
     ]
   })
+
+  tags = {
+    Name        = "${var.cluster_name}-node-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "kubernetes"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -228,6 +506,16 @@ resource "aws_eks_node_group" "main" {
 
   instance_types = ["t3.medium"]
 
+  tags = {
+    Name        = "${var.cluster_name}-node-group"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "kubernetes"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -243,15 +531,165 @@ resource "aws_iam_openid_connect_provider" "eks" {
   thumbprint_list = [data.tls_certificate.eks.certificates[0].sha1_fingerprint]
   url             = aws_eks_cluster.main.identity[0].oidc[0].issuer
 
+  tags = {
+    Name        = "${var.cluster_name}-oidc-provider"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "kubernetes"
+    Component   = "authentication"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
 }
 
-# ==================== RDS Aurora ====================
+# OIDC provider for CircleCI
+resource "aws_iam_openid_connect_provider" "circleci" {
+  url             = "https://oidc.circleci.com"
+  client_id_list  = ["circleci"]
+  thumbprint_list = ["9de5069c5afe602b2ea0a04b66beb2c0cca9c5b0"]
+
+  tags = {
+    Name        = "circleci-oidc-provider"
+    Environment = "shared"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "authentication"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# ==================== S3 Backend ====================
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "iac-test-automations-terraform-state-${data.aws_caller_identity.current.account_id}"
+
+  tags = {
+    Name        = "iac-test-automations-terraform-state-${data.aws_caller_identity.current.account_id}"
+    Environment = "shared"
+    Project     = "iac-test-automations"
+    Application = "infrastructure"
+    Component   = "terraform-backend"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# DynamoDB for state locking
+resource "aws_dynamodb_table" "terraform_locks" {
+  name         = "iac-test-automations-terraform-locks-${data.aws_caller_identity.current.account_id}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  tags = {
+    Name        = "iac-test-automations-terraform-locks-${data.aws_caller_identity.current.account_id}"
+    Environment = "shared"
+    Project     = "iac-test-automations"
+    Application = "infrastructure"
+    Component   = "terraform-backend"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# ==================== KMS Keys ====================
+resource "aws_kms_key" "rds" {
+  description             = "KMS key for RDS encryption"
+  deletion_window_in_days = 7
+
+  tags = {
+    Name        = "${var.environment}-rds-kms-key"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "encryption"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_kms_key" "cache" {
+  description             = "KMS key for ElastiCache encryption"
+  deletion_window_in_days = 7
+
+  tags = {
+    Name        = "${var.environment}-cache-kms-key"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "encryption"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
 resource "aws_db_subnet_group" "main" {
   name       = "${var.db_cluster_identifier}-subnet-group"
   subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-subnet-group"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -263,11 +701,22 @@ resource "aws_rds_cluster" "main" {
   engine                          = "aurora-mysql"
   engine_version                  = "8.0.mysql_aurora.3.02.0"
   master_username                 = var.db_master_username
-  master_password                 = var.db_master_password
+  manage_master_user_password     = true
+  master_user_secret_kms_key_id   = aws_kms_key.rds.arn
   db_subnet_group_name            = aws_db_subnet_group.main.name
   vpc_security_group_ids          = [aws_security_group.rds.id]
   skip_final_snapshot             = true
   deletion_protection             = false
+
+  tags = {
+    Name        = var.db_cluster_identifier
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -281,6 +730,16 @@ resource "aws_rds_cluster_instance" "main" {
   instance_class     = "db.t3.small"
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-${count.index}"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -298,6 +757,16 @@ resource "aws_security_group" "rds" {
     cidr_blocks = [var.vpc_cidr]
   }
 
+  tags = {
+    Name        = "${var.db_cluster_identifier}-sg"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -307,6 +776,16 @@ resource "aws_security_group" "rds" {
 resource "aws_elasticache_subnet_group" "main" {
   name       = "${var.cache_cluster_id}-subnet-group"
   subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name        = "${var.cache_cluster_id}-subnet-group"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "cache"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -320,6 +799,16 @@ resource "aws_elasticache_cluster" "main" {
   num_cache_nodes      = 1
   subnet_group_name    = aws_elasticache_subnet_group.main.name
   security_group_ids   = [aws_security_group.cache.id]
+
+  tags = {
+    Name        = var.cache_cluster_id
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "cache"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -337,6 +826,16 @@ resource "aws_security_group" "cache" {
     cidr_blocks = [var.vpc_cidr]
   }
 
+  tags = {
+    Name        = "${var.cache_cluster_id}-sg"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "cache"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -345,6 +844,16 @@ resource "aws_security_group" "cache" {
 # ==================== Cognito ====================
 resource "aws_cognito_user_pool" "main" {
   name = var.cognito_user_pool_name
+
+  tags = {
+    Name        = var.cognito_user_pool_name
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "authentication"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -366,6 +875,16 @@ resource "aws_ecr_repository" "services" {
 
   name = each.value
 
+  tags = {
+    Name        = each.value
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "container-registry"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -381,20 +900,30 @@ resource "aws_iam_role" "circleci_dev" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.circleci.com"
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "https://github.com"
+            "oidc.circleci.com:aud" = "https://oidc.circleci.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/dev"
+            "oidc.circleci.com:sub" = "org/*/project/*/vcs/github/TuringGpt/iac-test-automations:ref:refs/heads/dev"
           }
         }
       }
     ]
   })
+
+  tags = {
+    Name        = "circleci-dev-role"
+    Environment = "dev"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "iam"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -431,6 +960,16 @@ resource "aws_iam_policy" "circleci_dev" {
     ]
   })
 
+  tags = {
+    Name        = "circleci-dev-policy"
+    Environment = "dev"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "iam"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -447,20 +986,30 @@ resource "aws_iam_role" "circleci_staging" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.circleci.com"
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "https://github.com"
+            "oidc.circleci.com:aud" = "https://oidc.circleci.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/staging"
+            "oidc.circleci.com:sub" = "org/*/project/*/vcs/github/TuringGpt/iac-test-automations:ref:refs/heads/staging"
           }
         }
       }
     ]
   })
+
+  tags = {
+    Name        = "circleci-staging-role"
+    Environment = "staging"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "iam"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -492,6 +1041,16 @@ resource "aws_iam_policy" "circleci_staging" {
     ]
   })
 
+  tags = {
+    Name        = "circleci-staging-policy"
+    Environment = "staging"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "iam"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
   lifecycle {
     prevent_destroy = false
   }
@@ -506,20 +1065,30 @@ resource "aws_iam_role" "circleci_prod" {
       {
         Effect = "Allow"
         Principal = {
-          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/token.actions.githubusercontent.com"
+          Federated = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:oidc-provider/oidc.circleci.com"
         }
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "token.actions.githubusercontent.com:aud" = "https://github.com"
+            "oidc.circleci.com:aud" = "https://oidc.circleci.com"
           }
           StringLike = {
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repo}:ref:refs/heads/main"
+            "oidc.circleci.com:sub" = "org/*/project/*/vcs/github/TuringGpt/iac-test-automations:ref:refs/heads/main"
           }
         }
       }
     ]
   })
+
+  tags = {
+    Name        = "circleci-prod-role"
+    Environment = "production"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "iam"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false
@@ -551,6 +1120,209 @@ resource "aws_iam_policy" "circleci_prod" {
       }
     ]
   })
+
+  tags = {
+    Name        = "circleci-prod-policy"
+    Environment = "production"
+    Project     = "iac-test-automations"
+    Application = "ci-cd"
+    Component   = "iam"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# ==================== CloudWatch Monitoring ====================
+# EKS Cluster CPU Utilization Alarm
+resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
+  alarm_name          = "${var.cluster_name}-cpu-utilization"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EKS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors EKS cluster CPU utilization"
+  alarm_actions       = []
+
+  dimensions = {
+    ClusterName = var.cluster_name
+  }
+
+  tags = {
+    Name        = "${var.cluster_name}-cpu-alarm"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# EKS Cluster Memory Utilization Alarm
+resource "aws_cloudwatch_metric_alarm" "eks_memory_utilization" {
+  alarm_name          = "${var.cluster_name}-memory-utilization"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "MemoryUtilization"
+  namespace           = "AWS/EKS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "85"
+  alarm_description   = "This metric monitors EKS cluster memory utilization"
+  alarm_actions       = []
+
+  dimensions = {
+    ClusterName = var.cluster_name
+  }
+
+  tags = {
+    Name        = "${var.cluster_name}-memory-alarm"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# RDS CPU Utilization Alarm
+resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
+  alarm_name          = "${var.db_cluster_identifier}-cpu-utilization"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors RDS CPU utilization"
+  alarm_actions       = []
+
+  dimensions = {
+    DBClusterIdentifier = var.db_cluster_identifier
+  }
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-cpu-alarm"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# RDS Free Storage Space Alarm
+resource "aws_cloudwatch_metric_alarm" "rds_free_storage_space" {
+  alarm_name          = "${var.db_cluster_identifier}-free-storage-space"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "1"
+  metric_name         = "FreeStorageSpace"
+  namespace           = "AWS/RDS"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "2000000000" # 2GB in bytes
+  alarm_description   = "This metric monitors RDS free storage space"
+  alarm_actions       = []
+
+  dimensions = {
+    DBClusterIdentifier = var.db_cluster_identifier
+  }
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-storage-alarm"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# ElastiCache CPU Utilization Alarm
+resource "aws_cloudwatch_metric_alarm" "cache_cpu_utilization" {
+  alarm_name          = "${var.cache_cluster_id}-cpu-utilization"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/ElastiCache"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "80"
+  alarm_description   = "This metric monitors ElastiCache CPU utilization"
+  alarm_actions       = []
+
+  dimensions = {
+    CacheClusterId = var.cache_cluster_id
+  }
+
+  tags = {
+    Name        = "${var.cache_cluster_id}-cpu-alarm"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# ElastiCache Freeable Memory Alarm
+resource "aws_cloudwatch_metric_alarm" "cache_freeable_memory" {
+  alarm_name          = "${var.cache_cluster_id}-freeable-memory"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "FreeableMemory"
+  namespace           = "AWS/ElastiCache"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "100000000" # 100MB in bytes
+  alarm_description   = "This metric monitors ElastiCache freeable memory"
+  alarm_actions       = []
+
+  dimensions = {
+    CacheClusterId = var.cache_cluster_id
+  }
+
+  tags = {
+    Name        = "${var.cache_cluster_id}-memory-alarm"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
 
   lifecycle {
     prevent_destroy = false

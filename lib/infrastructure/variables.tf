@@ -27,12 +27,7 @@ variable "db_cluster_identifier" {
 variable "db_master_username" {
   description = "RDS master username"
   type        = string
-}
-
-variable "db_master_password" {
-  description = "RDS master password"
-  type        = string
-  sensitive   = true
+  default     = "admin"
 }
 
 variable "cache_cluster_id" {
