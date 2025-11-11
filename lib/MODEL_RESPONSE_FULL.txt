@@ -1,0 +1,4 @@
+# MODEL_RESPONSE.md - Multi-Region Disaster Recovery Infrastructure
+
+Initial code generation with intentional issues to be corrected in IDEAL_RESPONSE.md
+

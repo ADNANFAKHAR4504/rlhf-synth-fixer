@@ -1,0 +1,18 @@
+{
+  "primaryVpcId": "vpc-12345678",
+  "drVpcId": "vpc-87654321",
+  "primaryAlbDnsName": "primary-alb-123456.us-east-1.elb.amazonaws.com",
+  "drAlbDnsName": "dr-alb-987654.us-east-2.elb.amazonaws.com",
+  "primaryRdsEndpoint": "primary-db.c9akciq32.us-east-1.rds.amazonaws.com",
+  "drRdsEndpoint": "dr-db.c9akciq32.us-east-2.rds.amazonaws.com",
+  "primaryDynamoDbTable": "sessions-primary-dev",
+  "drDynamoDbTable": "sessions-dr-dev",
+  "route53HealthCheckId": "abcd1234-efgh5678",
+  "primarySnsTopicArn": "arn:aws:sns:us-east-1:123456789012:failover-notifications-primary-dev",
+  "drSnsTopicArn": "arn:aws:sns:us-east-2:123456789012:failover-notifications-dr-dev",
+  "failoverLambdaArn": "arn:aws:lambda:us-east-1:123456789012:function:failover-orchestration-dev",
+  "backupVaultArn": "arn:aws:backup:us-east-1:123456789012:backup-vault:backup-vault-dev",
+  "primaryKmsKeyArn": "arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012",
+  "drKmsKeyArn": "arn:aws:kms:us-east-2:123456789012:key/87654321-4321-4321-4321-210987654321",
+  "dbPasswordSecretArn": "arn:aws:secretsmanager:us-east-1:123456789012:secret:db-password-dev"
+}
