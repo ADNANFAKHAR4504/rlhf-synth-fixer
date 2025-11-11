@@ -1,6 +1,8 @@
 import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 
 export interface IamStackProps {
   environmentSuffix: string;
@@ -24,6 +26,10 @@ export class IamStack extends Construct {
       snsTopicArn,
       kmsKeyArn,
     } = props;
+
+    // Get current AWS account ID and region
+    const currentAccount = new DataAwsCallerIdentity(this, 'current_account', {});
+    const currentRegion = new DataAwsRegion(this, 'current_region', {});
 
     // IAM role for transaction processor Lambda
     this.transactionProcessorRole = new IamRole(
@@ -92,7 +98,7 @@ export class IamStack extends Construct {
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ],
-            Resource: 'arn:aws:logs:*:*:*',
+            Resource: `arn:aws:logs:\${${currentRegion.name}}:\${${currentAccount.accountId}}:log-group:/aws/lambda/*`,
           },
           {
             Effect: 'Allow',
@@ -155,7 +161,7 @@ export class IamStack extends Construct {
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ],
-            Resource: 'arn:aws:logs:*:*:*',
+            Resource: `arn:aws:logs:\${${currentRegion.name}}:\${${currentAccount.accountId}}:log-group:/aws/lambda/*`,
           },
           {
             Effect: 'Allow',

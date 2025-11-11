@@ -7,6 +7,7 @@ import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integ
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
 import { ApiGatewayMethodSettings } from '@cdktf/provider-aws/lib/api-gateway-method-settings';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 
 export interface ApiGatewayStackProps {
   environmentSuffix: string;
@@ -30,6 +31,9 @@ export class ApiGatewayStack extends Construct {
       statusCheckerArn,
       statusCheckerInvokeArn,
     } = props;
+
+    // Get current AWS region
+    const currentRegion = new DataAwsRegion(this, 'current_region', {});
 
     // Create REST API
     this.api = new ApiGatewayRestApi(this, 'rest_api', {
@@ -200,6 +204,6 @@ export class ApiGatewayStack extends Construct {
       },
     });
 
-    this.apiUrl = `https://${this.api.id}.execute-api.us-east-1.amazonaws.com/${stage.stageName}`;
+    this.apiUrl = `https://${this.api.id}.execute-api.${currentRegion.name}.amazonaws.com/${stage.stageName}`;
   }
 }

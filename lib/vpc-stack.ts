@@ -91,12 +91,28 @@ export class VpcStack extends Construct {
       routeTableId: publicRouteTable.id,
     });
 
+    // Create route table for private subnets
+    const privateRouteTable = new RouteTable(this, 'private_route_table', {
+      vpcId: this.vpc.id,
+      tags: {
+        Name: `payment-private-rt-${environmentSuffix}`,
+      },
+    });
+
+    // Associate private subnets with private route table
+    this.privateSubnets.forEach((subnet, index) => {
+      new RouteTableAssociation(this, `private_rta_${index}`, {
+        subnetId: subnet.id,
+        routeTableId: privateRouteTable.id,
+      });
+    });
+
     // Create VPC Endpoints for AWS services (avoid NAT Gateway costs)
     new VpcEndpoint(this, 'dynamodb_endpoint', {
       vpcId: this.vpc.id,
       serviceName: 'com.amazonaws.us-east-1.dynamodb',
       vpcEndpointType: 'Gateway',
-      routeTableIds: [publicRouteTable.id],
+      routeTableIds: [publicRouteTable.id, privateRouteTable.id],
       tags: {
         Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
       },
@@ -106,7 +122,7 @@ export class VpcStack extends Construct {
       vpcId: this.vpc.id,
       serviceName: 'com.amazonaws.us-east-1.s3',
       vpcEndpointType: 'Gateway',
-      routeTableIds: [publicRouteTable.id],
+      routeTableIds: [publicRouteTable.id, privateRouteTable.id],
       tags: {
         Name: `payment-s3-endpoint-${environmentSuffix}`,
       },

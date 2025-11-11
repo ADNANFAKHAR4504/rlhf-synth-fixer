@@ -109,13 +109,13 @@ export class CloudwatchStack extends Construct {
       namespace: 'AWS/Lambda',
       period: 300,
       statistic: 'Sum',
-      threshold: 1, // 1% of invocations
+      threshold: 1,
       treatMissingData: 'notBreaching',
       dimensions: {
         FunctionName: transactionProcessorName,
       },
       alarmDescription:
-        'Alert when transaction processor error rate exceeds 1%',
+        'Alert when transaction processor has more than 1 error',
       alarmActions: [snsTopicArn],
       tags: {
         Name: `transaction-processor-alarm-${environmentSuffix}`,
@@ -136,7 +136,7 @@ export class CloudwatchStack extends Construct {
       dimensions: {
         FunctionName: statusCheckerName,
       },
-      alarmDescription: 'Alert when status checker error rate exceeds 1%',
+      alarmDescription: 'Alert when status checker has more than 1 error',
       alarmActions: [snsTopicArn],
       tags: {
         Name: `status-checker-alarm-${environmentSuffix}`,
