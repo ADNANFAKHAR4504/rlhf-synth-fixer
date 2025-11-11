@@ -12,13 +12,22 @@ import {
   GetRestApisCommand,
 } from '@aws-sdk/client-api-gateway';
 
+// Type definitions for API responses
+interface TransactionResponse {
+  message: string;
+  transactionId: string;
+}
+
 // Load deployment outputs
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// AWS clients configuration for ap-southeast-1
-const region = 'ap-southeast-1';
+// Get environment suffix and region from environment variables
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'ap-southeast-1';
+
+// Initialize AWS clients
 const dynamoDBClient = new DynamoDBClient({ region });
 const s3Client = new S3Client({ region });
 const sqsClient = new SQSClient({ region });
@@ -88,7 +97,7 @@ describe('Transaction Processing System Integration Tests', () => {
       });
 
       expect(response.status).toBe(200);
-      const data = await response.json();
+      const data = (await response.json()) as TransactionResponse;
       expect(data.message).toContain('processed successfully');
       expect(data.transactionId).toBe(testTransactionId);
     }, 15000);
@@ -199,7 +208,7 @@ describe('Transaction Processing System Integration Tests', () => {
     test('should invoke DailySummary Lambda function successfully', async () => {
       const response = await lambdaClient.send(
         new InvokeCommand({
-          FunctionName: `dailySummary-${process.env.ENVIRONMENT_SUFFIX || 'synthcdt0v'}`,
+          FunctionName: `dailySummary-${environmentSuffix}`,
           InvocationType: 'RequestResponse',
         })
       );
@@ -378,7 +387,7 @@ describe('Transaction Processing System Integration Tests', () => {
         body: JSON.stringify(lifecycleTransaction),
       });
       expect(apiResponse.status).toBe(200);
-      const apiData = await apiResponse.json();
+      const apiData = (await apiResponse.json()) as TransactionResponse;
       expect(apiData.transactionId).toBe(lifecycleTestId);
 
       // Step 2: Verify in DynamoDB

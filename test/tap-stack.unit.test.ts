@@ -468,3 +468,533 @@ describe('TapStack Unit Tests', () => {
     });
   });
 });
+
+// Lambda Function Unit Tests
+import { APIGatewayProxyEvent, SQSEvent } from 'aws-lambda';
+import { mockClient } from 'aws-sdk-client-mock';
+import { DynamoDBClient, PutItemCommand, ScanCommand } from '@aws-sdk/client-dynamodb';
+import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { handler as processTransactionHandler } from '../lib/lambda/processTransaction/index';
+import { handler as auditTransactionHandler } from '../lib/lambda/auditTransaction/index';
+import { handler as dailySummaryHandler } from '../lib/lambda/dailySummary/index';
+
+const dynamoDBMock = mockClient(DynamoDBClient);
+const sqsMock = mockClient(SQSClient);
+const s3Mock = mockClient(S3Client);
+
+describe('Lambda Function Unit Tests', () => {
+  beforeEach(() => {
+    dynamoDBMock.reset();
+    sqsMock.reset();
+    s3Mock.reset();
+  });
+
+  describe('ProcessTransaction Lambda', () => {
+    beforeEach(() => {
+      process.env.TABLE_NAME = 'test-table';
+      process.env.QUEUE_URL = 'https://sqs.us-east-1.amazonaws.com/123456789012/test-queue';
+    });
+
+    afterEach(() => {
+      delete process.env.TABLE_NAME;
+      delete process.env.QUEUE_URL;
+    });
+
+    const createEvent = (body: any): APIGatewayProxyEvent => ({
+      body: JSON.stringify(body),
+      headers: {},
+      multiValueHeaders: {},
+      httpMethod: 'POST',
+      isBase64Encoded: false,
+      path: '/transactions',
+      pathParameters: null,
+      queryStringParameters: null,
+      multiValueQueryStringParameters: null,
+      stageVariables: null,
+      requestContext: {} as any,
+      resource: '',
+    });
+
+    test('should process valid transaction successfully', async () => {
+      dynamoDBMock.on(PutItemCommand).resolves({});
+      sqsMock.on(SendMessageCommand).resolves({ MessageId: 'test-message-id' });
+
+      const event = createEvent({
+        transactionId: 'txn-123',
+        amount: 100.50,
+        currency: 'USD',
+        customerId: 'customer-456',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(200);
+      const body = JSON.parse(result.body);
+      expect(body.message).toBe('Transaction processed successfully');
+      expect(body.transactionId).toBe('txn-123');
+      expect(dynamoDBMock.calls()).toHaveLength(1);
+      expect(sqsMock.calls()).toHaveLength(1);
+    });
+
+    test('should use default timestamp when not provided', async () => {
+      dynamoDBMock.on(PutItemCommand).resolves({});
+      sqsMock.on(SendMessageCommand).resolves({ MessageId: 'test-message-id' });
+
+      const event = createEvent({
+        transactionId: 'txn-789',
+        amount: 50.25,
+        currency: 'EUR',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(200);
+      const putItemCall = dynamoDBMock.calls()[0];
+      const putItemInput = putItemCall.args[0].input as any;
+      expect(putItemInput.Item?.timestamp).toBeDefined();
+    });
+
+    test('should use default customerId when not provided', async () => {
+      dynamoDBMock.on(PutItemCommand).resolves({});
+      sqsMock.on(SendMessageCommand).resolves({ MessageId: 'test-message-id' });
+
+      const event = createEvent({
+        transactionId: 'txn-999',
+        amount: 75.00,
+        currency: 'GBP',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(200);
+      const putItemCall = dynamoDBMock.calls()[0];
+      const putItemInput = putItemCall.args[0].input as any;
+      expect(putItemInput.Item?.customerId.S).toBe('unknown');
+    });
+
+    test('should return 400 when transactionId is missing', async () => {
+      const event = createEvent({ amount: 100, currency: 'USD' });
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.message).toContain('Missing required fields');
+      expect(dynamoDBMock.calls()).toHaveLength(0);
+      expect(sqsMock.calls()).toHaveLength(0);
+    });
+
+    test('should return 400 when amount is missing', async () => {
+      const event = createEvent({ transactionId: 'txn-123', currency: 'USD' });
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.message).toContain('Missing required fields');
+    });
+
+    test('should return 400 when currency is missing', async () => {
+      const event = createEvent({ transactionId: 'txn-123', amount: 100 });
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.message).toContain('Missing required fields');
+    });
+
+    test('should return 500 when DynamoDB fails', async () => {
+      dynamoDBMock.on(PutItemCommand).rejects(new Error('DynamoDB error'));
+
+      const event = createEvent({
+        transactionId: 'txn-error',
+        amount: 100,
+        currency: 'USD',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(500);
+      const body = JSON.parse(result.body);
+      expect(body.message).toBe('Failed to process transaction');
+      expect(body.error).toBe('DynamoDB error');
+    });
+
+    test('should return 500 when SQS fails', async () => {
+      dynamoDBMock.on(PutItemCommand).resolves({});
+      sqsMock.on(SendMessageCommand).rejects(new Error('SQS error'));
+
+      const event = createEvent({
+        transactionId: 'txn-error',
+        amount: 100,
+        currency: 'USD',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(500);
+      const body = JSON.parse(result.body);
+      expect(body.message).toBe('Failed to process transaction');
+      expect(body.error).toBe('SQS error');
+    });
+
+    test('should store transaction with correct DynamoDB format', async () => {
+      dynamoDBMock.on(PutItemCommand).resolves({});
+      sqsMock.on(SendMessageCommand).resolves({ MessageId: 'test-message-id' });
+
+      const timestamp = Date.now();
+      const event = createEvent({
+        transactionId: 'txn-555',
+        amount: 200.75,
+        currency: 'CAD',
+        customerId: 'customer-777',
+        timestamp,
+      });
+
+      await processTransactionHandler(event);
+
+      const putItemCall = dynamoDBMock.calls()[0];
+      const putItemInput = putItemCall.args[0].input as any;
+      const item = putItemInput.Item;
+
+      expect(item?.transactionId.S).toBe('txn-555');
+      expect(item?.amount.N).toBe('200.75');
+      expect(item?.currency.S).toBe('CAD');
+      expect(item?.customerId.S).toBe('customer-777');
+      expect(item?.timestamp.N).toBe(timestamp.toString());
+      expect(item?.status.S).toBe('processed');
+    });
+
+    test('should return correct Content-Type header', async () => {
+      dynamoDBMock.on(PutItemCommand).resolves({});
+      sqsMock.on(SendMessageCommand).resolves({ MessageId: 'test-message-id' });
+
+      const event = createEvent({
+        transactionId: 'txn-123',
+        amount: 100,
+        currency: 'USD',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.headers).toEqual({ 'Content-Type': 'application/json' });
+    });
+
+    test('should handle null event body', async () => {
+      const event: APIGatewayProxyEvent = {
+        body: null,
+        headers: {},
+        multiValueHeaders: {},
+        httpMethod: 'POST',
+        isBase64Encoded: false,
+        path: '/transactions',
+        pathParameters: null,
+        queryStringParameters: null,
+        multiValueQueryStringParameters: null,
+        stageVariables: null,
+        requestContext: {} as any,
+        resource: '',
+      };
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(400);
+      const body = JSON.parse(result.body);
+      expect(body.message).toContain('Missing required fields');
+    });
+
+    test('should handle non-Error exceptions', async () => {
+      dynamoDBMock.on(PutItemCommand).rejects('String error' as any);
+
+      const event = createEvent({
+        transactionId: 'txn-error',
+        amount: 100,
+        currency: 'USD',
+      });
+
+      const result = await processTransactionHandler(event);
+
+      expect(result.statusCode).toBe(500);
+      const body = JSON.parse(result.body);
+      expect(body.message).toBe('Failed to process transaction');
+      expect(body.error).toBeDefined();
+    });
+  });
+
+  describe('AuditTransaction Lambda', () => {
+    beforeEach(() => {
+      process.env.BUCKET_NAME = 'test-bucket';
+    });
+
+    afterEach(() => {
+      delete process.env.BUCKET_NAME;
+    });
+
+    const createSQSEvent = (messageBody: any): SQSEvent => ({
+      Records: [
+        {
+          messageId: 'msg-123',
+          receiptHandle: 'receipt-123',
+          body: JSON.stringify(messageBody),
+          attributes: {} as any,
+          messageAttributes: {},
+          md5OfBody: '',
+          eventSource: 'aws:sqs',
+          eventSourceARN: 'arn:aws:sqs:us-east-1:123456789012:test-queue',
+          awsRegion: 'us-east-1',
+        },
+      ],
+    });
+
+    test('should create audit log in S3 successfully', async () => {
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      const transaction = {
+        transactionId: 'txn-123',
+        amount: 100,
+        currency: 'USD',
+        customerId: 'customer-456',
+        status: 'processed',
+      };
+
+      const event = createSQSEvent(transaction);
+      await auditTransactionHandler(event);
+
+      expect(s3Mock.calls()).toHaveLength(1);
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      expect(s3Input.Key).toMatch(/^audit\/txn-123-\d+\.json$/);
+      expect(s3Input.ContentType).toBe('application/json');
+    });
+
+    test('should include audit metadata in S3 object', async () => {
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      const transaction = {
+        transactionId: 'txn-456',
+        amount: 200,
+        currency: 'EUR',
+      };
+
+      const event = createSQSEvent(transaction);
+      await auditTransactionHandler(event);
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const body = JSON.parse(s3Input.Body as string);
+
+      expect(body.transactionId).toBe('txn-456');
+      expect(body.amount).toBe(200);
+      expect(body.currency).toBe('EUR');
+      expect(body.auditedAt).toBeDefined();
+      expect(body.messageId).toBe('msg-123');
+    });
+
+    test('should process multiple SQS records', async () => {
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      const event: SQSEvent = {
+        Records: [
+          {
+            messageId: 'msg-1',
+            receiptHandle: 'receipt-1',
+            body: JSON.stringify({ transactionId: 'txn-1', amount: 100, currency: 'USD' }),
+            attributes: {} as any,
+            messageAttributes: {},
+            md5OfBody: '',
+            eventSource: 'aws:sqs',
+            eventSourceARN: 'arn:aws:sqs:us-east-1:123456789012:test-queue',
+            awsRegion: 'us-east-1',
+          },
+          {
+            messageId: 'msg-2',
+            receiptHandle: 'receipt-2',
+            body: JSON.stringify({ transactionId: 'txn-2', amount: 200, currency: 'EUR' }),
+            attributes: {} as any,
+            messageAttributes: {},
+            md5OfBody: '',
+            eventSource: 'aws:sqs',
+            eventSourceARN: 'arn:aws:sqs:us-east-1:123456789012:test-queue',
+            awsRegion: 'us-east-1',
+          },
+        ],
+      };
+
+      await auditTransactionHandler(event);
+
+      expect(s3Mock.calls()).toHaveLength(2);
+    });
+
+    test('should throw error when S3 upload fails', async () => {
+      s3Mock.on(PutObjectCommand).rejects(new Error('S3 error'));
+
+      const transaction = { transactionId: 'txn-error', amount: 100, currency: 'USD' };
+      const event = createSQSEvent(transaction);
+
+      await expect(auditTransactionHandler(event)).rejects.toThrow('S3 error');
+    });
+
+    test('should throw error when message body is invalid JSON', async () => {
+      const event: SQSEvent = {
+        Records: [
+          {
+            messageId: 'msg-123',
+            receiptHandle: 'receipt-123',
+            body: '{invalid json}',
+            attributes: {} as any,
+            messageAttributes: {},
+            md5OfBody: '',
+            eventSource: 'aws:sqs',
+            eventSourceARN: 'arn:aws:sqs:us-east-1:123456789012:test-queue',
+            awsRegion: 'us-east-1',
+          },
+        ],
+      };
+
+      await expect(auditTransactionHandler(event)).rejects.toThrow();
+    });
+  });
+
+  describe('DailySummary Lambda', () => {
+    beforeEach(() => {
+      process.env.TABLE_NAME = 'test-table';
+      process.env.BUCKET_NAME = 'test-bucket';
+    });
+
+    afterEach(() => {
+      delete process.env.TABLE_NAME;
+      delete process.env.BUCKET_NAME;
+    });
+
+    test('should generate daily summary successfully', async () => {
+      const mockItems = [
+        { transactionId: { S: 'txn-1' }, amount: { N: '100' }, timestamp: { N: String(Date.now()) } },
+        { transactionId: { S: 'txn-2' }, amount: { N: '200' }, timestamp: { N: String(Date.now()) } },
+        { transactionId: { S: 'txn-3' }, amount: { N: '50' }, timestamp: { N: String(Date.now()) } },
+      ];
+
+      dynamoDBMock.on(ScanCommand).resolves({ Items: mockItems });
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      expect(dynamoDBMock.calls()).toHaveLength(1);
+      expect(s3Mock.calls()).toHaveLength(1);
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const body = JSON.parse(s3Input.Body as string);
+
+      expect(body.totalTransactions).toBe(3);
+      expect(body.totalAmount).toBe(350);
+      expect(body.date).toBeDefined();
+      expect(body.generatedAt).toBeDefined();
+    });
+
+    test('should filter transactions from last 24 hours', async () => {
+      dynamoDBMock.on(ScanCommand).resolves({ Items: [] });
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      const scanCall = dynamoDBMock.calls()[0];
+      const scanInput = scanCall.args[0].input as any;
+      expect(scanInput.FilterExpression).toBe('#ts > :yesterday');
+      expect(scanInput.ExpressionAttributeNames).toEqual({ '#ts': 'timestamp' });
+      expect(scanInput.ExpressionAttributeValues?.[':yesterday']).toBeDefined();
+    });
+
+    test('should handle empty transaction list', async () => {
+      dynamoDBMock.on(ScanCommand).resolves({ Items: [] });
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const body = JSON.parse(s3Input.Body as string);
+
+      expect(body.totalTransactions).toBe(0);
+      expect(body.totalAmount).toBe(0);
+    });
+
+    test('should create S3 object with correct key format', async () => {
+      dynamoDBMock.on(ScanCommand).resolves({ Items: [] });
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const today = new Date().toISOString().split('T')[0];
+
+      expect(s3Input.Key).toBe(`summaries/daily-${today}.json`);
+      expect(s3Input.ContentType).toBe('application/json');
+    });
+
+    test('should throw error when DynamoDB scan fails', async () => {
+      dynamoDBMock.on(ScanCommand).rejects(new Error('DynamoDB error'));
+
+      await expect(dailySummaryHandler()).rejects.toThrow('DynamoDB error');
+    });
+
+    test('should throw error when S3 upload fails', async () => {
+      dynamoDBMock.on(ScanCommand).resolves({ Items: [] });
+      s3Mock.on(PutObjectCommand).rejects(new Error('S3 error'));
+
+      await expect(dailySummaryHandler()).rejects.toThrow('S3 error');
+    });
+
+    test('should calculate total amount correctly', async () => {
+      const mockItems = [
+        { amount: { N: '100.50' }, timestamp: { N: String(Date.now()) } },
+        { amount: { N: '200.75' }, timestamp: { N: String(Date.now()) } },
+        { amount: { N: '50.25' }, timestamp: { N: String(Date.now()) } },
+      ];
+
+      dynamoDBMock.on(ScanCommand).resolves({ Items: mockItems });
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const body = JSON.parse(s3Input.Body as string);
+
+      expect(body.totalAmount).toBe(351.5);
+    });
+
+    test('should handle items with missing amount', async () => {
+      const mockItems: any[] = [
+        { amount: { N: '100' }, timestamp: { N: String(Date.now()) } },
+        { timestamp: { N: String(Date.now()) } },
+        { amount: { N: '50' }, timestamp: { N: String(Date.now()) } },
+      ];
+
+      dynamoDBMock.on(ScanCommand).resolves({ Items: mockItems });
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const body = JSON.parse(s3Input.Body as string);
+
+      expect(body.totalAmount).toBe(150);
+      expect(body.totalTransactions).toBe(3);
+    });
+
+    test('should handle undefined Items in scan result', async () => {
+      dynamoDBMock.on(ScanCommand).resolves({});
+      s3Mock.on(PutObjectCommand).resolves({});
+
+      await dailySummaryHandler();
+
+      const s3Call = s3Mock.calls()[0];
+      const s3Input = s3Call.args[0].input as any;
+      const body = JSON.parse(s3Input.Body as string);
+
+      expect(body.totalTransactions).toBe(0);
+      expect(body.totalAmount).toBe(0);
+    });
+  });
+});
