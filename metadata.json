@@ -7,16 +7,7 @@
   "startedAt": "2025-11-11T13:43:07+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Use Step Functions to orchestrate the migration workflow",
-    "Use AWS Transit Gateway for network connectivity between migrated and legacy components",
-    "Implement AWS Database Migration Service (DMS) for real-time database replication",
-    "Configure AWS Secrets Manager rotation for all database credentials",
-    "Implement CloudWatch Logs with metric filters for migration monitoring",
-    "Implement SNS topics for migration status notifications",
-    "Deploy Lambda functions for data validation between old and new systems",
-    "Deploy API Gateway with custom authorizers for authentication during transition",
-    "Use Parameter Store for environment-specific configuration values",
-    "Configure S3 buckets with versioning for migration state backups"
+    "Environment Migration"
   ],
   "po_id": "7up57r",
   "aws_services": [
@@ -40,5 +31,7 @@
     "X-Ray"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "emmanuel-turing"
 }
