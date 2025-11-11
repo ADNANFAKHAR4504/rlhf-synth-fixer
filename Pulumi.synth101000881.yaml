@@ -1,9 +1,0 @@
-encryptionsalt: v1:T19AMLKd8lU=:v1:Edv0eAfRmNjw+mVd:Uu2d2aIrvdLj/UnJtFzQVXPgdL75Aw==
-config:
-  aws:region: us-east-1
-  pulumi-infra:environmentSuffix: synth101000881
-  pulumi-infra:dbUsername: admin
-  pulumi-infra:dbPassword:
-    secure: v1:21xdUT4EX06Tzmzx:qhiJ6BMdI8fHukh3Z2ua1mUsm+YODp0yr9zwtQ==
-  pulumi-infra:instanceType: t3.micro
-  pulumi-infra:dbInstanceClass: db.t3.micro
