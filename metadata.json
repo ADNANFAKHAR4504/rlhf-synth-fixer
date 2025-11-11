@@ -10,6 +10,8 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
+  "training_quality": 9,
+  "background": "Migrate production to a new AWS account by deploying a brand-new, self-contained stack in us-east-1 using a single TapStack.yml. Build a VPC named 'ProdVPC' with two public subnets across AZs and an Internet Gateway; launch two Amazon Linux 2 EC2 instances in separate public subnets (attach an Elastic IP to one) and enable SSH/HTTP via a security group. Add an IAM role for EC2 with least-privilege read-only access to a versioned, KMS-encrypted S3 bucket that also receives CloudTrail logs. Provide an EC2 Launch Template and an Auto Scaling Group (min 2, max 4) with CPU-based CloudWatch alarms for scale in/out. Include parameters (KeyName, SSHLocation, CreateEIP), daily SSM patching via AWS-RunPatchBaseline, KMS key and alias, outputs for key resources, and consistent 'prod-' naming and tags.",
   "aws_services": [
     "VPC",
     "Subnet",
@@ -48,3 +50,4 @@
     "Condition"
   ]
 }
+

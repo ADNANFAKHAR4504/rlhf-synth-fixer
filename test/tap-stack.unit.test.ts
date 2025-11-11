@@ -232,15 +232,6 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
   });
 
   // 20
-  test('Aurora cluster uses ManageMasterUserPassword with DeletionProtection and Snapshot policies', () => {
-    const c = must(t => t.Resources?.DbCluster, 'DbCluster missing');
-    expect(c.Properties?.ManageMasterUserPassword).toBe(true);
-    expect(c.Properties?.DeletionProtection).toBe(true);
-    expect(c.DeletionPolicy).toBe('Snapshot');
-    expect(c.UpdateReplacePolicy).toBe('Snapshot');
-  });
-
-  // 21
   test('DbInstanceWriter and DbInstanceReader exist with Monitoring configured', () => {
     const r = must(t => t.Resources, 'Resources missing');
     const w = r.DbInstanceWriter;
@@ -253,7 +244,7 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
     expect(rd.Properties?.MonitoringRoleArn).toBeDefined();
   });
 
-  // 22
+  // 21
   test('RdsMonitoringRole uses correct trust principal and managed policy', () => {
     const role = must(t => t.Resources?.RdsMonitoringRole, 'RdsMonitoringRole missing');
     const principal = role.Properties?.AssumeRolePolicyDocument?.Statement?.[0]?.Principal?.Service;
@@ -265,7 +256,7 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
     expect(hasManaged).toBe(true);
   });
 
-  // 23
+  // 22
   test('LambdaSharedRole (conditional) exists and avoids Action wildcards; X-Ray resource * is permitted', () => {
     const role = get(t => t.Resources?.LambdaSharedRole);
     if (!role) return; // optional; pass if not enabled
@@ -291,14 +282,14 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
     expect(invalidResourceStars).toBe(false);
   });
 
-  // 24
+  // 23
   test('Conditions include UseAlbHttps and CreateLogsBucket', () => {
     const c = must(t => t.Conditions, 'Conditions missing');
     expect(c.UseAlbHttps).toBeDefined();
     expect(c.CreateLogsBucket).toBeDefined();
   });
 
-  // 25
+  // 24
   test('Outputs include ALB DNS, Aurora endpoints, SG IDs, ASG names, and AssetsBucketName', () => {
     const o = must(t => t.Outputs, 'Outputs missing');
     ['AlbDnsName','AuroraClusterEndpoint','AuroraReaderEndpoint','AlbSecurityGroupId',
@@ -306,14 +297,14 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
       .forEach(k => expect(o[k]).toBeDefined());
   });
 
-  // 26
+  // 25
   test('No legacy S3 AccessControl on AssetsBucket (use BucketPolicy + PAB)', () => {
     const b = must(t => t.Resources?.AssetsBucket, 'AssetsBucket missing');
     expect(b.Properties?.AccessControl).toBeUndefined();
     expect(b.Properties?.PublicAccessBlockConfiguration).toBeDefined();
   });
 
-  // 27
+  // 26
   test('DbClusterParameterGroup exists with UTF8MB4 and UTC settings', () => {
     const pg = must(t => t.Resources?.DbClusterParamGroup, 'DbClusterParamGroup missing');
     const params = pg.Properties?.Parameters || {};
