@@ -1,18 +1,34 @@
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import { DescribeTransitGatewaysCommand, DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import * as fs from 'fs';
+import * as path from 'path';
 
 interface StackOutputs {
   [key: string]: string;
 }
 
+// Read region from lib/AWS_REGION file if it exists
+function getRegion(): string {
+  const regionFilePath = path.join(process.cwd(), 'lib', 'AWS_REGION');
+  if (fs.existsSync(regionFilePath)) {
+    const regionFromFile = fs.readFileSync(regionFilePath, 'utf-8').trim();
+    return process.env.AWS_REGION || regionFromFile || 'us-east-1';
+  }
+  return process.env.AWS_REGION || 'us-east-1';
+}
+
 describe('Hub-and-Spoke CloudFormation Integration Tests', () => {
   let outputs: StackOutputs;
-  const region = process.env.AWS_REGION || 'us-east-1';
+  const region = getRegion();
   const ec2Client = new EC2Client({ region });
   const cfnClient = new CloudFormationClient({ region });
   const stackName = `TapStack-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
 
   beforeAll(async () => {
+    console.log(`Looking for stack: ${stackName} in region: ${region}`);
+    console.log(`AWS_REGION env var: ${process.env.AWS_REGION}`);
+    console.log(`ENVIRONMENT_SUFFIX env var: ${process.env.ENVIRONMENT_SUFFIX}`);
+    
     try {
       const command = new DescribeStacksCommand({ StackName: stackName });
       const response = await cfnClient.send(command);
@@ -25,7 +41,7 @@ describe('Hub-and-Spoke CloudFormation Integration Tests', () => {
         return acc;
       }, {});
     } catch (error: any) {
-      console.error(`Failed to load stack outputs from ${stackName}:`, error.message);
+      console.error(`Failed to load stack outputs from ${stackName} in region ${region}:`, error.message);
       throw error;
     }
   });
