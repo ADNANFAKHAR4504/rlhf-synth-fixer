@@ -488,4 +488,113 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
+  describe('Configuration Fallback', () => {
+    it('should use getStack when environmentSuffix is not configured', () => {
+      // Clear the module cache to force reload
+      jest.resetModules();
+
+      // Re-mock Pulumi with no environmentSuffix
+      jest.mock('@pulumi/pulumi');
+      jest.mock('@pulumi/aws');
+
+      const pulumi2 = require('@pulumi/pulumi');
+      const aws2 = require('@pulumi/aws');
+
+      // Mock Config to return undefined for environmentSuffix
+      (pulumi2.Config as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        get: jest.fn((key: string) => {
+          if (key === 'environmentSuffix') return undefined; // This triggers the fallback
+          return undefined;
+        }),
+      }));
+
+      (pulumi2.getStack as unknown as jest.Mock) = jest.fn().mockReturnValue('fallback-stack');
+      (pulumi2.interpolate as unknown as jest.Mock) = jest.fn((...args: any[]) => {
+        return {
+          apply: jest.fn((fn: any) => fn(...args)),
+        };
+      });
+      (pulumi2.all as unknown as jest.Mock) = jest.fn((args: any[]) => ({
+        apply: jest.fn((fn: any) => fn(args)),
+      }));
+
+      // Re-mock AWS resources for the second load
+      (aws2.dynamodb.Table as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        name: 'transactions-fallback',
+        arn: 'arn:aws:dynamodb:fallback',
+      }));
+
+      (aws2.sqs.Queue as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        arn: 'arn:aws:sqs:fallback',
+        url: 'https://sqs.fallback.amazonaws.com/fallback',
+        name: 'transaction-queue-fallback',
+      }));
+
+      (aws2.sns.Topic as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        arn: 'arn:aws:sns:fallback',
+        name: 'transaction-notifications-fallback',
+      }));
+
+      (aws2.iam.Role as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        arn: 'arn:aws:iam:fallback',
+        name: 'fallback-role',
+        id: 'fallback-role-id',
+      }));
+
+      (aws2.iam.RolePolicyAttachment as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+      (aws2.iam.RolePolicy as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+
+      (aws2.cloudwatch.LogGroup as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        name: '/aws/lambda/fallback',
+      }));
+
+      (aws2.lambda.Function as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        name: 'fallback-function',
+        arn: 'arn:aws:lambda:fallback',
+        invokeArn: 'arn:aws:apigateway:fallback',
+      }));
+
+      (aws2.lambda.EventSourceMapping as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+      (aws2.lambda.Permission as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+
+      (aws2.apigateway.RestApi as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        id: 'fallback-api',
+        name: 'fallback-api',
+        executionArn: 'arn:aws:execute-api:fallback',
+        rootResourceId: 'root',
+      }));
+
+      (aws2.apigateway.Resource as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        id: 'resource-id',
+      }));
+
+      (aws2.apigateway.Method as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        httpMethod: 'POST',
+      }));
+
+      (aws2.apigateway.Integration as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+      (aws2.apigateway.Deployment as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({
+        id: 'deployment-id',
+      }));
+      (aws2.apigateway.Stage as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+
+      (aws2.cloudwatch.MetricAlarm as unknown as jest.Mock) = jest.fn().mockImplementation(() => ({}));
+
+      (aws2.lambda.Runtime as any) = {
+        NodeJS18dX: 'nodejs18.x'
+      };
+
+      // Reload the stack module with new mocks
+      const stackWithFallback = require('../lib/tap-stack');
+
+      // Verify that getStack was called
+      expect(pulumi2.getStack).toHaveBeenCalled();
+
+      // Verify resources were created with fallback suffix
+      expect(aws2.dynamodb.Table).toHaveBeenCalled();
+      const tableCalls = (aws2.dynamodb.Table as unknown as jest.Mock).mock.calls;
+      expect(tableCalls[0][0]).toContain('fallback-stack');
+    });
+  });
+
 });
