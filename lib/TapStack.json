@@ -1,25 +1,16 @@
 {
   "AWSTemplateFormatVersion": "2010-09-09",
-  "Description": "Aurora PostgreSQL Production Database Infrastructure - Transaction Processing System",
+  "Description": "Aurora PostgreSQL Production Database Infrastructure - Transaction Processing System with VPC (Default Region: eu-west-2)",
   "Metadata": {
     "AWS::CloudFormation::Interface": {
       "ParameterGroups": [
         {
           "Label": {
-            "default": "Environment Configuration"
+            "default": "Deployment Configuration"
           },
           "Parameters": [
+            "DeploymentRegion",
             "EnvironmentSuffix"
-          ]
-        },
-        {
-          "Label": {
-            "default": "Network Configuration"
-          },
-          "Parameters": [
-            "SubnetId1",
-            "SubnetId2",
-            "VpcSecurityGroupId"
           ]
         },
         {
@@ -35,24 +26,26 @@
     }
   },
   "Parameters": {
+    "DeploymentRegion": {
+      "Type": "String",
+      "Default": "eu-west-2",
+      "Description": "AWS Region for deployment (London)",
+      "AllowedValues": [
+        "eu-west-2",
+        "us-east-1",
+        "us-west-2",
+        "eu-west-1",
+        "eu-central-1",
+        "ap-southeast-1"
+      ],
+      "ConstraintDescription": "Must be a valid AWS region"
+    },
     "EnvironmentSuffix": {
       "Type": "String",
       "Default": "prod",
       "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
       "AllowedPattern": "^[a-zA-Z0-9]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters"
-    },
-    "SubnetId1": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "First subnet ID for DB subnet group (must be in different AZ)"
-    },
-    "SubnetId2": {
-      "Type": "AWS::EC2::Subnet::Id",
-      "Description": "Second subnet ID for DB subnet group (must be in different AZ)"
-    },
-    "VpcSecurityGroupId": {
-      "Type": "AWS::EC2::SecurityGroup::Id",
-      "Description": "VPC Security Group ID for database access control"
     },
     "DatabaseName": {
       "Type": "String",
@@ -72,6 +65,178 @@
     }
   },
   "Resources": {
+    "VPC": {
+      "Type": "AWS::EC2::VPC",
+      "Properties": {
+        "CidrBlock": "10.0.0.0/16",
+        "EnableDnsHostnames": true,
+        "EnableDnsSupport": true,
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "vpc-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          },
+          {
+            "Key": "DeploymentRegion",
+            "Value": {
+              "Ref": "DeploymentRegion"
+            }
+          }
+        ]
+      }
+    },
+    "InternetGateway": {
+      "Type": "AWS::EC2::InternetGateway",
+      "Properties": {
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "igw-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "AttachGateway": {
+      "Type": "AWS::EC2::VPCGatewayAttachment",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "InternetGatewayId": {
+          "Ref": "InternetGateway"
+        }
+      }
+    },
+    "PrivateSubnet1": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.1.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            0,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-1-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "PrivateSubnet2": {
+      "Type": "AWS::EC2::Subnet",
+      "Properties": {
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "CidrBlock": "10.0.2.0/24",
+        "AvailabilityZone": {
+          "Fn::Select": [
+            1,
+            {
+              "Fn::GetAZs": ""
+            }
+          ]
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "private-subnet-2-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
+    "DatabaseSecurityGroup": {
+      "Type": "AWS::EC2::SecurityGroup",
+      "Properties": {
+        "GroupDescription": "Security group for Aurora PostgreSQL database access",
+        "GroupName": {
+          "Fn::Sub": "aurora-sg-${EnvironmentSuffix}"
+        },
+        "VpcId": {
+          "Ref": "VPC"
+        },
+        "SecurityGroupIngress": [
+          {
+            "IpProtocol": "tcp",
+            "FromPort": 5432,
+            "ToPort": 5432,
+            "CidrIp": "10.0.0.0/16",
+            "Description": "PostgreSQL access from VPC"
+          }
+        ],
+        "SecurityGroupEgress": [
+          {
+            "IpProtocol": "-1",
+            "CidrIp": "0.0.0.0/0",
+            "Description": "Allow all outbound traffic"
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "aurora-sg-${EnvironmentSuffix}"
+            }
+          },
+          {
+            "Key": "Environment",
+            "Value": "Production"
+          },
+          {
+            "Key": "ManagedBy",
+            "Value": "CloudFormation"
+          }
+        ]
+      }
+    },
     "DatabaseSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "DeletionPolicy": "Delete",
@@ -119,10 +284,10 @@
         "DBSubnetGroupDescription": "Subnet group for Aurora PostgreSQL cluster across 2 AZs",
         "SubnetIds": [
           {
-            "Ref": "SubnetId1"
+            "Ref": "PrivateSubnet1"
           },
           {
-            "Ref": "SubnetId2"
+            "Ref": "PrivateSubnet2"
           }
         ],
         "Tags": [
@@ -178,11 +343,6 @@
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
-      "DependsOn": [
-        "DatabaseSecret",
-        "DBSubnetGroup",
-        "DBClusterParameterGroup"
-      ],
       "Properties": {
         "DBClusterIdentifier": {
           "Fn::Sub": "aurora-postgres-cluster-${EnvironmentSuffix}"
@@ -207,7 +367,7 @@
         },
         "VpcSecurityGroupIds": [
           {
-            "Ref": "VpcSecurityGroupId"
+            "Ref": "DatabaseSecurityGroup"
           }
         ],
         "StorageEncrypted": true,
@@ -244,7 +404,6 @@
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
-      "DependsOn": "AuroraCluster",
       "Properties": {
         "DBInstanceIdentifier": {
           "Fn::Sub": "aurora-instance-1-${EnvironmentSuffix}"
@@ -310,7 +469,6 @@
       "Type": "AWS::CloudWatch::Alarm",
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
-      "DependsOn": "AuroraCluster",
       "Properties": {
         "AlarmName": {
           "Fn::Sub": "aurora-cpu-high-${EnvironmentSuffix}"
@@ -338,10 +496,6 @@
       "Type": "AWS::SecretsManager::SecretTargetAttachment",
       "DeletionPolicy": "Delete",
       "UpdateReplacePolicy": "Delete",
-      "DependsOn": [
-        "DatabaseSecret",
-        "AuroraCluster"
-      ],
       "Properties": {
         "SecretId": {
           "Ref": "DatabaseSecret"
@@ -448,6 +602,28 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+        }
+      }
+    },
+    "VpcId": {
+      "Description": "VPC ID",
+      "Value": {
+        "Ref": "VPC"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VpcId"
+        }
+      }
+    },
+    "SecurityGroupId": {
+      "Description": "Database security group ID",
+      "Value": {
+        "Ref": "DatabaseSecurityGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-SecurityGroupId"
         }
       }
     }

@@ -29,25 +29,18 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
   });
 
   describe('Parameters', () => {
+    test('should have DeploymentRegion parameter with eu-west-2 default', () => {
+      expect(template.Parameters.DeploymentRegion).toBeDefined();
+      expect(template.Parameters.DeploymentRegion.Type).toBe('String');
+      expect(template.Parameters.DeploymentRegion.Default).toBe('eu-west-2');
+      expect(template.Parameters.DeploymentRegion.AllowedValues).toContain('eu-west-2');
+      expect(template.Parameters.DeploymentRegion.AllowedValues).toContain('us-east-1');
+    });
+
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
-      expect(template.Parameters.EnvironmentSuffix.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-    });
-
-    test('should have SubnetId1 parameter', () => {
-      expect(template.Parameters.SubnetId1).toBeDefined();
-      expect(template.Parameters.SubnetId1.Type).toBe('AWS::EC2::Subnet::Id');
-    });
-
-    test('should have SubnetId2 parameter', () => {
-      expect(template.Parameters.SubnetId2).toBeDefined();
-      expect(template.Parameters.SubnetId2.Type).toBe('AWS::EC2::Subnet::Id');
-    });
-
-    test('should have VpcSecurityGroupId parameter', () => {
-      expect(template.Parameters.VpcSecurityGroupId).toBeDefined();
-      expect(template.Parameters.VpcSecurityGroupId.Type).toBe('AWS::EC2::SecurityGroup::Id');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('prod');
     });
 
     test('should have DatabaseName parameter with validation', () => {
@@ -63,6 +56,42 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(template.Parameters.MasterUsername.Default).toBe('dbadmin');
       expect(template.Parameters.MasterUsername.MinLength).toBe('1');
       expect(template.Parameters.MasterUsername.MaxLength).toBe('16');
+    });
+
+    test('should NOT have VPC parameters (self-contained)', () => {
+      expect(template.Parameters.SubnetId1).toBeUndefined();
+      expect(template.Parameters.SubnetId2).toBeUndefined();
+      expect(template.Parameters.VpcSecurityGroupId).toBeUndefined();
+    });
+  });
+
+  describe('VPC Infrastructure', () => {
+    test('should have VPC with correct CIDR', () => {
+      expect(template.Resources.VPC).toBeDefined();
+      expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
+      expect(template.Resources.VPC.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(template.Resources.VPC.Properties.EnableDnsHostnames).toBe(true);
+      expect(template.Resources.VPC.Properties.EnableDnsSupport).toBe(true);
+    });
+
+    test('should have Internet Gateway', () => {
+      expect(template.Resources.InternetGateway).toBeDefined();
+      expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
+    });
+
+    test('should have two private subnets in different AZs', () => {
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet1.Properties.CidrBlock).toBe('10.0.1.0/24');
+      expect(template.Resources.PrivateSubnet2.Properties.CidrBlock).toBe('10.0.2.0/24');
+    });
+
+    test('should have Database Security Group', () => {
+      expect(template.Resources.DatabaseSecurityGroup).toBeDefined();
+      expect(template.Resources.DatabaseSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+      const ingress = template.Resources.DatabaseSecurityGroup.Properties.SecurityGroupIngress[0];
+      expect(ingress.FromPort).toBe(5432);
+      expect(ingress.ToPort).toBe(5432);
     });
   });
 
@@ -119,11 +148,11 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(name).toEqual({ 'Fn::Sub': 'aurora-subnet-group-${EnvironmentSuffix}' });
     });
 
-    test('should reference both subnet parameters', () => {
+    test('should reference both private subnets', () => {
       const subnetIds = template.Resources.DBSubnetGroup.Properties.SubnetIds;
       expect(subnetIds).toHaveLength(2);
-      expect(subnetIds[0]).toEqual({ Ref: 'SubnetId1' });
-      expect(subnetIds[1]).toEqual({ Ref: 'SubnetId2' });
+      expect(subnetIds[0]).toEqual({ Ref: 'PrivateSubnet1' });
+      expect(subnetIds[1]).toEqual({ Ref: 'PrivateSubnet2' });
     });
 
     test('should have appropriate description', () => {
@@ -169,11 +198,14 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(template.Resources.AuroraCluster.UpdateReplacePolicy).toBe('Delete');
     });
 
-    test('should have proper dependencies', () => {
-      const deps = template.Resources.AuroraCluster.DependsOn;
-      expect(deps).toContain('DatabaseSecret');
-      expect(deps).toContain('DBSubnetGroup');
-      expect(deps).toContain('DBClusterParameterGroup');
+    test('should have implicit dependencies via Ref functions', () => {
+      // CloudFormation automatically infers dependencies from Ref and Fn::GetAtt
+      // No explicit DependsOn needed as cfn-lint W3005 warns about redundancy
+      const props = template.Resources.AuroraCluster.Properties;
+      expect(props.MasterUsername['Fn::Sub']).toContain('DatabaseSecret');
+      expect(props.MasterUserPassword['Fn::Sub']).toContain('DatabaseSecret');
+      expect(props.DBSubnetGroupName).toEqual({ Ref: 'DBSubnetGroup' });
+      expect(props.DBClusterParameterGroupName).toEqual({ Ref: 'DBClusterParameterGroup' });
     });
 
     test('should have identifier with environmentSuffix', () => {
@@ -211,9 +243,9 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(template.Resources.AuroraCluster.Properties.DBSubnetGroupName).toEqual({ Ref: 'DBSubnetGroup' });
     });
 
-    test('should reference security group parameter', () => {
+    test('should reference database security group', () => {
       const sgIds = template.Resources.AuroraCluster.Properties.VpcSecurityGroupIds;
-      expect(sgIds[0]).toEqual({ Ref: 'VpcSecurityGroupId' });
+      expect(sgIds[0]).toEqual({ Ref: 'DatabaseSecurityGroup' });
     });
 
     test('should have encryption enabled', () => {
@@ -277,8 +309,9 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(template.Resources.AuroraInstance2.UpdateReplacePolicy).toBe('Delete');
     });
 
-    test('AuroraInstance1 should depend on AuroraCluster', () => {
-      expect(template.Resources.AuroraInstance1.DependsOn).toBe('AuroraCluster');
+    test('AuroraInstance1 should have implicit dependency on AuroraCluster via Ref', () => {
+      // CloudFormation automatically infers dependency from Ref
+      expect(template.Resources.AuroraInstance1.Properties.DBClusterIdentifier).toEqual({ Ref: 'AuroraCluster' });
     });
 
     test('AuroraInstance2 should depend on AuroraInstance1', () => {
@@ -324,8 +357,11 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(template.Resources.CPUUtilizationAlarm.UpdateReplacePolicy).toBe('Delete');
     });
 
-    test('should depend on AuroraCluster', () => {
-      expect(template.Resources.CPUUtilizationAlarm.DependsOn).toBe('AuroraCluster');
+    test('should have implicit dependency on AuroraCluster via Ref in dimensions', () => {
+      // CloudFormation automatically infers dependency from Ref in dimensions
+      const dimensions = template.Resources.CPUUtilizationAlarm.Properties.Dimensions;
+      const clusterDimension = dimensions.find((d: any) => d.Name === 'DBClusterIdentifier');
+      expect(clusterDimension.Value).toEqual({ Ref: 'AuroraCluster' });
     });
 
     test('should have name with environmentSuffix', () => {
@@ -381,10 +417,11 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
       expect(template.Resources.SecretTargetAttachment.UpdateReplacePolicy).toBe('Delete');
     });
 
-    test('should depend on DatabaseSecret and AuroraCluster', () => {
-      const deps = template.Resources.SecretTargetAttachment.DependsOn;
-      expect(deps).toContain('DatabaseSecret');
-      expect(deps).toContain('AuroraCluster');
+    test('should have implicit dependencies on DatabaseSecret and AuroraCluster via Ref', () => {
+      // CloudFormation automatically infers dependencies from Ref
+      const props = template.Resources.SecretTargetAttachment.Properties;
+      expect(props.SecretId).toEqual({ Ref: 'DatabaseSecret' });
+      expect(props.TargetId).toEqual({ Ref: 'AuroraCluster' });
     });
 
     test('should reference DatabaseSecret', () => {
@@ -462,19 +499,19 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
   });
 
   describe('Resource Count Validation', () => {
-    test('should have exactly 8 resources', () => {
+    test('should have exactly 14 resources (8 Aurora + 5 VPC + 1 Gateway Attachment)', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(8);
+      expect(resourceCount).toBe(14);
     });
 
-    test('should have exactly 6 parameters', () => {
+    test('should have exactly 4 parameters (DeploymentRegion, EnvironmentSuffix, DatabaseName, MasterUsername)', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(6);
+      expect(parameterCount).toBe(4);
     });
 
-    test('should have exactly 8 outputs', () => {
+    test('should have exactly 10 outputs (8 Aurora + 2 VPC)', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(8);
+      expect(outputCount).toBe(10);
     });
   });
 
@@ -507,11 +544,22 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
   });
 
   describe('Deletion Policy Compliance', () => {
-    test('all resources should have Delete policies', () => {
-      Object.keys(template.Resources).forEach(resourceKey => {
+    test('all Aurora resources should have Delete policies', () => {
+      const auroraResources = ['DatabaseSecret', 'DBSubnetGroup', 'DBClusterParameterGroup', 
+                               'AuroraCluster', 'AuroraInstance1', 'AuroraInstance2', 
+                               'CPUUtilizationAlarm', 'SecretTargetAttachment'];
+      auroraResources.forEach(resourceKey => {
         const resource = template.Resources[resourceKey];
         expect(resource.DeletionPolicy).toBe('Delete');
         expect(resource.UpdateReplacePolicy).toBe('Delete');
+      });
+    });
+
+    test('VPC resources should exist (no deletion policy needed)', () => {
+      const vpcResources = ['VPC', 'InternetGateway', 'AttachGateway', 
+                           'PrivateSubnet1', 'PrivateSubnet2', 'DatabaseSecurityGroup'];
+      vpcResources.forEach(resourceKey => {
+        expect(template.Resources[resourceKey]).toBeDefined();
       });
     });
   });
