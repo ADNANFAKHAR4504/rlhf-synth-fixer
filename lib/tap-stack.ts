@@ -81,23 +81,31 @@ export class TapStack extends TerraformStack {
 
     const config = ENVIRONMENT_CONFIGS[environment];
 
-    // Enhanced tags with Application and CostCenter
-    const enhancedTags = [
-      ...defaultTags,
-      {
-        tags: {
-          Application: 'payment-processing',
-          CostCenter: 'fintech-ops',
-          EnvironmentSuffix: environmentSuffix,
-          ManagedBy: 'cdktf',
-        },
-      },
-    ];
+    // Merge all tags into a single object
+    const mergedTags: Record<string, string> = {
+      Application: 'payment-processing',
+      CostCenter: 'fintech-ops',
+      EnvironmentSuffix: environmentSuffix,
+      ManagedBy: 'cdktf',
+    };
 
-    // Configure AWS Provider
+    // Merge existing defaultTags if provided
+    if (defaultTags && defaultTags.length > 0) {
+      defaultTags.forEach(tagObj => {
+        if (tagObj.tags) {
+          Object.assign(mergedTags, tagObj.tags);
+        }
+      });
+    }
+
+    // Configure AWS Provider with single defaultTags object
     new AwsProvider(this, 'aws', {
       region: awsRegion,
-      defaultTags: enhancedTags,
+      defaultTags: [
+        {
+          tags: mergedTags,
+        },
+      ],
     });
 
     // Configure S3 Backend with native state locking
