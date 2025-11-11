@@ -139,7 +139,7 @@ export class TapStack extends pulumi.ComponentResource {
     // Create CloudWatch alarms
     this.createCloudWatchAlarms('primary', primaryEcs, primarySnsTopic);
     this.createCloudWatchAlarms('dr', drEcs, drSnsTopic);
-    
+
     // Create Aurora replication monitoring
     this.createAuroraReplicationAlarm('primary', primarySnsTopic);
     this.createAuroraReplicationAlarm('dr', drSnsTopic);
@@ -617,8 +617,7 @@ export class TapStack extends pulumi.ComponentResource {
     primaryKmsKey: aws.kms.Key,
     drKmsKey: aws.kms.Key
   ): aws.rds.GlobalCluster {
-    
-    // FIXED: Create Secrets Manager secret for database password
+    // Secrets Manager secret for DB password
     const dbSecret = new aws.secretsmanager.Secret(
       `aurora-secret-${this.props.environmentSuffix}`,
       {
@@ -659,7 +658,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Primary Cluster with Secrets Manager integration
+    // Primary Cluster
     const primaryCluster = new aws.rds.Cluster(
       `aurora-primary-${this.props.environmentSuffix}`,
       {
@@ -719,14 +718,13 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // FIXED: DR Cluster - PROPERLY CONFIGURED as secondary in global database
+    // DR Cluster - important fix: globalClusterIdentifier set only for creation as secondary
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
         clusterIdentifier: `trading-aurora-dr-${this.props.environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
-        globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
         storageEncrypted: true,
@@ -769,6 +767,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     return globalCluster;
   }
+
 
   private createDynamoDBGlobalTable(): aws.dynamodb.Table {
     const table = new aws.dynamodb.Table(
@@ -1188,7 +1187,7 @@ export class TapStack extends pulumi.ComponentResource {
     snsTopic: aws.sns.Topic
   ) {
     const provider = region === 'primary' ? this.primaryProvider : this.drProvider;
-    
+
     new aws.cloudwatch.MetricAlarm(
       `aurora-replication-lag-${region}-${this.props.environmentSuffix}`,
       {
