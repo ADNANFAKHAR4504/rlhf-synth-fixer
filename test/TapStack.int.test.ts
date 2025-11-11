@@ -7,8 +7,9 @@ interface StackOutputs {
 
 describe('Hub-and-Spoke CloudFormation Integration Tests', () => {
   let outputs: StackOutputs;
-  const ec2Client = new EC2Client({});
-  const cfnClient = new CloudFormationClient({});
+  const region = process.env.AWS_REGION || 'us-east-1';
+  const ec2Client = new EC2Client({ region });
+  const cfnClient = new CloudFormationClient({ region });
   const stackName = `TapStack-${process.env.ENVIRONMENT_SUFFIX || 'dev'}`;
 
   beforeAll(async () => {
