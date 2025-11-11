@@ -6,7 +6,7 @@ BUG #25: Missing canary alarm configuration
 import json
 import pulumi
 import pulumi_aws as aws
-from pulumi import Output, ResourceOptions, AssetArchive, StringAsset
+from pulumi import Output, ResourceOptions
 from typing import Optional
 
 
@@ -130,9 +130,10 @@ def handler(event, context):
     }
 """
 
-        python_canary_archive = AssetArchive({
-            "handler.py": StringAsset(python_canary_script)
-        })
+        python_canary_code = aws.synthetics.CanaryCodeArgs(
+            handler="handler.handler",
+            script=python_canary_script,
+        )
 
         # Primary region canary
         # BUG #24: Script language doesn't match runtime
@@ -141,8 +142,7 @@ def handler(event, context):
             name=f"trading-canary-primary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-primary"),
             execution_role_arn=self.canary_role.arn,
-            handler="handler.handler",
-            zip_file=python_canary_archive,
+            code=python_canary_code,
             runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
@@ -163,8 +163,7 @@ def handler(event, context):
             name=f"trading-canary-secondary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-secondary"),
             execution_role_arn=self.canary_role.arn,
-            handler="handler.handler",
-            zip_file=python_canary_archive,
+            code=python_canary_code,
             runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
