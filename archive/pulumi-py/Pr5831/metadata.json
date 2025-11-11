@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349169",
+  "team": "6",
+  "startedAt": "2025-11-05T08:31:18.338Z",
+  "subtask": "Application Deployment",
+  "background": "This task simulates the setup of a typical serverless application architecture using Pulumi, a powerful yet succinct tool for defining cloud infrastructure using code.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

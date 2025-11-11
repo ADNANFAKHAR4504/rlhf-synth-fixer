@@ -1,0 +1,30 @@
+{
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000188",
+  "team": "1",
+  "startedAt": "2025-11-06T12:22:11.702Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "CloudTrail",
+    "IAM",
+    "VPC",
+    "EC2",
+    "RDS",
+    "SecurityGroup"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "harshita-turing",
+  "dockerS3Location": ""
+}

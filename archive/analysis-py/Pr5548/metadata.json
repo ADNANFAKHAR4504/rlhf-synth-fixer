@@ -1,0 +1,25 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "356270",
+  "team": "stf",
+  "startedAt": "2025-10-31T12:18:00.083Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "IAM",
+    "Access Analyzer",
+    "STS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
