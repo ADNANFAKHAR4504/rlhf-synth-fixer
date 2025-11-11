@@ -891,34 +891,43 @@ new aws.iam.RolePolicyAttachment(`lambda-basic-policy-${environmentSuffix}`, {
 
 // ADDED: Enhanced Lambda IAM Policy
 const lambdaPolicy = new aws.iam.Policy(`lambda-policy-${environmentSuffix}`, {
-  policy: JSON.stringify({
-    Version: '2012-10-17',
-    Statement: [
-      {
-        Effect: 'Allow',
-        Action: ['rds:DescribeDBClusters', 'rds:DescribeDBInstances'],
-        Resource: '*',
-      },
-      {
-        Effect: 'Allow',
-        Action: ['cloudwatch:PutMetricData', 'cloudwatch:GetMetricStatistics'],
-        Resource: '*',
-      },
-      {
-        Effect: 'Allow',
-        Action: ['dynamodb:GetItem', 'dynamodb:PutItem', 'dynamodb:UpdateItem'],
-        Resource: dynamoTable.arn,
-      },
-      {
-        Effect: 'Allow',
-        Action: [
-          'dms:DescribeReplicationTasks',
-          'dms:DescribeReplicationInstances',
-        ],
-        Resource: '*',
-      },
-    ],
-  }),
+  policy: dynamoTable.arn.apply(arn =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['rds:DescribeDBClusters', 'rds:DescribeDBInstances'],
+          Resource: '*',
+        },
+        {
+          Effect: 'Allow',
+          Action: [
+            'cloudwatch:PutMetricData',
+            'cloudwatch:GetMetricStatistics',
+          ],
+          Resource: '*',
+        },
+        {
+          Effect: 'Allow',
+          Action: [
+            'dynamodb:GetItem',
+            'dynamodb:PutItem',
+            'dynamodb:UpdateItem',
+          ],
+          Resource: arn,
+        },
+        {
+          Effect: 'Allow',
+          Action: [
+            'dms:DescribeReplicationTasks',
+            'dms:DescribeReplicationInstances',
+          ],
+          Resource: '*',
+        },
+      ],
+    })
+  ),
   tags: {
     Name: `lambda-policy-${environmentSuffix}`,
     Environment: environmentSuffix,
