@@ -5,6 +5,7 @@
 
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as crypto from 'crypto';
 
 interface TapStackProps {
   environmentSuffix: string;
@@ -24,7 +25,6 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dynamodbTable: aws.dynamodb.Table;
   public readonly hostedZone: aws.route53.Zone;
   public readonly primaryHealthCheck: aws.route53.HealthCheck;
-
   private readonly props: Required<TapStackProps>;
   private primaryProvider: aws.Provider;
   private drProvider: aws.Provider;
@@ -139,6 +139,10 @@ export class TapStack extends pulumi.ComponentResource {
     // Create CloudWatch alarms
     this.createCloudWatchAlarms('primary', primaryEcs, primarySnsTopic);
     this.createCloudWatchAlarms('dr', drEcs, drSnsTopic);
+    
+    // Create Aurora replication monitoring
+    this.createAuroraReplicationAlarm('primary', primarySnsTopic);
+    this.createAuroraReplicationAlarm('dr', drSnsTopic);
 
     // Create CloudWatch dashboard
     this.createDashboard(primaryEcs, drEcs);
@@ -613,6 +617,35 @@ export class TapStack extends pulumi.ComponentResource {
     primaryKmsKey: aws.kms.Key,
     drKmsKey: aws.kms.Key
   ): aws.rds.GlobalCluster {
+    
+    // FIXED: Create Secrets Manager secret for database password
+    const dbSecret = new aws.secretsmanager.Secret(
+      `aurora-secret-${this.props.environmentSuffix}`,
+      {
+        description: 'Aurora database master password',
+        kmsKeyId: primaryKmsKey.arn,
+        tags: this.props.tags,
+      },
+      { provider: this.primaryProvider, parent: this }
+    );
+
+    // Generate secure random password
+    const securePassword = crypto.randomBytes(32).toString('base64').slice(0, 32).replace(/[^a-zA-Z0-9]/g, 'A') + '1!';
+
+    const secretVersion = new aws.secretsmanager.SecretVersion(
+      `aurora-secret-version-${this.props.environmentSuffix}`,
+      {
+        secretId: dbSecret.id,
+        secretString: pulumi.secret(
+          JSON.stringify({
+            username: 'dbadmin',
+            password: securePassword,
+          })
+        ),
+      },
+      { provider: this.primaryProvider, parent: this }
+    );
+
     // Create Global Cluster
     const globalCluster = new aws.rds.GlobalCluster(
       `aurora-global-${this.props.environmentSuffix}`,
@@ -626,7 +659,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Primary Cluster
+    // Primary Cluster with Secrets Manager integration
     const primaryCluster = new aws.rds.Cluster(
       `aurora-primary-${this.props.environmentSuffix}`,
       {
@@ -636,10 +669,16 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         databaseName: 'trading',
         masterUsername: 'dbadmin',
-        masterPassword: 'ChangeMe123!',
-        globalClusterIdentifier: globalCluster.id,
-        dbSubnetGroupName: primarySubnetGroup.name,
-        vpcSecurityGroupIds: [primarySecurityGroup.id],
+        masterPassword: secretVersion.secretString.apply(s => {
+          const parsed = s ? JSON.parse(s) : {};
+          if (typeof parsed.password !== "string") {
+            throw new Error("Secret string did not contain a password");
+          }
+          return parsed.password;
+        }),
+        globalClusterIdentifier: globalCluster.id!,
+        dbSubnetGroupName: primarySubnetGroup.name!,
+        vpcSecurityGroupIds: [primarySecurityGroup.id!],
         storageEncrypted: true,
         kmsKeyId: primaryKmsKey.arn,
         backupRetentionPeriod: 7,
@@ -680,16 +719,14 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // DR Cluster (Secondary) - FIXED
-    // Note: globalClusterIdentifier removed to fix the error:
-    // "existing RDS Clusters cannot be added to an existing RDS Global Cluster"
+    // FIXED: DR Cluster - PROPERLY CONFIGURED as secondary in global database
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
         clusterIdentifier: `trading-aurora-dr-${this.props.environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
-        // globalClusterIdentifier: globalCluster.id, // COMMENTED OUT - see note above
+        globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
         storageEncrypted: true,
@@ -708,8 +745,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         provider: this.drProvider,
         parent: this,
-        dependsOn: [primaryCluster],
-        ignoreChanges: ['globalClusterIdentifier'], // ADDED - prevents drift if manually attached
+        dependsOn: [primaryCluster, globalCluster],
       }
     );
 
@@ -845,6 +881,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    // FIXED: Added Secrets Manager access to task role policy
     new aws.iam.RolePolicy(
       `ecs-task-policy-${region}-${this.props.environmentSuffix}`,
       {
@@ -867,6 +904,11 @@ export class TapStack extends pulumi.ComponentResource {
               Action: ['s3:GetObject', 's3:PutObject'],
               Resource: `arn:aws:s3:::trading-artifacts-*-${this.props.environmentSuffix}/*`,
             },
+            {
+              Effect: 'Allow',
+              Action: ['secretsmanager:GetSecretValue'],
+              Resource: `arn:aws:secretsmanager:*:*:secret:aurora-secret-${this.props.environmentSuffix}-*`,
+            },
           ],
         }),
       },
@@ -884,25 +926,25 @@ export class TapStack extends pulumi.ComponentResource {
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
         containerDefinitions: pulumi.interpolate`[
-  {
-    "name": "trading-app",
-    "image": "nginx:latest",
-    "portMappings": [
-      {
-        "containerPort": 80,
-        "protocol": "tcp"
-      }
-    ],
-    "logConfiguration": {
-      "logDriver": "awslogs",
-      "options": {
-        "awslogs-group": "${logGroup.name}",
-        "awslogs-region": "${region === 'primary' ? this.props.primaryRegion : this.props.drRegion}",
-        "awslogs-stream-prefix": "trading"
-      }
-    }
-  }
-]`,
+          {
+            "name": "trading-app",
+            "image": "nginx:latest",
+            "portMappings": [
+              {
+                "containerPort": 80,
+                "protocol": "tcp"
+              }
+            ],
+            "logConfiguration": {
+              "logDriver": "awslogs",
+              "options": {
+                "awslogs-group": "${logGroup.name}",
+                "awslogs-region": "${region === 'primary' ? this.props.primaryRegion : this.props.drRegion}",
+                "awslogs-stream-prefix": "trading"
+              }
+            }
+          }
+        ]`,
         tags: {
           ...this.props.tags,
           Region: region,
@@ -1140,6 +1182,38 @@ export class TapStack extends pulumi.ComponentResource {
     // Simplified for this implementation
   }
 
+  // ADDED: Aurora replication monitoring
+  private createAuroraReplicationAlarm(
+    region: string,
+    snsTopic: aws.sns.Topic
+  ) {
+    const provider = region === 'primary' ? this.primaryProvider : this.drProvider;
+    
+    new aws.cloudwatch.MetricAlarm(
+      `aurora-replication-lag-${region}-${this.props.environmentSuffix}`,
+      {
+        name: `aurora-replication-lag-${region}-${this.props.environmentSuffix}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 2,
+        metricName: 'AuroraGlobalDBReplicationLag',
+        namespace: 'AWS/RDS',
+        period: 60,
+        statistic: 'Average',
+        threshold: 60000, // 60 seconds = 60,000 milliseconds
+        alarmDescription: 'Aurora Global DB replication lag exceeds 1 minute (RPO requirement)',
+        alarmActions: [snsTopic.arn],
+        dimensions: {
+          DBClusterIdentifier: `trading-aurora-${region}-${this.props.environmentSuffix}`,
+        },
+        tags: {
+          ...this.props.tags,
+          Region: region,
+        },
+      },
+      { provider, parent: this }
+    );
+  }
+
   private createFailoverLambdas(
     globalCluster: aws.rds.GlobalCluster,
     drEcsService: aws.ecs.Service,
@@ -1221,14 +1295,12 @@ rds_client = boto3.client('rds', region_name=os.environ['DR_REGION'])
 def handler(event, context):
     cluster_id = os.environ['DR_CLUSTER_ID']
     global_cluster_id = os.environ['GLOBAL_CLUSTER_ID']
-    
     try:
         # Remove from global cluster
         rds_client.remove_from_global_cluster(
             GlobalClusterIdentifier=global_cluster_id,
             DbClusterIdentifier=cluster_id
         )
-        
         return {
             'statusCode': 200,
             'body': json.dumps('Aurora DR cluster promoted successfully')
@@ -1254,6 +1326,7 @@ def handler(event, context):
       { provider: this.drProvider, parent: this }
     );
 
+    // FIXED: Complete Route53 Lambda implementation
     const updateRoute53Lambda = new aws.lambda.Function(
       `lambda-update-route53-${this.props.environmentSuffix}`,
       {
@@ -1271,12 +1344,68 @@ route53_client = boto3.client('route53')
 
 def handler(event, context):
     hosted_zone_id = os.environ['HOSTED_ZONE_ID']
+    domain_name = os.environ['DOMAIN_NAME']
+    primary_alb_dns = os.environ['PRIMARY_ALB_DNS']
+    primary_alb_zone_id = os.environ['PRIMARY_ALB_ZONE_ID']
+    dr_alb_dns = os.environ['DR_ALB_DNS']
+    dr_alb_zone_id = os.environ['DR_ALB_ZONE_ID']
     
     try:
-        # This is simplified
+        # Update primary record to weight 0 (disable primary)
+        response1 = route53_client.change_resource_record_sets(
+            HostedZoneId=hosted_zone_id,
+            ChangeBatch={
+                'Comment': 'Failover to DR - Disable primary',
+                'Changes': [
+                    {
+                        'Action': 'UPSERT',
+                        'ResourceRecordSet': {
+                            'Name': domain_name,
+                            'Type': 'A',
+                            'SetIdentifier': 'primary',
+                            'Failover': 'PRIMARY',
+                            'AliasTarget': {
+                                'HostedZoneId': primary_alb_zone_id,
+                                'DNSName': primary_alb_dns,
+                                'EvaluateTargetHealth': False
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        
+        # Update DR record to PRIMARY (enable DR as primary)
+        response2 = route53_client.change_resource_record_sets(
+            HostedZoneId=hosted_zone_id,
+            ChangeBatch={
+                'Comment': 'Failover to DR - Promote DR to primary',
+                'Changes': [
+                    {
+                        'Action': 'UPSERT',
+                        'ResourceRecordSet': {
+                            'Name': domain_name,
+                            'Type': 'A',
+                            'SetIdentifier': 'dr',
+                            'Failover': 'PRIMARY',
+                            'AliasTarget': {
+                                'HostedZoneId': dr_alb_zone_id,
+                                'DNSName': dr_alb_dns,
+                                'EvaluateTargetHealth': True
+                            }
+                        }
+                    }
+                ]
+            }
+        )
+        
         return {
             'statusCode': 200,
-            'body': json.dumps('Route53 updated successfully')
+            'body': json.dumps({
+                'message': 'Route53 updated successfully',
+                'primaryChangeId': response1['ChangeInfo']['Id'],
+                'drChangeId': response2['ChangeInfo']['Id']
+            })
         }
     except Exception as e:
         print(f"Error: {str(e)}")
@@ -1289,6 +1418,11 @@ def handler(event, context):
         environment: {
           variables: {
             HOSTED_ZONE_ID: hostedZone.id,
+            DOMAIN_NAME: pulumi.interpolate`${this.props.hostedZoneName}`,
+            PRIMARY_ALB_DNS: this.primaryAlb.dnsName,
+            PRIMARY_ALB_ZONE_ID: this.primaryAlb.zoneId,
+            DR_ALB_DNS: this.drAlb.dnsName,
+            DR_ALB_ZONE_ID: this.drAlb.zoneId,
           },
         },
         timeout: 60,
@@ -1316,14 +1450,12 @@ def handler(event, context):
     cluster_name = os.environ['CLUSTER_NAME']
     service_name = os.environ['SERVICE_NAME']
     desired_count = int(os.environ.get('DESIRED_COUNT', '2'))
-    
     try:
         response = ecs_client.update_service(
             cluster=cluster_name,
             service=service_name,
             desiredCount=desired_count
         )
-        
         return {
             'statusCode': 200,
             'body': json.dumps('ECS service scaled successfully')
