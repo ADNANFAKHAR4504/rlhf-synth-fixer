@@ -5,3 +5,4 @@ config:
   environmentSuffix:
     type: string
     description: Unique suffix for resource naming to avoid conflicts
+    default: dev

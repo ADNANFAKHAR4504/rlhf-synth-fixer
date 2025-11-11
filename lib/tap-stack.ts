@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
@@ -77,11 +78,9 @@ const flowLogsRole = new aws.iam.Role(`flow-logs-role-${environmentSuffix}`, {
   tags: tags,
 });
 
-new aws.iam.RolePolicy(
-  `flow-logs-policy-${environmentSuffix}`,
-  {
-    role: flowLogsRole.id,
-    policy: pulumi.interpolate`{
+new aws.iam.RolePolicy(`flow-logs-policy-${environmentSuffix}`, {
+  role: flowLogsRole.id,
+  policy: pulumi.interpolate`{
         "Version": "2012-10-17",
         "Statement": [
             {
@@ -97,16 +96,18 @@ new aws.iam.RolePolicy(
             }
         ]
     }`,
-  },
-);
-
-export const vpcFlowLog = new aws.ec2.FlowLog(`vpc-flow-log-${environmentSuffix}`, {
-  vpcId: vpc.vpcId,
-  trafficType: 'ALL',
-  logDestinationType: 's3',
-  logDestination: flowLogsBucket.arn,
-  tags: tags,
 });
+
+export const vpcFlowLog = new aws.ec2.FlowLog(
+  `vpc-flow-log-${environmentSuffix}`,
+  {
+    vpcId: vpc.vpcId,
+    trafficType: 'ALL',
+    logDestinationType: 's3',
+    logDestination: flowLogsBucket.arn,
+    tags: tags,
+  }
+);
 
 // KMS key for RDS encryption
 const rdsKmsKey = new aws.kms.Key(`rds-kms-key-${environmentSuffix}`, {
@@ -115,10 +116,13 @@ const rdsKmsKey = new aws.kms.Key(`rds-kms-key-${environmentSuffix}`, {
   tags: tags,
 });
 
-export const rdsKmsAlias = new aws.kms.Alias(`rds-kms-alias-${environmentSuffix}`, {
-  name: `alias/payment-rds-${environmentSuffix}`,
-  targetKeyId: rdsKmsKey.keyId,
-});
+export const rdsKmsAlias = new aws.kms.Alias(
+  `rds-kms-alias-${environmentSuffix}`,
+  {
+    name: `alias/payment-rds-${environmentSuffix}`,
+    targetKeyId: rdsKmsKey.keyId,
+  }
+);
 
 // Security Group for RDS
 const rdsSecurityGroup = new aws.ec2.SecurityGroup(
@@ -145,7 +149,7 @@ const rdsSecurityGroup = new aws.ec2.SecurityGroup(
       },
     ],
     tags: tags,
-  },
+  }
 );
 
 // DB Subnet Group
@@ -154,7 +158,7 @@ const dbSubnetGroup = new aws.rds.SubnetGroup(
   {
     subnetIds: vpc.privateSubnetIds,
     tags: tags,
-  },
+  }
 );
 
 // Secrets Manager for database credentials
@@ -164,7 +168,7 @@ const dbSecret = new aws.secretsmanager.Secret(
     name: `payment-db-credentials-${environmentSuffix}`,
     description: 'Database credentials for payment processing',
     tags: tags,
-  },
+  }
 );
 
 export const dbSecretVersion = new aws.secretsmanager.SecretVersion(
@@ -179,7 +183,7 @@ export const dbSecretVersion = new aws.secretsmanager.SecretVersion(
       port: 5432,
       dbname: 'paymentdb',
     }),
-  },
+  }
 );
 
 // Secrets rotation Lambda execution role
@@ -203,37 +207,34 @@ const rotationLambdaRole = new aws.iam.Role(
       'arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole',
     ],
     tags: tags,
-  },
+  }
 );
 
-new aws.iam.RolePolicy(
-  `rotation-lambda-policy-${environmentSuffix}`,
-  {
-    role: rotationLambdaRole.id,
-    policy: dbSecret.arn.apply(arn =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: [
-              'secretsmanager:DescribeSecret',
-              'secretsmanager:GetSecretValue',
-              'secretsmanager:PutSecretValue',
-              'secretsmanager:UpdateSecretVersionStage',
-            ],
-            Resource: arn,
-          },
-          {
-            Effect: 'Allow',
-            Action: ['secretsmanager:GetRandomPassword'],
-            Resource: '*',
-          },
-        ],
-      }),
-    ),
-  },
-);
+new aws.iam.RolePolicy(`rotation-lambda-policy-${environmentSuffix}`, {
+  role: rotationLambdaRole.id,
+  policy: dbSecret.arn.apply(arn =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: [
+            'secretsmanager:DescribeSecret',
+            'secretsmanager:GetSecretValue',
+            'secretsmanager:PutSecretValue',
+            'secretsmanager:UpdateSecretVersionStage',
+          ],
+          Resource: arn,
+        },
+        {
+          Effect: 'Allow',
+          Action: ['secretsmanager:GetRandomPassword'],
+          Resource: '*',
+        },
+      ],
+    })
+  ),
+});
 
 // RDS Aurora PostgreSQL Cluster
 const rdsCluster = new aws.rds.Cluster(
@@ -256,7 +257,7 @@ const rdsCluster = new aws.rds.Cluster(
     skipFinalSnapshot: true,
     enabledCloudwatchLogsExports: ['postgresql'],
     tags: tags,
-  },
+  }
 );
 
 export const rdsInstance1 = new aws.rds.ClusterInstance(
@@ -269,7 +270,7 @@ export const rdsInstance1 = new aws.rds.ClusterInstance(
     engineVersion: rdsCluster.engineVersion,
     publiclyAccessible: false,
     tags: tags,
-  },
+  }
 );
 
 export const rdsInstance2 = new aws.rds.ClusterInstance(
@@ -282,7 +283,7 @@ export const rdsInstance2 = new aws.rds.ClusterInstance(
     engineVersion: rdsCluster.engineVersion,
     publiclyAccessible: false,
     tags: tags,
-  },
+  }
 );
 
 // ECR Repository
@@ -300,7 +301,7 @@ const ecrRepository = new aws.ecr.Repository(
       },
     ],
     tags: tags,
-  },
+  }
 );
 
 // ECS Task Execution Role
@@ -323,32 +324,29 @@ const ecsTaskExecutionRole = new aws.iam.Role(
       'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy',
     ],
     tags: tags,
-  },
+  }
 );
 
-new aws.iam.RolePolicy(
-  `ecs-task-execution-policy-${environmentSuffix}`,
-  {
-    role: ecsTaskExecutionRole.id,
-    policy: dbSecret.arn.apply(arn =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['secretsmanager:GetSecretValue'],
-            Resource: arn,
-          },
-          {
-            Effect: 'Allow',
-            Action: ['kms:Decrypt'],
-            Resource: '*',
-          },
-        ],
-      }),
-    ),
-  },
-);
+new aws.iam.RolePolicy(`ecs-task-execution-policy-${environmentSuffix}`, {
+  role: ecsTaskExecutionRole.id,
+  policy: dbSecret.arn.apply(arn =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['secretsmanager:GetSecretValue'],
+          Resource: arn,
+        },
+        {
+          Effect: 'Allow',
+          Action: ['kms:Decrypt'],
+          Resource: '*',
+        },
+      ],
+    })
+  ),
+});
 
 // ECS Task Role
 const ecsTaskRole = new aws.iam.Role(`ecs-task-role-${environmentSuffix}`, {
@@ -367,24 +365,21 @@ const ecsTaskRole = new aws.iam.Role(`ecs-task-role-${environmentSuffix}`, {
   tags: tags,
 });
 
-new aws.iam.RolePolicy(
-  `ecs-task-policy-${environmentSuffix}`,
-  {
-    role: ecsTaskRole.id,
-    policy: dbSecret.arn.apply(arn =>
-      JSON.stringify({
-        Version: '2012-10-17',
-        Statement: [
-          {
-            Effect: 'Allow',
-            Action: ['secretsmanager:GetSecretValue'],
-            Resource: arn,
-          },
-        ],
-      }),
-    ),
-  },
-);
+new aws.iam.RolePolicy(`ecs-task-policy-${environmentSuffix}`, {
+  role: ecsTaskRole.id,
+  policy: dbSecret.arn.apply(arn =>
+    JSON.stringify({
+      Version: '2012-10-17',
+      Statement: [
+        {
+          Effect: 'Allow',
+          Action: ['secretsmanager:GetSecretValue'],
+          Resource: arn,
+        },
+      ],
+    })
+  ),
+});
 
 // CloudWatch Log Group for ECS
 const ecsLogGroup = new aws.cloudwatch.LogGroup(
@@ -393,7 +388,7 @@ const ecsLogGroup = new aws.cloudwatch.LogGroup(
     name: `/ecs/payment-app-${environmentSuffix}`,
     retentionInDays: 2555, // 7 years
     tags: tags,
-  },
+  }
 );
 
 // Security Group for ECS Tasks
@@ -421,22 +416,19 @@ const ecsSecurityGroup = new aws.ec2.SecurityGroup(
       },
     ],
     tags: tags,
-  },
+  }
 );
 
 // Update RDS security group to allow ECS access
-new aws.ec2.SecurityGroupRule(
-  `rds-from-ecs-${environmentSuffix}`,
-  {
-    type: 'ingress',
-    fromPort: 5432,
-    toPort: 5432,
-    protocol: 'tcp',
-    securityGroupId: rdsSecurityGroup.id,
-    sourceSecurityGroupId: ecsSecurityGroup.id,
-    description: 'PostgreSQL access from ECS tasks',
-  },
-);
+new aws.ec2.SecurityGroupRule(`rds-from-ecs-${environmentSuffix}`, {
+  type: 'ingress',
+  fromPort: 5432,
+  toPort: 5432,
+  protocol: 'tcp',
+  securityGroupId: rdsSecurityGroup.id,
+  sourceSecurityGroupId: ecsSecurityGroup.id,
+  description: 'PostgreSQL access from ECS tasks',
+});
 
 // ECS Cluster
 const ecsCluster = new aws.ecs.Cluster(`payment-cluster-${environmentSuffix}`, {
@@ -475,7 +467,7 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(
       },
     ],
     tags: tags,
-  },
+  }
 );
 
 const alb = new aws.lb.LoadBalancer(`payment-alb-${environmentSuffix}`, {
@@ -516,7 +508,7 @@ const certificate = new aws.acm.Certificate(
     domainName: `payment-${environmentSuffix}.example.com`,
     validationMethod: 'DNS',
     tags: tags,
-  },
+  }
 );
 
 // ALB HTTPS Listener
@@ -535,7 +527,7 @@ const httpsListener = new aws.lb.Listener(
       },
     ],
     tags: tags,
-  },
+  }
 );
 
 // ECS Task Definition
@@ -582,10 +574,10 @@ const taskDefinition = new aws.ecs.TaskDefinition(
               },
             },
           },
-        ]),
+        ])
       ),
     tags: tags,
-  },
+  }
 );
 
 // ECS Service
@@ -612,7 +604,7 @@ const ecsService = new aws.ecs.Service(
     healthCheckGracePeriodSeconds: 60,
     tags: tags,
   },
-  { dependsOn: [httpsListener] },
+  { dependsOn: [httpsListener] }
 );
 
 // Auto Scaling for ECS Service
@@ -624,7 +616,7 @@ const ecsTarget = new aws.appautoscaling.Target(
     resourceId: pulumi.interpolate`service/${ecsCluster.name}/${ecsService.name}`,
     scalableDimension: 'ecs:service:DesiredCount',
     serviceNamespace: 'ecs',
-  },
+  }
 );
 
 export const cpuScalingPolicy = new aws.appautoscaling.Policy(
@@ -643,7 +635,7 @@ export const cpuScalingPolicy = new aws.appautoscaling.Policy(
       scaleInCooldown: 300,
       scaleOutCooldown: 60,
     },
-  },
+  }
 );
 
 // S3 Bucket for Static Assets
@@ -676,7 +668,7 @@ const staticAssetsBucket = new aws.s3.Bucket(
       },
     ],
     tags: tags,
-  },
+  }
 );
 
 // CloudFront OAI
@@ -684,33 +676,30 @@ const oai = new aws.cloudfront.OriginAccessIdentity(
   `oai-${environmentSuffix}`,
   {
     comment: `OAI for payment static assets ${environmentSuffix}`,
-  },
+  }
 );
 
 // S3 Bucket Policy for CloudFront
-new aws.s3.BucketPolicy(
-  `static-assets-policy-${environmentSuffix}`,
-  {
-    bucket: staticAssetsBucket.id,
-    policy: pulumi
-      .all([staticAssetsBucket.arn, oai.iamArn])
-      .apply(([bucketArn, oaiArn]) =>
-        JSON.stringify({
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Effect: 'Allow',
-              Principal: {
-                AWS: oaiArn,
-              },
-              Action: 's3:GetObject',
-              Resource: `${bucketArn}/*`,
+new aws.s3.BucketPolicy(`static-assets-policy-${environmentSuffix}`, {
+  bucket: staticAssetsBucket.id,
+  policy: pulumi
+    .all([staticAssetsBucket.arn, oai.iamArn])
+    .apply(([bucketArn, oaiArn]) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              AWS: oaiArn,
             },
-          ],
-        }),
-      ),
-  },
-);
+            Action: 's3:GetObject',
+            Resource: `${bucketArn}/*`,
+          },
+        ],
+      })
+    ),
+});
 
 // CloudFront Distribution
 const cloudfront = new aws.cloudfront.Distribution(
@@ -753,11 +742,11 @@ const cloudfront = new aws.cloudfront.Distribution(
     },
     priceClass: 'PriceClass_100',
     tags: tags,
-  },
+  }
 );
 
 // CloudWatch Alarms
-const cpuAlarmHigh = new aws.cloudwatch.MetricAlarm(
+export const cpuAlarmHigh = new aws.cloudwatch.MetricAlarm(
   `ecs-cpu-high-${environmentSuffix}`,
   {
     name: `ecs-cpu-high-${environmentSuffix}`,
@@ -774,7 +763,7 @@ const cpuAlarmHigh = new aws.cloudwatch.MetricAlarm(
       ServiceName: ecsService.name,
     },
     tags: tags,
-  },
+  }
 );
 
 export const memoryAlarmHigh = new aws.cloudwatch.MetricAlarm(
@@ -794,7 +783,7 @@ export const memoryAlarmHigh = new aws.cloudwatch.MetricAlarm(
       ServiceName: ecsService.name,
     },
     tags: tags,
-  },
+  }
 );
 
 export const unhealthyHostAlarm = new aws.cloudwatch.MetricAlarm(
@@ -814,7 +803,7 @@ export const unhealthyHostAlarm = new aws.cloudwatch.MetricAlarm(
       TargetGroup: targetGroup.arnSuffix,
     },
     tags: tags,
-  },
+  }
 );
 
 // Exports
