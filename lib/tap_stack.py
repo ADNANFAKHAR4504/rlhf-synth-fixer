@@ -39,10 +39,14 @@ class TapStackArgs:
         self,
         environment_suffix: Optional[str] = None,
         alert_email_addresses: Optional[list] = None,
+        primary_region: str = "eu-central-1",
+        secondary_region: str = "eu-central-2",
         tags: Optional[dict] = None
     ):
         self.environment_suffix = environment_suffix or 'dev'
         self.alert_email_addresses = alert_email_addresses or []
+        self.primary_region = primary_region
+        self.secondary_region = secondary_region
         self.tags = tags or {}
 
 
@@ -83,14 +87,16 @@ class TapStack(pulumi.ComponentResource):
             'ManagedBy': 'Pulumi',
             'EnvironmentSuffix': self.environment_suffix
         }
+        self.primary_region = args.primary_region
+        self.secondary_region = args.secondary_region
 
         # 1. Network Infrastructure
         network_stack = NetworkStack(
             "network",
             NetworkStackArgs(
                 environment_suffix=self.environment_suffix,
-                primary_region="ap-southeast-1",
-                secondary_region="us-east-1",
+                primary_region=self.primary_region,
+                secondary_region=self.secondary_region,
                 tertiary_region="us-east-2",
                 tags=self.tags
             ),
@@ -126,8 +132,8 @@ class TapStack(pulumi.ComponentResource):
                 vpc_id=network_stack.production_vpc.id,
                 private_subnet_ids=[s.id for s in network_stack.production_private_subnets],
                 db_security_group_id=network_stack.db_security_group.id,
-                primary_region="ap-southeast-1",
-                secondary_region="us-east-1",
+                primary_region=self.primary_region,
+                secondary_region=self.secondary_region,
                 tertiary_region="us-east-2",
                 tags=self.tags
             ),
