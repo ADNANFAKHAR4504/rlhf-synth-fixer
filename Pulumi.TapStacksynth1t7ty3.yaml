@@ -1,0 +1,4 @@
+encryptionsalt: v1:8ATFC9iz4uM=:v1:oDf6UM6gl34hDl5v:/j0Xz1o31wFTtRi7mjFGrjb3BmszEg==
+config:
+  aws:region: ap-southeast-1
+  payment-processing:environmentSuffix: synth1t7ty3

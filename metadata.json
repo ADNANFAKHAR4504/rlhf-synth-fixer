@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T13:31:28+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [],
+  "po_id": "1t7ty3",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "ECR",
+    "ALB",
+    "ACM",
+    "CloudFront",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "NAT Gateway",
+    "Auto Scaling"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10
+}

@@ -1,3 +1,23 @@
+# Payment Processing Infrastructure - Production-Ready Implementation
+
+This document contains the production-ready implementation for the secure payment processing infrastructure using Pulumi with TypeScript, deployed to the ap-southeast-1 region.
+
+## Architecture Overview
+
+The infrastructure implements a secure, PCI DSS-compliant payment processing platform with:
+- Multi-AZ VPC with public and private subnets across 3 availability zones
+- Application Load Balancer with HTTPS termination
+- ECS Fargate cluster for containerized applications
+- RDS Aurora PostgreSQL Multi-AZ with customer-managed KMS encryption
+- S3 buckets with versioning and lifecycle policies
+- CloudFront CDN for static assets
+- Comprehensive security: IAM least privilege, Secrets Manager with rotation, security groups
+- Monitoring: CloudWatch logs (7-year retention) and alarms
+- Auto-scaling for ECS services based on CPU utilization
+
+## File: index.ts
+
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
@@ -838,3 +858,93 @@ export const ecrRepositoryUrl = ecrRepository.repositoryUrl;
 export const cloudfrontDomainName = cloudfront.domainName;
 export const staticAssetsBucketName = staticAssetsBucket.bucket;
 export const flowLogsBucketName = flowLogsBucket.bucket;
+```
+
+## Key Design Decisions
+
+### Security
+- **Encryption**: Customer-managed KMS keys for RDS, S3 server-side encryption (AES256)
+- **Network Isolation**: ECS tasks in private subnets with no direct internet access, NAT gateways for outbound
+- **Access Control**: IAM roles with least privilege, security groups with explicit port allowlists
+- **Secrets Management**: AWS Secrets Manager for database credentials with Lambda-based rotation capability
+- **SSL/TLS**: HTTPS-only access from internet to ALB with ACM certificates
+
+### Compliance
+- **VPC Flow Logs**: All traffic captured and sent to dedicated S3 bucket with lifecycle policy
+- **Audit Trails**: CloudWatch Logs with 7-year retention (2557 days - closest valid CloudWatch value)
+- **Resource Tagging**: All resources tagged with Environment, Project, and CostCenter for cost tracking
+
+### High Availability
+- **Multi-AZ Deployment**: VPC spans 3 availability zones
+- **RDS Aurora**: Multi-AZ deployment with 2 cluster instances
+- **NAT Gateways**: One per AZ for redundancy
+- **ECS Services**: Minimum 2 tasks with auto-scaling (2-10 tasks)
+
+### Operational Excellence
+- **Auto-Scaling**: ECS services scale based on CPU utilization (target 70%)
+- **Monitoring**: CloudWatch alarms for CPU, memory, and unhealthy hosts
+- **Container Insights**: Enabled for detailed ECS metrics
+- **Image Scanning**: ECR repository scans on push
+- **Specific Image Tags**: ECS tasks use versioned images (v1.0.0), not 'latest'
+
+### Cost Optimization
+- **S3 Lifecycle Policies**: Flow logs transition to Glacier after 90 days
+- **Static Assets**: Noncurrent versions transition to STANDARD_IA after 30 days, deleted after 90 days
+- **CloudFront**: PriceClass_100 for cost-effective CDN
+- **No Deletion Protection**: ALB deletion protection disabled for easy cleanup
+
+### Compliance with Requirements
+- All resource names include environmentSuffix for uniqueness
+- Deployed to ap-southeast-1 region
+- All resources fully destroyable (skipFinalSnapshot: true, no Retain policies)
+- PostgreSQL 14.6 for database engine
+- FARGATE launch type for serverless container orchestration
+- 7-year log retention for regulatory compliance
+
+## Deployment Instructions
+
+### Prerequisites
+- Pulumi CLI 3.x installed
+- Node.js 18+ and TypeScript 5.x
+- AWS CLI configured with appropriate credentials
+- AWS account with permissions for all required services
+
+### Configuration
+```bash
+pulumi config set environmentSuffix <unique-suffix>
+pulumi config set aws:region ap-southeast-1
+```
+
+### Deploy
+```bash
+npm install
+pulumi up
+```
+
+### Post-Deployment
+1. Push container image to ECR repository
+2. Configure DNS for ACM certificate validation
+3. Enable automatic rotation for database secret
+4. Upload static assets to S3 bucket
+
+## Outputs
+After deployment, the following values are exported:
+- `vpcId`: VPC ID for reference
+- `publicSubnetIds`: Public subnet IDs
+- `privateSubnetIds`: Private subnet IDs
+- `albDnsName`: ALB DNS name for application access
+- `albArn`: ALB ARN
+- `ecsClusterArn`: ECS cluster ARN
+- `ecsServiceName`: ECS service name
+- `rdsClusterEndpoint`: RDS write endpoint
+- `rdsClusterReadEndpoint`: RDS read endpoint
+- `dbSecretArn`: Database credentials secret ARN
+- `ecrRepositoryUrl`: ECR repository URL
+- `cloudfrontDomainName`: CloudFront distribution domain
+- `staticAssetsBucketName`: S3 bucket name for static assets
+- `flowLogsBucketName`: S3 bucket name for VPC flow logs
+
+## Cleanup
+```bash
+pulumi destroy
+```
