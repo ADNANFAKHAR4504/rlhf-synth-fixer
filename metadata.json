@@ -1,0 +1,16 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6285",
+  "team": "5",
+  "startedAt": "2025-11-11T13:27:26.421Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "real-time event-driven architecture for processing financial market data with automated compliance monitoring, audit trails, and regulatory adherence for financial services infrastructure",
+
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": ["Lambda", "EventBridge", "DynamoDB", "SQS", "SNS", "CloudWatch", "IAM", "X-Ray", "Systems Manager"]
+}
