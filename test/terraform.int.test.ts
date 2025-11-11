@@ -301,7 +301,7 @@ describe('Infrastructure Integration Tests', () => {
     describe('Application Load Balancer Configuration', () => {
       test('ALB should be internet-facing with correct settings', async () => {
         const albs = await elbClient.send(new DescribeLoadBalancersCommand({
-          Names: ['webapp-alb']
+          Names: ['webapp-alb1']
         }));
 
         const alb = albs.LoadBalancers!.find(lb => lb.DNSName === outputs.alb_dns_name);
@@ -776,12 +776,6 @@ describe('Infrastructure Integration Tests', () => {
           expect(instance.PrivateIpAddress).toBeDefined();
         });
       });
-      
-      // Step 5: Test would include actual DB connection from EC2
-      // This would require executing commands on EC2 or using Lambda
-      console.log('Database endpoint verified:', dbHost);
-      console.log('Database port:', dbPort);
-      console.log('Secret retrieved successfully');
     });
 
     test('Failover and recovery flow: Instance failure -> Health check fail -> ASG replacement -> Recovery', async () => {
@@ -838,7 +832,6 @@ describe('Infrastructure Integration Tests', () => {
       
       expect(finalHealthyCount).toBeGreaterThanOrEqual(2);
       
-      console.log('Failover test completed - application remained available');
     });
 
     test('Secret rotation flow: Rotate secret -> Update RDS -> Verify connectivity', async () => {
@@ -850,7 +843,6 @@ describe('Infrastructure Integration Tests', () => {
       const currentVersionId = currentSecret.VersionId;
       
       // Step 2: Initiate secret rotation (if rotation is configured)
-      // Note: Actual rotation requires Lambda function setup
       try {
         await secretsClient.send(new RotateSecretCommand({
           SecretId: outputs.secrets_manager_secret_arn,
@@ -859,8 +851,7 @@ describe('Infrastructure Integration Tests', () => {
           }
         }));
       } catch (error: any) {
-        // Rotation might not be configured, which is expected
-        console.log('Secret rotation not configured:', error.message);
+
       }
       
       // Step 3: Verify secret metadata
@@ -885,7 +876,6 @@ describe('Infrastructure Integration Tests', () => {
       
       expect(rdsInstance!.DBInstanceStatus).toBe('available');
       
-      console.log('Secret management flow verified');
     });
   });
 
@@ -975,8 +965,6 @@ describe('Infrastructure Integration Tests', () => {
             DesiredCapacity: 0
           }));
         }catch (error: any) {
-          // If capacity is not immediately adjusted, AWS SDK might not throw an error
-          console.log(`Setting capacity to 0 attempted: ${error.message}`);
         }
         
         // Try to set capacity above maximum (should fail or adjust to max)
@@ -986,7 +974,6 @@ describe('Infrastructure Integration Tests', () => {
             DesiredCapacity: 15
           }));
         }catch (error: any) {
-          console.log(`Setting capacity to 15 attempted: ${error.message}`);
         }
 
         await autoScalingClient.send(new SetDesiredCapacityCommand({
@@ -1186,10 +1173,6 @@ describe('Infrastructure Integration Tests', () => {
       
       expect(successful).toBeGreaterThan(concurrentRequests * 0.90); // 90% success rate
       expect(totalTime).toBeLessThan(30000); // Complete within 30 seconds
-      
-      console.log(`Performance test: ${successful}/${concurrentRequests} successful`);
-      console.log(`Total time: ${totalTime}ms`);
-      console.log(`Average time per request: ${totalTime / concurrentRequests}ms`);
     });
   });
 

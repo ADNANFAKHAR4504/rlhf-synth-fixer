@@ -694,3 +694,8 @@ output "rds_security_group_id" {
   description = "The Security Group ID for the RDS instance"
   value       = aws_security_group.rds.id
 }
+
+output "ec2_role_name" {
+  description = "The generated name of the EC2 IAM Role"
+  value       = aws_iam_role.ec2.name
+}
