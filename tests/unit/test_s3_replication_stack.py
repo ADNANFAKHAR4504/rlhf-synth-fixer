@@ -224,8 +224,8 @@ class TestS3Replication:
             }
         )
 
-    def test_delete_marker_replication_enabled(self, template):
-        """Test that delete marker replication is enabled."""
+    def test_replication_uses_v1_schema(self, template):
+        """Test that replication uses V1 schema (prefix-based) for RTC compatibility."""
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
@@ -233,9 +233,8 @@ class TestS3Replication:
                 "ReplicationConfiguration": {
                     "Rules": [
                         {
-                            "DeleteMarkerReplication": {
-                                "Status": "Enabled"
-                            }
+                            "Prefix": "",
+                            "Status": "Enabled"
                         }
                     ]
                 }

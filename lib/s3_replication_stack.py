@@ -135,9 +135,6 @@ class S3ReplicationStack(Stack):
                             status="Enabled"
                         )
                     ),
-                    delete_marker_replication=s3.CfnBucket.DeleteMarkerReplicationProperty(
-                        status="Enabled"
-                    ),
                 )
             ],
         )
