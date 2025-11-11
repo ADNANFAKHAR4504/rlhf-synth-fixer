@@ -388,13 +388,17 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(sg.Properties.GroupDescription).toContain('ECS');
     });
 
-    test('should allow all outbound traffic', () => {
+    test('should allow HTTPS outbound traffic', () => {
       const sg = template.Resources.CodeBuildSecurityGroup;
       const egress = sg.Properties.SecurityGroupEgress;
 
       expect(egress).toBeDefined();
-      expect(egress[0].IpProtocol).toBe(-1);
+      expect(egress.length).toBeGreaterThanOrEqual(1);
+      expect(egress[0].IpProtocol).toBe('tcp');
+      expect(egress[0].FromPort).toBe(443);
+      expect(egress[0].ToPort).toBe(443);
       expect(egress[0].CidrIp).toBe('0.0.0.0/0');
+      expect(egress[0].Description).toContain('HTTPS');
     });
 
     test('should associate security group with VPC', () => {
@@ -636,7 +640,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       const logGroup = template.Resources.EcsLogGroup;
       expect(logGroup).toBeDefined();
       expect(logGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(logGroup.Properties.RetentionInDays).toBe(7);
+      expect(logGroup.Properties.RetentionInDays).toBe(30);
     });
 
     test('should define ECS task definition', () => {

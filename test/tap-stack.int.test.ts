@@ -361,7 +361,7 @@ describe('Payment Service CI/CD Pipeline Integration Tests', () => {
         }
       }, 60000);
 
-      test('should verify security group allows outbound traffic', async () => {
+      test('should verify security group allows HTTPS outbound traffic', async () => {
         const sgId = outputs.CodeBuildSecurityGroupId;
 
         try {
@@ -377,12 +377,17 @@ describe('Payment Service CI/CD Pipeline Integration Tests', () => {
 
           const egressRules = response.SecurityGroups![0].IpPermissionsEgress;
           expect(egressRules).toBeDefined();
+          expect(egressRules!.length).toBeGreaterThanOrEqual(1);
 
-          const allTrafficRule = egressRules?.find(
-            rule => rule.IpProtocol === '-1' && rule.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
+          // Find HTTPS egress rule
+          const httpsRule = egressRules?.find(
+            rule => rule.IpProtocol === 'tcp' &&
+                   rule.FromPort === 443 &&
+                   rule.ToPort === 443 &&
+                   rule.IpRanges?.some(r => r.CidrIp === '0.0.0.0/0')
           );
 
-          expect(allTrafficRule).toBeDefined();
+          expect(httpsRule).toBeDefined();
         } catch (error: any) {
           console.error('Security group test failed:', error);
           throw error;
@@ -582,7 +587,7 @@ describe('Payment Service CI/CD Pipeline Integration Tests', () => {
           expect(response.logGroups).toBeDefined();
           const logGroup = response.logGroups!.find(lg => lg.logGroupName === logGroupName);
           expect(logGroup).toBeDefined();
-          expect(logGroup!.retentionInDays).toBe(7);
+          expect(logGroup!.retentionInDays).toBe(30);
         } catch (error: any) {
           console.error('CloudWatch log group test failed:', error);
           throw error;
