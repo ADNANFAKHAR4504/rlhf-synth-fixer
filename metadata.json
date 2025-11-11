@@ -12,6 +12,11 @@
   "po_id": "6w00k",
   "aws_services": [],
   "region": "us-east-1",
-  "author": "iamarpit-turing",
-  "reviewer": "raghav-turing"
+  "author": "mayanksethi-turing",
+  "reviewer": "raghav-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
