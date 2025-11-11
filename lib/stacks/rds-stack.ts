@@ -106,7 +106,7 @@ export class RdsStack extends Construct {
     const dbInstance = new DbInstance(this, 'db-instance', {
       identifier: `payment-db-${environment}-${environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '16.3',
+      engineVersion: '16.6',
       instanceClass: instanceClass,
       allocatedStorage: 20,
       storageType: 'gp3',

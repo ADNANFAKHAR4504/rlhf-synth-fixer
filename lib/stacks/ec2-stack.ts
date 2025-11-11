@@ -143,7 +143,7 @@ export class Ec2Stack extends Construct {
       userData: this.getUserData(environment),
       monitoring: true,
       rootBlockDevice: {
-        volumeSize: 20,
+        volumeSize: 30,
         volumeType: 'gp3',
         encrypted: true,
         deleteOnTermination: true,
