@@ -91,14 +91,14 @@ export class DatabaseStack extends pulumi.ComponentResource {
     );
 
     const dbPassword = new aws.secretsmanager.Secret(
-      `db-password-${environmentSuffix}`,
+      `db-password-v2-${environmentSuffix}`,
       {
-        name: `db-password-${environmentSuffix}`,
+        name: `db-password-v2-${environmentSuffix}`,
         description: 'RDS Aurora master password',
         kmsKeyId: primaryKmsKey.id,
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
-          Name: `db-password-${environmentSuffix}`,
+          Name: `db-password-v2-${environmentSuffix}`,
         })),
       },
       { provider: primaryProvider, parent: this }
@@ -228,9 +228,9 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     // RDS Aurora Global Cluster
     const globalCluster = new aws.rds.GlobalCluster(
-      `global-db-${environmentSuffix}`,
+      `global-db-v2-${environmentSuffix}`,
       {
-        globalClusterIdentifier: `global-db-${environmentSuffix}`,
+        globalClusterIdentifier: `global-db-v2-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'paymentsdb',
@@ -241,9 +241,9 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     // Primary RDS Cluster
     const primaryCluster = new aws.rds.Cluster(
-      `primary-db-cluster-${environmentSuffix}`,
+      `primary-db-cluster-v2-${environmentSuffix}`,
       {
-        clusterIdentifier: `primary-db-cluster-${environmentSuffix}`,
+        clusterIdentifier: `primary-db-cluster-v2-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'paymentsdb',
@@ -259,7 +259,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         enabledCloudwatchLogsExports: ['postgresql'],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
-          Name: `primary-db-cluster-${environmentSuffix}`,
+          Name: `primary-db-cluster-v2-${environmentSuffix}`,
           'DR-Role': 'primary',
         })),
       },
@@ -269,9 +269,9 @@ export class DatabaseStack extends pulumi.ComponentResource {
     // Primary cluster instances
     for (let i = 0; i < 2; i++) {
       new aws.rds.ClusterInstance(
-        `primary-db-instance-${i}-${environmentSuffix}`,
+        `primary-db-instance-v2-${i}-${environmentSuffix}`,
         {
-          identifier: `primary-db-instance-${i}-${environmentSuffix}`,
+          identifier: `primary-db-instance-v2-${i}-${environmentSuffix}`,
           clusterIdentifier: primaryCluster.id,
           instanceClass: 'db.r6g.large',
           engine: 'aurora-postgresql',
@@ -279,7 +279,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
           publiclyAccessible: false,
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
-            Name: `primary-db-instance-${i}-${environmentSuffix}`,
+            Name: `primary-db-instance-v2-${i}-${environmentSuffix}`,
             'DR-Role': 'primary',
           })),
         },
@@ -289,9 +289,9 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     // DR RDS Cluster
     const drCluster = new aws.rds.Cluster(
-      `dr-db-cluster-${environmentSuffix}`,
+      `dr-db-cluster-v2-${environmentSuffix}`,
       {
-        clusterIdentifier: `dr-db-cluster-${environmentSuffix}`,
+        clusterIdentifier: `dr-db-cluster-v2-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         dbSubnetGroupName: drSubnetGroup.name,
@@ -302,7 +302,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         enabledCloudwatchLogsExports: ['postgresql'],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
-          Name: `dr-db-cluster-${environmentSuffix}`,
+          Name: `dr-db-cluster-v2-${environmentSuffix}`,
           'DR-Role': 'secondary',
         })),
       },
@@ -312,9 +312,9 @@ export class DatabaseStack extends pulumi.ComponentResource {
     // DR cluster instances
     for (let i = 0; i < 2; i++) {
       new aws.rds.ClusterInstance(
-        `dr-db-instance-${i}-${environmentSuffix}`,
+        `dr-db-instance-v2-${i}-${environmentSuffix}`,
         {
-          identifier: `dr-db-instance-${i}-${environmentSuffix}`,
+          identifier: `dr-db-instance-v2-${i}-${environmentSuffix}`,
           clusterIdentifier: drCluster.id,
           instanceClass: 'db.r6g.large',
           engine: 'aurora-postgresql',
@@ -322,7 +322,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
           publiclyAccessible: false,
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
-            Name: `dr-db-instance-${i}-${environmentSuffix}`,
+            Name: `dr-db-instance-v2-${i}-${environmentSuffix}`,
             'DR-Role': 'secondary',
           })),
         },
@@ -332,9 +332,9 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
     // DynamoDB Global Table
     const dynamoTable = new aws.dynamodb.Table(
-      `session-table-${environmentSuffix}`,
+      `session-table-v2-${environmentSuffix}`,
       {
-        name: `session-table-${environmentSuffix}`,
+        name: `session-table-v2-${environmentSuffix}`,
         billingMode: 'PAY_PER_REQUEST',
         hashKey: 'sessionId',
         attributes: [
@@ -357,7 +357,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         ],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
-          Name: `session-table-${environmentSuffix}`,
+          Name: `session-table-v2-${environmentSuffix}`,
         })),
       },
       { provider: primaryProvider, parent: this }
