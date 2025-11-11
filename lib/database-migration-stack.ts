@@ -550,7 +550,7 @@ export class DatabaseMigrationStack extends Construct {
         databaseName: props.sourceDbName || 'migrationdb',
         username: sourceDbSecret.secretValueFromJson('username').unsafeUnwrap(),
         password: sourceDbSecret.secretValueFromJson('password').unsafeUnwrap(),
-        sslMode: 'require',
+        sslMode: 'none',
         mySqlSettings: {
           // Enable CDC for continuous replication
           afterConnectScript: '',
@@ -580,7 +580,7 @@ export class DatabaseMigrationStack extends Construct {
         databaseName: props.sourceDbName || 'migrationdb',
         username: targetDbSecret.secretValueFromJson('username').unsafeUnwrap(),
         password: targetDbSecret.secretValueFromJson('password').unsafeUnwrap(),
-        sslMode: 'require',
+        sslMode: 'none',
         mySqlSettings: {
           cleanSourceMetadataOnMismatch: false,
           maxFileSize: 512000,
