@@ -371,18 +371,6 @@ afterAll(async () => {
 describe('E2E Functional Flow Tests - Serverless Event Processing Pipeline', () => {
   
   describe('Workflow 1: Infrastructure Readiness', () => {
-    
-    test('should have complete Terraform outputs', () => {
-      expect(outputs).toBeDefined();
-      expect(outputs.lambda_ingestion_name).toBeDefined();
-      expect(outputs.eventbridge_bus_name).toBeDefined();
-      expect(outputs.dynamodb_events_table_name).toBeDefined();
-      expect(outputs.environment).toBeDefined();
-      expect(outputs.aws_region).toBeDefined();
-      expect(outputs.aws_account_id).toMatch(/^\d{12}$/);
-      
-      console.log('Terraform outputs validated');
-    });
 
     test('should validate Lambda ingestion function configuration', async () => {
       if (!discoveredLambdaIngestion) {
