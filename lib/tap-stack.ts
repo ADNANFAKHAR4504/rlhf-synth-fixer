@@ -79,7 +79,8 @@ export class TapStack extends pulumi.ComponentResource {
         drSubnetIds: networkStack.drPrivateSubnetIds,
         primaryProvider: networkStack.primaryProvider,
         drProvider: networkStack.drProvider,
-        primaryInstanceSecurityGroupId: computeStack.primaryInstanceSecurityGroupId,
+        primaryInstanceSecurityGroupId:
+          computeStack.primaryInstanceSecurityGroupId,
         drInstanceSecurityGroupId: computeStack.drInstanceSecurityGroupId,
       },
       { parent: this, dependsOn: [computeStack] }

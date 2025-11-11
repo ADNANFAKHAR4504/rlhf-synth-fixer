@@ -2,7 +2,9 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Mock Pulumi runtime with comprehensive mocking
 pulumi.runtime.setMocks({
-  newResource: (args: pulumi.runtime.MockResourceArgs): {
+  newResource: (
+    args: pulumi.runtime.MockResourceArgs
+  ): {
     id: string;
     state: Record<string, unknown>;
   } => {

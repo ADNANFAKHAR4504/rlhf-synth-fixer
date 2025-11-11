@@ -442,7 +442,9 @@ echo "OK" > /var/www/html/health.html
       {
         domainName: `payments-${environmentSuffix}.example.com`,
         validationMethod: 'DNS',
-        subjectAlternativeNames: [`*.payments-${environmentSuffix}.example.com`],
+        subjectAlternativeNames: [
+          `*.payments-${environmentSuffix}.example.com`,
+        ],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `primary-cert-${environmentSuffix}`,
@@ -459,7 +461,9 @@ echo "OK" > /var/www/html/health.html
       {
         domainName: `payments-${environmentSuffix}.example.com`,
         validationMethod: 'DNS',
-        subjectAlternativeNames: [`*.payments-${environmentSuffix}.example.com`],
+        subjectAlternativeNames: [
+          `*.payments-${environmentSuffix}.example.com`,
+        ],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `dr-cert-${environmentSuffix}`,
