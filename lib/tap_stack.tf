@@ -121,9 +121,9 @@ resource "aws_vpc" "main" {
   })
 }
 
-# Private subnets across 3 AZs
+# Private subnets across available AZs (minimum 2, maximum 3)
 resource "aws_subnet" "private" {
-  count = 3
+  count = min(length(data.aws_availability_zones.available.names), length(var.private_subnet_cidrs))
 
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
@@ -146,7 +146,7 @@ resource "aws_route_table" "private" {
 
 # Associate private subnets with route table
 resource "aws_route_table_association" "private" {
-  count = 3
+  count = min(length(data.aws_availability_zones.available.names), length(var.private_subnet_cidrs))
 
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private.id

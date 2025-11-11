@@ -91,15 +91,7 @@ elif [ "$PLATFORM" = "tf" ]; then
   # Set up PR-specific state management
   STATE_KEY="prs/${ENVIRONMENT_SUFFIX}/terraform.tfstate"
   echo "Using state key: $STATE_KEY"
-
-  # Delete any existing state file to start fresh
-  echo "🗑️ Deleting any existing Terraform state file for clean deployment..."
-  if aws s3 rm "s3://${TERRAFORM_STATE_BUCKET}/$STATE_KEY" 2>/dev/null; then
-    echo "✅ Existing state file deleted successfully"
-  else
-    echo "ℹ️ No existing state file found (this is normal for new deployments)"
-  fi
-
+  
   cd lib
   
   # Set up backend configuration with PR-specific settings

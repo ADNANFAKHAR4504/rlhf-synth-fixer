@@ -9,7 +9,7 @@ We need to build a secure AWS infrastructure that follows zero-trust security pr
 We're creating a Terraform configuration that sets up a completely isolated and secure AWS environment. Here's what the infrastructure will include:
 
 ### Network Security
-- A Virtual Private Cloud (VPC) with private subnets spread across 3 availability zones
+- A Virtual Private Cloud (VPC) with private subnets spread across available availability zones (2 AZs in us-west-1)
 - No direct internet access - everything stays private
 - VPC endpoints to securely connect to AWS services like S3, EC2, SSM, and CloudWatch Logs
 
@@ -40,7 +40,7 @@ We're creating a Terraform configuration that sets up a completely isolated and 
 
 ## Deployment Details
 
-- **Region**: US East 1 (us-east-1)
+- **Region**: US West 1 (us-west-1)
 - **Availability Zones**: 3 zones for high availability
 - **Compliance**: FIPS endpoints where available
 - **Architecture**: Zero-trust model with no internet gateways
