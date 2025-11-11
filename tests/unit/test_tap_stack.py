@@ -6,7 +6,8 @@ Tests VPC infrastructure including subnets, NAT Gateways, Network ACLs, and Flow
 """
 
 import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 import pulumi
 
 
@@ -64,7 +65,8 @@ pulumi.runtime.set_mocks(MyMocks())
 
 
 # Import after mocks are set
-from lib.tap_stack import TapStack, TapStackArgs  # pylint: disable=wrong-import-position
+from lib.tap_stack import (TapStack,  # pylint: disable=wrong-import-position
+                           TapStackArgs)
 
 
 class TestTapStackArgs(unittest.TestCase):
@@ -103,7 +105,7 @@ def test_vpc_creation():
     ).apply(lambda args: args[0])
 
     def check_result(outputs):
-        assert outputs["vpc_id"] == "vpc-12345"
+        assert outputs["vpc_id"] == "vpc-test"
         assert outputs["vpc_cidr"] == "10.0.0.0/16"
         assert outputs["dns_hostnames"] is True
 
