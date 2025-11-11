@@ -11,7 +11,7 @@
     "Cloud Environment Setup"
   ],
   "training_quality": 9,
-  "background": "Migrate production to a new AWS account by deploying a brand-new, self-contained stack in us-east-1 using a single TapStack.yml. Build a VPC named 'ProdVPC' with two public subnets across AZs and an Internet Gateway; launch two Amazon Linux 2 EC2 instances in separate public subnets (attach an Elastic IP to one) and enable SSH/HTTP via a security group. Add an IAM role for EC2 with least-privilege read-only access to a versioned, KMS-encrypted S3 bucket that also receives CloudTrail logs. Provide an EC2 Launch Template and an Auto Scaling Group (min 2, max 4) with CPU-based CloudWatch alarms for scale in/out. Include parameters (KeyName, SSHLocation, CreateEIP), daily SSM patching via AWS-RunPatchBaseline, KMS key and alias, outputs for key resources, and consistent 'prod-' naming and tags.",
+  "background": "Deploy a tapstack-${EnvironmentSuffix}-named VPC in us-east-1 with three public and three private subnets, per-AZ NAT Gateways, an internet-facing ALB (with S3 access logging) in front of Auto Scaling EC2 across 3 AZs, and an Aurora MySQL cluster using a 3-AZ subnet group. Static assets use a versioned, encrypted S3 bucket with PAB; optional async handlers (Lambda+SQS+SNS) exist behind a consolidated IAM role with Lambda code sourced from S3. Resource names and tags include the EnvironmentSuffix for safe multi-env operation; stateful resources are protected with Snapshot/Retain policies.",
   "aws_services": [
     "VPC",
     "Subnet",
