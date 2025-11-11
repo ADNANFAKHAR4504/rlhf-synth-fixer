@@ -72,7 +72,7 @@ echo "✅ Moto server is responsive"
 
 # Run tests
 echo "Running analysis tests..."
-python -m pytest test/test-analysis-*.py -v --tb=short --no-cov
+python -m pytest tests/test-analysis-*.py -v --tb=short --no-cov
 
 # Run analysis script
 echo "Running analysis script: $SCRIPT_PATH"
