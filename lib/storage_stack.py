@@ -8,6 +8,7 @@ Creates S3 buckets for migration checkpoints, rollback states, and backups.
 from typing import Optional
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import ResourceOptions, Output
 import json
 
@@ -51,10 +52,21 @@ class StorageStack(pulumi.ComponentResource):
             'Component': 'Storage'
         }
 
+        bucket_suffix = random.RandomString(
+            f"storage-{self.environment_suffix}-suffix",
+            length=6,
+            upper=False,
+            special=False,
+            opts=ResourceOptions(parent=self)
+        ).result
+
+        def bucket_name(prefix: str) -> pulumi.Output[str]:
+            return pulumi.Output.concat(prefix, self.environment_suffix, "-", bucket_suffix)
+
         # Migration Checkpoints Bucket
         self.checkpoints_bucket = aws.s3.Bucket(
             f"migration-checkpoints-{self.environment_suffix}",
-            bucket=f"migration-checkpoints-{self.environment_suffix}",
+            bucket=bucket_name("migration-checkpoints-"),
             versioning=aws.s3.BucketVersioningArgs(
                 enabled=True
             ),
@@ -86,7 +98,7 @@ class StorageStack(pulumi.ComponentResource):
             ],
             tags={
                 **self.tags,
-                'Name': f"migration-checkpoints-{self.environment_suffix}",
+                'Name': bucket_name("migration-checkpoints-"),
                 'BucketType': 'Checkpoints'
             },
             opts=ResourceOptions(parent=self)
@@ -106,7 +118,7 @@ class StorageStack(pulumi.ComponentResource):
         # Rollback States Bucket
         self.rollback_bucket = aws.s3.Bucket(
             f"migration-rollback-{self.environment_suffix}",
-            bucket=f"migration-rollback-{self.environment_suffix}",
+            bucket=bucket_name("migration-rollback-"),
             versioning=aws.s3.BucketVersioningArgs(
                 enabled=True
             ),
@@ -128,7 +140,7 @@ class StorageStack(pulumi.ComponentResource):
             ],
             tags={
                 **self.tags,
-                'Name': f"migration-rollback-{self.environment_suffix}",
+                'Name': bucket_name("migration-rollback-"),
                 'BucketType': 'Rollback'
             },
             opts=ResourceOptions(parent=self)
@@ -148,7 +160,7 @@ class StorageStack(pulumi.ComponentResource):
         # DMS Logs Bucket
         self.dms_logs_bucket = aws.s3.Bucket(
             f"dms-logs-{self.environment_suffix}",
-            bucket=f"dms-logs-{self.environment_suffix}",
+            bucket=bucket_name("dms-logs-"),
             versioning=aws.s3.BucketVersioningArgs(
                 enabled=False
             ),
@@ -170,7 +182,7 @@ class StorageStack(pulumi.ComponentResource):
             ],
             tags={
                 **self.tags,
-                'Name': f"dms-logs-{self.environment_suffix}",
+                'Name': bucket_name("dms-logs-"),
                 'BucketType': 'Logs'
             },
             opts=ResourceOptions(parent=self)

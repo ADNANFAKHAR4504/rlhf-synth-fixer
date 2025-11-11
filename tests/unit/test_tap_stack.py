@@ -39,17 +39,18 @@ class InfraMocks(pulumi.runtime.Mocks):
             outputs.setdefault('healthCheckId', f"{args.name}-hc-id")
         elif args.typ == "aws:cloudwatch/dashboard:Dashboard":
             outputs.setdefault('dashboardName', args.inputs.get('dashboard_name', f"dashboard-{args.name}"))
+        if args.typ == "random:index/randomString:RandomString":
+            outputs.setdefault('result', 'abc123')
 
         return [f"{args.name}-id", outputs]
 
     def call(self, args: pulumi.runtime.MockCallArgs):
         if args.token == "aws:ec2/getAvailabilityZones:getAvailabilityZones":
             return {
-                "names": [
-                    "eu-central-1a",
-                    "eu-central-1b",
-                    "eu-central-1c",
-                ]
+                "zones": [],
+                "group_names": [],
+                "names": ["eu-central-1a", "eu-central-1b", "eu-central-1c"],
+                "network_border_group": "eu-central-1",
             }
         if args.token == "aws:ec2/getVpc:getVpc":
             return {
@@ -807,40 +808,70 @@ class TestTagPropagation(unittest.TestCase):
             self.assertIn(key, args.tags)
 
 
+def _build_tap_stack(environment_suffix: str = "unit") -> "TapStack":
+    from lib.tap_stack import TapStack, TapStackArgs
+
+    return TapStack(
+        name=f"test-trading-platform-{environment_suffix}",
+        args=TapStackArgs(
+            environment_suffix=environment_suffix,
+            tags={"Environment": environment_suffix},
+            alert_email_addresses=["alerts@example.com"],
+        ),
+    )
+
+
 class TestTapStackExecution(unittest.TestCase):
     """Runtime tests that instantiate the full TapStack using mocks."""
 
     @pulumi.runtime.test
     def test_full_stack_instantiation(self):
-        from lib.tap_stack import TapStack, TapStackArgs
+        stack = _build_tap_stack()
 
-        def evaluate(_):
-            stack = TapStack(
-                name="test-trading-platform",
-                args=TapStackArgs(
-                    environment_suffix="unit",
-                    tags={"Environment": "unit"},
-                    alert_email_addresses=["alerts@example.com"],
-                ),
-            )
+        return pulumi.Output.all(
+            stack.environment_suffix,
+            stack.aurora_stack.primary_cluster_id,
+            stack.lambda_stack.primary_function_name,
+            stack.sns_stack.migration_status_topic.arn,
+            stack.api_gateway_stack.primary_api_endpoint,
+        ).apply(self._assert_full_stack)
 
-            return pulumi.Output.all(
-                stack.environment_suffix,
-                stack.aurora_stack.primary_cluster_id,
-                stack.lambda_stack.primary_function_name,
-                stack.sns_stack.migration_status_topic.arn,
-                stack.api_gateway_stack.primary_api_endpoint,
-            )
+    def _assert_full_stack(self, values):
+        env_suffix, aurora_id, lambda_name, sns_arn, api_endpoint = values
+        self.assertEqual(env_suffix, "unit")
+        self.assertTrue(str(aurora_id))
+        self.assertTrue(str(lambda_name))
+        self.assertTrue(str(sns_arn))
+        self.assertTrue(str(api_endpoint))
 
-        def assertions(outputs):
-            env_suffix, aurora_id, lambda_name, sns_arn, api_endpoint = outputs
-            self.assertEqual(env_suffix, "unit")
-            self.assertTrue(str(aurora_id))
-            self.assertTrue(str(lambda_name))
-            self.assertTrue(str(sns_arn))
-            self.assertTrue(str(api_endpoint))
+    def _assert_stack_components(self, stack):
+        self.assertIsNotNone(stack.network_stack.production_vpc_id)
+        self.assertIsNotNone(stack.database_stack.production_cluster_id)
+        self.assertIsNotNone(stack.dms_stack.replication_instance_arn)
+        self.assertIsNotNone(stack.lambda_stack.primary_function_arn)
+        self.assertIsNotNone(stack.api_gateway_stack.primary_api_endpoint)
+        self.assertIsNotNone(stack.monitoring_stack.dashboard_name)
 
-        return evaluate(None).apply(assertions)
+    @pulumi.runtime.test
+    def test_stack_component_outputs(self):
+        stack = _build_tap_stack(environment_suffix="qa")
+
+        return pulumi.Output.all(
+            stack.production_vpc_id,
+            stack.migration_vpc_id,
+            stack.transit_gateway_id,
+            stack.production_db_endpoint,
+            stack.migration_db_endpoint,
+            stack.dms_replication_instance_arn,
+            stack.validation_lambda_arn,
+            stack.api_gateway_endpoint,
+            stack.migration_state_machine_arn,
+            stack.migration_status_topic_arn,
+        ).apply(self._assert_component_outputs)
+
+    def _assert_component_outputs(self, values):
+        for value in values:
+            self.assertTrue(str(value))
 
 
 if __name__ == '__main__':
