@@ -1,15 +1,10 @@
 import { readFileSync } from 'fs';
-import { load } from 'js-yaml';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { join } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-// Load CloudFormation template
-const templatePath = join(__dirname, '..', 'lib', 'TapStack.yml');
+// Load CloudFormation template from JSON (converted from YAML)
+const templatePath = join(process.cwd(), 'lib', 'TapStack.json');
 const templateContent = readFileSync(templatePath, 'utf8');
-const template = load(templateContent);
+const template = JSON.parse(templateContent);
 
 describe('Hub-and-Spoke CloudFormation Template Unit Tests', () => {
   describe('Template Structure', () => {
@@ -244,7 +239,7 @@ describe('Hub-and-Spoke CloudFormation Template Unit Tests', () => {
     });
 
     test('should create Elastic IPs for NAT Gateways', () => {
-      const eips = ['FinanceEIP', 'EngineeringEIP', 'MarketingEIP'];
+      const eips = ['FinanceNATGatewayEIP', 'EngineeringNATGatewayEIP', 'MarketingNATGatewayEIP'];
       eips.forEach(eipName => {
         const eip = template.Resources[eipName];
         expect(eip).toBeDefined();
@@ -341,13 +336,13 @@ describe('Hub-and-Spoke CloudFormation Template Unit Tests', () => {
 
   describe('Network ACL Configuration', () => {
     test('should create Network ACL', () => {
-      const nacl = template.Resources.PublicSubnetNACL;
+      const nacl = template.Resources.HubPublicNetworkAcl;
       expect(nacl).toBeDefined();
       expect(nacl.Type).toBe('AWS::EC2::NetworkAcl');
     });
 
     test('should have HTTP inbound rule', () => {
-      const entry = template.Resources.PublicNACLInboundHTTP;
+      const entry = template.Resources.HubPublicNaclInboundHTTP;
       expect(entry).toBeDefined();
       expect(entry.Type).toBe('AWS::EC2::NetworkAclEntry');
       expect(entry.Properties.Protocol).toBe(6);
@@ -358,7 +353,7 @@ describe('Hub-and-Spoke CloudFormation Template Unit Tests', () => {
     });
 
     test('should have HTTPS inbound rule', () => {
-      const entry = template.Resources.PublicNACLInboundHTTPS;
+      const entry = template.Resources.HubPublicNaclInboundHTTPS;
       expect(entry).toBeDefined();
       expect(entry.Type).toBe('AWS::EC2::NetworkAclEntry');
       expect(entry.Properties.Protocol).toBe(6);
