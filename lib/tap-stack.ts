@@ -104,7 +104,7 @@ export class TapStack extends TerraformStack {
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
-        Name: `payment-vpc-${config.environmentSuffix}`,
+        Name: `payment-vpc-${config.environmentSuffix}-${uniqueSuffix}`,
         Environment: config.environmentSuffix,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -115,7 +115,7 @@ export class TapStack extends TerraformStack {
     const igw = new InternetGateway(this, 'igw', {
       vpcId: vpc.id,
       tags: {
-        Name: `payment-igw-${config.environmentSuffix}`,
+        Name: `payment-igw-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -128,7 +128,7 @@ export class TapStack extends TerraformStack {
       availabilityZone: Fn.element(availabilityZones.names, 0),
       mapPublicIpOnLaunch: true,
       tags: {
-        Name: `payment-public-subnet-1-${config.environmentSuffix}`,
+        Name: `payment-public-subnet-1-${config.environmentSuffix}-${uniqueSuffix}`,
         Type: 'Public',
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -141,7 +141,7 @@ export class TapStack extends TerraformStack {
       availabilityZone: Fn.element(availabilityZones.names, 1),
       mapPublicIpOnLaunch: true,
       tags: {
-        Name: `payment-public-subnet-2-${config.environmentSuffix}`,
+        Name: `payment-public-subnet-2-${config.environmentSuffix}-${uniqueSuffix}`,
         Type: 'Public',
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -154,7 +154,7 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.10.0/24',
       availabilityZone: Fn.element(availabilityZones.names, 0),
       tags: {
-        Name: `payment-private-subnet-1-${config.environmentSuffix}`,
+        Name: `payment-private-subnet-1-${config.environmentSuffix}-${uniqueSuffix}`,
         Type: 'Private',
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -166,7 +166,7 @@ export class TapStack extends TerraformStack {
       cidrBlock: '10.0.11.0/24',
       availabilityZone: Fn.element(availabilityZones.names, 1),
       tags: {
-        Name: `payment-private-subnet-2-${config.environmentSuffix}`,
+        Name: `payment-private-subnet-2-${config.environmentSuffix}-${uniqueSuffix}`,
         Type: 'Private',
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -177,7 +177,7 @@ export class TapStack extends TerraformStack {
     const natEip = new Eip(this, 'nat-eip', {
       domain: 'vpc',
       tags: {
-        Name: `payment-nat-eip-${config.environmentSuffix}`,
+        Name: `payment-nat-eip-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -188,7 +188,7 @@ export class TapStack extends TerraformStack {
       allocationId: natEip.id,
       subnetId: publicSubnet1.id,
       tags: {
-        Name: `payment-nat-gateway-${config.environmentSuffix}`,
+        Name: `payment-nat-gateway-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -199,7 +199,7 @@ export class TapStack extends TerraformStack {
     const publicRouteTable = new RouteTable(this, 'public-route-table', {
       vpcId: vpc.id,
       tags: {
-        Name: `payment-public-rt-${config.environmentSuffix}`,
+        Name: `payment-public-rt-${config.environmentSuffix}-${uniqueSuffix}`,
         Type: 'Public',
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -228,7 +228,7 @@ export class TapStack extends TerraformStack {
     const privateRouteTable = new RouteTable(this, 'private-route-table', {
       vpcId: vpc.id,
       tags: {
-        Name: `payment-private-rt-${config.environmentSuffix}`,
+        Name: `payment-private-rt-${config.environmentSuffix}-${uniqueSuffix}`,
         Type: 'Private',
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
@@ -258,11 +258,11 @@ export class TapStack extends TerraformStack {
       this,
       'vpc-endpoint-sg',
       {
-        name: `payment-vpc-endpoint-sg-${config.environmentSuffix}`,
+        name: `payment-vpc-endpoint-sg-${config.environmentSuffix}-${uniqueSuffix}`,
         description: 'Security group for VPC Endpoints',
         vpcId: vpc.id,
         tags: {
-          Name: `payment-vpc-endpoint-sg-${config.environmentSuffix}`,
+          Name: `payment-vpc-endpoint-sg-${config.environmentSuffix}-${uniqueSuffix}`,
           Project: 'PaymentPlatform',
           ManagedBy: 'CDKTF',
         },
@@ -297,7 +297,7 @@ export class TapStack extends TerraformStack {
       vpcEndpointType: 'Gateway',
       routeTableIds: [privateRouteTable.id],
       tags: {
-        Name: `payment-s3-endpoint-${config.environmentSuffix}`,
+        Name: `payment-s3-endpoint-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -312,7 +312,7 @@ export class TapStack extends TerraformStack {
       securityGroupIds: [vpcEndpointSecurityGroup.id],
       privateDnsEnabled: true,
       tags: {
-        Name: `payment-ecr-api-endpoint-${config.environmentSuffix}`,
+        Name: `payment-ecr-api-endpoint-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -326,7 +326,7 @@ export class TapStack extends TerraformStack {
       securityGroupIds: [vpcEndpointSecurityGroup.id],
       privateDnsEnabled: true,
       tags: {
-        Name: `payment-ecr-dkr-endpoint-${config.environmentSuffix}`,
+        Name: `payment-ecr-dkr-endpoint-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -338,7 +338,7 @@ export class TapStack extends TerraformStack {
       deletionWindowInDays: 10,
       enableKeyRotation: true,
       tags: {
-        Name: `payment-rds-kms-key-${config.environmentSuffix}`,
+        Name: `payment-rds-kms-key-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -356,7 +356,7 @@ export class TapStack extends TerraformStack {
       subnetIds: [privateSubnet1.id, privateSubnet2.id],
       description: `Database subnet group for payment platform ${config.environmentSuffix}`,
       tags: {
-        Name: `payment-db-subnet-group-${config.environmentSuffix}`,
+        Name: `payment-db-subnet-group-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -364,11 +364,11 @@ export class TapStack extends TerraformStack {
 
     // Create security group for RDS
     const rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
-      name: `payment-rds-sg-${config.environmentSuffix}`,
+      name: `payment-rds-sg-${config.environmentSuffix}-${uniqueSuffix}`,
       description: 'Security group for RDS PostgreSQL database',
       vpcId: vpc.id,
       tags: {
-        Name: `payment-rds-sg-${config.environmentSuffix}`,
+        Name: `payment-rds-sg-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -403,7 +403,7 @@ export class TapStack extends TerraformStack {
         description: `Database password for payment platform ${config.environmentSuffix}`,
         recoveryWindowInDays: 0, // Immediately delete for QA/testing
         tags: {
-          Name: `payment-platform-db-password-${config.environmentSuffix}`,
+          Name: `payment-platform-db-password-${config.environmentSuffix}-${uniqueSuffix}`,
           Project: 'PaymentPlatform',
           ManagedBy: 'CDKTF',
         },
@@ -443,7 +443,7 @@ export class TapStack extends TerraformStack {
       copyTagsToSnapshot: true,
       deletionProtection: false,
       tags: {
-        Name: `payment-db-${config.environmentSuffix}`,
+        Name: `payment-db-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -451,7 +451,7 @@ export class TapStack extends TerraformStack {
 
     // Create ECS cluster
     const ecsCluster = new EcsCluster(this, 'ecs-cluster', {
-      name: `payment-cluster-${config.environmentSuffix}`,
+      name: `payment-cluster-${config.environmentSuffix}-${uniqueSuffix}`,
       setting: [
         {
           name: 'containerInsights',
@@ -459,7 +459,7 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: {
-        Name: `payment-cluster-${config.environmentSuffix}`,
+        Name: `payment-cluster-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -470,7 +470,7 @@ export class TapStack extends TerraformStack {
       name: `/ecs/payment-platform-${config.environmentSuffix}-${uniqueSuffix}`,
       retentionInDays: environment.logRetentionDays,
       tags: {
-        Name: `payment-ecs-logs-${config.environmentSuffix}`,
+        Name: `payment-ecs-logs-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -492,7 +492,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `payment-ecs-task-execution-role-${config.environmentSuffix}`,
+        Name: `payment-ecs-task-execution-role-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -520,7 +520,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `payment-ecs-logs-policy-${config.environmentSuffix}`,
+        Name: `payment-ecs-logs-policy-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -547,7 +547,7 @@ export class TapStack extends TerraformStack {
         ],
       }),
       tags: {
-        Name: `payment-ecs-task-role-${config.environmentSuffix}`,
+        Name: `payment-ecs-task-role-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -555,11 +555,11 @@ export class TapStack extends TerraformStack {
 
     // Create security group for ECS tasks
     const ecsTaskSecurityGroup = new SecurityGroup(this, 'ecs-task-sg', {
-      name: `payment-ecs-task-sg-${config.environmentSuffix}`,
+      name: `payment-ecs-task-sg-${config.environmentSuffix}-${uniqueSuffix}`,
       description: 'Security group for ECS Fargate tasks',
       vpcId: vpc.id,
       tags: {
-        Name: `payment-ecs-task-sg-${config.environmentSuffix}`,
+        Name: `payment-ecs-task-sg-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -587,7 +587,7 @@ export class TapStack extends TerraformStack {
 
     // Create ECS task definition
     const taskDefinition = new EcsTaskDefinition(this, 'ecs-task-definition', {
-      family: `payment-task-${config.environmentSuffix}`,
+      family: `payment-task-${config.environmentSuffix}-${uniqueSuffix}`,
       requiresCompatibilities: ['FARGATE'],
       networkMode: 'awsvpc',
       cpu: '256',
@@ -624,7 +624,7 @@ export class TapStack extends TerraformStack {
         },
       ]),
       tags: {
-        Name: `payment-task-${config.environmentSuffix}`,
+        Name: `payment-task-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -632,11 +632,11 @@ export class TapStack extends TerraformStack {
 
     // Create security group for ALB
     const albSecurityGroup = new SecurityGroup(this, 'alb-sg', {
-      name: `payment-alb-sg-${config.environmentSuffix}`,
+      name: `payment-alb-sg-${config.environmentSuffix}-${uniqueSuffix}`,
       description: 'Security group for Application Load Balancer',
       vpcId: vpc.id,
       tags: {
-        Name: `payment-alb-sg-${config.environmentSuffix}`,
+        Name: `payment-alb-sg-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -671,7 +671,7 @@ export class TapStack extends TerraformStack {
       subnets: [publicSubnet1.id, publicSubnet2.id],
       enableDeletionProtection: false,
       tags: {
-        Name: `payment-alb-${config.environmentSuffix}`,
+        Name: `payment-alb-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -697,7 +697,7 @@ export class TapStack extends TerraformStack {
         matcher: '200-299',
       },
       tags: {
-        Name: `payment-tg-${config.environmentSuffix}`,
+        Name: `payment-tg-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -717,7 +717,7 @@ export class TapStack extends TerraformStack {
         },
       ],
       tags: {
-        Name: `payment-alb-listener-http-${config.environmentSuffix}`,
+        Name: `payment-alb-listener-http-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -746,7 +746,7 @@ export class TapStack extends TerraformStack {
       healthCheckGracePeriodSeconds: 60,
       dependsOn: [targetGroup],
       tags: {
-        Name: `payment-service-${config.environmentSuffix}`,
+        Name: `payment-service-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -758,7 +758,7 @@ export class TapStack extends TerraformStack {
       bucket: `payment-assets-${config.environmentSuffix}-${timestamp}`,
       forceDestroy: true,
       tags: {
-        Name: `payment-assets-${config.environmentSuffix}`,
+        Name: `payment-assets-${config.environmentSuffix}-${uniqueSuffix}`,
         Project: 'PaymentPlatform',
         ManagedBy: 'CDKTF',
       },
@@ -803,7 +803,7 @@ export class TapStack extends TerraformStack {
       bucket: assetsBucket.id,
       rule: [
         {
-          id: `expire-old-versions-${config.environmentSuffix}`,
+          id: `expire-old-versions-${config.environmentSuffix}-${uniqueSuffix}`,
           status: 'Enabled',
           noncurrentVersionExpiration: [
             {

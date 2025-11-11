@@ -543,7 +543,38 @@ containerDefinitions: JSON.stringify([
 ]),
 ```
 
-### 20. Missing Code Documentation
+### 20. NAT Gateway and Elastic IP Naming Conflicts
+
+**Issue**: NAT Gateway and Elastic IP resources didn't have unique suffixes, causing deployment failures when multiple stacks were deployed.
+
+**Impact**: Deployments would fail with "InvalidAllocationID.NotFound" errors when trying to associate Elastic IPs with NAT Gateways.
+
+**Fix**: Added unique suffixes to NAT Gateway and Elastic IP:
+```typescript
+// Create EIP for NAT Gateway
+const natEip = new Eip(this, 'nat-eip', {
+  domain: 'vpc',
+  tags: {
+    Name: `payment-nat-eip-${config.environmentSuffix}-${uniqueSuffix}`,
+    Project: 'PaymentPlatform',
+    ManagedBy: 'CDKTF',
+  },
+});
+
+// Create NAT Gateway in public subnet
+const natGateway = new NatGateway(this, 'nat-gateway', {
+  allocationId: natEip.id,
+  subnetId: publicSubnet1.id,
+  tags: {
+    Name: `payment-nat-gateway-${config.environmentSuffix}-${uniqueSuffix}`,
+    Project: 'PaymentPlatform',
+    ManagedBy: 'CDKTF',
+  },
+  dependsOn: [igw],
+});
+```
+
+### 21. Missing Code Documentation
 
 **Issue**: Methods and interfaces lacked documentation comments.
 
