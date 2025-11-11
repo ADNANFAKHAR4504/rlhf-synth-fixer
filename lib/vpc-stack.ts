@@ -18,17 +18,17 @@ export class VpcStack extends cdk.Stack {
     // Create VPC with private and public subnets
     this.vpc = new ec2.Vpc(this, `PaymentVpc${environmentSuffix}`, {
       vpcName: `payment-processing-vpc-${environmentSuffix}`,
-      maxAzs: 3,
-      natGateways: 1,
+      maxAzs: 2,
+      natGateways: 0,
       subnetConfiguration: [
         {
           name: 'Public',
-          subnetType: ec2.SubnetType.PUBLIC,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
           cidrMask: 24,
         },
         {
           name: 'Private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
           cidrMask: 24,
         },
         {
