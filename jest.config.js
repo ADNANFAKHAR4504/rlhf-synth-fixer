@@ -1,12 +1,9 @@
 module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
-  preset: 'ts-jest',
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
+  testMatch: ['**/*.test.ts'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
-    '^.+\\.mjs$': 'babel-jest',
+    '^.+\\.tsx?$': 'ts-jest'
   },
   transformIgnorePatterns: [
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy)/)',
@@ -21,7 +18,6 @@ module.exports = {
     '!<rootDir>/**/*.test.js',
     '!<rootDir>/node_modules/**',
   ],
-  coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
       branches: 70,
