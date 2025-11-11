@@ -207,7 +207,7 @@ Resources:
     Properties:
       AliasName: !Sub 'alias/payment-service-${EnvironmentName}'
       TargetKeyId: !Ref ArtifactsKey
-      
+
   # S3 Bucket for Pipeline Artifacts
   ArtifactsBucket:
     Type: AWS::S3::Bucket
@@ -244,7 +244,7 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
+
   ArtifactsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -268,7 +268,7 @@ Resources:
             Condition:
               Bool:
                 'aws:SecureTransport': 'false'
-  
+
   # Security Group for CodeBuild and ECS in VPC
   CodeBuildSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -276,9 +276,26 @@ Resources:
       GroupDescription: Security group for CodeBuild projects and ECS tasks
       VpcId: !Ref VPC
       SecurityGroupEgress:
-        - IpProtocol: -1
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
           CidrIp: 0.0.0.0/0
-          Description: Allow all outbound traffic
+          Description: HTTPS for AWS services, public ECR, and package downloads
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP for package repositories and mirrors
+        - IpProtocol: udp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+          Description: DNS resolution over TCP
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentName
@@ -286,7 +303,7 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
+
   # VPC Endpoints for CodeBuild without internet access
   S3VpcEndpoint:
     Type: AWS::EC2::VPCEndpoint
@@ -366,7 +383,7 @@ Resources:
         - !Ref PrivateSubnet2
       VpcEndpointType: Interface
       VpcId: !Ref VPC
-  
+
   # IAM Role for CodeBuild
   CodeBuildServiceRole:
     Type: AWS::IAM::Role
@@ -449,7 +466,7 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
+
   # IAM Role for CodePipeline
   CodePipelineServiceRole:
     Type: AWS::IAM::Role
@@ -531,8 +548,23 @@ Resources:
           Value: !Ref CostCenter
 
   # Build Project for Build Stage
+  # CloudWatch Logs Group for Build Project
+  BuildLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/payment-service-build-${EnvironmentName}'
+      RetentionInDays: 30
+
+  # CloudWatch Logs Group for Test Project
+  TestLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/codebuild/payment-service-test-${EnvironmentName}'
+      RetentionInDays: 30
+
   BuildProject:
     Type: AWS::CodeBuild::Project
+    DependsOn: BuildLogGroup
     Properties:
       Name: !Sub 'payment-service-build-${EnvironmentName}'
       Description: 'Build and security scan for payment service'
@@ -566,10 +598,11 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
+
   # Build Project for Test Stage
   TestProject:
     Type: AWS::CodeBuild::Project
+    DependsOn: TestLogGroup
     Properties:
       Name: !Sub 'payment-service-test-${EnvironmentName}'
       Description: 'Integration tests for payment service'
@@ -603,7 +636,7 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
+
   # ECS Cluster
   EcsCluster:
     Type: AWS::ECS::Cluster
@@ -648,7 +681,7 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/ecs/${EcsServiceName}'
-      RetentionInDays: 7
+      RetentionInDays: 30
 
   # ECS Task Definition
   EcsTaskDefinition:
@@ -712,7 +745,7 @@ Resources:
           Value: !Ref TeamName
         - Key: CostCenter
           Value: !Ref CostCenter
-  
+
   # CodePipeline
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
@@ -836,19 +869,19 @@ Resources:
         ZipFile: |
           const https = require('https');
           const url = require('url');
-          
+
           exports.handler = async (event) => {
               console.log('Event:', JSON.stringify(event, null, 2));
-              
+
               const pipeline = event.pipeline;
               const state = event.state;
               const executionId = event.executionId;
               const time = event.time;
               const webhookUrl = event.webhookUrl;
-              
+
               const emoji = state === 'FAILED' ? ':x:' : ':white_check_mark:';
               const color = state === 'FAILED' ? '#FF0000' : '#00FF00';
-              
+
               const message = {
                   attachments: [
                       {
@@ -877,7 +910,7 @@ Resources:
                       }
                   ]
               };
-              
+
               try {
                   const parsedUrl = url.parse(webhookUrl);
                   const options = {
@@ -888,7 +921,7 @@ Resources:
                           'Content-Type': 'application/json',
                       }
                   };
-                  
+
                   await new Promise((resolve, reject) => {
                       const req = https.request(options, (res) => {
                           let data = '';
@@ -899,15 +932,15 @@ Resources:
                               resolve(data);
                           });
                       });
-                      
+
                       req.on('error', (e) => {
                           reject(e);
                       });
-                      
+
                       req.write(JSON.stringify(message));
                       req.end();
                   });
-                  
+
                   return { statusCode: 200, body: 'Notification sent' };
               } catch (error) {
                   console.error('Error:', error);
@@ -1137,13 +1170,13 @@ Outputs:
 
   BuildLogGroupName:
     Description: CodeBuild Build Log Group Name
-    Value: !Sub '/aws/codebuild/payment-service-build-${EnvironmentName}'
+    Value: !Ref BuildLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-BuildLogGroupName'
 
   TestLogGroupName:
     Description: CodeBuild Test Log Group Name
-    Value: !Sub '/aws/codebuild/payment-service-test-${EnvironmentName}'
+    Value: !Ref TestLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-TestLogGroupName'
 
