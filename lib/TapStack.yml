@@ -1149,52 +1149,60 @@ Outputs:
 
   # Lambda Outputs (conditional)
   SlackNotificationFunctionArn:
+    Condition: HasSlackWebhook
     Description: Slack Notification Lambda Function ARN
-    Value: !If [HasSlackWebhook, !GetAtt SlackNotificationFunction.Arn, '']
+    Value: !GetAtt SlackNotificationFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-SlackNotificationFunctionArn'
 
   SlackNotificationFunctionName:
+    Condition: HasSlackWebhook
     Description: Slack Notification Lambda Function Name
-    Value: !If [HasSlackWebhook, !Ref SlackNotificationFunction, '']
+    Value: !Ref SlackNotificationFunction
     Export:
       Name: !Sub '${AWS::StackName}-SlackNotificationFunctionName'
 
   # EventBridge Outputs
   PipelineStateChangeRuleArn:
+    Condition: HasSlackWebhook
     Description: EventBridge Rule ARN for Pipeline State Changes
-    Value: !If [HasSlackWebhook, !GetAtt PipelineStateChangeRule.Arn, '']
+    Value: !GetAtt PipelineStateChangeRule.Arn
     Export:
       Name: !Sub '${AWS::StackName}-PipelineStateChangeRuleArn'
 
   # VPC Endpoint Outputs (conditional)
   S3VpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
     Description: S3 VPC Endpoint ID
-    Value: !If [ShouldCreateVpcEndpoints, !Ref S3VpcEndpoint, '']
+    Value: !Ref S3VpcEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-S3VpcEndpointId'
 
   EcrApiVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
     Description: ECR API VPC Endpoint ID
-    Value: !If [ShouldCreateVpcEndpoints, !Ref EcrApiVpcEndpoint, '']
+    Value: !Ref EcrApiVpcEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-EcrApiVpcEndpointId'
 
   EcrDkrVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
     Description: ECR DKR VPC Endpoint ID
-    Value: !If [ShouldCreateVpcEndpoints, !Ref EcrDkrVpcEndpoint, '']
+    Value: !Ref EcrDkrVpcEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-EcrDkrVpcEndpointId'
 
   LogsVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
     Description: CloudWatch Logs VPC Endpoint ID
-    Value: !If [ShouldCreateVpcEndpoints, !Ref LogsVpcEndpoint, '']
+    Value: !Ref LogsVpcEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-LogsVpcEndpointId'
 
   CodeBuildVpcEndpointId:
+    Condition: ShouldCreateVpcEndpoints
     Description: CodeBuild VPC Endpoint ID
-    Value: !If [ShouldCreateVpcEndpoints, !Ref CodeBuildVpcEndpoint, '']
+    Value: !Ref CodeBuildVpcEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-CodeBuildVpcEndpointId'
 
