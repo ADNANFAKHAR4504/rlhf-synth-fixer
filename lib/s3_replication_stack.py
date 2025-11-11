@@ -122,10 +122,7 @@ class S3ReplicationStack(Stack):
                             replica_kms_key_id=replica_key.key_arn,
                         ),
                         metrics=s3.CfnBucket.MetricsProperty(
-                            status="Enabled",
-                            event_threshold=s3.CfnBucket.ReplicationTimeValueProperty(
-                                minutes=15
-                            )
+                            status="Enabled"
                         ),
                     ),
                     source_selection_criteria=s3.CfnBucket.SourceSelectionCriteriaProperty(

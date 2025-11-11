@@ -209,10 +209,7 @@ class TestS3Replication:
                         {
                             "Destination": {
                                 "Metrics": {
-                                    "Status": "Enabled",
-                                    "EventThreshold": {
-                                        "Minutes": 15
-                                    }
+                                    "Status": "Enabled"
                                 }
                             }
                         }
