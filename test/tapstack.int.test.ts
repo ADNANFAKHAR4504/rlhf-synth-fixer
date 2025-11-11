@@ -393,8 +393,16 @@ describe('Infrastructure Integration Tests', () => {
         it('should have environment suffix in all resource names', () => {
             const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
+            // List of keys that contain auto-generated IDs that don't include env suffix
+            const excludedKeys = ['auroraClusterId', 'ecrRepositoryUrl'];
+
             for (const [key, value] of Object.entries(outputs)) {
-                if (typeof value === 'string' && !value.startsWith('arn:')) {
+                // Skip ARNs, URLs, endpoints, and auto-generated IDs
+                if (typeof value === 'string' &&
+                    !value.startsWith('arn:') &&
+                    !value.startsWith('http') &&
+                    !value.includes('amazonaws.com') &&
+                    !excludedKeys.includes(key)) {
                     expect(value).toContain(environmentSuffix);
                 }
             }

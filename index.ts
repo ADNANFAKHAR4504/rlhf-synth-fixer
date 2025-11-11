@@ -917,6 +917,14 @@ const s3Bucket = new aws.s3.Bucket(`app-bucket-${environmentSuffix}`, {
   },
 });
 
+// Enable versioning on S3 bucket
+new aws.s3.BucketVersioningV2(`app-bucket-versioning-${environmentSuffix}`, {
+  bucket: s3Bucket.id,
+  versioningConfiguration: {
+    status: 'Enabled',
+  },
+});
+
 // Lambda Execution Role
 const lambdaRole = new aws.iam.Role(`lambda-role-${environmentSuffix}`, {
   assumeRolePolicy: JSON.stringify({
