@@ -27,20 +27,20 @@ class MyMocks(pulumi.runtime.Mocks):
             outputs = {
                 **args.inputs,
                 "id": "vpc-mock123",
-                "arn": "arn:aws:ec2:us-east-1:123456789:vpc/vpc-mock123",
+                "arn": "arn:aws:ec2:eu-central-1:123456789:vpc/vpc-mock123",
                 "cidr_block": args.inputs.get("cidrBlock", "10.0.0.0/16"),
             }
         elif args.typ == "aws:ec2/subnet:Subnet":
             outputs = {
                 **args.inputs,
                 "id": f"subnet-mock-{args.name}",
-                "arn": f"arn:aws:ec2:us-east-1:123456789:subnet/subnet-mock-{args.name}",
+                "arn": f"arn:aws:ec2:eu-central-1:123456789:subnet/subnet-mock-{args.name}",
             }
         elif args.typ == "aws:ec2/internetGateway:InternetGateway":
             outputs = {
                 **args.inputs,
                 "id": "igw-mock123",
-                "arn": "arn:aws:ec2:us-east-1:123456789:internet-gateway/igw-mock123",
+                "arn": "arn:aws:ec2:eu-central-1:123456789:internet-gateway/igw-mock123",
             }
         elif args.typ == "aws:ec2/natGateway:NatGateway":
             outputs = {
@@ -109,8 +109,8 @@ class MyMocks(pulumi.runtime.Mocks):
         """Mock provider function calls."""
         if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
             return {
-                "names": ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d"],
-                "id": "us-east-1",
+                "names": ["eu-central-1a", "eu-central-1b", "eu-central-1c", "eu-central-1d"],
+                "id": "eu-central-1",
             }
         return {}
 

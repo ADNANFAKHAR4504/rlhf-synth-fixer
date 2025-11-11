@@ -17,5 +17,6 @@
     "EC2",
     "S3"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }

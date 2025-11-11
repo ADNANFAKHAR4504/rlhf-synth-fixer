@@ -60,7 +60,7 @@ class TapStack(pulumi.ComponentResource):
             **args.tags
         }
 
-        # Get availability zones for us-east-1
+        # Get availability zones for eu-central-1
         azs = aws.get_availability_zones(state="available")
 
         # Use first 3 AZs

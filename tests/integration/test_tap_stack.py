@@ -28,8 +28,8 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             cls.outputs = json.load(f)
 
         # Initialize AWS clients
-        cls.ec2_client = boto3.client('ec2', region_name='us-east-1')
-        cls.s3_client = boto3.client('s3', region_name='us-east-1')
+        cls.ec2_client = boto3.client('ec2', region_name='eu-central-1')
+        cls.s3_client = boto3.client('s3', region_name='eu-central-1')
 
     def test_vpc_exists_with_correct_cidr(self):
         """Test VPC exists and has correct CIDR block."""

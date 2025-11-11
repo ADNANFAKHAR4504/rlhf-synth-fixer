@@ -59,7 +59,7 @@ Create a comprehensive VPC infrastructure using **Pulumi with Python** for a pay
 - Use **Security Groups** for firewall rules
 - Use **VPC Flow Logs** for security monitoring
 - Use **S3** for flow log storage
-- Deploy to **us-east-1** region
+- Deploy to **eu-central-1** region
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: {environment}-{tier}-{resource}-{az}
 - All resources must be destroyable without Retain policies

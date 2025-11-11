@@ -37,9 +37,9 @@ The solution creates a comprehensive VPC infrastructure with proper network segm
 
 ### 2. Public Subnet Tier
 - **3 Subnets**: One per availability zone
-  - 10.0.1.0/24 (us-east-1a)
-  - 10.0.2.0/24 (us-east-1b)
-  - 10.0.3.0/24 (us-east-1c)
+  - 10.0.1.0/24 (eu-central-1a)
+  - 10.0.2.0/24 (eu-central-1b)
+  - 10.0.3.0/24 (eu-central-1c)
 - **Internet Gateway**: Attached to VPC for public internet access
 - **NAT Gateways**: One per public subnet with Elastic IPs
 - **Route Table**: Routes 0.0.0.0/0 to Internet Gateway
@@ -47,18 +47,18 @@ The solution creates a comprehensive VPC infrastructure with proper network segm
 
 ### 3. Private Subnet Tier
 - **3 Subnets**: One per availability zone
-  - 10.0.11.0/24 (us-east-1a)
-  - 10.0.12.0/24 (us-east-1b)
-  - 10.0.13.0/24 (us-east-1c)
+  - 10.0.11.0/24 (eu-central-1a)
+  - 10.0.12.0/24 (eu-central-1b)
+  - 10.0.13.0/24 (eu-central-1c)
 - **Route Tables**: One per subnet, each routing to respective NAT Gateway
 - **Internet Access**: Outbound only through NAT Gateways
 - **Purpose**: Host application servers with controlled internet access
 
 ### 4. Database Subnet Tier
 - **3 Subnets**: One per availability zone
-  - 10.0.21.0/24 (us-east-1a)
-  - 10.0.22.0/24 (us-east-1b)
-  - 10.0.23.0/24 (us-east-1c)
+  - 10.0.21.0/24 (eu-central-1a)
+  - 10.0.22.0/24 (eu-central-1b)
+  - 10.0.23.0/24 (eu-central-1c)
 - **Route Table**: Single table with no internet routing
 - **Network Isolation**: Complete isolation for database resources
 - **Purpose**: Host RDS databases with no direct internet access
