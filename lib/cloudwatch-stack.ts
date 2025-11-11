@@ -9,6 +9,7 @@ export interface CloudwatchStackProps {
   statusCheckerName: string;
   dynamodbTableName: string;
   snsTopicArn: string;
+  region: string;
 }
 
 export class CloudwatchStack extends Construct {
@@ -21,9 +22,10 @@ export class CloudwatchStack extends Construct {
       statusCheckerName,
       dynamodbTableName,
       snsTopicArn,
+      region,
     } = props;
 
-    // Get current AWS region for dashboard metrics
+    // Get current AWS region dynamically for dashboard metrics
     const currentRegion = new DataAwsRegion(this, 'current_region', {});
 
     // Create CloudWatch Dashboard
@@ -38,14 +40,15 @@ export class CloudwatchStack extends Construct {
                 [
                   'AWS/Lambda',
                   'Invocations',
+                  'FunctionName',
+                  transactionProcessorName,
                   { stat: 'Sum', label: 'Transaction Processor Invocations' },
-                  { FunctionName: transactionProcessorName },
                 ],
                 [
-                  '.',
-                  '.',
+                  '...',
+                  'FunctionName',
+                  statusCheckerName,
                   { stat: 'Sum', label: 'Status Checker Invocations' },
-                  { FunctionName: statusCheckerName },
                 ],
               ],
               period: 300,
@@ -61,14 +64,15 @@ export class CloudwatchStack extends Construct {
                 [
                   'AWS/Lambda',
                   'Errors',
+                  'FunctionName',
+                  transactionProcessorName,
                   { stat: 'Sum', label: 'Transaction Processor Errors' },
-                  { FunctionName: transactionProcessorName },
                 ],
                 [
-                  '.',
-                  '.',
+                  '...',
+                  'FunctionName',
+                  statusCheckerName,
                   { stat: 'Sum', label: 'Status Checker Errors' },
-                  { FunctionName: statusCheckerName },
                 ],
               ],
               period: 300,
@@ -84,14 +88,16 @@ export class CloudwatchStack extends Construct {
                 [
                   'AWS/DynamoDB',
                   'ConsumedReadCapacityUnits',
+                  'TableName',
+                  dynamodbTableName,
                   { stat: 'Sum' },
-                  { TableName: dynamodbTableName },
                 ],
                 [
                   '.',
                   'ConsumedWriteCapacityUnits',
+                  'TableName',
+                  dynamodbTableName,
                   { stat: 'Sum' },
-                  { TableName: dynamodbTableName },
                 ],
               ],
               period: 300,

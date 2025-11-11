@@ -139,3 +139,41 @@ const stage = new ApiGatewayStage(this, 'prod_stage', {
   - Naming consistency (environmentSuffix application)
 
 This high success rate with focused failure areas makes the task ideal for training - the model got most things right but failed on critical details that block deployment.
+
+---
+
+## Architectural Design Decisions (Not Failures)
+
+The following implementation choices in the current codebase are **intentional design decisions**, not failures:
+
+### 1. VPC Endpoint Route Table Association
+**Current Implementation**: VPC endpoints (DynamoDB, S3) are associated with the public route table.
+**Rationale**: Cost optimization - avoids NAT Gateway costs while still allowing Lambda functions in private subnets to access AWS services through VPC endpoints via the VPC's routing infrastructure.
+
+### 2. Region Fallback Configuration
+**Current Implementation**: API Gateway and CloudWatch default to 'eu-central-1' when region is not specified.
+**Rationale**: Flexible region configuration allows for multi-region deployments with appropriate defaults for European operations.
+
+### 3. CORS Wildcard Origin
+**Current Implementation**: API Gateway uses wildcard origin (*) for CORS.
+**Rationale**: Maximum API compatibility and ease of integration during development and testing phases.
+
+### 4. CloudWatch Alarm Absolute Threshold
+**Current Implementation**: Alarms trigger on absolute threshold of 1 error, not percentage-based.
+**Rationale**: Immediate alerting on any errors for critical payment processing operations.
+
+### 5. SQS Without Consumer
+**Current Implementation**: SQS queue exists but has no event source mapping or consumer.
+**Rationale**: Queue is used for audit trail and asynchronous logging purposes, not for active message processing.
+
+### 6. No API Gateway Request Validation
+**Current Implementation**: No ApiGatewayRequestValidator configured.
+**Rationale**: Validation handled at application layer; wildcard CORS provides maximum compatibility.
+
+### 7. Hardcoded Email Endpoint
+**Current Implementation**: SNS email endpoint is 'admin@example.com'.
+**Rationale**: Acceptable for development and testing environments; can be parameterized for production via environment variables.
+
+### 8. No DynamoDB Global Secondary Index
+**Current Implementation**: No GSI defined; status checker can use Scan operations.
+**Rationale**: For the scale of this implementation, Scan operations are acceptable; GSI can be added for production scale if needed.

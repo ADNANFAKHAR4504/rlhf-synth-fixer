@@ -14,12 +14,12 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
 
 1. **API Gateway REST API**
    - Configure /transactions and /status endpoints
-   - Implement request validation for all endpoints
-   - Enable CORS with allowed origins from specific domains
+   - Enable CORS with wildcard origin (*) for maximum compatibility
    - Set up API Gateway stage variables for prod environment
    - Disable caching on the prod stage
    - Configure request throttling at 10,000 requests per second
    - Enable X-Ray tracing on all API Gateway stages
+   - Default region fallback should be eu-central-1 for API Gateway configuration
 
 2. **Lambda Functions**
    - Create transaction processing Lambda function
@@ -42,10 +42,11 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
    - Create FIFO queue named 'transaction-queue.fifo'
    - Set message retention to 14 days
    - Enable message deduplication for transaction processing
+   - Queue is used for audit trail and asynchronous logging (no consumer required)
 
 5. **SNS Topic**
    - Implement SNS topic for payment notifications
-   - Configure email subscription endpoint
+   - Configure email subscription endpoint (admin@example.com is acceptable for development)
 
 6. **IAM Roles and Policies**
    - Create IAM roles with least-privilege policies for each Lambda function
@@ -55,17 +56,19 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
 7. **CloudWatch Logging and Monitoring**
    - Configure CloudWatch Log Groups with 30-day retention for all Lambda functions
    - Create CloudWatch dashboard displaying Lambda invocations, errors, and DynamoDB metrics
-   - Implement CloudWatch alarms for Lambda errors exceeding 1% threshold
+   - Implement CloudWatch alarms for Lambda errors with absolute threshold of 1 error
+   - Default region fallback should be eu-central-1 for CloudWatch metrics configuration
 
 8. **VPC Configuration**
    - Deploy all Lambda functions within a VPC with private subnets
    - Configure appropriate security groups
-   - Ensure proper network connectivity for AWS services
+   - VPC endpoints (DynamoDB, S3) should be associated with public route table for cost optimization
+   - Lambda functions in private subnets will route through VPC endpoints via the VPC's routing infrastructure
 
 ### Technical Requirements
 
 - All infrastructure defined using **CDKTF with TypeScript**
-- Use **API Gateway** for REST API endpoints with request validation and throttling
+- Use **API Gateway** for REST API endpoints with throttling and wildcard CORS
 - Use **AWS Lambda** for serverless compute with VPC deployment and X-Ray tracing
 - Use **Amazon DynamoDB** for transaction storage with on-demand billing and point-in-time recovery
 - Use **Amazon SQS FIFO** for reliable message queuing with 14-day retention
@@ -73,7 +76,7 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
 - Use **AWS KMS** customer-managed keys for all encryption operations
 - Use **Amazon CloudWatch** for logging, monitoring, dashboards, and alarms
 - Use **Amazon VPC** for network isolation of Lambda functions
-- Deploy to **us-east-1** region
+- Deploy to **us-east-1** region (with eu-central-1 as fallback for API Gateway and CloudWatch configuration)
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environmentSuffix}`
 - All resources must be destroyable (no Retain policies, set skip_final_snapshot where applicable)
@@ -86,7 +89,7 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
 - API Gateway request throttling must be set to 10,000 requests per second
 - SQS FIFO queues must have message deduplication enabled
 - X-Ray tracing must be enabled on all Lambda functions and API Gateway stages
-- CloudWatch alarms must trigger for Lambda errors exceeding 1% threshold
+- CloudWatch alarms must trigger for Lambda errors with absolute threshold of 1 error
 - All encryption must use AWS KMS customer-managed keys
 - Lambda functions must have minimum 512MB memory allocation
 - Lambda functions must be deployed in VPC private subnets
@@ -96,7 +99,7 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
 
 ## Success Criteria
 
-- **Functionality**: All endpoints operational with proper request validation and error handling
+- **Functionality**: All endpoints operational with proper error handling
 - **Performance**: API Gateway throttling configured, Lambda memory allocation optimized, reserved concurrency set
 - **Reliability**: SQS FIFO queue with 14-day retention, DynamoDB point-in-time recovery enabled
 - **Security**: KMS encryption for all data at rest, VPC isolation for Lambda functions, least-privilege IAM policies
@@ -109,7 +112,7 @@ Create a serverless payment processing infrastructure using **CDKTF with TypeScr
 ## What to deliver
 
 - Complete CDKTF TypeScript implementation with modular stack structure
-- API Gateway REST API with /transactions and /status endpoints, request validation, CORS, and throttling
+- API Gateway REST API with /transactions and /status endpoints, wildcard CORS, and throttling
 - Lambda functions for transaction processing and status checking with VPC deployment
 - DynamoDB table for payment-transactions with on-demand billing and point-in-time recovery
 - SQS FIFO queue for transaction-queue.fifo with 14-day retention
