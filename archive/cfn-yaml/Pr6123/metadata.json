@@ -11,12 +11,16 @@
     "Cloud Environment Setup"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
-    "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "VPC",
+    "EC2",
+    "ECS",
+    "ALB",
+    "CloudWatch",
+    "IAM",
+    "SNS",
+    "SSM",
+    "ServiceDiscovery",
+    "AutoScaling"
   ],
   "coverage": {
     "lines": 100,
