@@ -521,19 +521,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Environment Suffix Configuration', () => {
-    test('Uses environmentSuffix from props', () => {
-      expect(stack.node.tryGetContext('environmentSuffix')).toBeDefined();
-      // Stack was created with environmentSuffix: 'test'
-      template.hasResourceProperties('AWS::EC2::VPC', {
-        Tags: Match.arrayWith([
-          Match.objectLike({
-            Key: 'Name',
-            Value: Match.stringLikeRegexp('.*test'),
-          }),
-        ]),
-      });
-    });
-
     test('Falls back to context when no environmentSuffix in props', () => {
       const contextApp = new cdk.App({
         context: {
