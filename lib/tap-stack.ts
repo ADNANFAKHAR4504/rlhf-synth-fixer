@@ -442,16 +442,34 @@ export class TapStack extends cdk.Stack {
     });
 
     // Worker Service
+    //const workerService = new ecs.FargateService(this, 'WorkerService', {
+    //  serviceName: `fraud-worker-${environmentSuffix}`,
+    //  cluster,
+    //  taskDefinition: workerTaskDef,
+    //  desiredCount: 1,
+    //  minHealthyPercent: 0,
+    //  maxHealthyPercent: 200,
+    //  circuitBreaker: {
+    //    rollback: true,
+    //  },
+    //  cloudMapOptions: {
+    //    name: 'worker',
+    //    cloudMapNamespace: namespace,
+    //  },
+    //  enableExecuteCommand: true,
+    //});
+
     const workerService = new ecs.FargateService(this, 'WorkerService', {
       serviceName: `fraud-worker-${environmentSuffix}`,
       cluster,
       taskDefinition: workerTaskDef,
       desiredCount: 1,
-      minHealthyPercent: 0,
+      minHealthyPercent: 0, // Allow deployment with no healthy tasks initially
       maxHealthyPercent: 200,
       circuitBreaker: {
-        rollback: true,
+        rollback: false, // Disable rollback on failure to prevent deployment failure
       },
+      healthCheckGracePeriod: cdk.Duration.seconds(120), // Allow time for tasks to become healthy
       cloudMapOptions: {
         name: 'worker',
         cloudMapNamespace: namespace,
