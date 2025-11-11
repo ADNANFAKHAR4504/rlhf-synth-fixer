@@ -71,8 +71,8 @@ export class TapStack extends pulumi.ComponentResource {
     this.auroraGlobalCluster = this.createAuroraGlobalDatabase(
       primaryNetworking.subnetGroup,
       drNetworking.subnetGroup,
-      primaryNetworking.securityGroup,
-      drNetworking.securityGroup,
+      primaryNetworking.rdsSecurityGroup,
+      drNetworking.rdsSecurityGroup,
       primaryKmsKey,
       drKmsKey
     );
@@ -113,7 +113,6 @@ export class TapStack extends pulumi.ComponentResource {
     // Create Route 53 and health checks
     this.hostedZone = this.createHostedZone();
     this.primaryHealthCheck = this.createHealthCheck(this.primaryAlb);
-
     this.createRoute53Records(
       this.primaryAlb,
       this.drAlb,
@@ -160,8 +159,8 @@ export class TapStack extends pulumi.ComponentResource {
   private initializeProps(props: TapStackProps): Required<TapStackProps> {
     return {
       environmentSuffix: props.environmentSuffix,
-      primaryRegion: props.primaryRegion || 'us-east-1',
-      drRegion: props.drRegion || 'us-east-2',
+      primaryRegion: props.primaryRegion || 'eu-central-1',  // Changed from us-east-1
+      drRegion: props.drRegion || 'eu-west-2',  // Changed from us-east-2
       hostedZoneName:
         props.hostedZoneName ||
         `trading-platform-${props.environmentSuffix}.com`,
@@ -230,6 +229,9 @@ export class TapStack extends pulumi.ComponentResource {
     const provider =
       region === 'primary' ? this.primaryProvider : this.drProvider;
     const baseOctet = region === 'primary' ? '10.0' : '10.1';
+    
+    // Get region string for AZ configuration
+    const regionStr = region === 'primary' ? this.props.primaryRegion : this.props.drRegion;
 
     // Internet Gateway
     const igw = new aws.ec2.InternetGateway(
@@ -251,7 +253,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.1.0/24`,
-        availabilityZone: region === 'primary' ? 'us-east-1a' : 'us-east-2a',
+        availabilityZone: `${regionStr}a`,  // Dynamic AZ
         mapPublicIpOnLaunch: true,
         tags: {
           ...this.props.tags,
@@ -267,7 +269,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.2.0/24`,
-        availabilityZone: region === 'primary' ? 'us-east-1b' : 'us-east-2b',
+        availabilityZone: `${regionStr}b`,  // Dynamic AZ
         mapPublicIpOnLaunch: true,
         tags: {
           ...this.props.tags,
@@ -284,7 +286,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.10.0/24`,
-        availabilityZone: region === 'primary' ? 'us-east-1a' : 'us-east-2a',
+        availabilityZone: `${regionStr}a`,  // Dynamic AZ
         tags: {
           ...this.props.tags,
           Name: `private-subnet-1-${region}-${this.props.environmentSuffix}`,
@@ -299,7 +301,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: vpc.id,
         cidrBlock: `${baseOctet}.11.0/24`,
-        availabilityZone: region === 'primary' ? 'us-east-1b' : 'us-east-2b',
+        availabilityZone: `${regionStr}b`,  // Dynamic AZ
         tags: {
           ...this.props.tags,
           Name: `private-subnet-2-${region}-${this.props.environmentSuffix}`,
@@ -866,7 +868,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    // Task Definition
+    // Task Definition - FIXED to use pulumi.interpolate
     const taskDefinition = new aws.ecs.TaskDefinition(
       `ecs-task-${region}-${this.props.environmentSuffix}`,
       {
@@ -877,29 +879,26 @@ export class TapStack extends pulumi.ComponentResource {
         requiresCompatibilities: ['FARGATE'],
         executionRoleArn: taskExecutionRole.arn,
         taskRoleArn: taskRole.arn,
-        containerDefinitions: JSON.stringify([
+        containerDefinitions: pulumi.interpolate`[
           {
-            name: 'trading-app',
-            image: 'nginx:latest',
-            portMappings: [
+            "name": "trading-app",
+            "image": "nginx:latest",
+            "portMappings": [
               {
-                containerPort: 80,
-                protocol: 'tcp',
-              },
+                "containerPort": 80,
+                "protocol": "tcp"
+              }
             ],
-            logConfiguration: {
-              logDriver: 'awslogs',
-              options: {
-                'awslogs-group': logGroup.name,
-                'awslogs-region':
-                  region === 'primary'
-                    ? this.props.primaryRegion
-                    : this.props.drRegion,
-                'awslogs-stream-prefix': 'trading',
-              },
-            },
-          },
-        ]),
+            "logConfiguration": {
+              "logDriver": "awslogs",
+              "options": {
+                "awslogs-group": "${logGroup.name}",
+                "awslogs-region": "${region === 'primary' ? this.props.primaryRegion : this.props.drRegion}",
+                "awslogs-stream-prefix": "trading"
+              }
+            }
+          }
+        ]`,
         tags: {
           ...this.props.tags,
           Region: region,

@@ -11,45 +11,27 @@
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
-// Initialize Pulumi configuration for the current stack.
-const config = new pulumi.Config();
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-// Get the environment suffix from the CI, Pulumi config, defaulting to 'dev'.
-const environmentSuffix =
-  process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
-
-// Get metadata from environment variables for tagging purposes.
-// These are often injected by CI/CD systems.
-const repository = config.get('repository') || 'unknown';
-const commitAuthor = config.get('commitAuthor') || 'unknown';
-
-// Define a set of default tags to apply to all resources.
-// While not explicitly used in the TapStack instantiation here,
-// this is the standard place to define them. They would typically be passed
-// into the TapStack or configured on the AWS provider.
-const defaultTags = {
-  Environment: environmentSuffix,
-  Repository: repository,
-  Author: commitAuthor,
-};
-
-// Instantiate the main stack component for the infrastructure.
-// This encapsulates all the resources for the platform.
-const stack = new TapStack('trading-platform', {
-  environmentSuffix,
-  primaryRegion: 'us-east-1',
-  drRegion: 'us-east-2',
+// Create the trading platform stack with EU regions
+const tradingPlatform = new TapStack('trading-platform', {
+  environmentSuffix: environmentSuffix,
+  primaryRegion: 'eu-central-1',  // Frankfurt
+  drRegion: 'eu-west-2',          // London
   hostedZoneName: `trading-platform-${environmentSuffix}.com`,
-  notificationEmail: 'ops@tradingplatform.com',
-  tags: defaultTags,
+  notificationEmail: 'ops@example.com',
+  tags: {
+    Project: 'TradingPlatform',
+    Environment: environmentSuffix,
+  },
 });
 
-// Export outputs for use by other stacks or external systems
-export const primaryVpcId = stack.primaryVpc.id;
-export const drVpcId = stack.drVpc.id;
-export const primaryAlbDns = stack.primaryAlb.dnsName;
-export const drAlbDns = stack.drAlb.dnsName;
-export const auroraGlobalClusterId = stack.auroraGlobalCluster.id;
-export const dynamodbTableName = stack.dynamodbTable.name;
-export const hostedZoneId = stack.hostedZone.id;
-export const primaryHealthCheckId = stack.primaryHealthCheck.id;
+// Export outputs
+export const primaryVpcId = tradingPlatform.primaryVpc.id;
+export const drVpcId = tradingPlatform.drVpc.id;
+export const primaryAlbDns = tradingPlatform.primaryAlb.dnsName;
+export const drAlbDns = tradingPlatform.drAlb.dnsName;
+export const auroraGlobalClusterId = tradingPlatform.auroraGlobalCluster.id;
+export const dynamodbTableName = tradingPlatform.dynamodbTable.name;
+export const hostedZoneId = tradingPlatform.hostedZone.id;
+export const primaryHealthCheckId = tradingPlatform.primaryHealthCheck.id;
