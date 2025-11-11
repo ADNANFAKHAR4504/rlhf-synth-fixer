@@ -624,6 +624,7 @@ variable "project_name" {
 }
 
 # Outputs
+
 output "alb_dns_name" {
   description = "DNS name of the Application Load Balancer"
   value       = aws_lb.main.dns_name
@@ -637,4 +638,59 @@ output "rds_endpoint" {
 output "secrets_manager_secret_arn" {
   description = "ARN of the Secrets Manager secret containing RDS password"
   value       = aws_secretsmanager_secret.rds_password.arn
+}
+
+output "vpc_id" {
+  description = "The ID of the main VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of the public subnets (where ALB and NAT Gateways are located)"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of the private subnets (where EC2 instances and RDS are located)"
+  value       = aws_subnet.private[*].id
+}
+
+output "alb_security_group_id" {
+  description = "The Security Group ID for the Application Load Balancer"
+  value       = aws_security_group.alb.id
+}
+
+output "ec2_security_group_id" {
+  description = "The Security Group ID for the EC2 instances"
+  value       = aws_security_group.ec2.id
+}
+
+output "asg_name" {
+  description = "The name of the Auto Scaling Group"
+  value       = aws_autoscaling_group.main.name
+}
+
+output "launch_template_id" {
+  description = "The ID of the Launch Template used by the ASG"
+  value       = aws_launch_template.main.id
+}
+
+output "ec2_iam_instance_profile_arn" {
+  description = "The ARN of the IAM Instance Profile attached to the EC2 instances"
+  value       = aws_iam_instance_profile.ec2.arn
+}
+
+output "rds_db_name" {
+  description = "The database name"
+  value       = aws_db_instance.main.db_name
+}
+
+output "rds_master_username" {
+  description = "The master database username"
+  value       = aws_db_instance.main.username
+}
+
+output "rds_security_group_id" {
+  description = "The Security Group ID for the RDS instance"
+  value       = aws_security_group.rds.id
 }
