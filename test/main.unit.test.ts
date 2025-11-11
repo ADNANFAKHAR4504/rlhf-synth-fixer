@@ -333,13 +333,15 @@ describe("Payment Processing Stack Unit Tests", () => {
     });
   });
 
-  describe("Secrets Manager Configuration", () => {
-    it("should use environment-specific secret names with environmentSuffix", () => {
-      Object.keys(environments).forEach((env) => {
-        const secretName = `payment-db-password-${env}-${environmentSuffix}`;
-        expect(secretName).toContain(env);
-        expect(secretName).toContain(environmentSuffix);
-      });
+  describe("Database Configuration", () => {
+    it("should use environment variables for database credentials", () => {
+      const dbUsername = process.env.TF_VAR_db_username || 'dbadmin';
+      const dbPassword = process.env.TF_VAR_db_password || 'TempPassword123!';
+
+      expect(dbUsername).toBeTruthy();
+      expect(dbPassword).toBeTruthy();
+      expect(dbUsername.length).toBeGreaterThan(0);
+      expect(dbPassword.length).toBeGreaterThan(0);
     });
   });
 

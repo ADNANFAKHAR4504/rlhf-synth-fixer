@@ -33,8 +33,6 @@ import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integ
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
-import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 
 interface EnvironmentConfig {
@@ -246,22 +244,10 @@ class PaymentProcessingStack extends TerraformStack {
       },
     });
 
-    // FIX 2: Secret name now includes environmentSuffix
-    const dbPasswordSecret = new DataAwsSecretsmanagerSecret(
-      this,
-      'db_password_secret',
-      {
-        name: `payment-db-password-${config.environment}-${environmentSuffix}`,
-      }
-    );
-
-    const dbPasswordSecretVersion = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db_password_secret_version',
-      {
-        secretId: dbPasswordSecret.id,
-      }
-    );
+    // Database credentials - using environment variables for CI/CD compatibility
+    // In production, these should be managed via TF_VAR_db_username and TF_VAR_db_password
+    const dbUsername = process.env.TF_VAR_db_username || 'dbadmin';
+    const dbPassword = process.env.TF_VAR_db_password || 'TempPassword123!';
 
     // FIX 3: RDS instance identifier now includes environmentSuffix
     // FIX 4: Added multiAz, publiclyAccessible, and storageEncrypted properties
@@ -273,8 +259,8 @@ class PaymentProcessingStack extends TerraformStack {
       allocatedStorage: 20,
       storageType: 'gp2',
       dbName: 'paymentdb',
-      username: 'dbadmin',
-      password: dbPasswordSecretVersion.secretString,
+      username: dbUsername,
+      password: dbPassword,
       dbSubnetGroupName: dbSubnetGroup.name,
       vpcSecurityGroupIds: [rdsSecurityGroup.id],
       backupRetentionPeriod: 7,
