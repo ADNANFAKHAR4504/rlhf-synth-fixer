@@ -520,7 +520,7 @@ export class DatabaseMigrationStack extends Construct {
         replicationInstanceClass: 'dms.t3.medium',
         replicationInstanceIdentifier: `dms-replication-${environmentSuffix}`,
         allocatedStorage: 100,
-        engineVersion: '3.5.1',
+      //  engineVersion: '3.5.1',
         multiAz: false,
         publiclyAccessible: false,
         replicationSubnetGroupIdentifier:
