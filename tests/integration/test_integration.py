@@ -17,7 +17,7 @@ class TestInfrastructureDeployment:
     def setup_class(cls):
         """Load stack outputs from cfn-outputs/flat-outputs.json."""
         outputs_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "cfn-outputs",
             "flat-outputs.json"
         )
@@ -50,9 +50,8 @@ class TestInfrastructureDeployment:
     @staticmethod
     def _get_output(key):
         """Extract output value by key from stack outputs."""
-        for output in TestInfrastructureDeployment.outputs:
-            if output.get("OutputKey") == key:
-                return output.get("OutputValue")
+        if key in TestInfrastructureDeployment.outputs:
+            return TestInfrastructureDeployment.outputs[key]
         raise ValueError(f"Output key '{key}' not found in stack outputs")
 
     def test_vpc_configuration(self):
@@ -265,10 +264,8 @@ class TestInfrastructureDeployment:
             "VpcId"
         ]
 
-        output_keys = [output.get("OutputKey") for output in self.outputs]
-
         for required in required_outputs:
-            assert required in output_keys, f"Required output '{required}' not found"
+            assert required in self.outputs, f"Required output '{required}' not found"
 
 
 class TestAPIEndpoints:
@@ -278,7 +275,7 @@ class TestAPIEndpoints:
     def setup_class(cls):
         """Load ALB DNS from stack outputs."""
         outputs_file = os.path.join(
-            os.path.dirname(os.path.dirname(__file__)),
+            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
             "cfn-outputs",
             "flat-outputs.json"
         )
@@ -286,12 +283,7 @@ class TestAPIEndpoints:
         with open(outputs_file, "r", encoding="utf-8") as f:
             outputs = json.load(f)
 
-        cls.alb_dns = None
-        for output in outputs:
-            if output.get("OutputKey") == "ALBDnsName":
-                cls.alb_dns = output.get("OutputValue")
-                break
-
+        cls.alb_dns = outputs.get("ALBDnsName")
         assert cls.alb_dns is not None, "ALB DNS not found in outputs"
         cls.base_url = f"http://{cls.alb_dns}"
 
