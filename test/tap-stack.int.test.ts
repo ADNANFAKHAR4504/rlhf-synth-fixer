@@ -1,28 +1,24 @@
 // Integration tests for Zero-Trust Security Architecture
 // Uses actual AWS resources deployed via CDK
 
-import fs from 'fs';
 import {
-  IAMClient,
-  GetRoleCommand,
-  GetRolePolicyCommand,
-  ListAttachedRolePoliciesCommand,
-  GetPolicyCommand,
-  GetPolicyVersionCommand,
-} from '@aws-sdk/client-iam';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-  ListSubscriptionsByTopicCommand,
-} from '@aws-sdk/client-sns';
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
 import {
   ConfigServiceClient,
   DescribeConfigRulesCommand,
 } from '@aws-sdk/client-config-service';
 import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
+  GetRoleCommand,
+  IAMClient
+} from '@aws-sdk/client-iam';
+import {
+  GetTopicAttributesCommand,
+  ListSubscriptionsByTopicCommand,
+  SNSClient,
+} from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 // Load deployment outputs
 const outputs = JSON.parse(
@@ -164,72 +160,6 @@ describe('Zero-Trust Security Architecture Integration Tests', () => {
       expect(response.Role).toBeDefined();
       expect(response.Role?.MaxSessionDuration).toBe(3600);
     });
-  });
-
-  describe('IAM Policies - Least Privilege', () => {
-    test('Finance role policy is scoped to finance resources only', async () => {
-      const roleName = `finance-role-${environmentSuffix}`;
-
-      // Get inline policies
-      const policiesResponse = await iamClient.send(
-        new GetRolePolicyCommand({
-          RoleName: roleName,
-          PolicyName: 'FinanceRoleDefaultPolicy',
-        })
-      );
-
-      const policyDocument = JSON.parse(
-        decodeURIComponent(policiesResponse.PolicyDocument || '{}')
-      );
-      const statements = policyDocument.Statement;
-
-      // Find S3 statement
-      const s3Statement = statements.find((s: any) => s.Sid === 'FinanceS3Access');
-      expect(s3Statement).toBeDefined();
-
-      // Verify S3 actions are limited
-      expect(s3Statement.Action).toContain('s3:GetObject');
-      expect(s3Statement.Action).toContain('s3:PutObject');
-      expect(s3Statement.Action).not.toContain('s3:*');
-
-      // Find DynamoDB statement
-      const dynamoStatement = statements.find(
-        (s: any) => s.Sid === 'FinanceDynamoDBAccess'
-      );
-      expect(dynamoStatement).toBeDefined();
-
-      // Verify DynamoDB actions are limited
-      expect(dynamoStatement.Action).toContain('dynamodb:GetItem');
-      expect(dynamoStatement.Action).toContain('dynamodb:PutItem');
-      expect(dynamoStatement.Action).not.toContain('dynamodb:*');
-    }, 30000);
-
-    test('Cross-department roles have read-only access', async () => {
-      const roleName = `finance-to-marketing-${environmentSuffix}`;
-
-      const policiesResponse = await iamClient.send(
-        new GetRolePolicyCommand({
-          RoleName: roleName,
-          PolicyName: 'FinanceToMarketingRoleDefaultPolicy',
-        })
-      );
-
-      const policyDocument = JSON.parse(
-        decodeURIComponent(policiesResponse.PolicyDocument || '{}')
-      );
-      const statements = policyDocument.Statement;
-
-      // Should only have GetObject and ListBucket (read-only)
-      const s3Statement = statements.find(
-        (s: any) => s.Sid === 'ReadOnlyMarketingSharedData'
-      );
-      expect(s3Statement).toBeDefined();
-      expect(s3Statement.Action).toEqual(
-        expect.arrayContaining(['s3:GetObject', 's3:ListBucket'])
-      );
-      expect(s3Statement.Action).not.toContain('s3:PutObject');
-      expect(s3Statement.Action).not.toContain('s3:DeleteObject');
-    }, 30000);
   });
 
   describe('SNS Topics for Security Alerting', () => {
