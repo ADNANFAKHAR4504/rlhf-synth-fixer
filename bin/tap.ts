@@ -56,6 +56,4 @@ export const dynamoTableName = stack.dynamoTableName;
 export const primarySnsTopicArn = stack.primarySnsTopicArn;
 export const standbySnsTopicArn = stack.standbySnsTopicArn;
 export const primaryHealthCheckId = stack.primaryHealthCheckId;
-export const hostedZoneId = stack.hostedZoneId;
-export const domainName = stack.domainName;
 export const applicationUrl = stack.applicationUrl;
