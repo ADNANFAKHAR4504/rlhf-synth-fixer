@@ -25,7 +25,7 @@ Create a CloudFormation template in JSON format to build a migration-ready infra
 5. Network traffic between tiers must be restricted using security groups with least privilege access
 
 ## Environment Details
-- Migration environment in us-east-1 region
+- Migration environment in eu-central-2 region
 - Three-tier architecture: Application Load Balancer, Auto Scaling Groups for EC2 instances, and RDS PostgreSQL database
 - Infrastructure spans across 2 availability zones
 - Public subnets for ALB, private subnets for application and database tiers

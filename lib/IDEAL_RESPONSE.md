@@ -1403,7 +1403,7 @@ The complete production-ready CloudFormation template is available in `lib/TapSt
 ### Prerequisites
 
 - AWS CLI configured with appropriate credentials
-- An EC2 key pair created in us-east-1 region
+- An EC2 key pair created in eu-central-2 region
 - Sufficient AWS service limits for the resources
 
 ### Deploy the Stack
@@ -1421,7 +1421,7 @@ aws cloudformation create-stack \
     ParameterKey=InstanceType,ParameterValue=t3.micro \
     ParameterKey=KeyName,ParameterValue=your-key-pair-name \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region eu-central-2
 ```
 
 ### Monitor Stack Creation
@@ -1429,7 +1429,7 @@ aws cloudformation create-stack \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name migration-infrastructure-prod \
-  --region us-east-1 \
+  --region eu-central-2 \
   --query 'Stacks[0].StackStatus'
 ```
 
@@ -1438,6 +1438,6 @@ aws cloudformation describe-stacks \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name migration-infrastructure-prod \
-  --region us-east-1 \
+  --region eu-central-2 \
   --query 'Stacks[0].Outputs'
 ```

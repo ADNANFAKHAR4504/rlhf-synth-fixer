@@ -5,6 +5,7 @@ This CloudFormation template creates a complete three-tier migration infrastruct
 ## Architecture Overview
 
 The template creates:
+
 - VPC with public and private subnets across 2 availability zones
 - Application Load Balancer for distributing traffic
 - Auto Scaling Groups for application servers
@@ -25,9 +26,7 @@ The template creates:
           "Label": {
             "default": "Environment Configuration"
           },
-          "Parameters": [
-            "EnvironmentSuffix"
-          ]
+          "Parameters": ["EnvironmentSuffix"]
         },
         {
           "Label": {
@@ -44,11 +43,7 @@ The template creates:
           "Label": {
             "default": "Application Configuration"
           },
-          "Parameters": [
-            "InstanceType",
-            "KeyName",
-            "LatestAmiId"
-          ]
+          "Parameters": ["InstanceType", "KeyName", "LatestAmiId"]
         }
       ]
     }
@@ -87,7 +82,12 @@ The template creates:
       "Type": "String",
       "Default": "db.t3.micro",
       "Description": "Database instance class",
-      "AllowedValues": ["db.t3.micro", "db.t3.small", "db.t3.medium", "db.r5.large"]
+      "AllowedValues": [
+        "db.t3.micro",
+        "db.t3.small",
+        "db.t3.medium",
+        "db.r5.large"
+      ]
     },
     "InstanceType": {
       "Type": "String",
@@ -115,7 +115,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-vpc-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-vpc-${EnvironmentSuffix}" }
           },
           {
             "Key": "Environment",
@@ -138,21 +138,23 @@ The template creates:
     "AttachGateway": {
       "Type": "AWS::EC2::VPCGatewayAttachment",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
-        "InternetGatewayId": {"Ref": "InternetGateway"}
+        "VpcId": { "Ref": "VPC" },
+        "InternetGatewayId": { "Ref": "InternetGateway" }
       }
     },
     "PublicSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.1.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-public-subnet-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Tier",
@@ -164,14 +166,16 @@ The template creates:
     "PublicSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.2.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
         "MapPublicIpOnLaunch": true,
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-public-subnet-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Tier",
@@ -183,13 +187,15 @@ The template creates:
     "PrivateSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.11.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-subnet-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-private-subnet-1-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Tier",
@@ -201,13 +207,15 @@ The template creates:
     "PrivateSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.12.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-subnet-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-private-subnet-2-${EnvironmentSuffix}"
+            }
           },
           {
             "Key": "Tier",
@@ -219,13 +227,13 @@ The template creates:
     "DBSubnet1": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.21.0/24",
-        "AvailabilityZone": {"Fn::Select": [0, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": { "Fn::Select": [0, { "Fn::GetAZs": "" }] },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-subnet-1-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-db-subnet-1-${EnvironmentSuffix}" }
           },
           {
             "Key": "Tier",
@@ -237,13 +245,13 @@ The template creates:
     "DBSubnet2": {
       "Type": "AWS::EC2::Subnet",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "CidrBlock": "10.0.22.0/24",
-        "AvailabilityZone": {"Fn::Select": [1, {"Fn::GetAZs": ""}]},
+        "AvailabilityZone": { "Fn::Select": [1, { "Fn::GetAZs": "" }] },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-subnet-2-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-db-subnet-2-${EnvironmentSuffix}" }
           },
           {
             "Key": "Tier",
@@ -260,7 +268,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-nat-eip-1-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-nat-eip-1-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -273,7 +281,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-nat-eip-2-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-nat-eip-2-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -281,12 +289,12 @@ The template creates:
     "NatGateway1": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway1EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet1"},
+        "AllocationId": { "Fn::GetAtt": ["NatGateway1EIP", "AllocationId"] },
+        "SubnetId": { "Ref": "PublicSubnet1" },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-nat-1-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-nat-1-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -294,12 +302,12 @@ The template creates:
     "NatGateway2": {
       "Type": "AWS::EC2::NatGateway",
       "Properties": {
-        "AllocationId": {"Fn::GetAtt": ["NatGateway2EIP", "AllocationId"]},
-        "SubnetId": {"Ref": "PublicSubnet2"},
+        "AllocationId": { "Fn::GetAtt": ["NatGateway2EIP", "AllocationId"] },
+        "SubnetId": { "Ref": "PublicSubnet2" },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-nat-2-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-nat-2-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -307,11 +315,11 @@ The template creates:
     "PublicRouteTable": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-public-rt-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-public-rt-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -320,33 +328,35 @@ The template creates:
       "Type": "AWS::EC2::Route",
       "DependsOn": "AttachGateway",
       "Properties": {
-        "RouteTableId": {"Ref": "PublicRouteTable"},
+        "RouteTableId": { "Ref": "PublicRouteTable" },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "GatewayId": {"Ref": "InternetGateway"}
+        "GatewayId": { "Ref": "InternetGateway" }
       }
     },
     "PublicSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet1"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": { "Ref": "PublicSubnet1" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
       }
     },
     "PublicSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PublicSubnet2"},
-        "RouteTableId": {"Ref": "PublicRouteTable"}
+        "SubnetId": { "Ref": "PublicSubnet2" },
+        "RouteTableId": { "Ref": "PublicRouteTable" }
       }
     },
     "PrivateRouteTable1": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-rt-1-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-private-rt-1-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -354,26 +364,28 @@ The template creates:
     "PrivateRoute1": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable1"},
+        "RouteTableId": { "Ref": "PrivateRouteTable1" },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway1"}
+        "NatGatewayId": { "Ref": "NatGateway1" }
       }
     },
     "PrivateSubnet1RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet1"},
-        "RouteTableId": {"Ref": "PrivateRouteTable1"}
+        "SubnetId": { "Ref": "PrivateSubnet1" },
+        "RouteTableId": { "Ref": "PrivateRouteTable1" }
       }
     },
     "PrivateRouteTable2": {
       "Type": "AWS::EC2::RouteTable",
       "Properties": {
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-private-rt-2-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-private-rt-2-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -381,31 +393,32 @@ The template creates:
     "PrivateRoute2": {
       "Type": "AWS::EC2::Route",
       "Properties": {
-        "RouteTableId": {"Ref": "PrivateRouteTable2"},
+        "RouteTableId": { "Ref": "PrivateRouteTable2" },
         "DestinationCidrBlock": "0.0.0.0/0",
-        "NatGatewayId": {"Ref": "NatGateway2"}
+        "NatGatewayId": { "Ref": "NatGateway2" }
       }
     },
     "PrivateSubnet2RouteTableAssociation": {
       "Type": "AWS::EC2::SubnetRouteTableAssociation",
       "Properties": {
-        "SubnetId": {"Ref": "PrivateSubnet2"},
-        "RouteTableId": {"Ref": "PrivateRouteTable2"}
+        "SubnetId": { "Ref": "PrivateSubnet2" },
+        "RouteTableId": { "Ref": "PrivateRouteTable2" }
       }
     },
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
-        "DBSubnetGroupName": {"Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"},
+        "DBSubnetGroupName": {
+          "Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"
+        },
         "DBSubnetGroupDescription": "Subnet group for RDS PostgreSQL database",
-        "SubnetIds": [
-          {"Ref": "DBSubnet1"},
-          {"Ref": "DBSubnet2"}
-        ],
+        "SubnetIds": [{ "Ref": "DBSubnet1" }, { "Ref": "DBSubnet2" }],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-db-subnet-group-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -413,9 +426,9 @@ The template creates:
     "ALBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}"},
+        "GroupName": { "Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}" },
         "GroupDescription": "Security group for Application Load Balancer",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
@@ -435,7 +448,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-alb-sg-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -443,15 +456,15 @@ The template creates:
     "AppSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "migration-app-sg-${EnvironmentSuffix}"},
+        "GroupName": { "Fn::Sub": "migration-app-sg-${EnvironmentSuffix}" },
         "GroupDescription": "Security group for application servers",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 8080,
             "ToPort": 8080,
-            "SourceSecurityGroupId": {"Ref": "ALBSecurityGroup"},
+            "SourceSecurityGroupId": { "Ref": "ALBSecurityGroup" },
             "Description": "Allow traffic from ALB on port 8080"
           }
         ],
@@ -465,7 +478,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-app-sg-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-app-sg-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -473,15 +486,15 @@ The template creates:
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
-        "GroupName": {"Fn::Sub": "migration-db-sg-${EnvironmentSuffix}"},
+        "GroupName": { "Fn::Sub": "migration-db-sg-${EnvironmentSuffix}" },
         "GroupDescription": "Security group for RDS PostgreSQL database",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 5432,
             "ToPort": 5432,
-            "SourceSecurityGroupId": {"Ref": "AppSecurityGroup"},
+            "SourceSecurityGroupId": { "Ref": "AppSecurityGroup" },
             "Description": "Allow PostgreSQL from application servers"
           }
         ],
@@ -495,7 +508,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-sg-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-db-sg-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -503,19 +516,16 @@ The template creates:
     "ApplicationLoadBalancer": {
       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
       "Properties": {
-        "Name": {"Fn::Sub": "migration-alb-${EnvironmentSuffix}"},
+        "Name": { "Fn::Sub": "migration-alb-${EnvironmentSuffix}" },
         "Type": "application",
         "Scheme": "internet-facing",
         "IpAddressType": "ipv4",
-        "Subnets": [
-          {"Ref": "PublicSubnet1"},
-          {"Ref": "PublicSubnet2"}
-        ],
-        "SecurityGroups": [{"Ref": "ALBSecurityGroup"}],
+        "Subnets": [{ "Ref": "PublicSubnet1" }, { "Ref": "PublicSubnet2" }],
+        "SecurityGroups": [{ "Ref": "ALBSecurityGroup" }],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-alb-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-alb-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -523,10 +533,10 @@ The template creates:
     "BlueTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "migration-blue-tg-${EnvironmentSuffix}"},
+        "Name": { "Fn::Sub": "migration-blue-tg-${EnvironmentSuffix}" },
         "Port": 8080,
         "Protocol": "HTTP",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "HealthCheckEnabled": true,
         "HealthCheckProtocol": "HTTP",
         "HealthCheckPath": "/health",
@@ -538,7 +548,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-blue-tg-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-blue-tg-${EnvironmentSuffix}" }
           },
           {
             "Key": "DeploymentColor",
@@ -550,10 +560,10 @@ The template creates:
     "GreenTargetGroup": {
       "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
       "Properties": {
-        "Name": {"Fn::Sub": "migration-green-tg-${EnvironmentSuffix}"},
+        "Name": { "Fn::Sub": "migration-green-tg-${EnvironmentSuffix}" },
         "Port": 8080,
         "Protocol": "HTTP",
-        "VpcId": {"Ref": "VPC"},
+        "VpcId": { "Ref": "VPC" },
         "HealthCheckEnabled": true,
         "HealthCheckProtocol": "HTTP",
         "HealthCheckPath": "/health",
@@ -565,7 +575,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-green-tg-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-green-tg-${EnvironmentSuffix}" }
           },
           {
             "Key": "DeploymentColor",
@@ -577,13 +587,13 @@ The template creates:
     "ALBListener": {
       "Type": "AWS::ElasticLoadBalancingV2::Listener",
       "Properties": {
-        "LoadBalancerArn": {"Ref": "ApplicationLoadBalancer"},
+        "LoadBalancerArn": { "Ref": "ApplicationLoadBalancer" },
         "Port": 80,
         "Protocol": "HTTP",
         "DefaultActions": [
           {
             "Type": "forward",
-            "TargetGroupArn": {"Ref": "BlueTargetGroup"}
+            "TargetGroupArn": { "Ref": "BlueTargetGroup" }
           }
         ]
       }
@@ -591,14 +601,16 @@ The template creates:
     "LaunchTemplate": {
       "Type": "AWS::EC2::LaunchTemplate",
       "Properties": {
-        "LaunchTemplateName": {"Fn::Sub": "migration-launch-template-${EnvironmentSuffix}"},
+        "LaunchTemplateName": {
+          "Fn::Sub": "migration-launch-template-${EnvironmentSuffix}"
+        },
         "LaunchTemplateData": {
-          "ImageId": {"Ref": "LatestAmiId"},
-          "InstanceType": {"Ref": "InstanceType"},
-          "KeyName": {"Ref": "KeyName"},
-          "SecurityGroupIds": [{"Ref": "AppSecurityGroup"}],
+          "ImageId": { "Ref": "LatestAmiId" },
+          "InstanceType": { "Ref": "InstanceType" },
+          "KeyName": { "Ref": "KeyName" },
+          "SecurityGroupIds": [{ "Ref": "AppSecurityGroup" }],
           "IamInstanceProfile": {
-            "Arn": {"Fn::GetAtt": ["EC2InstanceProfile", "Arn"]}
+            "Arn": { "Fn::GetAtt": ["EC2InstanceProfile", "Arn"] }
           },
           "UserData": {
             "Fn::Base64": {
@@ -611,7 +623,9 @@ The template creates:
               "Tags": [
                 {
                   "Key": "Name",
-                  "Value": {"Fn::Sub": "migration-app-server-${EnvironmentSuffix}"}
+                  "Value": {
+                    "Fn::Sub": "migration-app-server-${EnvironmentSuffix}"
+                  }
                 }
               ]
             }
@@ -622,25 +636,29 @@ The template creates:
     "AutoScalingGroup": {
       "Type": "AWS::AutoScaling::AutoScalingGroup",
       "Properties": {
-        "AutoScalingGroupName": {"Fn::Sub": "migration-asg-${EnvironmentSuffix}"},
+        "AutoScalingGroupName": {
+          "Fn::Sub": "migration-asg-${EnvironmentSuffix}"
+        },
         "VPCZoneIdentifier": [
-          {"Ref": "PrivateSubnet1"},
-          {"Ref": "PrivateSubnet2"}
+          { "Ref": "PrivateSubnet1" },
+          { "Ref": "PrivateSubnet2" }
         ],
         "LaunchTemplate": {
-          "LaunchTemplateId": {"Ref": "LaunchTemplate"},
-          "Version": {"Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"]}
+          "LaunchTemplateId": { "Ref": "LaunchTemplate" },
+          "Version": { "Fn::GetAtt": ["LaunchTemplate", "LatestVersionNumber"] }
         },
         "MinSize": "2",
         "MaxSize": "6",
         "DesiredCapacity": "2",
         "HealthCheckType": "ELB",
         "HealthCheckGracePeriod": 300,
-        "TargetGroupARNs": [{"Ref": "BlueTargetGroup"}],
+        "TargetGroupARNs": [{ "Ref": "BlueTargetGroup" }],
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-asg-instance-${EnvironmentSuffix}"},
+            "Value": {
+              "Fn::Sub": "migration-asg-instance-${EnvironmentSuffix}"
+            },
             "PropagateAtLaunch": true
           }
         ]
@@ -649,7 +667,7 @@ The template creates:
     "EC2Role": {
       "Type": "AWS::IAM::Role",
       "Properties": {
-        "RoleName": {"Fn::Sub": "migration-ec2-role-${EnvironmentSuffix}"},
+        "RoleName": { "Fn::Sub": "migration-ec2-role-${EnvironmentSuffix}" },
         "AssumeRolePolicyDocument": {
           "Version": "2012-10-17",
           "Statement": [
@@ -668,7 +686,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-ec2-role-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-ec2-role-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -676,29 +694,35 @@ The template creates:
     "EC2InstanceProfile": {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName": {"Fn::Sub": "migration-ec2-profile-${EnvironmentSuffix}"},
-        "Roles": [{"Ref": "EC2Role"}]
+        "InstanceProfileName": {
+          "Fn::Sub": "migration-ec2-profile-${EnvironmentSuffix}"
+        },
+        "Roles": [{ "Ref": "EC2Role" }]
       }
     },
     "DBSecret": {
       "Type": "AWS::SecretsManager::Secret",
       "Properties": {
-        "Name": {"Fn::Sub": "migration-db-credentials-${EnvironmentSuffix}"},
+        "Name": { "Fn::Sub": "migration-db-credentials-${EnvironmentSuffix}" },
         "Description": "Database credentials for RDS PostgreSQL",
         "SecretString": {
           "Fn::Sub": [
             "{\"username\":\"${Username}\",\"password\":\"${Password}\",\"engine\":\"postgres\",\"host\":\"${DBEndpoint}\",\"port\":5432,\"dbname\":\"migrationdb\"}",
             {
-              "Username": {"Ref": "DBUsername"},
-              "Password": {"Ref": "DBPassword"},
-              "DBEndpoint": {"Fn::GetAtt": ["RDSInstance", "Endpoint.Address"]}
+              "Username": { "Ref": "DBUsername" },
+              "Password": { "Ref": "DBPassword" },
+              "DBEndpoint": {
+                "Fn::GetAtt": ["RDSInstance", "Endpoint.Address"]
+              }
             }
           ]
         },
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-db-credentials-${EnvironmentSuffix}"}
+            "Value": {
+              "Fn::Sub": "migration-db-credentials-${EnvironmentSuffix}"
+            }
           }
         ]
       }
@@ -707,19 +731,21 @@ The template creates:
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Delete",
       "Properties": {
-        "DBInstanceIdentifier": {"Fn::Sub": "migration-postgres-${EnvironmentSuffix}"},
+        "DBInstanceIdentifier": {
+          "Fn::Sub": "migration-postgres-${EnvironmentSuffix}"
+        },
         "DBName": "migrationdb",
         "Engine": "postgres",
         "EngineVersion": "14.7",
-        "DBInstanceClass": {"Ref": "DBInstanceClass"},
-        "AllocatedStorage": {"Ref": "DBAllocatedStorage"},
+        "DBInstanceClass": { "Ref": "DBInstanceClass" },
+        "AllocatedStorage": { "Ref": "DBAllocatedStorage" },
         "StorageType": "gp3",
         "StorageEncrypted": true,
-        "MasterUsername": {"Ref": "DBUsername"},
-        "MasterUserPassword": {"Ref": "DBPassword"},
+        "MasterUsername": { "Ref": "DBUsername" },
+        "MasterUserPassword": { "Ref": "DBPassword" },
         "MultiAZ": true,
-        "DBSubnetGroupName": {"Ref": "DBSubnetGroup"},
-        "VPCSecurityGroups": [{"Ref": "DBSecurityGroup"}],
+        "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
+        "VPCSecurityGroups": [{ "Ref": "DBSecurityGroup" }],
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
@@ -729,7 +755,7 @@ The template creates:
         "Tags": [
           {
             "Key": "Name",
-            "Value": {"Fn::Sub": "migration-postgres-${EnvironmentSuffix}"}
+            "Value": { "Fn::Sub": "migration-postgres-${EnvironmentSuffix}" }
           }
         ]
       }
@@ -738,23 +764,23 @@ The template creates:
   "Outputs": {
     "VPCId": {
       "Description": "VPC ID",
-      "Value": {"Ref": "VPC"},
+      "Value": { "Ref": "VPC" },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-VPCId"}
+        "Name": { "Fn::Sub": "${AWS::StackName}-VPCId" }
       }
     },
     "ALBDNSName": {
       "Description": "DNS name of the Application Load Balancer",
-      "Value": {"Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]},
+      "Value": { "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"] },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-ALBDNSName"}
+        "Name": { "Fn::Sub": "${AWS::StackName}-ALBDNSName" }
       }
     },
     "RDSEndpoint": {
       "Description": "RDS PostgreSQL endpoint address",
-      "Value": {"Fn::GetAtt": ["RDSInstance", "Endpoint.Address"]},
+      "Value": { "Fn::GetAtt": ["RDSInstance", "Endpoint.Address"] },
       "Export": {
-        "Name": {"Fn::Sub": "${AWS::StackName}-RDSEndpoint"}
+        "Name": { "Fn::Sub": "${AWS::StackName}-RDSEndpoint" }
       }
     }
   }
@@ -786,12 +812,13 @@ aws cloudformation create-stack \
     ParameterKey=DBPassword,ParameterValue=YourSecurePassword123! \
     ParameterKey=KeyName,ParameterValue=your-key-pair \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region eu-central-2
 ```
 
 ## Testing
 
 After deployment:
+
 1. Verify VPC and subnets are created
 2. Check ALB DNS name is accessible
 3. Verify RDS instance is in Multi-AZ configuration
