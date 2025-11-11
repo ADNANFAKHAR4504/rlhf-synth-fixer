@@ -28,7 +28,7 @@ if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
     
     echo "✓ Found lib/optimize.py"
     echo "Environment: ${ENVIRONMENT_SUFFIX:-dev}"
-    echo "Region: ${AWS_REGION:-us-east-2}"
+    echo "Region: ${AWS_REGION:-us-east-1}"
     echo ""
     
     # Execute optimization script
