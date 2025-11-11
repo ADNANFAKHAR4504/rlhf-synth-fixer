@@ -1,6 +1,7 @@
 import { Construct } from 'constructs';
 import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
+import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';
 
 export interface CloudwatchStackProps {
   environmentSuffix: string;
@@ -21,6 +22,9 @@ export class CloudwatchStack extends Construct {
       dynamodbTableName,
       snsTopicArn,
     } = props;
+
+    // Get current AWS region for dashboard metrics
+    const currentRegion = new DataAwsRegion(this, 'current_region', {});
 
     // Create CloudWatch Dashboard
     new CloudwatchDashboard(this, 'payment_dashboard', {
@@ -46,7 +50,7 @@ export class CloudwatchStack extends Construct {
               ],
               period: 300,
               stat: 'Sum',
-              region: 'us-east-1',
+              region: currentRegion.name,
               title: 'Lambda Invocations',
             },
           },
@@ -69,7 +73,7 @@ export class CloudwatchStack extends Construct {
               ],
               period: 300,
               stat: 'Sum',
-              region: 'us-east-1',
+              region: currentRegion.name,
               title: 'Lambda Errors',
             },
           },
@@ -92,7 +96,7 @@ export class CloudwatchStack extends Construct {
               ],
               period: 300,
               stat: 'Sum',
-              region: 'us-east-1',
+              region: currentRegion.name,
               title: 'DynamoDB Capacity',
             },
           },

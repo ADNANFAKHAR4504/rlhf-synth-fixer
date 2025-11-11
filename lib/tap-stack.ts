@@ -132,6 +132,11 @@ export class TapStack extends TerraformStack {
       description: 'SQS queue URL',
     });
 
+    new TerraformOutput(this, 'sqs_dlq_url', {
+      value: sqsStack.transactionDlq.url,
+      description: 'SQS Dead Letter Queue URL',
+    });
+
     new TerraformOutput(this, 'sns_topic_arn', {
       value: snsStack.notificationTopic.arn,
       description: 'SNS topic ARN',
