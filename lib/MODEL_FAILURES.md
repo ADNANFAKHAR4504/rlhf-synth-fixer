@@ -5,7 +5,6 @@ This document details all the issues found in the initial MODEL_RESPONSE and the
 ## Summary Statistics
 
 - **Total Issues Found**: 10
-- **Critical Issues**: 3
 - **Major Issues**: 5
 - **Minor Issues**: 2
 - **Estimated Fix Time**: 2-3 hours
@@ -13,14 +12,12 @@ This document details all the issues found in the initial MODEL_RESPONSE and the
 
 ---
 
-## Critical Issues (Deployment Blockers)
-
 ### 1. Missing IAM Policy for Secrets Manager Access
 
-**Severity**: CRITICAL
 **Impact**: Application instances cannot retrieve database credentials, causing connection failures
 
 **Problem**:
+
 ```json
 "EC2Role": {
   "Type": "AWS::IAM::Role",
@@ -34,6 +31,7 @@ This document details all the issues found in the initial MODEL_RESPONSE and the
 ```
 
 **Fix Applied**:
+
 ```json
 "EC2Role": {
   "Type": "AWS::IAM::Role",
@@ -69,10 +67,10 @@ This document details all the issues found in the initial MODEL_RESPONSE and the
 
 ### 2. Missing Secrets Manager Integration in User Data
 
-**Severity**: CRITICAL
 **Impact**: Application cannot retrieve database credentials at startup
 
 **Problem**:
+
 ```bash
 #!/bin/bash
 yum update -y
@@ -85,6 +83,7 @@ echo 'Application server starting on port 8080' > /opt/app/server.log
 ```
 
 **Fix Applied**:
+
 ```bash
 #!/bin/bash
 yum update -y
@@ -104,10 +103,10 @@ echo 'Application server starting on port 8080' > /opt/app/server.log
 
 ### 3. No Automatic Secret Rotation
 
-**Severity**: CRITICAL (Security Best Practice)
 **Impact**: Database credentials never rotate, violating security compliance requirements
 
 **Problem**:
+
 ```json
 "DBSecret": {
   "Type": "AWS::SecretsManager::Secret",
@@ -124,6 +123,7 @@ echo 'Application server starting on port 8080' > /opt/app/server.log
 Added three resources:
 
 1. **Lambda Rotation Function**:
+
 ```json
 "SecretRotationFunction": {
   "Type": "AWS::Lambda::Function",
@@ -140,6 +140,7 @@ Added three resources:
 ```
 
 2. **Lambda IAM Role**:
+
 ```json
 "LambdaExecutionRole": {
   "Type": "AWS::IAM::Role",
@@ -159,6 +160,7 @@ Added three resources:
 ```
 
 3. **Rotation Schedule**:
+
 ```json
 "SecretRotationSchedule": {
   "Type": "AWS::SecretsManager::RotationSchedule",
@@ -173,6 +175,7 @@ Added three resources:
 ```
 
 4. **Lambda Permission**:
+
 ```json
 "LambdaInvokePermission": {
   "Type": "AWS::Lambda::Permission",
@@ -196,6 +199,7 @@ Added three resources:
 **Impact**: Production environments cannot serve secure traffic
 
 **Problem**:
+
 ```json
 "SecurityGroupIngress": [
   {
@@ -210,6 +214,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "SecurityGroupIngress": [
   {
@@ -239,6 +244,7 @@ Added three resources:
 **Impact**: Cannot SSH into instances for debugging
 
 **Problem**:
+
 ```json
 "AppSecurityGroup": {
   "SecurityGroupIngress": [
@@ -254,6 +260,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "SecurityGroupIngress": [
   {
@@ -283,6 +290,7 @@ Added three resources:
 **Impact**: Cannot monitor database queries and errors for troubleshooting
 
 **Problem**:
+
 ```json
 "RDSInstance": {
   "Type": "AWS::RDS::DBInstance",
@@ -295,6 +303,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "RDSInstance": {
   "Type": "AWS::RDS::DBInstance",
@@ -311,12 +320,11 @@ Added three resources:
 
 ---
 
-### 7. Missing Critical Outputs
-
 **Severity**: MAJOR
 **Impact**: Cannot easily retrieve ARNs needed for deployment automation and monitoring
 
 **Problem**:
+
 ```json
 "Outputs": {
   "VPCId": {...},
@@ -327,6 +335,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "Outputs": {
   "VPCId": {...},
@@ -370,6 +379,7 @@ Added three resources:
 **Impact**: Cannot properly track costs, identify resources, or apply policies
 
 **Problem**:
+
 ```json
 "InternetGateway": {
   "Properties": {
@@ -394,6 +404,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "InternetGateway": {
   "Properties": {
@@ -432,6 +443,7 @@ Added three resources:
 **Impact**: EC2 instances don't inherit all necessary tags
 
 **Problem**:
+
 ```json
 "LaunchTemplate": {
   "Properties": {
@@ -454,6 +466,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "TagSpecifications": [
   {
@@ -482,6 +495,7 @@ Added three resources:
 **Impact**: ASG instances lack complete tagging
 
 **Problem**:
+
 ```json
 "AutoScalingGroup": {
   "Properties": {
@@ -498,6 +512,7 @@ Added three resources:
 ```
 
 **Fix Applied**:
+
 ```json
 "Tags": [
   {
@@ -519,12 +534,12 @@ Added three resources:
 
 ## Issue Distribution by Category
 
-| Category | Count | Percentage |
-|----------|-------|------------|
-| Security & IAM | 3 | 30% |
-| Tagging & Organization | 4 | 40% |
-| Monitoring & Logging | 1 | 10% |
-| Networking & Access | 2 | 20% |
+| Category               | Count | Percentage |
+| ---------------------- | ----- | ---------- |
+| Security & IAM         | 3     | 30%        |
+| Tagging & Organization | 4     | 40%        |
+| Monitoring & Logging   | 1     | 10%        |
+| Networking & Access    | 2     | 20%        |
 
 ---
 
@@ -538,6 +553,7 @@ Added three resources:
    - Tag compliance checker would find inconsistent tagging
 
 2. **Template Validation**:
+
    ```bash
    aws cloudformation validate-template --template-body file://TapStack.json
    ```
@@ -568,18 +584,18 @@ Added three resources:
 
 ## Time to Fix Each Issue
 
-| Issue | Estimated Time | Actual Time |
-|-------|---------------|-------------|
-| 1. IAM Policy | 30 min | 25 min |
-| 2. User Data Integration | 20 min | 15 min |
-| 3. Secret Rotation | 60 min | 90 min |
-| 4. HTTPS Support | 5 min | 5 min |
-| 5. SSH Access | 10 min | 10 min |
-| 6. CloudWatch Logs | 5 min | 5 min |
-| 7. Missing Outputs | 15 min | 20 min |
-| 8. Inconsistent Tagging | 20 min | 25 min |
-| 9-10. Minor Tag Issues | 10 min | 10 min |
-| **Total** | **175 min** | **205 min (~3.5 hours)** |
+| Issue                    | Estimated Time | Actual Time              |
+| ------------------------ | -------------- | ------------------------ |
+| 1. IAM Policy            | 30 min         | 25 min                   |
+| 2. User Data Integration | 20 min         | 15 min                   |
+| 3. Secret Rotation       | 60 min         | 90 min                   |
+| 4. HTTPS Support         | 5 min          | 5 min                    |
+| 5. SSH Access            | 10 min         | 10 min                   |
+| 6. CloudWatch Logs       | 5 min          | 5 min                    |
+| 7. Missing Outputs       | 15 min         | 20 min                   |
+| 8. Inconsistent Tagging  | 20 min         | 25 min                   |
+| 9-10. Minor Tag Issues   | 10 min         | 10 min                   |
+| **Total**                | **175 min**    | **205 min (~3.5 hours)** |
 
 ---
 
@@ -665,12 +681,14 @@ python scripts/validate_tags.py lib/TapStack.json
 ### Training Quality Score: 9/10
 
 **Strengths**:
+
 - Real-world issues that developers encounter
 - Covers security, networking, IAM, and monitoring
 - Good balance of critical and minor issues
 - Clear before/after examples
 
 **Improvement Opportunities**:
+
 - Could include more CloudWatch Alarms configuration
 - Could demonstrate SNS notifications for rotation failures
 - Could show backup restoration testing
