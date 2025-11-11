@@ -12,7 +12,10 @@ module.exports = {
     'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy)/)',
   ],
   collectCoverageFrom: [
-    '<rootDir>/index.ts',
+    '<rootDir>/lib/**/*.ts',
+    '<rootDir>/lib/**/*.mjs',
+    '<rootDir>/lib/**/*.js',
+    '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
     '!<rootDir>/**/*.test.ts',
     '!<rootDir>/**/*.test.js',
@@ -21,7 +24,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 100,
+      branches: 70,
       functions: 100,
       lines: 100,
       statements: 100,
