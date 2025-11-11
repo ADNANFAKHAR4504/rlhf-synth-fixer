@@ -12,6 +12,59 @@ from unittest.mock import Mock
 
 import pulumi
 
+
+class InfraMocks(pulumi.runtime.Mocks):
+    """Pulumi mocks that provide realistic outputs for AWS resources."""
+
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        outputs = {**args.inputs}
+        outputs.setdefault('arn', f"arn:aws:mock::{args.name}")
+        outputs.setdefault('id', f"{args.name}-id")
+
+        if args.typ == "aws:rds/cluster:Cluster":
+            outputs.setdefault('endpoint', f"{args.name}.cluster-123.eu-central-1.rds.amazonaws.com")
+            outputs.setdefault('readerEndpoint', f"{args.name}.reader-123.eu-central-1.rds.amazonaws.com")
+            outputs.setdefault('clusterIdentifier', args.inputs.get('cluster_identifier', args.name))
+        elif args.typ == "aws:rds/clusterInstance:ClusterInstance":
+            outputs.setdefault('identifier', args.inputs.get('identifier', args.name))
+        elif args.typ == "aws:dynamodb/table:Table":
+            outputs.setdefault('name', args.inputs.get('name', args.name))
+        elif args.typ == "aws:s3/bucket:Bucket":
+            outputs.setdefault('bucket', args.inputs.get('bucket', args.name))
+        elif args.typ == "aws:lambda/function:Function":
+            outputs.setdefault('name', args.inputs.get('name', args.name))
+        elif args.typ == "aws:apigateway/restApi:RestApi":
+            outputs.setdefault('id', f"{args.name}-api-id")
+        elif args.typ == "aws:route53/healthCheck:HealthCheck":
+            outputs.setdefault('healthCheckId', f"{args.name}-hc-id")
+        elif args.typ == "aws:cloudwatch/dashboard:Dashboard":
+            outputs.setdefault('dashboardName', args.inputs.get('dashboard_name', f"dashboard-{args.name}"))
+
+        return [f"{args.name}-id", outputs]
+
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        if args.token == "aws:ec2/getAvailabilityZones:getAvailabilityZones":
+            return {
+                "names": [
+                    "eu-central-1a",
+                    "eu-central-1b",
+                    "eu-central-1c",
+                ]
+            }
+        if args.token == "aws:ec2/getVpc:getVpc":
+            return {
+                "id": "vpc-12345",
+                "cidr_block": "10.0.0.0/16",
+            }
+        if args.token == "aws:ec2/getSubnets:getSubnets":
+            return {"ids": ["subnet-1", "subnet-2", "subnet-3"]}
+        if args.token == "aws:getCallerIdentity:getCallerIdentity":
+            return {"account_id": "123456789012"}
+        return {}
+
+
+pulumi.runtime.set_mocks(InfraMocks(), preview=False)
+
 # Ensure the project root is importable when tests run from this package path.
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..'))
 
@@ -752,6 +805,42 @@ class TestTagPropagation(unittest.TestCase):
 
         for key in base_tags:
             self.assertIn(key, args.tags)
+
+
+class TestTapStackExecution(unittest.TestCase):
+    """Runtime tests that instantiate the full TapStack using mocks."""
+
+    @pulumi.runtime.test
+    def test_full_stack_instantiation(self):
+        from lib.tap_stack import TapStack, TapStackArgs
+
+        def evaluate(_):
+            stack = TapStack(
+                name="test-trading-platform",
+                args=TapStackArgs(
+                    environment_suffix="unit",
+                    tags={"Environment": "unit"},
+                    alert_email_addresses=["alerts@example.com"],
+                ),
+            )
+
+            return pulumi.Output.all(
+                stack.environment_suffix,
+                stack.aurora_stack.primary_cluster_id,
+                stack.lambda_stack.primary_function_name,
+                stack.sns_stack.migration_status_topic.arn,
+                stack.api_gateway_stack.primary_api_endpoint,
+            )
+
+        def assertions(outputs):
+            env_suffix, aurora_id, lambda_name, sns_arn, api_endpoint = outputs
+            self.assertEqual(env_suffix, "unit")
+            self.assertTrue(str(aurora_id))
+            self.assertTrue(str(lambda_name))
+            self.assertTrue(str(sns_arn))
+            self.assertTrue(str(api_endpoint))
+
+        return evaluate(None).apply(assertions)
 
 
 if __name__ == '__main__':

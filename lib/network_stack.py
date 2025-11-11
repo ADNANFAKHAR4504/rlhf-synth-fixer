@@ -57,6 +57,9 @@ class NetworkStack(pulumi.ComponentResource):
             'Component': 'Network'
         }
 
+        self._provider = opts.provider if opts and opts.provider else None
+        invoke_opts = pulumi.InvokeOptions(parent=self, provider=self._provider)
+
         # Create production VPC in primary region
         self.production_vpc = aws.ec2.Vpc(
             f"production-vpc-{self.environment_suffix}",
@@ -68,7 +71,7 @@ class NetworkStack(pulumi.ComponentResource):
                 'Name': f"production-vpc-{self.environment_suffix}",
                 'VPCType': 'Production'
             },
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, provider=self._provider)
         )
 
         # Create migration VPC in primary region
@@ -82,11 +85,11 @@ class NetworkStack(pulumi.ComponentResource):
                 'Name': f"migration-vpc-{self.environment_suffix}",
                 'VPCType': 'Migration'
             },
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, provider=self._provider)
         )
 
         # Get availability zones for primary region
-        azs = aws.get_availability_zones(state="available")
+        azs = aws.get_availability_zones(state="available", opts=invoke_opts)
 
         # Create subnets for production VPC
         self.production_public_subnets = []
@@ -106,7 +109,7 @@ class NetworkStack(pulumi.ComponentResource):
                     'Name': f"production-public-subnet-{i+1}-{self.environment_suffix}",
                     'Type': 'Public'
                 },
-                opts=ResourceOptions(parent=self.production_vpc)
+                opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
             )
             self.production_public_subnets.append(public_subnet)
 
@@ -121,7 +124,7 @@ class NetworkStack(pulumi.ComponentResource):
                     'Name': f"production-private-subnet-{i+1}-{self.environment_suffix}",
                     'Type': 'Private'
                 },
-                opts=ResourceOptions(parent=self.production_vpc)
+                opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
             )
             self.production_private_subnets.append(private_subnet)
 
@@ -136,7 +139,7 @@ class NetworkStack(pulumi.ComponentResource):
                     'Name': f"production-dms-subnet-{i+1}-{self.environment_suffix}",
                     'Type': 'DMS'
                 },
-                opts=ResourceOptions(parent=self.production_vpc)
+                opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
             )
             self.production_dms_subnets.append(dms_subnet)
 
@@ -158,7 +161,7 @@ class NetworkStack(pulumi.ComponentResource):
                     'Name': f"migration-public-subnet-{i+1}-{self.environment_suffix}",
                     'Type': 'Public'
                 },
-                opts=ResourceOptions(parent=self.migration_vpc)
+                opts=ResourceOptions(parent=self.migration_vpc, provider=self._provider)
             )
             self.migration_public_subnets.append(public_subnet)
 
@@ -173,7 +176,7 @@ class NetworkStack(pulumi.ComponentResource):
                     'Name': f"migration-private-subnet-{i+1}-{self.environment_suffix}",
                     'Type': 'Private'
                 },
-                opts=ResourceOptions(parent=self.migration_vpc)
+                opts=ResourceOptions(parent=self.migration_vpc, provider=self._provider)
             )
             self.migration_private_subnets.append(private_subnet)
 
@@ -188,7 +191,7 @@ class NetworkStack(pulumi.ComponentResource):
                     'Name': f"migration-dms-subnet-{i+1}-{self.environment_suffix}",
                     'Type': 'DMS'
                 },
-                opts=ResourceOptions(parent=self.migration_vpc)
+                opts=ResourceOptions(parent=self.migration_vpc, provider=self._provider)
             )
             self.migration_dms_subnets.append(dms_subnet)
 
@@ -200,7 +203,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"production-igw-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.production_vpc)
+            opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
         )
 
         self.migration_igw = aws.ec2.InternetGateway(
@@ -210,7 +213,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"migration-igw-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.migration_vpc)
+            opts=ResourceOptions(parent=self.migration_vpc, provider=self._provider)
         )
 
         # Elastic IPs and NAT Gateways for production VPC
@@ -223,7 +226,7 @@ class NetworkStack(pulumi.ComponentResource):
                     **self.tags,
                     'Name': f"production-nat-eip-{i+1}-{self.environment_suffix}"
                 },
-                opts=ResourceOptions(parent=self)
+                opts=ResourceOptions(parent=self, provider=self._provider)
             )
 
             nat_gw = aws.ec2.NatGateway(
@@ -234,7 +237,7 @@ class NetworkStack(pulumi.ComponentResource):
                     **self.tags,
                     'Name': f"production-nat-gw-{i+1}-{self.environment_suffix}"
                 },
-                opts=ResourceOptions(parent=self.production_vpc, depends_on=[self.production_igw])
+                opts=ResourceOptions(parent=self.production_vpc, depends_on=[self.production_igw], provider=self._provider)
             )
             self.production_nat_gateways.append(nat_gw)
 
@@ -248,7 +251,7 @@ class NetworkStack(pulumi.ComponentResource):
                     **self.tags,
                     'Name': f"migration-nat-eip-{i+1}-{self.environment_suffix}"
                 },
-                opts=ResourceOptions(parent=self)
+                opts=ResourceOptions(parent=self, provider=self._provider)
             )
 
             nat_gw = aws.ec2.NatGateway(
@@ -259,7 +262,7 @@ class NetworkStack(pulumi.ComponentResource):
                     **self.tags,
                     'Name': f"migration-nat-gw-{i+1}-{self.environment_suffix}"
                 },
-                opts=ResourceOptions(parent=self.migration_vpc, depends_on=[self.migration_igw])
+                opts=ResourceOptions(parent=self.migration_vpc, depends_on=[self.migration_igw], provider=self._provider)
             )
             self.migration_nat_gateways.append(nat_gw)
 
@@ -271,7 +274,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"production-public-rt-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.production_vpc)
+            opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
         )
 
         aws.ec2.Route(
@@ -279,7 +282,7 @@ class NetworkStack(pulumi.ComponentResource):
             route_table_id=self.production_public_rt.id,
             destination_cidr_block="0.0.0.0/0",
             gateway_id=self.production_igw.id,
-            opts=ResourceOptions(parent=self.production_public_rt)
+            opts=ResourceOptions(parent=self.production_public_rt, provider=self._provider)
         )
 
         for i, subnet in enumerate(self.production_public_subnets):
@@ -287,7 +290,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"production-public-rta-{i+1}-{self.environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=self.production_public_rt.id,
-                opts=ResourceOptions(parent=subnet)
+                opts=ResourceOptions(parent=subnet, provider=self._provider)
             )
 
         # Private route table for production VPC
@@ -298,7 +301,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"production-private-rt-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.production_vpc)
+            opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
         )
 
         if self.production_nat_gateways:
@@ -307,7 +310,7 @@ class NetworkStack(pulumi.ComponentResource):
                 route_table_id=self.production_private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.production_nat_gateways[0].id,
-                opts=ResourceOptions(parent=self.production_private_rt)
+                opts=ResourceOptions(parent=self.production_private_rt, provider=self._provider)
             )
 
         for i, subnet in enumerate(self.production_private_subnets + self.production_dms_subnets):
@@ -315,7 +318,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"production-private-rta-{i+1}-{self.environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=self.production_private_rt.id,
-                opts=ResourceOptions(parent=subnet)
+                opts=ResourceOptions(parent=subnet, provider=self._provider)
             )
 
         # Route tables for migration VPC
@@ -326,7 +329,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"migration-public-rt-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.migration_vpc)
+            opts=ResourceOptions(parent=self.migration_vpc, provider=self._provider)
         )
 
         aws.ec2.Route(
@@ -334,7 +337,7 @@ class NetworkStack(pulumi.ComponentResource):
             route_table_id=self.migration_public_rt.id,
             destination_cidr_block="0.0.0.0/0",
             gateway_id=self.migration_igw.id,
-            opts=ResourceOptions(parent=self.migration_public_rt)
+            opts=ResourceOptions(parent=self.migration_public_rt, provider=self._provider)
         )
 
         for i, subnet in enumerate(self.migration_public_subnets):
@@ -342,7 +345,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"migration-public-rta-{i+1}-{self.environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=self.migration_public_rt.id,
-                opts=ResourceOptions(parent=subnet)
+                opts=ResourceOptions(parent=subnet, provider=self._provider)
             )
 
         # Private route table for migration VPC
@@ -353,7 +356,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"migration-private-rt-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.migration_vpc)
+            opts=ResourceOptions(parent=self.migration_vpc, provider=self._provider)
         )
 
         if self.migration_nat_gateways:
@@ -362,7 +365,7 @@ class NetworkStack(pulumi.ComponentResource):
                 route_table_id=self.migration_private_rt.id,
                 destination_cidr_block="0.0.0.0/0",
                 nat_gateway_id=self.migration_nat_gateways[0].id,
-                opts=ResourceOptions(parent=self.migration_private_rt)
+                opts=ResourceOptions(parent=self.migration_private_rt, provider=self._provider)
             )
 
         for i, subnet in enumerate(self.migration_private_subnets + self.migration_dms_subnets):
@@ -370,7 +373,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"migration-private-rta-{i+1}-{self.environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=self.migration_private_rt.id,
-                opts=ResourceOptions(parent=subnet)
+                opts=ResourceOptions(parent=subnet, provider=self._provider)
             )
 
         # Transit Gateway
@@ -385,7 +388,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"migration-tgw-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, provider=self._provider)
         )
 
         # Transit Gateway attachments for production VPC
@@ -399,7 +402,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"production-tgw-attachment-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.transit_gateway)
+            opts=ResourceOptions(parent=self.transit_gateway, provider=self._provider)
         )
 
         # Transit Gateway attachment for migration VPC
@@ -413,7 +416,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"migration-tgw-attachment-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.transit_gateway)
+            opts=ResourceOptions(parent=self.transit_gateway, provider=self._provider)
         )
 
         # Security groups
@@ -443,7 +446,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"db-sg-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.production_vpc)
+            opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
         )
 
         self.lambda_security_group = aws.ec2.SecurityGroup(
@@ -463,7 +466,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"lambda-sg-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.production_vpc)
+            opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
         )
 
         self.dms_security_group = aws.ec2.SecurityGroup(
@@ -492,7 +495,7 @@ class NetworkStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"dms-sg-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self.production_vpc)
+            opts=ResourceOptions(parent=self.production_vpc, provider=self._provider)
         )
 
         # Register outputs
