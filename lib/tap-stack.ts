@@ -2,7 +2,7 @@
  * tap-stack.ts
  *
  * Creates EKS cluster using native AWS resources in eu-west-2 (London)
- * Istio resources are optional and will be skipped if Istio is not installed
+ * Uses nginx demo images for testing
  */
 
 import * as pulumi from '@pulumi/pulumi';
@@ -16,7 +16,6 @@ export interface TapStackArgs {
   fraudDetectorImage?: string;
   notificationServiceImage?: string;
   tags?: pulumi.Input<{ [key: string]: string }>;
-  enableIstio?: boolean; // New parameter to enable/disable Istio
 }
 
 export class TapStack extends pulumi.ComponentResource {
@@ -33,7 +32,6 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
-    const enableIstio = args.enableIstio ?? false; // Istio disabled by default
 
     // Create explicit AWS provider for eu-west-2 (London)
     const awsProvider = new aws.Provider(
@@ -44,13 +42,11 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Use nginx demo image as default (publicly available)
-    const paymentApiImage =
-      args.paymentApiImage || 'nginx:latest';
-    const fraudDetectorImage =
-      args.fraudDetectorImage || 'nginx:latest';
+    // Use nginx as default - publicly available and works without authentication
+    const paymentApiImage = args.paymentApiImage || 'nginx:1.25-alpine';
+    const fraudDetectorImage = args.fraudDetectorImage || 'nginx:1.25-alpine';
     const notificationServiceImage =
-      args.notificationServiceImage || 'nginx:latest';
+      args.notificationServiceImage || 'nginx:1.25-alpine';
 
     // Create VPC for EKS cluster
     const vpc = new aws.ec2.Vpc(
@@ -354,15 +350,12 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [nodeGroup] }
     );
 
-    // Kubernetes namespace
+    // Kubernetes namespace - no Istio injection
     const namespace = new k8s.core.v1.Namespace(
       'microservices-ns',
       {
         metadata: {
           name: `microservices-${environmentSuffix}`,
-          labels: enableIstio ? {
-            'istio-injection': 'enabled',
-          } : {},
         },
       },
       { parent: this, provider: k8sProvider }
@@ -496,9 +489,6 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'payment-api',
                 version: 'v1',
               },
-              annotations: enableIstio ? {
-                'sidecar.istio.io/inject': 'true',
-              } : {},
             },
             spec: {
               containers: [
@@ -570,9 +560,6 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'fraud-detector',
                 version: 'v1',
               },
-              annotations: enableIstio ? {
-                'sidecar.istio.io/inject': 'true',
-              } : {},
             },
             spec: {
               containers: [
@@ -644,9 +631,6 @@ export class TapStack extends pulumi.ComponentResource {
                 app: 'notification-service',
                 version: 'v1',
               },
-              annotations: enableIstio ? {
-                'sidecar.istio.io/inject': 'true',
-              } : {},
             },
             spec: {
               containers: [
@@ -776,7 +760,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, provider: k8sProvider }
     );
 
-    // Gateway LoadBalancer Service
+    // Gateway LoadBalancer Service - points directly to payment-api
     const gatewayService = new k8s.core.v1.Service(
       'gateway-loadbalancer',
       {
@@ -900,7 +884,7 @@ export class TapStack extends pulumi.ComponentResource {
         { parent: this, provider: k8sProvider }
       );
 
-    // Network Policies
+    // Network Policies - simplified without Istio
     const paymentApiNetworkPolicy = new k8s.networking.v1.NetworkPolicy(
       'payment-api-netpol',
       {
