@@ -120,7 +120,7 @@ describe("Payment Processing Stack Unit Tests", () => {
       // Verify required properties would be set
       const expectedConfig = {
         engine: "postgres",
-        engineVersion: "14.7",
+        engineVersion: "14.19",
         backupRetentionPeriod: 7,
         skipFinalSnapshot: true,
         multiAz: false,
@@ -128,6 +128,8 @@ describe("Payment Processing Stack Unit Tests", () => {
         storageEncrypted: true,
       };
 
+      expect(expectedConfig.engine).toBe("postgres");
+      expect(expectedConfig.engineVersion).toBe("14.19");
       expect(expectedConfig.multiAz).toBe(false);
       expect(expectedConfig.publiclyAccessible).toBe(false);
       expect(expectedConfig.storageEncrypted).toBe(true);

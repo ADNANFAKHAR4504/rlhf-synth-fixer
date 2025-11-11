@@ -254,7 +254,7 @@ class PaymentProcessingStack extends TerraformStack {
     const rdsInstance = new DbInstance(this, 'rds_instance', {
       identifier: `payment-db-${config.environment}-${environmentSuffix}`,
       engine: 'postgres',
-      engineVersion: '14.7',
+      engineVersion: '14.19',
       instanceClass: config.rdsInstanceClass,
       allocatedStorage: 20,
       storageType: 'gp2',
