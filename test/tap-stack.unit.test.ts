@@ -13,7 +13,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-dev', {
         environmentSuffix: 'dev-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -25,7 +25,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-dev', {
         environmentSuffix: 'dev-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -38,7 +38,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-dev', {
         environmentSuffix: 'dev-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -52,7 +52,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-dev', {
         environmentSuffix: 'dev-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -65,7 +65,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-dev', {
         environmentSuffix: 'dev-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -83,7 +83,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-staging', {
         environmentSuffix: 'staging-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -96,7 +96,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-staging', {
         environmentSuffix: 'staging-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -112,7 +112,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-prod', {
         environmentSuffix: 'prod-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -125,7 +125,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-prod', {
         environmentSuffix: 'prod-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -140,7 +140,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test-prod', {
         environmentSuffix: 'prod-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -155,7 +155,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -166,7 +166,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -178,7 +178,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -189,7 +189,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -202,7 +202,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -213,7 +213,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -226,7 +226,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -237,7 +237,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -253,7 +253,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -267,7 +267,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test-env',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
         defaultTags: [
           {
             tags: {
@@ -285,7 +285,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'my-suffix',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -298,7 +298,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -309,7 +309,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -320,7 +320,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -331,7 +331,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -342,7 +342,7 @@ describe('TapStack', () => {
       const app = Testing.app();
       const stack = new TapStack(app, 'test', {
         environmentSuffix: 'dev-test',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);
@@ -357,7 +357,7 @@ describe('TapStack', () => {
         environmentSuffix: 'test',
         stateBucket: 'my-tf-state',
         stateBucketRegion: 'us-east-1',
-        awsRegion: 'ap-southeast-1',
+        awsRegion: 'ap-southeast-2',
       });
 
       const synthesized = Testing.synth(stack);

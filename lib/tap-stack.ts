@@ -17,8 +17,8 @@ interface TapStackProps {
   defaultTags?: AwsProviderDefaultTags[];
 }
 
-// Region override for ap-southeast-1
-const AWS_REGION_OVERRIDE = 'ap-southeast-1';
+// Region override for ap-southeast-2
+const AWS_REGION_OVERRIDE = 'ap-southeast-2';
 
 // Environment-specific configurations
 interface EnvironmentConfig {
@@ -37,7 +37,7 @@ const ENVIRONMENT_CONFIGS: Record<string, EnvironmentConfig> = {
     rdsBackupRetention: 1,
     ec2InstanceType: 't3.micro',
     s3LifecycleDays: 30,
-    availabilityZones: ['ap-southeast-1a', 'ap-southeast-1b'],
+    availabilityZones: ['ap-southeast-2a', 'ap-southeast-2b'],
   },
   staging: {
     vpcCidr: '10.1.0.0/16',
@@ -45,7 +45,7 @@ const ENVIRONMENT_CONFIGS: Record<string, EnvironmentConfig> = {
     rdsBackupRetention: 7,
     ec2InstanceType: 't3.small',
     s3LifecycleDays: 90,
-    availabilityZones: ['ap-southeast-1a', 'ap-southeast-1b'],
+    availabilityZones: ['ap-southeast-2a', 'ap-southeast-2b'],
   },
   prod: {
     vpcCidr: '10.2.0.0/16',
@@ -53,7 +53,7 @@ const ENVIRONMENT_CONFIGS: Record<string, EnvironmentConfig> = {
     rdsBackupRetention: 30,
     ec2InstanceType: 't3.medium',
     s3LifecycleDays: 365,
-    availabilityZones: ['ap-southeast-1a', 'ap-southeast-1b'],
+    availabilityZones: ['ap-southeast-2a', 'ap-southeast-2b'],
   },
 };
 

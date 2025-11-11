@@ -20,7 +20,7 @@ Create a multi-environment payment processing infrastructure using **cdktf with 
    - Staging environment: 10.1.0.0/16 CIDR block
    - Production environment: 10.2.0.0/16 CIDR block
    - Each VPC needs 2 public subnet pairs and 2 private subnet pairs
-   - Deploy across 2 availability zones in ap-southeast-1 region
+   - Deploy across 2 availability zones in ap-southeast-2 region
    - NAT Gateways for private subnet outbound connectivity
    - VPC endpoints for S3 service access
 
@@ -62,7 +62,7 @@ Create a multi-environment payment processing infrastructure using **cdktf with 
 ### Technical Requirements
 
 - All infrastructure defined using **cdktf with ts**
-- Deploy to **ap-southeast-1** region
+- Deploy to **ap-southeast-2** region
 - Use **VPC** for network isolation
 - Use **RDS** for PostgreSQL database service
 - Use **S3** for object storage

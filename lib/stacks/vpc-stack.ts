@@ -159,7 +159,7 @@ export class VpcStack extends Construct {
     // Create VPC Endpoint for S3
     new VpcEndpoint(this, 's3-endpoint', {
       vpcId: vpc.id,
-      serviceName: 'com.amazonaws.ap-southeast-1.s3',
+      serviceName: 'com.amazonaws.ap-southeast-2.s3',
       vpcEndpointType: 'Gateway',
       routeTableIds: [
         publicRouteTable.id,

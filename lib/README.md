@@ -10,7 +10,7 @@ This CDKTF project deploys a comprehensive payment processing infrastructure acr
   - Staging: 10.1.0.0/16
   - Prod: 10.2.0.0/16
 - 2 public subnets + 2 private subnets per environment
-- Deployed across 2 availability zones (ap-southeast-1a, ap-southeast-1b)
+- Deployed across 2 availability zones (ap-southeast-2a, ap-southeast-2b)
 - NAT Gateways for private subnet internet access
 - VPC endpoints for S3 service
 
@@ -82,7 +82,7 @@ npm install
 
 ```bash
 export ENVIRONMENT_SUFFIX="dev-pr123"
-export AWS_REGION="ap-southeast-1"
+export AWS_REGION="ap-southeast-2"
 export TERRAFORM_STATE_BUCKET="iac-rlhf-tf-states"
 export TERRAFORM_STATE_BUCKET_REGION="us-east-1"
 
@@ -93,7 +93,7 @@ cdktf deploy
 
 ```bash
 export ENVIRONMENT_SUFFIX="staging-pr456"
-export AWS_REGION="ap-southeast-1"
+export AWS_REGION="ap-southeast-2"
 
 cdktf deploy
 ```
@@ -102,7 +102,7 @@ cdktf deploy
 
 ```bash
 export ENVIRONMENT_SUFFIX="prod"
-export AWS_REGION="ap-southeast-1"
+export AWS_REGION="ap-southeast-2"
 
 cdktf deploy
 ```

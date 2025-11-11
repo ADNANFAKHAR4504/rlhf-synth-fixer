@@ -1,10 +1,10 @@
 # Provisioning of Infrastructure Environments
 
 > **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using cdktf with ts**
-> 
-> Platform: **cdktf**  
-> Language: **ts**  
-> Region: **ap-southeast-1**
+>
+> Platform: **cdktf**
+> Language: **ts**
+> Region: **ap-southeast-2**
 >
 > **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
 
@@ -47,4 +47,4 @@ Multi-environment AWS infrastructure spanning three separate workspaces (dev, st
 - Enable appropriate logging and monitoring
 
 ## Target Region
-All resources should be deployed to: **ap-southeast-1**
+All resources should be deployed to: **ap-southeast-2**
