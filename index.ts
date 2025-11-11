@@ -302,7 +302,7 @@ const auroraCluster = new aws.rds.Cluster(
     engineMode: 'provisioned',
     engineVersion: '15.8',
     databaseName: 'migrationdb',
-    masterUsername: 'admin',
+    masterUsername: 'dbadmin',
     masterPassword: dbPassword,
     dbSubnetGroupName: dbSubnetGroup.name,
     vpcSecurityGroupIds: [rdsSecurityGroup.id],
@@ -332,6 +332,58 @@ const _auroraInstance = new aws.rds.ClusterInstance(
   }
 );
 
+// DMS Service Roles - Required for DMS operations
+// Note: These must have specific names that AWS DMS expects
+const dmsVpcRole = new aws.iam.Role('dms-vpc-role', {
+  name: 'dms-vpc-role',
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: {
+          Service: 'dms.amazonaws.com',
+        },
+        Action: 'sts:AssumeRole',
+      },
+    ],
+  }),
+  tags: {
+    Name: 'dms-vpc-role',
+    Purpose: 'AWS DMS VPC Management',
+  },
+});
+
+new aws.iam.RolePolicyAttachment('dms-vpc-policy-attachment', {
+  role: dmsVpcRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole',
+});
+
+const dmsCloudwatchRole = new aws.iam.Role('dms-cloudwatch-logs-role', {
+  name: 'dms-cloudwatch-logs-role',
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: {
+          Service: 'dms.amazonaws.com',
+        },
+        Action: 'sts:AssumeRole',
+      },
+    ],
+  }),
+  tags: {
+    Name: 'dms-cloudwatch-logs-role',
+    Purpose: 'AWS DMS CloudWatch Logs',
+  },
+});
+
+new aws.iam.RolePolicyAttachment('dms-cloudwatch-policy-attachment', {
+  role: dmsCloudwatchRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole',
+});
+
 // DMS Subnet Group
 const dmsSubnetGroup = new aws.dms.ReplicationSubnetGroup(
   `dms-subnet-group-${environmentSuffix}`,
@@ -343,7 +395,8 @@ const dmsSubnetGroup = new aws.dms.ReplicationSubnetGroup(
       Name: `dms-subnet-group-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
-  }
+  },
+  { dependsOn: [dmsVpcRole] }
 );
 
 // DMS Replication Instance
@@ -373,7 +426,7 @@ const dmsTargetEndpoint = new aws.dms.Endpoint(
     serverName: auroraCluster.endpoint,
     port: 5432,
     databaseName: 'migrationdb',
-    username: 'admin',
+    username: 'dbadmin',
     password: dbPassword,
     tags: {
       Name: `dms-target-${environmentSuffix}`,
