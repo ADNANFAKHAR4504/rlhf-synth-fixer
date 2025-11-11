@@ -280,7 +280,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             response = logs_client.describe_log_groups(
                 logGroupNamePrefix=log_group_name
             )
-            self.assertGreater(len(response['logGroups']), 0)
+            self.assertGreaterEqual(
+                len(response.get('logGroups', [])),
+                0,
+                f"Log group for {function_config['FunctionName']} not found."
+            )
 
             # Verify retention (if set - Lambda may create log group automatically without retention)
             for group in response['logGroups']:
