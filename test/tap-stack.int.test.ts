@@ -1,20 +1,17 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack, TapStackProps } from '../lib/tap-stack';
-import { PaymentMonitoringStack } from '../lib/payment-monitoring-stack';
-import { ApiGatewayMonitoringStack } from '../lib/api-gateway-monitoring-stack';
-import { RdsEcsMonitoringStack } from '../lib/rds-ecs-monitoring-stack';
 
 function build(ctx?: Record<string, any>, props?: TapStackProps) {
   const app = new cdk.App(ctx ? { context: ctx } : undefined);
   const tap = new TapStack(app, 'TestTapStack', props as any);
 
-  const childStacks = tap.node.children.filter((c) => {
+  const childStacks = tap.node.children.filter(c => {
     // include only constructs that look like Stack instances (have stackName)
     return (c as any).stackName !== undefined;
   }) as cdk.Stack[];
 
-  const templates = childStacks.map((s) => ({
+  const templates = childStacks.map(s => ({
     stack: s,
     id: s.node.id,
     template: Template.fromStack(s),
@@ -81,7 +78,11 @@ describe('TapStack Integration Tests', () => {
     let found = false;
     for (const { template } of templates) {
       const bodies = dashboardBodies(template);
-      if (bodies.some(b => /AWS\/ApiGateway|ApiGateway|Api Gateway|ApiGateway/.test(b))) {
+      if (
+        bodies.some(b =>
+          /AWS\/ApiGateway|ApiGateway|Api Gateway|ApiGateway/.test(b)
+        )
+      ) {
         found = true;
         break;
       }
@@ -102,7 +103,10 @@ describe('TapStack Integration Tests', () => {
         found = true;
         break;
       }
-      if (anyAlarmWithNamespace(template, 'AWS/RDS') || anyAlarmWithNamespace(template, 'AWS/ECS')) {
+      if (
+        anyAlarmWithNamespace(template, 'AWS/RDS') ||
+        anyAlarmWithNamespace(template, 'AWS/ECS')
+      ) {
         found = true;
         break;
       }
@@ -150,8 +154,12 @@ describe('TapStack Integration Tests', () => {
       for (const res of Object.values(resources) as any[]) {
         const tags = res?.Properties?.Tags;
         if (!Array.isArray(tags)) continue;
-        const hasProject = tags.some((t: any) => t.Key === 'Project' && typeof t.Value === 'string');
-        const hasEnv = tags.some((t: any) => t.Key === 'Environment' && typeof t.Value === 'string');
+        const hasProject = tags.some(
+          (t: any) => t.Key === 'Project' && typeof t.Value === 'string'
+        );
+        const hasEnv = tags.some(
+          (t: any) => t.Key === 'Environment' && typeof t.Value === 'string'
+        );
         if (hasProject && hasEnv) {
           anyTagged = true;
           break;

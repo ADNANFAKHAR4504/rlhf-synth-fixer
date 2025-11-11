@@ -6,7 +6,6 @@ import { NotificationsConstruct } from './constructs/notifications';
 import { LogProcessingConstruct } from './constructs/log-processing';
 import { LogRetentionConstruct } from './constructs/log-retention';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 
 export class PaymentMonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -19,11 +18,15 @@ export class PaymentMonitoringStack extends cdk.Stack {
     const logProcessing = new LogProcessingConstruct(this, 'LogProcessing');
 
     // Dedicated log group for monitoring
-    const monitoringLogGroup = new logs.LogGroup(this, 'PaymentMonitoringLogGroup', {
-      logGroupName: `/aws/monitoring/payment-${cdk.Stack.of(this).stackName}`,
-      retention: logs.RetentionDays.ONE_MONTH,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
+    const monitoringLogGroup = new logs.LogGroup(
+      this,
+      'PaymentMonitoringLogGroup',
+      {
+        logGroupName: `/aws/monitoring/payment-${cdk.Stack.of(this).stackName}`,
+        retention: logs.RetentionDays.ONE_MONTH,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
 
     // Optional metric filter for errors in log processing
     new logs.MetricFilter(this, 'ErrorMetricFilter', {
