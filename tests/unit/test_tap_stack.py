@@ -44,6 +44,7 @@ class TestTapStackArgs(unittest.TestCase):
 @pulumi.runtime.test
 def test_tap_stack_initialization():
     """Test TapStack initialization with environment suffix."""
+    import os
     import pulumi
     from lib.tap_stack import TapStack, TapStackArgs
 
@@ -61,11 +62,12 @@ def test_tap_stack_initialization():
 
         # Verify basic properties
         assert stack.environment_suffix == "test123"
-        assert stack.region == "ap-southeast-1"
+        # Region should be from AWS_REGION env var or default to eu-central-1
+        expected_region = os.getenv('AWS_REGION', 'eu-central-1')
+        assert stack.region == expected_region
         assert len(stack.azs) == 3
-        assert stack.azs[0] == "ap-southeast-1a"
-        assert stack.azs[1] == "ap-southeast-1b"
-        assert stack.azs[2] == "ap-southeast-1c"
+        # AZs should be dynamically fetched, so just verify count
+        assert all(isinstance(az, str) for az in stack.azs)
     finally:
         pulumi.export = original_export
 
@@ -349,9 +351,12 @@ def test_availability_zones():
         args = TapStackArgs(environment_suffix="test-az")
         stack = TapStack(name="test-stack", args=args)
 
-        # Verify AZs
-        expected_azs = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
-        assert stack.azs == expected_azs
+        # Verify AZs are dynamically fetched - just check we have 3 valid AZs
+        assert len(stack.azs) == 3
+        # All should be strings and belong to the configured region
+        for az in stack.azs:
+            assert isinstance(az, str)
+            assert stack.region in az
     finally:
         pulumi.export = original_export
 
@@ -361,6 +366,7 @@ def test_availability_zones():
 @pulumi.runtime.test
 def test_region_configuration():
     """Test that region is correctly configured."""
+    import os
     import pulumi
     from lib.tap_stack import TapStack, TapStackArgs
 
@@ -375,8 +381,10 @@ def test_region_configuration():
         args = TapStackArgs(environment_suffix="test-region")
         stack = TapStack(name="test-stack", args=args)
 
-        # Verify region
-        assert stack.region == "ap-southeast-1"
+        # Verify region is from AWS_REGION env var or defaults to eu-central-1
+        expected_region = os.getenv('AWS_REGION', 'eu-central-1')
+        assert stack.region == expected_region
+        assert isinstance(stack.region, str)
     finally:
         pulumi.export = original_export
 

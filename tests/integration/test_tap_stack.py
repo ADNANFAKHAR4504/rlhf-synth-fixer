@@ -365,9 +365,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         # Verify 3 AZs
         self.assertEqual(len(azs), 3)
 
-        # Verify all AZs are in ap-southeast-1
+        # Verify all AZs belong to the configured region
+        # AZs are dynamically discovered, so verify they match the region
         for az in azs:
-            self.assertTrue(az.startswith('ap-southeast-1'))
+            self.assertTrue(az.startswith(self.region),
+                          f"AZ {az} should be in region {self.region}")
 
         # Verify subnets span all AZs
         all_subnet_ids = (

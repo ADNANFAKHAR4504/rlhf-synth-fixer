@@ -10,6 +10,7 @@ This module implements a PCI-DSS compliant network infrastructure with:
 - Transit Gateway for hybrid connectivity
 """
 from typing import Dict, List
+import os
 import pulumi
 import pulumi_aws as aws
 from dataclasses import dataclass
@@ -33,8 +34,13 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('custom:infrastructure:TapStack', name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.region = "ap-southeast-1"
-        self.azs = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
+        
+        # Get region from AWS_REGION environment variable, default to eu-central-1
+        self.region = os.getenv('AWS_REGION', 'eu-central-1')
+        
+        # Dynamically fetch available AZs for the current region
+        availability_zones = aws.get_availability_zones(state="available")
+        self.azs = availability_zones.names[:3]  # Use first 3 available AZs
 
         # Create VPC
         self.vpc = self._create_vpc()
@@ -535,7 +541,7 @@ class TapStack(pulumi.ComponentResource):
         """Create S3 bucket for VPC Flow Logs with lifecycle policy."""
         bucket = aws.s3.Bucket(
             f"vpc-flow-logs-{self.environment_suffix}",
-            bucket=f"vpc-flow-logs-{self.environment_suffix}-{pulumi.get_stack()}",
+            bucket=f"vpc-flow-logs-{self.environment_suffix}-{pulumi.get_stack().lower()}",
             force_destroy=True,
             tags={
                 "Name": f"vpc-flow-logs-{self.environment_suffix}",
