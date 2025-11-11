@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "po_id": "101000892",
+  "startedAt": "2025-11-11T04:46:55+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "compute",
+    "database",
+    "security",
+    "migration",
+    "multi-az"
+  ],
+  "aws_services": [
+    "ALB",
+    "AutoScaling",
+    "EC2",
+    "IAM",
+    "Lambda",
+    "RDS",
+    "SecretsManager",
+    "SecurityGroups",
+    "VPC"
+  ],
+  "training_quality": 9
+}
