@@ -18,7 +18,7 @@ The key insight for this implementation is the KMS key policy that grants CloudW
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as pulumi from "@pulumi/pulumi";
 import { SecureApiStack } from "../lib";
@@ -39,7 +39,7 @@ export const logGroupName = stack.logGroupName;
 
 ## File: lib/index.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
