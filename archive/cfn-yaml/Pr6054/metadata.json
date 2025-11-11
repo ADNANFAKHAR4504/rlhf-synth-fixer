@@ -12,17 +12,27 @@
   ],
   "aws_services": [
     "Route53",
-    "Aurora",
+    "VPC",
+    "EC2",
+    "KMS",
+    "S3",
+    "RDS",
+    "DynamoDB",
+    "ElasticLoadBalancingV2",
     "Lambda",
     "CloudWatch",
     "SNS",
-    "DynamoDB",
-    "S3",
-    "Systems Manager Parameter Store",
     "EventBridge",
     "IAM",
-    "KMS",
-    "VPC"
+    "Systems Manager Parameter Store",
+    "SecretsManager",
+    "Logs"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
 }
