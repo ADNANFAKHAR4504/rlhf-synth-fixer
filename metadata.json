@@ -1,6 +1,6 @@
 {
   "platform": "cfn",
-  "language": "js",
+  "language": "yaml",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
@@ -22,5 +22,7 @@
     "Lambda",
     "IAM"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }
