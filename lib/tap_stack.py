@@ -427,6 +427,7 @@ class TapStack(Stack):
             endpoint_type=endpoint_type,
             endpoint_identifier=f"payment-{environment}-{self.environment_suffix}",
             engine_name="postgres",
+            database_name="paymentdb",
             postgre_sql_settings=dms.CfnEndpoint.PostgreSqlSettingsProperty(
                 secrets_manager_secret_id=secret.secret_arn,
                 secrets_manager_access_role_arn=dms_secrets_role.role_arn,
