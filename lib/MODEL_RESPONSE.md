@@ -609,9 +609,9 @@ Set required environment variables:
 
 ```bash
 export ENVIRONMENT_SUFFIX=dev
-export AWS_REGION=us-east-1
+export AWS_REGION=us-west-2
 export TERRAFORM_STATE_BUCKET=your-state-bucket
-export TERRAFORM_STATE_BUCKET_REGION=us-east-1
+export TERRAFORM_STATE_BUCKET_REGION=us-west-2
 ```
 
 Create database password secret in AWS Secrets Manager:

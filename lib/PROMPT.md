@@ -4,11 +4,11 @@ We have a fintech startup that is struggling with infrastructure consistency acr
 
 The root problem is that they have been manually configuring infrastructure in each environment, and over time, the environments have diverged. They need a way to maintain identical infrastructure across development, staging, and production while still allowing for environment-specific variations like instance sizes and retention policies. We need to solve this using infrastructure as code that can be reliably applied to any environment.
 
-The business needs this infrastructure deployed to the us-east-1 region with three completely isolated environments. Each environment should be functionally identical but sized appropriately for its purpose.
+The business needs this infrastructure deployed to the us-west-2 region with three completely isolated environments. Each environment should be functionally identical but sized appropriately for its purpose.
 
 ## What we need to build
 
-Create a multi-environment infrastructure management system using **CDKTF with ts** for the fintech payment processing platform. The solution must support three isolated environments (dev, staging, prod) in the us-east-1 region with consistent configuration across all environments.
+Create a multi-environment infrastructure management system using **CDKTF with ts** for the fintech payment processing platform. The solution must support three isolated environments (dev, staging, prod) in the us-west-2 region with consistent configuration across all environments.
 
 ### Core Requirements
 
@@ -64,7 +64,7 @@ Create a multi-environment infrastructure management system using **CDKTF with t
 - Use Terraform 1.5+ with AWS provider 5.x
 - All resources must be modular and reusable
 - Resource names must include environmentSuffix for uniqueness
-- Deploy to us-east-1 region
+- Deploy to us-west-2 region
 - All resources must be destroyable (no Retain deletion policies)
 - Include proper error handling and validation
 - Comprehensive inline documentation

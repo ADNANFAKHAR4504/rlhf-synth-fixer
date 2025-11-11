@@ -945,28 +945,28 @@ Before deployment, create a secret in AWS Secrets Manager for the database passw
 aws secretsmanager create-secret \
   --name payment-platform-db-password-dev \
   --secret-string "YourSecureDevPassword123!" \
-  --region us-east-1
+  --region us-west-2
 
 # For staging environment
 aws secretsmanager create-secret \
   --name payment-platform-db-password-staging \
   --secret-string "YourSecureStagingPassword123!" \
-  --region us-east-1
+  --region us-west-2
 
 # For prod environment
 aws secretsmanager create-secret \
   --name payment-platform-db-password-prod \
   --secret-string "YourSecureProdPassword123!" \
-  --region us-east-1
+  --region us-west-2
 ```
 
 ### Set Environment Variables
 
 ```bash
 export ENVIRONMENT_SUFFIX=dev
-export AWS_REGION=us-east-1
+export AWS_REGION=us-west-2
 export TERRAFORM_STATE_BUCKET=iac-rlhf-tf-states
-export TERRAFORM_STATE_BUCKET_REGION=us-east-1
+export TERRAFORM_STATE_BUCKET_REGION=us-west-2
 export REPOSITORY=payment-platform-infra
 export COMMIT_AUTHOR=your-name
 ```

@@ -601,7 +601,7 @@ interface EnvironmentConfig {
 
 ### 21. Invalid RDS PostgreSQL Version (Post-Deployment Discovery)
 
-**Issue**: The MODEL_RESPONSE and initial IDEAL_RESPONSE specified PostgreSQL version '14.7', which is not available in the target AWS region (us-east-1). During deployment, AWS returned an error: "Cannot find version 14.7 for postgres".
+**Issue**: The MODEL_RESPONSE and initial IDEAL_RESPONSE specified PostgreSQL version '14.7', which is not available in the target AWS region (us-west-2). During deployment, AWS returned an error: "Cannot find version 14.7 for postgres".
 
 **Impact**: Deployment would fail at the RDS creation step. AWS only supports specific minor versions of PostgreSQL, and version 14.7 was not among them.
 
