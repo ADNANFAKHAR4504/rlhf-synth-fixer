@@ -1,0 +1,27 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912210",
+  "team": "6",
+  "startedAt": "2025-11-11T14:08:28.066Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "EC2",
+    "IAM",
+    "CodeBuild",
+    "CodePipeline",
+    "CodeDeploy",
+    "CodeCommit",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch Logs",
+    "ECS"
+  ]
+}

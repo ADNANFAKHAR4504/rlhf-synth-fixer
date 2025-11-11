@@ -1,0 +1,816 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'CI/CD Pipeline for Containerized Payment Service with Security Controls'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: 'staging'
+    Description: Environment name for tagging and resource naming
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  TeamName:
+    Type: String
+    Default: 'payment-team'
+    Description: Team responsible for this service
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
+  CostCenter:
+    Type: String
+    Default: 'finance-123'
+    Description: Cost center for billing purposes
+    
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: VPC for isolated CodeBuild projects
+    
+  PrivateSubnetIds:
+    Type: List<AWS::EC2::Subnet::Id>
+    Description: Private subnets for CodeBuild VPC configuration
+    
+  PrivateRouteTableId:
+    Type: String
+    Description: Private route table ID for VPC endpoints
+    
+  EcsClusterName:
+    Type: String
+    Description: Target ECS Cluster for deployment
+    
+  EcsServiceName:
+    Type: String
+    Description: Target ECS Service for deployment
+    
+  SlackWebhookUrl:
+    Type: String
+    Description: Webhook URL for Slack notifications (leave empty to disable notifications)
+    Default: ''
+    NoEcho: true
+
+Conditions:
+  HasSlackWebhook: !Not [!Equals [!Ref SlackWebhookUrl, '']]
+
+Resources:
+  # KMS Key for encryption
+  ArtifactsKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: KMS key for encrypting pipeline artifacts
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Id: key-policy-1
+        Statement:
+          - Sid: Allow administration of the key
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:*'
+            Resource: '*'
+          - Sid: Allow use of the key by pipeline services
+            Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+                - codepipeline.amazonaws.com
+                - codedeploy.amazonaws.com
+            Action:
+              - 'kms:Encrypt'
+              - 'kms:Decrypt'
+              - 'kms:ReEncrypt*'
+              - 'kms:GenerateDataKey*'
+              - 'kms:DescribeKey'
+            Resource: '*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  ArtifactsKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/payment-service-${EnvironmentName}'
+      TargetKeyId: !Ref ArtifactsKey
+      
+  # S3 Bucket for Pipeline Artifacts
+  ArtifactsBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+    Properties:
+      BucketName: !Sub 'payment-service-artifacts-${EnvironmentName}-${AWS::AccountId}-${AWS::Region}'
+      VersioningConfiguration:
+        Status: Enabled
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !GetAtt ArtifactsKey.Arn
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldArtifacts
+            Status: Enabled
+            ExpirationInDays: 90
+          - Id: TransitionToGlacier
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  ArtifactsBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ArtifactsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyUnencryptedObjectUploads
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:PutObject'
+            Resource: !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              StringNotEquals:
+                's3:x-amz-server-side-encryption': 'aws:kms'
+          - Sid: DenyInsecureConnections
+            Effect: Deny
+            Principal: '*'
+            Action: 's3:*'
+            Resource: !Sub '${ArtifactsBucket.Arn}/*'
+            Condition:
+              Bool:
+                'aws:SecureTransport': 'false'
+  
+  # Security Group for CodeBuild in VPC
+  CodeBuildSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for CodeBuild projects
+      VpcId: !Ref VpcId
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: Allow HTTPS to VPC endpoints
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  # VPC Endpoints for CodeBuild without internet access
+  S3VpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: '*'
+            Action:
+              - 's3:GetObject'
+              - 's3:PutObject'
+              - 's3:ListBucket'
+            Resource:
+              - !GetAtt ArtifactsBucket.Arn
+              - !Sub '${ArtifactsBucket.Arn}/*'
+              - 'arn:aws:s3:::codebuild-*'
+              - 'arn:aws:s3:::aws-codedeploy-*'
+      RouteTableIds:
+        - !Ref PrivateRouteTableId
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.s3'
+      VpcId: !Ref VpcId
+
+  EcrApiVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.api'
+      SubnetIds: !Ref PrivateSubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
+  EcrDkrVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.ecr.dkr'
+      SubnetIds: !Ref PrivateSubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
+  LogsVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
+      SubnetIds: !Ref PrivateSubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+
+  CodeBuildVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      PrivateDnsEnabled: true
+      SecurityGroupIds:
+        - !Ref CodeBuildSecurityGroup
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.codebuild'
+      SubnetIds: !Ref PrivateSubnetIds
+      VpcEndpointType: Interface
+      VpcId: !Ref VpcId
+  
+  # IAM Role for CodeBuild
+  CodeBuildServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codebuild.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonECR-FullAccess'
+      Policies:
+        - PolicyName: CodeBuildServiceRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowS3Operations
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+              - Sid: AllowKMSOperations
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:ReEncrypt*'
+                Resource: !GetAtt ArtifactsKey.Arn
+              - Sid: AllowLogging
+                Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+              - Sid: AllowVPCOperations
+                Effect: Allow
+                Action:
+                  - 'ec2:CreateNetworkInterface'
+                  - 'ec2:DescribeDhcpOptions'
+                  - 'ec2:DescribeNetworkInterfaces'
+                  - 'ec2:DeleteNetworkInterface'
+                  - 'ec2:DescribeSubnets'
+                  - 'ec2:DescribeSecurityGroups'
+                  - 'ec2:DescribeVpcs'
+                Resource: '*'
+              - Sid: DenyProductionAccess
+                Effect: Deny
+                Action:
+                  - 'rds:*'
+                  - 'dynamodb:*'
+                  - 's3:*'
+                Resource:
+                  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:prod-*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prod-*'
+                  - 'arn:aws:s3:::prod-*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  # IAM Role for CodePipeline
+  CodePipelineServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codepipeline.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CodePipelineServiceRolePolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowS3Operations
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:GetObjectVersion'
+                  - 's3:PutObject'
+                  - 's3:ListBucket'
+                Resource:
+                  - !GetAtt ArtifactsBucket.Arn
+                  - !Sub '${ArtifactsBucket.Arn}/*'
+              - Sid: AllowCodeCommitOperations
+                Effect: Allow
+                Action:
+                  - 'codecommit:GetBranch'
+                  - 'codecommit:GetCommit'
+                  - 'codecommit:UploadArchive'
+                  - 'codecommit:GetUploadArchiveStatus'
+                  - 'codecommit:CancelUploadArchive'
+                Resource: !Sub 'arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:payment-service'
+              - Sid: AllowCodeBuildOperations
+                Effect: Allow
+                Action:
+                  - 'codebuild:BatchGetBuilds'
+                  - 'codebuild:StartBuild'
+                Resource:
+                  - !GetAtt BuildProject.Arn
+                  - !GetAtt TestProject.Arn
+              - Sid: AllowCodeDeployOperations
+                Effect: Allow
+                Action:
+                  - 'codedeploy:CreateDeployment'
+                  - 'codedeploy:GetDeployment'
+                  - 'codedeploy:GetDeploymentConfig'
+                  - 'codedeploy:GetApplicationRevision'
+                  - 'codedeploy:RegisterApplicationRevision'
+                Resource: '*'
+              - Sid: AllowECSOperations
+                Effect: Allow
+                Action:
+                  - 'ecs:DescribeServices'
+                  - 'ecs:DescribeTaskDefinition'
+                  - 'ecs:DescribeTasks'
+                  - 'ecs:ListTasks'
+                  - 'ecs:RegisterTaskDefinition'
+                  - 'ecs:UpdateService'
+                Resource: '*'
+              - Sid: AllowKMSOperations
+                Effect: Allow
+                Action:
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:Encrypt'
+                  - 'kms:GenerateDataKey*'
+                  - 'kms:ReEncrypt*'
+                Resource: !GetAtt ArtifactsKey.Arn
+              - Sid: DenyProductionAccess
+                Effect: Deny
+                Action:
+                  - 'rds:*'
+                  - 'dynamodb:*'
+                  - 's3:*'
+                Resource:
+                  - !Sub 'arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:prod-*'
+                  - !Sub 'arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prod-*'
+                  - 'arn:aws:s3:::prod-*'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # IAM Role for CodeDeploy
+  CodeDeployServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: codedeploy.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AWSCodeDeployRoleForECS'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  # Build Project for Build Stage
+  BuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'payment-service-build-${EnvironmentName}'
+      Description: 'Build and security scan for payment service'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+      VpcConfig:
+        VpcId: !Ref VpcId
+        Subnets: !Ref PrivateSubnetIds
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: buildspec.yml
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Sub '/aws/codebuild/payment-service-build-${EnvironmentName}'
+          Status: ENABLED
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  # Build Project for Test Stage
+  TestProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: !Sub 'payment-service-test-${EnvironmentName}'
+      Description: 'Integration tests for payment service'
+      ServiceRole: !GetAtt CodeBuildServiceRole.Arn
+      Artifacts:
+        Type: CODEPIPELINE
+      Environment:
+        Type: LINUX_CONTAINER
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: aws/codebuild/amazonlinux2-x86_64-standard:3.0
+        PrivilegedMode: true
+      VpcConfig:
+        VpcId: !Ref VpcId
+        Subnets: !Ref PrivateSubnetIds
+        SecurityGroupIds:
+          - !Ref CodeBuildSecurityGroup
+      Source:
+        Type: CODEPIPELINE
+        BuildSpec: testspec.yml
+      LogsConfig:
+        CloudWatchLogs:
+          GroupName: !Sub '/aws/codebuild/payment-service-test-${EnvironmentName}'
+          Status: ENABLED
+      TimeoutInMinutes: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  # CodeDeploy Application and Deployment Group
+  CodeDeployApplication:
+    Type: AWS::CodeDeploy::Application
+    Properties:
+      ApplicationName: !Sub 'payment-service-${EnvironmentName}'
+      ComputePlatform: ECS
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  CodeDeployDeploymentGroup:
+    Type: AWS::CodeDeploy::DeploymentGroup
+    Properties:
+      ApplicationName: !Ref CodeDeployApplication
+      DeploymentGroupName: !Sub 'payment-service-${EnvironmentName}-dg'
+      DeploymentConfigName: CodeDeployDefault.ECSAllAtOnce
+      ServiceRoleArn: !GetAtt CodeDeployServiceRole.Arn
+      ECSServices:
+        - ClusterName: !Ref EcsClusterName
+          ServiceName: !Ref EcsServiceName
+      BlueGreenDeploymentConfiguration:
+        DeploymentReadyOption:
+          ActionOnTimeout: CONTINUE_DEPLOYMENT
+          WaitTimeInMinutes: 0
+        TerminateBlueInstancesOnDeploymentSuccess:
+          Action: TERMINATE
+          TerminationWaitTimeInMinutes: 5
+      DeploymentStyle:
+        DeploymentOption: WITH_TRAFFIC_CONTROL
+        DeploymentType: BLUE_GREEN
+      AutoRollbackConfiguration:
+        Enabled: true
+        Events:
+          - DEPLOYMENT_FAILURE
+          - DEPLOYMENT_STOP_ON_ALARM
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+  
+  # CodePipeline
+  Pipeline:
+    Type: AWS::CodePipeline::Pipeline
+    Properties:
+      Name: !Sub 'payment-service-${EnvironmentName}-pipeline'
+      RoleArn: !GetAtt CodePipelineServiceRole.Arn
+      ArtifactStore:
+        Type: S3
+        Location: !Ref ArtifactsBucket
+        EncryptionKey:
+          Id: !GetAtt ArtifactsKey.Arn
+          Type: KMS
+      Stages:
+        - Name: Source
+          Actions:
+            - Name: Source
+              ActionTypeId:
+                Category: Source
+                Owner: AWS
+                Provider: CodeCommit
+                Version: '1'
+              Configuration:
+                RepositoryName: payment-service
+                BranchName: main
+              OutputArtifacts:
+                - Name: SourceCode
+        - Name: Build
+          Actions:
+            - Name: Build
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref BuildProject
+              InputArtifacts:
+                - Name: SourceCode
+              OutputArtifacts:
+                - Name: BuildOutput
+        - Name: Test
+          Actions:
+            - Name: IntegrationTest
+              ActionTypeId:
+                Category: Build
+                Owner: AWS
+                Provider: CodeBuild
+                Version: '1'
+              Configuration:
+                ProjectName: !Ref TestProject
+              InputArtifacts:
+                - Name: BuildOutput
+              OutputArtifacts:
+                - Name: TestOutput
+        - Name: Deploy
+          Actions:
+            - Name: Deploy
+              ActionTypeId:
+                Category: Deploy
+                Owner: AWS
+                Provider: CodeDeployToECS
+                Version: '1'
+              Configuration:
+                ApplicationName: !Ref CodeDeployApplication
+                DeploymentGroupName: !Ref CodeDeployDeploymentGroup
+                TaskDefinitionTemplateArtifact: TestOutput
+                TaskDefinitionTemplatePath: taskdef.json
+                AppSpecTemplateArtifact: TestOutput
+                AppSpecTemplatePath: appspec.yml
+                Image1ArtifactName: BuildOutput
+                Image1ContainerName: IMAGE1_NAME
+              InputArtifacts:
+                - Name: TestOutput
+                - Name: BuildOutput
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # EventBridge Rule for Pipeline State Change
+  PipelineStateChangeRule:
+    Type: AWS::Events::Rule
+    Condition: HasSlackWebhook
+    Properties:
+      Description: "Rule for monitoring CodePipeline state changes"
+      EventPattern:
+        source:
+          - "aws.codepipeline"
+        detail-type:
+          - "CodePipeline Pipeline Execution State Change"
+        detail:
+          state:
+            - "FAILED"
+            - "SUCCEEDED"
+          pipeline:
+            - !Ref Pipeline
+      State: ENABLED
+      Targets:
+        - Arn: !GetAtt SlackNotificationFunction.Arn
+          Id: SlackNotificationTarget
+          InputTransformer:
+            InputPathsMap:
+              pipeline: "$.detail.pipeline"
+              state: "$.detail.state"
+              executionId: "$.detail.execution-id"
+              time: "$.time"
+            InputTemplate: !Sub |
+              {
+                "pipeline": <pipeline>,
+                "state": <state>,
+                "executionId": <executionId>,
+                "time": <time>,
+                "webhookUrl": "${SlackWebhookUrl}"
+              }
+
+  # Lambda function for Slack notifications
+  SlackNotificationFunction:
+    Type: AWS::Lambda::Function
+    Condition: HasSlackWebhook
+    Properties:
+      Handler: index.handler
+      Role: !GetAtt SlackNotificationFunctionRole.Arn
+      Code:
+        ZipFile: |
+          const https = require('https');
+          const url = require('url');
+          
+          exports.handler = async (event) => {
+              console.log('Event:', JSON.stringify(event, null, 2));
+              
+              const pipeline = event.pipeline;
+              const state = event.state;
+              const executionId = event.executionId;
+              const time = event.time;
+              const webhookUrl = event.webhookUrl;
+              
+              const emoji = state === 'FAILED' ? ':x:' : ':white_check_mark:';
+              const color = state === 'FAILED' ? '#FF0000' : '#00FF00';
+              
+              const message = {
+                  attachments: [
+                      {
+                          fallback: `Pipeline ${pipeline} ${state}`,
+                          color: color,
+                          title: `Pipeline State Change: ${pipeline}`,
+                          fields: [
+                              {
+                                  title: 'Status',
+                                  value: `${emoji} ${state}`,
+                                  short: true
+                              },
+                              {
+                                  title: 'Execution ID',
+                                  value: executionId,
+                                  short: true
+                              },
+                              {
+                                  title: 'Time',
+                                  value: time,
+                                  short: false
+                              }
+                          ],
+                          footer: 'AWS CodePipeline',
+                          ts: Math.floor(Date.now() / 1000)
+                      }
+                  ]
+              };
+              
+              try {
+                  const parsedUrl = url.parse(webhookUrl);
+                  const options = {
+                      hostname: parsedUrl.host,
+                      path: parsedUrl.path,
+                      method: 'POST',
+                      headers: {
+                          'Content-Type': 'application/json',
+                      }
+                  };
+                  
+                  await new Promise((resolve, reject) => {
+                      const req = https.request(options, (res) => {
+                          let data = '';
+                          res.on('data', (chunk) => {
+                              data += chunk;
+                          });
+                          res.on('end', () => {
+                              resolve(data);
+                          });
+                      });
+                      
+                      req.on('error', (e) => {
+                          reject(e);
+                      });
+                      
+                      req.write(JSON.stringify(message));
+                      req.end();
+                  });
+                  
+                  return { statusCode: 200, body: 'Notification sent' };
+              } catch (error) {
+                  console.error('Error:', error);
+                  return { statusCode: 500, body: 'Error sending notification' };
+              }
+          };
+      Runtime: nodejs20.x
+      Timeout: 30
+      MemorySize: 128
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # IAM Role for Lambda function
+  SlackNotificationFunctionRole:
+    Type: AWS::IAM::Role
+    Condition: HasSlackWebhook
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: Team
+          Value: !Ref TeamName
+        - Key: CostCenter
+          Value: !Ref CostCenter
+
+  # Lambda Permission for EventBridge
+  SlackNotificationPermission:
+    Type: AWS::Lambda::Permission
+    Condition: HasSlackWebhook
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref SlackNotificationFunction
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt PipelineStateChangeRule.Arn
+
+Outputs:
+  PipelineUrl:
+    Description: URL to the CodePipeline console
+    Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
+  
+  ArtifactsBucketName:
+    Description: S3 Bucket for pipeline artifacts
+    Value: !Ref ArtifactsBucket
+  
+  KmsKeyId:
+    Description: KMS Key for artifact encryption
+    Value: !Ref ArtifactsKey
+  
+  CodeDeployApplicationName:
+    Description: CodeDeploy application name
+    Value: !Ref CodeDeployApplication
+  
+  CodeDeployDeploymentGroupName:
+    Description: CodeDeploy deployment group name
+    Value: !Ref CodeDeployDeploymentGroup
