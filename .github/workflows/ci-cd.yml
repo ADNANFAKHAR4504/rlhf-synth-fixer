@@ -817,7 +817,7 @@ jobs:
             CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
             1. Read lib/IDEAL_RESPONSE.md if it exists
             2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (\`\`\`python, \`\`\`bash, etc.)
+            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
             4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
             5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
             6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
@@ -830,7 +830,7 @@ jobs:
             When validating platform/language compliance, you MUST:
             1. Run: bash ./.claude/scripts/validate-code-platform.sh
             2. This script checks lib/IDEAL_RESPONSE.md (NOT MODEL_RESPONSE.md) against metadata.json
-            3. If MODEL_FAILURES.md mentions \"Maven → Gradle\" or \"multi-stack → single stack\", those are PAST fixes
+            3. If MODEL_FAILURES.md mentions "Maven → Gradle" or "multi-stack → single stack", those are PAST fixes
             4. DO NOT report those as current problems in IDEAL_RESPONSE.md
             5. Only validate what is CURRENTLY in lib/IDEAL_RESPONSE.md
 
@@ -842,7 +842,7 @@ jobs:
             - training_quality (required)
             - aws_services (required)
 
-            For CI/CD Pipeline tasks (subject_label: \"CI/CD Pipeline\" OR platform: \"cicd\"):
+            For CI/CD Pipeline tasks (subject_label: "CI/CD Pipeline" OR platform: "cicd"):
             - training_quality (required)
             - aws_services (NOT required - CI/CD pipelines don't deploy AWS services)
 
