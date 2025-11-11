@@ -10,7 +10,7 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "training_quality": 8,
+  "training_quality": 10,
   "aws_services": [
     "S3",
     "Lambda",
@@ -22,5 +22,11 @@
     "EventBridge",
     "IAM",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
