@@ -958,22 +958,255 @@ Resources:
       SourceArn: !GetAtt PipelineStateChangeRule.Arn
 
 Outputs:
+  # Pipeline Outputs
   PipelineUrl:
     Description: URL to the CodePipeline console
     Value: !Sub https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}
-  
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineUrl'
+
+  PipelineName:
+    Description: CodePipeline name
+    Value: !Ref Pipeline
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineName'
+
+  PipelineArn:
+    Description: CodePipeline ARN
+    Value: !Sub 'arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}'
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineArn'
+
+  # S3 Outputs
   ArtifactsBucketName:
     Description: S3 Bucket for pipeline artifacts
     Value: !Ref ArtifactsBucket
-  
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucketName'
+
+  ArtifactsBucketArn:
+    Description: ARN of the S3 Bucket for pipeline artifacts
+    Value: !GetAtt ArtifactsBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ArtifactsBucketArn'
+
+  # KMS Outputs
   KmsKeyId:
     Description: KMS Key for artifact encryption
     Value: !Ref ArtifactsKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyId'
 
+  KmsKeyArn:
+    Description: KMS Key ARN for artifact encryption
+    Value: !GetAtt ArtifactsKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyArn'
+
+  KmsKeyAliasName:
+    Description: KMS Key Alias Name
+    Value: !Ref ArtifactsKeyAlias
+    Export:
+      Name: !Sub '${AWS::StackName}-KmsKeyAliasName'
+
+  # VPC Outputs
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  VPCCidr:
+    Description: VPC CIDR block
+    Value: !GetAtt VPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCCidr'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1Id'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2Id'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGatewayId'
+
+  PrivateRouteTableId:
+    Description: Private Route Table ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateRouteTableId'
+
+  # Security Group Outputs
+  CodeBuildSecurityGroupId:
+    Description: Security Group for CodeBuild and ECS
+    Value: !Ref CodeBuildSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildSecurityGroupId'
+
+  # CodeBuild Outputs
+  BuildProjectName:
+    Description: CodeBuild Build Project Name
+    Value: !Ref BuildProject
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildProjectName'
+
+  BuildProjectArn:
+    Description: CodeBuild Build Project ARN
+    Value: !GetAtt BuildProject.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildProjectArn'
+
+  TestProjectName:
+    Description: CodeBuild Test Project Name
+    Value: !Ref TestProject
+    Export:
+      Name: !Sub '${AWS::StackName}-TestProjectName'
+
+  TestProjectArn:
+    Description: CodeBuild Test Project ARN
+    Value: !GetAtt TestProject.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-TestProjectArn'
+
+  # IAM Role Outputs
+  CodeBuildServiceRoleArn:
+    Description: CodeBuild Service Role ARN
+    Value: !GetAtt CodeBuildServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildServiceRoleArn'
+
+  CodePipelineServiceRoleArn:
+    Description: CodePipeline Service Role ARN
+    Value: !GetAtt CodePipelineServiceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CodePipelineServiceRoleArn'
+
+  EcsTaskExecutionRoleArn:
+    Description: ECS Task Execution Role ARN
+    Value: !GetAtt EcsTaskExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsTaskExecutionRoleArn'
+
+  # ECS Outputs
   EcsClusterName:
     Description: ECS Cluster name
     Value: !Ref EcsCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsClusterName'
+
+  EcsClusterArn:
+    Description: ECS Cluster ARN
+    Value: !GetAtt EcsCluster.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsClusterArn'
 
   EcsServiceName:
     Description: ECS Service name
     Value: !GetAtt EcsService.Name
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsServiceName'
+
+  EcsServiceArn:
+    Description: ECS Service ARN
+    Value: !Ref EcsService
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsServiceArn'
+
+  EcsTaskDefinitionArn:
+    Description: ECS Task Definition ARN
+    Value: !Ref EcsTaskDefinition
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsTaskDefinitionArn'
+
+  # CloudWatch Logs Outputs
+  EcsLogGroupName:
+    Description: ECS Log Group Name
+    Value: !Ref EcsLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-EcsLogGroupName'
+
+  BuildLogGroupName:
+    Description: CodeBuild Build Log Group Name
+    Value: !Sub '/aws/codebuild/payment-service-build-${EnvironmentName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-BuildLogGroupName'
+
+  TestLogGroupName:
+    Description: CodeBuild Test Log Group Name
+    Value: !Sub '/aws/codebuild/payment-service-test-${EnvironmentName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-TestLogGroupName'
+
+  # Lambda Outputs (conditional)
+  SlackNotificationFunctionArn:
+    Description: Slack Notification Lambda Function ARN
+    Value: !If [HasSlackWebhook, !GetAtt SlackNotificationFunction.Arn, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-SlackNotificationFunctionArn'
+
+  SlackNotificationFunctionName:
+    Description: Slack Notification Lambda Function Name
+    Value: !If [HasSlackWebhook, !Ref SlackNotificationFunction, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-SlackNotificationFunctionName'
+
+  # EventBridge Outputs
+  PipelineStateChangeRuleArn:
+    Description: EventBridge Rule ARN for Pipeline State Changes
+    Value: !If [HasSlackWebhook, !GetAtt PipelineStateChangeRule.Arn, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-PipelineStateChangeRuleArn'
+
+  # VPC Endpoint Outputs (conditional)
+  S3VpcEndpointId:
+    Description: S3 VPC Endpoint ID
+    Value: !If [ShouldCreateVpcEndpoints, !Ref S3VpcEndpoint, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-S3VpcEndpointId'
+
+  EcrApiVpcEndpointId:
+    Description: ECR API VPC Endpoint ID
+    Value: !If [ShouldCreateVpcEndpoints, !Ref EcrApiVpcEndpoint, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-EcrApiVpcEndpointId'
+
+  EcrDkrVpcEndpointId:
+    Description: ECR DKR VPC Endpoint ID
+    Value: !If [ShouldCreateVpcEndpoints, !Ref EcrDkrVpcEndpoint, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-EcrDkrVpcEndpointId'
+
+  LogsVpcEndpointId:
+    Description: CloudWatch Logs VPC Endpoint ID
+    Value: !If [ShouldCreateVpcEndpoints, !Ref LogsVpcEndpoint, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-LogsVpcEndpointId'
+
+  CodeBuildVpcEndpointId:
+    Description: CodeBuild VPC Endpoint ID
+    Value: !If [ShouldCreateVpcEndpoints, !Ref CodeBuildVpcEndpoint, '']
+    Export:
+      Name: !Sub '${AWS::StackName}-CodeBuildVpcEndpointId'
+
+  # Stack Metadata
+  StackName:
+    Description: Name of this CloudFormation stack
+    Value: !Ref 'AWS::StackName'
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  EnvironmentName:
+    Description: Environment name used for this deployment
+    Value: !Ref EnvironmentName
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentName'
