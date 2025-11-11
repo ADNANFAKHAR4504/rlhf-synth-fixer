@@ -223,7 +223,7 @@ export class DatabaseMigrationStack extends Construct {
       `AuroraParameterGroup-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_07_1, // MySQL 8.0 compatible
+          version: rds.AuroraMysqlEngineVersion.VER_3_08_2, // MySQL 8.0 compatible
         }),
         description: 'Parameter group for Aurora MySQL cluster',
         parameters: {
@@ -262,7 +262,7 @@ export class DatabaseMigrationStack extends Construct {
       `AuroraCluster-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_07_1,
+          version: rds.AuroraMysqlEngineVersion.VER_3_08_2,
         }),
         credentials: rds.Credentials.fromSecret(targetDbSecret),
         defaultDatabaseName: props.sourceDbName || 'migrationdb',
@@ -346,7 +346,7 @@ export class DatabaseMigrationStack extends Construct {
       `SourceRdsParameterGroup-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_35,
+          version: rds.MysqlEngineVersion.VER_8_0_40,
         }),
         description: 'Parameter group for source RDS MySQL instance',
         parameters: {
@@ -362,7 +362,7 @@ export class DatabaseMigrationStack extends Construct {
       `SourceRdsInstance-${environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.mysql({
-          version: rds.MysqlEngineVersion.VER_8_0_35,
+          version: rds.MysqlEngineVersion.VER_8_0_40,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
