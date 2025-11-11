@@ -988,16 +988,22 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Encryption Configuration', () => {
-    test('All resources use encryption where applicable', () => {
-      // Check RDS encryption
+    test('Aurora clusters use encryption', () => {
+      // Check Aurora cluster encryption
       const dbClusters = template.findResources('AWS::RDS::DBCluster');
       Object.values(dbClusters).forEach((cluster: any) => {
         expect(cluster.Properties.StorageEncrypted).toBe(true);
       });
+    });
 
-      // Check RDS instance encryption
+    test('Standalone RDS instances use encryption', () => {
+      // Check RDS instance encryption (only for standalone MySQL, not Aurora instances)
       const dbInstances = template.findResources('AWS::RDS::DBInstance');
-      Object.values(dbInstances).forEach((instance: any) => {
+      const standaloneInstances = Object.values(dbInstances).filter(
+        (instance: any) => instance.Properties.Engine === 'mysql'
+      );
+
+      standaloneInstances.forEach((instance: any) => {
         expect(instance.Properties.StorageEncrypted).toBe(true);
       });
     });
