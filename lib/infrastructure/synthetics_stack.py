@@ -1,13 +1,12 @@
 """
 CloudWatch Synthetics canaries for endpoint monitoring.
-BUG #24: Canary script using wrong runtime (Python instead of Node.js)
 BUG #25: Missing canary alarm configuration
 """
 
 import json
 import pulumi
 import pulumi_aws as aws
-from pulumi import Output, ResourceOptions
+from pulumi import Output, ResourceOptions, AssetArchive, StringAsset
 from typing import Optional
 
 
@@ -110,19 +109,30 @@ class SyntheticsStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # BUG #24: Canary script written in Python but runtime expects Node.js
-        # This mismatch will cause canary execution failures
-        canary_script_python = """
-# BUG #24: This is Python code but canary expects Node.js!
-import json
+        python_canary_script = """import json
+import os
+import urllib.request
+
 
 def handler(event, context):
-    # This won't work with Node.js runtime
+    url = os.environ.get('API_ENDPOINT')
+    if not url:
+        raise ValueError('API_ENDPOINT environment variable is required')
+
+    with urllib.request.urlopen(url, timeout=10) as response:
+        status = response.getcode()
+        if status != 200:
+            raise RuntimeError(f'Expected 200 response, received {status}')
+
     return {
         'statusCode': 200,
-        'body': json.dumps('Health check passed')
+        'body': json.dumps({'message': 'Health check passed'})
     }
 """
+
+        python_canary_archive = AssetArchive({
+            "handler.py": StringAsset(python_canary_script)
+        })
 
         # Primary region canary
         # BUG #24: Script language doesn't match runtime
@@ -131,9 +141,9 @@ def handler(event, context):
             name=f"trading-canary-primary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-primary"),
             execution_role_arn=self.canary_role.arn,
-            handler="index.handler",
-            zip_file=canary_script_python,  # Python code
-            runtime_version="syn-nodejs-puppeteer-6.0",  # BUG #24: Node.js runtime!
+            handler="handler.handler",
+            zip_file=python_canary_archive,
+            runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
             ),
@@ -153,9 +163,9 @@ def handler(event, context):
             name=f"trading-canary-secondary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-secondary"),
             execution_role_arn=self.canary_role.arn,
-            handler="index.handler",
-            zip_file=canary_script_python,  # Same bug
-            runtime_version="syn-nodejs-puppeteer-6.0",  # Same bug
+            handler="handler.handler",
+            zip_file=python_canary_archive,
+            runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
             ),
