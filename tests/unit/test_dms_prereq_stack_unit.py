@@ -1,6 +1,6 @@
 """
 Unit tests for DmsPrerequisitesStack.
-Tests the DMS prerequisite IAM roles (imported, not created).
+Tests the DMS prerequisite IAM roles.
 """
 import os
 import sys
@@ -49,48 +49,92 @@ class TestDmsPrerequisitesStackInitialization:
 
 
 class TestDmsVpcRole:
-    """Test DMS VPC management role (imported)"""
+    """Test DMS VPC management role"""
 
     def test_dms_vpc_role_created(self, dms_prereq_stack):
-        """Test DMS VPC role is imported and accessible"""
-        # Since we're importing an existing role, it won't appear in the CloudFormation template
-        # We just verify the role object exists
-        assert dms_prereq_stack.dms_vpc_role is not None
-        assert dms_prereq_stack.dms_vpc_role.role_name == "dms-vpc-role"
+        """Test DMS VPC role is created with correct properties"""
+        template = assertions.Template.from_stack(dms_prereq_stack)
+
+        # Verify role exists in template
+        template.has_resource_properties("AWS::IAM::Role", {
+            "RoleName": "dms-vpc-role",
+            "AssumeRolePolicyDocument": {
+                "Statement": [
+                    {
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "dms.amazonaws.com"
+                        }
+                    }
+                ]
+            }
+        })
 
     def test_dms_vpc_role_has_managed_policy(self, dms_prereq_stack):
-        """Test DMS VPC role reference is valid"""
-        # For imported roles, we can't check managed policies in the template
-        # We just verify the role can be referenced
-        assert dms_prereq_stack.dms_vpc_role is not None
-        # The role_arn should be constructable
-        assert "dms-vpc-role" in dms_prereq_stack.dms_vpc_role.role_arn
+        """Test DMS VPC role has required managed policy"""
+        template = assertions.Template.from_stack(dms_prereq_stack)
+
+        # Verify the role has the AmazonDMSVPCManagementRole managed policy
+        template.has_resource_properties("AWS::IAM::Role", {
+            "ManagedPolicyArns": [
+                {
+                    "Fn::Join": assertions.Match.array_with([
+                        assertions.Match.array_with([
+                            assertions.Match.string_like_regexp(".*AmazonDMSVPCManagementRole")
+                        ])
+                    ])
+                }
+            ]
+        })
 
 
 class TestDmsCloudWatchLogsRole:
-    """Test DMS CloudWatch Logs role (imported)"""
+    """Test DMS CloudWatch Logs role"""
 
     def test_dms_cloudwatch_logs_role_created(self, dms_prereq_stack):
-        """Test DMS CloudWatch Logs role is imported and accessible"""
-        # Since we're importing an existing role, it won't appear in the CloudFormation template
-        # We just verify the role object exists
-        assert dms_prereq_stack.dms_cloudwatch_logs_role is not None
-        assert dms_prereq_stack.dms_cloudwatch_logs_role.role_name == "dms-cloudwatch-logs-role"
+        """Test DMS CloudWatch Logs role is created with correct properties"""
+        template = assertions.Template.from_stack(dms_prereq_stack)
+
+        # Verify role exists in template
+        template.has_resource_properties("AWS::IAM::Role", {
+            "RoleName": "dms-cloudwatch-logs-role",
+            "AssumeRolePolicyDocument": {
+                "Statement": [
+                    {
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "dms.amazonaws.com"
+                        }
+                    }
+                ]
+            }
+        })
 
     def test_dms_cloudwatch_logs_role_has_managed_policy(self, dms_prereq_stack):
-        """Test DMS CloudWatch Logs role reference is valid"""
-        # For imported roles, we can't check managed policies in the template
-        # We just verify the role can be referenced
-        assert dms_prereq_stack.dms_cloudwatch_logs_role is not None
-        # The role_arn should be constructable
-        assert "dms-cloudwatch-logs-role" in dms_prereq_stack.dms_cloudwatch_logs_role.role_arn
+        """Test DMS CloudWatch Logs role has required managed policy"""
+        template = assertions.Template.from_stack(dms_prereq_stack)
+
+        # Verify the role has the AmazonDMSCloudWatchLogsRole managed policy
+        template.has_resource_properties("AWS::IAM::Role", {
+            "ManagedPolicyArns": [
+                {
+                    "Fn::Join": assertions.Match.array_with([
+                        assertions.Match.array_with([
+                            assertions.Match.string_like_regexp(".*AmazonDMSCloudWatchLogsRole")
+                        ])
+                    ])
+                }
+            ]
+        })
 
 
 class TestRoleCount:
-    """Test that no new roles are created (roles are imported)"""
+    """Test that exactly two roles are created"""
 
     def test_exactly_two_roles_created(self, dms_prereq_stack):
-        """Test that no IAM roles are created in CloudFormation (they are imported)"""
+        """Test that exactly two IAM roles are created in CloudFormation"""
         template = assertions.Template.from_stack(dms_prereq_stack)
-        # Since we import existing roles, there should be 0 IAM::Role resources in the template
-        template.resource_count_is("AWS::IAM::Role", 0)
+        # Should create exactly 2 IAM roles: dms-vpc-role and dms-cloudwatch-logs-role
+        template.resource_count_is("AWS::IAM::Role", 2)
