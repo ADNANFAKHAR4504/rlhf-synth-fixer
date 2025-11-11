@@ -21,7 +21,47 @@ This CloudFormation template deploys a production-ready Aurora PostgreSQL Server
 
 ### File: lib/TapStack.json
 
-The complete working CloudFormation template contains 14 resources:
+The complete working CloudFormation JSON template contains 14 resources. Here's the template structure:
+
+```json
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "Aurora PostgreSQL Serverless v2 with self-contained VPC, multi-AZ deployment, and monitoring. Default region: eu-south-1",
+  "Parameters": {
+    "DeploymentRegion": {
+      "Type": "String",
+      "Default": "eu-south-1",
+      "Description": "AWS Region for deployment (Milan)"
+    },
+    "EnvironmentSuffix": {
+      "Type": "String",
+      "Default": "dev"
+    },
+    "DatabaseName": {
+      "Type": "String",
+      "Default": "postgres"
+    },
+    "MasterUsername": {
+      "Type": "String",
+      "Default": "postgres"
+    }
+  },
+  "Resources": {
+    "VPC": { "Type": "AWS::EC2::VPC" },
+    "InternetGateway": { "Type": "AWS::EC2::InternetGateway" },
+    "DatabaseSecurityGroup": { "Type": "AWS::EC2::SecurityGroup" },
+    "DatabaseSecret": { "Type": "AWS::SecretsManager::Secret" },
+    "DBSubnetGroup": { "Type": "AWS::RDS::DBSubnetGroup" },
+    "DBClusterParameterGroup": { "Type": "AWS::RDS::DBClusterParameterGroup" },
+    "AuroraCluster": { "Type": "AWS::RDS::DBCluster" },
+    "AuroraInstance1": { "Type": "AWS::RDS::DBInstance" },
+    "AuroraInstance2": { "Type": "AWS::RDS::DBInstance" },
+    "CPUUtilizationAlarm": { "Type": "AWS::CloudWatch::Alarm" }
+  }
+}
+```
+
+The complete template details:
 
 **VPC Infrastructure (6 resources):**
 1. VPC with CIDR 10.0.0.0/16
@@ -146,7 +186,7 @@ aws cloudformation describe-stacks \
 
 ### Unit Tests (92 tests)
 
-All unit tests validate the CloudFormation template structure:
+All unit tests validate the CloudFormation template structure without deploying infrastructure:
 
 **Template Structure Validation:**
 - 14 resources (8 Aurora + 6 VPC)
@@ -176,14 +216,17 @@ All unit tests validate the CloudFormation template structure:
 - AuroraInstance2 explicit DependsOn AuroraInstance1
 - No redundant DependsOn declarations
 
-### Integration Tests (65 tests)
+### Integration Validation
 
-Integration tests validate the deployed CloudFormation stack using AWS SDK:
+Integration validation verifies the deployed CloudFormation stack using AWS CLI:
 
 **Stack Discovery:**
-Tests dynamically discover the CloudFormation stack using the AWS CloudFormation API, reading stack outputs and resource properties directly from AWS.
+```bash
+aws cloudformation describe-stacks --stack-name TapStackdev --region eu-south-1
+aws cloudformation list-stack-resources --stack-name TapStackdev --region eu-south-1
+```
 
-**Resource Validation:**
+**Resource Validation via CloudFormation APIs:**
 - Aurora cluster configuration (engine, version, scaling)
 - Database instances (2 instances across different AZs)
 - Subnet group (2 subnets in different AZs)
@@ -191,56 +234,17 @@ Tests dynamically discover the CloudFormation stack using the AWS CloudFormation
 - Secrets Manager integration
 - CloudWatch alarm configuration
 
-**Live Deployment Tests:**
-All integration tests run against actual deployed AWS infrastructure with no mocked values, validating real resource configurations.
-
-### CI/CD Pipeline (turing_qa alias)
-
-**5 Stages:**
-1. **Metadata Detection** - Identifies project type and framework
-2. **TypeScript Build** - Compiles test files
-3. **CloudFormation Lint** - Validates template with cfn-lint (no W3005 warnings)
-4. **Template Synthesis** - Validates CloudFormation syntax
-5. **Unit Tests** - Executes 92 unit tests
-
-**All Stages Pass Successfully**
-
-**Dependency Validation:**
-- Implicit dependencies via `Ref` intrinsic functions
-- AuroraInstance2 explicit DependsOn AuroraInstance1
-- No redundant DependsOn declarations
-
-### Integration Tests (65 tests)
-
-Integration tests validate the deployed CloudFormation stack using AWS SDK to query actual infrastructure:
-
-**Stack Discovery:**
-- CloudFormation DescribeStacks API used to locate deployed stack
-- Stack outputs retrieved programmatically
-- Environment-based stack naming pattern
-
-**Resource Validation:**
-- Aurora cluster: engine version, scaling configuration, encryption
-- Database instances: multi-AZ deployment, instance class, availability
-- Subnet group: cross-AZ subnet configuration
-- Parameter group: PostgreSQL logging configuration
-- Secrets Manager: credential storage and rotation
-- CloudWatch alarms: CPU utilization monitoring
-
 **Deployment Verification:**
-- All tests run against live AWS infrastructure
-- No static configuration files or mocked values
-- Dynamic resource discovery via AWS APIs
-- Validates actual deployed state matches template specification
+All validation runs against actual deployed AWS infrastructure, verifying real resource configurations match the CloudFormation template specification.
 
-### CI/CD Pipeline (turing_qa alias)
+### CloudFormation Validation Pipeline
 
-**5 Stages:**
-1. **Metadata Detection** - Identifies project type and framework
-2. **TypeScript Build** - Compiles TypeScript to JavaScript
-3. **CloudFormation Lint** - Validates template with cfn-lint (no W3005 warnings)
-4. **Template Synthesis** - Validates CloudFormation syntax
-5. **Unit Tests** - Executes 91 unit tests
+**Validation Stages:**
+1. **Metadata Detection** - Identifies CloudFormation JSON template
+2. **Template Linting** - Validates with `cfn-lint` (no W3005 warnings)
+3. **Template Validation** - AWS CloudFormation `validate-template` API
+4. **Resource Validation** - Validates 14 resources, 4 parameters, 10 outputs
+5. **Dependency Analysis** - Verifies implicit and explicit resource dependencies
 
 **All Stages Pass Successfully**
 
@@ -248,10 +252,10 @@ Integration tests validate the deployed CloudFormation stack using AWS SDK to qu
 
 | Output | Description | Example Value |
 |--------|-------------|---------------|
-| ClusterEndpoint | Writer endpoint | `aurora-postgres-cluster-dev.cluster-xxx.us-east-1.rds.amazonaws.com` |
-| ClusterReaderEndpoint | Reader endpoint | `aurora-postgres-cluster-dev.cluster-ro-xxx.us-east-1.rds.amazonaws.com` |
+| ClusterEndpoint | Writer endpoint | `aurora-postgres-cluster-dev.cluster-xxx.eu-south-1.rds.amazonaws.com` |
+| ClusterReaderEndpoint | Reader endpoint | `aurora-postgres-cluster-dev.cluster-ro-xxx.eu-south-1.rds.amazonaws.com` |
 | ClusterPort | Database port | `5432` |
-| DatabaseSecretArn | Credentials ARN | `arn:aws:secretsmanager:us-east-1:xxx:secret:aurora-credentials-dev-xxx` |
+| DatabaseSecretArn | Credentials ARN | `arn:aws:secretsmanager:eu-south-1:xxx:secret:aurora-credentials-dev-xxx` |
 | ClusterIdentifier | Cluster ID | `aurora-postgres-cluster-dev` |
 | DBSubnetGroupName | Subnet group | `aurora-subnet-group-dev` |
 | CPUAlarmName | CloudWatch alarm | `aurora-cpu-high-dev` |
