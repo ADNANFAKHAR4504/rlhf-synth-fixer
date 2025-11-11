@@ -22,6 +22,6 @@ new TapStack(app, stackName, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     //region: process.env.CDK_DEFAULT_REGION,
-    region: 'eu-central-2', // Target region
+    region: 'eu-central-1', // Target region
   },
 });
