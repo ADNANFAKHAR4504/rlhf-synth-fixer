@@ -48,6 +48,10 @@ if [ "$PLATFORM" = "cdk" ]; then
 
   echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-west-2..."
   npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-west-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+
+  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in ap-southeast-1..."
+  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/ap-southeast-1 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+  
   echo "✅ both regions bootstrapped successfully"
 
   # npm run cdk:bootstrap
