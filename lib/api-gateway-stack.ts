@@ -55,6 +55,9 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
         httpMethod: 'ANY',
         authorization: 'NONE',
         apiKeyRequired: true,
+        requestParameters: {
+          'method.request.path.proxy': true,
+        },
       },
       { parent: this }
     );

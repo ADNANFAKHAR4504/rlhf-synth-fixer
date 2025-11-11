@@ -381,7 +381,6 @@ export class EcsStack extends pulumi.ComponentResource {
         taskDefinition: taskDefinition.arn,
         desiredCount: 2,
         launchType: 'FARGATE',
-        platformVersion: 'LATEST',
         networkConfiguration: {
           subnets: privateSubnetIds,
           securityGroups: [appSecurityGroup.id],

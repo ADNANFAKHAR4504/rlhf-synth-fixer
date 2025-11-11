@@ -163,7 +163,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         clusterIdentifier: `payment-aurora-${environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
-        engineVersion: '14.10',
+        engineVersion: '14.11',
         databaseName: 'paymentdb',
         masterUsername: 'paymentadmin',
         masterPassword: dbPassword,
@@ -197,7 +197,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         clusterIdentifier: cluster.id,
         instanceClass: 'db.serverless',
         engine: 'aurora-postgresql',
-        engineVersion: '14.10',
+        engineVersion: '14.11',
         publiclyAccessible: false,
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
