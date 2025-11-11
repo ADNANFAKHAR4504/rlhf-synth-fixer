@@ -9,14 +9,7 @@
   "po_id": "gwcha",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Use S3 Cross-Region Replication (CRR) with replication time control enabled",
-    "Implement bucket versioning on both source and destination buckets",
-    "Configure lifecycle policies to transition objects to Glacier after 90 days in the replica bucket",
-    "Enable S3 Transfer Acceleration on the source bucket for faster uploads",
-    "Set up CloudWatch alarms for replication latency exceeding 15 minutes",
-    "Use KMS encryption with different keys in each region",
-    "Implement IAM roles with least privilege for replication",
-    "Deploy monitoring infrastructure using CloudWatch Logs for replication metrics"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "S3",
