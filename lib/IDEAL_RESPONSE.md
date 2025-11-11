@@ -1,6 +1,27 @@
 # Library Reference
 
-This document lists every non-Markdown file under `lib/` (excluding Terraform provider binaries/state). Each section includes the full file contents within an appropriate code fence.
+Every non-Markdown file under `lib/` (excluding Terraform provider binaries/state) is captured below with its full contents in an appropriate code fence.
+
+## .yamllint
+
+```text
+extends: default
+
+rules:
+  line-length:
+    max: 120
+    level: warning
+  document-start: disable
+  empty-lines:
+    max-start: 1
+    max-end: 1
+    max: 2
+  comments-indentation: disable
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+```
 
 ## ci-cd.yml
 
@@ -1026,6 +1047,26 @@ provider "registry.terraform.io/hashicorp/aws" {
   ]
 }
 
+provider "registry.terraform.io/hashicorp/random" {
+  version     = "3.7.2"
+  constraints = "~> 3.0"
+  hashes = [
+    "h1:356j/3XnXEKr9nyicLUufzoF4Yr6hRy481KIxRVpK0c=",
+    "zh:14829603a32e4bc4d05062f059e545a91e27ff033756b48afbae6b3c835f508f",
+    "zh:1527fb07d9fea400d70e9e6eb4a2b918d5060d604749b6f1c361518e7da546dc",
+    "zh:1e86bcd7ebec85ba336b423ba1db046aeaa3c0e5f921039b3f1a6fc2f978feab",
+    "zh:24536dec8bde66753f4b4030b8f3ef43c196d69cccbea1c382d01b222478c7a3",
+    "zh:29f1786486759fad9b0ce4fdfbbfece9343ad47cd50119045075e05afe49d212",
+    "zh:4d701e978c2dd8604ba1ce962b047607701e65c078cb22e97171513e9e57491f",
+    "zh:78d5eefdd9e494defcb3c68d282b8f96630502cac21d1ea161f53cfe9bb483b3",
+    "zh:7b8434212eef0f8c83f5a90c6d76feaf850f6502b61b53c329e85b3b281cba34",
+    "zh:ac8a23c212258b7976e1621275e3af7099e7e4a3d4478cf8d5d2a27f3bc3e967",
+    "zh:b516ca74431f3df4c6cf90ddcdb4042c626e026317a33c53f0b445a3d93b720d",
+    "zh:dc76e4326aec2490c1600d6871a95e78f9050f9ce427c71707ea412a2f2f1a62",
+    "zh:eac7b63e86c749c7d48f527671c7aee5b4e26c10be6ad7232d6860167f99dbb0",
+  ]
+}
+
 provider "registry.terraform.io/hashicorp/tls" {
   version = "4.1.0"
   hashes = [
@@ -1074,6 +1115,14 @@ key = "staging/terraform.tfstate"
 region = "us-east-1"
 encrypt = true
 dynamodb_table = "iac-test-automations-terraform-locks-123456789012"
+```
+
+## infrastructure/backend.tfvars
+
+```hcl
+bucket = "iac-test-terraform-state"
+key    = "terraform/state"
+region = "us-east-1"
 ```
 
 ## infrastructure/environments/dev.tfvars
@@ -1155,6 +1204,10 @@ terraform {
     aws = {
       source  = "hashicorp/aws"
       version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
     }
   }
 
@@ -1461,7 +1514,7 @@ resource "aws_network_acl_rule" "private_inbound_ephemeral" {
   egress         = false
   protocol       = "tcp"
   rule_action    = "allow"
-  cidr_block     = "0.0.0.0/0"
+  cidr_block     = var.vpc_cidr
   from_port      = 1024
   to_port        = 65535
 }
@@ -1652,7 +1705,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster" {
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.28"
+  version  = var.eks_version
 
   vpc_config {
     subnet_ids = aws_subnet.private[*].id
@@ -1732,10 +1785,10 @@ resource "aws_eks_node_group" "main" {
   scaling_config {
     desired_size = 3
     max_size     = 5
-    min_size     = 1
+    min_size     = 2
   }
 
-  instance_types = ["t3.medium"]
+  instance_types = [var.eks_node_instance_type]
 
   tags = {
     Name        = "${var.cluster_name}-node-group"
@@ -1778,6 +1831,9 @@ resource "aws_iam_openid_connect_provider" "eks" {
 }
 
 # OIDC provider for CircleCI
+# Thumbprint: SHA-1 fingerprint of CircleCI's OIDC certificate
+# Source: https://oidc.circleci.com/.well-known/openid_configuration
+# Verification: curl -s https://oidc.circleci.com/.well-known/openid_configuration | jq -r '.jwks_uri' | xargs curl -s | jq -r '.keys[0].x5c[0]' | openssl x509 -fingerprint -noout -sha1 | cut -d'=' -f2 | tr '[:upper:]' '[:lower:]'
 resource "aws_iam_openid_connect_provider" "circleci" {
   url             = "https://oidc.circleci.com"
   client_id_list  = ["circleci"]
@@ -1869,6 +1925,43 @@ resource "aws_dynamodb_table" "terraform_locks" {
   }
 }
 
+# ==================== RDS Monitoring IAM Role ====================
+resource "aws_iam_role" "rds_monitoring" {
+  name = "${var.db_cluster_identifier}-monitoring-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "monitoring.rds.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-monitoring-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "rds_monitoring" {
+  role       = aws_iam_role.rds_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+}
+
 resource "aws_kms_key" "rds" {
   description             = "KMS key for RDS encryption"
   deletion_window_in_days = 7
@@ -1931,7 +2024,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier              = var.db_cluster_identifier
   engine                          = "aurora-mysql"
-  engine_version                  = "8.0.mysql_aurora.3.02.0"
+  engine_version                  = var.rds_engine_version
   master_username                 = var.db_master_username
   manage_master_user_password     = true
   master_user_secret_kms_key_id   = aws_kms_key.rds.arn
@@ -1939,6 +2032,18 @@ resource "aws_rds_cluster" "main" {
   vpc_security_group_ids          = [aws_security_group.rds.id]
   skip_final_snapshot             = true
   deletion_protection             = false
+
+  # Backup configuration
+  backup_retention_period         = 7
+  preferred_backup_window         = "03:00-04:00"
+  preferred_maintenance_window    = "sun:04:00-sun:05:00"
+
+  # Monitoring and logging
+  enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
+  monitoring_interval             = 60
+  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
+  performance_insights_enabled    = true
+  performance_insights_kms_key_id = aws_kms_key.rds.arn
 
   tags = {
     Name        = var.db_cluster_identifier
@@ -1955,11 +2060,122 @@ resource "aws_rds_cluster" "main" {
   }
 }
 
+# RDS Master Password Rotation Configuration
+resource "aws_secretsmanager_secret_rotation" "rds_master_password" {
+  secret_id           = aws_rds_cluster.main.master_user_secret[0].secret_arn
+  rotation_lambda_arn = aws_lambda_function.rds_password_rotation.arn
+
+  rotation_rules {
+    automatically_after_days = 30
+  }
+
+  depends_on = [aws_rds_cluster.main]
+}
+
+# Lambda function for RDS password rotation
+resource "aws_lambda_function" "rds_password_rotation" {
+  function_name = "${var.db_cluster_identifier}-password-rotation"
+  role          = aws_iam_role.rds_password_rotation.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 300
+
+  # Use AWS managed rotation function for RDS
+  s3_bucket = "awslambda-${var.region}-functions"
+  s3_key    = "rotate-secret/rotate-secret.zip"
+
+  environment {
+    variables = {
+      SECRETS_MANAGER_ENDPOINT = "https://secretsmanager.${var.region}.amazonaws.com"
+    }
+  }
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-password-rotation"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# IAM role for RDS password rotation Lambda
+resource "aws_iam_role" "rds_password_rotation" {
+  name = "${var.db_cluster_identifier}-password-rotation-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-password-rotation-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "rds_password_rotation" {
+  role       = aws_iam_role.rds_password_rotation.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Custom policy for RDS password rotation
+resource "aws_iam_role_policy" "rds_password_rotation" {
+  name = "${var.db_cluster_identifier}-password-rotation-policy"
+  role = aws_iam_role.rds_password_rotation.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:UpdateSecretVersionStage"
+        ]
+        Resource = aws_rds_cluster.main.master_user_secret[0].secret_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBClusters",
+          "rds:GetClusterAuthToken"
+        ]
+        Resource = aws_rds_cluster.main.arn
+      }
+    ]
+  })
+}
+
 resource "aws_rds_cluster_instance" "main" {
   count              = 2
   identifier         = "${var.db_cluster_identifier}-${count.index}"
   cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = "db.t3.small"
+  instance_class     = var.rds_instance_class
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
 
@@ -2034,10 +2250,11 @@ resource "aws_elasticache_subnet_group" "main" {
 resource "aws_elasticache_cluster" "main" {
   cluster_id           = var.cache_cluster_id
   engine               = "redis"
-  node_type            = "cache.t3.micro"
+  node_type            = var.cache_node_type
   num_cache_nodes      = 1
   subnet_group_name    = aws_elasticache_subnet_group.main.name
   security_group_ids   = [aws_security_group.cache.id]
+  port                 = 6379
 
   tags = {
     Name        = var.cache_cluster_id
@@ -2048,6 +2265,16 @@ resource "aws_elasticache_cluster" "main" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# Generate Redis auth token
+resource "random_password" "redis_auth_token" {
+  length  = 32
+  special = true
 
   lifecycle {
     prevent_destroy = false
@@ -2357,10 +2584,7 @@ resource "aws_iam_policy" "circleci_staging" {
           "rds:ModifyDBCluster",
           "rds:ModifyDBInstance"
         ]
-        Resource = [
-          aws_rds_cluster.main.arn,
-          for instance in aws_rds_cluster_instance.main : instance.arn
-        ]
+        Resource = concat([aws_rds_cluster.main.arn], [for instance in aws_rds_cluster_instance.main : instance.arn])
       },
       {
         Effect = "Allow"
@@ -2519,10 +2743,7 @@ resource "aws_iam_policy" "circleci_prod" {
           "rds:DeleteDBInstance",
           "rds:RebootDBInstance"
         ]
-        Resource = [
-          aws_rds_cluster.main.arn,
-          for instance in aws_rds_cluster_instance.main : instance.arn
-        ]
+        Resource = concat([aws_rds_cluster.main.arn], [for instance in aws_rds_cluster_instance.main : instance.arn])
       },
       {
         Effect = "Allow"
@@ -2615,6 +2836,25 @@ resource "aws_iam_policy" "circleci_prod" {
   }
 }
 
+# ==================== SNS Topic for Alerts ====================
+resource "aws_sns_topic" "alerts" {
+  name = "${var.environment}-infrastructure-alerts"
+
+  tags = {
+    Name        = "${var.environment}-alerts-topic"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
 # ==================== CloudWatch Monitoring ====================
 # EKS Cluster CPU Utilization Alarm
 resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
@@ -2627,7 +2867,7 @@ resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors EKS cluster CPU utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     ClusterName = var.cluster_name
@@ -2642,6 +2882,8 @@ resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_eks_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -2659,7 +2901,7 @@ resource "aws_cloudwatch_metric_alarm" "eks_memory_utilization" {
   statistic           = "Average"
   threshold           = "85"
   alarm_description   = "This metric monitors EKS cluster memory utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     ClusterName = var.cluster_name
@@ -2674,6 +2916,8 @@ resource "aws_cloudwatch_metric_alarm" "eks_memory_utilization" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_eks_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -2691,7 +2935,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors RDS CPU utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DBClusterIdentifier = var.db_cluster_identifier
@@ -2706,6 +2950,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_rds_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -2723,7 +2969,7 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_space" {
   statistic           = "Average"
   threshold           = "2000000000" # 2GB in bytes
   alarm_description   = "This metric monitors RDS free storage space"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     DBClusterIdentifier = var.db_cluster_identifier
@@ -2738,6 +2984,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_space" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_rds_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -2755,7 +3003,7 @@ resource "aws_cloudwatch_metric_alarm" "cache_cpu_utilization" {
   statistic           = "Average"
   threshold           = "80"
   alarm_description   = "This metric monitors ElastiCache CPU utilization"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     CacheClusterId = var.cache_cluster_id
@@ -2770,6 +3018,8 @@ resource "aws_cloudwatch_metric_alarm" "cache_cpu_utilization" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_elasticache_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -2787,7 +3037,7 @@ resource "aws_cloudwatch_metric_alarm" "cache_freeable_memory" {
   statistic           = "Average"
   threshold           = "100000000" # 100MB in bytes
   alarm_description   = "This metric monitors ElastiCache freeable memory"
-  alarm_actions       = []
+  alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
     CacheClusterId = var.cache_cluster_id
@@ -2802,6 +3052,8 @@ resource "aws_cloudwatch_metric_alarm" "cache_freeable_memory" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_elasticache_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -2822,9 +3074,9 @@ output "ecr_registry" {
   value       = "${data.aws_caller_identity.current.account_id}.dkr.ecr.${var.region}.amazonaws.com"
 }
 
-output "rds_cluster_endpoint" {
-  description = "RDS cluster endpoint"
-  value       = aws_rds_cluster.main.endpoint
+output "rds_master_user_secret_arn" {
+  description = "RDS master user secret ARN in AWS Secrets Manager"
+  value       = aws_rds_cluster.main.master_user_secret[0].secret_arn
 }
 
 output "cache_cluster_endpoint" {
@@ -2865,6 +3117,36 @@ output "vpc_id" {
 output "private_subnet_ids" {
   description = "Private subnet IDs"
   value       = aws_subnet.private[*].id
+}
+
+output "sns_alerts_topic_arn" {
+  description = "SNS topic ARN for infrastructure alerts"
+  value       = aws_sns_topic.alerts.arn
+}
+
+output "terraform_state_bucket_name" {
+  description = "S3 bucket name for Terraform state"
+  value       = aws_s3_bucket.terraform_state.bucket
+}
+
+output "terraform_state_bucket_arn" {
+  description = "S3 bucket ARN for Terraform state"
+  value       = aws_s3_bucket.terraform_state.arn
+}
+
+output "terraform_locks_table_name" {
+  description = "DynamoDB table name for Terraform state locks"
+  value       = aws_dynamodb_table.terraform_locks.name
+}
+
+output "kms_rds_key_arn" {
+  description = "KMS key ARN for RDS encryption"
+  value       = aws_kms_key.rds.arn
+}
+
+output "kms_cache_key_arn" {
+  description = "KMS key ARN for ElastiCache encryption"
+  value       = aws_kms_key.cache.arn
 }
 ```
 
@@ -2929,6 +3211,36 @@ variable "tags" {
   default = {
     "iac-rlhf-amazon" = "true"
   }
+}
+
+variable "eks_version" {
+  description = "EKS cluster version"
+  type        = string
+  default     = "1.28"
+}
+
+variable "rds_engine_version" {
+  description = "RDS Aurora MySQL engine version"
+  type        = string
+  default     = "8.0.mysql_aurora.3.02.0"
+}
+
+variable "eks_node_instance_type" {
+  description = "EKS node instance type"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "rds_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.small"
+}
+
+variable "cache_node_type" {
+  description = "ElastiCache node type"
+  type        = string
+  default     = "cache.t3.micro"
 }
 ```
 

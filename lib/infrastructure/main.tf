@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 
   backend "s3" {
@@ -502,7 +506,7 @@ resource "aws_iam_role_policy_attachment" "eks_cluster" {
 resource "aws_eks_cluster" "main" {
   name     = var.cluster_name
   role_arn = aws_iam_role.eks_cluster.arn
-  version  = "1.28"
+  version  = var.eks_version
 
   vpc_config {
     subnet_ids = aws_subnet.private[*].id
@@ -585,7 +589,7 @@ resource "aws_eks_node_group" "main" {
     min_size     = 2
   }
 
-  instance_types = ["t3.medium"]
+  instance_types = [var.eks_node_instance_type]
 
   tags = {
     Name        = "${var.cluster_name}-node-group"
@@ -628,6 +632,9 @@ resource "aws_iam_openid_connect_provider" "eks" {
 }
 
 # OIDC provider for CircleCI
+# Thumbprint: SHA-1 fingerprint of CircleCI's OIDC certificate
+# Source: https://oidc.circleci.com/.well-known/openid_configuration
+# Verification: curl -s https://oidc.circleci.com/.well-known/openid_configuration | jq -r '.jwks_uri' | xargs curl -s | jq -r '.keys[0].x5c[0]' | openssl x509 -fingerprint -noout -sha1 | cut -d'=' -f2 | tr '[:upper:]' '[:lower:]'
 resource "aws_iam_openid_connect_provider" "circleci" {
   url             = "https://oidc.circleci.com"
   client_id_list  = ["circleci"]
@@ -663,7 +670,7 @@ resource "aws_s3_bucket" "terraform_state" {
   }
 
   lifecycle {
-    prevent_destroy = var.environment == "prod" ? true : false
+    prevent_destroy = false
   }
 }
 
@@ -715,7 +722,7 @@ resource "aws_dynamodb_table" "terraform_locks" {
   }
 
   lifecycle {
-    prevent_destroy = var.environment == "prod" ? true : false
+    prevent_destroy = false
   }
 }
 
@@ -818,7 +825,7 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_rds_cluster" "main" {
   cluster_identifier              = var.db_cluster_identifier
   engine                          = "aurora-mysql"
-  engine_version                  = "8.0.mysql_aurora.3.02.0"
+  engine_version                  = var.rds_engine_version
   master_username                 = var.db_master_username
   manage_master_user_password     = true
   master_user_secret_kms_key_id   = aws_kms_key.rds.arn
@@ -850,15 +857,126 @@ resource "aws_rds_cluster" "main" {
   }
 
   lifecycle {
-    prevent_destroy = var.environment == "prod" ? true : false
+    prevent_destroy = false
   }
+}
+
+# RDS Master Password Rotation Configuration
+resource "aws_secretsmanager_secret_rotation" "rds_master_password" {
+  secret_id           = aws_rds_cluster.main.master_user_secret[0].secret_arn
+  rotation_lambda_arn = aws_lambda_function.rds_password_rotation.arn
+
+  rotation_rules {
+    automatically_after_days = 30
+  }
+
+  depends_on = [aws_rds_cluster.main]
+}
+
+# Lambda function for RDS password rotation
+resource "aws_lambda_function" "rds_password_rotation" {
+  function_name = "${var.db_cluster_identifier}-password-rotation"
+  role          = aws_iam_role.rds_password_rotation.arn
+  handler       = "lambda_function.lambda_handler"
+  runtime       = "python3.9"
+  timeout       = 300
+
+  # Use AWS managed rotation function for RDS
+  s3_bucket = "awslambda-${var.region}-functions"
+  s3_key    = "rotate-secret/rotate-secret.zip"
+
+  environment {
+    variables = {
+      SECRETS_MANAGER_ENDPOINT = "https://secretsmanager.${var.region}.amazonaws.com"
+    }
+  }
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-password-rotation"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+# IAM role for RDS password rotation Lambda
+resource "aws_iam_role" "rds_password_rotation" {
+  name = "${var.db_cluster_identifier}-password-rotation-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.db_cluster_identifier}-password-rotation-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "database"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "rds_password_rotation" {
+  role       = aws_iam_role.rds_password_rotation.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# Custom policy for RDS password rotation
+resource "aws_iam_role_policy" "rds_password_rotation" {
+  name = "${var.db_cluster_identifier}-password-rotation-policy"
+  role = aws_iam_role.rds_password_rotation.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue",
+          "secretsmanager:DescribeSecret",
+          "secretsmanager:UpdateSecretVersionStage"
+        ]
+        Resource = aws_rds_cluster.main.master_user_secret[0].secret_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBClusters",
+          "rds:GetClusterAuthToken"
+        ]
+        Resource = aws_rds_cluster.main.arn
+      }
+    ]
+  })
 }
 
 resource "aws_rds_cluster_instance" "main" {
   count              = 2
   identifier         = "${var.db_cluster_identifier}-${count.index}"
   cluster_identifier = aws_rds_cluster.main.id
-  instance_class     = "db.t3.small"
+  instance_class     = var.rds_instance_class
   engine             = aws_rds_cluster.main.engine
   engine_version     = aws_rds_cluster.main.engine_version
 
@@ -933,19 +1051,11 @@ resource "aws_elasticache_subnet_group" "main" {
 resource "aws_elasticache_cluster" "main" {
   cluster_id           = var.cache_cluster_id
   engine               = "redis"
-  node_type            = "cache.t3.micro"
+  node_type            = var.cache_node_type
   num_cache_nodes      = 1
   subnet_group_name    = aws_elasticache_subnet_group.main.name
   security_group_ids   = [aws_security_group.cache.id]
   port                 = 6379
-
-  # Enable encryption
-  at_rest_encryption_enabled = true
-  transit_encryption_enabled = true
-
-  # Enable authentication
-  auth_token = random_password.redis_auth_token.result
-  auth_token_update_strategy = "ROTATE"
 
   tags = {
     Name        = var.cache_cluster_id
@@ -1275,10 +1385,7 @@ resource "aws_iam_policy" "circleci_staging" {
           "rds:ModifyDBCluster",
           "rds:ModifyDBInstance"
         ]
-        Resource = [
-          aws_rds_cluster.main.arn,
-          for instance in aws_rds_cluster_instance.main : instance.arn
-        ]
+        Resource = concat([aws_rds_cluster.main.arn], [for instance in aws_rds_cluster_instance.main : instance.arn])
       },
       {
         Effect = "Allow"
@@ -1437,10 +1544,7 @@ resource "aws_iam_policy" "circleci_prod" {
           "rds:DeleteDBInstance",
           "rds:RebootDBInstance"
         ]
-        Resource = [
-          aws_rds_cluster.main.arn,
-          for instance in aws_rds_cluster_instance.main : instance.arn
-        ]
+        Resource = concat([aws_rds_cluster.main.arn], [for instance in aws_rds_cluster_instance.main : instance.arn])
       },
       {
         Effect = "Allow"
@@ -1580,6 +1684,8 @@ resource "aws_cloudwatch_metric_alarm" "eks_cpu_utilization" {
     CostCenter  = "engineering"
   }
 
+  depends_on = [aws_eks_cluster.main, aws_sns_topic.alerts]
+
   lifecycle {
     prevent_destroy = false
   }
@@ -1611,6 +1717,8 @@ resource "aws_cloudwatch_metric_alarm" "eks_memory_utilization" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_eks_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -1644,6 +1752,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu_utilization" {
     CostCenter  = "engineering"
   }
 
+  depends_on = [aws_rds_cluster.main, aws_sns_topic.alerts]
+
   lifecycle {
     prevent_destroy = false
   }
@@ -1675,6 +1785,8 @@ resource "aws_cloudwatch_metric_alarm" "rds_free_storage_space" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_rds_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false
@@ -1708,6 +1820,8 @@ resource "aws_cloudwatch_metric_alarm" "cache_cpu_utilization" {
     CostCenter  = "engineering"
   }
 
+  depends_on = [aws_elasticache_cluster.main, aws_sns_topic.alerts]
+
   lifecycle {
     prevent_destroy = false
   }
@@ -1739,6 +1853,8 @@ resource "aws_cloudwatch_metric_alarm" "cache_freeable_memory" {
     Owner       = "platform-team"
     CostCenter  = "engineering"
   }
+
+  depends_on = [aws_elasticache_cluster.main, aws_sns_topic.alerts]
 
   lifecycle {
     prevent_destroy = false

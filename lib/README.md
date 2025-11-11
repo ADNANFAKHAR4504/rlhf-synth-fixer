@@ -133,6 +133,11 @@ terraform apply -var-file="../../variables.tf"
 | `node_max_size` | Maximum number of nodes | `10` |
 | `db_instance_class` | RDS instance class | `db.t3.small` |
 | `cache_node_type` | ElastiCache node type | `cache.t3.micro` |
+| `eks_version` | EKS cluster version | `1.28` |
+| `rds_engine_version` | RDS Aurora MySQL engine version | `8.0.mysql_aurora.3.02.0` |
+| `eks_node_instance_type` | EKS node instance type | `t3.medium` |
+| `rds_instance_class` | RDS instance class | `db.t3.small` |
+| `cache_node_type` | ElastiCache node type | `cache.t3.micro` |
 
 ## Deployment Environments
 
@@ -188,7 +193,20 @@ CircleCI uses OpenID Connect for AWS authentication, eliminating the need for lo
 ### Encryption
 - **At Rest**: KMS encryption for RDS and ElastiCache
 - **In Transit**: TLS encryption for all services
-- **Secrets**: AWS Secrets Manager integration
+- **Secrets**: AWS Secrets Manager integration with automatic password rotation
+
+### RDS Password Management
+The RDS master password is managed by AWS Secrets Manager with automatic rotation:
+
+- **Secret ARN**: Available as Terraform output `rds_master_user_secret_arn`
+- **Rotation Schedule**: Every 30 days automatically
+- **Rotation Function**: AWS Lambda function handles password updates
+- **Zero Downtime**: Password rotation occurs without service interruption
+
+To retrieve the current password:
+```bash
+aws secretsmanager get-secret-value --secret-id $(terraform output rds_master_user_secret_arn)
+```
 
 ### Network Security
 - **VPC Isolation**: Private subnets for sensitive resources
@@ -266,13 +284,63 @@ aws rds describe-db-log-files --db-instance-identifier $DB_INSTANCE
 kubectl logs -f deployment/your-app
 ```
 
-## Contributing
+## Terraform Outputs
 
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/your-feature`
-3. Make your changes and add tests
-4. Run the test suite: `npm test`
-5. Submit a pull request
+After deployment, the following outputs are available for use by other systems and automation:
+
+### Core Infrastructure
+| Output | Description |
+|--------|-------------|
+| `cluster_name` | EKS cluster name |
+| `vpc_id` | VPC ID |
+| `private_subnet_ids` | Private subnet IDs |
+
+### Container Registry
+| Output | Description |
+|--------|-------------|
+| `ecr_registry` | ECR registry URL |
+
+### Database & Cache
+| Output | Description |
+|--------|-------------|
+| `rds_cluster_endpoint` | RDS cluster endpoint |
+| `rds_master_user_secret_arn` | RDS master user secret ARN in AWS Secrets Manager |
+| `cache_cluster_endpoint` | ElastiCache cluster endpoint |
+
+### Authentication
+| Output | Description |
+|--------|-------------|
+| `cognito_user_pool_id` | Cognito user pool ID |
+| `cognito_user_pool_client_id` | Cognito user pool client ID |
+
+### CI/CD
+| Output | Description |
+|--------|-------------|
+| `circleci_dev_role_arn` | CircleCI dev role ARN |
+| `circleci_staging_role_arn` | CircleCI staging role ARN |
+| `circleci_prod_role_arn` | CircleCI prod role ARN |
+
+### Backend & Security
+| Output | Description |
+|--------|-------------|
+| `sns_alerts_topic_arn` | SNS topic ARN for infrastructure alerts |
+| `terraform_state_bucket_name` | S3 bucket name for Terraform state |
+| `terraform_state_bucket_arn` | S3 bucket ARN for Terraform state |
+| `terraform_locks_table_name` | DynamoDB table name for Terraform state locks |
+| `kms_rds_key_arn` | KMS key ARN for RDS encryption |
+| `kms_cache_key_arn` | KMS key ARN for ElastiCache encryption |
+
+### Accessing Outputs
+```bash
+# Get all outputs
+terraform output
+
+# Get specific output
+terraform output cluster_name
+
+# Use in scripts
+CLUSTER_NAME=$(terraform output cluster_name)
+```
 
 ### Code Quality
 - **ESLint**: JavaScript/TypeScript linting

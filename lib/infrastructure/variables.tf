@@ -57,3 +57,33 @@ variable "tags" {
     "iac-rlhf-amazon" = "true"
   }
 }
+
+variable "eks_version" {
+  description = "EKS cluster version"
+  type        = string
+  default     = "1.28"
+}
+
+variable "rds_engine_version" {
+  description = "RDS Aurora MySQL engine version"
+  type        = string
+  default     = "8.0.mysql_aurora.3.02.0"
+}
+
+variable "eks_node_instance_type" {
+  description = "EKS node instance type"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "rds_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t3.small"
+}
+
+variable "cache_node_type" {
+  description = "ElastiCache node type"
+  type        = string
+  default     = "cache.t3.micro"
+}
