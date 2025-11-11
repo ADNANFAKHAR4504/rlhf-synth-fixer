@@ -28,5 +28,11 @@
     "EC2",
     "Secrets Manager"
   ],
-  "training_quality": 8
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Olatunjym",
+  "dockerS3Location": ""
 }
