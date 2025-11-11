@@ -27,7 +27,7 @@ export class TapStack extends cdk.Stack {
     this.vpc = new ec2.Vpc(this, 'PaymentVpc', {
       vpcName: `payment-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      availabilityZones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+      availabilityZones: ['eu-central-2a', 'eu-central-2b', 'eu-central-2c'],
       natGateways: 3, // One NAT gateway per AZ
 
       // Define subnet configuration
