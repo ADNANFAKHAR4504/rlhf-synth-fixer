@@ -29,10 +29,11 @@ describe('Aurora PostgreSQL CloudFormation Template Unit Tests', () => {
   });
 
   describe('Parameters', () => {
-    test('should have DeploymentRegion parameter with eu-west-2 default', () => {
+    test('should have DeploymentRegion parameter with eu-south-1 default', () => {
       expect(template.Parameters.DeploymentRegion).toBeDefined();
       expect(template.Parameters.DeploymentRegion.Type).toBe('String');
-      expect(template.Parameters.DeploymentRegion.Default).toBe('eu-west-2');
+      expect(template.Parameters.DeploymentRegion.Default).toBe('eu-south-1');
+      expect(template.Parameters.DeploymentRegion.AllowedValues).toContain('eu-south-1');
       expect(template.Parameters.DeploymentRegion.AllowedValues).toContain('eu-west-2');
       expect(template.Parameters.DeploymentRegion.AllowedValues).toContain('us-east-1');
     });

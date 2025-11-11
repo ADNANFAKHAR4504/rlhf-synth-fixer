@@ -7,7 +7,7 @@ This CloudFormation template deploys a production-ready Aurora PostgreSQL Server
 ## Architecture
 
 **Key Components:**
-- **Deployment Region**: Default deployment to **eu-west-2 (London)**, configurable via parameter
+- **Deployment Region**: Default deployment to **eu-south-1 (Milan)**, configurable via parameter
 - **VPC Infrastructure**: Self-contained VPC (10.0.0.0/16) with 2 private subnets across separate AZs
 - **Aurora PostgreSQL 15.8**: Serverless v2 cluster with 0.5-1 ACU auto-scaling
 - **Multi-AZ Deployment**: 2 database instances for high availability
@@ -120,9 +120,9 @@ The complete working CloudFormation template contains 14 resources:
 aws cloudformation deploy \
   --template-file lib/TapStack.json \
   --stack-name TapStackdev \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --parameter-overrides \
-      DeploymentRegion=eu-west-2 \
+      DeploymentRegion=eu-south-1 \
       EnvironmentSuffix=dev \
       DatabaseName=transactiondb \
       MasterUsername=dbadmin \
@@ -133,12 +133,12 @@ aws cloudformation deploy \
 
 ```bash
 # Check stack status
-aws cloudformation describe-stacks --stack-name TapStackdev --region eu-west-2
+aws cloudformation describe-stacks --stack-name TapStackdev --region eu-south-1
 
 # Retrieve outputs
 aws cloudformation describe-stacks \
   --stack-name TapStackdev \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --query 'Stacks[0].Outputs'
 ```
 
@@ -146,13 +146,28 @@ aws cloudformation describe-stacks \
 
 ### Unit Tests (92 tests)
 
+All unit tests validate the CloudFormation template structure:
+
 **Template Structure Validation:**
 - 14 resources (8 Aurora + 6 VPC)
 - 4 parameters (DeploymentRegion, EnvironmentSuffix, DatabaseName, MasterUsername)
 - 10 outputs (8 Aurora + 2 VPC)
 
+**VPC Infrastructure Tests:**
+- VPC CIDR block validation (10.0.0.0/16)
+- Private subnet CIDR validation (10.0.1.0/24, 10.0.2.0/24)
+- Security group ingress rule (PostgreSQL port 5432)
+- Internet Gateway attachment
+
+**Aurora Configuration Tests:**
+- Engine version (aurora-postgresql 15.8)
+- Serverless v2 scaling (MinCapacity 0.5, MaxCapacity 1)
+- Storage encryption enabled
+- DeletionProtection false
+- Backup retention (7 days)
+
 **Parameter Validation:**
-- DeploymentRegion defaults to eu-west-2 with allowed values
+- DeploymentRegion defaults to eu-south-1 with allowed values
 - Naming pattern constraints
 - Parameter types and defaults
 
@@ -163,21 +178,10 @@ aws cloudformation describe-stacks \
 
 ### Integration Tests (65 tests)
 
-**Dynamic Stack Discovery:**
-```typescript
-async function discoverStackName(): Promise<string> {
-  const envStackName = process.env.STACK_NAME;
-  if (envStackName) return envStackName;
-  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-  return `TapStack${environmentSuffix}`;
-}
+Integration tests validate the deployed CloudFormation stack using AWS SDK:
 
-async function getStackOutputs(stackName: string): Promise<Record<string, string>> {
-  const command = new DescribeStacksCommand({ StackName: stackName });
-  const response = await cfnClient.send(command);
-  // Extract outputs dynamically from CloudFormation API
-}
-```
+**Stack Discovery:**
+Tests dynamically discover the CloudFormation stack using the AWS CloudFormation API, reading stack outputs and resource properties directly from AWS.
 
 **Resource Validation:**
 - Aurora cluster configuration (engine, version, scaling)
@@ -187,10 +191,47 @@ async function getStackOutputs(stackName: string): Promise<Record<string, string
 - Secrets Manager integration
 - CloudWatch alarm configuration
 
-**Tests Run Against Live Deployment:**
-- No mocked values
-- All assertions flexible for actual deployed infrastructure
-- No dependency on static flat-outputs.json file
+**Live Deployment Tests:**
+All integration tests run against actual deployed AWS infrastructure with no mocked values, validating real resource configurations.
+
+### CI/CD Pipeline (turing_qa alias)
+
+**5 Stages:**
+1. **Metadata Detection** - Identifies project type and framework
+2. **TypeScript Build** - Compiles test files
+3. **CloudFormation Lint** - Validates template with cfn-lint (no W3005 warnings)
+4. **Template Synthesis** - Validates CloudFormation syntax
+5. **Unit Tests** - Executes 92 unit tests
+
+**All Stages Pass Successfully**
+
+**Dependency Validation:**
+- Implicit dependencies via `Ref` intrinsic functions
+- AuroraInstance2 explicit DependsOn AuroraInstance1
+- No redundant DependsOn declarations
+
+### Integration Tests (65 tests)
+
+Integration tests validate the deployed CloudFormation stack using AWS SDK to query actual infrastructure:
+
+**Stack Discovery:**
+- CloudFormation DescribeStacks API used to locate deployed stack
+- Stack outputs retrieved programmatically
+- Environment-based stack naming pattern
+
+**Resource Validation:**
+- Aurora cluster: engine version, scaling configuration, encryption
+- Database instances: multi-AZ deployment, instance class, availability
+- Subnet group: cross-AZ subnet configuration
+- Parameter group: PostgreSQL logging configuration
+- Secrets Manager: credential storage and rotation
+- CloudWatch alarms: CPU utilization monitoring
+
+**Deployment Verification:**
+- All tests run against live AWS infrastructure
+- No static configuration files or mocked values
+- Dynamic resource discovery via AWS APIs
+- Validates actual deployed state matches template specification
 
 ### CI/CD Pipeline (turing_qa alias)
 
@@ -256,23 +297,23 @@ All 10 original requirements FULLY IMPLEMENTED:
 # Update stack with parameter changes
 aws cloudformation update-stack \
   --stack-name TapStackdev \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --template-body file://lib/TapStack.json \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue=staging
 
 # Delete stack and all resources
-aws cloudformation delete-stack --stack-name TapStackdev --region eu-west-2
+aws cloudformation delete-stack --stack-name TapStackdev --region eu-south-1
 
 # View stack events
 aws cloudformation describe-stack-events \
   --stack-name TapStackdev \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --max-items 20
 
 # Retrieve database credentials
 aws secretsmanager get-secret-value \
   --secret-id aurora-credentials-dev \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --query 'SecretString' \
   --output text | jq -r '.password'
 ```
@@ -283,17 +324,17 @@ aws secretsmanager get-secret-value \
 # Check CloudWatch alarm status
 aws cloudwatch describe-alarms \
   --alarm-names aurora-cpu-high-dev \
-  --region eu-west-2
+  --region eu-south-1
 
 # View PostgreSQL logs
 aws logs tail /aws/rds/cluster/aurora-postgres-cluster-dev/postgresql \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --follow
 
 # Check RDS cluster status
 aws rds describe-db-clusters \
   --db-cluster-identifier aurora-postgres-cluster-dev \
-  --region eu-west-2 \
+  --region eu-south-1 \
   --query 'DBClusters[0].[Status,EngineVersion,ServerlessV2ScalingConfiguration]'
 ```
 

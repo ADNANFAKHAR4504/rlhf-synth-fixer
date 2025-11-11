@@ -16,21 +16,13 @@ LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
 
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
-# Read AWS region from .aws-region file if it exists
-if [ -f ".aws-region" ]; then
-  DEFAULT_AWS_REGION=$(cat .aws-region | tr -d '[:space:]')
-  echo "📍 Found .aws-region file with region: $DEFAULT_AWS_REGION"
-else
-  DEFAULT_AWS_REGION="us-east-1"
-fi
-
 # Set default environment variables if not provided
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
-export AWS_REGION=${AWS_REGION:-$DEFAULT_AWS_REGION}
+export AWS_REGION=${AWS_REGION:-us-east-1}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
-export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-$DEFAULT_AWS_REGION}
+export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
 export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
