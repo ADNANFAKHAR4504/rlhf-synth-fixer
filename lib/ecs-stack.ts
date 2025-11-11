@@ -248,8 +248,8 @@ export class EcsStack extends pulumi.ComponentResource {
               {
                 name: 'payment-app',
                 image: `${repoUrl}:latest`,
-                cpu: 512,
-                memory: 1024,
+                cpu: 480,
+                memory: 768,
                 essential: true,
                 portMappings: [
                   {
