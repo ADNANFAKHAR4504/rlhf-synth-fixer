@@ -1,5 +1,5 @@
 {
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "platform": "cdk",
   "language": "py",
   "complexity": "hard",
@@ -25,5 +25,10 @@
     "CloudWatch",
     "CloudWatch Logs"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
