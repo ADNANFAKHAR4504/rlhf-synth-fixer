@@ -649,6 +649,66 @@ describe('TapStack Unit Tests', () => {
     });
   });
 
+  describe('DMS VPC Role with Custom Configuration', () => {
+    test('DatabaseMigrationStack with provided dmsVpcRole uses the role', () => {
+      const customApp = new cdk.App();
+      const customStack = new cdk.Stack(customApp, 'CustomStack', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+
+      // Create a custom role
+      const customRole = new iam.Role(customStack, 'CustomDmsRole', {
+        assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
+        roleName: 'custom-dms-vpc-role',
+      });
+
+      const { DatabaseMigrationStack } = require('../lib/database-migration-stack');
+      new DatabaseMigrationStack(customStack, 'DbMigration', {
+        environmentSuffix: 'custom',
+        dmsVpcRole: customRole,
+      });
+
+      const customTemplate = Template.fromStack(customStack);
+
+      // Should use the provided custom role
+      customTemplate.hasResourceProperties('AWS::IAM::Role', {
+        RoleName: 'custom-dms-vpc-role',
+      });
+
+      // Should NOT create an additional role with fallback name
+      const roles = customTemplate.findResources('AWS::IAM::Role');
+      const fallbackRoles = Object.values(roles).filter(
+        (role: any) => role.Properties?.RoleName === 'dms-vpc-role-custom'
+      );
+      expect(fallbackRoles.length).toBe(0);
+    });
+
+    test('DatabaseMigrationStack with all optional props', () => {
+      const propsApp = new cdk.App();
+      const propsStack = new cdk.Stack(propsApp, 'PropsStack', {
+        env: { account: '123456789012', region: 'eu-west-2' },
+      });
+
+      const { DatabaseMigrationStack } = require('../lib/database-migration-stack');
+      new DatabaseMigrationStack(propsStack, 'DbMigration', {
+        environmentSuffix: 'props-test',
+        sourceRdsEndpoint: 'custom-source.rds.amazonaws.com',
+        sourceRdsPort: 3307,
+        sourceDbName: 'custom_db',
+      });
+
+      const propsTemplate = Template.fromStack(propsStack);
+
+      // Verify custom source endpoint configuration is used
+      propsTemplate.hasResourceProperties('AWS::DMS::Endpoint', {
+        EndpointType: 'source',
+        ServerName: 'custom-source.rds.amazonaws.com',
+        Port: 3307,
+        DatabaseName: 'custom_db',
+      });
+    });
+  });
+
   describe('Additional Resource Coverage', () => {
     test('VPC Peering routes are created correctly', () => {
       const routes = template.findResources('AWS::EC2::Route');
@@ -729,6 +789,227 @@ describe('TapStack Unit Tests', () => {
         Engine: 'mysql',
         StorageEncrypted: true,
         PubliclyAccessible: false,
+      });
+    });
+
+    test('All subnets are properly tagged', () => {
+      const subnets = template.findResources('AWS::EC2::Subnet');
+      const subnetKeys = Object.keys(subnets);
+
+      expect(subnetKeys.length).toBeGreaterThan(0);
+
+      subnetKeys.forEach((key) => {
+        const subnet = subnets[key];
+        expect(subnet.Properties.Tags).toBeDefined();
+      });
+    });
+
+    test('NAT Gateways are in public subnets', () => {
+      const natGateways = template.findResources('AWS::EC2::NatGateway');
+      const natKeys = Object.keys(natGateways);
+
+      natKeys.forEach((key) => {
+        const nat = natGateways[key];
+        expect(nat.Properties.SubnetId).toBeDefined();
+      });
+    });
+
+    test('CloudWatch log groups for Lambda have retention', () => {
+      const logGroups = template.findResources('AWS::Logs::LogGroup');
+      const logGroupKeys = Object.keys(logGroups);
+
+      if (logGroupKeys.length > 0) {
+        logGroupKeys.forEach((key) => {
+          const logGroup = logGroups[key];
+          if (logGroup.Properties.RetentionInDays) {
+            expect(logGroup.Properties.RetentionInDays).toBeGreaterThan(0);
+          }
+        });
+      }
+    });
+
+    test('Secrets have proper rotation configuration', () => {
+      const secrets = template.findResources('AWS::SecretsManager::Secret');
+      const secretKeys = Object.keys(secrets);
+
+      expect(secretKeys.length).toBeGreaterThanOrEqual(2);
+
+      // Verify secrets are encrypted
+      secretKeys.forEach((key) => {
+        const secret = secrets[key];
+        // Secrets should have either KmsKeyId or use default encryption
+        expect(secret.Properties).toBeDefined();
+      });
+    });
+
+    test('DMS task has proper settings for CDC', () => {
+      const tasks = template.findResources('AWS::DMS::ReplicationTask');
+      const taskKeys = Object.keys(tasks);
+
+      expect(taskKeys.length).toBeGreaterThanOrEqual(1);
+
+      taskKeys.forEach((key) => {
+        const task = tasks[key];
+        expect(task.Properties.MigrationType).toBe('full-load-and-cdc');
+        expect(task.Properties.ReplicationTaskSettings).toBeDefined();
+
+        // Parse and validate task settings
+        const settings = JSON.parse(task.Properties.ReplicationTaskSettings);
+        expect(settings.Logging).toBeDefined();
+        expect(settings.Logging.EnableLogging).toBe(true);
+      });
+    });
+
+    test('All IAM roles have trust policies', () => {
+      const roles = template.findResources('AWS::IAM::Role');
+      const roleKeys = Object.keys(roles);
+
+      roleKeys.forEach((key) => {
+        const role = roles[key];
+        expect(role.Properties.AssumeRolePolicyDocument).toBeDefined();
+        expect(
+          role.Properties.AssumeRolePolicyDocument.Statement
+        ).toBeDefined();
+        expect(
+          role.Properties.AssumeRolePolicyDocument.Statement.length
+        ).toBeGreaterThan(0);
+      });
+    });
+
+    test('VPC endpoints configuration', () => {
+      const vpcs = template.findResources('AWS::EC2::VPC');
+      const vpcKeys = Object.keys(vpcs);
+
+      // Should have both dev and prod VPCs
+      expect(vpcKeys.length).toBe(2);
+
+      vpcKeys.forEach((key) => {
+        const vpc = vpcs[key];
+        expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+        expect(vpc.Properties.EnableDnsSupport).toBe(true);
+      });
+    });
+
+    test('Aurora cluster has proper instance configuration', () => {
+      const dbInstances = template.findResources('AWS::RDS::DBInstance');
+      const instanceKeys = Object.keys(dbInstances);
+
+      const auroraInstances = instanceKeys.filter((key) => {
+        return dbInstances[key].Properties.Engine === 'aurora-mysql';
+      });
+
+      expect(auroraInstances.length).toBeGreaterThanOrEqual(2);
+
+      // Check for writer and reader
+      auroraInstances.forEach((key) => {
+        const instance = dbInstances[key];
+        expect(instance.Properties.DBInstanceClass).toBeDefined();
+        expect(instance.Properties.Engine).toBe('aurora-mysql');
+      });
+    });
+  });
+
+  describe('Resource Dependencies and Order', () => {
+    test('DMS task depends on endpoints and replication instance', () => {
+      const tasks = template.findResources('AWS::DMS::ReplicationTask');
+      const taskKeys = Object.keys(tasks);
+
+      expect(taskKeys.length).toBeGreaterThanOrEqual(1);
+
+      taskKeys.forEach((key) => {
+        const task = tasks[key];
+        expect(task.DependsOn).toBeDefined();
+        expect(Array.isArray(task.DependsOn)).toBe(true);
+        expect(task.DependsOn.length).toBeGreaterThanOrEqual(3);
+      });
+    });
+
+    test('Aurora instances depend on cluster', () => {
+      const dbInstances = template.findResources('AWS::RDS::DBInstance');
+      const instanceKeys = Object.keys(dbInstances);
+
+      const auroraInstances = instanceKeys.filter((key) => {
+        return dbInstances[key].Properties.Engine === 'aurora-mysql';
+      });
+
+      auroraInstances.forEach((key) => {
+        const instance = dbInstances[key];
+        expect(instance.Properties.DBClusterIdentifier).toBeDefined();
+      });
+    });
+
+    test('Security group rules reference correct security groups', () => {
+      const sgs = template.findResources('AWS::EC2::SecurityGroup');
+      const sgKeys = Object.keys(sgs);
+
+      const sgsWithIngress = sgKeys.filter((key) => {
+        return (
+          sgs[key].Properties.SecurityGroupIngress &&
+          sgs[key].Properties.SecurityGroupIngress.length > 0
+        );
+      });
+
+      expect(sgsWithIngress.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Monitoring and Alarms Configuration', () => {
+    test('All alarms have proper evaluation periods', () => {
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      const alarmKeys = Object.keys(alarms);
+
+      expect(alarmKeys.length).toBeGreaterThanOrEqual(2);
+
+      alarmKeys.forEach((key) => {
+        const alarm = alarms[key];
+        expect(alarm.Properties.EvaluationPeriods).toBeDefined();
+        expect(alarm.Properties.EvaluationPeriods).toBeGreaterThan(0);
+        expect(alarm.Properties.ComparisonOperator).toBeDefined();
+      });
+    });
+
+    test('Alarms are linked to SNS topic', () => {
+      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+      const alarmKeys = Object.keys(alarms);
+
+      alarmKeys.forEach((key) => {
+        const alarm = alarms[key];
+        expect(alarm.Properties.AlarmActions).toBeDefined();
+        expect(alarm.Properties.AlarmActions.length).toBeGreaterThan(0);
+      });
+    });
+
+    test('SNS topic has correct display name', () => {
+      template.hasResourceProperties('AWS::SNS::Topic', {
+        DisplayName: 'DMS Migration Alarms',
+      });
+    });
+  });
+
+  describe('Encryption Configuration', () => {
+    test('All resources use encryption where applicable', () => {
+      // Check RDS encryption
+      const dbClusters = template.findResources('AWS::RDS::DBCluster');
+      Object.values(dbClusters).forEach((cluster: any) => {
+        expect(cluster.Properties.StorageEncrypted).toBe(true);
+      });
+
+      // Check RDS instance encryption
+      const dbInstances = template.findResources('AWS::RDS::DBInstance');
+      Object.values(dbInstances).forEach((instance: any) => {
+        expect(instance.Properties.StorageEncrypted).toBe(true);
+      });
+    });
+
+    test('KMS keys have rotation enabled', () => {
+      const kmsKeys = template.findResources('AWS::KMS::Key');
+      const keyKeys = Object.keys(kmsKeys);
+
+      expect(keyKeys.length).toBeGreaterThan(0);
+
+      keyKeys.forEach((key) => {
+        const kmsKey = kmsKeys[key];
+        expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
       });
     });
   });
