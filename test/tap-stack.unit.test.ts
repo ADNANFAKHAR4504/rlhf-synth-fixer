@@ -179,11 +179,31 @@ describe('TapStack', () => {
       });
     });
 
-    it('should expose applicationUrl output with http protocol', (done) => {
+    it('should expose hostedZoneId output', (done) => {
+      pulumi.output(stack.hostedZoneId).apply(hostedZoneId => {
+        expect(hostedZoneId).toBeDefined();
+        expect(typeof hostedZoneId).toBe('string');
+        done();
+      });
+    });
+
+    it('should expose domainName output', (done) => {
+      pulumi.output(stack.domainName).apply(domainName => {
+        expect(domainName).toBeDefined();
+        expect(typeof domainName).toBe('string');
+        expect(domainName).toContain('trading-app');
+        expect(domainName).toContain('example.com');
+        done();
+      });
+    });
+
+    it('should expose applicationUrl output with http protocol and custom domain', (done) => {
       pulumi.output(stack.applicationUrl).apply(appUrl => {
         expect(appUrl).toBeDefined();
         expect(typeof appUrl).toBe('string');
         expect(appUrl).toContain('http://');
+        expect(appUrl).toContain('trading-app');
+        expect(appUrl).toContain('example.com');
         done();
       });
     });
@@ -385,9 +405,10 @@ describe('TapStack', () => {
       });
     });
 
-    it('should create application URL based on primary ALB', (done) => {
-      pulumi.all([stack.applicationUrl, stack.primaryAlbDns]).apply(([appUrl, primaryAlbDns]) => {
-        expect(appUrl).toContain(primaryAlbDns);
+    it('should create application URL based on custom domain', (done) => {
+      pulumi.output(stack.applicationUrl).apply((appUrl) => {
+        expect(appUrl).toContain('trading-app');
+        expect(appUrl).toContain('example.com');
         expect(appUrl).toMatch(/^http:\/\//);
         done();
       });
@@ -630,9 +651,11 @@ describe('TapStack', () => {
       });
     });
 
-    it('should include ALB DNS name in application URL', (done) => {
-      pulumi.all([stack.applicationUrl, stack.primaryAlbDns]).apply(([url, albDns]) => {
-        expect(url).toContain(albDns);
+    it('should use custom domain name in application URL', (done) => {
+      pulumi.output(stack.applicationUrl).apply((url) => {
+        expect(url).toContain('trading-app');
+        expect(url).toContain('example.com');
+        expect(url).not.toContain('.elb.amazonaws.com');
         done();
       });
     });
