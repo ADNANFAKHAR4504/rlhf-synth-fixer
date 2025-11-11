@@ -23,7 +23,7 @@ export class TapStack extends pulumi.ComponentResource {
     super("custom:infrastructure:TapStack", name, {}, opts);
 
     const { environmentSuffix } = props;
-    const region = "us-east-1";
+    const region = "eu-central-1";
 
     // Get availability zones
     const availabilityZones = aws.getAvailabilityZones({

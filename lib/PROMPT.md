@@ -126,7 +126,7 @@ Create a blue-green deployment infrastructure using **Pulumi with TypeScript** f
 - Use **AWS WAF** for application protection
 - Use **KMS** for encryption key management
 - Use **IAM** for access control with least privilege
-- Deploy to **us-east-1** region
+- Deploy to **eu-central-1** region
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: {resource-type}-{env}-environmentSuffix
 

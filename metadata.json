@@ -29,7 +29,7 @@
     "SNS",
     "IAM"
   ],
-  "region": "us-east-1",
+  "region": "eu-central-1",
   "training_quality": 10,
   "author": "mayanksethi-turing",
   "reviewer": "adnan-turing"
