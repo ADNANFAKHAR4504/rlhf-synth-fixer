@@ -277,8 +277,8 @@ jobs:
   analysis:
     name: Analysis
     runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    needs: [detect-metadata, lint, unit-tests]
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
     environment: dev
     env:
       AWS_ENDPOINT_URL: http://127.0.0.1:5001
