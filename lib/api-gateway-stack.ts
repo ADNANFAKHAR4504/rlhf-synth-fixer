@@ -7,6 +7,8 @@ import { ApiGatewayIntegration } from '@cdktf/provider-aws/lib/api-gateway-integ
 import { ApiGatewayDeployment } from '@cdktf/provider-aws/lib/api-gateway-deployment';
 import { ApiGatewayStage } from '@cdktf/provider-aws/lib/api-gateway-stage';
 import { ApiGatewayMethodSettings } from '@cdktf/provider-aws/lib/api-gateway-method-settings';
+import { ApiGatewayMethodResponse } from '@cdktf/provider-aws/lib/api-gateway-method-response';
+import { ApiGatewayIntegrationResponse } from '@cdktf/provider-aws/lib/api-gateway-integration-response';
 
 export interface ApiGatewayStackProps {
   environmentSuffix: string;
@@ -14,6 +16,7 @@ export interface ApiGatewayStackProps {
   transactionProcessorInvokeArn: string;
   statusCheckerArn: string;
   statusCheckerInvokeArn: string;
+  region: string;
 }
 
 export class ApiGatewayStack extends Construct {
@@ -29,10 +32,13 @@ export class ApiGatewayStack extends Construct {
       transactionProcessorInvokeArn,
       statusCheckerArn,
       statusCheckerInvokeArn,
+      region,
     } = props;
 
+    const apiRegion = region || 'eu-central-1';
+
     // Create REST API
-    this.api = new ApiGatewayRestApi(this, 'rest_api', {
+    this.api = new ApiGatewayRestApi(this, `rest-api-${environmentSuffix}`, {
       name: `payment-api-${environmentSuffix}`,
       description: 'Payment Processing REST API',
       endpointConfiguration: {
@@ -46,7 +52,7 @@ export class ApiGatewayStack extends Construct {
     // Create /transactions resource
     const transactionsResource = new ApiGatewayResource(
       this,
-      'transactions_resource',
+      `transactions-resource-${environmentSuffix}`,
       {
         restApiId: this.api.id,
         parentId: this.api.rootResourceId,
@@ -57,7 +63,7 @@ export class ApiGatewayStack extends Construct {
     // POST /transactions method
     const transactionsMethod = new ApiGatewayMethod(
       this,
-      'transactions_method',
+      `transactions-method-${environmentSuffix}`,
       {
         restApiId: this.api.id,
         resourceId: transactionsResource.id,
@@ -67,65 +73,89 @@ export class ApiGatewayStack extends Construct {
     );
 
     // Integration for POST /transactions
-    new ApiGatewayIntegration(this, 'transactions_integration', {
-      restApiId: this.api.id,
-      resourceId: transactionsResource.id,
-      httpMethod: transactionsMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: transactionProcessorInvokeArn,
-    });
+    const transactionsIntegration = new ApiGatewayIntegration(
+      this,
+      `transactions-integration-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: transactionsResource.id,
+        httpMethod: transactionsMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: transactionProcessorInvokeArn,
+      }
+    );
 
     // Lambda permission for transactions
-    new LambdaPermission(this, 'transactions_lambda_permission', {
-      statementId: `AllowAPIGatewayInvoke-${environmentSuffix}`,
-      action: 'lambda:InvokeFunction',
-      functionName: transactionProcessorArn,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `${this.api.executionArn}/*/*`,
-    });
+    new LambdaPermission(
+      this,
+      `transactions-lambda-permission-${environmentSuffix}`,
+      {
+        statementId: `AllowAPIGatewayInvoke-${environmentSuffix}`,
+        action: 'lambda:InvokeFunction',
+        functionName: transactionProcessorArn,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: `${this.api.executionArn}/*/*`,
+      }
+    );
 
     // Create /status resource
-    const statusResource = new ApiGatewayResource(this, 'status_resource', {
-      restApiId: this.api.id,
-      parentId: this.api.rootResourceId,
-      pathPart: 'status',
-    });
+    const statusResource = new ApiGatewayResource(
+      this,
+      `status-resource-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        parentId: this.api.rootResourceId,
+        pathPart: 'status',
+      }
+    );
 
     // GET /status method
-    const statusMethod = new ApiGatewayMethod(this, 'status_method', {
-      restApiId: this.api.id,
-      resourceId: statusResource.id,
-      httpMethod: 'GET',
-      authorization: 'NONE',
-      requestParameters: {
-        'method.request.querystring.transaction_id': true,
-      },
-    });
+    const statusMethod = new ApiGatewayMethod(
+      this,
+      `status-method-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: statusResource.id,
+        httpMethod: 'GET',
+        authorization: 'NONE',
+        requestParameters: {
+          'method.request.querystring.transaction_id': true,
+        },
+      }
+    );
 
     // Integration for GET /status
-    new ApiGatewayIntegration(this, 'status_integration', {
-      restApiId: this.api.id,
-      resourceId: statusResource.id,
-      httpMethod: statusMethod.httpMethod,
-      integrationHttpMethod: 'POST',
-      type: 'AWS_PROXY',
-      uri: statusCheckerInvokeArn,
-    });
+    const statusIntegration = new ApiGatewayIntegration(
+      this,
+      `status-integration-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: statusResource.id,
+        httpMethod: statusMethod.httpMethod,
+        integrationHttpMethod: 'POST',
+        type: 'AWS_PROXY',
+        uri: statusCheckerInvokeArn,
+      }
+    );
 
     // Lambda permission for status
-    new LambdaPermission(this, 'status_lambda_permission', {
-      statementId: `AllowAPIGatewayInvokeStatus-${environmentSuffix}`,
-      action: 'lambda:InvokeFunction',
-      functionName: statusCheckerArn,
-      principal: 'apigateway.amazonaws.com',
-      sourceArn: `${this.api.executionArn}/*/*`,
-    });
+    new LambdaPermission(
+      this,
+      `status-lambda-permission-${environmentSuffix}`,
+      {
+        statementId: `AllowAPIGatewayInvokeStatus-${environmentSuffix}`,
+        action: 'lambda:InvokeFunction',
+        functionName: statusCheckerArn,
+        principal: 'apigateway.amazonaws.com',
+        sourceArn: `${this.api.executionArn}/*/*`,
+      }
+    );
 
     // Enable CORS for transactions
     const transactionsCorsMethod = new ApiGatewayMethod(
       this,
-      'transactions_cors',
+      `transactions-cors-${environmentSuffix}`,
       {
         restApiId: this.api.id,
         resourceId: transactionsResource.id,
@@ -134,45 +164,144 @@ export class ApiGatewayStack extends Construct {
       }
     );
 
-    new ApiGatewayIntegration(this, 'transactions_cors_integration', {
-      restApiId: this.api.id,
-      resourceId: transactionsResource.id,
-      httpMethod: transactionsCorsMethod.httpMethod,
-      type: 'MOCK',
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}',
-      },
-    });
+    const transactionsCorsIntegration = new ApiGatewayIntegration(
+      this,
+      `transactions-cors-integration-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: transactionsResource.id,
+        httpMethod: transactionsCorsMethod.httpMethod,
+        type: 'MOCK',
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+      }
+    );
+
+    // Method response for transactions CORS
+    new ApiGatewayMethodResponse(
+      this,
+      `transactions-cors-method-response-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: transactionsResource.id,
+        httpMethod: transactionsCorsMethod.httpMethod,
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+      }
+    );
+
+    // Integration response for transactions CORS
+    new ApiGatewayIntegrationResponse(
+      this,
+      `transactions-cors-integration-response-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: transactionsResource.id,
+        httpMethod: transactionsCorsMethod.httpMethod,
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers':
+            "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'", // eslint-disable-line max-len
+          'method.response.header.Access-Control-Allow-Methods':
+            "'OPTIONS,POST'",
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
+        dependsOn: [transactionsCorsIntegration],
+      }
+    );
 
     // Enable CORS for status
-    const statusCorsMethod = new ApiGatewayMethod(this, 'status_cors', {
-      restApiId: this.api.id,
-      resourceId: statusResource.id,
-      httpMethod: 'OPTIONS',
-      authorization: 'NONE',
-    });
+    const statusCorsMethod = new ApiGatewayMethod(
+      this,
+      `status-cors-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: statusResource.id,
+        httpMethod: 'OPTIONS',
+        authorization: 'NONE',
+      }
+    );
 
-    new ApiGatewayIntegration(this, 'status_cors_integration', {
-      restApiId: this.api.id,
-      resourceId: statusResource.id,
-      httpMethod: statusCorsMethod.httpMethod,
-      type: 'MOCK',
-      requestTemplates: {
-        'application/json': '{"statusCode": 200}',
-      },
-    });
+    const statusCorsIntegration = new ApiGatewayIntegration(
+      this,
+      `status-cors-integration-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: statusResource.id,
+        httpMethod: statusCorsMethod.httpMethod,
+        type: 'MOCK',
+        requestTemplates: {
+          'application/json': '{"statusCode": 200}',
+        },
+      }
+    );
+
+    // Method response for status CORS
+    new ApiGatewayMethodResponse(
+      this,
+      `status-cors-method-response-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: statusResource.id,
+        httpMethod: statusCorsMethod.httpMethod,
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers': true,
+          'method.response.header.Access-Control-Allow-Methods': true,
+          'method.response.header.Access-Control-Allow-Origin': true,
+        },
+      }
+    );
+
+    // Integration response for status CORS
+    new ApiGatewayIntegrationResponse(
+      this,
+      `status-cors-integration-response-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        resourceId: statusResource.id,
+        httpMethod: statusCorsMethod.httpMethod,
+        statusCode: '200',
+        responseParameters: {
+          'method.response.header.Access-Control-Allow-Headers':
+            "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'", // eslint-disable-line max-len
+          'method.response.header.Access-Control-Allow-Methods':
+            "'OPTIONS,GET'",
+          'method.response.header.Access-Control-Allow-Origin': "'*'",
+        },
+        dependsOn: [statusCorsIntegration],
+      }
+    );
 
     // Create deployment
-    const deployment = new ApiGatewayDeployment(this, 'deployment', {
-      restApiId: this.api.id,
-      dependsOn: [transactionsMethod, statusMethod],
-      lifecycle: {
-        createBeforeDestroy: true,
-      },
-    });
+    const deployment = new ApiGatewayDeployment(
+      this,
+      `deployment-${environmentSuffix}`,
+      {
+        restApiId: this.api.id,
+        dependsOn: [
+          transactionsMethod,
+          transactionsIntegration,
+          statusMethod,
+          statusIntegration,
+          transactionsCorsMethod,
+          transactionsCorsIntegration,
+          statusCorsMethod,
+          statusCorsIntegration,
+        ],
+        lifecycle: {
+          createBeforeDestroy: true,
+        },
+      }
+    );
 
     // Create prod stage
-    const stage = new ApiGatewayStage(this, 'prod_stage', {
+    const stage = new ApiGatewayStage(this, `prod-stage-${environmentSuffix}`, {
       restApiId: this.api.id,
       deploymentId: deployment.id,
       stageName: 'prod',
@@ -186,7 +315,7 @@ export class ApiGatewayStack extends Construct {
     });
 
     // Configure stage settings
-    new ApiGatewayMethodSettings(this, 'method_settings', {
+    new ApiGatewayMethodSettings(this, `method-settings-${environmentSuffix}`, {
       restApiId: this.api.id,
       stageName: stage.stageName,
       methodPath: '*/*',
@@ -200,6 +329,6 @@ export class ApiGatewayStack extends Construct {
       },
     });
 
-    this.apiUrl = `https://${this.api.id}.execute-api.us-east-1.amazonaws.com/${stage.stageName}`;
+    this.apiUrl = `https://${this.api.id}.execute-api.${apiRegion}.amazonaws.com/${stage.stageName}`;
   }
 }

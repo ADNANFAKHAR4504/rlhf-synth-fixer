@@ -105,6 +105,7 @@ export class TapStack extends TerraformStack {
       transactionProcessorInvokeArn: lambdaStack.transactionProcessor.invokeArn,
       statusCheckerArn: lambdaStack.statusChecker.arn,
       statusCheckerInvokeArn: lambdaStack.statusChecker.invokeArn,
+      region: awsRegion,
     });
 
     // Create CloudWatch dashboard and alarms
@@ -114,6 +115,7 @@ export class TapStack extends TerraformStack {
       statusCheckerName: lambdaStack.statusChecker.functionName,
       dynamodbTableName: dynamodbStack.transactionsTable.name,
       snsTopicArn: snsStack.notificationTopic.arn,
+      region: awsRegion,
     });
 
     // Outputs
