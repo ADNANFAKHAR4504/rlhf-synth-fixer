@@ -482,14 +482,10 @@ export class TapStack extends pulumi.ComponentResource {
       `webhook-processor-${environmentSuffix}`,
       {
         name: `webhook-processor-${environmentSuffix}`,
-        runtime: aws.lambda.Runtime.Go1dx,
+        runtime: 'provided.al2',
         handler: 'bootstrap',
         role: webhookRole.arn,
-        code: new pulumi.asset.AssetArchive({
-          bootstrap: new pulumi.asset.FileAsset(
-            './lib/lambda/webhook-processor/bootstrap'
-          ),
-        }),
+        code: new pulumi.asset.FileArchive('./lib/lambda/webhook-processor'),
         environment: {
           variables: {
             SNS_TOPIC_ARN: paymentTopic.arn,
@@ -511,14 +507,10 @@ export class TapStack extends pulumi.ComponentResource {
       `transaction-recorder-${environmentSuffix}`,
       {
         name: `transaction-recorder-${environmentSuffix}`,
-        runtime: aws.lambda.Runtime.Go1dx,
+        runtime: 'provided.al2',
         handler: 'bootstrap',
         role: transactionRole.arn,
-        code: new pulumi.asset.AssetArchive({
-          bootstrap: new pulumi.asset.FileAsset(
-            './lib/lambda/transaction-recorder/bootstrap'
-          ),
-        }),
+        code: new pulumi.asset.FileArchive('./lib/lambda/transaction-recorder'),
         environment: {
           variables: {
             DYNAMODB_TABLE: transactionsTable.name,
@@ -540,14 +532,10 @@ export class TapStack extends pulumi.ComponentResource {
       `fraud-detector-${environmentSuffix}`,
       {
         name: `fraud-detector-${environmentSuffix}`,
-        runtime: aws.lambda.Runtime.Go1dx,
+        runtime: 'provided.al2',
         handler: 'bootstrap',
         role: fraudRole.arn,
-        code: new pulumi.asset.AssetArchive({
-          bootstrap: new pulumi.asset.FileAsset(
-            './lib/lambda/fraud-detector/bootstrap'
-          ),
-        }),
+        code: new pulumi.asset.FileArchive('./lib/lambda/fraud-detector'),
         environment: {
           variables: {
             ENVIRONMENT: environmentSuffix,
