@@ -11,6 +11,20 @@
     "Security Configuration as Code"
   ],
   "aws_services": [
-    "Cloudwatch"
-  ]
+    "VPC",
+    "EC2",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "Config",
+    "Systems Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
 }
