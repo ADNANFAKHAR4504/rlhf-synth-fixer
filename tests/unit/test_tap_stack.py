@@ -87,10 +87,9 @@ class TapMocks(pulumi.runtime.Mocks):
 
 pulumi.runtime.set_mocks(TapMocks(), preview=False)
 
-# Ensure the project's lib directory is importable.
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../lib"))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 
-from tap_stack import TapStack, TapStackArgs  # noqa: E402
+from lib.tap_stack import TapStack, TapStackArgs  # noqa: E402
 
 
 def _build_stack(environment_suffix: str = "unit") -> TapStack:

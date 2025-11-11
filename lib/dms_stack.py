@@ -66,7 +66,7 @@ class DmsStack(pulumi.ComponentResource):
         }
 
         # Create DMS IAM roles
-        self._create_dms_iam_roles()
+        role_dependencies = self._create_dms_iam_roles()
 
         # DMS Subnet Group
         self.dms_subnet_group = aws.dms.ReplicationSubnetGroup(
@@ -98,7 +98,7 @@ class DmsStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"dms-replication-instance-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, depends_on=role_dependencies)
         )
 
         # Source Endpoint (Production Aurora)
@@ -243,6 +243,7 @@ class DmsStack(pulumi.ComponentResource):
         """Create required IAM roles for DMS service."""
 
         invoke_opts = pulumi.InvokeOptions(parent=self)
+        dependencies = []
 
         try:
             existing_vpc_role = aws.iam.get_role(name="dms-vpc-role", opts=invoke_opts)
@@ -273,12 +274,13 @@ class DmsStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self, ignore_changes=["name", "path"])
             )
 
-        aws.iam.RolePolicyAttachment(
+        vpc_attachment = aws.iam.RolePolicyAttachment(
             f"dms-vpc-policy-attachment-{self.environment_suffix}",
             role=dms_vpc_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole",
             opts=ResourceOptions(parent=dms_vpc_role)
         )
+        dependencies.append(vpc_attachment)
 
         try:
             existing_cloudwatch_role = aws.iam.get_role(name="dms-cloudwatch-logs-role", opts=invoke_opts)
@@ -309,9 +311,12 @@ class DmsStack(pulumi.ComponentResource):
                 opts=ResourceOptions(parent=self, ignore_changes=["name", "path"])
             )
 
-        aws.iam.RolePolicyAttachment(
+        cloudwatch_attachment = aws.iam.RolePolicyAttachment(
             f"dms-cloudwatch-policy-attachment-{self.environment_suffix}",
             role=dms_cloudwatch_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole",
             opts=ResourceOptions(parent=dms_cloudwatch_role)
         )
+        dependencies.append(cloudwatch_attachment)
+
+        return dependencies
