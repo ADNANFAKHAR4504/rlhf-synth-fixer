@@ -1,0 +1,12 @@
+config:
+  aws:region: us-east-2
+  environment-migration:dbPassword:
+    secure: v1:EEcxWYZ5UZ87JloV:YFRwESKQ41RrMeHn75zsIQcQg0rbNVBN3oII
+  environment-migration:sourceDbHost: localhost
+  environment-migration:sourceDbName: sourcedb
+  environment-migration:sourceDbUser: postgres
+  environment-migration:sourceDbPassword:
+    secure: v1:u067RKAr2OzpKFbS:yhBC3HSAY4TA1cGZrcmYcTS3UHpyMMyuVKuU
+  environment-migration:domainName: example-dev.com
+  environment-migration:env: dev
+encryptionsalt: v1:TB97cwik2Vs=:v1:O+5yAGSNIISXIjm/:Tcybm2GN5fPFTZTVw1b429ZlcJP91g==

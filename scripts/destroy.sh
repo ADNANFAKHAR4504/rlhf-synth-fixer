@@ -17,7 +17,7 @@ echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 # Set default environment variables if not provided
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
-export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
+export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-2}
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"
 if [ -n "$TERRAFORM_STATE_BUCKET" ]; then
