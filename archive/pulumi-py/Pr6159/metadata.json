@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-10T07:15:33+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Serverless Infrastructure (Functions as Code)"],
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "aws_services": [
     "apigateway",
     "lambda",
@@ -18,7 +20,12 @@
     "cloudwatch",
     "kms"
   ],
-  "training_quality": 8,
+  "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "emmanuel-turing"
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
