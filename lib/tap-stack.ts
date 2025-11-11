@@ -1,6 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import { DatabaseMigrationStack } from './database-migration-stack';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import { DatabaseMigrationStack, DatabaseMigrationStackProps } from './database-migration-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -10,22 +11,26 @@ export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
 
-    // Get environment suffix from props, context, or use 'dev' as default
     const environmentSuffix =
       props?.environmentSuffix ||
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // Instantiate the Database Migration Stack as a construct (not nested stack)
-    new DatabaseMigrationStack(this, 'DatabaseMigration', {
-      environmentSuffix: environmentSuffix,
-      // Optional: Override these with actual values if known
-      // developmentVpcId: 'vpc-xxxxx',
-      // productionVpcId: 'vpc-yyyyy',
-      // sourceRdsEndpoint: 'source-rds.xxxxxx.ap-southeast-1.rds.amazonaws.com',
-      // sourceRdsPort: 3306,
-      // sourceDbName: 'migrationdb',
-      // sourceSecretArn: 'arn:aws:secretsmanager:ap-southeast-1:...',
+    // Create DMS VPC management role with the conventional name.
+    const dmsVpcRole = new iam.Role(this, 'DmsVpcRole', {
+      roleName: 'dms-vpc-role', // keep the conventional name so DMS/other tools can find it
+      assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
+      managedPolicies: [
+        iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonDMSVPCManagementRole'),
+      ],
     });
+
+    // Pass the role (or roleArn) into the DatabaseMigrationStack
+    const dmProps: DatabaseMigrationStackProps = {
+      environmentSuffix,
+      dmsVpcRole, // add this prop to DatabaseMigrationStack props (or dmsVpcRoleArn: dmsVpcRole.roleArn)
+    };
+
+    new DatabaseMigrationStack(this, 'DatabaseMigration', dmProps);
   }
 }

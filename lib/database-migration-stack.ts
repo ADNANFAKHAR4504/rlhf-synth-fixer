@@ -26,6 +26,18 @@ export interface DatabaseMigrationStackProps {
   // Secret ARNs for existing credentials
   sourceSecretArn?: string;
   targetSecretArn?: string;
+
+  /**
+   * Optional: supply an existing IAM role object for DMS VPC management.
+   * If provided, the stack will use this role (recommended when created in top-level stack).
+   */
+  dmsVpcRole?: iam.IRole;
+
+  /**
+   * Optional: supply an ARN string for an existing DMS VPC management role.
+   * If provided and dmsVpcRole is not set, the stack will import the role by ARN.
+   */
+  dmsVpcRoleArn?: string;
 }
 
 export class DatabaseMigrationStack extends Construct {
@@ -390,67 +402,65 @@ export class DatabaseMigrationStack extends Construct {
     );
 
     // ==============================
-    // 7. DMS IAM Roles
+    // 7. DMS IAM Roles (RESOLVED / WIRED)
     // ==============================
 
-    // DMS VPC Management Role (required for DMS VPC management)
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    //const dmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
-    //  assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
-    //  managedPolicies: [
-    //    iam.ManagedPolicy.fromAwsManagedPolicyName(
-    //      'service-role/AmazonDMSVPCManagementRole'
-    //    ),
-    //  ],
-    //  roleName: `dms-vpc-role-${environmentSuffix}`,
-    //});
+    // Resolve DMS VPC management role based on props:
+    // 1) use props.dmsVpcRole if provided
+    // 2) import by props.dmsVpcRoleArn if provided
+    // 3) create a role in this construct as a fallback
+    let resolvedDmsVpcRole: iam.IRole | undefined = props.dmsVpcRole;
+    let createdDmsVpcRole = false;
 
-    const dmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
-      assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
-    });
+    if (!resolvedDmsVpcRole && props.dmsVpcRoleArn) {
+      resolvedDmsVpcRole = iam.Role.fromRoleArn(
+        this,
+        `ImportedDmsVpcRole-${environmentSuffix}`,
+        props.dmsVpcRoleArn,
+        { mutable: false }
+      );
+    }
 
-    dmsVpcRole.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName(
-        'service-role/AmazonDMSVPCManagementRole'
-      )
-    );
+    if (!resolvedDmsVpcRole) {
+      // Create role in this construct (fallback). If you want a conventional name visible outside,
+      // create the role at top-level (tap-stack.ts) with roleName: 'dms-vpc-role' and pass it in.
+      resolvedDmsVpcRole = new iam.Role(this, `DmsVpcRole-${environmentSuffix}`, {
+        assumedBy: new iam.ServicePrincipal('dms.amazonaws.com'),
+        roleName: `dms-vpc-role-${environmentSuffix}`,
+      });
+      createdDmsVpcRole = true;
 
-    dmsVpcRole.addToPolicy(
-      new iam.PolicyStatement({
-        effect: iam.Effect.ALLOW,
-        actions: [
-          'ec2:DescribeAccountAttributes',
-          'ec2:DescribeAddresses',
-          'ec2:DescribeAvailabilityZones',
-          'ec2:DescribeInternetGateways',
-          'ec2:DescribeNetworkAcls',
-          'ec2:DescribeRouteTables',
-          'ec2:DescribeSecurityGroups',
-          'ec2:DescribeSubnets',
-          'ec2:DescribeVpcs',
-          'ec2:CreateNetworkInterface',
-          'ec2:DeleteNetworkInterface',
-          'ec2:ModifyNetworkInterfaceAttribute',
-          'ec2:DescribeNetworkInterfaces',
-        ],
-        resources: ['*'],
-      })
-    );
+      // Attach required managed policy and inline permissions only when we created the role here.
+      resolvedDmsVpcRole.addManagedPolicy(
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'service-role/AmazonDMSVPCManagementRole'
+        )
+      );
 
-    const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
-      this,
-      `DmsSubnetGroup-${environmentSuffix}`,
-      {
-        replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
-        replicationSubnetGroupDescription:
-          'Subnet group for DMS replication instance',
-        subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
-      }
-    );
+      resolvedDmsVpcRole.addToPolicy(
+        new iam.PolicyStatement({
+          effect: iam.Effect.ALLOW,
+          actions: [
+            'ec2:DescribeAccountAttributes',
+            'ec2:DescribeAddresses',
+            'ec2:DescribeAvailabilityZones',
+            'ec2:DescribeInternetGateways',
+            'ec2:DescribeNetworkAcls',
+            'ec2:DescribeRouteTables',
+            'ec2:DescribeSecurityGroups',
+            'ec2:DescribeSubnets',
+            'ec2:DescribeVpcs',
+            'ec2:CreateNetworkInterface',
+            'ec2:DeleteNetworkInterface',
+            'ec2:ModifyNetworkInterfaceAttribute',
+            'ec2:DescribeNetworkInterfaces',
+          ],
+          resources: ['*'],
+        })
+      );
+    }
 
-    dmsSubnetGroup.node.addDependency(dmsVpcRole);
-
-    // DMS CloudWatch Logs Role (required for DMS logging)
+    // DMS CloudWatch Logs Role (required for DMS logging) - create as before
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const dmsCloudwatchRole = new iam.Role(
       this,
@@ -470,16 +480,30 @@ export class DatabaseMigrationStack extends Construct {
     // 8. DMS Subnet Group
     // ==============================
 
-    //const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
-    //  this,
-    //  `DmsSubnetGroup-${environmentSuffix}`,
-    //  {
-    //    replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
-    //    replicationSubnetGroupDescription:
-    //      'Subnet group for DMS replication instance',
-    //    subnetIds: prodPrivateSubnets.map(subnet => subnet.subnetId),
-    //  }
-    //);
+    const dmsSubnetGroup = new dms.CfnReplicationSubnetGroup(
+      this,
+      `DmsSubnetGroup-${environmentSuffix}`,
+      {
+        replicationSubnetGroupIdentifier: `dms-subnet-group-${environmentSuffix}`,
+        replicationSubnetGroupDescription:
+          'Subnet group for DMS replication instance',
+        subnetIds: prodPrivateSubnets.map((subnet) => subnet.subnetId),
+      }
+    );
+
+    // Add dependency on the role CFN resource only if the role was created in this stack.
+    // Imported roles won't have a CFN child and shouldn't be modified.
+    if (createdDmsVpcRole) {
+      const maybeRoleCfn = (resolvedDmsVpcRole as unknown as Construct).node
+        .defaultChild as cdk.CfnResource | undefined;
+      if (maybeRoleCfn) {
+        dmsSubnetGroup.node.addDependency(maybeRoleCfn);
+      } else {
+        // As a fallback, add dependency on the role construct itself
+        dmsSubnetGroup.node.addDependency(resolvedDmsVpcRole as Construct);
+      }
+    }
+
     // ==============================
     // 9. DMS Replication Instance
     // ==============================
@@ -500,6 +524,7 @@ export class DatabaseMigrationStack extends Construct {
       }
     );
 
+    // Ensure replication instance creation waits for subnet group
     dmsReplicationInstance.addDependency(dmsSubnetGroup);
 
     // ==============================
@@ -788,13 +813,11 @@ import pymysql
 import boto3
 import os
 from typing import Dict, Any
-
 def get_secret(secret_arn: str) -> Dict[str, str]:
     """Retrieve secret from Secrets Manager"""
     client = boto3.client('secretsmanager')
     response = client.get_secret_value(SecretId=secret_arn)
     return json.loads(response['SecretString'])
-
 def get_connection(host: str, port: int, user: str, password: str, database: str):
     """Create MySQL connection"""
     return pymysql.connect(
@@ -805,19 +828,16 @@ def get_connection(host: str, port: int, user: str, password: str, database: str
         database=database,
         connect_timeout=30
     )
-
 def get_table_count(connection, table_name: str) -> int:
     """Get row count for a table"""
     with connection.cursor() as cursor:
         cursor.execute(f"SELECT COUNT(*) FROM {table_name}")
         return cursor.fetchone()[0]
-
 def get_all_tables(connection) -> list:
     """Get list of all tables in database"""
     with connection.cursor() as cursor:
         cursor.execute("SHOW TABLES")
         return [row[0] for row in cursor.fetchall()]
-
 def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     """
     Lambda handler to validate data consistency between source and target databases
@@ -826,7 +846,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
         # Get database credentials from Secrets Manager
         source_secret = get_secret(os.environ['SOURCE_SECRET_ARN'])
         target_secret = get_secret(os.environ['TARGET_SECRET_ARN'])
-
         # Connect to source database
         source_conn = get_connection(
             host=os.environ['SOURCE_HOST'],
@@ -835,7 +854,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             password=source_secret['password'],
             database=os.environ['SOURCE_DB']
         )
-
         # Connect to target database
         target_conn = get_connection(
             host=os.environ['TARGET_HOST'],
@@ -844,37 +862,29 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
             password=target_secret['password'],
             database=os.environ['TARGET_DB']
         )
-
         # Get tables from both databases
         source_tables = set(get_all_tables(source_conn))
         target_tables = set(get_all_tables(target_conn))
-
         # Check for missing tables
         missing_tables = source_tables - target_tables
         extra_tables = target_tables - source_tables
-
         # Validate row counts for common tables
         validation_results = []
         common_tables = source_tables & target_tables
-
         for table in common_tables:
             source_count = get_table_count(source_conn, table)
             target_count = get_table_count(target_conn, table)
-
             validation_results.append({
                 'table': table,
                 'source_count': source_count,
                 'target_count': target_count,
                 'match': source_count == target_count
             })
-
         # Close connections
         source_conn.close()
         target_conn.close()
-
         # Prepare response
         all_match = all(r['match'] for r in validation_results)
-
         return {
             'statusCode': 200,
             'body': json.dumps({
@@ -885,7 +895,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
                 'total_tables_checked': len(common_tables)
             })
         }
-
     except Exception as e:
         return {
             'statusCode': 500,
