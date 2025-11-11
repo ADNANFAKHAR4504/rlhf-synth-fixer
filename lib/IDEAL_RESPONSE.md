@@ -96,7 +96,7 @@ Resource: [
 │   ├── MODEL_RESPONSE.md   # Initial implementation with issues
 │   ├── MODEL_FAILURES.md   # Documented issues (11 total)
 │   ├── IDEAL_RESPONSE.md   # This file - corrected implementation notes
-│   └── AWS_REGION          # Primary region (us-east-1)
+│   └── AWS_REGION          # Primary region (eu-central-1)
 ├── index.ts                # Import from bin/tap.ts
 ├── Pulumi.yaml             # Pulumi project configuration
 └── metadata.json           # Task metadata

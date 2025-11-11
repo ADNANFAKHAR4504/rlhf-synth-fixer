@@ -145,8 +145,8 @@ export class TapStack extends pulumi.ComponentResource {
     private initializeProps(props: TapStackProps): Required<TapStackProps> {
         return {
             environmentSuffix: props.environmentSuffix,
-            primaryRegion: props.primaryRegion || "us-east-1",
-            drRegion: props.drRegion || "us-east-2",
+            primaryRegion: props.primaryRegion || "eu-central-1",
+            drRegion: props.drRegion || "eu-west-2",
             hostedZoneName: props.hostedZoneName || `trading-platform-${props.environmentSuffix}.com`,
             notificationEmail: props.notificationEmail || "ops@example.com",
             tags: {
@@ -213,7 +213,7 @@ export class TapStack extends pulumi.ComponentResource {
         const publicSubnet1 = new aws.ec2.Subnet(`public-subnet-1-${region}-${this.props.environmentSuffix}`, {
             vpcId: vpc.id,
             cidrBlock: `${baseOctet}.1.0/24`,
-            availabilityZone: region === "primary" ? "us-east-1a" : "us-east-2a",
+            availabilityZone: region === "primary" ? "eu-central-1a" : "eu-west-2a",
             mapPublicIpOnLaunch: true,
             tags: {
                 ...this.props.tags,
@@ -225,7 +225,7 @@ export class TapStack extends pulumi.ComponentResource {
         const publicSubnet2 = new aws.ec2.Subnet(`public-subnet-2-${region}-${this.props.environmentSuffix}`, {
             vpcId: vpc.id,
             cidrBlock: `${baseOctet}.2.0/24`,
-            availabilityZone: region === "primary" ? "us-east-1b" : "us-east-2b",
+            availabilityZone: region === "primary" ? "eu-central-1b" : "eu-west-2b",
             mapPublicIpOnLaunch: true,
             tags: {
                 ...this.props.tags,
@@ -238,7 +238,7 @@ export class TapStack extends pulumi.ComponentResource {
         const privateSubnet1 = new aws.ec2.Subnet(`private-subnet-1-${region}-${this.props.environmentSuffix}`, {
             vpcId: vpc.id,
             cidrBlock: `${baseOctet}.10.0/24`,
-            availabilityZone: region === "primary" ? "us-east-1a" : "us-east-2a",
+            availabilityZone: region === "primary" ? "eu-central-1a" : "eu-west-2a",
             tags: {
                 ...this.props.tags,
                 Name: `private-subnet-1-${region}-${this.props.environmentSuffix}`,
@@ -249,7 +249,7 @@ export class TapStack extends pulumi.ComponentResource {
         const privateSubnet2 = new aws.ec2.Subnet(`private-subnet-2-${region}-${this.props.environmentSuffix}`, {
             vpcId: vpc.id,
             cidrBlock: `${baseOctet}.11.0/24`,
-            availabilityZone: region === "primary" ? "us-east-1b" : "us-east-2b",
+            availabilityZone: region === "primary" ? "eu-central-1b" : "eu-west-2b",
             tags: {
                 ...this.props.tags,
                 Name: `private-subnet-2-${region}-${this.props.environmentSuffix}`,
@@ -1214,8 +1214,8 @@ def handler(event, context):
 // Main stack instantiation
 const stack = new TapStack("trading-platform", {
     environmentSuffix: pulumi.getStack(),
-    primaryRegion: "us-east-1",
-    drRegion: "us-east-2",
+    primaryRegion: "eu-central-1",
+    drRegion: "eu-west-2",
     notificationEmail: "ops@tradingplatform.com",
 });
 
