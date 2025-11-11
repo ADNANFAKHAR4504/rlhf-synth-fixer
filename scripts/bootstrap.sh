@@ -21,7 +21,7 @@ export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
-export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-2}
+export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
 export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
@@ -42,8 +42,8 @@ if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
   export CURRENT_ACCOUNT_ID=${CURRENT_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
 
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-2..."
-  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-1..."
+  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-1 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
   
 
   echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-west-2..."

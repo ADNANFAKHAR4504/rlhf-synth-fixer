@@ -17,7 +17,7 @@ if [ -z "$AWS_SECRET_ACCESS_KEY" ]; then
 fi
 
 # Set default region if not provided
-AWS_REGION=${AWS_REGION:-us-east-2}
+AWS_REGION=${AWS_REGION:-us-east-1}
 
 echo "Setting up AWS credentials with region: $AWS_REGION"
 
