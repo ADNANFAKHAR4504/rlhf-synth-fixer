@@ -300,7 +300,7 @@ const auroraCluster = new aws.rds.Cluster(
   {
     engine: 'aurora-postgresql',
     engineMode: 'provisioned',
-    engineVersion: '15.5',
+    engineVersion: '15.8',
     databaseName: 'migrationdb',
     masterUsername: 'admin',
     masterPassword: dbPassword,
@@ -324,13 +324,65 @@ const _auroraInstance = new aws.rds.ClusterInstance(
     clusterIdentifier: auroraCluster.id,
     instanceClass: 'db.serverless',
     engine: 'aurora-postgresql',
-    engineVersion: '15.5',
+    engineVersion: '15.8',
     tags: {
       Name: `aurora-instance-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
   }
 );
+
+// DMS VPC Role - Required by AWS DMS to access VPC resources
+const dmsVpcRole = new aws.iam.Role('dms-vpc-role', {
+  name: 'dms-vpc-role',
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: {
+          Service: 'dms.amazonaws.com',
+        },
+        Action: 'sts:AssumeRole',
+      },
+    ],
+  }),
+  tags: {
+    Name: 'dms-vpc-role',
+    Environment: environmentSuffix,
+  },
+});
+
+new aws.iam.RolePolicyAttachment('dms-vpc-policy', {
+  role: dmsVpcRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole',
+});
+
+// DMS CloudWatch Logs Role
+const dmsCloudwatchRole = new aws.iam.Role('dms-cloudwatch-logs-role', {
+  name: 'dms-cloudwatch-logs-role',
+  assumeRolePolicy: JSON.stringify({
+    Version: '2012-10-17',
+    Statement: [
+      {
+        Effect: 'Allow',
+        Principal: {
+          Service: 'dms.amazonaws.com',
+        },
+        Action: 'sts:AssumeRole',
+      },
+    ],
+  }),
+  tags: {
+    Name: 'dms-cloudwatch-logs-role',
+    Environment: environmentSuffix,
+  },
+});
+
+new aws.iam.RolePolicyAttachment('dms-cloudwatch-policy', {
+  role: dmsCloudwatchRole.name,
+  policyArn: 'arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole',
+});
 
 // DMS Subnet Group
 const dmsSubnetGroup = new aws.dms.ReplicationSubnetGroup(
@@ -343,7 +395,8 @@ const dmsSubnetGroup = new aws.dms.ReplicationSubnetGroup(
       Name: `dms-subnet-group-${environmentSuffix}`,
       Environment: environmentSuffix,
     },
-  }
+  },
+  { dependsOn: [dmsVpcRole] }
 );
 
 // DMS Replication Instance
