@@ -13,7 +13,7 @@ describe('TapStack Unit Tests', () => {
       environmentSuffix: 'test',
       env: {
         account: '123456789012',
-        region: 'ap-southeast-1',
+        region: 'eu-central-1',
       },
     });
     template = Template.fromStack(stack);
@@ -26,7 +26,7 @@ describe('TapStack Unit Tests', () => {
     });
 
     test('Stack has correct region', () => {
-      expect(stack.region).toBe('ap-southeast-1');
+      expect(stack.region).toBe('eu-central-1');
     });
 
     test('Stack tags are applied', () => {
