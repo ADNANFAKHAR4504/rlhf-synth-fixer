@@ -11,12 +11,19 @@
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
-    "S3 Bucket",
-    "SNS Topic",
-    "IAM Role",
+    "S3",
+    "SNS",
+    "IAM",
     "Lambda",
     "CloudFormation",
     "EventBridge",
     "CloudWatch"
-  ]
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
 }
