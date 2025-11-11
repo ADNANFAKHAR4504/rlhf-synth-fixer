@@ -1,6 +1,6 @@
 # Library Reference
 
-This document enumerates every non-Markdown asset under `lib/` (excluding Terraform provider binaries/state). Each section preserves the complete file contents within an appropriate code fence.
+This document lists every non-Markdown file under `lib/` (excluding Terraform provider binaries/state). Each section includes the full file contents within an appropriate code fence.
 
 ## ci-cd.yml
 
@@ -146,7 +146,8 @@ jobs:
       - run:
           name: TFLint
           command: |
-            curl -L "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip" > tflint.zip
+            curl -L "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip" \
+              > tflint.zip
             unzip tflint.zip
             ./tflint --recursive --format=json > ../reports/tflint-report.json
             ./tflint --recursive 2>&1 | tee ../reports/tflint.log
@@ -196,7 +197,8 @@ jobs:
       - run:
           name: Login to ECR
           command: |
-            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | \
+              docker login --username AWS --password-stdin ${ECR_REGISTRY}
       - run:
           name: Build multi-arch Docker image
           command: |
@@ -230,8 +232,24 @@ jobs:
         type: string
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - terraform/init:
           path: infrastructure
           backend_config_file: backend-<< parameters.environment >>.conf
@@ -239,7 +257,8 @@ jobs:
           name: Select workspace
           command: |
             cd infrastructure
-            terraform workspace select << parameters.environment >> || terraform workspace new << parameters.environment >>
+            terraform workspace select << parameters.environment >> || \
+              terraform workspace new << parameters.environment >>
       - terraform/plan:
           path: infrastructure
           var_file: environments/<< parameters.environment >>.tfvars
@@ -544,8 +563,24 @@ jobs:
         type: string
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - run:
           name: Prowler PCI-DSS scan
           command: |
@@ -594,8 +629,24 @@ jobs:
         type: string
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - run:
           name: Configure Datadog
           command: |
@@ -630,8 +681,24 @@ jobs:
         enum: ["application", "infrastructure", "full"]
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - install-kubectl
       - when:
           condition:
@@ -671,7 +738,7 @@ jobs:
 # ==================== WORKFLOWS ====================
 workflows:
   version: 2
-  
+
   # Main CI/CD pipeline workflow
   # Implements a comprehensive build-test-deploy-verify pipeline
   # with progressive delivery: dev -> staging (blue-green) -> production (rolling/canary)
@@ -685,7 +752,7 @@ workflows:
           context: aws-dev
       - dependency-scan:
           context: aws-dev
-      
+
       # Phase 2: Parallel service builds (8 microservices)
       # Each service builds independently to maximize parallelism
       - build-services:
@@ -744,7 +811,7 @@ workflows:
           requires:
             - code-validation
             - dependency-scan
-      
+
       # Phase 3: Comprehensive testing (unit, integration, e2e, security)
       # Tests run in parallel where possible, with proper dependencies
       - unit-tests:
@@ -770,7 +837,7 @@ workflows:
           context: aws-dev
           requires:
             - code-validation
-      
+
       # Phase 4: Infrastructure deployment (dev environment)
       - terraform-deploy:
           name: deploy-infrastructure-dev
@@ -778,7 +845,7 @@ workflows:
           context: aws-dev
           requires:
             - infrastructure-validation
-      
+
       # Phase 5: Application deployment (dev)
       - deploy-dev:
           context: aws-dev
@@ -788,7 +855,7 @@ workflows:
             - integration-tests
             - e2e-tests
             - security-scan
-      
+
       # Phase 6: Dev environment validation and monitoring
       - validate-deployment:
           name: validate-dev
@@ -814,14 +881,14 @@ workflows:
           context: aws-dev
           requires:
             - deploy-dev
-      
+
       # Phase 7: Performance testing (post-deployment)
       - performance-tests:
           context: aws-dev
           requires:
             - validate-dev
             - compliance-check-dev
-      
+
       # Phase 8: Staging environment promotion
       # Only proceeds if dev validation passes
       - terraform-deploy:
@@ -831,12 +898,12 @@ workflows:
           requires:
             - validate-dev
             - performance-tests
-      
+
       - deploy-staging-blue-green:
           context: aws-staging
           requires:
             - deploy-infrastructure-staging
-      
+
       # Phase 9: Staging validation
       - validate-deployment:
           name: validate-staging
@@ -862,7 +929,7 @@ workflows:
           context: aws-staging
           requires:
             - deploy-staging-blue-green
-      
+
       # Phase 10: Production approval gate
       # Manual approval required before production deployment
       - hold-production:
@@ -871,7 +938,7 @@ workflows:
             - validate-staging
             - compliance-check-staging
             - smoke-test-staging
-      
+
       # Phase 11: Production deployment
       - terraform-deploy:
           name: deploy-infrastructure-prod
@@ -879,7 +946,7 @@ workflows:
           context: aws-prod
           requires:
             - hold-production
-      
+
       - deploy-production:
           name: deploy-prod-rolling
           deployment-type: rolling
@@ -889,7 +956,7 @@ workflows:
           filters:
             branches:
               only: main
-      
+
       # Phase 12: Production validation and monitoring
       - validate-deployment:
           name: validate-prod
@@ -1082,6 +1149,8 @@ github_repo = "TuringGpt/iac-test-automations"
 
 ```hcl
 terraform {
+  required_version = ">= 1.6.0"
+
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -1090,11 +1159,7 @@ terraform {
   }
 
   backend "s3" {
-    bucket         = "iac-test-automations-terraform-state-${data.aws_caller_identity.current.account_id}"
-    key            = "${var.environment}/terraform.tfstate"
-    region         = var.region
-    encrypt        = true
-    dynamodb_table = "iac-test-automations-terraform-locks-${data.aws_caller_identity.current.account_id}"
+    # Configuration provided via backend config files
   }
 }
 
@@ -1472,7 +1537,82 @@ resource "aws_network_acl_association" "public" {
   subnet_id      = aws_subnet.public[count.index].id
 }
 
-# ==================== EKS ====================
+# ==================== VPC Flow Logs ====================
+resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
+  name              = "/aws/vpc/flowlogs/${var.environment}"
+  retention_in_days = 30
+
+  tags = {
+    Name        = "${var.environment}-vpc-flow-logs"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network-monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_iam_role" "vpc_flow_logs" {
+  name = "${var.environment}-vpc-flow-logs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "vpc-flow-logs.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.environment}-vpc-flow-logs-role"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network-monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "vpc_flow_logs" {
+  role       = aws_iam_role.vpc_flow_logs.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonVPCCrossAccountNetworkInterfaceOperations"
+}
+
+resource "aws_flow_log" "main" {
+  iam_role_arn    = aws_iam_role.vpc_flow_logs.arn
+  log_destination = aws_cloudwatch_log_group.vpc_flow_logs.arn
+  traffic_type    = "ALL"
+  vpc_id          = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.environment}-vpc-flow-log"
+    Environment = var.environment
+    Project     = "iac-test-automations"
+    Application = "multi-tenant-saas"
+    Component   = "network-monitoring"
+    Owner       = "platform-team"
+    CostCenter  = "engineering"
+  }
+
+  lifecycle {
+    prevent_destroy = false
+  }
+}
 resource "aws_iam_role" "eks_cluster" {
   name = "${var.cluster_name}-cluster-role"
 
@@ -1517,6 +1657,14 @@ resource "aws_eks_cluster" "main" {
   vpc_config {
     subnet_ids = aws_subnet.private[*].id
   }
+
+  enabled_cluster_log_types = [
+    "api",
+    "audit",
+    "authenticator",
+    "controllerManager",
+    "scheduler"
+  ]
 
   tags = {
     Name        = var.cluster_name
@@ -1721,10 +1869,10 @@ resource "aws_dynamodb_table" "terraform_locks" {
   }
 }
 
-# ==================== KMS Keys ====================
 resource "aws_kms_key" "rds" {
   description             = "KMS key for RDS encryption"
   deletion_window_in_days = 7
+  enable_key_rotation     = true
 
   tags = {
     Name        = "${var.environment}-rds-kms-key"
@@ -1744,6 +1892,7 @@ resource "aws_kms_key" "rds" {
 resource "aws_kms_key" "cache" {
   description             = "KMS key for ElastiCache encryption"
   deletion_window_in_days = 7
+  enable_key_rotation     = true
 
   tags = {
     Name        = "${var.environment}-cache-kms-key"
@@ -1834,10 +1983,17 @@ resource "aws_security_group" "rds" {
   vpc_id = aws_vpc.main.id
 
   ingress {
-    from_port   = 3306
-    to_port     = 3306
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    from_port       = 3306
+    to_port         = 3306
+    protocol        = "tcp"
+    security_groups = [aws_eks_cluster.main.vpc_config[0].cluster_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -1903,10 +2059,17 @@ resource "aws_security_group" "cache" {
   vpc_id = aws_vpc.main.id
 
   ingress {
-    from_port   = 6379
-    to_port     = 6379
-    protocol    = "tcp"
-    cidr_blocks = [var.vpc_cidr]
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_eks_cluster.main.vpc_config[0].cluster_security_group_id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
@@ -1927,6 +2090,16 @@ resource "aws_security_group" "cache" {
 # ==================== Cognito ====================
 resource "aws_cognito_user_pool" "main" {
   name = var.cognito_user_pool_name
+
+  password_policy {
+    minimum_length    = 12
+    require_uppercase = true
+    require_lowercase = true
+    require_numbers   = true
+    require_symbols   = true
+  }
+
+  mfa_configuration = "OPTIONAL"
 
   tags = {
     Name        = var.cognito_user_pool_name
@@ -2028,8 +2201,20 @@ resource "aws_iam_policy" "circleci_dev" {
         Effect = "Allow"
         Action = [
           "eks:DescribeCluster",
-          "eks:ListClusters",
-          "ecr:GetAuthorizationToken",
+          "eks:ListClusters"
+        ]
+        Resource = aws_eks_cluster.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "ecr:BatchCheckLayerAvailability",
           "ecr:GetDownloadUrlForLayer",
           "ecr:BatchGetImage",
@@ -2038,7 +2223,27 @@ resource "aws_iam_policy" "circleci_dev" {
           "ecr:CompleteLayerUpload",
           "ecr:PutImage"
         ]
-        Resource = "*"
+        Resource = [
+          for repo in aws_ecr_repository.services : repo.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = "${aws_s3_bucket.terraform_state.arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem"
+        ]
+        Resource = aws_dynamodb_table.terraform_locks.arn
       }
     ]
   })
@@ -2113,13 +2318,89 @@ resource "aws_iam_policy" "circleci_staging" {
       {
         Effect = "Allow"
         Action = [
-          "eks:*",
-          "ecr:*",
-          "rds:*",
-          "elasticache:*",
-          "route53:*"
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+          "eks:UpdateClusterConfig",
+          "eks:UpdateClusterVersion"
+        ]
+        Resource = aws_eks_cluster.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+          "ecr:CreateRepository",
+          "ecr:DeleteRepository"
+        ]
+        Resource = [
+          for repo in aws_ecr_repository.services : repo.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBClusters",
+          "rds:DescribeDBInstances",
+          "rds:ModifyDBCluster",
+          "rds:ModifyDBInstance"
+        ]
+        Resource = [
+          aws_rds_cluster.main.arn,
+          for instance in aws_rds_cluster_instance.main : instance.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticache:DescribeCacheClusters",
+          "elasticache:ModifyCacheCluster"
+        ]
+        Resource = aws_elasticache_cluster.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ListHostedZones",
+          "route53:GetChange",
+          "route53:ChangeResourceRecordSets"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.terraform_state.arn,
+          "${aws_s3_bucket.terraform_state.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query"
+        ]
+        Resource = aws_dynamodb_table.terraform_locks.arn
       }
     ]
   })
@@ -2192,14 +2473,129 @@ resource "aws_iam_policy" "circleci_prod" {
       {
         Effect = "Allow"
         Action = [
-          "eks:*",
-          "ecr:*",
-          "rds:*",
-          "elasticache:*",
-          "route53:*",
-          "cloudformation:*"
+          "eks:DescribeCluster",
+          "eks:ListClusters",
+          "eks:UpdateClusterConfig",
+          "eks:UpdateClusterVersion",
+          "eks:CreateNodegroup",
+          "eks:DeleteNodegroup",
+          "eks:UpdateNodegroupConfig"
+        ]
+        Resource = aws_eks_cluster.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:GetAuthorizationToken"
         ]
         Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+          "ecr:PutImage",
+          "ecr:CreateRepository",
+          "ecr:DeleteRepository",
+          "ecr:SetRepositoryPolicy"
+        ]
+        Resource = [
+          for repo in aws_ecr_repository.services : repo.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "rds:DescribeDBClusters",
+          "rds:DescribeDBInstances",
+          "rds:ModifyDBCluster",
+          "rds:ModifyDBInstance",
+          "rds:CreateDBInstance",
+          "rds:DeleteDBInstance",
+          "rds:RebootDBInstance"
+        ]
+        Resource = [
+          aws_rds_cluster.main.arn,
+          for instance in aws_rds_cluster_instance.main : instance.arn
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "elasticache:DescribeCacheClusters",
+          "elasticache:ModifyCacheCluster",
+          "elasticache:CreateCacheCluster",
+          "elasticache:DeleteCacheCluster",
+          "elasticache:RebootCacheCluster"
+        ]
+        Resource = aws_elasticache_cluster.main.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "route53:ListHostedZones",
+          "route53:GetChange",
+          "route53:ChangeResourceRecordSets",
+          "route53:CreateHostedZone",
+          "route53:DeleteHostedZone"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudformation:CreateStack",
+          "cloudformation:UpdateStack",
+          "cloudformation:DeleteStack",
+          "cloudformation:DescribeStacks",
+          "cloudformation:ListStacks"
+        ]
+        Resource = "arn:aws:cloudformation:*:*:stack/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject",
+          "s3:ListBucket",
+          "s3:GetBucketVersioning"
+        ]
+        Resource = [
+          aws_s3_bucket.terraform_state.arn,
+          "${aws_s3_bucket.terraform_state.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:GetItem",
+          "dynamodb:PutItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = aws_dynamodb_table.terraform_locks.arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:DescribeKey",
+          "kms:CreateGrant",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:GenerateDataKey",
+          "kms:ReEncrypt*"
+        ]
+        Resource = [
+          aws_kms_key.rds.arn,
+          aws_kms_key.cache.arn
+        ]
       }
     ]
   })

@@ -139,7 +139,8 @@ jobs:
       - run:
           name: TFLint
           command: |
-            curl -L "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip" > tflint.zip
+            curl -L "https://github.com/terraform-linters/tflint/releases/latest/download/tflint_linux_amd64.zip" \
+              > tflint.zip
             unzip tflint.zip
             ./tflint --recursive --format=json > ../reports/tflint-report.json
             ./tflint --recursive 2>&1 | tee ../reports/tflint.log
@@ -189,7 +190,8 @@ jobs:
       - run:
           name: Login to ECR
           command: |
-            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+            aws ecr get-login-password --region ${AWS_DEFAULT_REGION} | \
+              docker login --username AWS --password-stdin ${ECR_REGISTRY}
       - run:
           name: Build multi-arch Docker image
           command: |
@@ -223,8 +225,24 @@ jobs:
         type: string
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - terraform/init:
           path: infrastructure
           backend_config_file: backend-<< parameters.environment >>.conf
@@ -232,7 +250,8 @@ jobs:
           name: Select workspace
           command: |
             cd infrastructure
-            terraform workspace select << parameters.environment >> || terraform workspace new << parameters.environment >>
+            terraform workspace select << parameters.environment >> || \
+              terraform workspace new << parameters.environment >>
       - terraform/plan:
           path: infrastructure
           var_file: environments/<< parameters.environment >>.tfvars
@@ -537,8 +556,24 @@ jobs:
         type: string
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - run:
           name: Prowler PCI-DSS scan
           command: |
@@ -587,8 +622,24 @@ jobs:
         type: string
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - run:
           name: Configure Datadog
           command: |
@@ -623,8 +674,24 @@ jobs:
         enum: ["application", "infrastructure", "full"]
     steps:
       - checkout
-      - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN_<< parameters.environment >>}
+      - when:
+          condition:
+            equal: [dev, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_DEV}
+      - when:
+          condition:
+            equal: [staging, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_STAGING}
+      - when:
+          condition:
+            equal: [production, << parameters.environment >>]
+          steps:
+            - assume-aws-role:
+                role-arn: ${OIDC_ROLE_ARN_PROD}
       - install-kubectl
       - when:
           condition:
@@ -664,7 +731,7 @@ jobs:
 # ==================== WORKFLOWS ====================
 workflows:
   version: 2
-  
+
   # Main CI/CD pipeline workflow
   # Implements a comprehensive build-test-deploy-verify pipeline
   # with progressive delivery: dev -> staging (blue-green) -> production (rolling/canary)
@@ -678,7 +745,7 @@ workflows:
           context: aws-dev
       - dependency-scan:
           context: aws-dev
-      
+
       # Phase 2: Parallel service builds (8 microservices)
       # Each service builds independently to maximize parallelism
       - build-services:
@@ -737,7 +804,7 @@ workflows:
           requires:
             - code-validation
             - dependency-scan
-      
+
       # Phase 3: Comprehensive testing (unit, integration, e2e, security)
       # Tests run in parallel where possible, with proper dependencies
       - unit-tests:
@@ -763,7 +830,7 @@ workflows:
           context: aws-dev
           requires:
             - code-validation
-      
+
       # Phase 4: Infrastructure deployment (dev environment)
       - terraform-deploy:
           name: deploy-infrastructure-dev
@@ -771,7 +838,7 @@ workflows:
           context: aws-dev
           requires:
             - infrastructure-validation
-      
+
       # Phase 5: Application deployment (dev)
       - deploy-dev:
           context: aws-dev
@@ -781,7 +848,7 @@ workflows:
             - integration-tests
             - e2e-tests
             - security-scan
-      
+
       # Phase 6: Dev environment validation and monitoring
       - validate-deployment:
           name: validate-dev
@@ -807,14 +874,14 @@ workflows:
           context: aws-dev
           requires:
             - deploy-dev
-      
+
       # Phase 7: Performance testing (post-deployment)
       - performance-tests:
           context: aws-dev
           requires:
             - validate-dev
             - compliance-check-dev
-      
+
       # Phase 8: Staging environment promotion
       # Only proceeds if dev validation passes
       - terraform-deploy:
@@ -824,12 +891,12 @@ workflows:
           requires:
             - validate-dev
             - performance-tests
-      
+
       - deploy-staging-blue-green:
           context: aws-staging
           requires:
             - deploy-infrastructure-staging
-      
+
       # Phase 9: Staging validation
       - validate-deployment:
           name: validate-staging
@@ -855,7 +922,7 @@ workflows:
           context: aws-staging
           requires:
             - deploy-staging-blue-green
-      
+
       # Phase 10: Production approval gate
       # Manual approval required before production deployment
       - hold-production:
@@ -864,7 +931,7 @@ workflows:
             - validate-staging
             - compliance-check-staging
             - smoke-test-staging
-      
+
       # Phase 11: Production deployment
       - terraform-deploy:
           name: deploy-infrastructure-prod
@@ -872,7 +939,7 @@ workflows:
           context: aws-prod
           requires:
             - hold-production
-      
+
       - deploy-production:
           name: deploy-prod-rolling
           deployment-type: rolling
@@ -882,7 +949,7 @@ workflows:
           filters:
             branches:
               only: main
-      
+
       # Phase 12: Production validation and monitoring
       - validate-deployment:
           name: validate-prod
