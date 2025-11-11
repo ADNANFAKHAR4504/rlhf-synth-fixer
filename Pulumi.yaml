@@ -1,4 +1,4 @@
-name: payment-processing
+name: TapStack
 runtime: nodejs
 description: Secure payment processing infrastructure with PCI DSS compliance
 config:

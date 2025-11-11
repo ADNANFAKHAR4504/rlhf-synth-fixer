@@ -131,19 +131,23 @@ class MyMocks implements pulumi.runtime.Mocks {
 pulumi.runtime.setMocks(new MyMocks());
 
 // Mock Pulumi config to return test values
-jest.mock('@pulumi/pulumi', () => {
-  const actual = jest.requireActual('@pulumi/pulumi');
-  return {
-    ...actual,
-    Config: jest.fn().mockImplementation(() => ({
-      require: jest.fn((key: string) => {
-        if (key === 'environmentSuffix') return 'test';
-        return 'mock-value';
-      }),
-      get: jest.fn(() => 'ap-southeast-1'),
-    })),
-  };
-}, { virtual: false });
+jest.mock(
+  '@pulumi/pulumi',
+  () => {
+    const actual = jest.requireActual('@pulumi/pulumi');
+    return {
+      ...actual,
+      Config: jest.fn().mockImplementation(() => ({
+        require: jest.fn((key: string) => {
+          if (key === 'environmentSuffix') return 'test';
+          return 'mock-value';
+        }),
+        get: jest.fn(() => 'ap-southeast-1'),
+      })),
+    };
+  },
+  { virtual: false },
+);
 
 describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
   let indexModule: any;
@@ -511,7 +515,7 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
                   },
                 },
               },
-            ])
+            ]),
           ),
       });
 
@@ -885,7 +889,7 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
                 Resource: arn,
               },
             ],
-          })
+          }),
         ),
       });
 
