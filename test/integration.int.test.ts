@@ -18,7 +18,9 @@ describe("Payment Processing Infrastructure Integration Tests", () => {
     const outputsPath = path.join(__dirname, "../cfn-outputs/flat-outputs.json");
 
     if (fs.existsSync(outputsPath)) {
-      outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+      const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+      // Handle nested structure from CDKTF - outputs are under "payment-processing" key
+      outputs = rawOutputs["payment-processing"] || rawOutputs;
     } else {
       console.warn("⚠️  No flat-outputs.json found. Skipping integration tests.");
       outputs = {};
