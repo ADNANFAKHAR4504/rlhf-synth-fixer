@@ -6,9 +6,38 @@ pulumi.runtime.setMocks({
     id: string;
     state: any;
   } {
+    const mockOutputs = { ...args.inputs };
+
+    // Add mock outputs for AWS resources that have computed properties
+    switch (args.type) {
+      case 'aws:lb/loadBalancer:LoadBalancer':
+        mockOutputs.dnsName = `${args.name}-123456789.ap-southeast-1.elb.amazonaws.com`;
+        mockOutputs.arn = `arn:aws:elasticloadbalancing:ap-southeast-1:123456789012:loadbalancer/app/${args.name}/abc123`;
+        break;
+      case 'aws:rds/cluster:Cluster':
+        mockOutputs.endpoint = `${args.name}.cluster-xyz.ap-southeast-1.rds.amazonaws.com`;
+        mockOutputs.arn = `arn:aws:rds:ap-southeast-1:123456789012:cluster:${args.name}`;
+        break;
+      case 'aws:ecs/cluster:Cluster':
+        mockOutputs.arn = `arn:aws:ecs:ap-southeast-1:123456789012:cluster/${args.name}`;
+        break;
+      case 'aws:secretsmanager/secret:Secret':
+        mockOutputs.arn = `arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:${args.name}`;
+        break;
+      case 'aws:apigateway/stage:Stage':
+        mockOutputs.invokeUrl = `https://abc123.execute-api.ap-southeast-1.amazonaws.com/${args.inputs.stageName}`;
+        break;
+      case 'aws:lb/targetGroup:TargetGroup':
+        mockOutputs.arn = `arn:aws:elasticloadbalancing:ap-southeast-1:123456789012:targetgroup/${args.name}/xyz789`;
+        break;
+      case 'aws:ecs/service:Service':
+        mockOutputs.id = `arn:aws:ecs:ap-southeast-1:123456789012:service/${args.name}`;
+        break;
+    }
+
     return {
       id: `${args.name}_id`,
-      state: args.inputs,
+      state: mockOutputs,
     };
   },
   call: function (args: pulumi.runtime.MockCallArgs) {
@@ -45,25 +74,19 @@ describe('TapStack', () => {
     expect(stack).toBeDefined();
   });
 
-  it('should have albDnsName output', done => {
-    stack.albDnsName.apply(name => {
-      expect(name).toBeDefined();
-      done();
-    });
+  it('should have albDnsName output', async () => {
+    const name = await stack.albDnsName.promise();
+    expect(name).toBeDefined();
   });
 
-  it('should have apiGatewayUrl output', done => {
-    stack.apiGatewayUrl.apply(url => {
-      expect(url).toBeDefined();
-      done();
-    });
+  it('should have apiGatewayUrl output', async () => {
+    const url = await stack.apiGatewayUrl.promise();
+    expect(url).toBeDefined();
   });
 
-  it('should have dashboardUrl output', done => {
-    stack.dashboardUrl.apply(url => {
-      expect(url).toBeDefined();
-      done();
-    });
+  it('should have dashboardUrl output', async () => {
+    const url = await stack.dashboardUrl.promise();
+    expect(url).toBeDefined();
   });
 });
 
@@ -81,40 +104,30 @@ describe('VpcStack', () => {
     expect(vpcStack).toBeDefined();
   });
 
-  it('should have vpcId output', done => {
-    vpcStack.vpcId.apply(id => {
-      expect(id).toBeDefined();
-      done();
-    });
+  it('should have vpcId output', async () => {
+    const id = await vpcStack.vpcId.promise();
+    expect(id).toBeDefined();
   });
 
-  it('should have 3 public subnets', done => {
-    vpcStack.publicSubnetIds.apply(ids => {
-      expect(ids).toHaveLength(3);
-      done();
-    });
+  it('should have 3 public subnets', async () => {
+    const ids = await vpcStack.publicSubnetIds.promise();
+    expect(ids).toHaveLength(3);
   });
 
-  it('should have 3 private subnets', done => {
-    vpcStack.privateSubnetIds.apply(ids => {
-      expect(ids).toHaveLength(3);
-      done();
-    });
+  it('should have 3 private subnets', async () => {
+    const ids = await vpcStack.privateSubnetIds.promise();
+    expect(ids).toHaveLength(3);
   });
 
-  it('should have 3 database subnets', done => {
-    vpcStack.databaseSubnetIds.apply(ids => {
-      expect(ids).toHaveLength(3);
-      done();
-    });
+  it('should have 3 database subnets', async () => {
+    const ids = await vpcStack.databaseSubnetIds.promise();
+    expect(ids).toHaveLength(3);
   });
 
-  it('should have private subnet CIDRs', done => {
-    vpcStack.privateSubnetCidrs.apply(cidrs => {
-      expect(cidrs).toBeDefined();
-      expect(cidrs.length).toBeGreaterThan(0);
-      done();
-    });
+  it('should have private subnet CIDRs', async () => {
+    const cidrs = await vpcStack.privateSubnetCidrs.promise();
+    expect(cidrs).toBeDefined();
+    expect(cidrs.length).toBeGreaterThan(0);
   });
 });
 
@@ -142,25 +155,19 @@ describe('DatabaseStack', () => {
     expect(databaseStack).toBeDefined();
   });
 
-  it('should have cluster endpoint', done => {
-    databaseStack.clusterEndpoint.apply(endpoint => {
-      expect(endpoint).toBeDefined();
-      done();
-    });
+  it('should have cluster endpoint', async () => {
+    const endpoint = await databaseStack.clusterEndpoint.promise();
+    expect(endpoint).toBeDefined();
   });
 
-  it('should have cluster ARN', done => {
-    databaseStack.clusterArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have cluster ARN', async () => {
+    const arn = await databaseStack.clusterArn.promise();
+    expect(arn).toBeDefined();
   });
 
-  it('should have database secret ARN', done => {
-    databaseStack.databaseSecretArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have database secret ARN', async () => {
+    const arn = await databaseStack.databaseSecretArn.promise();
+    expect(arn).toBeDefined();
   });
 });
 
@@ -191,32 +198,24 @@ describe('EcsStack', () => {
     expect(ecsStack).toBeDefined();
   });
 
-  it('should have cluster ARN', done => {
-    ecsStack.clusterArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have cluster ARN', async () => {
+    const arn = await ecsStack.clusterArn.promise();
+    expect(arn).toBeDefined();
   });
 
-  it('should have service ARN', done => {
-    ecsStack.serviceArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have service ARN', async () => {
+    const arn = await ecsStack.serviceArn.promise();
+    expect(arn).toBeDefined();
   });
 
-  it('should have blue target group ARN', done => {
-    ecsStack.blueTargetGroupArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have blue target group ARN', async () => {
+    const arn = await ecsStack.blueTargetGroupArn.promise();
+    expect(arn).toBeDefined();
   });
 
-  it('should have green target group ARN', done => {
-    ecsStack.greenTargetGroupArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have green target group ARN', async () => {
+    const arn = await ecsStack.greenTargetGroupArn.promise();
+    expect(arn).toBeDefined();
   });
 });
 
@@ -249,18 +248,14 @@ describe('AlbStack', () => {
     expect(albStack).toBeDefined();
   });
 
-  it('should have ALB DNS name', done => {
-    albStack.albDnsName.apply(dns => {
-      expect(dns).toBeDefined();
-      done();
-    });
+  it('should have ALB DNS name', async () => {
+    const dns = await albStack.albDnsName.promise();
+    expect(dns).toBeDefined();
   });
 
-  it('should have ALB ARN', done => {
-    albStack.albArn.apply(arn => {
-      expect(arn).toBeDefined();
-      done();
-    });
+  it('should have ALB ARN', async () => {
+    const arn = await albStack.albArn.promise();
+    expect(arn).toBeDefined();
   });
 });
 
@@ -282,11 +277,9 @@ describe('ApiGatewayStack', () => {
     expect(apiStack).toBeDefined();
   });
 
-  it('should have API URL output', done => {
-    apiStack.apiUrl.apply(url => {
-      expect(url).toBeDefined();
-      done();
-    });
+  it('should have API URL output', async () => {
+    const url = await apiStack.apiUrl.promise();
+    expect(url).toBeDefined();
   });
 });
 
@@ -320,12 +313,10 @@ describe('MonitoringStack', () => {
     expect(monitoringStack).toBeDefined();
   });
 
-  it('should have dashboard URL', done => {
-    monitoringStack.dashboardUrl.apply(url => {
-      expect(url).toBeDefined();
-      expect(url).toContain('cloudwatch');
-      done();
-    });
+  it('should have dashboard URL', async () => {
+    const url = await monitoringStack.dashboardUrl.promise();
+    expect(url).toBeDefined();
+    expect(url).toContain('cloudwatch');
   });
 });
 
