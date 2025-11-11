@@ -1,4 +1,3 @@
-import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
@@ -6,12 +5,12 @@ import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { Fn } from 'cdktf';
 import { Construct } from 'constructs';
 
 export interface NetworkingStackProps {
   environment: string;
   cidrBlock: string;
+  availabilityZones?: string[];
 }
 
 export class NetworkingStack extends Construct {
@@ -25,12 +24,10 @@ export class NetworkingStack extends Construct {
   constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
 
-    const { environment, cidrBlock } = props;
+    const { environment, cidrBlock, availabilityZones } = props;
 
-    // Query available availability zones dynamically
-    const availableAzs = new DataAwsAvailabilityZones(this, 'available-azs', {
-      state: 'available',
-    });
+    // Use provided AZs or query dynamically
+    const azList = availabilityZones || ['us-east-1a', 'us-east-1c'];
 
     // Create VPC
     this.vpc = new Vpc(this, 'vpc', {
@@ -52,18 +49,18 @@ export class NetworkingStack extends Construct {
       dependsOn: [this.vpc],
     });
 
-    // Create Public Subnets (2 AZs) - use first 2 available AZs
+    // Create Public Subnets (2 AZs)
     this.publicSubnets = [];
-    const numAzs = 2;
+    const numAzs = Math.min(2, azList.length);
 
     for (let azIndex = 0; azIndex < numAzs; azIndex++) {
       const subnet = new Subnet(this, `public-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex}.0/24`,
-        availabilityZone: Fn.element(availableAzs.names, azIndex),
+        availabilityZone: azList[azIndex],
         mapPublicIpOnLaunch: true,
         tags: {
-          Name: `public-subnet-${environment}-${azIndex}`,
+          Name: `public-subnet-${environment}-${azList[azIndex]}`,
         },
         dependsOn: [this.vpc],
       });
@@ -77,9 +74,9 @@ export class NetworkingStack extends Construct {
       const subnet = new Subnet(this, `private-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex + 10}.0/24`,
-        availabilityZone: Fn.element(availableAzs.names, azIndex),
+        availabilityZone: azList[azIndex],
         tags: {
-          Name: `private-subnet-${environment}-${azIndex}`,
+          Name: `private-subnet-${environment}-${azList[azIndex]}`,
         },
         dependsOn: [this.vpc],
       });
