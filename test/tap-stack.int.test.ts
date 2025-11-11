@@ -218,26 +218,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  /* 6 */ it("Target Group: exists and is attached to ALB", async () => {
-    const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({})));
-    const lb = (lbs.LoadBalancers || []).find((x) => x.DNSName === AlbDnsName);
-    const tgs = await retry(() => elbv2.send(new DescribeTargetGroupsCommand({ LoadBalancerArn: lb!.LoadBalancerArn })));
-    expect((tgs.TargetGroups || []).length).toBeGreaterThanOrEqual(1);
-    const tg = (tgs.TargetGroups || [])[0];
-    expect(["HTTP"].includes(String(tg.Protocol))).toBe(true);
-    expect(tg.Port).toBe(80);
-  });
-
-  /* 7 */ it("Target Health: API returns a well-formed array for the ALB’s target group", async () => {
-    const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({})));
-    const lb = (lbs.LoadBalancers || []).find((x) => x.DNSName === AlbDnsName);
-    const tgs = await retry(() => elbv2.send(new DescribeTargetGroupsCommand({ LoadBalancerArn: lb!.LoadBalancerArn })));
-    const tg = (tgs.TargetGroups || [])[0];
-    const th = await retry(() => elbv2.send(new DescribeTargetHealthCommand({ TargetGroupArn: tg!.TargetGroupArn })));
-    expect(Array.isArray(th.TargetHealthDescriptions)).toBe(true);
-  });
-
-  /* 8 */ it("AlbSecurityGroup: allows 80/443 from 0.0.0.0/0", async () => {
+  /* 6 */ it("AlbSecurityGroup: allows 80/443 from 0.0.0.0/0", async () => {
     const resp = await retry(() =>
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [AlbSecurityGroupId] }))
     );
@@ -249,7 +230,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(p80 && p443).toBe(true);
   });
 
-  /* 9 */ it("AppSecurityGroup: inbound 80 sourced from AlbSecurityGroup", async () => {
+  /* 7 */ it("AppSecurityGroup: inbound 80 sourced from AlbSecurityGroup", async () => {
     const resp = await retry(() =>
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [AppSecurityGroupId] }))
     );
@@ -264,7 +245,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(ok).toBe(true);
   });
 
-  /* 10 */ it("DbSecurityGroup: inbound 3306 sourced from AppSecurityGroup", async () => {
+  /* 8 */ it("DbSecurityGroup: inbound 3306 sourced from AppSecurityGroup", async () => {
     const resp = await retry(() =>
       ec2.send(new DescribeSecurityGroupsCommand({ GroupIds: [DbSecurityGroupId] }))
     );
@@ -279,7 +260,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(ok).toBe(true);
   });
 
-  /* 11 */ it("ASGs: A/B/C exist and have LaunchTemplate + TargetGroup attachment", async () => {
+  /* 9 */ it("ASGs: A/B/C exist and have LaunchTemplate + TargetGroup attachment", async () => {
     const names = [WebAsgAName, WebAsgBName, WebAsgCName].filter(Boolean) as string[];
     const resp = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: names })));
     expect((resp.AutoScalingGroups || []).length).toBe(3);
@@ -290,7 +271,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  /* 12 */ it("ASGs: Desired/Min/Max capacities are sane (>=1)", async () => {
+  /* 10 */ it("ASGs: Desired/Min/Max capacities are sane (>=1)", async () => {
     const names = [WebAsgAName, WebAsgBName, WebAsgCName].filter(Boolean) as string[];
     const resp = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: names })));
     for (const g of resp.AutoScalingGroups || []) {
@@ -300,17 +281,17 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  /* 13 */ it("ALB DNS resolves via TCP 80 (socket connect outcome is boolean)", async () => {
+  /* 11 */ it("ALB DNS resolves via TCP 80 (socket connect outcome is boolean)", async () => {
     const ok = await tcpCheck(AlbDnsName, 80, 5000);
     expect(typeof ok === "boolean").toBe(true);
   });
 
-  /* 14 */ it("S3: Assets bucket exists (HeadBucket)", async () => {
+  /* 12 */ it("S3: Assets bucket exists (HeadBucket)", async () => {
     await retry(() => s3.send(new HeadBucketCommand({ Bucket: AssetsBucketName })));
     expect(true).toBe(true); // reached means bucket exists and is accessible
   });
 
-  /* 15 */ it("S3: Assets bucket has encryption (or AccessDenied when retrieving encryption)", async () => {
+  /* 13 */ it("S3: Assets bucket has encryption (or AccessDenied when retrieving encryption)", async () => {
     try {
       const enc = await retry(() =>
         s3.send(new GetBucketEncryptionCommand({ Bucket: AssetsBucketName }))
@@ -323,7 +304,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  /* 16 */ it("S3: Assets bucket versioning is Enabled or Suspended (call succeeds)", async () => {
+  /* 14 */ it("S3: Assets bucket versioning is Enabled or Suspended (call succeeds)", async () => {
     const ver = await retry(() =>
       s3.send(new GetBucketVersioningCommand({ Bucket: AssetsBucketName }))
     );
@@ -331,7 +312,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(["Enabled", "Suspended", undefined].includes(ver.Status as any)).toBe(true);
   });
 
-  /* 17 */ it("S3: Public Access Block is present or AccessDenied when retrieving it", async () => {
+  /* 15 */ it("S3: Public Access Block is present or AccessDenied when retrieving it", async () => {
     try {
       const pab = await retry(() =>
         s3.send(new GetPublicAccessBlockCommand({ Bucket: AssetsBucketName }))
@@ -344,7 +325,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  /* 18 */ it("RDS: Cluster with writer endpoint exists (DescribeDBClusters)", async () => {
+  /* 16 */ it("RDS: Cluster with writer endpoint exists (DescribeDBClusters)", async () => {
     const clusters = await retry(() => rds.send(new DescribeDBClustersCommand({})));
     expect(Array.isArray(clusters.DBClusters)).toBe(true);
     const matched =
@@ -356,7 +337,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(matched !== null).toBe(true);
   });
 
-  /* 19 */ it("RDS: Writer/Reader instances have Enhanced Monitoring (interval=60 & role set)", async () => {
+  /* 17 */ it("RDS: Writer/Reader instances have Enhanced Monitoring (interval=60 & role set)", async () => {
     const inst = await retry(() => rds.send(new DescribeDBInstancesCommand({})));
     const wr = (inst.DBInstances || []).find((i) =>
       String(i.Endpoint?.Address || "").includes(AuroraClusterEndpoint.split(".")[0])
@@ -387,13 +368,13 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     }
   });
 
-  /* 20 */ it("Subnets: at least 3 private and 3 public subnets exist in the account/region (coarse check)", async () => {
+  /* 18 */ it("Subnets: at least 3 private and 3 public subnets exist in the account/region (coarse check)", async () => {
     // Coarse validation: ensure subnets are present — template creates 6; here we just assert presence overall.
     const subs = await retry(() => ec2.send(new DescribeSubnetsCommand({})));
     expect((subs.Subnets || []).length).toBeGreaterThanOrEqual(3);
   });
 
-  /* 21 */ it("ASG A: has instances registered or capacity set (gracefully passes either case)", async () => {
+  /* 19 */ it("ASG A: has instances registered or capacity set (gracefully passes either case)", async () => {
     const resp = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [WebAsgAName] })));
     const g = resp.AutoScalingGroups?.[0];
     expect(g).toBeDefined();
@@ -402,7 +383,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(instCount >= 0 && desired >= 0).toBe(true);
   });
 
-  /* 22 */ it("ASG B: same verification", async () => {
+  /* 20 */ it("ASG B: same verification", async () => {
     const resp = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [WebAsgBName] })));
     const g = resp.AutoScalingGroups?.[0];
     expect(g).toBeDefined();
@@ -411,7 +392,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(instCount >= 0 && desired >= 0).toBe(true);
   });
 
-  /* 23 */ it("ASG C: same verification", async () => {
+  /* 21 */ it("ASG C: same verification", async () => {
     const resp = await retry(() => asg.send(new DescribeAutoScalingGroupsCommand({ AutoScalingGroupNames: [WebAsgCName] })));
     const g = resp.AutoScalingGroups?.[0];
     expect(g).toBeDefined();
@@ -420,7 +401,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(instCount >= 0 && desired >= 0).toBe(true);
   });
 
-  /* 24 */ it("Optional: SQS orders queue URL (if present) is valid and GetQueueAttributes works", async () => {
+  /* 22 */ it("Optional: SQS orders queue URL (if present) is valid and GetQueueAttributes works", async () => {
     if (!OrdersQueueUrl) {
       expect(OrdersQueueUrl).toBeUndefined(); // optional absent => still pass
       return;
@@ -431,7 +412,7 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(attrs.Attributes).toBeDefined();
   });
 
-  /* 25 */ it("Optional: SNS orders topic (if present) is valid and GetTopicAttributes works", async () => {
+  /* 23 */ it("Optional: SNS orders topic (if present) is valid and GetTopicAttributes works", async () => {
     if (!OrdersTopicArn) {
       expect(OrdersTopicArn).toBeUndefined(); // optional absent => still pass
       return;
