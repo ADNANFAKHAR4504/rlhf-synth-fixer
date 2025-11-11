@@ -387,8 +387,8 @@ export class TapStack extends cdk.Stack {
       desiredCount: 2,
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
-      // corrected property name and enabled the circuit breaker with rollback
-      deploymentCircuitBreaker: {
+      // use the correct CDK prop name 'circuitBreaker'
+      circuitBreaker: {
         enable: true,
         rollback: true,
       },
@@ -451,8 +451,8 @@ export class TapStack extends cdk.Stack {
       desiredCount: 1,
       minHealthyPercent: 0,
       maxHealthyPercent: 200,
-      // keep circuit breaker enabled in production — allow warmup first
-      deploymentCircuitBreaker: {
+      // use the correct CDK prop name 'circuitBreaker' (enable + rollback)
+      circuitBreaker: {
         enable: true,
         rollback: true,
       },
