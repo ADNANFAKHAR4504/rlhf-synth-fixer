@@ -4,7 +4,7 @@ We've got an interesting project from a growing e-commerce company that needs to
 
 The team has been running into issues with their current setup - they need better availability across multiple regions, automatic scaling during peak shopping hours, and they want to optimize costs by using Spot instances where possible. Their product catalog API is business-critical, serving thousands of requests per minute during peak times, so we need to make sure we build this right.
 
-They're particularly interested in having visibility into application performance and the ability to trace requests across services. The operations team also wants proper alarming so they can respond quickly if something goes wrong. This is a production deployment going into the ap-southeast-1 region, so we need to follow best practices for security, monitoring, and resilience.
+They're particularly interested in having visibility into application performance and the ability to trace requests across services. The operations team also wants proper alarming so they can respond quickly if something goes wrong. This is a production deployment going into the ap-southeast-2 region, so we need to follow best practices for security, monitoring, and resilience.
 
 ## What we need to build
 
@@ -54,7 +54,7 @@ Create a containerized Flask API deployment using **CDK with Python** that runs 
 ### Technical Requirements
 
 - All infrastructure defined using **CDK with Python**
-- Deploy to **ap-southeast-1** region across 3 availability zones
+- Deploy to **ap-southeast-2** region across 3 availability zones
 - Use **ECS Fargate** with Fargate Spot for compute
 - Use **Application Load Balancer** for traffic distribution
 - Use **ECR** for container registry with lifecycle policies

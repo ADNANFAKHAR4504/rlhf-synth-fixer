@@ -537,7 +537,7 @@ environment_suffix = app.node.try_get_context("environmentSuffix") or "dev"
 # Get AWS account and region from environment variables or use defaults
 env = cdk.Environment(
     account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
-    region=os.environ.get("CDK_DEFAULT_REGION", "ap-southeast-1"),
+    region=os.environ.get("CDK_DEFAULT_REGION", "ap-southeast-2"),
 )
 
 TapStack(
@@ -1159,7 +1159,7 @@ pip install -r requirements.txt
 
 2. Bootstrap CDK (first time only):
 ```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/ap-southeast-1
+cdk bootstrap aws://ACCOUNT-NUMBER/ap-southeast-2
 ```
 
 3. Deploy stack (container builds automatically):

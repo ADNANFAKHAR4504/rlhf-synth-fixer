@@ -507,7 +507,7 @@ environment_suffix = app.node.try_get_context("environmentSuffix") or "dev"
 # Get AWS account and region from environment variables or use defaults
 env = cdk.Environment(
     account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
-    region=os.environ.get("CDK_DEFAULT_REGION", "ap-southeast-1"),
+    region=os.environ.get("CDK_DEFAULT_REGION", "ap-southeast-2"),
 )
 
 TapStack(
@@ -645,7 +645,7 @@ pip install -r requirements.txt
 2. Bootstrap CDK (first time only):
 
 ```bash
-cdk bootstrap aws://ACCOUNT-NUMBER/ap-southeast-1
+cdk bootstrap aws://ACCOUNT-NUMBER/ap-southeast-2
 ```
 
 ## Deployment
@@ -669,7 +669,7 @@ cdk deploy -c environmentSuffix=prod
 ### Deployment to Specific Region
 
 ```bash
-export CDK_DEFAULT_REGION=ap-southeast-1
+export CDK_DEFAULT_REGION=ap-southeast-2
 cdk deploy
 ```
 
@@ -713,7 +713,7 @@ docker tag flask-api:latest $ECR_URI:latest
 2. Authenticate with ECR:
 
 ```bash
-aws ecr get-login-password --region ap-southeast-1 | docker login --username AWS --password-stdin $ECR_URI
+aws ecr get-login-password --region ap-southeast-2 | docker login --username AWS --password-stdin $ECR_URI
 ```
 
 3. Push the image:

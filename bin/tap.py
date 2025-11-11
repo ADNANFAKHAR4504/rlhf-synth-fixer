@@ -12,7 +12,7 @@ environment_suffix = app.node.try_get_context("environmentSuffix") or "dev"
 # Get AWS account and region from environment variables or use defaults
 env = cdk.Environment(
     account=os.environ.get("CDK_DEFAULT_ACCOUNT"),
-    region=os.environ.get("CDK_DEFAULT_REGION", "ap-southeast-1"),
+    region=os.environ.get("CDK_DEFAULT_REGION", "ap-southeast-2"),
 )
 
 TapStack(
