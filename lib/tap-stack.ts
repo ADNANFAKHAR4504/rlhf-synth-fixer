@@ -2168,7 +2168,7 @@ exports.handler = async (event) => {
     new aws.cloudwatch.LogGroup(
       `migration-lambda-logs-${environmentSuffix}`,
       {
-        name: `/aws/lambda/${migrationLambda.name}`,
+        name: pulumi.interpolate`/aws/lambda/${migrationLambda.name}`,
         retentionInDays: 90,
         tags: {
           Service: 'migration',
