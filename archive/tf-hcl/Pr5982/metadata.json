@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "omii5",
+  "team": "synth",
+  "startedAt": "2025-11-06T19:34:23+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS Aurora",
+    "DMS",
+    "ECS Fargate",
+    "ALB",
+    "Route 53",
+    "Direct Connect",
+    "CloudWatch",
+    "Systems Manager",
+    "S3",
+    "DynamoDB",
+    "IAM",
+    "Kinesis Firehose"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

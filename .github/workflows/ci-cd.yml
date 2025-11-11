@@ -300,8 +300,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
-          is-analysis: 'true'
+          download-artifacts: "false"
+          is-analysis: "true"
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -947,16 +947,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "🔍 Fetching latest Claude review comment..."
-          gh pr view ${{ github.event.pullrequest.number }} --comments --json comments \
+          gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
 
           echo "🍀 Searching for quality score pattern..."
-
-          SCORE=$(grep -Poi '(training|final)\s+(quality|score)[^0-9]{0,20}([0-9]+(?:\.[0-9]+)?)\s*/\s*10|training_quality["\s:]+([0-9]+(?:\.[0-9]+)?)' all_comments.txt \
-            | grep -Po '[0-9]+(\.[0-9]+)?' | head -1)
+          # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
+          SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality):?|training[_[:space:]]*quality:?|quality[[:space:]]*score:?|score:)[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
+            | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
 
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score. Defaulting to 0."
+            echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
             SCORE=0
           fi
 
