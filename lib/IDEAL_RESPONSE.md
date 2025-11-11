@@ -619,7 +619,7 @@ notify_slack_main_develop:
       changes: [ "**/*" ]
   script:
     - bash scripts/create-datadog-event.sh "Pipeline success ${CI_COMMIT_BRANCH} ${CI_COMMIT_SHORT_SHA}"
-    - 'curl -sS -X POST "$SLACK_WEBHOOK_URL" -H "Content-type: application/json" -d "{\"text\":\"✅ Pipeline completed for *${CI_COMMIT_BRANCH}* @ *${CI_COMMIT_SHORT_SHA}* (<${CI_PROJECT_URL}/-/pipelines/${CI_PIPELINE_ID}|view>)\"}"'
+    - 'curl -sS -X POST "$SLACK_WEBHOOK_URL" -H "Content-type: application/json" -d "{\"text\":\" Pipeline completed for *${CI_COMMIT_BRANCH}* @ *${CI_COMMIT_SHORT_SHA}* (<${CI_PROJECT_URL}/-/pipelines/${CI_PIPELINE_ID}|view>)\"}"'
 
 notify_pagerduty_on_main_fail:
   stage: monitoring
