@@ -15,14 +15,19 @@
     "High Availability"
   ],
   "aws_services": [
-    "RDS Aurora",
-    "AWS Secrets Manager",
+    "RDS",
+    "VPC",
+    "Secrets Manager",
     "CloudWatch",
-    "KMS",
-    "VPC"
+    "KMS"
   ],
   "region": "eu-west-2",
   "author": "iamarpit-turing",
   "reviewer": "chriscrsov",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
