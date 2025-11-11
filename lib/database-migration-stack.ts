@@ -223,7 +223,7 @@ export class DatabaseMigrationStack extends Construct {
       `AuroraParameterGroup-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_09_1, // MySQL 8.0 compatible
+          version: rds.AuroraMysqlEngineVersion.VER_2_09_1, // MySQL 8.0 compatible
         }),
         description: 'Parameter group for Aurora MySQL cluster',
         parameters: {
@@ -262,7 +262,7 @@ export class DatabaseMigrationStack extends Construct {
       `AuroraCluster-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraMysql({
-          version: rds.AuroraMysqlEngineVersion.VER_3_09_1,
+          version: rds.AuroraMysqlEngineVersion.VER_2_09_1,
         }),
         credentials: rds.Credentials.fromSecret(targetDbSecret),
         defaultDatabaseName: props.sourceDbName || 'migrationdb',
