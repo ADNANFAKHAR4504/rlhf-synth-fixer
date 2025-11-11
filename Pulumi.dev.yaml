@@ -1,5 +1,5 @@
 config:
-  aws:region: us-east-1
+  aws:region: us-east-2
   environment-migration:dbPassword:
     secure: v1:EEcxWYZ5UZ87JloV:YFRwESKQ41RrMeHn75zsIQcQg0rbNVBN3oII
   environment-migration:sourceDbHost: localhost

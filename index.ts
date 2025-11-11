@@ -1,11 +1,24 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as fs from 'fs';
+import * as path from 'path';
 
 const config = new pulumi.Config();
 const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
-const region = 'us-east-1';
+
+// Read region from AWS_REGION file or use default
+const regionFilePath = path.join(__dirname, 'lib', 'AWS_REGION');
+let regionFromFile = 'us-east-2'; // Default region
+try {
+  if (fs.existsSync(regionFilePath)) {
+    regionFromFile = fs.readFileSync(regionFilePath, 'utf-8').trim();
+  }
+} catch (error) {
+  console.log('Using default region: us-east-2');
+}
+const region = regionFromFile || 'us-east-2';
 
 // Get database password from config or use default for testing
 const dbPassword =
