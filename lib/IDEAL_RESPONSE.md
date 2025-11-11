@@ -73,7 +73,7 @@ Resources:
         SecretStringTemplate: '{}'
         GenerateStringKey: 'password'
         PasswordLength: 16
-        ExcludeCharacters: '"@/\'
+        ExcludeCharacters: '/@" '
 
   # VPC Infrastructure
   VPC:
@@ -440,7 +440,7 @@ Resources:
       EngineVersion: '14.6'
       DatabaseName: payments
       MasterUsername: dbadmin
-      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
         - !Ref DBSecurityGroup
@@ -995,7 +995,7 @@ Outputs:
           "SecretStringTemplate": "{}",
           "GenerateStringKey": "password",
           "PasswordLength": 16,
-          "ExcludeCharacters": "\"@/\\"
+          "ExcludeCharacters": "/@\" "
         }
       }
     },
@@ -1788,7 +1788,7 @@ Outputs:
         "DatabaseName": "payments",
         "MasterUsername": "dbadmin",
         "MasterUserPassword": {
-          "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString}}"
+          "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString:password}}"
         },
         "DBSubnetGroupName": {
           "Ref": "DBSubnetGroup"

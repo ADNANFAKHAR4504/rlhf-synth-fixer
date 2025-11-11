@@ -85,7 +85,7 @@
                     "SecretStringTemplate": "{}",
                     "GenerateStringKey": "password",
                     "PasswordLength": 16,
-                    "ExcludeCharacters": "\"@/\\"
+                    "ExcludeCharacters": "/@\" "
                 }
             }
         },
@@ -887,7 +887,7 @@
                 "DatabaseName": "payments",
                 "MasterUsername": "dbadmin",
                 "MasterUserPassword": {
-                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString}}"
+                    "Fn::Sub": "{{resolve:secretsmanager:${AWS::StackName}-aurora-password:SecretString:password}}"
                 },
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"
