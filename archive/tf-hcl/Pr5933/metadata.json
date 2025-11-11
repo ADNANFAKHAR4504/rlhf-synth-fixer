@@ -1,0 +1,32 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000315",
+  "team": "4",
+  "startedAt": "2025-11-06T10:07:28.904Z",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "RDS",
+    "VPC",
+    "Lambda",
+    "CloudWatch",
+    "Route53",
+    "SNS",
+    "KMS",
+    "S3",
+    "IAM",
+    "EC2"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}
