@@ -424,7 +424,7 @@ export class TapStack extends TerraformStack {
 
     // Create RDS PostgreSQL instance
     const rdsInstance = new DbInstance(this, 'rds-instance', {
-      identifier: `payment-db-${config.environmentSuffix}`,
+      identifier: `payment-db-${config.environmentSuffix}-${uniqueSuffix}`,
       engine: 'postgres',
       engineVersion: '14',
       instanceClass: environment.dbInstanceClass,
@@ -507,7 +507,7 @@ export class TapStack extends TerraformStack {
 
     // Create IAM policy for CloudWatch Logs access
     const ecsLogsPolicy = new IamPolicy(this, 'ecs-logs-policy', {
-      name: `payment-ecs-logs-policy-${config.environmentSuffix}`,
+      name: `payment-ecs-logs-policy-${config.environmentSuffix}-${uniqueSuffix}`,
       description: 'Policy for ECS tasks to write logs to CloudWatch',
       policy: JSON.stringify({
         Version: '2012-10-17',
@@ -725,7 +725,7 @@ export class TapStack extends TerraformStack {
 
     // Create ECS service
     new EcsService(this, 'ecs-service', {
-      name: `payment-service-${config.environmentSuffix}`,
+      name: `payment-service-${config.environmentSuffix}-${uniqueSuffix}`,
       cluster: ecsCluster.id,
       taskDefinition: taskDefinition.arn,
       desiredCount: environment.ecsTaskCount,
