@@ -29,6 +29,14 @@ export class TapStack extends pulumi.ComponentResource {
   private primaryProvider: aws.Provider;
   private drProvider: aws.Provider;
 
+  private validateSecretPassword(secretString: string): string {
+    const parsed = secretString ? JSON.parse(secretString) : {};
+    if (typeof parsed.password !== "string") {
+      throw new Error("Secret string did not contain a password");
+    }
+    return parsed.password;
+  }
+
   constructor(
     name: string,
     props: TapStackProps,
@@ -668,13 +676,8 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         databaseName: 'trading',
         masterUsername: 'dbadmin',
-        masterPassword: secretVersion.secretString.apply(s => {
-          const parsed = s ? JSON.parse(s) : {};
-          if (typeof parsed.password !== "string") {
-            throw new Error("Secret string did not contain a password");
-          }
-          return parsed.password;
-        }),
+
+        masterPassword: secretVersion.secretString.apply(s => this.validateSecretPassword(s ?? '')),
         globalClusterIdentifier: globalCluster.id!,
         dbSubnetGroupName: primarySubnetGroup.name!,
         vpcSecurityGroupIds: [primarySecurityGroup.id!],
