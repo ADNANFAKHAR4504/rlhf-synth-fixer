@@ -10,7 +10,8 @@ a zero-downtime migration from on-premises to AWS.
 
 from typing import Optional
 import pulumi
-from pulumi import ResourceOptions, Output
+from pulumi import ResourceOptions
+import pulumi_aws as aws
 
 # Import all stack components
 from .network_stack import NetworkStack, NetworkStackArgs
@@ -90,6 +91,21 @@ class TapStack(pulumi.ComponentResource):
         self.primary_region = args.primary_region
         self.secondary_region = args.secondary_region
 
+        primary_provider = aws.Provider(
+            f"aws-primary-{self.environment_suffix}",
+            region=self.primary_region,
+            opts=ResourceOptions(parent=self)
+        )
+
+        secondary_provider = aws.Provider(
+            f"aws-secondary-{self.environment_suffix}",
+            region=self.secondary_region,
+            opts=ResourceOptions(parent=self)
+        )
+
+        self.primary_provider = primary_provider
+        self.secondary_provider = secondary_provider
+
         # 1. Network Infrastructure
         network_stack = NetworkStack(
             "network",
@@ -100,7 +116,7 @@ class TapStack(pulumi.ComponentResource):
                 tertiary_region="us-east-2",
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, provider=primary_provider)
         )
 
         # 2. Storage Infrastructure (S3 buckets)
@@ -110,7 +126,7 @@ class TapStack(pulumi.ComponentResource):
                 environment_suffix=self.environment_suffix,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, provider=primary_provider)
         )
 
         # 3. Notification Infrastructure (SNS topics)
@@ -121,7 +137,7 @@ class TapStack(pulumi.ComponentResource):
                 alert_email_addresses=args.alert_email_addresses,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, provider=primary_provider)
         )
 
         # 4. Database Infrastructure (RDS Aurora)
@@ -137,7 +153,7 @@ class TapStack(pulumi.ComponentResource):
                 tertiary_region="us-east-2",
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, depends_on=[network_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[network_stack])
         )
 
         # 5. DMS Infrastructure
@@ -154,7 +170,7 @@ class TapStack(pulumi.ComponentResource):
                 db_subnet_group_name=database_stack.db_subnet_group.name,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, depends_on=[database_stack, network_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[database_stack, network_stack])
         )
 
         # 6. Lambda Functions Infrastructure
@@ -170,7 +186,7 @@ class TapStack(pulumi.ComponentResource):
                 sns_topic_arn=notification_stack.validation_alerts_topic.arn,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, depends_on=[network_stack, database_stack, notification_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[network_stack, database_stack, notification_stack])
         )
 
         # 7. API Gateway Infrastructure
@@ -184,7 +200,7 @@ class TapStack(pulumi.ComponentResource):
                 migration_db_endpoint=database_stack.migration_cluster.endpoint,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, depends_on=[lambda_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[lambda_stack])
         )
 
         # 8. Parameter Store Infrastructure
@@ -197,7 +213,7 @@ class TapStack(pulumi.ComponentResource):
                 api_gateway_endpoint=api_gateway_stack.api_endpoint,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, depends_on=[database_stack, api_gateway_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[database_stack, api_gateway_stack])
         )
 
         # 9. Step Functions Infrastructure
@@ -214,6 +230,7 @@ class TapStack(pulumi.ComponentResource):
             ),
             opts=ResourceOptions(
                 parent=self,
+                provider=primary_provider,
                 depends_on=[lambda_stack, dms_stack, notification_stack, storage_stack]
             )
         )
@@ -234,6 +251,7 @@ class TapStack(pulumi.ComponentResource):
             ),
             opts=ResourceOptions(
                 parent=self,
+                provider=primary_provider,
                 depends_on=[
                     database_stack,
                     dms_stack,
