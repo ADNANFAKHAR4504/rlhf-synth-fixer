@@ -105,23 +105,21 @@ class S3ReplicationStack(Stack):
         replica_key.grant_encrypt(replication_role)
 
         # Configure S3 replication using L1 construct
+        # Note: ReplicationTime requires S3 RTC which needs special configuration
         cfn_replication_config = s3.CfnBucket.ReplicationConfigurationProperty(
             role=replication_role.role_arn,
             rules=[
                 s3.CfnBucket.ReplicationRuleProperty(
                     id=f"ReplicationRule{environment_suffix}",
                     status="Enabled",
-                    prefix="",
+                    priority=1,
+                    filter=s3.CfnBucket.ReplicationRuleFilterProperty(
+                        prefix=""
+                    ),
                     destination=s3.CfnBucket.ReplicationDestinationProperty(
                         bucket=replica_bucket.bucket_arn,
                         encryption_configuration=s3.CfnBucket.EncryptionConfigurationProperty(
                             replica_kms_key_id=replica_key.key_arn,
-                        ),
-                        replication_time=s3.CfnBucket.ReplicationTimeProperty(
-                            status="Enabled",
-                            time=s3.CfnBucket.ReplicationTimeValueProperty(
-                                minutes=15
-                            )
                         ),
                         metrics=s3.CfnBucket.MetricsProperty(
                             status="Enabled",
@@ -134,6 +132,9 @@ class S3ReplicationStack(Stack):
                         sse_kms_encrypted_objects=s3.CfnBucket.SseKmsEncryptedObjectsProperty(
                             status="Enabled"
                         )
+                    ),
+                    delete_marker_replication=s3.CfnBucket.DeleteMarkerReplicationProperty(
+                        status="Enabled"
                     ),
                 )
             ],

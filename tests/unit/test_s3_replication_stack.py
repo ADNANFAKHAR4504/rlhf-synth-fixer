@@ -188,15 +188,18 @@ class TestS3Replication:
                         Match.object_like({
                             "Id": "ReplicationRuletest",
                             "Status": "Enabled",
-                            "Prefix": ""
+                            "Priority": 1,
+                            "Filter": {
+                                "Prefix": ""
+                            }
                         })
                     ])
                 }
             }
         )
 
-    def test_replication_time_control_enabled(self, template):
-        """Test that RTC is enabled in replication configuration."""
+    def test_replication_metrics_enabled(self, template):
+        """Test that replication metrics are enabled in replication configuration."""
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
@@ -205,12 +208,6 @@ class TestS3Replication:
                     "Rules": [
                         {
                             "Destination": {
-                                "ReplicationTime": {
-                                    "Status": "Enabled",
-                                    "Time": {
-                                        "Minutes": 15
-                                    }
-                                },
                                 "Metrics": {
                                     "Status": "Enabled",
                                     "EventThreshold": {
@@ -224,8 +221,8 @@ class TestS3Replication:
             }
         )
 
-    def test_replication_uses_v1_schema(self, template):
-        """Test that replication uses V1 schema (prefix-based) for RTC compatibility."""
+    def test_delete_marker_replication_enabled(self, template):
+        """Test that delete marker replication is enabled."""
         template.has_resource_properties(
             "AWS::S3::Bucket",
             {
@@ -233,8 +230,9 @@ class TestS3Replication:
                 "ReplicationConfiguration": {
                     "Rules": [
                         {
-                            "Prefix": "",
-                            "Status": "Enabled"
+                            "DeleteMarkerReplication": {
+                                "Status": "Enabled"
+                            }
                         }
                     ]
                 }
