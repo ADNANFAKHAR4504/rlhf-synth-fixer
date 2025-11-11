@@ -129,8 +129,8 @@ class TestTapStackArgs(unittest.TestCase):
 
         self.assertEqual(args.environment_suffix, 'dev')
         self.assertEqual(args.tags, {})
-        self.assertEqual(args.primary_region, 'us-east-1')
-        self.assertEqual(args.secondary_region, 'us-east-2')
+        self.assertEqual(args.primary_region, 'eu-central-1')
+        self.assertEqual(args.secondary_region, 'eu-central-2')
         self.assertIsNone(args.domain_name)
 
     def test_tap_stack_args_custom_values(self):

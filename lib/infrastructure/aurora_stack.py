@@ -5,14 +5,24 @@ BUG #8: Missing encryption configuration on secondary cluster
 BUG #9: Hardcoded password instead of using Secrets Manager
 """
 
+import ipaddress
+from dataclasses import dataclass
+from typing import List, Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import Output, ResourceOptions
-from typing import Optional
+from pulumi import ResourceOptions
 
 
 class AuroraStack(pulumi.ComponentResource):
     """Aurora PostgreSQL Global Database spanning two regions."""
+
+    @dataclass
+    class _NetworkConfig:
+        vpc_id: pulumi.Input[str]
+        subnet_ids: List[pulumi.Input[str]]
+        cidr_block: pulumi.Input[str]
+        created: bool
 
     def __init__(
         self,
@@ -37,15 +47,18 @@ class AuroraStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get VPC and subnets for primary
-        primary_vpc = aws.ec2.get_vpc(default=True)
-        primary_subnets = aws.ec2.get_subnets(
-            filters=[aws.ec2.GetSubnetsFilterArgs(name="vpc-id", values=[primary_vpc.id])]
+        primary_network = self._ensure_network(
+            name_prefix="primary",
+            environment_suffix=environment_suffix,
+            provider=primary_provider,
+            region=primary_region,
+            tags=tags,
+            default_cidr="10.0.0.0/16",
         )
 
         self.primary_subnet_group = aws.rds.SubnetGroup(
             f"aurora-subnet-group-primary-{environment_suffix}",
-            subnet_ids=primary_subnets.ids,
+            subnet_ids=primary_network.subnet_ids,
             tags={**tags, 'Name': f"aurora-subnet-group-primary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=primary_provider)
         )
@@ -53,12 +66,12 @@ class AuroraStack(pulumi.ComponentResource):
         self.primary_security_group = aws.ec2.SecurityGroup(
             f"aurora-sg-primary-{environment_suffix}",
             description="Security group for Aurora PostgreSQL cluster",
-            vpc_id=primary_vpc.id,
+            vpc_id=primary_network.vpc_id,
             ingress=[aws.ec2.SecurityGroupIngressArgs(
                 protocol="tcp",
                 from_port=5432,
                 to_port=5432,
-                cidr_blocks=["0.0.0.0/0"]  # BUG #10: Too permissive! Should restrict to VPC CIDR
+                cidr_blocks=[primary_network.cidr_block]
             )],
             egress=[aws.ec2.SecurityGroupEgressArgs(
                 protocol="-1",
@@ -116,16 +129,18 @@ class AuroraStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=primary_provider)
         )
 
-        # Secondary region setup
-        secondary_vpc = aws.ec2.get_vpc(default=True, opts=pulumi.InvokeOptions(provider=secondary_provider))
-        secondary_subnets = aws.ec2.get_subnets(
-            filters=[aws.ec2.GetSubnetsFilterArgs(name="vpc-id", values=[secondary_vpc.id])],
-            opts=pulumi.InvokeOptions(provider=secondary_provider)
+        secondary_network = self._ensure_network(
+            name_prefix="secondary",
+            environment_suffix=environment_suffix,
+            provider=secondary_provider,
+            region=secondary_region,
+            tags=tags,
+            default_cidr="10.1.0.0/16",
         )
 
         self.secondary_subnet_group = aws.rds.SubnetGroup(
             f"aurora-subnet-group-secondary-{environment_suffix}",
-            subnet_ids=secondary_subnets.ids,
+            subnet_ids=secondary_network.subnet_ids,
             tags={**tags, 'Name': f"aurora-subnet-group-secondary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=secondary_provider)
         )
@@ -133,12 +148,12 @@ class AuroraStack(pulumi.ComponentResource):
         self.secondary_security_group = aws.ec2.SecurityGroup(
             f"aurora-sg-secondary-{environment_suffix}",
             description="Security group for Aurora PostgreSQL cluster",
-            vpc_id=secondary_vpc.id,
+            vpc_id=secondary_network.vpc_id,
             ingress=[aws.ec2.SecurityGroupIngressArgs(
                 protocol="tcp",
                 from_port=5432,
                 to_port=5432,
-                cidr_blocks=["0.0.0.0/0"]  # Same permissive bug
+                cidr_blocks=[secondary_network.cidr_block]
             )],
             egress=[aws.ec2.SecurityGroupEgressArgs(
                 protocol="-1",
@@ -191,3 +206,83 @@ class AuroraStack(pulumi.ComponentResource):
             'primary_endpoint': self.primary_cluster.endpoint,
             'secondary_cluster_arn': self.secondary_cluster.arn,
         })
+
+    def _ensure_network(
+        self,
+        name_prefix: str,
+        environment_suffix: str,
+        provider: aws.Provider,
+        region: str,
+        tags: dict,
+        default_cidr: str,
+    ) -> _NetworkConfig:
+        invoke_opts = pulumi.InvokeOptions(provider=provider)
+
+        try:
+            existing_vpc = aws.ec2.get_vpc(default=True, opts=invoke_opts)
+            existing_subnets = aws.ec2.get_subnets(
+                filters=[aws.ec2.GetSubnetsFilterArgs(name="vpc-id", values=[existing_vpc.id])],
+                opts=invoke_opts,
+            )
+
+            if not existing_subnets.ids:
+                raise pulumi.RunError(
+                    f"Default VPC in region {region} has no subnets; a dedicated VPC will be created."
+                )
+
+            return AuroraStack._NetworkConfig(
+                vpc_id=existing_vpc.id,
+                subnet_ids=list(existing_subnets.ids),
+                cidr_block=existing_vpc.cidr_block,
+                created=False,
+            )
+        except Exception:
+            pulumi.log.warn(
+                f"No usable default VPC found in region {region}. Provisioning dedicated networking for Aurora."
+            )
+
+            network = ipaddress.ip_network(default_cidr)
+            vpc = aws.ec2.Vpc(
+                f"{name_prefix}-aurora-vpc-{environment_suffix}",
+                cidr_block=str(network),
+                enable_dns_hostnames=True,
+                enable_dns_support=True,
+                tags={**tags, "Name": f"{name_prefix}-aurora-vpc-{environment_suffix}"},
+                opts=ResourceOptions(parent=self, provider=provider),
+            )
+
+            availability_zones = aws.get_availability_zones(
+                state="available",
+                opts=invoke_opts,
+            )
+
+            if not availability_zones.names:
+                raise pulumi.RunError(f"No availability zones reported for region {region}.")
+
+            subnet_networks = list(network.subnets(new_prefix=24))
+            if len(subnet_networks) < 2:
+                raise pulumi.RunError("Unable to derive enough subnets from the provided CIDR block.")
+
+            subnet_ids: List[pulumi.Input[str]] = []
+            for index, subnet_network in enumerate(subnet_networks[:2]):
+                az = availability_zones.names[index % len(availability_zones.names)]
+                subnet = aws.ec2.Subnet(
+                    f"{name_prefix}-aurora-subnet-{environment_suffix}-{index}",
+                    vpc_id=vpc.id,
+                    cidr_block=str(subnet_network),
+                    availability_zone=az,
+                    map_public_ip_on_launch=False,
+                    tags={
+                        **tags,
+                        "Name": f"{name_prefix}-aurora-subnet-{environment_suffix}-{index}",
+                    },
+                    opts=ResourceOptions(parent=self, provider=provider),
+                )
+                subnet_ids.append(subnet.id)
+
+            return AuroraStack._NetworkConfig(
+                vpc_id=vpc.id,
+                subnet_ids=subnet_ids,
+                cidr_block=vpc.cidr_block,
+                created=True,
+            )
