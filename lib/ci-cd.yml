@@ -1081,6 +1081,8 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     environment: 'production'
+    timeoutInMinutes: 180  # 3 hours for multi-region deployment
+    cancelTimeoutInMinutes: 10  # Allow time for cleanup on cancellation
     strategy:
       runOnce:
         preDeploy:
@@ -1095,37 +1097,44 @@ stages:
               useGlobalConfig: true
               addSpnToEnvironment: false
             displayName: 'Pre-deployment health checks'
+            retryCountOnTaskFailure: 2
         
         deploy:
           steps:
           - script: |
-              IFS=',' read -ra REGIONS <<< "$(prodAksRegions)"
+              # Set variables for proper substitution
+              PROD_REGIONS="$(prodAksRegions)"
+              BUILD_ID="$(Build.BuildId)"
+              SCRIPTS_PATH="$(scriptsPath)"
+              PROD_RG_PREFIX="$(prodResourceGroupPrefix)"
+
+              IFS=',' read -ra REGIONS <<< "${PROD_REGIONS}"
               for region in "${REGIONS[@]}"; do
-                echo "##[group]Deploying to region: $region"
-                
-                # Deploy infrastructure
+                echo "##[group]Deploying to region: ${region}"
+
+                # Deploy infrastructure with proper variable expansion
                 az deployment group create \
-                  --resource-group "prod-iot-$region-rg" \
+                  --resource-group "${PROD_RG_PREFIX}-${region}-rg" \
                   --template-file templates/production/main.bicep \
-                  --parameters region=$region buildId=$(Build.BuildId)
-                
+                  --parameters region="${region}" buildId="${BUILD_ID}"
+
                 # Deploy IoT Hub
-                bash $(scriptsPath)/deploy-iot-hub.sh production $region $(Build.BuildId)
-                
+                bash "${SCRIPTS_PATH}/deploy-iot-hub.sh" production "${region}" "${BUILD_ID}"
+
                 # Deploy Event Hubs
-                bash $(scriptsPath)/deploy-event-hubs.sh production $region
-                
+                bash "${SCRIPTS_PATH}/deploy-event-hubs.sh" production "${region}"
+
                 # Deploy AKS
-                bash $(scriptsPath)/deploy-aks.sh production $region $(Build.BuildId)
-                
+                bash "${SCRIPTS_PATH}/deploy-aks.sh" production "${region}" "${BUILD_ID}"
+
                 # Configure Cosmos DB
-                bash $(scriptsPath)/configure-cosmos.sh production $region
-                
+                bash "${SCRIPTS_PATH}/configure-cosmos.sh" production "${region}"
+
                 echo "##[endgroup]"
-                
+
                 # Validate deployment before proceeding to next region
-                bash $(scriptsPath)/validate-region-deployment.sh production $region
-                
+                bash "${SCRIPTS_PATH}/validate-region-deployment.sh" production "${region}"
+
                 sleep 60  # Brief pause between regions
               done
             displayName: 'Deploy to all production regions'
@@ -1257,6 +1266,8 @@ stages:
     pool:
       vmImage: 'ubuntu-latest'
     environment: 'production-rollback'
+    timeoutInMinutes: 90  # Extended timeout for rollback operations
+    cancelTimeoutInMinutes: 10  # Allow cleanup time
     strategy:
       runOnce:
         deploy:
@@ -1271,7 +1282,8 @@ stages:
               useGlobalConfig: true
               addSpnToEnvironment: false
             displayName: 'Rollback IoT Hub edge deployments'
-          
+            retryCountOnTaskFailure: 2
+
           - task: AzureCLI@2
             inputs:
               azureSubscription: '$(azureSubscription)'
@@ -1282,7 +1294,8 @@ stages:
               useGlobalConfig: true
               addSpnToEnvironment: false
             displayName: 'Rollback Azure Functions'
-          
+            retryCountOnTaskFailure: 2
+
           - task: AzureCLI@2
             inputs:
               azureSubscription: '$(azureSubscription)'
@@ -1293,6 +1306,7 @@ stages:
               useGlobalConfig: true
               addSpnToEnvironment: false
             displayName: 'Revert Traffic Manager configuration'
+            retryCountOnTaskFailure: 2
           
           - task: AzureCLI@2
             inputs:
@@ -1300,36 +1314,45 @@ stages:
               scriptType: 'bash'
               scriptLocation: 'inline'
               inlineScript: |
+                # Set variables for proper substitution
+                PROD_GLOBAL_RG="$(prodGlobalResourceGroup)"
+                CDN_PROFILE="$(cdnProfileName)"
+                CDN_ENDPOINT="$(cdnEndpointName)"
+                PROD_REGIONS="$(prodAksRegions)"
+                PROD_RG_PREFIX="$(prodResourceGroupPrefix)"
+
                 # Clear CDN caches
                 az cdn endpoint purge \
-                  --resource-group $(prodGlobalResourceGroup) \
-                  --profile-name $(cdnProfileName) \
-                  --name $(cdnEndpointName) \
+                  --resource-group "${PROD_GLOBAL_RG}" \
+                  --profile-name "${CDN_PROFILE}" \
+                  --name "${CDN_ENDPOINT}" \
                   --content-paths "/*"
-                
+
                 # Clear Redis caches without service interruption
                 # Using FLUSHALL instead of force-reboot to avoid availability impact
-                IFS=',' read -ra REGIONS <<< "$(prodAksRegions)"
+                IFS=',' read -ra REGIONS <<< "${PROD_REGIONS}"
                 for region in "${REGIONS[@]}"; do
-                  echo "Flushing Redis cache in region: $region"
+                  echo "Flushing Redis cache in region: ${region}"
+
                   # Get Redis connection details and flush cache
                   REDIS_KEY=$(az redis list-keys \
-                    --resource-group "prod-iot-$region-rg" \
-                    --name "iot-redis-$region" \
+                    --resource-group "${PROD_RG_PREFIX}-${region}-rg" \
+                    --name "iot-redis-${region}" \
                     --query primaryKey -o tsv)
 
                   REDIS_HOST=$(az redis show \
-                    --resource-group "prod-iot-$region-rg" \
-                    --name "iot-redis-$region" \
+                    --resource-group "${PROD_RG_PREFIX}-${region}-rg" \
+                    --name "iot-redis-${region}" \
                     --query hostName -o tsv)
 
                   # Use redis-cli to flush cache without reboot
-                  redis-cli -h "$REDIS_HOST" -a "$REDIS_KEY" --tls FLUSHALL
-                  echo "Cache flushed for region: $region"
+                  redis-cli -h "${REDIS_HOST}" -a "${REDIS_KEY}" --tls FLUSHALL
+                  echo "Cache flushed for region: ${region}"
                 done
               useGlobalConfig: true
               addSpnToEnvironment: false
             displayName: 'Clear caches'
+            retryCountOnTaskFailure: 1
           
           - task: PowerShell@2
             inputs:

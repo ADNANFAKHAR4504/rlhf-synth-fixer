@@ -17,6 +17,9 @@ The ideal implementation includes:
 9. **Configurable Variables** - All hardcoded values moved to variables section
 10. **Job Timeouts** - Explicit timeout configurations for all jobs to prevent hung pipelines
 11. **Safe Rollback** - Redis cache flushing without service interruption, manual rollback trigger option
+12. **Proper Variable Substitution** - Bash scripts use proper variable assignment to avoid expansion issues
+13. **Comprehensive Retry Logic** - Critical operations retry on transient failures
+14. **Cancellation Protection** - Extended timeouts and cleanup periods for critical deployments
 
 ## Reference Implementation
 
@@ -118,6 +121,62 @@ redis-cli -h "$REDIS_HOST" -a "$REDIS_KEY" --tls FLUSHALL
 ```
 
 Users can now queue the pipeline with `TRIGGER_ROLLBACK=true` to perform manual rollbacks independent of deployment failures.
+
+### 8. Improved Script Variable Substitution
+**Problem**: Inline bash scripts used direct Azure Pipelines variable expansion within loops, which could lead to improper substitution and hard-to-debug issues.
+
+**Solution**: Added proper variable assignment at the beginning of scripts:
+```yaml
+- script: |
+    # Set variables for proper substitution
+    PROD_REGIONS="$(prodAksRegions)"
+    BUILD_ID="$(Build.BuildId)"
+    SCRIPTS_PATH="$(scriptsPath)"
+    PROD_RG_PREFIX="$(prodResourceGroupPrefix)"
+
+    IFS=',' read -ra REGIONS <<< "${PROD_REGIONS}"
+    for region in "${REGIONS[@]}"; do
+      az deployment group create \
+        --resource-group "${PROD_RG_PREFIX}-${region}-rg" \
+        --parameters region="${region}" buildId="${BUILD_ID}"
+    done
+```
+
+This ensures variables are properly expanded once at the start and then used as bash variables throughout the script.
+
+### 9. Extended Timeout and Cancellation Protection
+**Problem**: Critical production deployments lacked explicit timeout and cancellation settings, risking incomplete cleanup on interruption.
+
+**Solution**: Added timeout and cancellation protection to critical jobs:
+```yaml
+- deployment: deployProductionRegions
+  timeoutInMinutes: 180  # 3 hours for multi-region deployment
+  cancelTimeoutInMinutes: 10  # Allow time for cleanup on cancellation
+
+- deployment: rollbackProduction
+  timeoutInMinutes: 90  # Extended timeout for rollback operations
+  cancelTimeoutInMinutes: 10  # Allow cleanup time
+```
+
+### 10. Comprehensive Retry Logic
+**Problem**: Critical Azure CLI operations lacked retry logic for transient network or service failures.
+
+**Solution**: Added retry logic to all critical operations:
+```yaml
+- task: AzureCLI@2
+  displayName: 'Pre-deployment health checks'
+  retryCountOnTaskFailure: 2
+
+- task: AzureCLI@2
+  displayName: 'Rollback IoT Hub edge deployments'
+  retryCountOnTaskFailure: 2
+
+- task: AzureCLI@2
+  displayName: 'Clear caches'
+  retryCountOnTaskFailure: 1
+```
+
+Applied to: pre-deployment checks, all rollback operations, traffic manager configuration, and cache clearing.
 
 ## Verification Against Requirements
 

@@ -301,22 +301,167 @@ Added documentation in prerequisites section explaining the TRIGGER_ROLLBACK var
 
 ---
 
+## Issue 8: Improper Variable Substitution in Bash Scripts
+
+**Severity**: Medium
+
+**Description**: The MODEL_RESPONSE.md contained inline bash scripts that directly used Azure Pipelines variable expansion syntax `$(variable)` within bash loops and conditionals. This pattern can lead to unexpected behavior when variables contain special characters or spaces, and makes the scripts harder to debug.
+
+**Problematic Code** (lines 1102-1129):
+```yaml
+- script: |
+    IFS=',' read -ra REGIONS <<< "$(prodAksRegions)"
+    for region in "${REGIONS[@]}"; do
+      az deployment group create \
+        --resource-group "prod-iot-$region-rg" \
+        --parameters region=$region buildId=$(Build.BuildId)
+      bash $(scriptsPath)/deploy-iot-hub.sh production $region $(Build.BuildId)
+    done
+```
+
+**Issues**:
+1. Mixed use of Azure Pipelines `$()` and bash `${}` expansion
+2. Direct variable references without quoting in some places
+3. Resource group name hardcoded prefix `prod-iot` instead of using variable
+
+**Impact**:
+- Potential failures if variables contain spaces or special characters
+- Difficult to trace variable expansion issues during debugging
+- Inconsistent with using variables for resource group prefixes
+
+**Fix Applied**:
+```yaml
+- script: |
+    # Set variables for proper substitution
+    PROD_REGIONS="$(prodAksRegions)"
+    BUILD_ID="$(Build.BuildId)"
+    SCRIPTS_PATH="$(scriptsPath)"
+    PROD_RG_PREFIX="$(prodResourceGroupPrefix)"
+
+    IFS=',' read -ra REGIONS <<< "${PROD_REGIONS}"
+    for region in "${REGIONS[@]}"; do
+      echo "##[group]Deploying to region: ${region}"
+
+      # Deploy infrastructure with proper variable expansion
+      az deployment group create \
+        --resource-group "${PROD_RG_PREFIX}-${region}-rg" \
+        --template-file templates/production/main.bicep \
+        --parameters region="${region}" buildId="${BUILD_ID}"
+
+      # Deploy IoT Hub
+      bash "${SCRIPTS_PATH}/deploy-iot-hub.sh" production "${region}" "${BUILD_ID}"
+    done
+```
+
+Applied to both production deployment script and cache clearing script.
+
+---
+
+## Issue 9: Missing Retry Logic on Critical Operations
+
+**Severity**: Low
+
+**Description**: The MODEL_RESPONSE.md included retry logic on some deployment tasks but was inconsistent. Critical operations like pre-deployment health checks, rollback operations, and cache clearing lacked retry logic, making them vulnerable to transient failures.
+
+**Tasks Without Retry**:
+- Pre-deployment health checks
+- Rollback IoT Hub deployments
+- Rollback Azure Functions
+- Rollback Traffic Manager configuration
+- Cache clearing operations
+
+**Impact**: Transient network failures or temporary service unavailability could cause critical operations to fail unnecessarily, requiring manual intervention.
+
+**Fix Applied**:
+Added `retryCountOnTaskFailure` to all critical Azure CLI tasks:
+
+```yaml
+- task: AzureCLI@2
+  displayName: 'Pre-deployment health checks'
+  retryCountOnTaskFailure: 2
+
+- task: AzureCLI@2
+  displayName: 'Rollback IoT Hub edge deployments'
+  retryCountOnTaskFailure: 2
+
+- task: AzureCLI@2
+  displayName: 'Rollback Azure Functions'
+  retryCountOnTaskFailure: 2
+
+- task: AzureCLI@2
+  displayName: 'Revert Traffic Manager configuration'
+  retryCountOnTaskFailure: 2
+
+- task: AzureCLI@2
+  displayName: 'Clear caches'
+  retryCountOnTaskFailure: 1
+```
+
+---
+
+## Issue 10: Missing Cancellation Timeout Protection
+
+**Severity**: Low
+
+**Description**: The MODEL_RESPONSE.md lacked explicit cancellation timeout settings on critical deployment and rollback jobs. When a pipeline is cancelled, jobs need time to clean up resources gracefully. Without this setting, cancellation could leave resources in an inconsistent state.
+
+**Missing Configuration**:
+- Production multi-region deployment had no cancellation timeout
+- Rollback deployment had no cancellation timeout
+
+**Impact**:
+- Abrupt cancellation could leave deployments half-complete
+- Resources might not be properly cleaned up
+- Could require manual cleanup of orphaned resources
+
+**Fix Applied**:
+Added timeout and cancellation protection to critical jobs:
+
+```yaml
+- deployment: deployProductionRegions
+  timeoutInMinutes: 180  # 3 hours for multi-region deployment
+  cancelTimeoutInMinutes: 10  # Allow time for cleanup on cancellation
+
+- deployment: rollbackProduction
+  timeoutInMinutes: 90  # Extended timeout for rollback operations
+  cancelTimeoutInMinutes: 10  # Allow cleanup time
+```
+
+This gives the pipeline 10 minutes to gracefully shut down when cancelled, allowing cleanup scripts to run and resources to be properly released.
+
+---
+
 ## Summary of Fixes
 
-Total issues identified and fixed: 7
+Total issues identified and fixed: 10
 
 **By Severity**:
-- Medium: 4 issues (Missing variables, script validation, prerequisites, Redis reboot)
-- Low: 3 issues (Hardcoded names, timeouts, rollback trigger)
+- Medium: 5 issues (Missing variables, script validation, prerequisites, Redis reboot, variable substitution)
+- Low: 5 issues (Hardcoded names, timeouts, rollback trigger, retry logic, cancellation protection)
 
 **By Category**:
 - Configuration: 3 issues (variables, hardcoded names, prerequisites)
 - Validation: 1 issue (script validation)
-- Resilience: 2 issues (timeouts, Redis reboot)
+- Resilience: 4 issues (timeouts, Redis reboot, retry logic, cancellation protection)
 - Functionality: 1 issue (manual rollback)
+- Code Quality: 1 issue (variable substitution)
 
-**Lines Changed**: Approximately 150 additions, 10 modifications across the 1300-line pipeline
+**Lines Changed**: Approximately 200 additions, 25 modifications across the 1360-line pipeline
+
+**Key Improvements**:
+1. All Azure Pipelines variables properly assigned to bash variables before use
+2. Consistent quoting and variable expansion throughout scripts
+3. Retry logic on all critical Azure CLI operations (5+ tasks)
+4. Cancellation timeouts on production and rollback deployments
+5. Extended job timeouts for long-running multi-region operations
 
 **Compatibility**: All fixes maintain backward compatibility with the original MODEL_RESPONSE.md design while adding robustness and configurability.
 
-**Verification**: The fixed pipeline in ci-cd.yml now fully satisfies all requirements in PROMPT.md with production-ready enhancements for error handling, documentation, and operational safety.
+**Production Readiness**: The pipeline now includes:
+- Comprehensive error handling and retry mechanisms
+- Proper variable substitution preventing expansion issues
+- Graceful cancellation with cleanup time
+- Extended timeouts for complex multi-region operations
+- Complete documentation of prerequisites and configuration
+
+**Verification**: The fixed pipeline in ci-cd.yml now fully satisfies all requirements in PROMPT.md with production-ready enhancements for error handling, documentation, operational safety, and reliability.
