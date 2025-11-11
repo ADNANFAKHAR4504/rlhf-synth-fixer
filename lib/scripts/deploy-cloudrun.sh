@@ -20,3 +20,4 @@ gcloud run deploy "${PRV_NAME}"   --image "${APP_IMAGE}"   --platform managed   
 URL="$(gcloud run services describe "${PRV_NAME}" --region "${CLOUD_RUN_REGION:-us-central1}" --format='value(status.url)')"
 echo "PREVIEW_URL=${URL}" | tee preview.env
 echo "[cloudrun] Deployed preview at ${URL}"
+

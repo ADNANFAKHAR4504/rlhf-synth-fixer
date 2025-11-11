@@ -17,3 +17,4 @@ for REGION in ${REGIONS}; do
     sleep "${HEALTH_WAIT_SECONDS:-30}"
   done
 done
+

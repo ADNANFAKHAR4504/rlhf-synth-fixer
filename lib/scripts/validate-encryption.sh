@@ -13,3 +13,5 @@ case "${MODE}" in
     echo "Unknown mode: ${MODE}" >&2 ; exit 1 ;;
 esac
 echo "[encryption] Validation for ${MODE} completed (placeholder)."
+
+

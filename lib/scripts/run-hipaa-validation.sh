@@ -10,3 +10,4 @@ echo "HIPAA_ACCESS_CONTROLS=OK" > reports/hipaa/access.txt
 echo "HIPAA_TRANSPORT_ENCRYPTION=OK" > reports/hipaa/transport.txt
 echo "HIPAA_AT_REST_ENCRYPTION=OK" > reports/hipaa/at_rest.txt
 echo "[hipaa] Completed (placeholders). Replace with org-approved checks."
+

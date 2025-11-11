@@ -14,3 +14,4 @@ echo "CLOUD_TRACE=ENABLED_OR_VERIFIED" > reports/monitoring/trace.txt
 echo "ERROR_REPORTING=CONFIGURED_OR_VERIFIED" > reports/monitoring/error_reporting.txt
 echo "BQ_AUDIT_PIPELINE=VERIFIED" > reports/monitoring/bq_audit.txt
 echo "[monitoring] Completed (placeholders). Fill with real gcloud/terraform steps."
+

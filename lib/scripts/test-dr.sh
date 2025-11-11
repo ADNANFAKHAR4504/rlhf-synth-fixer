@@ -10,3 +10,4 @@ echo "RESTORE_OK=1" > reports/dr/restore.txt
 echo "RTO_VALID=1" > reports/dr/rto.txt
 echo "RPO_VALID=1" > reports/dr/rpo.txt
 echo "[dr] DR validation completed (placeholders). Replace with real restore/validate."
+

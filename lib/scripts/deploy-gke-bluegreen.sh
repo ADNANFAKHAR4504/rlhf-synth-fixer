@@ -19,3 +19,4 @@ kubectl -n "${NAMESPACE}" patch virtualservice ${APP}-vs --type='merge' -p '{"sp
 
 # Post-shift checks
 kubectl -n "${NAMESPACE}" get pods -o wide
+
