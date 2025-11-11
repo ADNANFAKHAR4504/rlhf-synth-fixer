@@ -31,5 +31,10 @@
   "region": "us-east-1",
   "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "balasl342"
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
