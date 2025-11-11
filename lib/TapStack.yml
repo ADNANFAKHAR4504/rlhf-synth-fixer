@@ -5,12 +5,29 @@ Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
       - Label:
+          default: 'Deployment Configuration'
+        Parameters:
+          - DeploymentRegion
+      - Label:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
           - Environment
 
 Parameters:
+  DeploymentRegion:
+    Type: String
+    Default: 'eu-south-1'
+    Description: 'AWS Region for deployment (Milan)'
+    AllowedValues:
+      - eu-south-1
+      - eu-west-2
+      - us-east-1
+      - us-west-2
+      - eu-west-1
+      - eu-central-1
+      - ap-southeast-1
+
   EnvironmentSuffix:
     Type: String
     Default: 'dev'
@@ -86,6 +103,8 @@ Resources:
           Value: !Ref Environment
         - Key: MigrationPhase
           Value: 'phase-1'
+        - Key: DeploymentRegion
+          Value: !Ref DeploymentRegion
 
   # ==================== Hub VPC (10.0.0.0/16) ====================
   HubVPC:
