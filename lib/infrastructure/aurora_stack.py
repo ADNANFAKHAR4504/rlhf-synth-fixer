@@ -176,8 +176,6 @@ class AuroraStack(pulumi.ComponentResource):
             global_cluster_identifier=self.global_cluster.id,
             # storage_encrypted=True,  # MISSING!
             backup_retention_period=7,
-            master_username="dbadmin",
-            master_password="insecure123",
             tags={**tags, 'Name': f"trading-cluster-secondary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=secondary_provider, depends_on=[self.primary_cluster])
         )

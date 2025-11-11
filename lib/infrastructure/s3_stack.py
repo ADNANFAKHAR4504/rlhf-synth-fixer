@@ -64,11 +64,12 @@ class S3Stack(pulumi.ComponentResource):
         )
 
         # Secondary bucket
-        # BUG #16: Missing versioning on secondary bucket
         self.secondary_bucket = aws.s3.Bucket(
             f"trading-data-secondary-{environment_suffix}",
             bucket=f"trading-data-secondary-{environment_suffix}",
-            # Missing: versioning configuration!
+            versioning=aws.s3.BucketVersioningArgs(
+                enabled=True
+            ),
             tags={**tags, 'Name': f"trading-data-secondary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=secondary_provider)
         )
