@@ -388,10 +388,11 @@ export class TapStack extends cdk.Stack {
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
       // use the correct CDK prop name 'circuitBreaker'
-      circuitBreaker: {
-        enable: true,
-        rollback: true,
-      },
+      //circuitBreaker: {
+      //  enable: true,
+      //  rollback: true,
+      //},
+      circuitBreaker: undefined,
       // allow warm-up time before ALB health checks are enforced to avoid false negatives
       healthCheckGracePeriod: cdk.Duration.seconds(300),
       platformVersion: ecs.FargatePlatformVersion.LATEST,
