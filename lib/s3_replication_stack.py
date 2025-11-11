@@ -1,17 +1,14 @@
 """S3 Replication Stack for Disaster Recovery Solution."""
 
 from typing import Optional
+
 import aws_cdk as cdk
-from aws_cdk import (
-    Stack,
-    aws_s3 as s3,
-    aws_kms as kms,
-    aws_iam as iam,
-    aws_cloudwatch as cloudwatch,
-    aws_logs as logs,
-    CfnOutput,
-    RemovalPolicy,
-)
+from aws_cdk import CfnOutput, RemovalPolicy, Stack
+from aws_cdk import aws_cloudwatch as cloudwatch
+from aws_cdk import aws_iam as iam
+from aws_cdk import aws_kms as kms
+from aws_cdk import aws_logs as logs
+from aws_cdk import aws_s3 as s3
 from constructs import Construct
 
 
@@ -114,7 +111,7 @@ class S3ReplicationStack(Stack):
                 s3.CfnBucket.ReplicationRuleProperty(
                     id=f"ReplicationRule{environment_suffix}",
                     status="Enabled",
-                    priority=1,
+                    prefix="",
                     destination=s3.CfnBucket.ReplicationDestinationProperty(
                         bucket=replica_bucket.bucket_arn,
                         encryption_configuration=s3.CfnBucket.EncryptionConfigurationProperty(

@@ -1,10 +1,11 @@
 """Unit tests for S3 Replication Stack."""
 
 import aws_cdk as cdk
-from aws_cdk.assertions import Template, Match
 import pytest
+from aws_cdk.assertions import Match, Template
 
-from lib.s3_replication_stack import S3ReplicationStack, S3ReplicationStackProps
+from lib.s3_replication_stack import (S3ReplicationStack,
+                                      S3ReplicationStackProps)
 
 
 @pytest.fixture
@@ -187,7 +188,7 @@ class TestS3Replication:
                         Match.object_like({
                             "Id": "ReplicationRuletest",
                             "Status": "Enabled",
-                            "Priority": 1
+                            "Prefix": ""
                         })
                     ])
                 }
