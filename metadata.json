@@ -6,7 +6,18 @@
   "turn_type": "single",
   "startedAt": "2025-11-10T16:58:15.156468Z",
   "subtask": "Security, Compliance, and Governance",
-  "subject_labels": [],
+  "subject_labels": [
+    "IAM",
+    "Zero-Trust Security",
+    "Cross-Department Access",
+    "CloudWatch Alarms",
+    "AWS Config",
+    "KMS Encryption",
+    "SNS Notifications",
+    "Resource Tagging",
+    "Least Privilege",
+    "MFA Enforcement"
+  ],
   "po_id": "q4r92",
   "aws_services": [
     "IAM",
