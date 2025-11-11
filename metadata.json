@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-11T13:21:38+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Infrastructure Environments"
+  ],
   "po_id": "6cy03t",
   "aws_services": [
     "VPC",
@@ -28,5 +30,7 @@
     "IAM"
   ],
   "region": "us-east-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "adnan-turing"
 }
