@@ -113,7 +113,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    const dbPassword = pulumi.secret('PaymentDBP@ssw0rd!2024');
+    const dbPassword = pulumi.secret('PaymentDBPassw0rd!2024');
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const _dbSecretVersion = new aws.secretsmanager.SecretVersion(
