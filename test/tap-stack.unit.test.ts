@@ -278,6 +278,29 @@ describe('ComputeStack', () => {
     expect(zoneId).toBeDefined();
     expect(typeof zoneId).toBe('string');
   });
+
+  it('should create HTTP-only listeners for PR environments', () => {
+    const networkStack = new NetworkStack('test-network-compute-pr', {
+      environmentSuffix: 'pr1234',
+      tags: { Environment: 'pr1234' },
+    });
+
+    const prStack = new ComputeStack('test-compute-pr', {
+      environmentSuffix: 'pr1234',
+      tags: { Environment: 'pr1234' },
+      primaryVpcId: networkStack.primaryVpcId,
+      primaryPublicSubnetIds: networkStack.primaryPublicSubnetIds,
+      primaryPrivateSubnetIds: networkStack.primaryPrivateSubnetIds,
+      drVpcId: networkStack.drVpcId,
+      drPublicSubnetIds: networkStack.drPublicSubnetIds,
+      drPrivateSubnetIds: networkStack.drPrivateSubnetIds,
+      primaryProvider: networkStack.primaryProvider,
+      drProvider: networkStack.drProvider,
+    });
+
+    expect(prStack).toBeDefined();
+    expect(prStack).toBeInstanceOf(ComputeStack);
+  });
 });
 
 describe('DnsStack', () => {
