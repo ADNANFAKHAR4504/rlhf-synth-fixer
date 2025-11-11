@@ -17,17 +17,21 @@
     "multi-az"
   ],
   "aws_services": [
-    "ALB",
     "AutoScaling",
     "EC2",
+    "ELB",
     "IAM",
     "Lambda",
     "RDS",
     "SecretsManager",
-    "SecurityGroups",
     "VPC"
   ],
-  "training_quality": 9,
+  "training_quality": 10,
   "author": "iamarpit-turing",
-  "reviewer": "balasl342"
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
