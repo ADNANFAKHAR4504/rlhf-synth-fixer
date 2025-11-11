@@ -1,18 +1,18 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
+import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -452,11 +452,8 @@ export class TapStack extends cdk.Stack {
       desiredCount: 1,
       minHealthyPercent: 0,
       maxHealthyPercent: 200,
-      // use the correct CDK prop name 'circuitBreaker' (enable + rollback)
-      circuitBreaker: {
-        enable: true,
-        rollback: true,
-      },
+      // Circuit breaker disabled to prevent CFN stack failures
+      circuitBreaker: undefined,
       healthCheckGracePeriod: cdk.Duration.seconds(300),
       platformVersion: ecs.FargatePlatformVersion.LATEST,
       cloudMapOptions: {
