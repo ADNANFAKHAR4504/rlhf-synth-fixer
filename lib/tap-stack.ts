@@ -57,8 +57,11 @@ export class TapStack extends TerraformStack {
       defaultTags: config.defaultTags,
     });
 
+    // Add a short timestamp suffix for uniqueness (last 6 digits)
+    const uniqueSuffix = Date.now().toString().slice(-6);
+
     // Define state lock table name (must be static for backend config)
-    const stateLockTableName = `tap-state-lock-${config.environmentSuffix}`;
+    const stateLockTableName = `tap-state-lock-${config.environmentSuffix}-${uniqueSuffix}`;
 
     // Configure S3 Backend for remote state (without DynamoDB locking initially)
     // COMMENTED OUT FOR QA: Using local state to avoid S3 AccessDenied issues
@@ -343,13 +346,13 @@ export class TapStack extends TerraformStack {
 
     // Create KMS alias for easier reference
     new KmsAlias(this, 'rds-kms-alias', {
-      name: `alias/payment-rds-${config.environmentSuffix}`,
+      name: `alias/payment-rds-${config.environmentSuffix}-${uniqueSuffix}`,
       targetKeyId: rdsKmsKey.keyId,
     });
 
     // Create DB subnet group
     const dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
-      name: `payment-db-subnet-group-${config.environmentSuffix}`,
+      name: `payment-db-subnet-${config.environmentSuffix}-${uniqueSuffix}`,
       subnetIds: [privateSubnet1.id, privateSubnet2.id],
       description: `Database subnet group for payment platform ${config.environmentSuffix}`,
       tags: {
@@ -396,7 +399,7 @@ export class TapStack extends TerraformStack {
       this,
       'db-password-secret',
       {
-        name: `payment-platform-db-password-${config.environmentSuffix}`,
+        name: `payment-db-pwd-${config.environmentSuffix}-${uniqueSuffix}`,
         description: `Database password for payment platform ${config.environmentSuffix}`,
         recoveryWindowInDays: 0, // Immediately delete for QA/testing
         tags: {
@@ -464,7 +467,7 @@ export class TapStack extends TerraformStack {
 
     // Create CloudWatch log group for ECS
     const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
-      name: `/ecs/payment-platform-${config.environmentSuffix}`,
+      name: `/ecs/payment-platform-${config.environmentSuffix}-${uniqueSuffix}`,
       retentionInDays: environment.logRetentionDays,
       tags: {
         Name: `payment-ecs-logs-${config.environmentSuffix}`,
@@ -475,7 +478,7 @@ export class TapStack extends TerraformStack {
 
     // Create IAM role for ECS task execution
     const ecsTaskExecutionRole = new IamRole(this, 'ecs-task-execution-role', {
-      name: `payment-ecs-task-execution-role-${config.environmentSuffix}`,
+      name: `payment-ecs-exec-role-${config.environmentSuffix}-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -530,7 +533,7 @@ export class TapStack extends TerraformStack {
 
     // Create IAM role for ECS task
     const ecsTaskRole = new IamRole(this, 'ecs-task-role', {
-      name: `payment-ecs-task-role-${config.environmentSuffix}`,
+      name: `payment-ecs-task-role-${config.environmentSuffix}-${uniqueSuffix}`,
       assumeRolePolicy: JSON.stringify({
         Version: '2012-10-17',
         Statement: [
@@ -661,7 +664,7 @@ export class TapStack extends TerraformStack {
 
     // Create Application Load Balancer
     const alb = new Alb(this, 'alb', {
-      name: `payment-alb-${config.environmentSuffix}`,
+      name: `pay-alb-${config.environmentSuffix}-${uniqueSuffix}`,
       internal: false,
       loadBalancerType: 'application',
       securityGroups: [albSecurityGroup.id],
@@ -676,7 +679,7 @@ export class TapStack extends TerraformStack {
 
     // Create target group
     const targetGroup = new AlbTargetGroup(this, 'alb-target-group', {
-      name: `payment-tg-${config.environmentSuffix}`,
+      name: `pay-tg-${config.environmentSuffix}-${uniqueSuffix}`,
       port: 8080,
       protocol: 'HTTP',
       vpcId: vpc.id,

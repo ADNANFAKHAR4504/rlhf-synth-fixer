@@ -25,6 +25,25 @@ describe('Stack Structure', () => {
     // Verify that TapStack instantiates without errors via props
     expect(stack).toBeDefined();
     expect(synthesized).toBeDefined();
+
+    // Verify resources have unique suffixes (environment suffix + timestamp)
+    // The synthesized JSON should contain resources with the environment suffix
+    expect(synthesized).toContain('prod');
+
+    // Check for specific resources that should have unique suffixes
+    const synthObj = JSON.parse(synthesized);
+
+    // Verify DynamoDB table has unique suffix pattern
+    const dynamoTable = synthObj.resource.aws_dynamodb_table['state-lock-table'];
+    expect(dynamoTable.name).toMatch(/tap-state-lock-prod-\d{6}/);
+
+    // Verify ALB has unique suffix pattern
+    const alb = synthObj.resource.aws_alb.alb;
+    expect(alb.name).toMatch(/pay-alb-prod-\d{6}/);
+
+    // Verify Target Group has unique suffix pattern
+    const tg = synthObj.resource.aws_alb_target_group['alb-target-group'];
+    expect(tg.name).toMatch(/pay-tg-prod-\d{6}/);
   });
 
   test('TapStack uses default values when no props provided', () => {
