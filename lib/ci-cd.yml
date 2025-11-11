@@ -576,11 +576,9 @@ monitor_release:
         - "scripts/run-lighthouse.sh"
   script:
     - export SENTRY_RELEASE="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
-    - npm ci
-    - npx @sentry/cli releases new "$SENTRY_RELEASE"
+    - npm ci && npx @sentry/cli releases new "$SENTRY_RELEASE"
     - bash scripts/create-datadog-event.sh "Deployed ${CI_COMMIT_SHORT_SHA} to ${CI_ENVIRONMENT_NAME}"
-    - bash scripts/run-synthetic-tests.sh
-    - bash scripts/run-lighthouse.sh
+    - bash scripts/run-synthetic-tests.sh && bash scripts/run-lighthouse.sh
   needs:
     - deploy_prod
 
