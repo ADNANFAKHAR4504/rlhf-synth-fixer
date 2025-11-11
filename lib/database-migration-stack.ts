@@ -1,15 +1,15 @@
 import * as cdk from 'aws-cdk-lib';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as dms from 'aws-cdk-lib/aws-dms';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as kms from 'aws-cdk-lib/aws-kms';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
-import * as sns from 'aws-cdk-lib/aws-sns';
+import * as dms from 'aws-cdk-lib/aws-dms';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
 export interface DatabaseMigrationStackProps {
@@ -520,7 +520,7 @@ export class DatabaseMigrationStack extends Construct {
         replicationInstanceClass: 'dms.t3.medium',
         replicationInstanceIdentifier: `dms-replication-${environmentSuffix}`,
         allocatedStorage: 100,
-      //  engineVersion: '3.5.1',
+        //  engineVersion: '3.5.1',
         multiAz: false,
         publiclyAccessible: false,
         replicationSubnetGroupIdentifier:
@@ -559,7 +559,6 @@ export class DatabaseMigrationStack extends Construct {
           maxFileSize: 512000,
           parallelLoadThreads: 1,
           serverTimezone: 'UTC',
-          targetDbType: 'specific-database',
         },
       }
     );
