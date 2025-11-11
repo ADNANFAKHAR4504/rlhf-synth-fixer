@@ -1,5 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 
 export interface DatabaseStackArgs {
   environmentSuffix: string;
@@ -10,6 +11,8 @@ export interface DatabaseStackArgs {
   drSubnetIds: pulumi.Output<string[]>;
   primaryProvider: aws.Provider;
   drProvider: aws.Provider;
+  primaryInstanceSecurityGroupId?: pulumi.Output<string>;
+  drInstanceSecurityGroupId?: pulumi.Output<string>;
 }
 
 export class DatabaseStack extends pulumi.ComponentResource {
@@ -36,6 +39,8 @@ export class DatabaseStack extends pulumi.ComponentResource {
       drSubnetIds,
       primaryProvider,
       drProvider,
+      primaryInstanceSecurityGroupId,
+      drInstanceSecurityGroupId,
     } = args;
 
     // Create KMS key for database encryption in primary region
@@ -70,7 +75,21 @@ export class DatabaseStack extends pulumi.ComponentResource {
       { provider: drProvider, parent: this }
     );
 
-    // Generate random password for RDS
+    // Generate cryptographically secure random password for RDS
+    const randomPassword = new random.RandomPassword(
+      `db-password-random-${environmentSuffix}`,
+      {
+        length: 32,
+        special: true,
+        overrideSpecial: '!@#$%^&*()_+-=[]{}|;:,.<>?',
+        minLower: 1,
+        minUpper: 1,
+        minNumeric: 1,
+        minSpecial: 1,
+      },
+      { parent: this }
+    );
+
     const dbPassword = new aws.secretsmanager.Secret(
       `db-password-${environmentSuffix}`,
       {
@@ -85,18 +104,11 @@ export class DatabaseStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
-    // Generate random password
-    const randomPassword = Array.from({ length: 20 }, () => {
-      const chars =
-        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
-      return chars.charAt(Math.floor(Math.random() * chars.length));
-    }).join('');
-
     const _dbPasswordVersion = new aws.secretsmanager.SecretVersion(
       `db-password-version-${environmentSuffix}`,
       {
         secretId: dbPassword.id,
-        secretString: pulumi.secret(randomPassword),
+        secretString: randomPassword.result,
       },
       { provider: primaryProvider, parent: this }
     );
@@ -108,14 +120,25 @@ export class DatabaseStack extends pulumi.ComponentResource {
       {
         vpcId: primaryVpcId,
         description: 'Security group for primary RDS cluster',
-        ingress: [
-          {
-            protocol: 'tcp',
-            fromPort: 5432,
-            toPort: 5432,
-            cidrBlocks: ['10.0.0.0/16', '10.1.0.0/16'],
-          },
-        ],
+        ingress: primaryInstanceSecurityGroupId
+          ? [
+              {
+                protocol: 'tcp',
+                fromPort: 5432,
+                toPort: 5432,
+                securityGroups: [primaryInstanceSecurityGroupId],
+                description: 'Allow access from compute instances',
+              },
+            ]
+          : [
+              {
+                protocol: 'tcp',
+                fromPort: 5432,
+                toPort: 5432,
+                cidrBlocks: ['10.0.0.0/16'],
+                description: 'Allow access from VPC CIDR',
+              },
+            ],
         egress: [
           {
             protocol: '-1',
@@ -139,14 +162,25 @@ export class DatabaseStack extends pulumi.ComponentResource {
       {
         vpcId: drVpcId,
         description: 'Security group for DR RDS cluster',
-        ingress: [
-          {
-            protocol: 'tcp',
-            fromPort: 5432,
-            toPort: 5432,
-            cidrBlocks: ['10.0.0.0/16', '10.1.0.0/16'],
-          },
-        ],
+        ingress: drInstanceSecurityGroupId
+          ? [
+              {
+                protocol: 'tcp',
+                fromPort: 5432,
+                toPort: 5432,
+                securityGroups: [drInstanceSecurityGroupId],
+                description: 'Allow access from compute instances',
+              },
+            ]
+          : [
+              {
+                protocol: 'tcp',
+                fromPort: 5432,
+                toPort: 5432,
+                cidrBlocks: ['10.1.0.0/16'],
+                description: 'Allow access from VPC CIDR',
+              },
+            ],
         egress: [
           {
             protocol: '-1',
@@ -214,7 +248,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         databaseName: 'paymentsdb',
         masterUsername: 'dbadmin',
-        masterPassword: pulumi.secret(randomPassword),
+        masterPassword: randomPassword.result,
         dbSubnetGroupName: primarySubnetGroup.name,
         vpcSecurityGroupIds: [primaryDbSg.id],
         globalClusterIdentifier: globalCluster.id,

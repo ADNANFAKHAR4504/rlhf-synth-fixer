@@ -47,23 +47,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Database layer with Aurora Global Database and DynamoDB global tables
-    const databaseStack = new DatabaseStack(
-      'database',
-      {
-        environmentSuffix,
-        tags,
-        primaryVpcId: networkStack.primaryVpcId,
-        drVpcId: networkStack.drVpcId,
-        primarySubnetIds: networkStack.primaryPrivateSubnetIds,
-        drSubnetIds: networkStack.drPrivateSubnetIds,
-        primaryProvider: networkStack.primaryProvider,
-        drProvider: networkStack.drProvider,
-      },
-      { parent: this }
-    );
-
     // Compute resources with Auto Scaling and ALBs in both regions
+    // Created first so security group IDs can be passed to database stack
     const computeStack = new ComputeStack(
       'compute',
       {
@@ -79,6 +64,25 @@ export class TapStack extends pulumi.ComponentResource {
         drProvider: networkStack.drProvider,
       },
       { parent: this }
+    );
+
+    // Database layer with Aurora Global Database and DynamoDB global tables
+    // Uses compute security group IDs for more secure access control
+    const databaseStack = new DatabaseStack(
+      'database',
+      {
+        environmentSuffix,
+        tags,
+        primaryVpcId: networkStack.primaryVpcId,
+        drVpcId: networkStack.drVpcId,
+        primarySubnetIds: networkStack.primaryPrivateSubnetIds,
+        drSubnetIds: networkStack.drPrivateSubnetIds,
+        primaryProvider: networkStack.primaryProvider,
+        drProvider: networkStack.drProvider,
+        primaryInstanceSecurityGroupId: computeStack.primaryInstanceSecurityGroupId,
+        drInstanceSecurityGroupId: computeStack.drInstanceSecurityGroupId,
+      },
+      { parent: this, dependsOn: [computeStack] }
     );
 
     // DNS and health-check based failover routing

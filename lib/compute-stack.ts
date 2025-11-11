@@ -21,6 +21,8 @@ export class ComputeStack extends pulumi.ComponentResource {
   public readonly drAlbZoneId: pulumi.Output<string>;
   public readonly primaryAlbArn: pulumi.Output<string>;
   public readonly drAlbArn: pulumi.Output<string>;
+  public readonly primaryInstanceSecurityGroupId: pulumi.Output<string>;
+  public readonly drInstanceSecurityGroupId: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -84,6 +86,14 @@ export class ComputeStack extends pulumi.ComponentResource {
             fromPort: 80,
             toPort: 80,
             cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP traffic from internet',
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTPS traffic from internet',
           },
         ],
         egress: [
@@ -115,6 +125,14 @@ export class ComputeStack extends pulumi.ComponentResource {
             fromPort: 80,
             toPort: 80,
             cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTP traffic from internet',
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'Allow HTTPS traffic from internet',
           },
         ],
         egress: [
@@ -417,13 +435,49 @@ echo "OK" > /var/www/html/health.html
       { provider: drProvider, parent: this }
     );
 
-    // Listener for primary ALB
+    // ACM Certificate for primary region
+    // NOTE: In production, replace with a validated certificate for your domain
+    const primaryCert = new aws.acm.Certificate(
+      `primary-cert-${environmentSuffix}`,
+      {
+        domainName: `payments-${environmentSuffix}.example.com`,
+        validationMethod: 'DNS',
+        subjectAlternativeNames: [`*.payments-${environmentSuffix}.example.com`],
+        tags: pulumi.all([tags]).apply(([t]) => ({
+          ...t,
+          Name: `primary-cert-${environmentSuffix}`,
+          'DR-Role': 'primary',
+        })),
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // ACM Certificate for DR region
+    // NOTE: In production, replace with a validated certificate for your domain
+    const drCert = new aws.acm.Certificate(
+      `dr-cert-${environmentSuffix}`,
+      {
+        domainName: `payments-${environmentSuffix}.example.com`,
+        validationMethod: 'DNS',
+        subjectAlternativeNames: [`*.payments-${environmentSuffix}.example.com`],
+        tags: pulumi.all([tags]).apply(([t]) => ({
+          ...t,
+          Name: `dr-cert-${environmentSuffix}`,
+          'DR-Role': 'secondary',
+        })),
+      },
+      { provider: drProvider, parent: this }
+    );
+
+    // HTTPS Listener for primary ALB
     new aws.lb.Listener(
-      `primary-alb-listener-${environmentSuffix}`,
+      `primary-alb-https-listener-${environmentSuffix}`,
       {
         loadBalancerArn: primaryAlb.arn,
-        port: 80,
-        protocol: 'HTTP',
+        port: 443,
+        protocol: 'HTTPS',
+        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
+        certificateArn: primaryCert.arn,
         defaultActions: [
           {
             type: 'forward',
@@ -434,17 +488,61 @@ echo "OK" > /var/www/html/health.html
       { provider: primaryProvider, parent: this }
     );
 
-    // Listener for DR ALB
+    // HTTPS Listener for DR ALB
     new aws.lb.Listener(
-      `dr-alb-listener-${environmentSuffix}`,
+      `dr-alb-https-listener-${environmentSuffix}`,
+      {
+        loadBalancerArn: drAlb.arn,
+        port: 443,
+        protocol: 'HTTPS',
+        sslPolicy: 'ELBSecurityPolicy-TLS13-1-2-2021-06',
+        certificateArn: drCert.arn,
+        defaultActions: [
+          {
+            type: 'forward',
+            targetGroupArn: drTargetGroup.arn,
+          },
+        ],
+      },
+      { provider: drProvider, parent: this }
+    );
+
+    // HTTP Listener for primary ALB with redirect to HTTPS
+    new aws.lb.Listener(
+      `primary-alb-http-listener-${environmentSuffix}`,
+      {
+        loadBalancerArn: primaryAlb.arn,
+        port: 80,
+        protocol: 'HTTP',
+        defaultActions: [
+          {
+            type: 'redirect',
+            redirect: {
+              port: '443',
+              protocol: 'HTTPS',
+              statusCode: 'HTTP_301',
+            },
+          },
+        ],
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // HTTP Listener for DR ALB with redirect to HTTPS
+    new aws.lb.Listener(
+      `dr-alb-http-listener-${environmentSuffix}`,
       {
         loadBalancerArn: drAlb.arn,
         port: 80,
         protocol: 'HTTP',
         defaultActions: [
           {
-            type: 'forward',
-            targetGroupArn: drTargetGroup.arn,
+            type: 'redirect',
+            redirect: {
+              port: '443',
+              protocol: 'HTTPS',
+              statusCode: 'HTTP_301',
+            },
           },
         ],
       },
@@ -457,6 +555,8 @@ echo "OK" > /var/www/html/health.html
     this.drAlbZoneId = drAlb.zoneId;
     this.primaryAlbArn = primaryAlb.arn;
     this.drAlbArn = drAlb.arn;
+    this.primaryInstanceSecurityGroupId = primaryInstanceSg.id;
+    this.drInstanceSecurityGroupId = drInstanceSg.id;
 
     this.registerOutputs({
       primaryAlbDnsName: this.primaryAlbDnsName,
@@ -465,6 +565,8 @@ echo "OK" > /var/www/html/health.html
       drAlbZoneId: this.drAlbZoneId,
       primaryAlbArn: this.primaryAlbArn,
       drAlbArn: this.drAlbArn,
+      primaryInstanceSecurityGroupId: this.primaryInstanceSecurityGroupId,
+      drInstanceSecurityGroupId: this.drInstanceSecurityGroupId,
     });
   }
 }
