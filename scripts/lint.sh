@@ -111,9 +111,11 @@ elif [ "$PLATFORM" = "tf" ] && [ "$LANGUAGE" = "hcl" ]; then
         exit 1
     fi
 
-    # Initialize terraform (ensure providers are installed even if directory exists)
-    echo "📦 Initializing Terraform..."
-    terraform init -backend=false -input=false -upgrade >/dev/null
+    # Initialize terraform if needed
+    if [ ! -d ".terraform" ]; then
+        echo "📦 Initializing Terraform..."
+        terraform init -backend=false
+    fi
 
     # Validate terraform configuration
     echo "🔍 Validating Terraform configuration..."
