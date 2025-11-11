@@ -1,0 +1,7 @@
+name: pulumi-infra
+runtime:
+  name: python
+  options:
+    virtualenv: /Users/mayanksethi/.local/share/virtualenvs/synth-7up57r-TwM47z-v
+description: Pulumi infrastructure for TAP
+main: tap.py
