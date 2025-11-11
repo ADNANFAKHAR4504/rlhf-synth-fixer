@@ -122,7 +122,6 @@ export class BackupStack extends pulumi.ComponentResource {
             completionWindow: 120,
             lifecycle: {
               deleteAfter: 30,
-              coldStorageAfter: 7,
             },
             recoveryPointTags: pulumi.all([tags]).apply(([t]) => ({
               ...t,
@@ -133,7 +132,6 @@ export class BackupStack extends pulumi.ComponentResource {
                 destinationVaultArn: pulumi.interpolate`arn:aws:backup:us-east-2:${accountId}:backup-vault:${drVault.name}`,
                 lifecycle: {
                   deleteAfter: 30,
-                  coldStorageAfter: 7,
                 },
               },
             ],

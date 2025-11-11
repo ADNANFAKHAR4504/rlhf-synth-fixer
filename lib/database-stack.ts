@@ -318,6 +318,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
         replicas: [
           {
             regionName: 'us-east-2',
+            kmsKeyArn: drKmsKey.arn,
           },
         ],
         tags: pulumi.all([tags]).apply(([t]) => ({
