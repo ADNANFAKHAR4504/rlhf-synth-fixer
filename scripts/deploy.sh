@@ -48,11 +48,7 @@ if [ -n "$PULUMI_BACKEND_URL" ]; then
 fi
 
 echo "=== Bootstrap Phase ==="
-if [ "${SKIP_BOOTSTRAP:-false}" != "true" ]; then
-  ./scripts/bootstrap.sh
-else
-  echo "⏭️ Skipping bootstrap as requested"
-fi
+./scripts/bootstrap.sh
 
 # Deploy step
 echo "=== Deploy Phase ==="

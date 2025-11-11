@@ -35,7 +35,6 @@
     "test:integration": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
     "test:integration-js": "jest --testPathPattern=\\.int\\.test\\.mjs$ --testTimeout=30000",
     "test:integration-cdktf": "jest --testPathPattern=\\.int\\.test\\.ts$ --testTimeout=30000",
-    "test:live": "jest --testPathPattern=\\.int\\.test\\.ts$ --testNamePattern=\"Live End-to-End\" --testTimeout=60000",
     "cdk": "cdk",
     "cdk:synth": "npx cdk synth --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
     "cdk:bootstrap": "npx cdk bootstrap --context environmentSuffix=${ENVIRONMENT_SUFFIX:-dev}",
