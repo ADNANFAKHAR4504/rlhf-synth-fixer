@@ -242,7 +242,7 @@ describe("TapStack — Live Integration Tests (Serverless Anomaly Detection)", (
 
   /* 6 */ it("Lambda: detection function exists, ARM64, tracing Active, reserved concurrency >= 100", async () => {
     const arn = outputs.DetectionFunctionArn;
-    const cfg = (await retry(() => lambda.send(new GetFunctionConfigurationCommand({ FunctionName: arn })))).;
+    const cfg = await retry(() => lambda.send(new GetFunctionConfigurationCommand({ FunctionName: arn })));
     expect(cfg.Architectures?.includes("arm64")).toBe(true);
     expect(cfg.TracingConfig?.Mode).toBe("Active");
     const conc = await retry(() => lambda.send(new GetFunctionConcurrencyCommand({ FunctionName: arn })));
