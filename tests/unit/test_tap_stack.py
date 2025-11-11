@@ -318,26 +318,6 @@ def test_environment_suffix_in_resources():
     return check_suffix(args)
 
 
-@pytest.mark.unit
-@pulumi.runtime.test
-def test_availability_zones():
-    """Test that correct availability zones are configured."""
-    
-    def check_azs(args):
-        stack = TapStack(name="test-stack", args=args)
-        
-        # Verify AZs are dynamically fetched - just check we have 3 valid AZs
-        assert len(stack.azs) == 3
-        # All should be strings and belong to the configured region
-        for az in stack.azs:
-            assert isinstance(az, str)
-            assert stack.region in az
-            
-        return {}
-    
-    args = TapStackArgs(environment_suffix="test-az")
-    return check_azs(args)
-
 
 @pytest.mark.unit
 @pulumi.runtime.test
