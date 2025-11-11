@@ -326,7 +326,7 @@ export class DatabaseMigrationStack extends Construct {
 
     // Enable backtrack (72 hours)
     const cfnCluster = auroraCluster.node.defaultChild as rds.CfnDBCluster;
-    cfnCluster.backtrackWindow = 259200; // 72 hours in seconds
+    //cfnCluster.backtrackWindow = 259200; // 72 hours in seconds
 
     // Enable secret rotation after Aurora cluster is created
     (targetDbSecret as secretsmanager.Secret).addRotationSchedule('Rt', {
