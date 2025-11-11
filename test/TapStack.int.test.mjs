@@ -1,37 +1,63 @@
-import { readFileSync } from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeTransitGatewaysCommand,
-  DescribeTransitGatewayAttachmentsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeTransitGatewayRouteTablesCommand,
-  SearchTransitGatewayRoutesCommand
-} from '@aws-sdk/client-ec2';
+    CloudFormationClient,
+    DescribeStacksCommand
+} from '@aws-sdk/client-cloudformation';
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand
+    CloudWatchLogsClient,
+    DescribeLogGroupsCommand
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+    DescribeInternetGatewaysCommand,
+    DescribeNatGatewaysCommand,
+    DescribeRouteTablesCommand,
+    DescribeSecurityGroupsCommand,
+    DescribeSubnetsCommand,
+    DescribeTransitGatewayAttachmentsCommand,
+    DescribeTransitGatewayRouteTablesCommand,
+    DescribeTransitGatewaysCommand,
+    DescribeVpcAttributeCommand,
+    DescribeVpcsCommand,
+    EC2Client,
+    SearchTransitGatewayRoutesCommand
+} from '@aws-sdk/client-ec2';
 
-const region = 'us-east-1';
+const region = process.env.AWS_REGION || 'us-east-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'stage';
+const stackName = `TapStack-${environmentSuffix}`;
+
 const ec2Client = new EC2Client({ region });
 const logsClient = new CloudWatchLogsClient({ region });
+const cfnClient = new CloudFormationClient({ region });
 
-// Load stack outputs
+// Dynamically load stack outputs from CloudFormation
 let outputs = {};
-try {
-  const outputsContent = readFileSync('cfn-outputs/flat-outputs.json', 'utf8');
-  outputs = JSON.parse(outputsContent);
-} catch (error) {
-  console.error('Failed to load stack outputs:', error);
-  throw error;
+let stackOutputs = [];
+
+async function loadStackOutputs() {
+  try {
+    const response = await cfnClient.send(
+      new DescribeStacksCommand({ StackName: stackName })
+    );
+    
+    if (response.Stacks && response.Stacks.length > 0) {
+      stackOutputs = response.Stacks[0].Outputs || [];
+      outputs = stackOutputs.reduce((acc, output) => {
+        acc[output.OutputKey] = output.OutputValue;
+        return acc;
+      }, {});
+      console.log(`Loaded ${stackOutputs.length} outputs from stack ${stackName}`);
+    }
+  } catch (error) {
+    console.error(`Failed to load stack outputs from ${stackName}:`, error.message);
+    throw error;
+  }
 }
 
 describe('Hub-and-Spoke Network Architecture Integration Tests', () => {
+  beforeAll(async () => {
+    await loadStackOutputs();
+  });
+
   describe('VPC Validation', () => {
     test('Hub VPC should exist with correct CIDR', async () => {
       const vpcId = outputs.HubVpcId;
@@ -94,15 +120,24 @@ describe('Hub-and-Spoke Network Architecture Integration Tests', () => {
         outputs.MarketingVpcId
       ];
 
-      const response = await ec2Client.send(
-        new DescribeVpcsCommand({ VpcIds: vpcIds })
-      );
+      for (const vpcId of vpcIds) {
+        const dnsSupportResponse = await ec2Client.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsSupport'
+          })
+        );
 
-      expect(response.Vpcs).toHaveLength(4);
-      response.Vpcs.forEach(vpc => {
-        expect(vpc.EnableDnsSupport).toBe(true);
-        expect(vpc.EnableDnsHostnames).toBe(true);
-      });
+        const dnsHostnamesResponse = await ec2Client.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsHostnames'
+          })
+        );
+
+        expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+        expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+      }
     });
   });
 

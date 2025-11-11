@@ -1,6 +1,6 @@
 {
   "platform": "cfn",
-  "language": "yaml",
+  "language": "js",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
