@@ -552,87 +552,6 @@ jobs:
             coverage/
             cov.json
 
-  claude-task-analyze:
-    runs-on: ubuntu-24.04
-    name: "Claude Task Analysis"
-    needs: [detect-metadata, unit-tests]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-
-      - name: Run Claude Task Analysis
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: "Analyze the IAC task files in the lib/ folder and generate a report showing which resources have deletion protection enabled."
-          claude_args: |
-            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-            --system-prompt "This helps identify resources that will REMAIN after stack deletion.
-
-            Your task:
-            1. Read all IAC code files in the lib/ folder (including TypeScript, Python, Java, Go, Terraform, CloudFormation, etc.)
-            2. Identify all AWS resources defined in the infrastructure code
-            3. For each resource, check ONLY for deletion protection settings:
-               - Look for properties like: DeletionProtection, deletion_protection, DeletionPolicy: Retain, etc.
-               - Common patterns:
-                 * CloudFormation: DeletionProtection: true, DeletionPolicy: Retain
-                 * Terraform: deletion_protection = true, prevent_destroy = true
-                 * CDK: deletionProtection: true, removalPolicy: RemovalPolicy.RETAIN
-                 * RDS: DeletionProtection: true
-                 * DynamoDB: DeletionProtectionEnabled: true
-                 * S3: (bucket-level policy prevents deletion)
-               - Note: RDS databases should NOT have delete protection enabled (deleteProtection should be false for RDS)
-            4. For each resource, determine:
-               - Resource name/identifier
-               - deleteProtection: true if deletion protection is enabled, false otherwise
-               - cost: Estimate the monthly cost (for resources that will remain after deletion)
-
-            5. Generate a markdown table with the following columns:
-               - resource: The resource name/identifier
-               - deleteProtection: true/false based on deletion protection settings
-               - cost: Estimated monthly cost (in USD, or "N/A" if not applicable)
-
-            6. At the bottom of the table, add a summary row with:
-               - Total monthly cost (sum of all costs, excluding "N/A")
-               - Total per day cost (monthly cost / 30)
-
-            7. Post the report as a GitHub comment on the pull request.
-
-            Example table format:
-            | resource | deleteProtection | cost |
-            |----------|------------------|------|
-            | s3-bucket-myapp | true | $0.023 |
-            | rds-database-prod | false | $150.00 |
-            | dynamodb-table-users | true | $25.00 |
-            | **Total (per month)** | | **$175.023** |
-            | **Total (per day)** | | **$5.83** |
-
-            Important:
-            - ONLY check for deletion protection settings - ignore encryption, MFA, backup, versioning, etc.
-            - Focus on identifying resources that will remain after stack deletion
-            - Resources with deleteProtection: true will persist after stack deletion
-            - For cost estimation, use standard AWS pricing or reasonable estimates
-            - If cost cannot be determined, use "N/A" and exclude from totals
-            - Calculate per day cost as monthly cost divided by 30
-            - Post the complete report as a GitHub comment with the cost summary at the bottom"
-
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
   #   runs-on: ubuntu-24.04
@@ -703,9 +622,31 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [detect-metadata]
+    needs:
+      [
+        detect-metadata,
+        integration-tests-live,
+        analysis,
+        cicd-pipeline-optimization,
+      ]
     # For Infrastructure Analysis/Monitoring OR CI/CD Pipeline: Allow int-tests to be skipped
     # For all other subject labels: Require int-tests to succeed
+    if: |
+      always() && !cancelled() &&
+      (needs.analysis.result == 'success' || needs.analysis.result == 'skipped') &&
+      (needs.cicd-pipeline-optimization.result == 'success' || needs.cicd-pipeline-optimization.result == 'skipped') &&
+      (
+        (
+          (contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) ||
+           contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)) &&
+          (needs.integration-tests-live.result == 'success' || needs.integration-tests-live.result == 'skipped')
+        ) ||
+        (
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) &&
+          !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) &&
+          needs.integration-tests-live.result == 'success'
+        )
+      )
     permissions:
       contents: write
       pull-requests: write
@@ -767,10 +708,12 @@ jobs:
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review."
+          prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review. You MUST post your review findings as a comment on this pull request when complete."
           claude_args: |
             --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
-            --system-prompt "# Determine Review Type
+            --system-prompt "CRITICAL: You MUST post a GitHub comment on this pull request when your review is complete. This is mandatory and non-negotiable.
+
+            # Determine Review Type
 
             First, check the subject_labels in metadata.json to determine the review type:
             ```bash
@@ -874,7 +817,7 @@ jobs:
             CRITICAL: you MUST validate lib/IDEAL_RESPONSE.md, read .claude/agents/iac-infra-qa-trainer.md to understand how that file should have been created.
             1. Read lib/IDEAL_RESPONSE.md if it exists
             2. lib/IDEAL_RESPONSE.md should be well-formatted, markdown.
-            3. Important: There should not be code outside proper code blocks (```python, ```bash, etc.)
+            3. Important: There should not be code outside proper code blocks (\`\`\`python, \`\`\`bash, etc.)
             4. Every code file inside lib/ folder should be represented in lib/IDEAL_RESPONSE.md in code_blocks.
             5. There should not be references in the lib/IDEAL_RESPONSE.md to the QA process, unit tests or integration tests.
             6. If the lib/IDEAL_RESPONSE.md does not meet the above criteria, fail the job by exiting with code 1.
@@ -887,7 +830,7 @@ jobs:
             When validating platform/language compliance, you MUST:
             1. Run: bash ./.claude/scripts/validate-code-platform.sh
             2. This script checks lib/IDEAL_RESPONSE.md (NOT MODEL_RESPONSE.md) against metadata.json
-            3. If MODEL_FAILURES.md mentions "Maven → Gradle" or "multi-stack → single stack", those are PAST fixes
+            3. If MODEL_FAILURES.md mentions \"Maven → Gradle\" or \"multi-stack → single stack\", those are PAST fixes
             4. DO NOT report those as current problems in IDEAL_RESPONSE.md
             5. Only validate what is CURRENTLY in lib/IDEAL_RESPONSE.md
 
@@ -899,7 +842,7 @@ jobs:
             - training_quality (required)
             - aws_services (required)
 
-            For CI/CD Pipeline tasks (subject_label: "CI/CD Pipeline" OR platform: "cicd"):
+            For CI/CD Pipeline tasks (subject_label: \"CI/CD Pipeline\" OR platform: \"cicd\"):
             - training_quality (required)
             - aws_services (NOT required - CI/CD pipelines don't deploy AWS services)
 
@@ -921,7 +864,14 @@ jobs:
             - The numeric value (0–10) represents the final quality score.
             - Continue to post your detailed GitHub comment as usual.
 
-            Once your review is complete, post the summary comment and finish execution successfully.
+            **MANDATORY FINAL STEP**: Once your review is complete, you MUST post a comprehensive GitHub comment on this pull request summarizing your findings, scores, and any recommendations. The comment should include:
+            - Summary of the review
+            - Training quality score
+            - Any issues found
+            - Recommendations for improvement
+            - The final SCORE line at the end
+
+            After posting the comment, finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow."
 
       - name: Extract Claude Quality Score from PR Comment
