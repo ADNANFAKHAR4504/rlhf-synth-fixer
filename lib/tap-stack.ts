@@ -58,6 +58,12 @@ export class TapStack extends cdk.Stack {
       exportName: `dms-task-arn-${environmentSuffix}`,
     });
 
+    new cdk.CfnOutput(this, 'ValidationLambdaArn', {
+      value: dbMigration.validationLambdaArn,
+      description: 'Data validation Lambda function ARN',
+      exportName: `validation-lambda-arn-${environmentSuffix}`,
+    });
+
     new cdk.CfnOutput(this, 'DmsVpcRoleArn', {
       value: dmsVpcRole.roleArn,
       description: 'DMS VPC management role ARN',

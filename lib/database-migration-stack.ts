@@ -43,6 +43,7 @@ export interface DatabaseMigrationStackProps {
 export class DatabaseMigrationStack extends Construct {
   public readonly auroraClusterEndpoint: string;
   public readonly dmsTaskArn: string;
+  public readonly validationLambdaArn: string;
 
   constructor(
     scope: Construct,
@@ -947,5 +948,6 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     // (Outputs are defined at the TapStack level)
     this.auroraClusterEndpoint = auroraCluster.clusterEndpoint.hostname;
     this.dmsTaskArn = dmsTask.ref;
+    this.validationLambdaArn = validationLambda.functionArn;
   }
 }

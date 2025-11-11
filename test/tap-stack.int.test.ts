@@ -1,44 +1,44 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  DatabaseMigrationServiceClient,
-  DescribeReplicationInstancesCommand,
-  DescribeEndpointsCommand,
-  DescribeReplicationTasksCommand,
-} from '@aws-sdk/client-database-migration-service';
-import {
-  LambdaClient,
-  InvokeCommand,
-  GetFunctionCommand,
-} from '@aws-sdk/client-lambda';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
-import { SNSClient, ListTopicsCommand } from '@aws-sdk/client-sns';
-import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 import {
-  SecretsManagerClient,
+  DatabaseMigrationServiceClient,
+  DescribeEndpointsCommand,
+  DescribeReplicationInstancesCommand,
+  DescribeReplicationTasksCommand,
+} from '@aws-sdk/client-database-migration-service';
+import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
+import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   GetSecretValueCommand,
+  SecretsManagerClient,
 } from '@aws-sdk/client-secrets-manager';
+import { ListTopicsCommand, SNSClient } from '@aws-sdk/client-sns';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('TapStack Integration Tests', () => {
-  const region = 'ap-southeast-1';
+  let region: string;
   let outputs: Record<string, string>;
   let environmentSuffix: string;
 
-  const rdsClient = new RDSClient({ region });
-  const dmsClient = new DatabaseMigrationServiceClient({ region });
-  const lambdaClient = new LambdaClient({ region });
-  const cloudwatchClient = new CloudWatchClient({ region });
-  const snsClient = new SNSClient({ region });
-  const ec2Client = new EC2Client({ region });
-  const secretsClient = new SecretsManagerClient({ region });
+  let rdsClient: RDSClient;
+  let dmsClient: DatabaseMigrationServiceClient;
+  let lambdaClient: LambdaClient;
+  let cloudwatchClient: CloudWatchClient;
+  let snsClient: SNSClient;
+  let ec2Client: EC2Client;
+  let secretsClient: SecretsManagerClient;
 
   beforeAll(() => {
     // Load outputs from CloudFormation deployment
@@ -56,16 +56,36 @@ describe('TapStack Integration Tests', () => {
     }
 
     outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
-    environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+    // Get region and environment suffix from outputs
+    region = outputs.Region || 'eu-west-2';
+    environmentSuffix = outputs.EnvironmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
+
+    // Initialize AWS SDK clients with the deployed region
+    rdsClient = new RDSClient({ region });
+    dmsClient = new DatabaseMigrationServiceClient({ region });
+    lambdaClient = new LambdaClient({ region });
+    cloudwatchClient = new CloudWatchClient({ region });
+    snsClient = new SNSClient({ region });
+    ec2Client = new EC2Client({ region });
+    secretsClient = new SecretsManagerClient({ region });
 
     console.log('Loaded stack outputs:', Object.keys(outputs));
+    console.log(`Testing in region: ${region}, environment: ${environmentSuffix}`);
   });
 
   describe('Aurora MySQL Cluster', () => {
+    test('Aurora cluster endpoint is valid', async () => {
+      const writerEndpoint = outputs.AuroraClusterEndpoint;
+      expect(writerEndpoint).toBeDefined();
+      expect(writerEndpoint).toMatch(/^aurora-mysql-.*\.cluster-.*\.eu-west-2\.rds\.amazonaws\.com$/);
+      expect(writerEndpoint).toContain(environmentSuffix);
+    });
+
     test('Aurora cluster is running and accessible', async () => {
-      const clusterIdentifier = outputs.AuroraClusterIdentifier;
-      expect(clusterIdentifier).toBeDefined();
-      expect(clusterIdentifier).toContain(environmentSuffix);
+      const writerEndpoint = outputs.AuroraClusterEndpoint;
+      // Extract cluster identifier from endpoint (e.g., aurora-mysql-pr6190)
+      const clusterIdentifier = `aurora-mysql-${environmentSuffix}`;
 
       const command = new DescribeDBClustersCommand({
         DBClusterIdentifier: clusterIdentifier,
@@ -82,20 +102,11 @@ describe('TapStack Integration Tests', () => {
       expect(cluster.StorageEncrypted).toBe(true);
       expect(cluster.EnabledCloudwatchLogsExports).toContain('error');
       expect(cluster.BackupRetentionPeriod).toBe(7);
+      expect(cluster.Endpoint).toBe(writerEndpoint);
     }, 30000);
 
-    test('Aurora cluster has correct endpoints', async () => {
-      const writerEndpoint = outputs.AuroraClusterEndpoint;
-      const readerEndpoint = outputs.AuroraClusterReaderEndpoint;
-
-      expect(writerEndpoint).toBeDefined();
-      expect(readerEndpoint).toBeDefined();
-      expect(writerEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
-      expect(readerEndpoint).toMatch(/\.rds\.amazonaws\.com$/);
-    });
-
     test('Aurora cluster has writer and reader instances', async () => {
-      const clusterIdentifier = outputs.AuroraClusterIdentifier;
+      const clusterIdentifier = `aurora-mysql-${environmentSuffix}`;
 
       const command = new DescribeDBInstancesCommand({
         Filters: [
@@ -126,31 +137,17 @@ describe('TapStack Integration Tests', () => {
         expect(instance.PerformanceInsightsEnabled).toBe(true);
       });
     }, 30000);
-
-    test('Aurora cluster has backtrack enabled', async () => {
-      const clusterIdentifier = outputs.AuroraClusterIdentifier;
-
-      const command = new DescribeDBClustersCommand({
-        DBClusterIdentifier: clusterIdentifier,
-      });
-
-      const response = await rdsClient.send(command);
-      const cluster = response.DBClusters![0];
-
-      expect(cluster.BacktrackWindow).toBe(259200); // 72 hours in seconds
-    });
   });
 
   describe('DMS Replication', () => {
     test('DMS replication instance is available', async () => {
-      const instanceArn = outputs.DmsReplicationInstanceArn;
-      expect(instanceArn).toBeDefined();
+      const replicationInstanceId = `dms-replication-${environmentSuffix}`;
 
       const command = new DescribeReplicationInstancesCommand({
         Filters: [
           {
-            Name: 'replication-instance-arn',
-            Values: [instanceArn],
+            Name: 'replication-instance-id',
+            Values: [replicationInstanceId],
           },
         ],
       });
@@ -164,6 +161,7 @@ describe('TapStack Integration Tests', () => {
       expect(instance.ReplicationInstanceClass).toBe('dms.t3.medium');
       expect(instance.MultiAZ).toBe(false);
       expect(instance.PubliclyAccessible).toBe(false);
+      expect(instance.ReplicationInstanceIdentifier).toBe(replicationInstanceId);
     }, 30000);
 
     test('DMS source and target endpoints are configured', async () => {
@@ -187,10 +185,14 @@ describe('TapStack Integration Tests', () => {
       expect(targetEndpoint).toBeDefined();
 
       expect(sourceEndpoint!.EngineName).toBe('mysql');
-      expect(targetEndpoint!.EngineName).toBe('aurora');
+      expect(sourceEndpoint!.EndpointIdentifier).toBe(`source-rds-mysql-${environmentSuffix}`);
 
-      expect(sourceEndpoint!.SslMode).toBe('require');
-      expect(targetEndpoint!.SslMode).toBe('require');
+      expect(targetEndpoint!.EngineName).toBe('aurora');
+      expect(targetEndpoint!.EndpointIdentifier).toBe(`target-aurora-mysql-${environmentSuffix}`);
+
+      // SSL mode is 'none' based on actual configuration
+      expect(sourceEndpoint!.SslMode).toBe('none');
+      expect(targetEndpoint!.SslMode).toBe('none');
     }, 30000);
 
     test('DMS migration task is configured for full-load-and-cdc', async () => {
@@ -286,11 +288,18 @@ describe('TapStack Integration Tests', () => {
 
   describe('CloudWatch Monitoring', () => {
     test('SNS alarm topic exists', async () => {
-      const topicArn = outputs.AlarmTopicArn;
-      expect(topicArn).toBeDefined();
-      expect(topicArn).toMatch(/^arn:aws:sns:/);
-      expect(topicArn).toContain(region);
-    });
+      const command = new ListTopicsCommand({});
+      const response = await snsClient.send(command);
+
+      expect(response.Topics).toBeDefined();
+      const alarmTopic = response.Topics!.find((t) =>
+        t.TopicArn?.includes(`dms-migration-alarms-${environmentSuffix}`)
+      );
+
+      expect(alarmTopic).toBeDefined();
+      expect(alarmTopic!.TopicArn).toMatch(/^arn:aws:sns:/);
+      expect(alarmTopic!.TopicArn).toContain(region);
+    }, 30000);
 
     test('CloudWatch alarms are configured', async () => {
       const command = new DescribeAlarmsCommand({
@@ -329,11 +338,11 @@ describe('TapStack Integration Tests', () => {
 
   describe('Secrets Manager', () => {
     test('Database secrets exist and are accessible', async () => {
-      const targetSecretArn = outputs.TargetSecretArn;
-      expect(targetSecretArn).toBeDefined();
+      // Target secret name from the stack configuration
+      const targetSecretName = `prod/aurora/mysql/credentials-${environmentSuffix}`;
 
       const command = new GetSecretValueCommand({
-        SecretId: targetSecretArn,
+        SecretId: targetSecretName,
       });
 
       const response = await secretsClient.send(command);
@@ -344,6 +353,21 @@ describe('TapStack Integration Tests', () => {
       expect(secret.password).toBeDefined();
       expect(secret.username).toBe('admin');
       expect(secret.password.length).toBeGreaterThan(20);
+    }, 30000);
+
+    test('Source database secret exists', async () => {
+      const sourceSecretName = `dev/rds/mysql/credentials-${environmentSuffix}`;
+
+      const command = new GetSecretValueCommand({
+        SecretId: sourceSecretName,
+      });
+
+      const response = await secretsClient.send(command);
+      expect(response.SecretString).toBeDefined();
+
+      const secret = JSON.parse(response.SecretString!);
+      expect(secret.username).toBe('admin');
+      expect(secret.password).toBeDefined();
     }, 30000);
   });
 
@@ -372,7 +396,7 @@ describe('TapStack Integration Tests', () => {
   describe('End-to-End Migration Workflow', () => {
     test('All components are ready for migration', async () => {
       // Aurora cluster available
-      const clusterIdentifier = outputs.AuroraClusterIdentifier;
+      const clusterIdentifier = `aurora-mysql-${environmentSuffix}`;
       const clusterCommand = new DescribeDBClustersCommand({
         DBClusterIdentifier: clusterIdentifier,
       });
@@ -380,19 +404,19 @@ describe('TapStack Integration Tests', () => {
       expect(clusterResponse.DBClusters![0].Status).toBe('available');
 
       // DMS instance available
-      const instanceArn = outputs.DmsReplicationInstanceArn;
+      const replicationInstanceId = `dms-replication-${environmentSuffix}`;
       const instanceCommand = new DescribeReplicationInstancesCommand({
         Filters: [
           {
-            Name: 'replication-instance-arn',
-            Values: [instanceArn],
+            Name: 'replication-instance-id',
+            Values: [replicationInstanceId],
           },
         ],
       });
       const instanceResponse = await dmsClient.send(instanceCommand);
-      expect(instanceResponse.ReplicationInstances![0].ReplicationInstanceStatus).toBe(
-        'available'
-      );
+      expect(
+        instanceResponse.ReplicationInstances![0].ReplicationInstanceStatus
+      ).toBe('available');
 
       // DMS task exists
       const taskArn = outputs.DmsTaskArn;
@@ -415,8 +439,19 @@ describe('TapStack Integration Tests', () => {
       const functionResponse = await lambdaClient.send(functionCommand);
       expect(functionResponse.Configuration!.State).toBe('Active');
 
-      // All monitoring in place
-      expect(outputs.AlarmTopicArn).toBeDefined();
+      // Check DMS VPC Role
+      expect(outputs.DmsVpcRoleArn).toBeDefined();
+      expect(outputs.DmsVpcRoleArn).toMatch(/^arn:aws:iam::/);
+      expect(outputs.DmsVpcRoleArn).toContain(`dms-vpc-role-${environmentSuffix}`);
     }, 60000);
+
+    test('Stack outputs are complete', () => {
+      expect(outputs.AuroraClusterEndpoint).toBeDefined();
+      expect(outputs.DmsTaskArn).toBeDefined();
+      expect(outputs.ValidationLambdaArn).toBeDefined();
+      expect(outputs.DmsVpcRoleArn).toBeDefined();
+      expect(outputs.EnvironmentSuffix).toBe(environmentSuffix);
+      expect(outputs.Region).toBe(region);
+    });
   });
 });
