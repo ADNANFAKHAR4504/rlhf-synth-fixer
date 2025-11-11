@@ -49,40 +49,42 @@ export class NetworkingStack extends Construct {
       tags: {
         Name: `igw-${environment}`,
       },
+      dependsOn: [this.vpc],
     });
 
     // Create Public Subnets (2 AZs) - use first 2 available AZs
     this.publicSubnets = [];
-    const azs = [0, 1];
+    const numAzs = 2;
 
-    azs.forEach((azIndex) => {
-      const azName = Fn.element(availableAzs.names, azIndex);
+    for (let azIndex = 0; azIndex < numAzs; azIndex++) {
       const subnet = new Subnet(this, `public-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex}.0/24`,
-        availabilityZone: azName,
+        availabilityZone: Fn.element(availableAzs.names, azIndex),
         mapPublicIpOnLaunch: true,
         tags: {
           Name: `public-subnet-${environment}-${azIndex}`,
         },
+        dependsOn: [this.vpc],
       });
       this.publicSubnets.push(subnet);
-    });
+    }
 
     // Create Private Subnets (2 AZs)
     this.privateSubnets = [];
-    azs.forEach((azIndex) => {
-      const azName = Fn.element(availableAzs.names, azIndex);
+
+    for (let azIndex = 0; azIndex < numAzs; azIndex++) {
       const subnet = new Subnet(this, `private-subnet-${azIndex}`, {
         vpcId: this.vpc.id,
         cidrBlock: `${cidrBlock.split('.')[0]}.${cidrBlock.split('.')[1]}.${azIndex + 10}.0/24`,
-        availabilityZone: azName,
+        availabilityZone: Fn.element(availableAzs.names, azIndex),
         tags: {
           Name: `private-subnet-${environment}-${azIndex}`,
         },
+        dependsOn: [this.vpc],
       });
       this.privateSubnets.push(subnet);
-    });
+    }
 
     // Create Public Route Table
     const publicRouteTable = new RouteTable(this, 'public-rt', {
@@ -96,6 +98,7 @@ export class NetworkingStack extends Construct {
       tags: {
         Name: `public-rt-${environment}`,
       },
+      dependsOn: [this.vpc, igw],
     });
 
     // Associate public subnets with public route table
@@ -103,6 +106,7 @@ export class NetworkingStack extends Construct {
       new RouteTableAssociation(this, `public-rta-${index}`, {
         subnetId: subnet.id,
         routeTableId: publicRouteTable.id,
+        dependsOn: [subnet, publicRouteTable],
       });
     });
 
@@ -118,6 +122,7 @@ export class NetworkingStack extends Construct {
       lifecycle: {
         createBeforeDestroy: true,
       },
+      dependsOn: [this.vpc],
     });
 
     this.ecsSecurityGroup = new SecurityGroup(this, 'ecs-sg', {
@@ -131,6 +136,7 @@ export class NetworkingStack extends Construct {
       lifecycle: {
         createBeforeDestroy: true,
       },
+      dependsOn: [this.vpc],
     });
 
     this.rdsSecurityGroup = new SecurityGroup(this, 'rds-sg', {
@@ -144,6 +150,7 @@ export class NetworkingStack extends Construct {
       lifecycle: {
         createBeforeDestroy: true,
       },
+      dependsOn: [this.vpc],
     });
 
     // Create Security Group Rules separately to avoid circular dependencies
