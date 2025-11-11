@@ -19,11 +19,21 @@
     "experimentalDecorators": true,
     "strictPropertyInitialization": false,
     "typeRoots": ["./node_modules/@types"],
-    "types": ["node", "jest"],
+    "types": ["node"],
     "isolatedModules": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
     "outDir": "dist"
   },
-  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "**/*.d.ts"]
+  "exclude": [
+    "node_modules",
+    "cdk.out",
+    "templates",
+    "archive",
+    "worktree",
+    "test",
+    "tests",
+    "**/*.d.ts"
+  ],
+  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts"]
 }
