@@ -318,17 +318,17 @@ describe("Payment Processing Stack Unit Tests", () => {
   });
 
   describe("Backend Configuration", () => {
-    it("should use environment-specific state bucket with environmentSuffix", () => {
+    it("should use shared state bucket with environment-specific keys", () => {
+      const stateBucket = 'iac-rlhf-tf-states';
       const backendConfig = {
-        bucket: `terraform-state-payment-processing-${environmentSuffix}`,
-        key: "payment-processing/dev/terraform.tfstate",
+        bucket: stateBucket,
+        key: `${environmentSuffix}/payment-processing-dev.tfstate`,
         region: "us-east-1",
-        dynamodbTable: `terraform-state-lock-${environmentSuffix}`,
         encrypt: true,
       };
 
-      expect(backendConfig.bucket).toContain(environmentSuffix);
-      expect(backendConfig.dynamodbTable).toContain(environmentSuffix);
+      expect(backendConfig.bucket).toBe(stateBucket);
+      expect(backendConfig.key).toContain(environmentSuffix);
       expect(backendConfig.encrypt).toBe(true);
     });
   });

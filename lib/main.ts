@@ -50,12 +50,17 @@ class PaymentProcessingStack extends TerraformStack {
       region: 'us-east-1',
     });
 
-    // FIX 1: Backend configuration now includes environmentSuffix
+    // Backend configuration using shared state bucket with environment-specific keys
+    // The state bucket should be provided via TERRAFORM_STATE_BUCKET environment variable
+    const stateBucket =
+      process.env.TERRAFORM_STATE_BUCKET || 'iac-rlhf-tf-states';
+    const stateBucketRegion =
+      process.env.TERRAFORM_STATE_BUCKET_REGION || 'us-east-1';
+
     new S3Backend(this, {
-      bucket: `terraform-state-payment-processing-${environmentSuffix}`,
-      key: `payment-processing/${config.environment}/terraform.tfstate`,
-      region: 'us-east-1',
-      dynamodbTable: `terraform-state-lock-${environmentSuffix}`,
+      bucket: stateBucket,
+      key: `${environmentSuffix}/payment-processing-${config.environment}.tfstate`,
+      region: stateBucketRegion,
       encrypt: true,
     });
 
