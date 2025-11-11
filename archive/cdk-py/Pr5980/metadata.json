@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "bcgw4",
+  "team": "synth",
+  "startedAt": "2025-11-06T19:44:12+05:30",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "Failure Recovery and High Availability"
+  ],
+  "aws_services": [
+    "Aurora",
+    "CloudWatch",
+    "ECS",
+    "ELB",
+    "IAM",
+    "Lambda",
+    "RDS",
+    "Route53",
+    "S3",
+    "SNS",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

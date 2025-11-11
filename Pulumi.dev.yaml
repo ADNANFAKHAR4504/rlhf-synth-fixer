@@ -1,0 +1,11 @@
+config:
+  aws:region: us-east-1
+  multi-env-infra:environmentSuffix: dev-12345
+  multi-env-infra:environment: dev
+  multi-env-infra:minCapacity: "1"
+  multi-env-infra:maxCapacity: "2"
+  multi-env-infra:readReplicaCount: "1"
+  multi-env-infra:backupRetentionDays: "1"
+  multi-env-infra:enableWaf: "false"
+  multi-env-infra:costCenter: dev-team
+encryptionsalt: v1:FxnD+VzoYKM=:v1:jRQjikBKTPdRgRWN:XCw4gc/2ukwi03PXvyVzLcCTyQD35w==
