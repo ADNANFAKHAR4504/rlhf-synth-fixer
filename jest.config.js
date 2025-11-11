@@ -14,19 +14,20 @@ module.exports = {
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
+    '<rootDir>/lib/**/*.js',
     '!<rootDir>/bin/**/*.ts',
     '!<rootDir>/**/*.d.ts',
-    '!<rootDir>/**/*.js',
     '!<rootDir>/**/*.test.ts',
+    '!<rootDir>/**/*.test.js',
     '!<rootDir>/node_modules/**',
   ],
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 0,
-      functions: 0,
-      lines: 0,
-      statements: 0,
+      branches: 90,
+      functions: 90,
+      lines: 90,
+      statements: 90,
     },
   },
   testTimeout: 30000,
@@ -35,6 +36,10 @@ module.exports = {
   globals: {
     'ts-jest': {
       isolatedModules: true,
-    },
-  },
+      tsconfig: {
+        allowJs: true,
+        esModuleInterop: true
+      }
+    }
+  }
 };
