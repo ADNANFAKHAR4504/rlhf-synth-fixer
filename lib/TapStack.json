@@ -1181,8 +1181,23 @@
         "Principal": "secretsmanager.amazonaws.com"
       }
     },
+    "AuroraMasterPasswordSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-aurora-password"
+        },
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\":\"postgres\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": "/@\" "
+        }
+      }
+    },
     "RDSInstance": {
       "Type": "AWS::RDS::DBInstance",
+      "DependsOn": "AuroraMasterPasswordSecret",
       "DeletionPolicy": "Delete",
       "Properties": {
         "DBInstanceIdentifier": {
