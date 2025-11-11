@@ -7,6 +7,8 @@ import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -342,23 +344,63 @@ export class TapStack extends cdk.Stack {
       );
     }
 
+    const stagingVpc = new ec2.Vpc(this, 'StagingVpc', {
+      maxAzs: 2,
+      natGateways: 0,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
+    });
+
+    const stagingCluster = new ecs.Cluster(this, 'StagingCluster', {
+      clusterName: `StagingCluster-${environmentSuffix}`,
+      vpc: stagingVpc,
+    });
+
+    const stagingTaskDefinition = new ecs.FargateTaskDefinition(
+      this,
+      'StagingTaskDefinition',
+      {
+        memoryLimitMiB: 512,
+        cpu: 256,
+      }
+    );
+
+    stagingTaskDefinition.addContainer('MicroserviceContainer', {
+      image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'microservice',
+      }),
+    });
+
+    const stagingSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'StagingSecurityGroup',
+      {
+        vpc: stagingVpc,
+        description: 'Security group for staging ECS service',
+        allowAllOutbound: true,
+      }
+    );
+
+    const stagingService = new ecs.FargateService(this, 'StagingService', {
+      cluster: stagingCluster,
+      taskDefinition: stagingTaskDefinition,
+      desiredCount: 1,
+      assignPublicIp: true,
+      serviceName: `microservice-${environmentSuffix}`,
+      securityGroups: [stagingSecurityGroup],
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+    });
+
     const deployToStagingAction = new codepipeline_actions.EcsDeployAction({
       actionName: 'DeployToStaging',
-      service: ecs.FargateService.fromFargateServiceAttributes(
-        this,
-        'StagingService',
-        {
-          serviceArn: `arn:aws:ecs:${this.region}:${stagingAccountId}:service/StagingCluster/microservice-${environmentSuffix}`,
-          cluster: ecs.Cluster.fromClusterAttributes(this, 'StagingCluster', {
-            clusterName: 'StagingCluster',
-            securityGroups: [],
-            vpc: cdk.aws_ec2.Vpc.fromLookup(this, 'StagingVpc', {
-              isDefault: true,
-            }),
-            clusterArn: `arn:aws:ecs:${this.region}:${stagingAccountId}:cluster/StagingCluster`,
-          }),
-        }
-      ),
+      service: stagingService,
       imageFile: buildOutput.atPath('imageDefinition.json'),
       deploymentTimeout: cdk.Duration.minutes(60),
       role: stagingDeployRole,
@@ -374,7 +416,7 @@ export class TapStack extends cdk.Stack {
       notificationTopic: approvalTopic,
       additionalInformation:
         'Please review the staging deployment before approving deployment to production',
-      externalEntityLink: `https://${this.region}.console.aws.amazon.com/ecs/home?region=${this.region}#/clusters/StagingCluster/services/microservice-${environmentSuffix}/details`,
+      externalEntityLink: `https://${this.region}.console.aws.amazon.com/ecs/home?region=${this.region}#/clusters/${stagingCluster.clusterName}/services/${stagingService.serviceName}/details`,
     });
 
     pipeline.addStage({
@@ -382,22 +424,157 @@ export class TapStack extends cdk.Stack {
       actions: [manualApprovalAction],
     });
 
+    const prodVpc = new ec2.Vpc(this, 'ProdVpc', {
+      maxAzs: 2,
+      natGateways: 0,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
+    });
+
+    const prodCluster = new ecs.Cluster(this, 'ProdCluster', {
+      clusterName: `ProdCluster-${environmentSuffix}`,
+      vpc: prodVpc,
+    });
+
+    const prodLoadBalancer = new elbv2.ApplicationLoadBalancer(
+      this,
+      'ProdLoadBalancer',
+      {
+        vpc: prodVpc,
+        internetFacing: true,
+        loadBalancerName: `prod-alb-${environmentSuffix}`,
+      }
+    );
+
+    const prodListener = prodLoadBalancer.addListener('ProdListener', {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+    });
+
+    const blueTargetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'BlueTargetGroup',
+      {
+        vpc: prodVpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.IP,
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+      }
+    );
+
+    const greenTargetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'GreenTargetGroup',
+      {
+        vpc: prodVpc,
+        port: 80,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.IP,
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+      }
+    );
+
+    prodListener.addTargetGroups('DefaultTargetGroup', {
+      targetGroups: [blueTargetGroup],
+    });
+
+    const codedeployApplication = new codedeploy.EcsApplication(
+      this,
+      'ProdCodeDeployApplication',
+      {
+        applicationName: `ProdMicroserviceApplication-${environmentSuffix}`,
+      }
+    );
+
+    const prodTaskDefinition = new ecs.FargateTaskDefinition(
+      this,
+      'ProdTaskDefinition',
+      {
+        memoryLimitMiB: 512,
+        cpu: 256,
+      }
+    );
+
+    prodTaskDefinition.addContainer('MicroserviceContainer', {
+      image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'microservice',
+      }),
+      portMappings: [
+        {
+          containerPort: 80,
+          protocol: ecs.Protocol.TCP,
+        },
+      ],
+    });
+
+    const prodSecurityGroup = new ec2.SecurityGroup(this, 'ProdSecurityGroup', {
+      vpc: prodVpc,
+      description: 'Security group for production ECS service',
+      allowAllOutbound: true,
+    });
+
+    prodSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(80),
+      'Allow HTTP traffic from ALB'
+    );
+
+    const prodService = new ecs.FargateService(this, 'ProdService', {
+      cluster: prodCluster,
+      taskDefinition: prodTaskDefinition,
+      desiredCount: 1,
+      assignPublicIp: true,
+      serviceName: `microservice-prod-${environmentSuffix}`,
+      securityGroups: [prodSecurityGroup],
+      deploymentController: {
+        type: ecs.DeploymentControllerType.CODE_DEPLOY,
+      },
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+    });
+
+    prodService.attachToApplicationTargetGroup(blueTargetGroup);
+
+    const prodDeploymentGroup = new codedeploy.EcsDeploymentGroup(
+      this,
+      'ProdDeploymentGroup',
+      {
+        application: codedeployApplication,
+        service: prodService,
+        deploymentGroupName: `ProdMicroserviceDeploymentGroup-${environmentSuffix}`,
+        deploymentConfig:
+          codedeploy.EcsDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+        blueGreenDeploymentConfig: {
+          blueTargetGroup: blueTargetGroup,
+          greenTargetGroup: greenTargetGroup,
+          listener: prodListener,
+        },
+      }
+    );
+
     const deployToProdAction =
       new codepipeline_actions.CodeDeployEcsDeployAction({
         actionName: 'DeployToProduction',
-        deploymentGroup:
-          codedeploy.EcsDeploymentGroup.fromEcsDeploymentGroupAttributes(
-            this,
-            'ProdDeploymentGroup',
-            {
-              deploymentGroupName: `ProdMicroserviceDeploymentGroup-${environmentSuffix}`,
-              application: codedeploy.EcsApplication.fromEcsApplicationName(
-                this,
-                'ProdApplication',
-                `ProdMicroserviceApplication-${environmentSuffix}`
-              ),
-            }
-          ),
+        deploymentGroup: prodDeploymentGroup,
         taskDefinitionTemplateFile: buildOutput.atPath('taskdef.json'),
         appSpecTemplateFile: buildOutput.atPath('appspec.yaml'),
         containerImageInputs: [
