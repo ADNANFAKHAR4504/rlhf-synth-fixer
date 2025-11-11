@@ -318,7 +318,7 @@ export class DatabaseMigrationStack extends Construct {
 
     // Enable secret rotation after Aurora cluster is created
     (targetDbSecret as secretsmanager.Secret).addRotationSchedule(
-      'RotationSchedule',
+      'Rt',
       {
         automaticallyAfter: cdk.Duration.days(30),
         hostedRotation: secretsmanager.HostedRotation.mysqlSingleUser(),

@@ -58,7 +58,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 - Use **AWS Lambda** for validation functions
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment}-{suffix}`
-- Deploy to **ap-southeast-1** region
+- Deploy to **us-east-1** region
 - CDK version 2.x with TypeScript
 - Node.js 18 or higher
 
