@@ -14,7 +14,8 @@ new TapStack(app, `TapStack-${environmentSuffix}`, {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'eu-central-2',
   },
-  description: 'Secure VPC infrastructure for PCI DSS compliant payment processing',
+  description:
+    'Secure VPC infrastructure for PCI DSS compliant payment processing',
 });
 
 app.synth();

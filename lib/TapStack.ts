@@ -47,7 +47,7 @@ export class TapStack extends cdk.Stack {
 
       // Enable VPC Flow Logs
       flowLogs: {
-        's3': {
+        s3: {
           destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup),
           trafficType: ec2.FlowLogTrafficType.ALL,
         },
@@ -169,18 +169,20 @@ export class TapStack extends cdk.Stack {
 
     // Associate Network ACL with all private subnets
     privateSubnets.forEach((subnet, index) => {
-      new ec2.SubnetNetworkAclAssociation(this, `PrivateSubnetAclAssociation${index}`, {
-        subnet: subnet,
-        networkAcl: networkAcl,
-      });
+      new ec2.SubnetNetworkAclAssociation(
+        this,
+        `PrivateSubnetAclAssociation${index}`,
+        {
+          subnet: subnet,
+          networkAcl: networkAcl,
+        }
+      );
     });
 
     // Create S3 VPC Endpoint (Gateway type)
     this.s3Endpoint = this.vpc.addGatewayEndpoint('S3Endpoint', {
       service: ec2.GatewayVpcEndpointAwsService.S3,
-      subnets: [
-        { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
-      ],
+      subnets: [{ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS }],
     });
 
     // Tag S3 Endpoint

@@ -70,5 +70,8 @@ module.exports = {
     '*.js',
     '*.d.ts',
     'worktree/',
+    'cli/',
+    'index.ts',
+    'subcategory-references/',
   ],
 };
