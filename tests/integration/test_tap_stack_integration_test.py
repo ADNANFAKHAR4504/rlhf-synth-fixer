@@ -23,7 +23,7 @@ class TestDeployedInfrastructure(unittest.TestCase):
         with open(outputs_file, 'r', encoding='utf-8') as f:
             cls.outputs = json.load(f)
 
-        cls.region = os.getenv('AWS_REGION', 'us-east-1')
+        cls.region = os.getenv('AWS_REGION', 'us-east-2')
 
         # Initialize AWS clients
         cls.ec2_client = boto3.client('ec2', region_name=cls.region)

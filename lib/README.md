@@ -45,7 +45,7 @@ The infrastructure includes:
 Set the following configuration values:
 
 ```bash
-pulumi config set aws:region us-east-1
+pulumi config set aws:region us-east-2
 pulumi config set environmentSuffix dev
 ```
 
@@ -63,7 +63,7 @@ pulumi stack init dev
 
 3. Configure AWS region and environment suffix:
 ```bash
-pulumi config set aws:region us-east-1
+pulumi config set aws:region us-east-2
 pulumi config set environmentSuffix dev
 ```
 
@@ -83,7 +83,7 @@ pulumi up
 ECR_URL=$(pulumi stack output ecr_repository_url)
 
 # Login to ECR
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $ECR_URL
+aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin $ECR_URL
 
 # Build and tag image
 docker build -t webapp:latest .

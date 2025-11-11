@@ -81,7 +81,7 @@ class TestVPCModule(unittest.TestCase):
         mock_sg_instance.id = 'sg-123'
         mock_sg.return_value = mock_sg_instance
 
-        result = create_vpc('test', 'us-east-1')
+        result = create_vpc('test', 'us-east-2')
 
         # Verify VPC was created
         mock_vpc.assert_called_once()
@@ -108,7 +108,7 @@ class TestECRModule(unittest.TestCase):
 
         mock_repo_instance = MagicMock()
         mock_repo_instance.id = 'repo-123'
-        mock_repo_instance.repository_url = 'account.dkr.ecr.us-east-1.amazonaws.com/repo'
+        mock_repo_instance.repository_url = 'account.dkr.ecr.us-east-2.amazonaws.com/repo'
         mock_repo.return_value = mock_repo_instance
 
         result = create_ecr_repository('test')
@@ -144,7 +144,7 @@ class TestRDSModule(unittest.TestCase):
         # Mock secret
         mock_secret_instance = MagicMock()
         mock_secret_instance.id = 'secret-123'
-        mock_secret_instance.arn = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test'
+        mock_secret_instance.arn = 'arn:aws:secretsmanager:us-east-2:123456789012:secret:test'
         mock_secret.return_value = mock_secret_instance
 
         # Mock secret version
@@ -229,22 +229,22 @@ class TestECSModule(unittest.TestCase):
 
         # Mock target group
         mock_tg = MagicMock()
-        mock_tg.arn = 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/123'
+        mock_tg.arn = 'arn:aws:elasticloadbalancing:us-east-2:123456789012:targetgroup/test/123'
 
         # Mock ECR repo
         mock_ecr = MagicMock()
-        mock_ecr.repository_url = 'account.dkr.ecr.us-east-1.amazonaws.com/repo'
+        mock_ecr.repository_url = 'account.dkr.ecr.us-east-2.amazonaws.com/repo'
 
         # Mock secret
         mock_secret = MagicMock()
-        mock_secret.arn = 'arn:aws:secretsmanager:us-east-1:123456789012:secret:test'
+        mock_secret.arn = 'arn:aws:secretsmanager:us-east-2:123456789012:secret:test'
 
         # Mock listener
         mock_listener = MagicMock()
 
         # Mock task definition
         mock_task_def_instance = MagicMock()
-        mock_task_def_instance.arn = 'arn:aws:ecs:us-east-1:123456789012:task-definition/test:1'
+        mock_task_def_instance.arn = 'arn:aws:ecs:us-east-2:123456789012:task-definition/test:1'
         mock_task_def.return_value = mock_task_def_instance
 
         # Mock service
@@ -299,13 +299,13 @@ class TestALBModule(unittest.TestCase):
         # Mock ALB
         mock_alb_instance = MagicMock()
         mock_alb_instance.id = 'alb-123'
-        mock_alb_instance.dns_name = 'alb-123.us-east-1.elb.amazonaws.com'
+        mock_alb_instance.dns_name = 'alb-123.us-east-2.elb.amazonaws.com'
         mock_alb.return_value = mock_alb_instance
 
         # Mock target group
         mock_tg_instance = MagicMock()
         mock_tg_instance.id = 'tg-123'
-        mock_tg_instance.arn = 'arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/test/123'
+        mock_tg_instance.arn = 'arn:aws:elasticloadbalancing:us-east-2:123456789012:targetgroup/test/123'
         mock_tg.return_value = mock_tg_instance
 
         # Mock listener

@@ -2,7 +2,7 @@
 
 Hey team,
 
-We need to build out infrastructure for our Flask web application that's currently running on a single EC2 instance. The business is experiencing serious performance issues during flash sales, and we've been asked to modernize this with a proper containerized architecture that can auto-scale. I've been assigned to create this using **Pulumi with Python** for the us-east-1 region.
+We need to build out infrastructure for our Flask web application that's currently running on a single EC2 instance. The business is experiencing serious performance issues during flash sales, and we've been asked to modernize this with a proper containerized architecture that can auto-scale. I've been assigned to create this using **Pulumi with Python** for the us-east-2 region.
 
 The current setup is causing us real problems. During our last flash sale, the single EC2 instance couldn't handle the load, and we lost revenue because customers couldn't complete checkouts. The leadership team wants a solution that can automatically scale up during high traffic periods and scale back down to save costs during quiet times. They also want proper load balancing, managed databases, and secure credential management.
 
@@ -10,14 +10,14 @@ The application itself is a Python Flask API that needs to connect to a PostgreS
 
 ## What we need to build
 
-Create a highly available containerized Flask application infrastructure using **Pulumi with Python** for deployment to AWS us-east-1. The system needs to handle variable traffic loads with automatic scaling and include proper networking, load balancing, container orchestration, and managed database services.
+Create a highly available containerized Flask application infrastructure using **Pulumi with Python** for deployment to AWS us-east-2. The system needs to handle variable traffic loads with automatic scaling and include proper networking, load balancing, container orchestration, and managed database services.
 
 ### Core Requirements
 
 1. **Network Infrastructure**
    - VPC with 2 public subnets (10.0.1.0/24, 10.0.2.0/24) for load balancers
    - VPC with 2 private subnets (10.0.3.0/24, 10.0.4.0/24) for application and database
-   - Distribute subnets across us-east-1a and us-east-1b availability zones
+   - Distribute subnets across us-east-2a and us-east-2b availability zones
    - NAT Gateways to provide outbound internet access for private resources
 
 2. **Load Balancing**
@@ -72,7 +72,7 @@ Create a highly available containerized Flask application infrastructure using *
 - Use **Secrets Manager** for credential storage (automatic rotation disabled)
 - Resource names must include **environmentSuffix** for uniqueness across PR environments
 - Follow naming convention pattern: resource-type-environment-suffix
-- Deploy all resources to **us-east-1** region
+- Deploy all resources to **us-east-2** region
 - Target Python 3.8+ and Pulumi 3.x or higher
 
 ### Constraints

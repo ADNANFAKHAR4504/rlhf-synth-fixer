@@ -187,7 +187,7 @@ def create_ecs_service(  # pylint: disable=too-many-positional-arguments,too-man
                         "logDriver": "awslogs",
                         "options": {
                             "awslogs-group": args[1],
-                            "awslogs-region": "us-east-1",
+                            "awslogs-region": "us-east-2",
                             "awslogs-stream-prefix": "flask"
                         }
                     },

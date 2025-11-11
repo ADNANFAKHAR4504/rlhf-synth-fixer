@@ -29,7 +29,7 @@ stack_name = pulumi.get_stack()
 
 # AWS Region
 aws_config = pulumi.Config("aws")
-region = aws_config.get("region") or "us-east-1"
+region = aws_config.get("region") or "us-east-2"
 
 # Create VPC and networking
 vpc_resources = create_vpc(environment_suffix, region)
