@@ -24,6 +24,11 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
 
+    // Get operations account ID from environment variable
+    // Use a default for local testing, but require it for prod deployments
+    const operationsAccountId = process.env.OPERATIONS_ACCOUNT_ID ||
+      (environmentSuffix.includes('prod') ? '' : '000000000000');
+
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
@@ -59,7 +64,7 @@ export class TapStack extends TerraformStack {
       environment: environment,
       environmentSuffix: environmentSuffix,
       cidrBlock: config.cidrBlock,
-      operationsAccountId: '123456789012',
+      operationsAccountId: operationsAccountId,
       awsRegion: awsRegion,
     });
   }

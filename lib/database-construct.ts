@@ -1,7 +1,7 @@
-import { Construct } from 'constructs';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { TerraformVariable } from 'cdktf';
+import { Construct } from 'constructs';
 
 export interface DatabaseConstructProps {
   environment: string;
@@ -22,9 +22,9 @@ export class DatabaseConstruct extends Construct {
       environment,
       subnetIds,
       securityGroupIds,
-      instanceClass = 'db.t3.micro',
+      instanceClass = 'db.t4g.small',
       allocatedStorage = 20,
-      engineVersion = '14.7',
+      engineVersion = '17.4',
     } = props;
 
     // Create DB Subnet Group
