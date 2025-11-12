@@ -1,5 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import * as fs from 'fs';
+import * as path from 'path';
 import { NetworkStack } from './network-stack';
 import { DatabaseStack } from './database-stack';
 import { ComputeStack } from './compute-stack';
@@ -35,8 +37,6 @@ export class TapStack extends cdk.Stack {
     } else {
       // Try to read from lib/AWS_REGION file
       try {
-        const fs = require('fs');
-        const path = require('path');
         const regionFile = path.join(__dirname, 'AWS_REGION');
         if (fs.existsSync(regionFile)) {
           const fileContent = fs.readFileSync(regionFile, 'utf8').trim();
