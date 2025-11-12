@@ -252,7 +252,7 @@ For test environments:
 ✅ **Security**: Security groups, IAM roles, Secrets Manager
 ✅ **Monitoring**: CloudWatch logs with 7-day retention
 ✅ **Auto-Scaling**: CPU-based scaling 2-10 tasks
-✅ **Region**: us-east-1
+✅ **Region**: eu-south-1
 ✅ **Resource Naming**: All resources include environmentSuffix
 ✅ **Tags**: Environment and Project tags applied
 ✅ **Destroyable**: No Retain policies, skip_final_snapshot enabled

@@ -67,7 +67,7 @@ Create a production-grade infrastructure using **Pulumi with Python** to deploy 
 - Use **ACM** for SSL/TLS certificate management
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: {resource-type}-{purpose}-{environment-suffix}
-- Deploy to **us-east-1** region
+- Deploy to **eu-south-1** region
 - All resources must be tagged with Environment='production' and Project='ecommerce-api'
 
 ### Constraints

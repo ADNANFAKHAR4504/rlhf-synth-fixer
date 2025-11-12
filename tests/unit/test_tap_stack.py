@@ -27,7 +27,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
             outputs = {
                 **args.inputs,
                 "id": f"subnet-{args.name}",
-                "availabilityZone": "us-east-1a",
+                "availabilityZone": "eu-south-1a",
             }
         elif args.typ == "aws:ec2/internetGateway:InternetGateway":
             outputs = {**args.inputs, "id": "igw-12345"}
@@ -43,19 +43,19 @@ class PulumiMocks(pulumi.runtime.Mocks):
             outputs = {
                 **args.inputs,
                 "id": f"repo-{args.name}",
-                "repositoryUrl": f"123456789012.dkr.ecr.us-east-1.amazonaws.com/{args.name}",
+                "repositoryUrl": f"123456789012.dkr.ecr.eu-south-1.amazonaws.com/{args.name}",
             }
         elif args.typ == "aws:ecs/cluster:Cluster":
             outputs = {
                 **args.inputs,
                 "id": f"cluster-{args.name}",
-                "arn": f"arn:aws:ecs:us-east-1:123456789012:cluster/{args.name}",
+                "arn": f"arn:aws:ecs:eu-south-1:123456789012:cluster/{args.name}",
             }
         elif args.typ == "aws:lb/loadBalancer:LoadBalancer":
             outputs = {
                 **args.inputs,
                 "id": f"alb-{args.name}",
-                "dnsName": f"{args.name}.us-east-1.elb.amazonaws.com",
+                "dnsName": f"{args.name}.eu-south-1.elb.amazonaws.com",
                 "zoneId": "Z35SXDOTRQ7X7K",
             }
         elif args.typ == "aws:lb/targetGroup:TargetGroup":
@@ -63,7 +63,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
                 **args.inputs,
                 "id": f"tg-{args.name}",
                 "arn": (
-                    f"arn:aws:elasticloadbalancing:us-east-1:123456789012:"
+                    f"arn:aws:elasticloadbalancing:eu-south-1:123456789012:"
                     f"targetgroup/{args.name}"
                 ),
             }
@@ -79,7 +79,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
             outputs = {
                 **args.inputs,
                 "id": f"cluster-{args.name}",
-                "endpoint": f"{args.name}.cluster-xyz.us-east-1.rds.amazonaws.com",
+                "endpoint": f"{args.name}.cluster-xyz.eu-south-1.rds.amazonaws.com",
             }
         elif args.typ == "aws:rds/clusterInstance:ClusterInstance":
             outputs = {**args.inputs, "id": f"instance-{args.name}"}
@@ -89,7 +89,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
             outputs = {
                 **args.inputs,
                 "id": f"secret-{args.name}",
-                "arn": f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{args.name}",
+                "arn": f"arn:aws:secretsmanager:eu-south-1:123456789012:secret:{args.name}",
             }
         elif args.typ == "aws:secretsmanager/secretVersion:SecretVersion":
             outputs = {**args.inputs, "id": f"version-{args.name}"}
@@ -98,7 +98,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
                 **args.inputs,
                 "id": f"task-{args.name}",
                 "arn": (
-                    f"arn:aws:ecs:us-east-1:123456789012:"
+                    f"arn:aws:ecs:eu-south-1:123456789012:"
                     f"task-definition/{args.name}:1"
                 ),
             }
@@ -114,7 +114,7 @@ class PulumiMocks(pulumi.runtime.Mocks):
         """Mock function calls."""
         if args.token == "aws:index/getAvailabilityZones:getAvailabilityZones":
             return {
-                "names": ["us-east-1a", "us-east-1b"],
+                "names": ["eu-south-1a", "eu-south-1b"],
                 "zoneIds": ["use1-az1", "use1-az2"],
             }
         return {}
