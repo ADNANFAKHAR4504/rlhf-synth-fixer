@@ -50,7 +50,7 @@ const vpc = new awsx.ec2.Vpc(`payment-vpc-${environmentSuffix}`, {
 });
 
 // S3 bucket for VPC Flow Logs
-const flowLogsBucket = new aws.s3.BucketV2(
+const flowLogsBucket = new aws.s3.Bucket(
   `payment-flowlogs-${environmentSuffix}`,
   {
     bucket: `payment-flowlogs-${environmentSuffix}-${region}`,
@@ -58,7 +58,7 @@ const flowLogsBucket = new aws.s3.BucketV2(
   }
 );
 
-void new aws.s3.BucketVersioningV2(
+void new aws.s3.BucketVersioning(
   `payment-flowlogs-versioning-${environmentSuffix}`,
   {
     bucket: flowLogsBucket.id,
@@ -68,7 +68,7 @@ void new aws.s3.BucketVersioningV2(
   }
 );
 
-void new aws.s3.BucketServerSideEncryptionConfigurationV2(
+void new aws.s3.BucketServerSideEncryptionConfiguration(
   `payment-flowlogs-encryption-${environmentSuffix}`,
   {
     bucket: flowLogsBucket.id,
@@ -94,7 +94,7 @@ const flowLogsBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 );
 
 // Lifecycle policy for Flow Logs bucket
-void new aws.s3.BucketLifecycleConfigurationV2(
+void new aws.s3.BucketLifecycleConfiguration(
   `payment-flowlogs-lifecycle-${environmentSuffix}`,
   {
     bucket: flowLogsBucket.id,

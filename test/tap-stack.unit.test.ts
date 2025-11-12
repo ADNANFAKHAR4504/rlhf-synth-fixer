@@ -8,8 +8,9 @@ pulumi.runtime.setMocks({
       state: {
         ...args.inputs,
         arn: args.type === 'aws:s3/bucket:Bucket'
-          ? `arn:aws:s3:::${args.inputs.name || args.name}`
-          : `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
+          ? `arn:aws:s3:::${args.inputs.bucket || args.inputs.name || args.name}`
+          : `arn:aws:${args.type}:eu-central-2:123456789012:${args.name}`,
+        bucket: args.inputs.bucket || args.inputs.name || args.name,
       },
     };
   },
