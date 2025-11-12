@@ -196,6 +196,12 @@ export class TapStack extends TerraformStack {
       value: dynamoModule.table.name,
       description: 'DynamoDB table name for metadata',
     });
+
+    new TerraformOutput(this, 'sns-topic-arn', {
+      value: snsModule.topic.arn, // adjust based on your actual variable name
+      description: 'SNS Topic ARN for notifications',
+    });
+
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
   }
