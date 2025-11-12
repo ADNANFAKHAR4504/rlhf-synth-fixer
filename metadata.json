@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-12T08:21:49+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "AWS Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "Serverless",
+    "Event-Driven Architecture",
+    "Real-time Processing",
+    "Fraud Detection"
+  ],
+  "po_id": "101000917",
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9
+}
