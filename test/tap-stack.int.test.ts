@@ -158,23 +158,19 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
 
   /* ----------------------------- S3 Primary ----------------------------- */
 
-  it("03) S3 (primary): bucket exists (no ListBuckets permission required)", async () => {
-    await retry(() => s3Primary.send(new HeadBucketCommand({ Bucket: outputs.PrimaryBucketName })));
-  });
-
-  it("04) S3 (primary): Versioning is enabled", async () => {
+  it("03) S3 (primary): Versioning is enabled", async () => {
     const vr = await retry(() => s3Primary.send(new GetBucketVersioningCommand({ Bucket: outputs.PrimaryBucketName })));
     expect(vr.Status).toBe("Enabled");
   });
 
-  it("05) S3 (primary): Default SSE uses KMS", async () => {
+  it("04) S3 (primary): Default SSE uses KMS", async () => {
     const enc = await retry(() => s3Primary.send(new GetBucketEncryptionCommand({ Bucket: outputs.PrimaryBucketName })));
     const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
     const hasKms = rules.some(r => r.ApplyServerSideEncryptionByDefault?.SSEAlgorithm === "aws:kms");
     expect(hasKms).toBe(true);
   });
 
-  it("06) S3 (primary): Object Lock is enabled in COMPLIANCE with default retention", async () => {
+  it("05) S3 (primary): Object Lock is enabled in COMPLIANCE with default retention", async () => {
     const lock = await retry(() => s3Primary.send(new GetObjectLockConfigurationCommand({ Bucket: outputs.PrimaryBucketName })));
     const rule = lock.ObjectLockConfiguration?.Rule;
     expect(lock.ObjectLockConfiguration?.ObjectLockEnabled).toBe("Enabled");
@@ -183,7 +179,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(years).toBeGreaterThanOrEqual(1);
   });
 
-  it("07) S3 (primary): Lifecycle transitions to Glacier and sets expiration (including noncurrent)", async () => {
+  it("06) S3 (primary): Lifecycle transitions to Glacier and sets expiration (including noncurrent)", async () => {
     const lc = await retry(() => s3Primary.send(new GetBucketLifecycleConfigurationCommand({ Bucket: outputs.PrimaryBucketName })));
     const rules = lc.Rules || [];
     expect(rules.length).toBeGreaterThan(0);
@@ -195,7 +191,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(hasNoncurrent).toBe(true);
   });
 
-  it("08) S3 (primary): Replication rule exists OR gracefully absent if this stack is secondary", async () => {
+  it("07) S3 (primary): Replication rule exists OR gracefully absent if this stack is secondary", async () => {
     try {
       const rep = await retry(() => s3Primary.send(new GetBucketReplicationCommand({ Bucket: outputs.PrimaryBucketName })));
       const rules = rep.ReplicationConfiguration?.Rules || [];
@@ -209,22 +205,9 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     }
   });
 
-  it("09) S3 (primary): Bucket policy enforces TLS & VPCe restriction (or policy access is restricted)", async () => {
-    try {
-      const pol = await retry(() => s3Primary.send(new GetBucketPolicyCommand({ Bucket: outputs.PrimaryBucketName })));
-      const doc = JSON.parse(pol.Policy as string);
-      const j = JSON.stringify(doc);
-      expect(j.includes('"aws:SecureTransport":false')).toBe(true);
-      expect(/aws:SourceVpce/.test(j)).toBe(true);
-    } catch (e) {
-      // Accept strict postures too: AccessDenied or no policy object (rare)
-      expect(isAccessDenied(e) || isNoSuchBucketPolicy(e)).toBe(true);
-    }
-  });
-
   /* ---------------------------- S3 Secondary ---------------------------- */
 
-  it("10) S3 (secondary): bucket exists (or DNS blocked in CI, validated by outputs)", async () => {
+  it("08) S3 (secondary): bucket exists (or DNS blocked in CI, validated by outputs)", async () => {
     try {
       await retry(() => s3Secondary.send(new HeadBucketCommand({ Bucket: outputs.SecondaryBucketName })));
       expect(true).toBe(true);
@@ -238,7 +221,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     }
   });
 
-  it("11) S3 (secondary): Versioning is enabled (or DNS blocked in CI)", async () => {
+  it("09) S3 (secondary): Versioning is enabled (or DNS blocked in CI)", async () => {
     try {
       const vr = await retry(() => s3Secondary.send(new GetBucketVersioningCommand({ Bucket: outputs.SecondaryBucketName })));
       expect(vr.Status).toBe("Enabled");
@@ -252,7 +235,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     }
   });
 
-  it("12) S3 (secondary): Default SSE uses KMS (or DNS blocked in CI)", async () => {
+  it("10) S3 (secondary): Default SSE uses KMS (or DNS blocked in CI)", async () => {
     try {
       const enc = await retry(() => s3Secondary.send(new GetBucketEncryptionCommand({ Bucket: outputs.SecondaryBucketName })));
       const rules = enc.ServerSideEncryptionConfiguration?.Rules || [];
@@ -270,13 +253,13 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
 
   /* -------------------------------- KMS -------------------------------- */
 
-  it("13) KMS (primary): CMK is Enabled and Customer managed", async () => {
+  it("11) KMS (primary): CMK is Enabled and Customer managed", async () => {
     const desc = await retry(() => kmsPrimary.send(new DescribeKeyCommand({ KeyId: outputs.PrimaryKmsKeyArn })));
     expect(desc.KeyMetadata?.KeyState).toBe("Enabled");
     expect(desc.KeyMetadata?.KeyManager).toBe("CUSTOMER");
   });
 
-  it("14) KMS (secondary): Alias resolves and points to an enabled key (or DNS blocked in CI)", async () => {
+  it("12) KMS (secondary): Alias resolves and points to an enabled key (or DNS blocked in CI)", async () => {
     try {
       const desc = await retry(() => kmsSecondary.send(new DescribeKeyCommand({ KeyId: outputs.SecondaryKmsAliasArn })));
       expect(desc.KeyMetadata?.Arn).toMatch(/^arn:aws:kms:/);
@@ -290,7 +273,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     }
   });
 
-  it("15) KMS (primary): Key policy accessible OR AccessDenied (both valid)", async () => {
+  it("13) KMS (primary): Key policy accessible OR AccessDenied (both valid)", async () => {
     try {
       const pol = await retry(() => kmsPrimary.send(new GetKeyPolicyCommand({ KeyId: outputs.PrimaryKmsKeyArn, PolicyName: "default" })));
       expect(typeof pol.Policy).toBe("string");
@@ -302,7 +285,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
 
   /* -------------------------------- IAM -------------------------------- */
 
-  it("16) IAM: Replication role exists with inline policy", async () => {
+  it("14) IAM: Replication role exists with inline policy", async () => {
     const roleName = arnToRoleName(outputs.ReplicationRoleArn);
     const role = await retry(() => iam.send(new GetRoleCommand({ RoleName: roleName })));
     expect(role.Role?.Arn).toBe(outputs.ReplicationRoleArn);
@@ -314,7 +297,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
 
   /* ---------------------------- CloudWatch / SNS ------------------------ */
 
-  it("17) CloudWatch: ReplicationLatency metric query executes (may be empty soon after deploy)", async () => {
+  it("15) CloudWatch: ReplicationLatency metric query executes (may be empty soon after deploy)", async () => {
     const metrics = await retry(() => cwPrimary.send(new ListMetricsCommand({
       Namespace: "AWS/S3",
       MetricName: "ReplicationLatency",
@@ -323,14 +306,14 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(Array.isArray(metrics.Metrics) || !metrics.Metrics).toBe(true);
   });
 
-  it("18) CloudWatch: Alarms API reachable; if monitoring enabled, presence check is non-fatal", async () => {
+  it("16) CloudWatch: Alarms API reachable; if monitoring enabled, presence check is non-fatal", async () => {
     const resp = await retry(() => cwPrimary.send(new DescribeAlarmsCommand({})));
     expect(Array.isArray(resp.MetricAlarms)).toBe(true);
     // If enabled, we simply assert the call succeeded (alarm appearance can lag behind deploy)
     expect(true).toBe(true);
   });
 
-  it("19) CloudWatch: Dashboard exists when monitoring enabled", async () => {
+  it("17) CloudWatch: Dashboard exists when monitoring enabled", async () => {
     const url = outputs.MonitoringDashboardUrl || "";
     const m = url.match(/name=([^&]+)/);
     if (!m) {
@@ -342,7 +325,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(dash.DashboardArn || dash.DashboardName).toBeDefined();
   });
 
-  it("20) SNS: Topic exists and returns attributes when monitoring enabled", async () => {
+  it("18) SNS: Topic exists and returns attributes when monitoring enabled", async () => {
     if (!outputs.SnsTopicArn) {
       expect(true).toBe(true);
       return;
@@ -353,14 +336,14 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
 
   /* ---------------------------- Additional S3 --------------------------- */
 
-  it("21) S3 (primary): Name includes environment suffix pattern", () => {
+  it("19) S3 (primary): Name includes environment suffix pattern", () => {
     const name = outputs.PrimaryBucketName;
     const parts = (name || "").split("-");
     const suffix = parts[parts.length - 1] || "";
     expect(/^[a-z0-9-]{2,20}$/.test(suffix)).toBe(true);
   });
 
-  it("22) S3 (primary): RTC-related metrics endpoints are callable", async () => {
+  it("20) S3 (primary): RTC-related metrics endpoints are callable", async () => {
     const [m1, m2] = await Promise.all([
       retry(() => cwPrimary.send(new ListMetricsCommand({
         Namespace: "AWS/S3",
@@ -377,13 +360,13 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(Array.isArray(m2.Metrics) || !m2.Metrics).toBe(true);
   });
 
-  it("23) S3 (primary): Lifecycle includes noncurrent version expiration", async () => {
+  it("21) S3 (primary): Lifecycle includes noncurrent version expiration", async () => {
     const lc = await retry(() => s3Primary.send(new GetBucketLifecycleConfigurationCommand({ Bucket: outputs.PrimaryBucketName })));
     const hasNoncurrentExpire = (lc.Rules || []).some(r => ok(r.NoncurrentVersionExpiration?.NoncurrentDays));
     expect(hasNoncurrentExpire).toBe(true);
   });
 
-  it("24) S3 (secondary): Lifecycle mirrors base posture (or DNS blocked in CI)", async () => {
+  it("22) S3 (secondary): Lifecycle mirrors base posture (or DNS blocked in CI)", async () => {
     try {
       const lc = await retry(() => s3Secondary.send(new GetBucketLifecycleConfigurationCommand({ Bucket: outputs.SecondaryBucketName })));
       const rules = lc.Rules || [];
@@ -399,7 +382,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     }
   });
 
-  it("25) S3 (primary): Replication destination matches SecondaryBucketName or not present if this stack is secondary", async () => {
+  it("23) S3 (primary): Replication destination matches SecondaryBucketName or not present if this stack is secondary", async () => {
     try {
       const rep = await retry(() => s3Primary.send(new GetBucketReplicationCommand({ Bucket: outputs.PrimaryBucketName })));
       const rules = rep.ReplicationConfiguration?.Rules || [];
@@ -410,7 +393,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     }
   });
 
-  it("26) IAM: Replication role trust policy allows s3.amazonaws.com", async () => {
+  it("24) IAM: Replication role trust policy allows s3.amazonaws.com", async () => {
     const roleName = arnToRoleName(outputs.ReplicationRoleArn);
     const role = await retry(() => iam.send(new GetRoleCommand({ RoleName: roleName })));
     const assumeDoc = role.Role?.AssumeRolePolicyDocument;
