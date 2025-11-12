@@ -2239,6 +2239,7 @@ The architecture implements comprehensive high availability through multi-AZ dep
     },
     "WAFWebACLAssociation": {
       "Type": "AWS::WAFv2::WebACLAssociation",
+      "DependsOn": "APIGatewayStage",
       "Properties": {
         "ResourceArn": {
           "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${APIGatewayRestAPI}/stages/prod"
@@ -2369,7 +2370,7 @@ The architecture implements comprehensive high availability through multi-AZ dep
           ]
         },
         "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+          "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
         ],
         "Policies": [
           {
