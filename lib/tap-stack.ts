@@ -1,6 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import * as codecommit from 'aws-cdk-lib/aws-codecommit';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -38,9 +37,20 @@ export class TapStack extends cdk.Stack {
       process.env.PROD_ACCOUNT_ID ||
       this.account;
 
-    const repository = new codecommit.Repository(this, 'MicroserviceRepo', {
-      repositoryName: `microservice-repository-${environmentSuffix}`,
-      description: 'Repository for our containerized microservice',
+    const artifactKey = new kms.Key(this, 'ArtifactKey', {
+      enableKeyRotation: true,
+      description: 'KMS key for encrypting the artifacts stored in S3',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
+      bucketName: `microservice-source-${this.account}-${environmentSuffix}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: artifactKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     const ecrRepository = new ecr.Repository(this, 'MicroserviceECR', {
@@ -52,12 +62,6 @@ export class TapStack extends cdk.Stack {
           description: 'Keep only the last 10 images',
         },
       ],
-    });
-
-    const artifactKey = new kms.Key(this, 'ArtifactKey', {
-      enableKeyRotation: true,
-      description: 'KMS key for encrypting the artifacts stored in S3',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const artifactBucket = new s3.Bucket(this, 'ArtifactBucket', {
@@ -91,12 +95,12 @@ export class TapStack extends cdk.Stack {
     });
 
     const sourceOutput = new codepipeline.Artifact('SourceCode');
-    const sourceAction = new codepipeline_actions.CodeCommitSourceAction({
-      actionName: 'CodeCommit',
-      repository: repository,
-      branch: 'main',
+    const sourceAction = new codepipeline_actions.S3SourceAction({
+      actionName: 'S3Source',
+      bucket: sourceBucket,
+      bucketKey: 'source.zip',
       output: sourceOutput,
-      trigger: codepipeline_actions.CodeCommitTrigger.EVENTS,
+      trigger: codepipeline_actions.S3Trigger.EVENTS,
     });
 
     pipeline.addStage({
@@ -740,9 +744,9 @@ export class TapStack extends cdk.Stack {
       new cloudwatch_actions.SnsAction(alarmTopic)
     );
 
-    new cdk.CfnOutput(this, 'RepositoryCloneUrlHttp', {
-      value: repository.repositoryCloneUrlHttp,
-      description: 'CodeCommit repository clone URL (HTTP)',
+    new cdk.CfnOutput(this, 'SourceBucketName', {
+      value: sourceBucket.bucketName,
+      description: 'S3 bucket name for source code',
     });
 
     new cdk.CfnOutput(this, 'EcrRepositoryUri', {

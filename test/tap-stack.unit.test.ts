@@ -16,8 +16,8 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: Match.stringLikeRegexp('.*-test'),
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp('.*source.*test'),
       });
     });
 
@@ -30,8 +30,8 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: Match.stringLikeRegexp('.*-context-env'),
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp('.*source.*context-env'),
       });
     });
 
@@ -42,8 +42,8 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: Match.stringLikeRegexp('.*-dev'),
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp('.*source.*dev'),
       });
     });
 
@@ -57,31 +57,51 @@ describe('TapStack', () => {
       });
       template = Template.fromStack(stack);
 
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: Match.stringLikeRegexp('.*-props'),
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: Match.stringLikeRegexp('.*source.*props'),
       });
     });
   });
 
-  describe('CodeCommit Repository', () => {
-  beforeEach(() => {
-    app = new cdk.App();
+  describe('S3 Source Bucket', () => {
+    beforeEach(() => {
+      app = new cdk.App();
       stack = new TapStack(app, 'TestTapStack', {
         environmentSuffix: 'test',
         env: { account: '123456789012', region: 'us-east-1' },
       });
-    template = Template.fromStack(stack);
-  });
+      template = Template.fromStack(stack);
+    });
 
-    test('should create CodeCommit repository with correct name', () => {
-      template.hasResourceProperties('AWS::CodeCommit::Repository', {
-        RepositoryName: 'microservice-repository-test',
-        RepositoryDescription: 'Repository for our containerized microservice',
+    test('should create S3 source bucket with correct name', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketName: 'microservice-source-123456789012-test',
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
       });
     });
 
-    test('should have exactly one CodeCommit repository', () => {
-      template.resourceCountIs('AWS::CodeCommit::Repository', 1);
+    test('should have source bucket with KMS encryption', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'aws:kms',
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    test('should have source bucket with DESTROY removal policy', () => {
+      const resources = template.findResources('AWS::S3::Bucket');
+      const sourceBucket = Object.values(resources).find((bucket: any) =>
+        bucket.Properties?.BucketName?.includes('source')
+      );
+      expect(sourceBucket?.DeletionPolicy).toBe('Delete');
     });
   });
 
@@ -212,8 +232,8 @@ describe('TapStack', () => {
       });
     });
 
-    test('should have exactly one artifact bucket', () => {
-      template.resourceCountIs('AWS::S3::Bucket', 1);
+    test('should have exactly two S3 buckets (source and artifact)', () => {
+      template.resourceCountIs('AWS::S3::Bucket', 2);
     });
   });
 
@@ -571,9 +591,9 @@ describe('TapStack', () => {
       template = Template.fromStack(stack);
     });
 
-    test('should output repository clone URL', () => {
-      template.hasOutput('RepositoryCloneUrlHttp', {
-        Description: 'CodeCommit repository clone URL (HTTP)',
+    test('should output source bucket name', () => {
+      template.hasOutput('SourceBucketName', {
+        Description: 'S3 bucket name for source code',
       });
     });
 
