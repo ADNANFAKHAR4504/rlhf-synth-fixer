@@ -89,6 +89,8 @@ export interface LambdaConfig {
   runtime: string;
   timeout: number;
   memorySize: number;
+  s3Bucket: string; 
+  s3Key: string; 
   environmentVariables?: { [key: string]: string };
   iamStatements: aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocumentStatement[];
 }
@@ -188,8 +190,8 @@ export class LambdaModule extends Construct {
         runtime: config.runtime,
         timeout: config.timeout,
         memorySize: config.memorySize,
-        filename: 'lambda.zip', // Placeholder - would be replaced with actual deployment package
-        sourceCodeHash: 'placeholder', // Would be calculated from actual code
+        s3Bucket: config.s3Bucket,        // Use S3 instead of filename
+        s3Key: config.s3Key,
         environment: {
           variables: {
             ...config.environmentVariables,

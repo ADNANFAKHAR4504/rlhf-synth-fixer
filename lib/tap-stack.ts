@@ -79,6 +79,8 @@ export class TapStack extends TerraformStack {
       runtime: 'nodejs18.x',
       timeout: 300,
       memorySize: 512,
+      s3Bucket: "my-etl-lambda-deployments-123",  // Your bucket name
+      s3Key: "validation-lambda.zip",
       environmentVariables: {
         SNS_TOPIC_ARN: snsModule.topic.arn,
         BUCKET_NAME: 'placeholder', // Will be updated after S3 creation
@@ -113,6 +115,8 @@ export class TapStack extends TerraformStack {
         runtime: 'nodejs18.x',
         timeout: 300,
         memorySize: 512,
+        s3Bucket: "my-etl-lambda-deployments-123",  // Your bucket name
+        s3Key: "transformation-lambda.zip",
         environmentVariables: {
           BUCKET_NAME: 'placeholder', // Will be updated after S3 creation
         },
