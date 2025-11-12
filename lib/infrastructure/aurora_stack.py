@@ -173,9 +173,6 @@ class AuroraStack(pulumi.ComponentResource):
         # BUG #8: Missing storage_encrypted=True on secondary cluster
         # Note: If cluster already exists without global_cluster_identifier, it must be manually deleted
         # or use delete_before_replace to ensure proper replacement
-        # Use final_snapshot_identifier for deletion compatibility with existing clusters
-        # that were created without skip_final_snapshot=True
-        final_snapshot_id = f"trading-cluster-secondary-{environment_suffix}-replacement-snapshot"
         self.secondary_cluster = aws.rds.Cluster(
             f"trading-cluster-secondary-{environment_suffix}",
             cluster_identifier=f"trading-cluster-secondary-{environment_suffix}",
@@ -187,7 +184,7 @@ class AuroraStack(pulumi.ComponentResource):
             kms_key_id=secondary_kms.arn,
             storage_encrypted=True,
             backup_retention_period=7,
-            final_snapshot_identifier=final_snapshot_id,  # Required for deletion of existing clusters
+            skip_final_snapshot=True,  # Skip snapshot when deleting for replacement
             tags={**tags, 'Name': f"trading-cluster-secondary-{environment_suffix}"},
             opts=ResourceOptions(
                 parent=self,
