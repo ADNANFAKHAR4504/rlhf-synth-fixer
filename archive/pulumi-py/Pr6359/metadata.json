@@ -33,5 +33,10 @@
   "region": "eu-west-2",
   "author": "iamarpit-turing",
   "reviewer": "chriscrsov",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
