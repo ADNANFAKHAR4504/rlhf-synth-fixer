@@ -12,19 +12,21 @@ export interface EnvironmentStackProps {
   environmentSuffix: string;
   cidrBlock: string;
   operationsAccountId: string;
+  awsRegion: string;
 }
 
 export class EnvironmentStack extends Construct {
   constructor(scope: Construct, id: string, props: EnvironmentStackProps) {
     super(scope, id);
 
-    const { environment, environmentSuffix, cidrBlock, operationsAccountId } =
+    const { environment, environmentSuffix, cidrBlock, operationsAccountId, awsRegion } =
       props;
 
     // Create networking infrastructure
     const networking = new NetworkingStack(this, 'networking', {
       environment: `${environment}-${environmentSuffix}`,
       cidrBlock: cidrBlock,
+      awsRegion: awsRegion,
     });
 
     // Create ALB
@@ -49,6 +51,7 @@ export class EnvironmentStack extends Construct {
       securityGroupIds: [networking.ecsSecurityGroup.id],
       targetGroupArn: alb.targetGroup.arn,
       operationsAccountId: operationsAccountId,
+      awsRegion: awsRegion,
     });
 
     // Create S3 Bucket for static assets

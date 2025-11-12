@@ -10,6 +10,7 @@ import { Construct } from 'constructs';
 export interface NetworkingStackProps {
   environment: string;
   cidrBlock: string;
+  awsRegion: string;
   availabilityZones?: string[];
 }
 
@@ -24,10 +25,10 @@ export class NetworkingStack extends Construct {
   constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
 
-    const { environment, cidrBlock, availabilityZones } = props;
+    const { environment, cidrBlock, awsRegion, availabilityZones } = props;
 
-    // Use provided AZs or query dynamically
-    const azList = availabilityZones || ['us-west-2a', 'us-west-2b'];
+    // Use provided AZs or derive from region
+    const azList = availabilityZones || [`${awsRegion}a`, `${awsRegion}b`];
 
     // Create VPC
     this.vpc = new Vpc(this, 'vpc', {

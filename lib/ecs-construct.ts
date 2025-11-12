@@ -12,6 +12,7 @@ export interface EcsConstructProps {
   subnetIds: string[];
   securityGroupIds: string[];
   targetGroupArn: string;
+  awsRegion: string;
   operationsAccountId?: string;
   containerImage?: string;
   containerPort?: number;
@@ -29,6 +30,7 @@ export class EcsConstruct extends Construct {
       subnetIds,
       securityGroupIds,
       targetGroupArn,
+      awsRegion,
       operationsAccountId = '123456789012',
       containerImage = 'nginx:latest',
       containerPort = 80,
@@ -102,7 +104,7 @@ export class EcsConstruct extends Construct {
               'ecr:BatchGetImage',
             ],
             Resource: [
-              `arn:aws:ecr:us-east-1:${operationsAccountId}:repository/*`,
+              `arn:aws:ecr:${awsRegion}:${operationsAccountId}:repository/*`,
             ],
           },
           {
@@ -160,7 +162,7 @@ export class EcsConstruct extends Construct {
             logDriver: 'awslogs',
             options: {
               'awslogs-group': `/ecs/${environment}/app`,
-              'awslogs-region': 'us-east-1',
+              'awslogs-region': awsRegion,
               'awslogs-stream-prefix': 'ecs',
             },
           },
