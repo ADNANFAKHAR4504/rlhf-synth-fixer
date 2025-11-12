@@ -617,9 +617,11 @@ describe('TapStack - Asynchronous Event Processing Pipeline Unit Tests', () => {
     });
 
     test('Resource dependencies are properly established to prevent circular references', () => {
-      // EventBridge role should exist before rule update
-      expect(templateYaml).toContain('DependsOn:');
-      expect(templateYaml).toContain('- FailedTransactionRule');
+      // EventBridge role is directly referenced in FailedTransactionRule via RoleArn
+      // This creates an implicit dependency without needing explicit DependsOn
+      expect(templateYaml).toContain('RoleArn: !GetAtt EventBridgeRole.Arn');
+      // Verify EventBridge role exists
+      validateResourceExists('EventBridgeRole', 'AWS::IAM::Role');
     });
   });
 

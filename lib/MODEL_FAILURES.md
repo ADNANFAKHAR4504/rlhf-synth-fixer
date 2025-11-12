@@ -6,7 +6,83 @@ The model response is **functionally correct and well-structured**, implementing
 
 ## Critical Failures
 
-### 1. **CRITICAL OPERATIONAL FAILURE** - Missing Required Outputs for Integration Testing
+### 1. **CRITICAL INFRASTRUCTURE FAILURE** - Duplicate EventBridge Rule Definition (MUST FIX)
+
+**Issue:** The template contains TWO EventBridge Rule resources that attempt to do the same thing, creating a redundant and potentially conflicting configuration.
+
+**Location:** Lines 287-307 and Lines 401-423 in lib/TapStack.yml
+
+**Problem:**
+
+- `FailedTransactionRule` (lines 287-307) - Initial rule definition WITHOUT RoleArn
+- `EventBridgeRoleAttachment` (lines 401-423) - Duplicate rule definition WITH RoleArn
+- Both resources are of type `AWS::Events::Rule`
+- The second resource has `DependsOn: FailedTransactionRule`, indicating incorrect approach
+
+**Code:**
+```yaml
+# First definition (lines 287-307)
+FailedTransactionRule:
+  Type: AWS::Events::Rule
+  Properties:
+    Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-failed-transaction-rule'
+    # ... configuration WITHOUT RoleArn
+    Targets:
+      - Arn: !Ref AlertsTopic
+        Id: '1'
+
+# Duplicate definition (lines 401-423)
+EventBridgeRoleAttachment:
+  Type: AWS::Events::Rule  # DUPLICATE!
+  Properties:
+    Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-failed-transaction-rule-update'
+    # ... essentially same configuration WITH RoleArn
+    Targets:
+      - Arn: !Ref AlertsTopic
+        Id: '1'
+        RoleArn: !GetAtt EventBridgeRole.Arn
+  DependsOn:
+    - FailedTransactionRule
+```
+
+**Impact:**
+
+- Creates TWO EventBridge rules instead of one
+- Resource name conflict potential
+- Confusing template structure
+- Unnecessary resource overhead
+- The first rule lacks proper IAM role attachment
+
+**Ideal Response Solution:**
+The ideal response correctly implements ONLY ONE EventBridge rule that includes the RoleArn in the target configuration:
+
+```yaml
+FailedTransactionRule:
+  Type: AWS::Events::Rule
+  Properties:
+    Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-failed-transaction-rule'
+    Description: 'Alert on failed transactions with amount > $5,000'
+    EventBusName: !Ref TransactionEventBus
+    EventPattern:
+      source:
+        - transaction.processor
+      detail-type:
+        - Transaction Failed
+      detail:
+        amount:
+          - numeric:
+              - ">"
+              - 5000
+    State: ENABLED
+    Targets:
+      - Arn: !Ref AlertsTopic
+        Id: '1'
+        RoleArn: !GetAtt EventBridgeRole.Arn
+```
+
+**Resolution:** The ideal response eliminates the duplicate `EventBridgeRoleAttachment` resource and correctly includes the RoleArn in the original `FailedTransactionRule` target configuration.
+
+### 2. **CRITICAL OPERATIONAL FAILURE** - Missing Required Outputs for Integration Testing
 
 **Requirement:** Provide comprehensive outputs for stack integration and testing capabilities.
 
@@ -118,35 +194,7 @@ Outputs:
 
 ## Minor Configuration Issues
 
-### 2. **MINOR TEMPLATE STRUCTURE ISSUE** - Duplicate EventBridge Rule Definition
-
-**Model Response:** Contains redundant EventBridge rule resources:
-```yaml
-  FailedTransactionRule:
-    Type: AWS::Events::Rule
-    # ... configuration
-
-  # Duplicate/conflicting resource
-  EventBridgeRoleAttachment:
-    Type: AWS::Events::Rule  # Same resource type
-    Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-failed-transaction-rule-update'
-      # ... essentially same configuration
-```
-
-**Ideal Response:** Clean, single EventBridge rule definition:
-```yaml
-  FailedTransactionRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-failed-transaction-rule'
-      # ... single, clean configuration
-```
-
-**Impact:**
-- Template complexity without functional benefit
-- Potential naming conflicts between resources
-- Confusing template structure that could lead to deployment issues
+*No minor issues identified. All remaining issues are classified as critical failures that require immediate attention.*
 
 ## What the Model Got Right
 
@@ -182,8 +230,8 @@ Outputs:
 
 | Severity | Issue | Model Gap | Impact |
 |----------|-------|-----------|--------|
+| **Critical** | **Duplicate EventBridge Rule Definition** | **Two conflicting EventBridge rules instead of one** | **Resource conflicts and deployment issues** |
 | **Critical** | **Missing Integration Outputs** | **6 outputs vs 32 outputs** | **Cannot perform comprehensive testing** |
-| Minor | Duplicate EventBridge Rule | Redundant resource definition | Template complexity |
 
 ## Operational Impact
 
@@ -219,22 +267,30 @@ Outputs:
    - Stack metadata (3 outputs)
 
 ### **Minor Template Cleanup**
-2. **Remove duplicate EventBridge rule** - Consolidate into single, clean resource definition
+## Summary of Required Actions
+
+**CRITICAL FIXES REQUIRED:**
+1. **Remove duplicate EventBridge rule** - Eliminate `EventBridgeRoleAttachment` resource and add `RoleArn` to the original `FailedTransactionRule` target configuration
+2. **Add comprehensive outputs** - Include all 26 missing outputs for integration testing and monitoring capabilities
 
 ## Conclusion
 
-The model response demonstrates **excellent technical understanding and implementation** of the core requirements. The architecture is sound, security is properly implemented, and all functional requirements are met.
+The model response demonstrates **excellent technical understanding and implementation** of most core requirements. However, it contains **two critical failures** that significantly impact the template's usability and operational effectiveness.
 
 **Key Strengths:**
-- **Perfect functional implementation** - All core services working correctly
+- **Perfect functional implementation** - All core services working correctly  
 - **Excellent security posture** - Proper KMS encryption and IAM permissions
 - **Clean architecture** - Well-structured FIFO queues with proper message filtering
-- **Full requirement compliance** - Meets all specified technical requirements
+- **Full requirement compliance** - Meets most specified technical requirements
 
-**Critical Gap:**
+**Critical Gaps:**
+- **Duplicate EventBridge rule configuration** - Creates redundant resources and potential conflicts
 - **Missing 81% of expected outputs** (6 provided vs 32 required) 
 - **Severely limits testing and integration capabilities**
 
-**The template is functionally complete and production-ready**, but the missing outputs represent a **critical operational failure** for testing, monitoring, and integration purposes. This is the difference between a **working solution** and a **fully operational, testable, and maintainable** CloudFormation template.
+**Overall Assessment:**
+The template shows **strong architectural understanding** but has **critical operational and structural issues**. The duplicate EventBridge rule represents a fundamental template design flaw that could cause deployment conflicts, while the missing outputs represent a **critical operational failure** for testing, monitoring, and integration purposes.
 
-The gap is primarily about **operational excellence and testing capability** rather than functional correctness. The core infrastructure would work perfectly in production, but without the comprehensive outputs, it would be very difficult to validate, monitor, and maintain effectively.
+This is the difference between a **partially working solution** and a **fully operational, testable, and maintainable** CloudFormation template. Both issues must be resolved before the template can be considered production-ready.
+
+The gaps are about **operational excellence, testing capability, and proper resource management** rather than just functional correctness. While the core infrastructure components would work, the structural issues and missing integration capabilities make it unsuitable for professional deployment without significant corrections.

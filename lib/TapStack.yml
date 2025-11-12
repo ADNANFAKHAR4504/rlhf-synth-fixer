@@ -304,6 +304,7 @@ Resources:
       Targets:
         - Arn: !Ref AlertsTopic
           Id: '1'
+          RoleArn: !GetAtt EventBridgeRole.Arn
 
   # ========================================
   # CloudWatch Alarms
@@ -396,31 +397,6 @@ Resources:
       Tags:
         - Key: Name
           Value: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-eventbridge-role'
-
-  # Update the EventBridge rule target to use the role
-  EventBridgeRoleAttachment:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-failed-transaction-rule-update'
-      Description: 'Alert on failed transactions with amount > $5,000'
-      EventBusName: !Ref TransactionEventBus
-      EventPattern:
-        source:
-          - transaction.processor
-        detail-type:
-          - Transaction Failed
-        detail:
-          amount:
-            - numeric:
-                - ">"
-                - 5000
-      State: ENABLED
-      Targets:
-        - Arn: !Ref AlertsTopic
-          Id: '1'
-          RoleArn: !GetAtt EventBridgeRole.Arn
-    DependsOn:
-      - FailedTransactionRule
 
 # ========================================
 # Outputs
