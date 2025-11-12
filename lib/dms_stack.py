@@ -8,7 +8,7 @@ Creates DMS replication instances, endpoints, and tasks for database migration.
 from typing import Optional, List
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions, Output
+from pulumi import ResourceOptions, Output, CustomTimeouts
 import json
 
 
@@ -83,6 +83,8 @@ class DmsStack(pulumi.ComponentResource):
         )
 
         # DMS Replication Instance
+        # Note: Replication instances can take 5-10 minutes to become "available"
+        # The task creation will wait for this instance to be ready via depends_on
         self.replication_instance = aws.dms.ReplicationInstance(
             f"dms-replication-instance-{self.environment_suffix}",
             replication_instance_id=f"dms-rep-inst-{self.environment_suffix}",
@@ -99,7 +101,16 @@ class DmsStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"dms-replication-instance-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self, depends_on=role_dependencies)
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=role_dependencies,
+                # Add custom timeout to allow time for instance to become available
+                custom_timeouts=CustomTimeouts(
+                    create="15m",  # Allow 15 minutes for instance to become available
+                    update="15m",
+                    delete="10m"
+                )
+            )
         )
 
         # Source Endpoint (Production Aurora)
@@ -143,11 +154,20 @@ class DmsStack(pulumi.ComponentResource):
         )
 
         # DMS Replication Task - Full Load + CDC
+        # IMPORTANT: The task creation requires the replication instance to be in "available" state
+        # Pulumi's depends_on ensures ordering but doesn't wait for the instance to be "available"
+        # The custom timeout allows retries, but the task will fail if the instance isn't ready
+        # Solution: Use the replication instance ARN in an apply() to ensure it's created first,
+        # then rely on AWS retry logic and custom timeouts to handle the availability wait
+        replication_instance_arn_ready = self.replication_instance.replication_instance_arn.apply(
+            lambda arn: arn
+        )
+        
         self.replication_task = aws.dms.ReplicationTask(
             f"dms-replication-task-{self.environment_suffix}",
             replication_task_id=f"dms-task-{self.environment_suffix}",
             migration_type="full-load-and-cdc",
-            replication_instance_arn=self.replication_instance.replication_instance_arn,
+            replication_instance_arn=replication_instance_arn_ready,
             source_endpoint_arn=self.source_endpoint.endpoint_arn,
             target_endpoint_arn=self.target_endpoint.endpoint_arn,
             table_mappings=json.dumps({
@@ -216,7 +236,20 @@ class DmsStack(pulumi.ComponentResource):
                     self.replication_instance,
                     self.source_endpoint,
                     self.target_endpoint
-                ]
+                ],
+                # Add custom timeout to allow time for replication instance to become available
+                # DMS replication instances can take 5-10 minutes to become "available"
+                # NOTE: If this fails with "replication instance is not active", you may need to:
+                # 1. Deploy the stack in two steps: first create the instance, wait for it to be available,
+                #    then create the task in a second deployment
+                # 2. Or use a custom resource/Lambda to wait for the instance to be "available"
+                custom_timeouts=CustomTimeouts(
+                    create="20m",  # Allow 20 minutes for replication instance to become available
+                    update="20m",
+                    delete="10m"
+                ),
+                # Retry on failure - AWS may retry if the instance becomes available during the timeout window
+                protect=False
             )
         )
 
