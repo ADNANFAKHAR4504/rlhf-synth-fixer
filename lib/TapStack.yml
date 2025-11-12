@@ -52,8 +52,13 @@ Parameters:
     NoEcho: true
 
 Conditions:
-  HasSlackWebhook: !Not [!Equals [!Ref SlackWebhookUrl, '']]
-  ShouldCreateVpcEndpoints: !Equals [!Ref CreateVpcEndpoints, 'true']
+  HasSlackWebhook: !Not
+    - !Equals
+      - !Ref SlackWebhookUrl
+      - ''
+  ShouldCreateVpcEndpoints: !Equals
+    - !Ref CreateVpcEndpoints
+    - 'true'
 
 Resources:
   # VPC for isolated CodeBuild
