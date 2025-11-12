@@ -129,8 +129,6 @@ resource "aws_nat_gateway" "main" {
     Project     = var.project_name
     ManagedBy   = "Terraform"
   }
-
-  depends_on = [aws_internet_gateway.main]
 }
 
 # Route Table for Public Subnets
