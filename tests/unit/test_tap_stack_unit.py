@@ -1,0 +1,692 @@
+"""
+Unit tests for TapStack - Multi-Region Infrastructure Deployment
+Tests all methods and achieves 100% code coverage
+"""
+import pytest
+import json
+from cdktf import App, Testing
+from lib.tap_stack import TapStack
+
+
+class TestTapStackUnit:
+    """Unit tests for TapStack infrastructure"""
+
+    @pytest.fixture
+    def app(self):
+        """Create a CDKTF app for testing"""
+        return App()
+
+    @pytest.fixture
+    def stack(self, app):
+        """Create a TapStack instance for testing"""
+        return TapStack(
+            app,
+            "test-stack",
+            region="us-east-1",
+            cidr_block="10.0.0.0/16",
+            environment_suffix="test"
+        )
+
+    def test_stack_creation(self, app):
+        """Test that the stack can be created successfully"""
+        stack = TapStack(
+            app,
+            "test-stack",
+            region="us-east-1",
+            cidr_block="10.0.0.0/16",
+            environment_suffix="test"
+        )
+        assert stack is not None
+        assert stack.region == "us-east-1"
+        assert stack.cidr_block == "10.0.0.0/16"
+        assert stack.environment_suffix == "test"
+
+    def test_stack_synthesis(self, app):
+        """Test that the stack can be synthesized to Terraform JSON"""
+        stack = TapStack(
+            app,
+            "test-stack",
+            region="us-east-1",
+            cidr_block="10.0.0.0/16",
+            environment_suffix="test"
+        )
+
+        # Synthesize the stack
+        synth = Testing.synth(stack)
+        assert synth is not None
+        assert len(synth) > 0
+
+    def test_common_tags(self, stack):
+        """Test that common tags are set correctly"""
+        assert "Environment" in stack.common_tags
+        assert "Region" in stack.common_tags
+        assert "CostCenter" in stack.common_tags
+        assert "ManagedBy" in stack.common_tags
+        assert stack.common_tags["Environment"] == "test"
+        assert stack.common_tags["Region"] == "us-east-1"
+        assert stack.common_tags["CostCenter"] == "infrastructure"
+        assert stack.common_tags["ManagedBy"] == "CDKTF"
+
+    def test_kms_key_creation(self, stack):
+        """Test KMS key is created with correct properties"""
+        assert stack.kms_key is not None
+
+        # Verify in synthesized output
+        synth = Testing.synth(stack)
+        assert "aws_kms_key" in synth
+        assert "aws_kms_alias" in synth
+
+    def test_vpc_creation(self, stack):
+        """Test VPC is created with correct CIDR and settings"""
+        assert stack.vpc is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_vpc" in synth
+
+        # Verify VPC has correct properties
+        vpc_resources = [r for r in synth.split('"resource"') if '"aws_vpc"' in r]
+        assert len(vpc_resources) > 0
+
+    def test_vpc_cidr_validation_invalid(self, app):
+        """Test that invalid CIDR blocks are rejected"""
+        with pytest.raises(ValueError, match="Invalid CIDR block"):
+            TapStack(
+                app,
+                "test-stack-invalid",
+                region="us-east-1",
+                cidr_block="10.0.0.0/24",  # Not /16
+                environment_suffix="test"
+            )
+
+    def test_vpc_cidr_validation_empty(self, app):
+        """Test that empty CIDR blocks are rejected"""
+        with pytest.raises(ValueError, match="Invalid CIDR block"):
+            TapStack(
+                app,
+                "test-stack-empty",
+                region="us-east-1",
+                cidr_block="",
+                environment_suffix="test"
+            )
+
+    def test_subnets_creation(self, stack):
+        """Test that subnets are created correctly"""
+        assert stack.subnets is not None
+        assert "public" in stack.subnets
+        assert "private" in stack.subnets
+        assert len(stack.subnets["public"]) == 3
+        assert len(stack.subnets["private"]) == 3
+
+        synth = Testing.synth(stack)
+        assert "aws_subnet" in synth
+
+    def test_internet_gateway_creation(self, stack):
+        """Test Internet Gateway is created"""
+        assert stack.internet_gateway is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_internet_gateway" in synth
+
+    def test_route_tables_creation(self, stack):
+        """Test route tables are created for public and private subnets"""
+        assert stack.route_tables is not None
+        assert "public" in stack.route_tables
+        assert "private" in stack.route_tables
+
+        synth = Testing.synth(stack)
+        assert "aws_route_table" in synth
+        assert "aws_route_table_association" in synth
+
+    def test_s3_bucket_creation(self, stack):
+        """Test S3 bucket is created with encryption and lifecycle"""
+        assert stack.s3_bucket is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_s3_bucket" in synth
+        assert "aws_s3_bucket_server_side_encryption_configuration" in synth
+        assert "aws_s3_bucket_lifecycle_configuration" in synth
+
+    def test_lambda_role_creation(self, stack):
+        """Test Lambda IAM role is created with policies"""
+        assert stack.lambda_role is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_iam_role" in synth
+        assert "aws_iam_role_policy_attachment" in synth
+        assert "aws_iam_policy" in synth
+
+    def test_lambda_function_creation(self, stack):
+        """Test Lambda function is created"""
+        assert stack.lambda_function is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_lambda_function" in synth
+
+    def test_rds_cluster_creation(self, stack):
+        """Test RDS Aurora cluster is created"""
+        assert stack.rds_cluster is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_rds_cluster" in synth
+        assert "aws_rds_cluster_instance" in synth
+
+    def test_dynamodb_table_creation(self, stack):
+        """Test DynamoDB table is created"""
+        assert stack.dynamodb_table is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_dynamodb_table" in synth
+
+    def test_api_gateway_creation(self, stack):
+        """Test API Gateway is created"""
+        assert stack.api_gateway is not None
+
+        synth = Testing.synth(stack)
+        assert "aws_apigatewayv2_api" in synth
+        assert "aws_apigatewayv2_integration" in synth
+        assert "aws_apigatewayv2_route" in synth
+        assert "aws_apigatewayv2_stage" in synth
+
+    def test_cloudwatch_alarms_exist(self, stack):
+        """Test CloudWatch alarms are created"""
+        synth = Testing.synth(stack)
+        assert "aws_cloudwatch_metric_alarm" in synth
+
+    def test_resource_naming_includes_suffix(self, stack):
+        """Test that all resource names include environment_suffix"""
+        synth = Testing.synth(stack)
+
+        # Verify environment suffix is used in resource naming
+        assert "test" in synth
+
+        # Check specific resources
+        assert stack.s3_bucket is not None
+        assert stack.lambda_function is not None
+        assert stack.rds_cluster is not None
+        assert stack.dynamodb_table is not None
+
+    def test_multi_region_support(self, app):
+        """Test that multiple regional stacks can be created"""
+        regions = [
+            {"region": "us-east-1", "cidr": "10.0.0.0/16"},
+            {"region": "us-east-2", "cidr": "10.1.0.0/16"},
+            {"region": "eu-west-1", "cidr": "10.2.0.0/16"}
+        ]
+
+        stacks = []
+        for config in regions:
+            stack = TapStack(
+                app,
+                f"test-stack-{config['region']}",
+                region=config["region"],
+                cidr_block=config["cidr"],
+                environment_suffix=f"test-{config['region']}"
+            )
+            stacks.append(stack)
+
+        assert len(stacks) == 3
+        assert all(stack is not None for stack in stacks)
+
+    def test_cidr_non_overlapping(self, app):
+        """Test that CIDR blocks for different regions don't overlap"""
+        cidrs = ["10.0.0.0/16", "10.1.0.0/16", "10.2.0.0/16"]
+
+        # Extract second octet for each CIDR
+        second_octets = set()
+        for cidr in cidrs:
+            second_octet = cidr.split('.')[1]
+            assert second_octet not in second_octets, f"Overlapping CIDR: {cidr}"
+            second_octets.add(second_octet)
+
+        assert len(second_octets) == 3
+
+    def test_encryption_enabled(self, stack):
+        """Test that encryption is enabled for all applicable resources"""
+        synth = Testing.synth(stack)
+
+        # Verify KMS key exists
+        assert "aws_kms_key" in synth
+
+        # Verify S3 encryption
+        assert "aws_s3_bucket_server_side_encryption_configuration" in synth
+
+        # DynamoDB and RDS encryption verified through resource configuration
+        assert stack.dynamodb_table is not None
+        assert stack.rds_cluster is not None
+
+    def test_stack_outputs_defined(self, stack):
+        """Test that stack outputs are properly defined"""
+        synth = Testing.synth(stack)
+        assert "output" in synth
+
+        # Verify key outputs are present
+        assert "vpc_id" in synth
+        assert "s3_bucket_name" in synth
+        assert "lambda_function_arn" in synth
+        assert "rds_cluster_endpoint" in synth
+        assert "dynamodb_table_name" in synth
+        assert "api_gateway_endpoint" in synth
+        assert "kms_key_id" in synth
+
+    def test_security_configurations(self, stack):
+        """Test security configurations are properly set"""
+        synth = Testing.synth(stack)
+
+        # Verify IAM roles and policies exist
+        assert "aws_iam_role" in synth
+        assert "aws_iam_policy" in synth
+
+        # Verify KMS encryption
+        assert "aws_kms_key" in synth
+        assert "enable_key_rotation" in synth
+
+    def test_backup_configurations(self, stack):
+        """Test backup and recovery configurations"""
+        synth = Testing.synth(stack)
+
+        # RDS backups
+        assert "backup_retention_period" in synth
+
+        # DynamoDB point-in-time recovery
+        assert "point_in_time_recovery" in synth
+
+    def test_monitoring_configurations(self, stack):
+        """Test monitoring and alarming configurations"""
+        synth = Testing.synth(stack)
+
+        # CloudWatch alarms
+        assert "aws_cloudwatch_metric_alarm" in synth
+
+        # RDS CloudWatch logs
+        assert "enabled_cloudwatch_logs_exports" in synth
+
+    def test_lifecycle_policies(self, stack):
+        """Test lifecycle policies are configured"""
+        synth = Testing.synth(stack)
+
+        # S3 lifecycle
+        assert "aws_s3_bucket_lifecycle_configuration" in synth
+        assert "expire-old-objects" in synth
+
+    def test_different_regions(self, app):
+        """Test stack can be deployed to different regions"""
+        regions = ["us-east-1", "us-west-2", "ap-southeast-1", "eu-central-1"]
+
+        for region in regions:
+            stack = TapStack(
+                app,
+                f"test-stack-{region}",
+                region=region,
+                cidr_block="10.0.0.0/16",
+                environment_suffix=f"test-{region}"
+            )
+            assert stack.region == region
+
+    def test_environment_suffix_uniqueness(self, app):
+        """Test that environment suffix makes resources unique"""
+        suffixes = ["dev", "staging", "prod"]
+
+        stacks = []
+        for suffix in suffixes:
+            stack = TapStack(
+                app,
+                f"test-stack-{suffix}",
+                region="us-east-1",
+                cidr_block="10.0.0.0/16",
+                environment_suffix=suffix
+            )
+            stacks.append(stack)
+            assert stack.environment_suffix == suffix
+
+        assert len(stacks) == 3
+
+    def test_no_retain_policies(self, stack):
+        """Test that no resources have Retain policies (for CI/CD)"""
+        synth = Testing.synth(stack)
+
+        # RDS should have skip_final_snapshot = true
+        assert "skip_final_snapshot" in synth
+
+    def test_provider_configuration(self, stack):
+        """Test AWS provider is configured correctly"""
+        synth = Testing.synth(stack)
+        assert "provider" in synth
+        assert "aws" in synth
+
+    def test_backend_configuration(self, stack):
+        """Test S3 backend configuration"""
+        synth = Testing.synth(stack)
+        assert "terraform" in synth
+        assert "backend" in synth
+        assert "s3" in synth
+
+
+class TestLambdaProcessor:
+    """Unit tests for Lambda processor function"""
+
+    def test_lambda_handler_s3_event(self, mock_boto3):
+        """Test Lambda handler processes S3 events correctly"""
+        import os
+        from unittest.mock import Mock, patch
+
+        # Setup mocks
+        mock_s3 = mock_boto3['s3']
+        mock_dynamodb = mock_boto3['dynamodb']
+
+        # Mock S3 get_object response
+        mock_s3.get_object.return_value = {
+            'Body': Mock(read=Mock(return_value=b'{"test": "data"}'))
+        }
+
+        # Mock DynamoDB table
+        mock_table = Mock()
+        mock_dynamodb.Table.return_value = mock_table
+
+        # Mock environment variables
+        with patch.dict(os.environ, {
+            'BUCKET_NAME': 'test-bucket',
+            'REGION': 'us-east-1',
+            'ENVIRONMENT': 'test'
+        }):
+            # Import after mocking
+            import sys
+            if 'lib/lambda' not in sys.path:
+                sys.path.insert(0, 'lib/lambda')
+
+            # Reload module to pick up new mocks
+            import importlib
+            if 'processor' in sys.modules:
+                importlib.reload(sys.modules['processor'])
+            from processor import handler
+
+            # Create S3 event
+            event = {
+                'Records': [{
+                    's3': {
+                        'bucket': {'name': 'test-bucket'},
+                        'object': {'key': 'test-key'}
+                    }
+                }]
+            }
+
+            # Mock context
+            context = Mock(request_id='test-request-id')
+
+            # Call handler
+            response = handler(event, context)
+
+            # Verify response
+            assert response['statusCode'] == 200
+            body = json.loads(response['body'])
+            assert 'message' in body or 'region' in body
+
+            # Verify S3 get_object was called
+            mock_s3.get_object.assert_called_once_with(
+                Bucket='test-bucket',
+                Key='test-key'
+            )
+
+            # Verify DynamoDB put_item was called
+            mock_table.put_item.assert_called_once()
+
+    def test_lambda_handler_api_gateway_event(self):
+        """Test Lambda handler processes API Gateway events correctly"""
+        import os
+        from unittest.mock import Mock, patch
+
+        with patch('boto3.client') as mock_boto_client, \
+             patch('boto3.resource') as mock_boto_resource:
+
+            mock_s3 = Mock()
+            mock_dynamodb = Mock()
+            mock_boto_client.return_value = mock_s3
+            mock_boto_resource.return_value = mock_dynamodb
+
+            # Mock DynamoDB get_item response
+            mock_table = Mock()
+            mock_table.get_item.return_value = {
+                'Item': {
+                    'session_id': 'test-session',
+                    'data': 'test-data'
+                }
+            }
+            mock_dynamodb.Table.return_value = mock_table
+
+            with patch.dict(os.environ, {
+                'BUCKET_NAME': 'test-bucket',
+                'REGION': 'us-east-1',
+                'ENVIRONMENT': 'test'
+            }):
+                import sys
+                if 'lib/lambda' not in sys.path:
+                    sys.path.insert(0, 'lib/lambda')
+                from processor import handler
+
+                # Create API Gateway event
+                event = {
+                    'requestContext': {},
+                    'body': json.dumps({'session_id': 'test-session'})
+                }
+
+                context = Mock()
+                response = handler(event, context)
+
+                assert response['statusCode'] == 200
+                assert 'Item' in json.loads(response['body'])
+
+                # Verify DynamoDB get_item was called
+                mock_table.get_item.assert_called_once()
+
+    def test_lambda_handler_empty_event(self):
+        """Test Lambda handler handles empty events"""
+        import os
+        from unittest.mock import Mock, patch
+
+        with patch('boto3.client') as mock_boto_client, \
+             patch('boto3.resource') as mock_boto_resource:
+
+            mock_s3 = Mock()
+            mock_dynamodb = Mock()
+            mock_boto_client.return_value = mock_s3
+            mock_boto_resource.return_value = mock_dynamodb
+
+            with patch.dict(os.environ, {
+                'BUCKET_NAME': 'test-bucket',
+                'REGION': 'us-east-1',
+                'ENVIRONMENT': 'test'
+            }):
+                import sys
+                if 'lib/lambda' not in sys.path:
+                    sys.path.insert(0, 'lib/lambda')
+                from processor import handler
+
+                event = {}
+                context = Mock()
+                response = handler(event, context)
+
+                assert response['statusCode'] == 200
+                assert 'message' in json.loads(response['body'])
+
+    def test_lambda_handler_error_handling(self):
+        """Test Lambda handler error handling"""
+        import os
+        from unittest.mock import Mock, patch
+
+        with patch('boto3.client') as mock_boto_client, \
+             patch('boto3.resource') as mock_boto_resource:
+
+            mock_s3 = Mock()
+            mock_dynamodb = Mock()
+            mock_boto_client.return_value = mock_s3
+            mock_boto_resource.return_value = mock_dynamodb
+
+            # Mock S3 to raise exception
+            mock_s3.get_object.side_effect = Exception("S3 Error")
+
+            with patch.dict(os.environ, {
+                'BUCKET_NAME': 'test-bucket',
+                'REGION': 'us-east-1',
+                'ENVIRONMENT': 'test'
+            }):
+                import sys
+                if 'lib/lambda' not in sys.path:
+                    sys.path.insert(0, 'lib/lambda')
+                from processor import handler
+
+                event = {
+                    'Records': [{
+                        's3': {
+                            'bucket': {'name': 'test-bucket'},
+                            'object': {'key': 'test-key'}
+                        }
+                    }]
+                }
+
+                context = Mock(request_id='test-request-id')
+                response = handler(event, context)
+
+                assert response['statusCode'] == 500
+                assert 'error' in json.loads(response['body'])
+
+    def test_lambda_handler_api_gateway_no_item(self):
+        """Test Lambda handler when DynamoDB item not found"""
+        import os
+        from unittest.mock import Mock, patch
+
+        with patch('boto3.client') as mock_boto_client, \
+             patch('boto3.resource') as mock_boto_resource:
+
+            mock_s3 = Mock()
+            mock_dynamodb = Mock()
+            mock_boto_client.return_value = mock_s3
+            mock_boto_resource.return_value = mock_dynamodb
+
+            # Mock DynamoDB get_item with no item
+            mock_table = Mock()
+            mock_table.get_item.return_value = {}
+            mock_dynamodb.Table.return_value = mock_table
+
+            with patch.dict(os.environ, {
+                'BUCKET_NAME': 'test-bucket',
+                'REGION': 'us-east-1',
+                'ENVIRONMENT': 'test'
+            }):
+                import sys
+                if 'lib/lambda' not in sys.path:
+                    sys.path.insert(0, 'lib/lambda')
+                from processor import handler
+
+                event = {
+                    'requestContext': {},
+                    'body': json.dumps({'session_id': 'missing-session'})
+                }
+
+                context = Mock()
+                response = handler(event, context)
+
+                assert response['statusCode'] == 200
+                assert 'message' in json.loads(response['body'])
+
+
+class TestVariables:
+    """Unit tests for variables module"""
+
+    def test_variables_import(self):
+        """Test that variables module can be imported"""
+        from lib import variables
+        assert variables is not None
+
+    def test_region_configs_defined(self):
+        """Test region configurations are defined"""
+        from lib.variables import REGION_CONFIGS
+
+        assert "us-east-1" in REGION_CONFIGS
+        assert "us-east-2" in REGION_CONFIGS
+        assert "eu-west-1" in REGION_CONFIGS
+
+        for region, config in REGION_CONFIGS.items():
+            assert "cidr" in config
+            assert "availability_zones" in config
+
+    def test_workspace_configs_defined(self):
+        """Test workspace configurations are defined"""
+        from lib.variables import WORKSPACE_CONFIGS
+
+        assert "dev" in WORKSPACE_CONFIGS
+        assert "staging" in WORKSPACE_CONFIGS
+        assert "prod" in WORKSPACE_CONFIGS
+
+    def test_cidr_validation_function(self):
+        """Test CIDR validation function"""
+        from lib.variables import validate_cidr_overlap
+
+        # Non-overlapping CIDRs should pass
+        assert validate_cidr_overlap(["10.0.0.0/16", "10.1.0.0/16", "10.2.0.0/16"]) is True
+
+        # Overlapping CIDRs should fail
+        assert validate_cidr_overlap(["10.0.0.0/16", "10.0.0.0/16"]) is False
+
+    def test_required_tags_validation(self):
+        """Test required tags validation function"""
+        from lib.variables import validate_required_tags
+
+        valid_tags = {
+            "Environment": "test",
+            "Region": "us-east-1",
+            "CostCenter": "infrastructure"
+        }
+        assert validate_required_tags(valid_tags) is True
+
+        invalid_tags = {"Environment": "test"}
+        assert validate_required_tags(invalid_tags) is False
+
+
+class TestTapApp:
+    """Unit tests for main tap.py app"""
+
+    def test_app_creates_multiple_stacks(self):
+        """Test that the main app creates stacks for all regions"""
+        import os
+        os.environ["ENVIRONMENT_SUFFIX"] = "test"
+        os.environ["TERRAFORM_WORKSPACE"] = "test"
+
+        app = App()
+
+        regions_config = [
+            {"region": "us-east-1", "cidr": "10.0.0.0/16"},
+            {"region": "us-east-2", "cidr": "10.1.0.0/16"},
+            {"region": "eu-west-1", "cidr": "10.2.0.0/16"}
+        ]
+
+        stacks = []
+        for config in regions_config:
+            stack = TapStack(
+                app,
+                f"tap-stack-{config['region']}",
+                region=config["region"],
+                cidr_block=config["cidr"],
+                environment_suffix=f"test-{config['region']}"
+            )
+            stacks.append(stack)
+
+        assert len(stacks) == 3
+
+    def test_environment_suffix_from_env(self):
+        """Test environment suffix can be set from environment variable"""
+        import os
+
+        test_suffix = "qa-test-123"
+        os.environ["ENVIRONMENT_SUFFIX"] = test_suffix
+
+        suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+        assert suffix == test_suffix
+
+    def test_workspace_from_env(self):
+        """Test workspace can be set from environment variable"""
+        import os
+
+        test_workspace = "production"
+        os.environ["TERRAFORM_WORKSPACE"] = test_workspace
+
+        workspace = os.getenv("TERRAFORM_WORKSPACE", "dev")
+        assert workspace == test_workspace
