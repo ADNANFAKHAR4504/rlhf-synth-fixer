@@ -116,13 +116,8 @@ const rdsKmsKey = new aws.kms.Key(`rds-kms-key-${environmentSuffix}`, {
   tags: tags,
 });
 
-export const rdsKmsAlias = new aws.kms.Alias(
-  `rds-kms-alias-${environmentSuffix}`,
-  {
-    name: `alias/payment-rds-${environmentSuffix}`,
-    targetKeyId: rdsKmsKey.keyId,
-  }
-);
+// Note: KMS Alias creation skipped to avoid conflicts with existing aliases
+// The KMS key can be referenced directly via rdsKmsKey.arn or rdsKmsKey.keyId
 
 // Security Group for RDS
 const rdsSecurityGroup = new aws.ec2.SecurityGroup(
@@ -542,8 +537,8 @@ const taskDefinition = new aws.ecs.TaskDefinition(
     executionRoleArn: ecsTaskExecutionRole.arn,
     taskRoleArn: ecsTaskRole.arn,
     containerDefinitions: pulumi
-      .all([ecrRepository.repositoryUrl, dbSecret.arn])
-      .apply(([repoUrl, secretArn]) =>
+      .all([ecrRepository.repositoryUrl, dbSecret.arn, ecsLogGroup.name])
+      .apply(([repoUrl, secretArn, logGroupName]: [string, string, string]) =>
         JSON.stringify([
           {
             name: 'payment-app',
@@ -568,7 +563,7 @@ const taskDefinition = new aws.ecs.TaskDefinition(
             logConfiguration: {
               logDriver: 'awslogs',
               options: {
-                'awslogs-group': ecsLogGroup.name,
+                'awslogs-group': logGroupName,
                 'awslogs-region': region,
                 'awslogs-stream-prefix': 'payment-app',
               },
