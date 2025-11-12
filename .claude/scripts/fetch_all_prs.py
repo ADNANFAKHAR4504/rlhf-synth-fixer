@@ -125,22 +125,85 @@ failed_count = sum(1 for r in results if r['status'] == 'FAILED')
 passed_count = sum(1 for r in results if r['status'] == 'PASSED')
 in_progress_count = sum(1 for r in results if r['status'] == 'IN PROGRESS')
 
-# Sort results by PR number (descending)
-sorted_results = sorted(results, key=lambda x: x['pr_number'], reverse=True)
+# Count failures by reason
+failure_reasons = {}
+for r in results:
+    if r['status'] == 'FAILED' and r['failure_reason']:
+        reasons = [reason.strip() for reason in r['failure_reason'].split(',')]
+        for reason in reasons:
+            failure_reasons[reason] = failure_reasons.get(reason, 0) + 1
+
+# Group PRs by status
+prs_by_status = {
+    'FAILED': [],
+    'PASSED': [],
+    'IN PROGRESS': []
+}
+
+for pr in results:
+    prs_by_status[pr['status']].append(pr)
+
+# Sort each group by PR number (descending)
+for status in prs_by_status:
+    prs_by_status[status].sort(key=lambda x: x['pr_number'], reverse=True)
+
+# Further group FAILED PRs by failure reason
+failed_by_reason = {}
+for pr in prs_by_status['FAILED']:
+    if pr['failure_reason']:
+        # Handle multiple failure reasons
+        reasons = [reason.strip() for reason in pr['failure_reason'].split(',')]
+        for reason in reasons:
+            if reason not in failed_by_reason:
+                failed_by_reason[reason] = []
+            # Add PR to this reason category (avoid duplicates)
+            if pr not in failed_by_reason[reason]:
+                failed_by_reason[reason].append(pr)
+
+# Sort failed PRs within each reason group
+for reason in failed_by_reason:
+    failed_by_reason[reason].sort(key=lambda x: x['pr_number'], reverse=True)
+
+# Calculate top assignees
+assignee_counts = {}
+for pr in results:
+    assignee = pr['assignee']
+    assignee_counts[assignee] = assignee_counts.get(assignee, 0) + 1
 
 # Create presentable JSON structure
 output_data = {
     'metadata': {
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
         'author': 'mayanksethi-turing',
+        'repository': 'TuringGpt/iac-test-automations',
         'total_open_prs': len(results)
     },
     'summary': {
-        'failed': failed_count,
-        'passed': passed_count,
-        'in_progress': in_progress_count
+        'by_status': {
+            'failed': failed_count,
+            'passed': passed_count,
+            'in_progress': in_progress_count
+        },
+        'failure_breakdown': {
+            'total_unique_failure_types': len(failure_reasons),
+            'by_failure_reason': dict(sorted(failure_reasons.items(), key=lambda x: x[1], reverse=True))
+        },
+        'top_assignees': dict(sorted(assignee_counts.items(), key=lambda x: x[1], reverse=True)[:10])
     },
-    'pull_requests': sorted_results
+    'pull_requests_by_status': {
+        'FAILED': {
+            'count': failed_count,
+            'by_failure_reason': failed_by_reason
+        },
+        'PASSED': {
+            'count': passed_count,
+            'prs': prs_by_status['PASSED']
+        },
+        'IN_PROGRESS': {
+            'count': in_progress_count,
+            'prs': prs_by_status['IN PROGRESS']
+        }
+    }
 }
 
 # Write to JSON file with pretty formatting
