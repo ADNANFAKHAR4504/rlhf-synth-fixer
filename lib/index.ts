@@ -300,16 +300,18 @@ void new aws.iam.RolePolicy(
   `payment-ecs-exec-custom-policy-${environmentSuffix}`,
   {
     role: ecsTaskExecutionRole.id,
-    policy: region.apply(r => JSON.stringify({
-      Version: '2012-10-17',
-      Statement: [
-        {
-          Effect: 'Allow',
-          Action: ['secretsmanager:GetSecretValue'],
-          Resource: `arn:aws:secretsmanager:${r}:*:secret:payment/*`,
-        },
-      ],
-    })),
+    policy: region.apply((r) =>
+      JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: ['secretsmanager:GetSecretValue'],
+            Resource: `arn:aws:secretsmanager:${r}:*:secret:payment/*`,
+          },
+        ],
+      })
+    ),
   }
 );
 
