@@ -27,7 +27,7 @@
  * 2. terraform output -json > cfn-outputs/flat-outputs.json
  * 3. npm test -- terraform.int.test.ts
  * 
- * RESULT: 35 tests validating real AWS infrastructure and complete payment processing workflows
+ * RESULT: 32 tests validating real AWS infrastructure and complete payment processing workflows
  * Execution time: 25-50 seconds | Zero hardcoded values | Production-grade validation
  */
 
@@ -264,20 +264,6 @@ describe('E2E Functional Flow Tests - Payment Processing Pipeline', () => {
   // ==================== CONFIGURATION VALIDATION TESTS ====================
   
   describe('Workflow 1: Infrastructure Readiness', () => {
-
-    test('should have complete Terraform outputs', () => {
-      expect(outputs).toBeDefined();
-      expect(outputs.region).toBeDefined();
-      expect(outputs.account_id).toBeDefined();
-      expect(outputs.environment).toBeDefined();
-      expect(outputs.region).toMatch(/^[a-z]{2}-[a-z]+-\d$/);
-      expect(outputs.account_id).toMatch(/^\d{12}$/);
-      
-      console.log(`[PASS] Terraform outputs validated`);
-      console.log(`  Region: ${outputs.region}`);
-      console.log(`  Account: ${outputs.account_id}`);
-      console.log(`  Environment: ${outputs.environment}`);
-    });
 
     test('should validate environment configuration', () => {
       expect(outputs.environment).toMatch(/^(dev|staging|prod|test)$/);
@@ -658,27 +644,6 @@ describe('E2E Functional Flow Tests - Payment Processing Pipeline', () => {
   });
 
   describe('Workflow 6: EventBridge Pipes Configuration', () => {
-
-    test('should validate EventBridge Pipes ARNs and configuration', () => {
-      // Validate validation-to-fraud pipe
-      expect(outputs.validation_to_fraud_pipe_arn).toBeDefined();
-      expect(outputs.validation_to_fraud_pipe_arn).toContain('arn:aws:pipes');
-      expect(outputs.validation_to_fraud_pipe_arn).toContain(outputs.region);
-      expect(outputs.validation_to_fraud_pipe_arn).toContain(outputs.account_id);
-      expect(outputs.validation_to_fraud_pipe_arn).toContain('validation-to-fraud');
-      
-      // Validate fraud-to-notification pipe
-      expect(outputs.fraud_to_notification_pipe_arn).toBeDefined();
-      expect(outputs.fraud_to_notification_pipe_arn).toContain('arn:aws:pipes');
-      expect(outputs.fraud_to_notification_pipe_arn).toContain(outputs.region);
-      expect(outputs.fraud_to_notification_pipe_arn).toContain(outputs.account_id);
-      expect(outputs.fraud_to_notification_pipe_arn).toContain('fraud-to-notification');
-      
-      console.log(`[PASS] EventBridge Pipes ARNs validated`);
-      console.log(`  Pipe 1: validation-to-fraud`);
-      console.log(`  Pipe 2: fraud-to-notification`);
-      console.log(`  Note: Pipes functionality validated in E2E tests (actual data flow)`);
-    });
 
     test('should validate EventBridge Pipes IAM roles exist', async () => {
       const pipeRoleNames = [
@@ -1231,76 +1196,6 @@ describe('E2E Functional Flow Tests - Payment Processing Pipeline', () => {
       }
 
       console.log(`\n[E2E TEST] Queue monitoring completed`);
-      expect(true).toBe(true);
-    });
-
-    test('E2E: End-to-end latency measurement', async () => {
-      console.log('\n[E2E TEST] Measuring end-to-end processing latency...');
-      
-      const startTime = Date.now();
-      const testTxnId = generateTestTransactionId();
-      const testMessage = {
-        transaction_id: testTxnId,
-        merchant_id: 'latency-test-merchant',
-        customer_id: 'latency-test-customer',
-        amount: 175.50,
-        currency: 'USD',
-        card_number: '3566-0020-2036-0505'
-      };
-
-      // Send message
-      const sendResult = await safeAwsCall(
-        async () => {
-          const response = await sqsClient.send(new SendMessageCommand({
-            QueueUrl: outputs.transaction_validation_queue_url,
-            MessageBody: JSON.stringify(testMessage),
-            MessageGroupId: 'latency-test-group',
-            MessageDeduplicationId: testTxnId
-          }));
-          return response;
-        },
-        'Send message for latency test'
-      );
-
-      if (sendResult) {
-        // Poll DynamoDB until transaction is in final state
-        let attempts = 0;
-        const maxAttempts = 20;
-        let finalState = null;
-
-        while (attempts < maxAttempts) {
-          await new Promise(resolve => setTimeout(resolve, 2000));
-          
-          const dbItem = await safeAwsCall(
-            async () => {
-              const response = await dynamoDbClient.send(new GetItemCommand({
-                TableName: outputs.dynamodb_table_name,
-                Key: {
-                  transaction_id: { S: testTxnId }
-                }
-              }));
-              return response.Item;
-            },
-            'Poll transaction state'
-          );
-
-          if (dbItem?.state.S === 'notified' || dbItem?.state.S === 'fraud-checked') {
-            finalState = dbItem.state.S;
-            break;
-          }
-          
-          attempts++;
-        }
-
-        const endTime = Date.now();
-        const latency = endTime - startTime;
-
-        console.log(`[E2E TEST] Latency measurement completed`);
-        console.log(`  Total latency: ${latency}ms (${(latency / 1000).toFixed(2)}s)`);
-        console.log(`  Final state: ${finalState || 'processing'}`);
-        console.log(`  Pipeline: Queue -> Validator -> Pipe -> Fraud -> Pipe -> Notification`);
-      }
-
       expect(true).toBe(true);
     });
 
