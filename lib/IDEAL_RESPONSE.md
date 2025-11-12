@@ -9,7 +9,7 @@ This document captures the final Pulumi Python implementation that lives under `
 - DynamoDB table with streams feeding the fraud detector
 - SQS queue + DLQ for suspicious transactions
 - SNS topic for alert fan-out
-- Centralized IAM, CloudWatch logging, and X-Ray tracing
+- Centralized IAM, CloudWatch logging, and X-Ray tracing.
 
 ## Key Fixes Compared to MODEL_RESPONSE
 
