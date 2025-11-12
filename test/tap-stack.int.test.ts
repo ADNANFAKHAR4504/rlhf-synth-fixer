@@ -233,7 +233,7 @@ describe('Payment Service CI/CD Pipeline Integration Tests', () => {
       }, 60000);
 
       test('should verify KMS key alias exists', async () => {
-        const environmentName = outputs.EnvironmentName;
+        const environmentSuffix = outputs.EnvironmentSuffix;
 
         try {
           // ACTION: List key aliases
@@ -242,7 +242,7 @@ describe('Payment Service CI/CD Pipeline Integration Tests', () => {
           );
 
           const alias = response.Aliases?.find(
-            a => a.AliasName === `alias/payment-service-${environmentName}`
+            a => a.AliasName === `alias/payment-service-${environmentSuffix}`
           );
 
           expect(alias).toBeDefined();

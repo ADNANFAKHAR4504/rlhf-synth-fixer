@@ -3,11 +3,11 @@ AWSTemplateFormatVersion: '2010-09-09'
 Description: 'CI/CD Pipeline for Containerized Payment Service with Security Controls'
 
 Parameters:
-  EnvironmentName:
+  EnvironmentSuffix:
     Type: String
-    Default: 'staging'
-    Description: Environment name for tagging and resource naming
-    AllowedPattern: ^[a-z][a-z0-9-]*$
+    Default: 'dev'
+    Description: Environment suffix for tagging and resource naming (e.g., pr6296, dev, staging)
+    AllowedPattern: ^[a-z0-9][a-z0-9-]*$
     ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
 
   TeamName:
@@ -66,9 +66,9 @@ Resources:
       EnableDnsSupport: true
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-payment-service-vpc'
+          Value: !Sub '${EnvironmentSuffix}-payment-service-vpc'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -84,9 +84,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-payment-service-private-subnet-1'
+          Value: !Sub '${EnvironmentSuffix}-payment-service-private-subnet-1'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -101,9 +101,9 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-payment-service-private-subnet-2'
+          Value: !Sub '${EnvironmentSuffix}-payment-service-private-subnet-2'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -115,9 +115,9 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-payment-service-igw'
+          Value: !Sub '${EnvironmentSuffix}-payment-service-igw'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -136,9 +136,9 @@ Resources:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub '${EnvironmentName}-payment-service-private-rt'
+          Value: !Sub '${EnvironmentSuffix}-payment-service-private-rt'
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -197,7 +197,7 @@ Resources:
             Resource: '*'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -206,7 +206,7 @@ Resources:
   ArtifactsKeyAlias:
     Type: AWS::KMS::Alias
     Properties:
-      AliasName: !Sub 'alias/payment-service-${EnvironmentName}'
+      AliasName: !Sub 'alias/payment-service-${EnvironmentSuffix}'
       TargetKeyId: !Ref ArtifactsKey
       
   # S3 Bucket for Pipeline Artifacts
@@ -215,7 +215,7 @@ Resources:
     DeletionPolicy: Retain
     UpdateReplacePolicy: Retain
     Properties:
-      BucketName: !Sub 'payment-service-artifacts-${EnvironmentName}-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'payment-service-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}'
       VersioningConfiguration:
         Status: Enabled
       BucketEncryption:
@@ -240,7 +240,7 @@ Resources:
         RestrictPublicBuckets: true
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -282,7 +282,7 @@ Resources:
           Description: Allow all outbound traffic
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -445,7 +445,7 @@ Resources:
                   - 'arn:aws:s3:::prod-*'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -525,7 +525,7 @@ Resources:
                   - 'arn:aws:s3:::prod-*'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -535,7 +535,7 @@ Resources:
   BuildProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub 'payment-service-build-${EnvironmentName}'
+      Name: !Sub 'payment-service-build-${EnvironmentSuffix}'
       Description: 'Build and security scan for payment service'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
@@ -557,12 +557,12 @@ Resources:
         BuildSpec: buildspec.yml
       LogsConfig:
         CloudWatchLogs:
-          GroupName: !Sub '/aws/codebuild/payment-service-build-${EnvironmentName}'
+          GroupName: !Sub '/aws/codebuild/payment-service-build-${EnvironmentSuffix}'
           Status: ENABLED
       TimeoutInMinutes: 30
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -572,7 +572,7 @@ Resources:
   TestProject:
     Type: AWS::CodeBuild::Project
     Properties:
-      Name: !Sub 'payment-service-test-${EnvironmentName}'
+      Name: !Sub 'payment-service-test-${EnvironmentSuffix}'
       Description: 'Integration tests for payment service'
       ServiceRole: !GetAtt CodeBuildServiceRole.Arn
       Artifacts:
@@ -594,12 +594,12 @@ Resources:
         BuildSpec: testspec.yml
       LogsConfig:
         CloudWatchLogs:
-          GroupName: !Sub '/aws/codebuild/payment-service-test-${EnvironmentName}'
+          GroupName: !Sub '/aws/codebuild/payment-service-test-${EnvironmentSuffix}'
           Status: ENABLED
       TimeoutInMinutes: 30
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -619,7 +619,7 @@ Resources:
           Base: 1
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -640,7 +640,7 @@ Resources:
         - 'arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
 
@@ -677,7 +677,7 @@ Resources:
               awslogs-stream-prefix: ecs
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -708,7 +708,7 @@ Resources:
           Rollback: true
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -718,7 +718,7 @@ Resources:
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
-      Name: !Sub 'payment-service-${EnvironmentName}-pipeline'
+      Name: !Sub 'payment-service-${EnvironmentSuffix}-pipeline'
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
       ArtifactStore:
         Type: S3
@@ -784,7 +784,7 @@ Resources:
                 - Name: BuildOutput
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -920,7 +920,7 @@ Resources:
       MemorySize: 128
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -942,7 +942,7 @@ Resources:
         - 'arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole'
       Tags:
         - Key: Environment
-          Value: !Ref EnvironmentName
+          Value: !Ref EnvironmentSuffix
         - Key: Team
           Value: !Ref TeamName
         - Key: CostCenter
@@ -1138,13 +1138,13 @@ Outputs:
 
   BuildLogGroupName:
     Description: CodeBuild Build Log Group Name
-    Value: !Sub '/aws/codebuild/payment-service-build-${EnvironmentName}'
+    Value: !Sub '/aws/codebuild/payment-service-build-${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-BuildLogGroupName'
 
   TestLogGroupName:
     Description: CodeBuild Test Log Group Name
-    Value: !Sub '/aws/codebuild/payment-service-test-${EnvironmentName}'
+    Value: !Sub '/aws/codebuild/payment-service-test-${EnvironmentSuffix}'
     Export:
       Name: !Sub '${AWS::StackName}-TestLogGroupName'
 
@@ -1214,9 +1214,9 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-StackName'
 
-  EnvironmentName:
+  EnvironmentSuffix:
     Description: Environment name used for this deployment
-    Value: !Ref EnvironmentName
+    Value: !Ref EnvironmentSuffix
     Export:
-      Name: !Sub '${AWS::StackName}-EnvironmentName'
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
 ```
