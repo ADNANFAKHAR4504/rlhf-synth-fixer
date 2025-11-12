@@ -120,6 +120,8 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
   let natGateway2Id: string;
   let environmentSuffix: string;
   let instanceId: string;
+  let vpcFlowLogsLogGroup: string;
+  let apiGatewayLogGroup: string;
 
   beforeAll(async () => {
     // Read stack name from metadata.json
@@ -174,6 +176,10 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
       outputs.find((o) => o.OutputKey === 'NATGateway2Id')?.OutputValue || '';
     environmentSuffix =
       outputs.find((o) => o.OutputKey === 'EnvironmentSuffix')?.OutputValue || '';
+    vpcFlowLogsLogGroup =
+      outputs.find((o) => o.OutputKey === 'VPCFlowLogsLogGroup')?.OutputValue || '';
+    apiGatewayLogGroup =
+      outputs.find((o) => o.OutputKey === 'APIGatewayLogGroup')?.OutputValue || '';
 
     // Get instance ID from Auto Scaling Group
     const instancesResponse = await ec2Client.send(
@@ -472,7 +478,7 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
 
   describe('[SERVICE-LEVEL] CloudWatch Logs - Write and Query Log Events', () => {
     test('should write custom log events to VPC Flow Logs group', async () => {
-      const logGroupName = `/aws/vpc/${environmentSuffix}-${stackName}`;
+      const logGroupName = vpcFlowLogsLogGroup;
       const logStreamName = `integration-test-${Date.now()}`;
 
       // ACTION: Create log stream
@@ -517,15 +523,12 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
 
     test('should verify log groups have correct retention periods', async () => {
       // ACTION: Query log groups and verify retention
-      const vpcFlowLogGroup = `/aws/vpc/${environmentSuffix}-${stackName}`;
-      const apiGatewayLogGroup = `/aws/apigateway/SecureWebAppAPI-${environmentSuffix}`;
-
       const logGroupsResponse = await cloudWatchLogsClient.send(
         new DescribeLogGroupsCommand({})
       );
 
       const vpcLogGroup = logGroupsResponse.logGroups?.find(
-        (lg) => lg.logGroupName === vpcFlowLogGroup
+        (lg) => lg.logGroupName === vpcFlowLogsLogGroup
       );
       const apiLogGroup = logGroupsResponse.logGroups?.find(
         (lg) => lg.logGroupName === apiGatewayLogGroup
@@ -921,10 +924,9 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
 
       console.log('[E2E Test] Step 4: Verifying API Gateway logs in CloudWatch...');
       // Step 4: Verify API Gateway logs
-      const apiLogGroup = `/aws/apigateway/SecureWebAppAPI-${environmentSuffix}`;
       const apiLogGroupsResponse = await cloudWatchLogsClient.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: apiLogGroup,
+          logGroupNamePrefix: apiGatewayLogGroup,
         })
       );
 
@@ -1188,13 +1190,31 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
       expect(uploadResult.StandardOutputContent).toContain('Upload completed');
 
       console.log('[E2E EC2-S3-KMS Test] Step 3: Verifying S3 object is encrypted with KMS...');
-      // Step 3: Verify encryption
-      const getResponse = await s3Client.send(
-        new GetObjectCommand({
-          Bucket: s3BucketName,
-          Key: testKey,
-        })
-      );
+      // Step 3: Wait for S3 eventual consistency, then verify encryption
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+
+      let getResponse;
+      let retries = 0;
+      const maxRetries = 5;
+
+      while (retries < maxRetries) {
+        try {
+          getResponse = await s3Client.send(
+            new GetObjectCommand({
+              Bucket: s3BucketName,
+              Key: testKey,
+            })
+          );
+          break;
+        } catch (error: any) {
+          if (error.name === 'NoSuchKey' && retries < maxRetries - 1) {
+            retries++;
+            await new Promise((resolve) => setTimeout(resolve, 2000));
+          } else {
+            throw error;
+          }
+        }
+      }
 
       expect(getResponse.ServerSideEncryption).toBe('aws:kms');
       expect(getResponse.SSEKMSKeyId).toContain(kmsKeyId);

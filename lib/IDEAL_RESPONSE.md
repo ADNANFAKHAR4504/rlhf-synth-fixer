@@ -2883,6 +2883,28 @@ The architecture implements comprehensive high availability through multi-AZ dep
           "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
         }
       }
+    },
+    "VPCFlowLogsLogGroup": {
+      "Description": "Name of the VPC Flow Logs CloudWatch Log Group",
+      "Value": {
+        "Ref": "VPCFlowLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-VPCFlowLogsLogGroup"
+        }
+      }
+    },
+    "APIGatewayLogGroup": {
+      "Description": "Name of the API Gateway CloudWatch Log Group",
+      "Value": {
+        "Ref": "APIGatewayLogGroup"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-APIGatewayLogGroup"
+        }
+      }
     }
   }
 }
