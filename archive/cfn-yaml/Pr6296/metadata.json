@@ -24,5 +24,12 @@
     "EventBridge",
     "CloudWatch Logs",
     "ECS"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
 }
