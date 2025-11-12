@@ -1190,12 +1190,13 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
       expect(uploadResult.StandardOutputContent).toContain('Upload completed');
 
       console.log('[E2E EC2-S3-KMS Test] Step 3: Verifying S3 object is encrypted with KMS...');
-      // Step 3: Wait for S3 eventual consistency, then verify encryption
-      await new Promise((resolve) => setTimeout(resolve, 3000));
+      // Step 3: Wait for S3 eventual consistency after EC2 upload, then verify encryption
+      // EC2 → S3 uploads require longer wait time than direct S3 operations
+      await new Promise((resolve) => setTimeout(resolve, 5000));
 
       let getResponse;
       let retries = 0;
-      const maxRetries = 5;
+      const maxRetries = 10;
 
       while (retries < maxRetries) {
         try {
@@ -1209,7 +1210,8 @@ describe('Integration Tests for Security Configuration as Code Stack', () => {
         } catch (error: any) {
           if (error.name === 'NoSuchKey' && retries < maxRetries - 1) {
             retries++;
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            console.log(`[E2E EC2-S3-KMS Test] Object not yet available, retry ${retries}/${maxRetries}...`);
+            await new Promise((resolve) => setTimeout(resolve, 3000));
           } else {
             throw error;
           }
