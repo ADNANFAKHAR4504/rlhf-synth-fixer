@@ -246,27 +246,39 @@ class DmsStack(pulumi.ComponentResource):
         invoke_opts = pulumi.InvokeOptions(parent=self)
         dependencies = []
 
-        # Create DMS VPC role with unique name including environment suffix
-        dms_vpc_role = aws.iam.Role(
-            f"dms-vpc-role-{self.environment_suffix}",
-            name=f"dms-vpc-role-{self.environment_suffix}",
-            path="/service-role/",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "dms.amazonaws.com"
-                    }
-                }]
-            }),
-            tags={
-                **self.tags,
-                'Name': f"dms-vpc-role-{self.environment_suffix}"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+        vpc_role_name = f"dms-vpc-role-{self.environment_suffix}"
+        cloudwatch_role_name = f"dms-cloudwatch-logs-role-{self.environment_suffix}"
+
+        # Try to get existing DMS VPC role, or create if it doesn't exist
+        try:
+            existing_vpc_role = aws.iam.get_role(name=vpc_role_name, opts=invoke_opts)
+            dms_vpc_role = aws.iam.Role.get(
+                f"dms-vpc-role-{self.environment_suffix}",
+                existing_vpc_role.arn,
+                opts=ResourceOptions(parent=self)
+            )
+        except Exception:
+            # Role doesn't exist, create it
+            dms_vpc_role = aws.iam.Role(
+                f"dms-vpc-role-{self.environment_suffix}",
+                name=vpc_role_name,
+                path="/service-role/",
+                assume_role_policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "dms.amazonaws.com"
+                        }
+                    }]
+                }),
+                tags={
+                    **self.tags,
+                    'Name': f"dms-vpc-role-{self.environment_suffix}"
+                },
+                opts=ResourceOptions(parent=self, ignore_changes=["assume_role_policy", "tags", "tags_all"])
+            )
         dependencies.append(dms_vpc_role)
 
         vpc_attachment = aws.iam.RolePolicyAttachment(
@@ -277,27 +289,36 @@ class DmsStack(pulumi.ComponentResource):
         )
         dependencies.append(vpc_attachment)
 
-        # Create DMS CloudWatch role with unique name including environment suffix
-        dms_cloudwatch_role = aws.iam.Role(
-            f"dms-cloudwatch-role-{self.environment_suffix}",
-            name=f"dms-cloudwatch-logs-role-{self.environment_suffix}",
-            path="/service-role/",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Action": "sts:AssumeRole",
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "dms.amazonaws.com"
-                    }
-                }]
-            }),
-            tags={
-                **self.tags,
-                'Name': f"dms-cloudwatch-role-{self.environment_suffix}"
-            },
-            opts=ResourceOptions(parent=self)
-        )
+        # Try to get existing DMS CloudWatch role, or create if it doesn't exist
+        try:
+            existing_cloudwatch_role = aws.iam.get_role(name=cloudwatch_role_name, opts=invoke_opts)
+            dms_cloudwatch_role = aws.iam.Role.get(
+                f"dms-cloudwatch-role-{self.environment_suffix}",
+                existing_cloudwatch_role.arn,
+                opts=ResourceOptions(parent=self)
+            )
+        except Exception:
+            # Role doesn't exist, create it
+            dms_cloudwatch_role = aws.iam.Role(
+                f"dms-cloudwatch-role-{self.environment_suffix}",
+                name=cloudwatch_role_name,
+                path="/service-role/",
+                assume_role_policy=json.dumps({
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                        "Action": "sts:AssumeRole",
+                        "Effect": "Allow",
+                        "Principal": {
+                            "Service": "dms.amazonaws.com"
+                        }
+                    }]
+                }),
+                tags={
+                    **self.tags,
+                    'Name': f"dms-cloudwatch-role-{self.environment_suffix}"
+                },
+                opts=ResourceOptions(parent=self, ignore_changes=["assume_role_policy", "tags", "tags_all"])
+            )
         dependencies.append(dms_cloudwatch_role)
 
         cloudwatch_attachment = aws.iam.RolePolicyAttachment(
