@@ -243,6 +243,135 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: primaryProvider, parent: this }
     );
 
+    // Create Elastic IPs for NAT Gateways in primary region
+    const primaryNatEip1 = new aws.ec2.Eip(
+      `primary-nat-eip-1-${environmentSuffix}`,
+      {
+        domain: 'vpc',
+        tags: {
+          Name: `primary-nat-eip-1-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Primary',
+          ...tags,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    const primaryNatEip2 = new aws.ec2.Eip(
+      `primary-nat-eip-2-${environmentSuffix}`,
+      {
+        domain: 'vpc',
+        tags: {
+          Name: `primary-nat-eip-2-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Primary',
+          ...tags,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Create NAT Gateways in primary region
+    const primaryNatGw1 = new aws.ec2.NatGateway(
+      `primary-nat-gw-1-${environmentSuffix}`,
+      {
+        allocationId: primaryNatEip1.id,
+        subnetId: primaryPublicSubnet1.id,
+        tags: {
+          Name: `primary-nat-gw-1-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Primary',
+          ...tags,
+        },
+      },
+      { provider: primaryProvider, parent: this, dependsOn: [primaryIgw] }
+    );
+
+    const primaryNatGw2 = new aws.ec2.NatGateway(
+      `primary-nat-gw-2-${environmentSuffix}`,
+      {
+        allocationId: primaryNatEip2.id,
+        subnetId: primaryPublicSubnet2.id,
+        tags: {
+          Name: `primary-nat-gw-2-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Primary',
+          ...tags,
+        },
+      },
+      { provider: primaryProvider, parent: this, dependsOn: [primaryIgw] }
+    );
+
+    // Create route tables for private subnets in primary region
+    const primaryPrivateRouteTable1 = new aws.ec2.RouteTable(
+      `primary-private-rt-1-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        tags: {
+          Name: `primary-private-rt-1-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Primary',
+          ...tags,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    const primaryPrivateRouteTable2 = new aws.ec2.RouteTable(
+      `primary-private-rt-2-${environmentSuffix}`,
+      {
+        vpcId: primaryVpc.id,
+        tags: {
+          Name: `primary-private-rt-2-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Primary',
+          ...tags,
+        },
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Add routes to NAT Gateways for private subnets in primary region
+    const _primaryPrivateRoute1 = new aws.ec2.Route(
+      `primary-private-route-1-${environmentSuffix}`,
+      {
+        routeTableId: primaryPrivateRouteTable1.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: primaryNatGw1.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    const _primaryPrivateRoute2 = new aws.ec2.Route(
+      `primary-private-route-2-${environmentSuffix}`,
+      {
+        routeTableId: primaryPrivateRouteTable2.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: primaryNatGw2.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    // Associate private subnets with their route tables in primary region
+    const _primaryPrivateRtAssoc1 = new aws.ec2.RouteTableAssociation(
+      `primary-private-rta-1-${environmentSuffix}`,
+      {
+        subnetId: primaryPrivateSubnet1.id,
+        routeTableId: primaryPrivateRouteTable1.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
+    const _primaryPrivateRtAssoc2 = new aws.ec2.RouteTableAssociation(
+      `primary-private-rta-2-${environmentSuffix}`,
+      {
+        subnetId: primaryPrivateSubnet2.id,
+        routeTableId: primaryPrivateRouteTable2.id,
+      },
+      { provider: primaryProvider, parent: this }
+    );
+
     // Create route table for public subnets in primary region
     const primaryPublicRouteTable = new aws.ec2.RouteTable(
       `primary-public-rt-${environmentSuffix}`,
@@ -710,6 +839,135 @@ echo "Primary Region (Milan) - Trading Application" > /var/www/html/index.html
           FailoverRole: 'Standby',
           ...tags,
         },
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    // Create Elastic IPs for NAT Gateways in standby region
+    const standbyNatEip1 = new aws.ec2.Eip(
+      `standby-nat-eip-1-${environmentSuffix}`,
+      {
+        domain: 'vpc',
+        tags: {
+          Name: `standby-nat-eip-1-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Standby',
+          ...tags,
+        },
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    const standbyNatEip2 = new aws.ec2.Eip(
+      `standby-nat-eip-2-${environmentSuffix}`,
+      {
+        domain: 'vpc',
+        tags: {
+          Name: `standby-nat-eip-2-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Standby',
+          ...tags,
+        },
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    // Create NAT Gateways in standby region
+    const standbyNatGw1 = new aws.ec2.NatGateway(
+      `standby-nat-gw-1-${environmentSuffix}`,
+      {
+        allocationId: standbyNatEip1.id,
+        subnetId: standbyPublicSubnet1.id,
+        tags: {
+          Name: `standby-nat-gw-1-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Standby',
+          ...tags,
+        },
+      },
+      { provider: standbyProvider, parent: this, dependsOn: [standbyIgw] }
+    );
+
+    const standbyNatGw2 = new aws.ec2.NatGateway(
+      `standby-nat-gw-2-${environmentSuffix}`,
+      {
+        allocationId: standbyNatEip2.id,
+        subnetId: standbyPublicSubnet2.id,
+        tags: {
+          Name: `standby-nat-gw-2-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Standby',
+          ...tags,
+        },
+      },
+      { provider: standbyProvider, parent: this, dependsOn: [standbyIgw] }
+    );
+
+    // Create route tables for private subnets in standby region
+    const standbyPrivateRouteTable1 = new aws.ec2.RouteTable(
+      `standby-private-rt-1-${environmentSuffix}`,
+      {
+        vpcId: standbyVpc.id,
+        tags: {
+          Name: `standby-private-rt-1-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Standby',
+          ...tags,
+        },
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    const standbyPrivateRouteTable2 = new aws.ec2.RouteTable(
+      `standby-private-rt-2-${environmentSuffix}`,
+      {
+        vpcId: standbyVpc.id,
+        tags: {
+          Name: `standby-private-rt-2-${environmentSuffix}`,
+          Environment: 'Production',
+          FailoverRole: 'Standby',
+          ...tags,
+        },
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    // Add routes to NAT Gateways for private subnets in standby region
+    const _standbyPrivateRoute1 = new aws.ec2.Route(
+      `standby-private-route-1-${environmentSuffix}`,
+      {
+        routeTableId: standbyPrivateRouteTable1.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: standbyNatGw1.id,
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    const _standbyPrivateRoute2 = new aws.ec2.Route(
+      `standby-private-route-2-${environmentSuffix}`,
+      {
+        routeTableId: standbyPrivateRouteTable2.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: standbyNatGw2.id,
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    // Associate private subnets with their route tables in standby region
+    const _standbyPrivateRtAssoc1 = new aws.ec2.RouteTableAssociation(
+      `standby-private-rta-1-${environmentSuffix}`,
+      {
+        subnetId: standbyPrivateSubnet1.id,
+        routeTableId: standbyPrivateRouteTable1.id,
+      },
+      { provider: standbyProvider, parent: this }
+    );
+
+    const _standbyPrivateRtAssoc2 = new aws.ec2.RouteTableAssociation(
+      `standby-private-rta-2-${environmentSuffix}`,
+      {
+        subnetId: standbyPrivateSubnet2.id,
+        routeTableId: standbyPrivateRouteTable2.id,
       },
       { provider: standbyProvider, parent: this }
     );
