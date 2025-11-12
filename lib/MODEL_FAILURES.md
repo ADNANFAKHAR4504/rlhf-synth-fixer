@@ -415,7 +415,7 @@ log_group=logs.LogGroup(...)
 
 **Impact Level**: Low
 
-**MODEL_RESPONSE Issue**: The CloudWatch Dashboard URL output hard-codes `ap-southeast-1` region instead of using the stack's region property.
+**MODEL_RESPONSE Issue**: The CloudWatch Dashboard URL output hard-codes `us-east-1` region instead of using the stack's region property.
 
 **Location**: `lib/tap_stack.py`, lines 150-154
 
@@ -424,7 +424,7 @@ log_group=logs.LogGroup(...)
 cdk.CfnOutput(
     self,
     "CloudWatchDashboardURL",
-    value=f"https://ap-southeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-southeast-1#dashboards:name={monitoring_stack.dashboard.dashboard_name}",
+    value=f"https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name={monitoring_stack.dashboard.dashboard_name}",
     description="CloudWatch Dashboard URL"
 )
 ```
@@ -440,7 +440,7 @@ cdk.CfnOutput(
 )
 ```
 
-**Root Cause**: The PROMPT specified ap-southeast-1 as the deployment region, so the model hard-coded it. However, using the stack's region property is more flexible.
+**Root Cause**: The PROMPT specified us-east-1 as the deployment region, so the model hard-coded it. However, using the stack's region property is more flexible.
 
 **Cost/Security/Performance Impact**:
 - Portability: URL breaks if deployed to different region

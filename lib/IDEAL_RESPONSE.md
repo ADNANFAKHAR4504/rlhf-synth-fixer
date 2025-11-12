@@ -581,7 +581,7 @@ Tests must validate:
 **Deployment Command**:
 ```bash
 export ENVIRONMENT_SUFFIX=synthx61li1
-export CERTIFICATE_ARN=arn:aws:acm:ap-southeast-1:123456789012:certificate/...
+export CERTIFICATE_ARN=arn:aws:acm:us-east-1:123456789012:certificate/...
 cdk deploy --all --require-approval never
 ```
 

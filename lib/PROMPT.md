@@ -4,7 +4,7 @@ Hey team,
 
 We need to build a production-grade payment processing API infrastructure for a fintech startup. They're handling sensitive financial data and need to maintain PCI DSS compliance while supporting 10,000+ concurrent transactions. I've been asked to create this using **CDK with Python**. The business wants end-to-end encryption, multi-AZ high availability, and strict compliance controls.
 
-This is a complex deployment spanning multiple AWS services. The application processes financial transactions, so we need to ensure proper isolation, encryption at rest and in transit, and comprehensive monitoring. The infrastructure needs to be deployed in ap-southeast-1 with full redundancy across 3 availability zones.
+This is a complex deployment spanning multiple AWS services. The application processes financial transactions, so we need to ensure proper isolation, encryption at rest and in transit, and comprehensive monitoring. The infrastructure needs to be deployed in us-east-1 with full redundancy across 3 availability zones.
 
 The team is looking for a complete solution that handles everything from network isolation to application deployment, database clustering, API management, asynchronous processing, and comprehensive observability. All resources need to be cost-optimized where possible while maintaining security and compliance requirements.
 
@@ -93,7 +93,7 @@ Create a comprehensive payment processing infrastructure using **CDK with Python
 - Use **NAT Instances** for outbound connectivity from private subnets
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{purpose}-{environmentSuffix}`
-- Deploy to **ap-southeast-1** region
+- Deploy to **us-east-1** region
 - Python 3.9+ and AWS CDK 2.100+ required
 
 ### Constraints

@@ -28,6 +28,6 @@
     "ECR",
     "NAT"
   ],
-  "region": "eu-central-2",
+  "region": "us-east-1",
   "training_quality": 10
 }

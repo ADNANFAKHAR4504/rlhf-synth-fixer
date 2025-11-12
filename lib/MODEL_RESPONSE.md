@@ -34,7 +34,7 @@ props = TapStackProps(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region='ap-southeast-1'
+        region='us-east-1'
     )
 )
 
@@ -186,7 +186,7 @@ class TapStack(cdk.Stack):
         cdk.CfnOutput(
             self,
             "CloudWatchDashboardURL",
-            value=f"https://ap-southeast-1.console.aws.amazon.com/cloudwatch/home?region=ap-southeast-1#dashboards:name={monitoring_stack.dashboard.dashboard_name}",
+            value=f"https://us-east-1.console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name={monitoring_stack.dashboard.dashboard_name}",
             description="CloudWatch Dashboard URL"
         )
 
