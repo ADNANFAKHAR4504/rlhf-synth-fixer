@@ -400,20 +400,14 @@ describe('TapStack CloudFormation Template', () => {
     test('restricts Lambda security group egress to controlled endpoints', () => {
       // Arrange
       const sg = resources.LambdaSecurityGroup;
-      const s3Egress = resources.LambdaSecurityGroupEgressS3;
       const vpcEgress = resources.LambdaSecurityGroupEgressVPC;
 
       // Assert - security group itself should not declare inline egress
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
       expect(sg.Properties.SecurityGroupEgress).toBeUndefined();
 
-      // Assert - S3 gateway endpoint egress rule
-      expect(s3Egress.Type).toBe('AWS::EC2::SecurityGroupEgress');
-      expect(s3Egress.Properties.GroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
-      expect(s3Egress.Properties.IpProtocol).toBe('tcp');
-      expect(s3Egress.Properties.FromPort).toBe(443);
-      expect(s3Egress.Properties.ToPort).toBe(443);
-      expect(s3Egress.Properties.DestinationPrefixListId).toEqual({ 'Fn::Sub': 'pl-${AWS::Partition}s3' });
+      // Assert - S3 Gateway endpoints don't require security group rules (they work at route table level)
+      // Only Interface endpoints (Lambda, CloudWatch Logs, KMS) need security group egress rules
 
       // Assert - interface endpoint egress rule scoped to VPC CIDR
       expect(vpcEgress.Type).toBe('AWS::EC2::SecurityGroupEgress');
@@ -549,7 +543,14 @@ describe('TapStack CloudFormation Template', () => {
 
       // Assert
       expect(role.Type).toBe('AWS::IAM::Role');
-      const certPolicy = policies.find((p: any) => p.PolicyName === 'CertificateValidationAccess');
+      // Policy name now includes project name and environment for uniqueness
+      const certPolicy = policies.find((p: any) => 
+        p.PolicyName && (
+          p.PolicyName['Fn::Sub']?.includes('CertificateValidationAccess') ||
+          (typeof p.PolicyName === 'string' && p.PolicyName.includes('CertificateValidationAccess'))
+        )
+      );
+      expect(certPolicy).toBeDefined();
       expect(certPolicy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
       expect(certPolicy.PolicyDocument.Statement[0].Resource['Fn::Sub']).toContain('${TrustStoreBucket}');
     });

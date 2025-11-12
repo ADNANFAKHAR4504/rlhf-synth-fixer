@@ -379,18 +379,6 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
   
-  # Add egress rule for S3 prefix list (needed for S3 Gateway endpoint)
-  LambdaSecurityGroupEgressS3:
-    Type: AWS::EC2::SecurityGroupEgress
-    Properties:
-      GroupId: !Ref LambdaSecurityGroup
-      IpProtocol: tcp
-      FromPort: 443
-      ToPort: 443
-      DestinationPrefixListId: !Sub 'pl-${AWS::Partition}s3'
-      Description: HTTPS to S3 via Gateway endpoint
-  
-  # Add egress rule for VPC CIDR (for Interface endpoints)
   LambdaSecurityGroupEgressVPC:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:

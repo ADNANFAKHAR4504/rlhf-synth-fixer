@@ -610,6 +610,9 @@
         "LambdaSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-lambda-sg-${EnvironmentName}"
+                },
                 "GroupDescription": "Security group for Lambda functions with VPC endpoint access",
                 "VpcId": {
                     "Ref": "VPC"
@@ -650,21 +653,6 @@
                         }
                     }
                 ]
-            }
-        },
-        "LambdaSecurityGroupEgressS3": {
-            "Type": "AWS::EC2::SecurityGroupEgress",
-            "Properties": {
-                "GroupId": {
-                    "Ref": "LambdaSecurityGroup"
-                },
-                "IpProtocol": "tcp",
-                "FromPort": 443,
-                "ToPort": 443,
-                "DestinationPrefixListId": {
-                    "Fn::Sub": "pl-${AWS::Partition}s3"
-                },
-                "Description": "HTTPS to S3 via Gateway endpoint"
             }
         },
         "LambdaSecurityGroupEgressVPC": {
@@ -1271,9 +1259,6 @@
         "AuthorizerLambdaRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-authorizer-lambda-role-${EnvironmentName}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1294,7 +1279,9 @@
                 ],
                 "Policies": [
                     {
-                        "PolicyName": "CertificateValidationAccess",
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-CertificateValidationAccess-${EnvironmentName}"
+                        },
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
@@ -1340,7 +1327,9 @@
                         }
                     },
                     {
-                        "PolicyName": "ExplicitDenyAllOther",
+                        "PolicyName": {
+                            "Fn::Sub": "${ProjectName}-ExplicitDenyAllOther-${EnvironmentName}"
+                        },
                         "PolicyDocument": {
                             "Version": "2012-10-17",
                             "Statement": [
