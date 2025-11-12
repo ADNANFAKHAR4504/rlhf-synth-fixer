@@ -66,6 +66,8 @@ class DmsStack(pulumi.ComponentResource):
         }
 
         # Create DMS IAM roles
+        # CRITICAL: These roles must be fully created and have policy attachments complete
+        # before creating the replication instance, otherwise it will fail with "Incompatible network"
         role_dependencies = self._create_dms_iam_roles()
 
         # DMS Subnet Group
@@ -84,7 +86,9 @@ class DmsStack(pulumi.ComponentResource):
 
         # DMS Replication Instance
         # Note: Replication instances can take 5-10 minutes to become "available"
-        # The task creation will wait for this instance to be ready via depends_on
+        # CRITICAL: The IAM roles (especially dms-vpc-role) must be fully configured
+        # with policy attachments complete before creating the instance, otherwise
+        # it will fail with "Incompatible network" error
         self.replication_instance = aws.dms.ReplicationInstance(
             f"dms-replication-instance-{self.environment_suffix}",
             replication_instance_id=f"dms-rep-inst-{self.environment_suffix}",
@@ -103,6 +107,7 @@ class DmsStack(pulumi.ComponentResource):
             },
             opts=ResourceOptions(
                 parent=self,
+                # CRITICAL: Ensure all IAM role dependencies are complete, including policy attachments
                 depends_on=role_dependencies,
                 # Add custom timeout to allow time for instance to become available
                 custom_timeouts=CustomTimeouts(
@@ -315,11 +320,18 @@ class DmsStack(pulumi.ComponentResource):
             )
         dependencies.append(dms_vpc_role)
 
+        # CRITICAL: Always create the policy attachment, even if role already exists
+        # This ensures the attachment is tracked by Pulumi and exists before DMS resources are created
         vpc_attachment = aws.iam.RolePolicyAttachment(
             f"dms-vpc-policy-attachment-{self.environment_suffix}",
             role=dms_vpc_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole",
-            opts=ResourceOptions(parent=dms_vpc_role, depends_on=[dms_vpc_role])
+            opts=ResourceOptions(
+                parent=dms_vpc_role,
+                depends_on=[dms_vpc_role],
+                # Ignore changes to prevent conflicts if attachment already exists
+                ignore_changes=["policy_arn", "role"]
+            )
         )
         dependencies.append(vpc_attachment)
 
@@ -356,11 +368,18 @@ class DmsStack(pulumi.ComponentResource):
             )
         dependencies.append(dms_cloudwatch_role)
 
+        # CRITICAL: Always create the policy attachment, even if role already exists
+        # This ensures the attachment is tracked by Pulumi and exists before DMS resources are created
         cloudwatch_attachment = aws.iam.RolePolicyAttachment(
             f"dms-cloudwatch-policy-attachment-{self.environment_suffix}",
             role=dms_cloudwatch_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonDMSCloudWatchLogsRole",
-            opts=ResourceOptions(parent=dms_cloudwatch_role, depends_on=[dms_cloudwatch_role])
+            opts=ResourceOptions(
+                parent=dms_cloudwatch_role,
+                depends_on=[dms_cloudwatch_role],
+                # Ignore changes to prevent conflicts if attachment already exists
+                ignore_changes=["policy_arn", "role"]
+            )
         )
         dependencies.append(cloudwatch_attachment)
 
