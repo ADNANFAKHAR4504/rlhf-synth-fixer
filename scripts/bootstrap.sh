@@ -42,19 +42,13 @@ if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
   export CURRENT_ACCOUNT_ID=${CURRENT_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
 
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-1..."
+  echo "   account $CURRENT_ACCOUNT_ID in us-east-1..."
   npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-1 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
   
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-2..."
-  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
 
   echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-west-2..."
   npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-west-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
-
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in ap-southeast-2..."
-  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/ap-southeast-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
-
-  echo "✅ all regions bootstrapped successfully"
+  echo "✅ both regions bootstrapped successfully"
 
   # npm run cdk:bootstrap
 

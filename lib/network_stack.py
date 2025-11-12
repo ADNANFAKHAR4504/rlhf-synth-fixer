@@ -33,13 +33,19 @@ class NetworkStack(NestedStack):
 
         env_suffix = props.environment_suffix
 
-        # VPC with 3 AZs and NAT Gateways for internet access from private subnets
+        # VPC with 3 AZs and NAT Instances for cost optimization
+        # NAT Instances are used instead of NAT Gateways to reduce costs
+        nat_instance_provider = ec2.NatProvider.instance_v2(
+            instance_type=ec2.InstanceType("t3.micro"),
+            # Uses Amazon Linux 2023 AMI which is the latest
+        )
+
         self.vpc = ec2.Vpc(
             self,
             f"PaymentVPC-{env_suffix}",
             vpc_name=f"payment-vpc-{env_suffix}",
             max_azs=3,
-            nat_gateways=3,  # One NAT Gateway per AZ for high availability
+            nat_gateway_provider=nat_instance_provider,
             subnet_configuration=[
                 ec2.SubnetConfiguration(
                     name=f"Public-{env_suffix}",
@@ -59,8 +65,7 @@ class NetworkStack(NestedStack):
             ]
         )
 
-        # NAT Gateways are automatically created by CDK VPC construct
-        # when nat_gateways > 0 is specified
+        # NAT Instances are created automatically for each AZ (cost-optimized)
 
         # Security Groups
         self.alb_security_group = ec2.SecurityGroup(

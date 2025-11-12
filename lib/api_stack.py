@@ -6,6 +6,8 @@ from aws_cdk import (
     aws_apigateway as apigw,
     aws_elasticloadbalancingv2 as elbv2,
     aws_logs as logs,
+    aws_s3 as s3,
+    aws_certificatemanager as acm,
     RemovalPolicy,
     CfnOutput
 )
@@ -128,6 +130,60 @@ class ApiStack(NestedStack):
         )
 
         usage_plan.add_api_key(api_key)
+
+        # S3 Bucket for mTLS trust store (CA certificates)
+        self.truststore_bucket = s3.Bucket(
+            self,
+            f"MTLSTrustStore-{env_suffix}",
+            bucket_name=f"payment-api-truststore-{env_suffix}",
+            encryption=s3.BucketEncryption.S3_MANAGED,
+            block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
+            versioned=True,
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True
+        )
+
+        # Mutual TLS Domain Configuration
+        # NOTE: For production, you need to:
+        # 1. Upload CA certificate bundle (PEM format) to the trust store bucket
+        # 2. Provide a valid ACM certificate ARN for your custom domain
+        # 3. Configure DNS to point to the API Gateway domain
+
+        # Create custom domain with mutual TLS (using CfnDomainName for mTLS support)
+        mtls_config = apigw.CfnDomainName.MutualTlsAuthenticationProperty(
+            truststore_uri=f"s3://{self.truststore_bucket.bucket_name}/truststore.pem",
+            truststore_version="1"  # Update this when rotating CA certificates
+        )
+
+        # Example: Custom domain with mTLS (requires ACM certificate)
+        # Uncomment and configure when you have a valid certificate and domain
+        # self.custom_domain = apigw.CfnDomainName(
+        #     self,
+        #     f"PaymentAPIDomain-{env_suffix}",
+        #     domain_name=f"api-{env_suffix}.yourdomain.com",  # Replace with actual domain
+        #     regional_certificate_arn="arn:aws:acm:region:account:certificate/id",  # Replace with actual ARN
+        #     endpoint_configuration=apigw.CfnDomainName.EndpointConfigurationProperty(
+        #         types=["REGIONAL"]
+        #     ),
+        #     mutual_tls_authentication=mtls_config,
+        #     security_policy="TLS_1_2"
+        # )
+        #
+        # # Base path mapping
+        # apigw.CfnBasePathMapping(
+        #     self,
+        #     f"APIBasePathMapping-{env_suffix}",
+        #     domain_name=self.custom_domain.domain_name,
+        #     rest_api_id=self.api.rest_api_id,
+        #     stage=self.api.deployment_stage.stage_name
+        # )
+
+        CfnOutput(
+            self,
+            "TrustStoreBucket",
+            value=self.truststore_bucket.bucket_name,
+            description="S3 bucket for mTLS trust store (upload CA certificates here)"
+        )
 
         CfnOutput(
             self,
