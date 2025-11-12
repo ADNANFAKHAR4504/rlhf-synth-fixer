@@ -116,12 +116,17 @@ class TestTapStack(unittest.TestCase):
             stack = TapStack(
                 "test-stack", TapStackArgs(environment_suffix="test"), None
             )
-            return {
-                "vpc_id": stack.vpc.id,
-                "vpc_cidr": stack.vpc.cidr_block,
-                "vpc_dns_hostnames": stack.vpc.enable_dns_hostnames,
-                "vpc_dns_support": stack.vpc.enable_dns_support,
-            }
+            return pulumi.Output.all(
+                stack.vpc.id,
+                stack.vpc.cidr_block,
+                stack.vpc.enable_dns_hostnames,
+                stack.vpc.enable_dns_support
+            ).apply(lambda vals: {
+                "vpc_id": vals[0],
+                "vpc_cidr": vals[1],
+                "vpc_dns_hostnames": vals[2],
+                "vpc_dns_support": vals[3],
+            })
 
         result = pulumi.Output.all().apply(check_vpc)
 
@@ -141,15 +146,22 @@ class TestTapStack(unittest.TestCase):
             stack = TapStack(
                 "test-stack", TapStackArgs(environment_suffix="test"), None
             )
-            return {
+            return pulumi.Output.all(
+                stack.private_subnets[0].cidr_block,
+                stack.private_subnets[1].cidr_block,
+                stack.private_subnets[2].cidr_block,
+                stack.private_subnets[0].availability_zone,
+                stack.private_subnets[1].availability_zone,
+                stack.private_subnets[2].availability_zone
+            ).apply(lambda vals: {
                 "subnet_count": len(stack.private_subnets),
-                "subnet_1_cidr": stack.private_subnets[0].cidr_block,
-                "subnet_2_cidr": stack.private_subnets[1].cidr_block,
-                "subnet_3_cidr": stack.private_subnets[2].cidr_block,
-                "subnet_1_az": stack.private_subnets[0].availability_zone,
-                "subnet_2_az": stack.private_subnets[1].availability_zone,
-                "subnet_3_az": stack.private_subnets[2].availability_zone,
-            }
+                "subnet_1_cidr": vals[0],
+                "subnet_2_cidr": vals[1],
+                "subnet_3_cidr": vals[2],
+                "subnet_1_az": vals[3],
+                "subnet_2_az": vals[4],
+                "subnet_3_az": vals[5],
+            })
 
         result = pulumi.Output.all().apply(check_subnets)
 
@@ -193,13 +205,19 @@ class TestTapStack(unittest.TestCase):
             stack = TapStack(
                 "test-stack", TapStackArgs(environment_suffix="test"), None
             )
-            return {
-                "merchant_table_name": stack.merchant_table.name,
-                "merchant_hash_key": stack.merchant_table.hash_key,
-                "transaction_table_name": stack.transaction_table.name,
-                "transaction_hash_key": stack.transaction_table.hash_key,
-                "transaction_range_key": stack.transaction_table.range_key,
-            }
+            return pulumi.Output.all(
+                stack.merchant_table.name,
+                stack.merchant_table.hash_key,
+                stack.transaction_table.name,
+                stack.transaction_table.hash_key,
+                stack.transaction_table.range_key
+            ).apply(lambda vals: {
+                "merchant_table_name": vals[0],
+                "merchant_hash_key": vals[1],
+                "transaction_table_name": vals[2],
+                "transaction_hash_key": vals[3],
+                "transaction_range_key": vals[4],
+            })
 
         result = pulumi.Output.all().apply(check_tables)
 
@@ -222,12 +240,17 @@ class TestTapStack(unittest.TestCase):
             stack = TapStack(
                 "test-stack", TapStackArgs(environment_suffix="test"), None
             )
-            return {
-                "queue_name": stack.transaction_queue.name,
-                "queue_visibility": stack.transaction_queue.visibility_timeout_seconds,
-                "dlq_name": stack.dlq.name,
-                "dlq_retention": stack.dlq.message_retention_seconds,
-            }
+            return pulumi.Output.all(
+                stack.transaction_queue.name,
+                stack.transaction_queue.visibility_timeout_seconds,
+                stack.dlq.name,
+                stack.dlq.message_retention_seconds
+            ).apply(lambda vals: {
+                "queue_name": vals[0],
+                "queue_visibility": vals[1],
+                "dlq_name": vals[2],
+                "dlq_retention": vals[3],
+            })
 
         result = pulumi.Output.all().apply(check_queues)
 
@@ -247,17 +270,27 @@ class TestTapStack(unittest.TestCase):
             stack = TapStack(
                 "test-stack", TapStackArgs(environment_suffix="test"), None
             )
-            return {
-                "validation_name": stack.validation_lambda.name,
-                "validation_runtime": stack.validation_lambda.runtime,
-                "validation_memory": stack.validation_lambda.memory_size,
-                "validation_timeout": stack.validation_lambda.timeout,
-                "validation_concurrency": stack.validation_lambda.reserved_concurrent_executions,
-                "fraud_name": stack.fraud_detection_lambda.name,
-                "fraud_runtime": stack.fraud_detection_lambda.runtime,
-                "failed_name": stack.failed_transaction_lambda.name,
-                "failed_runtime": stack.failed_transaction_lambda.runtime,
-            }
+            return pulumi.Output.all(
+                stack.validation_lambda.name,
+                stack.validation_lambda.runtime,
+                stack.validation_lambda.memory_size,
+                stack.validation_lambda.timeout,
+                stack.validation_lambda.reserved_concurrent_executions,
+                stack.fraud_detection_lambda.name,
+                stack.fraud_detection_lambda.runtime,
+                stack.failed_transaction_lambda.name,
+                stack.failed_transaction_lambda.runtime
+            ).apply(lambda vals: {
+                "validation_name": vals[0],
+                "validation_runtime": vals[1],
+                "validation_memory": vals[2],
+                "validation_timeout": vals[3],
+                "validation_concurrency": vals[4],
+                "fraud_name": vals[5],
+                "fraud_runtime": vals[6],
+                "failed_name": vals[7],
+                "failed_runtime": vals[8],
+            })
 
         result = pulumi.Output.all().apply(check_lambdas)
 
@@ -291,18 +324,29 @@ class TestTapStack(unittest.TestCase):
             stack = TapStack(
                 "test-stack", TapStackArgs(environment_suffix="test123"), None
             )
-            return {
-                "merchant_table": stack.merchant_table.name,
-                "transaction_table": stack.transaction_table.name,
-                "queue": stack.transaction_queue.name,
-                "dlq": stack.dlq.name,
-                "sns": stack.fraud_alert_topic.name,
-                "validation_lambda": stack.validation_lambda.name,
-                "fraud_lambda": stack.fraud_detection_lambda.name,
-                "failed_lambda": stack.failed_transaction_lambda.name,
-                "api": stack.api_gateway.name,
-                "waf": stack.waf_web_acl.name,
-            }
+            return pulumi.Output.all(
+                stack.merchant_table.name,
+                stack.transaction_table.name,
+                stack.transaction_queue.name,
+                stack.dlq.name,
+                stack.fraud_alert_topic.name,
+                stack.validation_lambda.name,
+                stack.fraud_detection_lambda.name,
+                stack.failed_transaction_lambda.name,
+                stack.api_gateway.name,
+                stack.waf_web_acl.name
+            ).apply(lambda vals: {
+                "merchant_table": vals[0],
+                "transaction_table": vals[1],
+                "queue": vals[2],
+                "dlq": vals[3],
+                "sns": vals[4],
+                "validation_lambda": vals[5],
+                "fraud_lambda": vals[6],
+                "failed_lambda": vals[7],
+                "api": vals[8],
+                "waf": vals[9],
+            })
 
         result = pulumi.Output.all().apply(check_suffix)
 
