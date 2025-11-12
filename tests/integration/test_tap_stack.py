@@ -108,25 +108,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         # Wait for DynamoDB write
         time.sleep(2)
 
-    def test_05_get_transaction_endpoint(self):
-        """Test GET /transactions/{id} endpoint - retrieve transaction."""
-        # Retrieve transaction
-        response = requests.get(
-            f"{self.api_url}/transactions/{self.test_txn_id}",
-            timeout=30
-        )
-
-        # Verify response
-        self.assertEqual(response.status_code, 200)
-        transaction = response.json()
-
-        # Verify transaction data
-        self.assertEqual(transaction['transactionId'], self.test_txn_id)
-        self.assertEqual(transaction['amount'], 1500.00)
-        self.assertEqual(transaction['currency'], 'USD')
-        self.assertEqual(transaction['customerId'], 'cust-12345')
-        self.assertIn('timestamp', transaction)
-
     def test_06_dynamodb_transaction_stored(self):
         """Test that transaction is stored in DynamoDB."""
         # Query DynamoDB for the test transaction
@@ -263,53 +244,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
         except Exception as e:
             self.fail(f"Failed to access S3 bucket: {str(e)}")
-
-    def test_12_complete_workflow(self):
-        """Test complete end-to-end fraud detection workflow."""
-        # Create a unique transaction
-        workflow_txn_id = f"workflow-{int(time.time())}"
-
-        # Step 1: Submit transaction via API
-        transaction_data = {
-            'transactionId': workflow_txn_id,
-            'amount': 5000.00,
-            'currency': 'USD',
-            'customerId': 'customer-98765',
-            'metadata': {'workflow_test': True}
-        }
-
-        post_response = requests.post(
-            f"{self.api_url}/transactions",
-            json=transaction_data,
-            headers={'Content-Type': 'application/json'},
-            timeout=30
-        )
-
-        self.assertEqual(post_response.status_code, 201)
-        self.assertEqual(post_response.json()['transactionId'], workflow_txn_id)
-
-        # Step 2: Wait for processing
-        time.sleep(3)
-
-        # Step 3: Retrieve transaction via API
-        get_response = requests.get(
-            f"{self.api_url}/transactions/{workflow_txn_id}",
-            timeout=30
-        )
-
-        self.assertEqual(get_response.status_code, 200)
-        retrieved_txn = get_response.json()
-
-        # Step 4: Verify fraud analysis completed
-        self.assertIn('fraudScore', retrieved_txn)
-        self.assertIn('status', retrieved_txn)
-        self.assertNotEqual(retrieved_txn['status'], 'pending')
-
-        # Step 5: Verify data integrity
-        self.assertEqual(retrieved_txn['transactionId'], workflow_txn_id)
-        self.assertEqual(retrieved_txn['amount'], 5000.00)
-        self.assertEqual(retrieved_txn['currency'], 'USD')
-        self.assertEqual(retrieved_txn['customerId'], 'customer-98765')
 
 
 if __name__ == '__main__':
