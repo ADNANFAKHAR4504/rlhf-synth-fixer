@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  * 
@@ -9,8 +14,8 @@
  * different deployment environments (development, staging, production, etc.).
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
 // Initialize Pulumi configuration for the current stack.
