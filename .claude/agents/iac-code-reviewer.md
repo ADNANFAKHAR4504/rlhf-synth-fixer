@@ -31,7 +31,21 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 **If verification fails**: STOP immediately, report BLOCKED.
 
-**Before Starting**: Review `.claude/lessons_learnt.md` for common issues and quality patterns.
+**Before Starting**:
+- Review `.claude/docs/references/pre-submission-checklist.md` for **MANDATORY** requirements before PR
+- Review `.claude/lessons_learnt.md` for common issues and quality patterns
+- Review `.claude/docs/references/cicd-file-restrictions.md` for CRITICAL file location requirements that fail CI/CD
+
+**PRE-SUBMISSION REQUIREMENTS** (All must pass):
+1. ✅ Build successful
+2. ✅ No lint issues  
+3. ✅ No synth issues
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ No files outside allowed directories
+7. ✅ Training quality ≥ 8
+
+**Reference**: `.claude/docs/references/pre-submission-checklist.md`
 
 ### Phase 1: Prerequisites Check
 
@@ -68,9 +82,50 @@ If FAIL:
 - Training quality penalty: -2 points
 - Note: "PROMPT.md appears AI-generated rather than human-written"
 
+#### Step 3.5: Check if IaC Optimization Task
+
+**⚠️ SPECIAL HANDLING FOR IAC OPTIMIZATION TASKS**
+
+Check if this is an optimization task:
+```bash
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // empty' metadata.json)
+if echo "$SUBJECT_LABELS" | grep -q "IaC Optimization"; then
+  IS_OPTIMIZATION_TASK=true
+else
+  IS_OPTIMIZATION_TASK=false
+fi
+```
+
+If `IS_OPTIMIZATION_TASK=true`:
+- **SKIP Step 4** (Platform/Language Compliance on stack files)
+- **PRIMARY FOCUS**: Evaluate `lib/optimize.py` quality
+- **EXPECTED**: Stack files contain BASELINE (non-optimized) values
+
+**What to Validate for Optimization Tasks**:
+1. ✅ `lib/optimize.py` exists and uses boto3/AWS SDK
+2. ✅ Script reads `ENVIRONMENT_SUFFIX` from environment
+3. ✅ Script finds resources using correct naming patterns
+4. ✅ Script modifies resources via AWS APIs (not file editing)
+5. ✅ Integration tests verify optimizations on actual AWS resources
+6. ✅ `lib/IDEAL_RESPONSE.md` shows the corrected `optimize.py` script
+
+**What NOT to Validate**:
+- ❌ Don't check if stack files have optimized values
+- ❌ Don't expect IDEAL_RESPONSE.md to show optimized infrastructure code
+- ❌ Don't penalize baseline (high) resource allocations in stack files
+
+**Training Quality Focus**:
+- Evaluate quality of `lib/optimize.py` script (boto3 usage, error handling, resource discovery)
+- Check fixes in MODEL_FAILURES.md related to optimization logic
+- Stack files are intentionally non-optimized to establish baseline
+
+If optimization task detected, **SKIP to Step 5** (AWS Services Enhancement).
+
 #### Step 4: Platform/Language Compliance Validation
 
 **CRITICAL** - Catches major training data quality issues.
+
+**⚠️ SKIP THIS STEP if IaC Optimization task (Step 3.5 determines this)**
 
 **IMPORTANT FILE CONTEXT**:
 - `lib/MODEL_RESPONSE.md` = Initial model output (MAY contain errors - that's the point!)
@@ -185,9 +240,36 @@ If < 80% resources have suffix:
 
 **CRITICAL THRESHOLD: ≥8 for PR creation**
 
+**Infrastructure Analysis Task Bonus**: If subject_labels contains "Infrastructure Analysis" or "Infrastructure Monitoring", evaluate the analysis script quality (lib/analyse.py or similar): check for professional tabular output (tabulate library), multiple realistic test scenarios (3+ per issue type), comprehensive data collection (resource details, metrics, context), and actionable findings. High-quality analysis data: +1 to +2 bonus; poor coverage or minimal value: -1 to -2 penalty.
+
 #### Step 8: Add Enhanced Fields to metadata.json
 
-**Extract AWS Services from IDEAL_RESPONSE.md**:
+**Determine Task Type**:
+
+```bash
+# Check if this is a CI/CD Pipeline task
+PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
+SUBJECT_LABELS=$(jq -r '.subject_labels[]? // ""' metadata.json)
+
+if [ "$PLATFORM" = "cicd" ] || echo "$SUBJECT_LABELS" | grep -q "CI/CD Pipeline"; then
+  IS_CICD_TASK=true
+else
+  IS_CICD_TASK=false
+fi
+```
+
+**For CI/CD Pipeline Tasks (platform: "cicd" OR subject_label: "CI/CD Pipeline")**:
+
+```bash
+# CI/CD Pipeline tasks only need training_quality (no aws_services required)
+jq --arg tq "$TRAINING_QUALITY" \
+  '.training_quality = ($tq | tonumber)' \
+  metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+```
+
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 (CI/CD Pipeline task - aws_services not required)"
+
+**For Standard IaC Tasks**:
 
 Scan IDEAL_RESPONSE.md and create a JSON array of unique AWS services mentioned. Examples:
 - RDS → "RDS"
@@ -214,9 +296,34 @@ jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
 jq -e '.aws_services | type == "array"' metadata.json || echo "❌ ERROR: aws_services must be an array"
 ```
 
-Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10"
+Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 and aws_services array"
 
-#### Step 9: Final Quality Gate
+#### Step 9: File Location Validation
+
+**CRITICAL CI/CD CHECK**: Verify all files are in allowed locations
+
+```bash
+# Check changed files against allowed locations
+git diff --name-only origin/main...HEAD
+
+# Verify no violations exist
+# See .claude/docs/references/cicd-file-restrictions.md for rules
+```
+
+**Common Violations**:
+- ❌ `README.md` at root → Must be `lib/README.md`
+- ❌ `PROMPT.md` at root → Must be `lib/PROMPT.md`
+- ❌ `IDEAL_RESPONSE.md` at root → Must be `lib/IDEAL_RESPONSE.md`
+- ❌ `MODEL_FAILURES.md` at root → Must be `lib/MODEL_FAILURES.md`
+- ❌ Files in `.github/`, `scripts/`, `docs/`, etc. → Not allowed
+
+**If violations found**:
+- Training quality penalty: -3 points (Critical issue)
+- Report: "❌ BLOCKED: Files in wrong locations will FAIL CI/CD"
+- List violating files and correct locations
+- Do NOT proceed to PR creation
+
+#### Step 10: Final Quality Gate
 
 **Before reporting "Ready" status**:
 
@@ -231,6 +338,7 @@ FINAL CHECKLIST:
 ☐ AWS services implemented
 ☐ No Retain policies
 ☐ Tests exist and pass
+☐ All files in allowed locations (Step 9)
 
 If ALL checked:
 - Report: "✅ READY for PR creation"
@@ -300,13 +408,45 @@ If ANY unchecked:
 
 ### Phase 3: Test Coverage
 
-**Cost Optimization**: Focus on gaps rather than comprehensive listings.
+**CRITICAL REQUIREMENT: 100% Coverage**
 
+**Unit Test Coverage Validation**:
+```bash
+# Extract coverage metrics
+STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+
+# Validate 100% requirement
+if [ "$STMT_COV" != "100" ] || [ "$FUNC_COV" != "100" ] || [ "$LINE_COV" != "100" ]; then
+  echo "❌ Coverage below 100%"
+  echo "Statements: ${STMT_COV}%"
+  echo "Functions: ${FUNC_COV}%"  
+  echo "Lines: ${LINE_COV}%"
+  exit 1
+fi
+```
+
+**Pass Criteria**:
+- Statement coverage: **100%** (not 99%, not 99.9%, exactly 100%)
+- Function coverage: **100%**
+- Line coverage: **100%**
+- All unit tests passing
+
+**If coverage < 100%**:
+- BLOCK PR creation
+- Report specific coverage gaps
+- Training quality penalty: -3 points
+- Cannot proceed to Phase 4
+
+**Integration Test Coverage**:
 - Analyze integration test coverage (must use cfn-outputs, no mocks)
 - Generate coverage report focusing on gaps: Requirement | Covered? | Test | Notes
   - **Prioritize uncovered resources** - list missing first
   - Briefly summarize what's covered
 - Provide Ready/Pending recommendation
+
+**Reference**: `.claude/docs/references/pre-submission-checklist.md` Section 5
 
 ### Phase 4: Final Training Quality Gate
 
@@ -339,8 +479,19 @@ If training_quality < 8:
 - All phases passed
 - Training quality ≥ 8
 - All metadata fields validated
-- Tests passing
+- **Unit test coverage = 100%** (statements, functions, lines)
+- Integration tests passing
+- All files in allowed directories
 - Requirements met
+
+**Pre-Submission Validation**:
+Before reporting "Ready", run final validation:
+```bash
+# Recommended: Run pre-submission check script
+bash .claude/scripts/pre-submission-check.sh
+```
+
+This validates all 6 critical requirements. If any fail, report BLOCKED and list specific issues.
 
 ## Focus Areas
 

@@ -1,0 +1,14 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node lib/main.ts",
+  "projectId": "payment-processing-infrastructure",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 5.0"
+  ],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true"
+  }
+}

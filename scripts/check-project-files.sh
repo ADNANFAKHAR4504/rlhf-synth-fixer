@@ -2,8 +2,8 @@
 
 set -e
 
-ALLOWED_FOLDERS=("bin" "lib" "test" "tests")
-ALLOWED_FILES=("package.json" "package-lock.json" "cdk.json" "tap.py" "tap.go" "cdktf.json" "Pulumi.yaml" "metadata.json")
+ALLOWED_FOLDERS=("bin" "lib" "test" "tests" "scripts")
+ALLOWED_FILES=("package.json" "package-lock.json" "cdk.json" "tap.py" "tap.go" "cdktf.json" "Pulumi.yaml" "metadata.json" "jest.config.js")
 
 echo "Checking PR file changes..."
 

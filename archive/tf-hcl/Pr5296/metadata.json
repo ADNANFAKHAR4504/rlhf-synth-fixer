@@ -1,0 +1,38 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "5003",
+  "team": "stf",
+  "startedAt": "2025-11-03T06:45:59.668Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Internet Gateway",
+    "Subnet",
+    "Elastic IP",
+    "NAT Gateway",
+    "Route Table",
+    "Security Group",
+    "Application Load Balancer",
+    "Target Group",
+    "Listener",
+    "Launch Template",
+    "Auto Scaling Group",
+    "RDS"
+  ],
+  "training_quality": 9,
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Gahdloot",
+  "dockerS3Location": ""
+}
