@@ -108,7 +108,7 @@ Resources:
                   - ec2:DescribeSecurityGroups
                   - ec2:DescribeInstances
                   - ec2:DescribeImages
-                  - s3:GetBucketEncryption
+                  - s3:GetEncryptionConfiguration
                   - s3:GetBucketVersioning
                   - s3:GetLifecycleConfiguration
                   - s3:ListBucket
@@ -140,6 +140,11 @@ Resources:
   # Main Analysis Lambda Function
   StackAnalysisLambda:
     Type: AWS::Lambda::Function
+    Metadata:
+      cfn-lint:
+        config:
+          ignore_checks:
+            - W3037  # False positive: cfn-lint incorrectly validates Python code in inline Lambda
     Properties:
       FunctionName: !Sub 'cfn-stack-analyzer-${AWS::StackName}'
       Runtime: python3.11
