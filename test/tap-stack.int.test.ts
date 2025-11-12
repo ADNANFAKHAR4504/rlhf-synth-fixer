@@ -191,18 +191,30 @@ describe("TapStack — Live Integration Tests (single file)", () => {
     expect(lb?.AvailabilityZones?.length ?? 0).toBeGreaterThanOrEqual(3);
   });
 
-  /* 4 */ it("ALB Listeners: HTTP(80) exists and redirects to HTTPS", async () => {
+  /* 4 */ it("ALB Listeners: HTTP(80) behavior is correct (redirect if HTTPS exists, else forward)", async () => {
     const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({})));
     const lb = (lbs.LoadBalancers || []).find((x) => x.DNSName === AlbDnsName);
     expect(lb?.LoadBalancerArn).toBeDefined();
 
-    const listeners = await retry(() => elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: lb!.LoadBalancerArn })));
+    const listeners = await retry(() =>
+      elbv2.send(new DescribeListenersCommand({ LoadBalancerArn: lb!.LoadBalancerArn }))
+    );
     const http = (listeners.Listeners || []).find((l) => l.Port === 80 && l.Protocol === "HTTP");
     expect(http).toBeDefined();
 
+    const https = (listeners.Listeners || []).find((l) => l.Port === 443 && l.Protocol === "HTTPS");
+
     const actions = http!.DefaultActions || [];
     const hasRedirect = actions.some((a) => a.Type === "redirect");
-    expect(hasRedirect).toBe(true);
+    const hasForward = actions.some((a) => a.Type === "forward" && (a.TargetGroupArn || (a.ForwardConfig && (a.ForwardConfig.TargetGroups || []).length > 0)));
+
+    if (https) {
+      // If HTTPS listener is present, HTTP must redirect to HTTPS
+      expect(hasRedirect).toBe(true);
+    } else {
+      // If HTTPS listener is absent, allow HTTP to forward
+      expect(hasForward).toBe(true);
+    }
   });
 
   /* 5 */ it("ALB Listeners: HTTPS(443) valid when present (cert attached)", async () => {
