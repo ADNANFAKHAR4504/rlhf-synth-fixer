@@ -206,6 +206,22 @@ class MyMocks(pulumi.runtime.Mocks):
                 "id": f"{args.name}-canary-id",
                 "arn": f"arn:aws:synthetics:us-east-1:123456789012:canary:{args.name}",
             }
+        elif args.typ == "aws:ec2/vpc:Vpc":
+            outputs = {
+                **args.inputs,
+                "id": f"{args.name}-vpc-id",
+                "cidr_block": args.inputs.get("cidr_block", "10.0.0.0/16"),
+            }
+        elif args.typ == "aws:ec2/subnet:Subnet":
+            outputs = {
+                **args.inputs,
+                "id": f"{args.name}-subnet-id",
+            }
+        elif args.typ == "aws:kms/getKey:getKey":
+            outputs = {
+                **args.inputs,
+                "arn": f"arn:aws:kms:us-east-1:123456789012:key/mock",
+            }
         else:
             outputs = {
                 **args.inputs,
@@ -221,6 +237,13 @@ class MyMocks(pulumi.runtime.Mocks):
             return {"ids": ["subnet-1", "subnet-2", "subnet-3"]}
         elif args.token == "aws:getCallerIdentity:getCallerIdentity":
             return {"account_id": "123456789012"}
+        elif args.token == "aws:index/getAvailabilityZones:getAvailabilityZones" or args.token == "aws:getAvailabilityZones:getAvailabilityZones":
+            return {
+                "names": ["us-east-1a", "us-east-1b", "us-east-1c"],
+                "zone_ids": ["use1-az1", "use1-az2", "use1-az3"],
+            }
+        elif args.token == "aws:kms/getKey:getKey":
+            return {"arn": "arn:aws:kms:us-east-1:123456789012:key/mock"}
         return {}
 
 
@@ -274,7 +297,7 @@ def test_route53_stack_with_domain():
 
 @pulumi.runtime.test
 def test_aurora_stack_creation():
-    """Test AuroraStack creation."""
+    """Test AuroraStack creation with default VPC."""
 
     def check_stack(args):
         stack = AuroraStack(
@@ -289,10 +312,99 @@ def test_aurora_stack_creation():
         assert hasattr(stack, 'secondary_cluster')
         assert hasattr(stack, 'global_cluster_id')
         assert hasattr(stack, 'primary_endpoint')
+        assert hasattr(stack, 'secondary_endpoint')
         return {'status': 'success'}
 
     result = pulumi.Output.all().apply(lambda _: check_stack(None))
     return result
+
+
+@pulumi.runtime.test
+def test_aurora_stack_no_subnets():
+    """Test AuroraStack when default VPC has no subnets (triggers VPC creation path)."""
+    
+    # Custom mocks that return empty subnets to trigger VPC creation
+    class NoSubnetsMocks(MyMocks):
+        def call(self, args: pulumi.runtime.MockCallArgs):
+            if args.token == "aws:ec2/getVpc:getVpc":
+                return {"id": "vpc-12345", "cidr_block": "10.0.0.0/16"}
+            elif args.token == "aws:ec2/getSubnets:getSubnets":
+                # Return empty subnets to trigger VPC creation path
+                return {"ids": []}
+            elif args.token == "aws:index/getAvailabilityZones:getAvailabilityZones" or args.token == "aws:getAvailabilityZones:getAvailabilityZones":
+                return {
+                    "names": ["us-east-1a", "us-east-1b", "us-east-1c"],
+                    "zone_ids": ["use1-az1", "use1-az2", "use1-az3"],
+                }
+            elif args.token == "aws:kms/getKey:getKey":
+                return {"arn": "arn:aws:kms:us-east-1:123456789012:key/mock"}
+            return super().call(args)
+    
+    # Temporarily override mocks
+    pulumi.runtime.set_mocks(NoSubnetsMocks(), preview=False)
+    
+    try:
+        def check_stack(args):
+            stack = AuroraStack(
+                name="test-aurora-nosubnets",
+                environment_suffix="test-nosubnets",
+                primary_region="us-east-1",
+                secondary_region="us-east-2",
+                tags={'Environment': 'test'}
+            )
+            assert hasattr(stack, 'global_cluster')
+            assert hasattr(stack, 'primary_cluster')
+            assert hasattr(stack, 'secondary_cluster')
+            return {'status': 'vpc_creation_path_tested'}
+        
+        result = pulumi.Output.all().apply(lambda _: check_stack(None))
+        return result
+    finally:
+        # Restore original mocks
+        pulumi.runtime.set_mocks(MyMocks(), preview=False)
+
+
+@pulumi.runtime.test
+def test_aurora_stack_no_vpc():
+    """Test AuroraStack when no default VPC exists (triggers VPC creation path)."""
+    
+    # Custom mocks that raise exception for get_vpc to trigger VPC creation
+    class NoVpcMocks(MyMocks):
+        def call(self, args: pulumi.runtime.MockCallArgs):
+            if args.token == "aws:ec2/getVpc:getVpc":
+                # Raise exception to trigger VPC creation path
+                raise Exception("No default VPC found")
+            elif args.token == "aws:index/getAvailabilityZones:getAvailabilityZones" or args.token == "aws:getAvailabilityZones:getAvailabilityZones":
+                return {
+                    "names": ["us-east-1a", "us-east-1b", "us-east-1c"],
+                    "zone_ids": ["use1-az1", "use1-az2", "use1-az3"],
+                }
+            elif args.token == "aws:kms/getKey:getKey":
+                return {"arn": "arn:aws:kms:us-east-1:123456789012:key/mock"}
+            return super().call(args)
+    
+    # Temporarily override mocks
+    pulumi.runtime.set_mocks(NoVpcMocks(), preview=False)
+    
+    try:
+        def check_stack(args):
+            stack = AuroraStack(
+                name="test-aurora-novpc",
+                environment_suffix="test-novpc",
+                primary_region="us-east-1",
+                secondary_region="us-east-2",
+                tags={'Environment': 'test'}
+            )
+            assert hasattr(stack, 'global_cluster')
+            assert hasattr(stack, 'primary_cluster')
+            assert hasattr(stack, 'secondary_cluster')
+            return {'status': 'novpc_path_tested'}
+        
+        result = pulumi.Output.all().apply(lambda _: check_stack(None))
+        return result
+    finally:
+        # Restore original mocks
+        pulumi.runtime.set_mocks(MyMocks(), preview=False)
 
 
 @pulumi.runtime.test

@@ -183,7 +183,12 @@ class AuroraStack(pulumi.ComponentResource):
             storage_encrypted=True,
             backup_retention_period=7,
             tags={**tags, 'Name': f"trading-cluster-secondary-{environment_suffix}"},
-            opts=ResourceOptions(parent=self, provider=secondary_provider, depends_on=[self.primary_cluster])
+            opts=ResourceOptions(
+                parent=self,
+                provider=secondary_provider,
+                depends_on=[self.primary_cluster],
+                replace_on_changes=["global_cluster_identifier"]
+            )
         )
 
         self.secondary_instance = aws.rds.ClusterInstance(
