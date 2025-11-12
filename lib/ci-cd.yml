@@ -245,11 +245,13 @@ policy_checkov:
 net_guardrails:
   stage: security
   image: mcr.microsoft.com/azure-cli:2.63.0
+  before_script: []   # override any global before_script so it doesn't add lines
+  after_script: []    # safe guard in case a global after_script is present
   script:
-    - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2" && az account set --subscription "$AZURE_SUBSCRIPTION_ID"
-    - mkdir -p "$SECURITY_DIR" && printf "Validate NSG/DDOS posture (assumed pre-provisioned)\n" > "$SECURITY_DIR/network.txt" && cat "$SECURITY_DIR/network.txt"
+    - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2" && az account set --subscription "$AZURE_SUBSCRIPTION_ID" && mkdir -p "$SECURITY_DIR" && printf "Validate NSG/DDOS posture (assumed pre-provisioned)\n" > "$SECURITY_DIR/network.txt" && cat "$SECURITY_DIR/network.txt"
   artifacts:
     paths: [$SECURITY_DIR/network.txt]
+
 
 
 # ---------- Integration ----------
