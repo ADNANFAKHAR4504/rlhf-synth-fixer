@@ -18,7 +18,7 @@ const region = process.env.AWS_REGION || "us-east-1";
 const ec2Client = new EC2Client({ region });
 
 // Load Terraform outputs
-const outputsPath = path.resolve(__dirname, "../tf-outputs/terraform-outputs.json");
+const outputsPath = path.resolve(__dirname, "../cfn-outputs/flat-outputs.json");
 let outputs: any;
 
 beforeAll(() => {
