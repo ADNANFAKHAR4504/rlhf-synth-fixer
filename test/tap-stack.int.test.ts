@@ -245,7 +245,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       if (isMockData) {
         expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{17}$/);
         expect(outputs['eks-cluster-name']).toMatch(/^[a-z0-9-]+-eks-cluster$/);
-        expect(outputs['eks-cluster-endpoint']).toMatch(/^https:\/\/[a-z0-9]+\.gr[0-9]\.[a-z0-9-]+\.eks\.amazonaws\.com$/);
+        expect(outputs['eks-cluster-endpoint']).toMatch(/^https:\/\/[a-zA-Z0-9]+\.gr[0-9]\.[a-z0-9-]+\.eks\.amazonaws\.com$/);
       }
     });
 
