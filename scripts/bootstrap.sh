@@ -42,38 +42,13 @@ if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, running CDK bootstrap..."
   export CURRENT_ACCOUNT_ID=${CURRENT_ACCOUNT_ID:-$(aws sts get-caller-identity --query Account --output text)}
 
-  # Function to clean up failed CDKToolkit stacks
-  cleanup_failed_stack() {
-    local region=$1
-    echo "Checking for failed CDKToolkit stack in $region..."
-    local stack_status=$(aws cloudformation describe-stacks --region $region --stack-name CDKToolkit --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "NOT_FOUND")
-
-    if [ "$stack_status" = "ROLLBACK_COMPLETE" ] || [ "$stack_status" = "ROLLBACK_FAILED" ] || [ "$stack_status" = "CREATE_FAILED" ]; then
-      echo "Found failed stack in $region with status: $stack_status. Deleting..."
-      aws cloudformation delete-stack --region $region --stack-name CDKToolkit
-      echo "Waiting for stack deletion to complete..."
-      aws cloudformation wait stack-delete-complete --region $region --stack-name CDKToolkit 2>/dev/null || echo "Stack deletion completed or stack not found"
-    elif [ "$stack_status" != "NOT_FOUND" ]; then
-      echo "CDKToolkit stack exists in $region with status: $stack_status"
-    fi
-  }
-
-  # Clean up and bootstrap us-east-1
-  cleanup_failed_stack us-east-1
   echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-east-1..."
   npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-east-1 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
+  
 
-  # Clean up and bootstrap us-west-2
-  cleanup_failed_stack us-west-2
   echo "Bootstrapping account $CURRENT_ACCOUNT_ID in us-west-2..."
   npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/us-west-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
-
-  # Clean up and bootstrap ap-southeast-2
-  cleanup_failed_stack ap-southeast-2
-  echo "Bootstrapping account $CURRENT_ACCOUNT_ID in ap-southeast-2..."
-  npx cdk bootstrap aws://${CURRENT_ACCOUNT_ID}/ap-southeast-2 --force --context environmentSuffix=${ENVIRONMENT_SUFFIX}
-
-  echo "✅ all regions bootstrapped successfully"
+  echo "✅ both regions bootstrapped successfully"
 
   # npm run cdk:bootstrap
 
