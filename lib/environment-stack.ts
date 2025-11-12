@@ -106,6 +106,11 @@ export class EnvironmentStack extends Construct {
       description: 'ECS Cluster ARN',
     });
 
+    new TerraformOutput(this, 'ecs-service-name', {
+      value: ecs.service.name,
+      description: 'ECS Service Name',
+    });
+
     new TerraformOutput(this, 's3-assets-bucket-name', {
       value: s3Assets.bucket.bucket,
       description: 'S3 Assets Bucket Name',

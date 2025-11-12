@@ -1,32 +1,33 @@
-import * as fs from 'fs';
-import * as path from 'path';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
-  ECSClient,
   DescribeClustersCommand,
   DescribeServicesCommand,
+  ECSClient,
+  ListServicesCommand,
 } from '@aws-sdk/client-ecs';
 import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
   DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
-  S3Client,
-  HeadBucketCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
   GetBucketEncryptionCommand,
   GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
 } from '@aws-sdk/client-s3';
-import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import * as fs from 'fs';
+import * as path from 'path';
 
 describe('TapStack Integration Tests', () => {
   const region = process.env.AWS_REGION || 'us-east-1';
@@ -48,7 +49,25 @@ describe('TapStack Integration Tests', () => {
 
     if (fs.existsSync(outputsPath)) {
       const outputsContent = fs.readFileSync(outputsPath, 'utf-8');
-      outputs = JSON.parse(outputsContent);
+      const rawOutputs = JSON.parse(outputsContent);
+
+      // CDKTF outputs are nested under stack name, flatten them
+      // Example: { "TapStackpr6176": { "environment_vpc-id_2837DF5F": "vpc-xxx" } }
+      const stackName = Object.keys(rawOutputs)[0];
+      if (stackName) {
+        const stackOutputs = rawOutputs[stackName];
+
+        // Map CDKTF output keys to simple keys
+        // environment_vpc-id_HASH -> vpc-id
+        Object.keys(stackOutputs).forEach((key) => {
+          // Extract the meaningful part between environment_ and _HASH
+          const match = key.match(/environment_(.+?)_[A-F0-9]+$/);
+          if (match) {
+            const simpleKey = match[1];
+            outputs[simpleKey] = stackOutputs[key];
+          }
+        });
+      }
     } else {
       console.warn(
         'flat-outputs.json not found. Integration tests may fail if infrastructure is not deployed.'
@@ -196,22 +215,32 @@ describe('TapStack Integration Tests', () => {
     });
 
     test('ECS service is running with desired count', async () => {
+      const clusterName = outputs['ecs-cluster-name'];
       const clusterArn = outputs['ecs-cluster-arn'];
 
-      const listServicesCommand = new DescribeServicesCommand({
+      // First, list services in the cluster
+      const listCommand = new ListServicesCommand({
         cluster: clusterArn,
-        services: [`${clusterArn}/app-service-*`],
       });
 
-      const response = await ecsClient.send(listServicesCommand);
-      expect(response.services).toBeDefined();
+      const listResponse = await ecsClient.send(listCommand);
+      expect(listResponse.serviceArns).toBeDefined();
+      expect(listResponse.serviceArns!.length).toBeGreaterThan(0);
 
-      if (response.services && response.services.length > 0) {
-        const service = response.services[0];
-        expect(service.status).toBe('ACTIVE');
-        expect(service.desiredCount).toBeGreaterThan(0);
-        expect(service.launchType).toBe('FARGATE');
-      }
+      // Then describe the services
+      const describeCommand = new DescribeServicesCommand({
+        cluster: clusterArn,
+        services: listResponse.serviceArns,
+      });
+
+      const response = await ecsClient.send(describeCommand);
+      expect(response.services).toBeDefined();
+      expect(response.services!.length).toBeGreaterThan(0);
+
+      const service = response.services![0];
+      expect(service.status).toBe('ACTIVE');
+      expect(service.desiredCount).toBe(2);
+      expect(service.launchType).toBe('FARGATE');
     });
 
     test('CloudWatch log group exists for ECS tasks', async () => {
