@@ -246,10 +246,10 @@ net_guardrails:
   stage: security
   image: mcr.microsoft.com/azure-cli:2.63.0
   script:
-    - *wif_login_az
-    - mkdir -p "$SECURITY_DIR" && printf "Validate NSG/DDOS posture (assumed pre-provisioned)\n" > "$SECURITY_DIR/network.txt" && cat "$SECURITY_DIR/network.txt"
+    - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2" && az account set --subscription "$AZURE_SUBSCRIPTION_ID" && mkdir -p "$SECURITY_DIR" && printf "Validate NSG/DDOS posture (assumed pre-provisioned)\n" > "$SECURITY_DIR/network.txt" && cat "$SECURITY_DIR/network.txt"
   artifacts:
     paths: [$SECURITY_DIR/network.txt]
+
 
 
 
@@ -357,11 +357,10 @@ deploy_staging_blue_green:
     deployment_tier: staging
   when: manual
   script:
-    - *wif_login_az
-    - IMG_REG="$ACR_REGISTRY.azurecr.io" TAG="$CI_COMMIT_SHA"
-    - for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU" "$RG_STG_SEASIA:$AKS_STG_SEASIA"; do IFS=: read -r RG AKS<<<"$R"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"; done && echo "staging bg OK" | tee "$HELM_OUT_DIR/release-notes-staging.txt"
+    - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2" && az account set --subscription "$AZURE_SUBSCRIPTION_ID" && IMG_REG="$ACR_REGISTRY.azurecr.io" TAG="$CI_COMMIT_SHA" && for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU" "$RG_STG_SEASIA:$AKS_STG_SEASIA"; do RG=${R%%:*}; AKS=${R##*:}; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"; done && echo "staging bg OK" | tee "$HELM_OUT_DIR/release-notes-staging.txt"
   artifacts:
     paths: ["$HELM_OUT_DIR/release-notes-staging.txt"]
+
 
 
 
