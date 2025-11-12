@@ -33,7 +33,7 @@ const vpc = new awsx.ec2.Vpc(`payment-vpc-${environmentSuffix}`, {
   cidrBlock: '10.0.0.0/16',
   numberOfAvailabilityZones: 3,
   natGateways: {
-    strategy: awsx.ec2.NatGatewayStrategy.OnePerAz,
+    strategy: awsx.ec2.NatGatewayStrategy.Single,
   },
   subnetSpecs: [
     {
