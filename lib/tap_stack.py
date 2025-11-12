@@ -341,7 +341,8 @@ def handler(event, context):
                 "subnet_ids": [s.id for s in self.vpc["private_subnets"]],
                 "security_group_ids": [self.vpc["security_group"].id]
             },
-            reserved_concurrent_executions=10,
+            # Reserved concurrent executions removed to avoid account limit issues
+            # reserved_concurrent_executions=10,
             tracing_config={"mode": "Active"},
             timeout=60,
             tags={"Environment": self.environment_suffix},
@@ -486,7 +487,8 @@ def handler(event, context):
                 "subnet_ids": [s.id for s in self.vpc["private_subnets"]],
                 "security_group_ids": [self.vpc["security_group"].id]
             },
-            reserved_concurrent_executions=10,
+            # Reserved concurrent executions removed to avoid account limit issues
+            # reserved_concurrent_executions=10,
             tracing_config={"mode": "Active"},
             timeout=60,
             tags={"Environment": self.environment_suffix},
@@ -620,7 +622,8 @@ Please investigate immediately.
                 }
             },
             kms_key_arn=self.kms_key.arn,
-            reserved_concurrent_executions=10,
+            # Reserved concurrent executions removed to avoid account limit issues
+            # reserved_concurrent_executions=10,
             tracing_config={"mode": "Active"},
             timeout=30,
             tags={"Environment": self.environment_suffix},
