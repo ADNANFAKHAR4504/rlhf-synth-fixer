@@ -251,7 +251,7 @@ export class EcsConstruct extends Construct {
     });
 
     // HTTP Listener - redirect to HTTPS if certificate provided, otherwise forward
-    new LbListener(this, 'listener-http', {
+    const httpListener = new LbListener(this, 'listener-http', {
       loadBalancerArn: alb.arn,
       port: 80,
       protocol: 'HTTP',
@@ -272,6 +272,7 @@ export class EcsConstruct extends Construct {
               targetGroupArn: targetGroup.arn,
             },
           ],
+      dependsOn: [alb, targetGroup],
     });
 
     // HTTPS Listener - only create if certificate ARN is provided
@@ -288,6 +289,7 @@ export class EcsConstruct extends Construct {
             targetGroupArn: targetGroup.arn,
           },
         ],
+        dependsOn: [alb, targetGroup, httpListener],
       });
     }
 
@@ -316,6 +318,7 @@ export class EcsConstruct extends Construct {
       tags: {
         Environment: props.environmentName,
       },
+      dependsOn: [httpListener, targetGroup],
     });
 
     this.clusterName = cluster.name;
