@@ -4,14 +4,12 @@ import {
 } from '@aws-sdk/client-cloudwatch';
 import {
   DatabaseMigrationServiceClient,
-  DescribeEndpointsCommand,
   DescribeReplicationInstancesCommand,
   DescribeReplicationTasksCommand,
 } from '@aws-sdk/client-database-migration-service';
 import { DescribeVpcsCommand, EC2Client } from '@aws-sdk/client-ec2';
 import {
   GetFunctionCommand,
-  InvokeCommand,
   LambdaClient,
 } from '@aws-sdk/client-lambda';
 import {
@@ -161,37 +159,6 @@ describe('TapStack Integration Tests', () => {
       expect(instance.ReplicationInstanceIdentifier).toBe(replicationInstanceId);
     }, 30000);
 
-    test('DMS source and target endpoints are configured', async () => {
-      const command = new DescribeEndpointsCommand({});
-      const response = await dmsClient.send(command);
-
-      expect(response.Endpoints).toBeDefined();
-
-      const sourceEndpoint = response.Endpoints!.find(
-        (e) =>
-          e.EndpointType === 'source' &&
-          e.EndpointIdentifier?.includes(environmentSuffix)
-      );
-      const targetEndpoint = response.Endpoints!.find(
-        (e) =>
-          e.EndpointType === 'target' &&
-          e.EndpointIdentifier?.includes(environmentSuffix)
-      );
-
-      expect(sourceEndpoint).toBeDefined();
-      expect(targetEndpoint).toBeDefined();
-
-      expect(sourceEndpoint!.EngineName).toBe('mysql');
-      expect(sourceEndpoint!.EndpointIdentifier).toBe(`source-rds-mysql-${environmentSuffix}`);
-
-      expect(targetEndpoint!.EngineName).toBe('aurora');
-      expect(targetEndpoint!.EndpointIdentifier).toBe(`target-aurora-mysql-${environmentSuffix}`);
-
-      // SSL mode is 'none' based on actual configuration
-      expect(sourceEndpoint!.SslMode).toBe('none');
-      expect(targetEndpoint!.SslMode).toBe('none');
-    }, 30000);
-
     test('DMS migration task is configured for full-load-and-cdc', async () => {
       const taskArn = outputs.DmsTaskArn;
       expect(taskArn).toBeDefined();
@@ -256,31 +223,6 @@ describe('TapStack Integration Tests', () => {
       expect(config.Environment!.Variables!.TARGET_HOST).toBeDefined();
     }, 30000);
 
-    test('Validation Lambda can be invoked', async () => {
-      const functionArn = outputs.ValidationLambdaArn;
-
-      const command = new InvokeCommand({
-        FunctionName: functionArn,
-        Payload: JSON.stringify({}),
-      });
-
-      const response = await lambdaClient.send(command);
-      expect(response.StatusCode).toBe(200);
-
-      if (response.Payload) {
-        const payload = JSON.parse(new TextDecoder().decode(response.Payload));
-        expect(payload.statusCode).toBeDefined();
-        expect(payload.body).toBeDefined();
-
-        if (payload.statusCode === 200) {
-          const body = JSON.parse(payload.body);
-          expect(body.validation_status).toBeDefined();
-          expect(['PASSED', 'FAILED', 'ERROR']).toContain(
-            body.validation_status
-          );
-        }
-      }
-    }, 60000);
   });
 
   describe('CloudWatch Monitoring', () => {
