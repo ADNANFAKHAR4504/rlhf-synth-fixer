@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: Payment processing web application infrastructure with PCI DSS compliance
+main: bin/tap.ts

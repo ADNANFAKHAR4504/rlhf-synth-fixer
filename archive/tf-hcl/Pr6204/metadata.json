@@ -1,0 +1,25 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101911931",
+  "team": "6",
+  "startedAt": "2025-11-10T09:01:28.898Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "(VPC",
+    "ALB",
+    "ASG",
+    "RDS)"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
+}

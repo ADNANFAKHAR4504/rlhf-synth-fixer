@@ -111,6 +111,7 @@ build
 .claude/*.csv.backup
 .claude/tasks.csv.lock/
 .claude/open_pr_status.json
+.claude/synth_pr_status.json
 .sherlock/data
 .sherlock/reports
 
