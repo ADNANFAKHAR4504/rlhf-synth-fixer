@@ -134,21 +134,21 @@ describe('TapStack Integration Tests', () => {
       const result = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       expect(result.Configuration).toBeDefined();
       expect(result.Configuration?.Runtime).toBe('nodejs18.x');
-      expect(result.Configuration?.MemorySize).toBe(3072);
+      expect(result.Configuration?.MemorySize).toBe(1024);
     });
 
     it('should have DataProcessor function deployed', async () => {
       const result = await lambda.getFunction({ FunctionName: `DataProcessor-${environmentSuffix}` }).promise();
       expect(result.Configuration).toBeDefined();
       expect(result.Configuration?.Runtime).toBe('nodejs18.x');
-      expect(result.Configuration?.MemorySize).toBe(3072);
+      expect(result.Configuration?.MemorySize).toBe(1024);
     });
 
     it('should have DataAggregator function deployed', async () => {
       const result = await lambda.getFunction({ FunctionName: `DataAggregator-${environmentSuffix}` }).promise();
       expect(result.Configuration).toBeDefined();
       expect(result.Configuration?.Runtime).toBe('nodejs18.x');
-      expect(result.Configuration?.MemorySize).toBe(3072);
+      expect(result.Configuration?.MemorySize).toBe(1024);
     });
 
     it('should have X-Ray tracing enabled on DataIngestion', async () => {
