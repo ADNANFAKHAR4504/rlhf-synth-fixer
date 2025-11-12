@@ -80,9 +80,10 @@ function flattenOutputs(data: any): any {
 // Load stack outputs produced by deployment
 function loadOutputs() {
   const candidates = [
-    path.resolve(process.cwd(), 'cdktf.out/stacks/tap-stack/outputs.json'),
+    path.resolve(process.cwd(), 'cfn-outputs/flat-outputs.json'),
+    path.resolve(process.cwd(), 'cfn-outputs.json'),
+    path.resolve(process.cwd(), 'cfn-outputs/outputs.json'),
     path.resolve(process.cwd(), 'outputs.json'),
-    path.resolve(process.cwd(), 'terraform.tfstate.d/outputs.json'),
   ];
 
   for (const p of candidates) {
