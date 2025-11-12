@@ -262,6 +262,24 @@ class TestTapStack(unittest.TestCase):
         self.assertIsNotNone(stack.notification_lambda)
 
     @pulumi.runtime.test
+    def test_lambda_reserved_concurrency(self):
+        """Ensure each Lambda reserves 100 concurrent executions as required."""
+        args = TapStackArgs(environment_suffix='test')
+        stack = TapStack(name="test-stack", args=args)
+
+        def check_reserved(values):
+            api_reserved, fraud_reserved, notification_reserved = values
+            self.assertEqual(api_reserved, 100)
+            self.assertEqual(fraud_reserved, 100)
+            self.assertEqual(notification_reserved, 100)
+
+        return pulumi.Output.all(
+            stack.api_lambda.reserved_concurrent_executions,
+            stack.fraud_lambda.reserved_concurrent_executions,
+            stack.notification_lambda.reserved_concurrent_executions,
+        ).apply(check_reserved)
+
+    @pulumi.runtime.test
     def test_eventbridge_rule_creation(self):
         """Test DynamoDB stream trigger is created."""
         args = TapStackArgs(environment_suffix='test')
