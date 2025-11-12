@@ -19,7 +19,7 @@ data "aws_caller_identity" "current" {}
 locals {
   # Resource naming
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   # Common tags
   common_tags = {
     Project     = var.project_name
@@ -30,8 +30,8 @@ locals {
   }
 
   # Generate unique bucket names with account ID
-  account_id = data.aws_caller_identity.current.account_id
-  app_bucket_name = var.application_bucket_name != "" ? var.application_bucket_name : "${local.account_id}-${local.name_prefix}-app-data"
+  account_id        = data.aws_caller_identity.current.account_id
+  app_bucket_name   = var.application_bucket_name != "" ? var.application_bucket_name : "${local.account_id}-${local.name_prefix}-app-data"
   audit_bucket_name = var.audit_bucket_name != "" ? var.audit_bucket_name : "${local.account_id}-${local.name_prefix}-audit-logs"
 }
 
@@ -40,12 +40,12 @@ locals {
 # ================================
 
 resource "aws_kms_key" "main" {
-  description                        = "Customer-managed KMS key for ${var.project_name} ${var.environment} environment"
-  deletion_window_in_days           = 10
-  key_usage                         = "ENCRYPT_DECRYPT"
-  customer_master_key_spec          = "SYMMETRIC_DEFAULT"
-  enable_key_rotation              = true
-  rotation_period_in_days          = var.kms_key_rotation_days
+  description              = "Customer-managed KMS key for ${var.project_name} ${var.environment} environment"
+  deletion_window_in_days  = 10
+  key_usage                = "ENCRYPT_DECRYPT"
+  customer_master_key_spec = "SYMMETRIC_DEFAULT"
+  enable_key_rotation      = true
+  rotation_period_in_days  = var.kms_key_rotation_days
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -225,7 +225,7 @@ resource "aws_vpc_endpoint" "s3" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "s3:GetObject",
@@ -263,7 +263,7 @@ resource "aws_vpc_endpoint" "ec2" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "ec2:DescribeInstances",
@@ -294,7 +294,7 @@ resource "aws_vpc_endpoint" "ssm" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "ssm:GetParameter",
@@ -325,7 +325,7 @@ resource "aws_vpc_endpoint" "logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "logs:CreateLogGroup",
@@ -656,7 +656,7 @@ resource "aws_s3_bucket_policy" "config" {
         Resource = "${aws_s3_bucket.config.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
             "AWS:SourceAccount" = local.account_id
           }
         }
@@ -734,11 +734,11 @@ resource "aws_config_config_rule" "iam_password_policy" {
   input_parameters = jsonencode({
     RequireUppercaseCharacters = "true"
     RequireLowercaseCharacters = "true"
-    RequireSymbols            = "true"
-    RequireNumbers            = "true"
-    MinimumPasswordLength     = "14"
-    PasswordReusePrevention   = "24"
-    MaxPasswordAge            = "90"
+    RequireSymbols             = "true"
+    RequireNumbers             = "true"
+    MinimumPasswordLength      = "14"
+    PasswordReusePrevention    = "24"
+    MaxPasswordAge             = "90"
   })
 
   depends_on = [aws_config_configuration_recorder.main]

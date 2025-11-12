@@ -156,9 +156,9 @@ output "config_delivery_channel_name" {
 output "config_rule_arns" {
   description = "ARNs of AWS Config rules"
   value = {
-    s3_encryption_rule    = aws_config_config_rule.s3_bucket_server_side_encryption_enabled.arn
-    iam_password_policy   = aws_config_config_rule.iam_password_policy.arn
-    access_keys_rotated   = aws_config_config_rule.access_keys_rotated.arn
+    s3_encryption_rule  = aws_config_config_rule.s3_bucket_server_side_encryption_enabled.arn
+    iam_password_policy = aws_config_config_rule.iam_password_policy.arn
+    access_keys_rotated = aws_config_config_rule.access_keys_rotated.arn
   }
 }
 
@@ -166,15 +166,15 @@ output "config_rule_arns" {
 output "infrastructure_summary" {
   description = "Summary of the zero-trust security infrastructure"
   value = {
-    vpc_id                    = aws_vpc.main.id
-    kms_key_arn              = aws_kms_key.main.arn
-    vpc_endpoint_count       = 4
-    private_subnet_count     = length(aws_subnet.private)
-    s3_buckets_count         = 3
-    iam_roles_count          = 2
-    config_rules_count       = 3
-    log_groups_count         = 2
-    deployment_region        = var.aws_region
-    environment              = var.environment
+    vpc_id               = aws_vpc.main.id
+    kms_key_arn          = aws_kms_key.main.arn
+    vpc_endpoint_count   = 4
+    private_subnet_count = length(aws_subnet.private)
+    s3_buckets_count     = 3
+    iam_roles_count      = 2
+    config_rules_count   = 3
+    log_groups_count     = 2
+    deployment_region    = var.aws_region
+    environment          = var.environment
   }
 }
