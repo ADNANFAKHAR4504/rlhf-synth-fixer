@@ -5,6 +5,7 @@
   "team": "synth",
   "turn_type": "single",
   "po_id": "101000914",
+  "startedAt": "2025-11-12T00:00:00Z",
   "subtask": "Application Deployment",
   "subject_labels": [
     "ECS",
