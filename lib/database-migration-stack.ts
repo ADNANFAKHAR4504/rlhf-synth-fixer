@@ -325,7 +325,6 @@ export class DatabaseMigrationStack extends Construct {
       }
     );
 
-
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const cfnCluster = auroraCluster.node.defaultChild as rds.CfnDBCluster;
 
