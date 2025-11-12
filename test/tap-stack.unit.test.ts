@@ -182,7 +182,7 @@ describe('TapStack Unit Tests', () => {
       expect(synthesized).toContain('"engine": "aurora-postgresql"');
       expect(synthesized).toContain('"engine_version": "14.6"');
       expect(synthesized).toContain('"database_name": "appdb"');
-      expect(synthesized).toContain('"master_username": "admin"');
+      expect(synthesized).toContain('"master_username": "dbadmin"');
       expect(synthesized).toContain('"storage_encrypted": true');
     });
 
@@ -304,8 +304,13 @@ describe('TapStack Unit Tests', () => {
       const devSynth = Testing.synth(devStack);
       const prodSynth = Testing.synth(prodStack);
 
-      expect(devSynth).toContain('"desired_count": 1');
-      expect(prodSynth).toContain('"desired_count": 3');
+      // Note: desiredCount is set to 0 to prevent task failures before container images are pushed
+      expect(devSynth).toContain('"desired_count": 0');
+      expect(prodSynth).toContain('"desired_count": 0');
+
+      // Verify different CPU/memory configurations
+      expect(devSynth).toContain('"cpu": "256"');
+      expect(prodSynth).toContain('"cpu": "1024"');
     });
   });
 
