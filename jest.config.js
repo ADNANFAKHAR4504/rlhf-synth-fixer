@@ -9,16 +9,8 @@ module.exports = {
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy)/)',
+    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
   ],
-  globals: {
-    'ts-jest': {
-      tsconfig: {
-        esModuleInterop: true,
-        allowSyntheticDefaultImports: true,
-      },
-    },
-  },
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
     '<rootDir>/lib/**/*.mjs',
@@ -31,7 +23,7 @@ module.exports = {
   coverageReporters: ['text', 'lcov', 'json-summary'],
   coverageThreshold: {
     global: {
-      branches: 90, 
+      branches: 90,
       functions: 90,
       lines: 90,
       statements: 90,

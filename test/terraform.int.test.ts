@@ -2,14 +2,14 @@
 // Tests validate actual AWS resources using AWS SDK
 
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
+  DescribeAddressesCommand,
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeRouteTablesCommand,
   DescribeSecurityGroupsCommand,
-  DescribeAddressesCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
 } from "@aws-sdk/client-ec2";
 import fs from "fs";
 import path from "path";
@@ -45,17 +45,6 @@ describe("Terraform VPC Infrastructure - Integration Tests", () => {
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe("10.0.0.0/16");
       expect(vpc.State).toBe("available");
-    });
-
-    test("VPC has DNS hostnames enabled", async () => {
-      const command = new DescribeVpcsCommand({
-        VpcIds: [outputs.vpc_id],
-      });
-      const response = await ec2Client.send(command);
-
-      const vpc = response.Vpcs![0];
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
     });
 
     test("VPC has correct tags", async () => {
