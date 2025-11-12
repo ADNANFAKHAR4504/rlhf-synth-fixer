@@ -117,12 +117,51 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
   echo "✅ CloudFormation YAML project detected, deploying with AWS CLI..."
 
-  # Check stack status and delete if in ROLLBACK_COMPLETE state
+  # Check stack status and handle stuck states
   STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
   STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
 
-  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
-    echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Deleting stack before redeployment..."
+  echo "Current stack status: $STACK_STATUS"
+
+  # Handle various stuck or failed states
+  if [[ "$STACK_STATUS" =~ ^(CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|DELETE_IN_PROGRESS)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Waiting for operation to complete..."
+
+    # Wait with timeout (max 10 minutes)
+    WAIT_COUNT=0
+    MAX_WAIT=60  # 60 * 10 seconds = 10 minutes
+
+    while [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+      sleep 10
+      STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+      echo "  Status: $STACK_STATUS (waited $((WAIT_COUNT * 10))s)"
+      WAIT_COUNT=$((WAIT_COUNT + 1))
+    done
+
+    # Check if still in progress after timeout
+    if [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]]; then
+      echo "⚠️ Stack still in progress after timeout. Attempting to cancel and delete..."
+      aws cloudformation cancel-update-stack --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 30
+
+      # Force delete
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+      STACK_STATUS="DOES_NOT_EXIST"
+    fi
+  fi
+
+  # Handle failed states that need cleanup
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
+
+    # Try to continue rollback if stuck
+    if [[ "$STACK_STATUS" =~ (ROLLBACK|UPDATE_ROLLBACK) ]]; then
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 10
+    fi
+
     aws cloudformation delete-stack --stack-name "$STACK_NAME"
     echo "⏳ Waiting for stack deletion to complete..."
     aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
@@ -132,17 +171,67 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
     echo "✅ Stack deleted successfully"
   fi
 
-  npm run cfn:deploy-yaml
+  # Deploy with error capture
+  if ! npm run cfn:deploy-yaml; then
+    echo ""
+    echo "❌ CloudFormation deployment failed. Fetching stack events..."
+    echo ""
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+      --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' \
+      --output table 2>/dev/null || echo "Could not fetch stack events"
+    echo ""
+    echo "💡 Check the CloudFormation template in lib/TapStack.yml for issues"
+    exit 1
+  fi
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
 
-  # Check stack status and delete if in ROLLBACK_COMPLETE state
+  # Check stack status and handle stuck states
   STACK_NAME="TapStack${ENVIRONMENT_SUFFIX:-dev}"
   STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
 
-  if [ "$STACK_STATUS" = "ROLLBACK_COMPLETE" ]; then
-    echo "⚠️ Stack is in ROLLBACK_COMPLETE state. Deleting stack before redeployment..."
+  echo "Current stack status: $STACK_STATUS"
+
+  # Handle various stuck or failed states
+  if [[ "$STACK_STATUS" =~ ^(CREATE_IN_PROGRESS|UPDATE_IN_PROGRESS|DELETE_IN_PROGRESS)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Waiting for operation to complete..."
+
+    # Wait with timeout (max 10 minutes)
+    WAIT_COUNT=0
+    MAX_WAIT=60  # 60 * 10 seconds = 10 minutes
+
+    while [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]] && [ $WAIT_COUNT -lt $MAX_WAIT ]; do
+      sleep 10
+      STACK_STATUS=$(aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "DOES_NOT_EXIST")
+      echo "  Status: $STACK_STATUS (waited $((WAIT_COUNT * 10))s)"
+      WAIT_COUNT=$((WAIT_COUNT + 1))
+    done
+
+    # Check if still in progress after timeout
+    if [[ "$STACK_STATUS" =~ (IN_PROGRESS) ]]; then
+      echo "⚠️ Stack still in progress after timeout. Attempting to cancel and delete..."
+      aws cloudformation cancel-update-stack --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 30
+
+      # Force delete
+      aws cloudformation delete-stack --stack-name "$STACK_NAME"
+      echo "⏳ Waiting for stack deletion..."
+      aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || true
+      STACK_STATUS="DOES_NOT_EXIST"
+    fi
+  fi
+
+  # Handle failed states that need cleanup
+  if [[ "$STACK_STATUS" =~ ^(ROLLBACK_COMPLETE|CREATE_FAILED|UPDATE_ROLLBACK_COMPLETE|DELETE_FAILED)$ ]]; then
+    echo "⚠️ Stack is in $STACK_STATUS state. Deleting stack before redeployment..."
+
+    # Try to continue rollback if stuck
+    if [[ "$STACK_STATUS" =~ (ROLLBACK|UPDATE_ROLLBACK) ]]; then
+      aws cloudformation continue-update-rollback --stack-name "$STACK_NAME" 2>/dev/null || true
+      sleep 10
+    fi
+
     aws cloudformation delete-stack --stack-name "$STACK_NAME"
     echo "⏳ Waiting for stack deletion to complete..."
     aws cloudformation wait stack-delete-complete --stack-name "$STACK_NAME" || {
@@ -152,7 +241,18 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
     echo "✅ Stack deleted successfully"
   fi
 
-  npm run cfn:deploy-json
+  # Deploy with error capture
+  if ! npm run cfn:deploy-json; then
+    echo ""
+    echo "❌ CloudFormation deployment failed. Fetching stack events..."
+    echo ""
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+      --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' \
+      --output table 2>/dev/null || echo "Could not fetch stack events"
+    echo ""
+    echo "💡 Check the CloudFormation template in lib/TapStack.json for issues"
+    exit 1
+  fi
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
