@@ -26,6 +26,9 @@ export class StorageStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags, kmsKeyArn } = args;
 
+    // Get the current AWS region
+    const currentRegion = aws.getRegionOutput({}, { parent: this });
+
     // Create DynamoDB table for transactions
     this.dynamoTable = new aws.dynamodb.Table(
       `transactions-${environmentSuffix}`,
@@ -60,11 +63,13 @@ export class StorageStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create S3 bucket for audit logs
+    // Create S3 bucket for audit logs with explicit region
     this.auditBucket = new aws.s3.Bucket(
       `payment-audit-logs-${environmentSuffix}`,
       {
         bucket: `payment-audit-logs-${environmentSuffix}`,
+        // CRITICAL FIX: Add explicit region to prevent us-east-1 default
+        region: currentRegion.name,
         versioning: {
           enabled: true,
         },

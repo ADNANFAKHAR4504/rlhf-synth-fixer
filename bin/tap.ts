@@ -8,7 +8,9 @@
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
+
 import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
 
 // Initialize Pulumi configuration for the current stack.
@@ -23,26 +25,45 @@ const environmentSuffix =
 const repository = config.get('repository') || 'unknown';
 const commitAuthor = config.get('commitAuthor') || 'unknown';
 
+// Get AWS region from config, defaulting to ap-southeast-1
+const awsRegion = config.get('awsRegion') || 'ap-southeast-1';
+
 // Define a set of default tags to apply to all resources.
-// While not explicitly used in the TapStack instantiation here,
-// this is the standard place to define them. They would typically be passed
-// into the TapStack or configured on the AWS provider.
 const defaultTags = {
   Environment: environmentSuffix,
   Repository: repository,
   Author: commitAuthor,
+  ManagedBy: 'Pulumi',
 };
+
+// CRITICAL FIX: Create AWS provider with explicit region configuration
+// This ensures ALL AWS resources (including S3 buckets) are created in ap-southeast-1
+const awsProvider = new aws.Provider('aws-provider', {
+  region: awsRegion,
+  defaultTags: {
+    tags: defaultTags,
+  },
+});
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-const stack = new TapStack('pulumi-infra', {
-  environmentSuffix,
-  tags: defaultTags,
-  notificationEmail: config.get('notificationEmail'),
-});
+const stack = new TapStack(
+  'pulumi-infra',
+  {
+    environmentSuffix,
+    tags: defaultTags,
+    notificationEmail: config.get('notificationEmail'),
+  },
+  {
+    provider: awsProvider, // Pass the provider with explicit region
+  }
+);
 
 // Export the stack outputs
 export const apiUrl = stack.apiUrl;
 export const auditBucketName = stack.auditBucketName;
 export const dynamoTableName = stack.dynamoTableName;
 export const dashboardUrl = stack.dashboardUrl;
+
+// Export the configured region for reference
+export const region = awsRegion;
