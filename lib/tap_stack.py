@@ -283,16 +283,17 @@ class PaymentEnvironment(ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Create rotation schedule (30 days)
-        self.db_secret_rotation = aws.secretsmanager.SecretRotation(
-            f"db-password-rotation-{self.environment_suffix}",
-            secret_id=self.db_secret.id,
-            rotation_lambda_arn=self._get_rotation_lambda_arn(),
-            rotation_rules=aws.secretsmanager.SecretRotationRotationRulesArgs(
-                automatically_after_days=30
-            ),
-            opts=ResourceOptions(parent=self, depends_on=[self.db_secret_version])
-        )
+        # Note: Secret rotation commented out as it requires a dedicated rotation Lambda function
+        # In production, implement a proper rotation Lambda and uncomment this section
+        # self.db_secret_rotation = aws.secretsmanager.SecretRotation(
+        #     f"db-password-rotation-{self.environment_suffix}",
+        #     secret_id=self.db_secret.id,
+        #     rotation_lambda_arn=self._get_rotation_lambda_arn(),
+        #     rotation_rules=aws.secretsmanager.SecretRotationRotationRulesArgs(
+        #         automatically_after_days=30
+        #     ),
+        #     opts=ResourceOptions(parent=self, depends_on=[self.db_secret_version])
+        # )
 
     def _get_rotation_lambda_arn(self) -> str:
         """
@@ -319,7 +320,7 @@ class PaymentEnvironment(ComponentResource):
             f"aurora-cluster-{self.environment_suffix}",
             cluster_identifier=f"payment-cluster-{self.environment_suffix.lower()}",
             engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-            engine_version="15.3",
+            engine_version="15.5",
             database_name="paymentdb",
             master_username="paymentadmin",
             master_password=self.db_secret_version.secret_string.apply(
@@ -343,7 +344,7 @@ class PaymentEnvironment(ComponentResource):
                 cluster_identifier=self.rds_cluster.id,
                 instance_class=self.instance_type,
                 engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-                engine_version="15.3",
+                engine_version="15.5",
                 publicly_accessible=False,
                 tags=self.tags,
                 opts=ResourceOptions(parent=self)
