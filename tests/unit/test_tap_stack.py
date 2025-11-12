@@ -206,13 +206,20 @@ class TestIAMRole(unittest.TestCase):
         stack = TapStack(self.app, "TestStack")
         template = Template.from_stack(stack)
         
-        # ASSERT - Check for the policy ARN as an object (Fn::Join)
+        # ASSERT - The Fn::Join has ["", [array of parts]] structure
+        # The pattern is in the second element of Fn::Join array
         template.has_resource_properties("AWS::IAM::Role", {
+            "RoleName": "payment-lambda-role-dev",
             "ManagedPolicyArns": Match.array_with([
                 Match.object_like({
-                    "Fn::Join": Match.array_with([
-                        Match.string_like_regexp(".*AWSLambdaBasicExecutionRole")
-                    ])
+                    "Fn::Join": [
+                        "",  # First element is delimiter
+                        Match.array_with([  # Second element contains the ARN parts
+                            Match.array_with([
+                                Match.string_like_regexp(".*AWSLambdaBasicExecutionRole")
+                            ])
+                        ])
+                    ]
                 })
             ])
         })
