@@ -397,17 +397,31 @@ describe('TapStack CloudFormation Template', () => {
       expect(kmsEndpoint.Properties.ServiceName['Fn::Sub']).toContain('kms');
     });
 
-    test('restricts Lambda security group egress to VPC CIDR only', () => {
+    test('restricts Lambda security group egress to controlled endpoints', () => {
       // Arrange
       const sg = resources.LambdaSecurityGroup;
+      const s3Egress = resources.LambdaSecurityGroupEgressS3;
+      const vpcEgress = resources.LambdaSecurityGroupEgressVPC;
 
-      // Assert
+      // Assert - security group itself should not declare inline egress
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
-      expect(sg.Properties.SecurityGroupEgress).toHaveLength(1);
-      expect(sg.Properties.SecurityGroupEgress[0].IpProtocol).toBe('tcp');
-      expect(sg.Properties.SecurityGroupEgress[0].FromPort).toBe(443);
-      expect(sg.Properties.SecurityGroupEgress[0].ToPort).toBe(443);
-      expect(sg.Properties.SecurityGroupEgress[0].CidrIp).toEqual({ Ref: 'VPCCidr' });
+      expect(sg.Properties.SecurityGroupEgress).toBeUndefined();
+
+      // Assert - S3 gateway endpoint egress rule
+      expect(s3Egress.Type).toBe('AWS::EC2::SecurityGroupEgress');
+      expect(s3Egress.Properties.GroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
+      expect(s3Egress.Properties.IpProtocol).toBe('tcp');
+      expect(s3Egress.Properties.FromPort).toBe(443);
+      expect(s3Egress.Properties.ToPort).toBe(443);
+      expect(s3Egress.Properties.DestinationPrefixListId).toEqual({ 'Fn::Sub': 'pl-${AWS::Partition}s3' });
+
+      // Assert - interface endpoint egress rule scoped to VPC CIDR
+      expect(vpcEgress.Type).toBe('AWS::EC2::SecurityGroupEgress');
+      expect(vpcEgress.Properties.GroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
+      expect(vpcEgress.Properties.IpProtocol).toBe('tcp');
+      expect(vpcEgress.Properties.FromPort).toBe(443);
+      expect(vpcEgress.Properties.ToPort).toBe(443);
+      expect(vpcEgress.Properties.CidrIp).toEqual({ Ref: 'VPCCidr' });
     });
   });
 

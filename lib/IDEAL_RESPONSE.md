@@ -364,14 +364,8 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupName: !Sub '${ProjectName}-lambda-sg-${EnvironmentName}'
-      GroupDescription: Security group for Lambda functions with restricted egress
+      GroupDescription: Security group for Lambda functions with VPC endpoint access
       VpcId: !Ref VPC
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          CidrIp: !Ref VPCCidr
-          Description: HTTPS to VPC endpoints only
       Tags:
         - Key: Name
           Value: !Sub '${ProjectName}-lambda-sg-${EnvironmentName}'
@@ -385,6 +379,28 @@ Resources:
           Value: 'true'
         - Key: Environment
           Value: !Ref EnvironmentName
+  
+  # Add egress rule for S3 prefix list (needed for S3 Gateway endpoint)
+  LambdaSecurityGroupEgressS3:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationPrefixListId: !Sub 'pl-${AWS::Partition}s3'
+      Description: HTTPS to S3 via Gateway endpoint
+  
+  # Add egress rule for VPC CIDR (for Interface endpoints)
+  LambdaSecurityGroupEgressVPC:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref VPCCidr
+      Description: HTTPS to VPC endpoints
   
   # VPC Endpoint for S3
   S3VPCEndpoint:

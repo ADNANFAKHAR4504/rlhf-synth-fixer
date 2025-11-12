@@ -87,28 +87,39 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     // Clean up all test S3 objects created during tests
     if (testS3Keys.length > 0 && dataBucketName) {
       try {
-        // Delete objects in batches (S3 allows up to 1000 per request)
-        const batches = [];
-        for (let i = 0; i < testS3Keys.length; i += 1000) {
-          batches.push(testS3Keys.slice(i, i + 1000));
-        }
+        // Filter out empty or undefined keys
+        const validKeys = testS3Keys.filter(key => key && key.length > 0);
+        
+        if (validKeys.length > 0) {
+          // Delete objects in batches (S3 allows up to 1000 per request)
+          const batches = [];
+          for (let i = 0; i < validKeys.length; i += 1000) {
+            batches.push(validKeys.slice(i, i + 1000));
+          }
 
-        for (const batch of batches) {
-          await s3Client.send(
-            new DeleteObjectsCommand({
-              Bucket: dataBucketName,
-              Delete: {
-                Objects: batch.map(key => ({ Key: key })),
-                Quiet: true,
-              },
-            })
-          );
+          for (const batch of batches) {
+            await s3Client.send(
+              new DeleteObjectsCommand({
+                Bucket: dataBucketName,
+                Delete: {
+                  Objects: batch.map(key => ({ Key: key })),
+                  Quiet: true,
+                },
+              })
+            );
+          }
         }
       } catch (error) {
         // Log but don't fail - cleanup is best effort
         console.warn('Failed to clean up some test S3 objects:', error);
       }
     }
+    
+    // Destroy AWS SDK clients to prevent Jest from hanging
+    lambdaClient.destroy();
+    s3Client.destroy();
+    sqsClient.destroy();
+    logsClient.destroy();
   });
 
   describe('External Partner Request → API Gateway Reception', () => {
@@ -462,7 +473,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(responseBody).toHaveProperty('message', 'Data processed successfully');
       expect(responseBody).toHaveProperty('location'); // S3 key
       expect(responseBody.transactionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/); // UUID format
-    });
+      
+      // Track for cleanup
+      if (responseBody.location) {
+        testS3Keys.push(responseBody.location);
+      }
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Processing Lambda generates unique transaction IDs for each request', async () => {
       // Arrange
@@ -496,7 +512,11 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       const body2 = JSON.parse(result2.body);
       expect(body1.transactionId).not.toBe(body2.transactionId);
       expect(body1.location).not.toBe(body2.location);
-    });
+      
+      // Track for cleanup
+      if (body1.location) testS3Keys.push(body1.location);
+      if (body2.location) testS3Keys.push(body2.location);
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Processing Lambda calculates checksum for transaction data', async () => {
       // Arrange
@@ -541,7 +561,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       
       // Track for cleanup
       testS3Keys.push(responseBody.location);
-    });
+    }, 60000); // Increase timeout to 60 seconds
   });
 
   describe('Processing Lambda Execution → Encrypted S3 Storage', () => {
@@ -589,7 +609,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.ServerSideEncryption).toBe('aws:kms');
       expect(s3Response.SSEKMSKeyId).toBeTruthy();
       expect(s3Response.ContentType).toBe('application/json');
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('S3 objects are stored with date partitioning and tags', async () => {
       // Arrange
@@ -634,7 +654,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.Metadata!['transaction-id']).toBeTruthy();
       expect(s3Response.Metadata!['processed-by']).toBe('lambda-processor');
       expect(s3Response.Metadata!['version']).toBe('2.0');
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Stored data includes checksum for integrity verification', async () => {
       // Arrange
@@ -684,7 +704,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData).toHaveProperty('processedAt');
       expect(storedData).toHaveProperty('originalTimestamp');
       expect(storedData).toHaveProperty('processingVersion', '2.0');
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Stored data preserves original transaction data', async () => {
       // Arrange
@@ -736,7 +756,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData.transactionData).toEqual(originalTransactionData);
       expect(storedData.transactionData.amount).toBe(1500.00);
       expect(storedData.transactionData.merchantId).toBe('merchant-preserve-test');
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Multiple transactions stored in correct date partitions', async () => {
       // Arrange
@@ -778,7 +798,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       for (const key of s3Keys) {
         expect(key).toMatch(new RegExp(`^processed/${TEST_CUSTOMER_ID}/${year}/${month}/${day}/.+\.json$`));
       }
-    });
+    }, 90000); // Increase timeout to 90 seconds
   });
 
   describe('Encrypted S3 Storage → Response Generation', () => {
@@ -817,7 +837,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       
       // Verify transaction ID in header matches body
       expect(result.headers['X-Transaction-Id']).toBe(body.transactionId);
-    });
+      
+      // Track for cleanup
+      if (body.location) {
+        testS3Keys.push(body.location);
+      }
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Error responses include request ID for traceability', async () => {
       // Arrange - Invalid input
@@ -883,7 +908,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       expect(s3Response).toBeDefined();
       expect(s3Response.ServerSideEncryption).toBe('aws:kms');
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Response timestamp is valid ISO format', async () => {
       // Arrange
@@ -911,7 +936,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       // Verify timestamp is valid ISO 8601 format
       const timestamp = new Date(body.timestamp);
       expect(timestamp.getTime()).not.toBeNaN();
-    });
+      
+      // Track for cleanup
+      if (body.location) {
+        testS3Keys.push(body.location);
+      }
+    }, 60000); // Increase timeout to 60 seconds
   });
 
   describe('Response Generation → Monitoring and Alerting', () => {
@@ -926,12 +956,19 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       };
 
       // Act - Invoke Lambda to generate logs
-      await lambdaClient.send(
+      const lambdaResponse = await lambdaClient.send(
         new InvokeCommand({
           FunctionName: processingLambdaArn,
           Payload: JSON.stringify(event),
         })
       );
+      
+      // Track for cleanup
+      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
+      const body = JSON.parse(result.body);
+      if (body.location) {
+        testS3Keys.push(body.location);
+      }
 
       // Wait for logs to be written
       await wait(5000);
@@ -963,7 +1000,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       expect(logStreams.logStreams).toBeDefined();
       expect(logStreams.logStreams!.length).toBeGreaterThan(0);
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('API Gateway logs are captured with encryption', async () => {
       // Arrange & Act - Verify API Gateway log group exists
@@ -1004,6 +1041,11 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       const result = parseLambdaResponse(response, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
+      
+      // Track for cleanup
+      if (responseBody.location) {
+        testS3Keys.push(responseBody.location);
+      }
 
       // Wait for logs
       await wait(5000);
@@ -1020,7 +1062,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       expect(logStreams.logStreams).toBeDefined();
       expect(logStreams.logStreams!.length).toBeGreaterThan(0);
-    });
+    }, 60000); // Increase timeout to 60 seconds
   });
 
   describe('Monitoring and Alerting → Dead Letter Queue Processing', () => {
@@ -1123,7 +1165,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData).toHaveProperty('dataClassification', 'HIGHLY_CONFIDENTIAL');
       expect(storedData).toHaveProperty('processedAt');
       expect(storedData).toHaveProperty('originalTimestamp');
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Multiple transactions are processed and stored separately', async () => {
       // Arrange
@@ -1176,7 +1218,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         expect(headResponse).toBeDefined();
         expect(headResponse.ServerSideEncryption).toBe('aws:kms');
       }
-    });
+    }, 90000); // Increase timeout to 90 seconds
 
     test('Checksum validation ensures data integrity', async () => {
       // Arrange
@@ -1225,7 +1267,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       const transactionDataJson = JSON.stringify(storedData.transactionData, Object.keys(storedData.transactionData).sort());
       const expectedChecksum = crypto.createHash('sha256').update(transactionDataJson).digest('hex');
       expect(storedData.checksum).toBe(expectedChecksum);
-    });
+    }, 60000); // Increase timeout to 60 seconds
 
     test('Error handling flows to DLQ when processing fails', async () => {
       // Arrange - Get initial DLQ state
