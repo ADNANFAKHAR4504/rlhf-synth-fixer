@@ -465,8 +465,8 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(
   }
 );
 
+// Note: name omitted to allow AWS to generate unique name and avoid conflicts
 const alb = new aws.lb.LoadBalancer(`payment-alb-${environmentSuffix}`, {
-  name: `payment-alb-${environmentSuffix}`,
   internal: false,
   loadBalancerType: 'application',
   securityGroups: [albSecurityGroup.id],
