@@ -138,6 +138,7 @@ class NetworkingModule(Construct):
             rule=[{
                 "id": "expire-old-logs",
                 "status": "Enabled",
+                "filter": [{}],
                 "expiration": [{
                     "days": 90,
                 }],

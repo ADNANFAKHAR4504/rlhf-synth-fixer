@@ -1,5 +1,6 @@
 """Security module for KMS keys, IAM roles, and policies."""
 
+import json
 from constructs import Construct
 from cdktf import Token
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
@@ -36,7 +37,7 @@ class SecurityModule(Construct):
             "s3_kms_key",
             description=f"KMS key for S3 encryption - {environment_suffix}",
             enable_key_rotation=True,
-            policy=Token.as_string({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -81,7 +82,7 @@ class SecurityModule(Construct):
             "lambda_kms_key",
             description=f"KMS key for Lambda encryption - {environment_suffix}",
             enable_key_rotation=True,
-            policy=Token.as_string({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -114,7 +115,7 @@ class SecurityModule(Construct):
             "cloudwatch_kms_key",
             description=f"KMS key for CloudWatch Logs - {environment_suffix}",
             enable_key_rotation=True,
-            policy=Token.as_string({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -167,7 +168,7 @@ class SecurityModule(Construct):
             self,
             "lambda_role",
             name=f"lambda-execution-role-{environment_suffix}",
-            assume_role_policy=Token.as_string({
+            assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -200,7 +201,7 @@ class SecurityModule(Construct):
             self,
             "lambda_custom_policy",
             name=f"lambda-custom-policy-{environment_suffix}",
-            policy=Token.as_string({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -260,7 +261,7 @@ class SecurityModule(Construct):
             self,
             "config_role",
             name=f"config-recorder-role-{environment_suffix}",
-            assume_role_policy=Token.as_string({
+            assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
@@ -294,7 +295,7 @@ class SecurityModule(Construct):
             "config_s3_policy",
             name=f"config-s3-policy-{environment_suffix}",
             role=self.config_role.id,
-            policy=Token.as_string({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {

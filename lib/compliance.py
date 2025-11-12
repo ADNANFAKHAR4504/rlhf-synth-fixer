@@ -1,5 +1,6 @@
 """Compliance module for AWS Config and EventBridge."""
 
+import json
 from constructs import Construct
 from cdktf import Token
 from cdktf_cdktf_provider_aws.config_configuration_recorder import ConfigConfigurationRecorder, ConfigConfigurationRecorderRecordingGroup
@@ -102,7 +103,7 @@ class ComplianceModule(Construct):
                 owner="AWS",
                 source_identifier="REQUIRED_TAGS",
             ),
-            input_parameters=Token.as_string({
+            input_parameters=json.dumps({
                 "tag1Key": "Environment",
                 "tag2Key": "DataClassification",
                 "tag3Key": "Owner",
@@ -128,7 +129,7 @@ class ComplianceModule(Construct):
             "security_event_rule",
             name=f"security-events-{environment_suffix}",
             description="Capture critical security events",
-            event_pattern=Token.as_string({
+            event_pattern=json.dumps({
                 "source": ["aws.guardduty", "aws.securityhub", "aws.config"],
                 "detail-type": [
                     "GuardDuty Finding",

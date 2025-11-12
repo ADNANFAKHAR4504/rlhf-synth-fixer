@@ -38,12 +38,12 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend (S3 has native state locking with DynamoDB)
+        # Configure S3 Backend with dynamic bucket name
         S3Backend(
             self,
-            bucket=state_bucket,
+            bucket=f"terraform-state-{environment_suffix}-{aws_region}",
             key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
+            region=aws_region,
             encrypt=True,
         )
 

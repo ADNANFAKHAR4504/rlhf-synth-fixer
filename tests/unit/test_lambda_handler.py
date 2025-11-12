@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch, MagicMock
 from botocore.exceptions import ClientError
 
 # Add parent directory to path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'lib', 'lambda')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..', 'lib', 'lambda')))
 
 
 class TestLambdaHandler:

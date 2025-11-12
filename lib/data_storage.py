@@ -1,5 +1,6 @@
 """Data storage module for S3 buckets with encryption and policies."""
 
+import json
 from constructs import Construct
 from cdktf import Token
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
@@ -114,40 +115,42 @@ class DataStorageModule(Construct):
         )
 
         # Bucket policy denying unencrypted uploads
+        bucket_policy_doc = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "DenyUnencryptedObjectUploads",
+                    "Effect": "Deny",
+                    "Principal": "*",
+                    "Action": "s3:PutObject",
+                    "Resource": f"${{{self.data_bucket.arn}}}/*",
+                    "Condition": {
+                        "StringNotEquals": {
+                            "s3:x-amz-server-side-encryption": "aws:kms"
+                        }
+                    }
+                },
+                {
+                    "Sid": "DenyInsecureTransport",
+                    "Effect": "Deny",
+                    "Principal": "*",
+                    "Action": "s3:*",
+                    "Resource": [
+                        f"${{{self.data_bucket.arn}}}",
+                        f"${{{self.data_bucket.arn}}}/*"
+                    ],
+                    "Condition": {
+                        "Bool": {
+                            "aws:SecureTransport": "false"
+                        }
+                    }
+                }
+            ]
+        }
+        
         S3BucketPolicy(
             self,
             "data_bucket_policy",
             bucket=self.data_bucket.id,
-            policy=Token.as_string({
-                "Version": "2012-10-17",
-                "Statement": [
-                    {
-                        "Sid": "DenyUnencryptedObjectUploads",
-                        "Effect": "Deny",
-                        "Principal": "*",
-                        "Action": "s3:PutObject",
-                        "Resource": f"{self.data_bucket.arn}/*",
-                        "Condition": {
-                            "StringNotEquals": {
-                                "s3:x-amz-server-side-encryption": "aws:kms"
-                            }
-                        }
-                    },
-                    {
-                        "Sid": "DenyInsecureTransport",
-                        "Effect": "Deny",
-                        "Principal": "*",
-                        "Action": "s3:*",
-                        "Resource": [
-                            self.data_bucket.arn,
-                            f"{self.data_bucket.arn}/*"
-                        ],
-                        "Condition": {
-                            "Bool": {
-                                "aws:SecureTransport": "false"
-                            }
-                        }
-                    }
-                ]
-            }),
+            policy=json.dumps(bucket_policy_doc),
         )

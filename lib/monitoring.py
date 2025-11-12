@@ -1,5 +1,6 @@
 """Monitoring module for CloudWatch Logs, alarms, and SNS."""
 
+import json
 from constructs import Construct
 from cdktf import Token
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
@@ -60,7 +61,7 @@ class MonitoringModule(Construct):
             self,
             "security_alerts_policy",
             arn=self.security_alerts_topic.arn,
-            policy=Token.as_string({
+            policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
                     {
