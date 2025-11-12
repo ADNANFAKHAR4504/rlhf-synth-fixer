@@ -22,5 +22,10 @@
   "training_quality": 9,
   "author": "iamarpit-turing",
   "reviewer": "adnan-turing",
-  "region": "eu-central-2"
+  "region": "eu-central-2",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
