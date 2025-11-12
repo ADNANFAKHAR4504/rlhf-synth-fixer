@@ -134,8 +134,8 @@ Mappings:
       AZ3: us-east-2c
     us-west-1:
       AZ1: us-west-1a
-      AZ2: us-west-1c
-      AZ3: us-west-1a
+      AZ2: us-west-1b
+      AZ3: us-west-1c
     us-west-2:
       AZ1: us-west-2a
       AZ2: us-west-2b
