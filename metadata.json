@@ -1,0 +1,26 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-13T01:22:21+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "9w6gq8",
+  "aws_services": [
+    "RDS",
+    "S3",
+    "EC2",
+    "ALB",
+    "Auto Scaling Groups",
+    "VPC",
+    "IAM",
+    "Secrets Manager",
+    "CloudWatch"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10
+}
