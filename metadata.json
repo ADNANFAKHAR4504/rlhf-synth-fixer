@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-11T13:38:32+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "aws_services": [
     "VPC",
     "ECS",
