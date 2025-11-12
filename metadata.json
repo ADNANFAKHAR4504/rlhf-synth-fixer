@@ -28,6 +28,9 @@
     "lines": 100,
     "branches": 100
   },
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
   "author": "kanishkah-turing",
   "dockerS3Location": ""
 }
