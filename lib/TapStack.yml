@@ -880,7 +880,7 @@ Resources:
           def handler(event, context):
               """Custom authorizer with mTLS certificate validation"""
               try:
-                  print(f"Authorizer invoked with requestId: {context.request_id}")
+                  print(f"Authorizer invoked with requestId: {context.aws_request_id}")
                   
                   # Extract method ARN for policy generation
                   method_arn = event['methodArn']
@@ -938,7 +938,22 @@ Resources:
                   
               except Exception as e:
                   print(f"Authorization error: {str(e)}")
-                  return generate_policy('user', 'Deny', method_arn, context)
+                  # Return a policy with the method ARN from the event
+                  if 'methodArn' in event:
+                      return generate_policy('user', 'Deny', event['methodArn'], None)
+                  else:
+                      # If method ARN is not available, return a generic deny
+                      return {
+                          'principalId': 'user',
+                          'policyDocument': {
+                              'Version': '2012-10-17',
+                              'Statement': [{
+                                  'Action': 'execute-api:Invoke',
+                                  'Effect': 'Deny',
+                                  'Resource': '*'
+                              }]
+                          }
+                      }
           
           def generate_policy(principal_id, effect, resource, context=None):
               """Generate IAM policy for API Gateway"""
@@ -955,9 +970,9 @@ Resources:
               }
               
               # Add context for successful authorizations
-              if effect == 'Allow' and context:
+              if effect == 'Allow' and context is not None:
                   auth_response['context'] = {
-                      'requestId': context.request_id,
+                      'requestId': context.aws_request_id,
                       'principalId': principal_id,
                       'authorizedAt': datetime.datetime.utcnow().isoformat()
                   }
@@ -1116,7 +1131,7 @@ Resources:
           
           def handler(event, context):
               """Main Lambda handler for processing financial data"""
-              request_id = context.request_id
+              request_id = context.aws_request_id
               logger.info(f"Processing request: {request_id}")
               
               try:
