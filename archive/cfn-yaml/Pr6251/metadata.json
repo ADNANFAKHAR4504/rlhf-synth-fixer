@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-11T04:48:49-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "networking",
+    "vpc",
+    "transit-gateway",
+    "hub-and-spoke",
+    "migration"
+  ],
+  "po_id": "101000891",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "TransitGateway",
+    "CloudWatch",
+    "Lambda",
+    "IAM"
+  ],
+  "author": "iamarpit-turing",
+  "region": "eu-south-1",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
