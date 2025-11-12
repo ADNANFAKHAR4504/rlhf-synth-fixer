@@ -4,11 +4,11 @@
   "complexity": "hard",
   "turn_type": "single",
   "po_id": "101912343",
-  "team": "1",
+  "team": "2",
   "startedAt": "2025-11-07T14:52:18.130Z",
-  "subtask": "Security, Compliance and Governance",
+  "subtask": "IaC-Multi-Environment-Management",
   "subject_labels": [
-    "Security Configuration as Code"
+    "Multi-Environment Consistency"
   ],
   "aws_services": [
     "Application Auto Scaling",
