@@ -17,7 +17,7 @@ class TestTapStackUnit:
         return App()
 
     @pytest.fixture
-    def stack(self, app, mock_backend_setup, mock_lambda_bundle):
+    def stack(self, app):
         """Create a TapStack instance for testing"""
         return TapStack(
             app,
