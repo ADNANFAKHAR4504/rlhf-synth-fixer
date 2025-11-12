@@ -375,10 +375,16 @@ export class TapStack extends cdk.Stack {
     );
 
     stagingTaskDefinition.addContainer('MicroserviceContainer', {
-      image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
+      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'microservice',
       }),
+      portMappings: [
+        {
+          containerPort: 80,
+          protocol: ecs.Protocol.TCP,
+        },
+      ],
     });
 
     const stagingSecurityGroup = new ec2.SecurityGroup(
@@ -518,7 +524,7 @@ export class TapStack extends cdk.Stack {
     );
 
     prodTaskDefinition.addContainer('MicroserviceContainer', {
-      image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
+      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
       logging: ecs.LogDrivers.awsLogs({
         streamPrefix: 'microservice',
       }),
