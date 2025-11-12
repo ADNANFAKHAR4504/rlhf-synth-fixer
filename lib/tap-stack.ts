@@ -149,6 +149,84 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Security group for VPC Endpoints
+    const vpcEndpointSecurityGroup = new aws.ec2.SecurityGroup(
+      `payment-vpc-endpoint-sg-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        description: 'Security group for VPC endpoints',
+        ingress: [
+          {
+            protocol: 'tcp',
+            fromPort: 443,
+            toPort: 443,
+            cidrBlocks: [vpc.cidrBlock],
+            description: 'Allow HTTPS from VPC',
+          },
+        ],
+        egress: [
+          {
+            protocol: '-1',
+            fromPort: 0,
+            toPort: 0,
+            cidrBlocks: ['0.0.0.0/0'],
+          },
+        ],
+        tags: { ...tags, Name: `payment-vpc-endpoint-sg-${environmentSuffix}` },
+      },
+      { parent: this }
+    );
+
+    // VPC Endpoints for AWS services (allows Lambda in private subnets to access AWS services)
+    const dynamodbEndpoint = new aws.ec2.VpcEndpoint(
+      `payment-dynamodb-endpoint-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        serviceName: pulumi.interpolate`com.amazonaws.${regionName}.dynamodb`,
+        vpcEndpointType: 'Gateway',
+        routeTableIds: [vpc.mainRouteTableId],
+        tags: {
+          ...tags,
+          Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
+        },
+      },
+      { parent: this, ignoreChanges: ['routeTableIds'] }
+    );
+
+    const snsEndpoint = new aws.ec2.VpcEndpoint(
+      `payment-sns-endpoint-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        serviceName: pulumi.interpolate`com.amazonaws.${regionName}.sns`,
+        vpcEndpointType: 'Interface',
+        subnetIds: [privateSubnet1.id, privateSubnet2.id],
+        securityGroupIds: [vpcEndpointSecurityGroup.id],
+        privateDnsEnabled: true,
+        tags: {
+          ...tags,
+          Name: `payment-sns-endpoint-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    const sqsEndpoint = new aws.ec2.VpcEndpoint(
+      `payment-sqs-endpoint-${environmentSuffix}`,
+      {
+        vpcId: vpc.id,
+        serviceName: pulumi.interpolate`com.amazonaws.${regionName}.sqs`,
+        vpcEndpointType: 'Interface',
+        subnetIds: [privateSubnet1.id, privateSubnet2.id],
+        securityGroupIds: [vpcEndpointSecurityGroup.id],
+        privateDnsEnabled: true,
+        tags: {
+          ...tags,
+          Name: `payment-sqs-endpoint-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
     // DynamoDB table for transaction storage
     const transactionsTable = new aws.dynamodb.Table(
       `transactions-${environmentSuffix}`,
@@ -530,7 +608,7 @@ export class TapStack extends pulumi.ComponentResource {
         timeout: 30,
         tags: { ...tags, Name: `webhook-processor-${environmentSuffix}` },
       },
-      { parent: this, dependsOn: [webhookLogGroup] }
+      { parent: this, dependsOn: [webhookLogGroup, snsEndpoint] }
     );
 
     const transactionRecorder = new aws.lambda.Function(
@@ -559,7 +637,10 @@ export class TapStack extends pulumi.ComponentResource {
         timeout: 30,
         tags: { ...tags, Name: `transaction-recorder-${environmentSuffix}` },
       },
-      { parent: this, dependsOn: [transactionLogGroup] }
+      {
+        parent: this,
+        dependsOn: [transactionLogGroup, sqsEndpoint, dynamodbEndpoint],
+      }
     );
 
     const fraudDetector = new aws.lambda.Function(
@@ -587,7 +668,7 @@ export class TapStack extends pulumi.ComponentResource {
         timeout: 30,
         tags: { ...tags, Name: `fraud-detector-${environmentSuffix}` },
       },
-      { parent: this, dependsOn: [fraudLogGroup] }
+      { parent: this, dependsOn: [fraudLogGroup, sqsEndpoint] }
     );
 
     // Event Source Mappings

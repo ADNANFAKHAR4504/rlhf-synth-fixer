@@ -30,11 +30,11 @@ func init() {
 	topicArn = os.Getenv("SNS_TOPIC_ARN")
 }
 
-func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (events.APIGatewayV2HTTPResponse, error) {
+func handler(ctx context.Context, request events.APIGatewayProxyRequest) (events.APIGatewayProxyResponse, error) {
 	// Parse the webhook payload
 	var webhook PaymentWebhook
 	if err := json.Unmarshal([]byte(request.Body), &webhook); err != nil {
-		return events.APIGatewayV2HTTPResponse{
+		return events.APIGatewayProxyResponse{
 			StatusCode: 400,
 			Body:       fmt.Sprintf("Invalid payload: %v", err),
 		}, nil
@@ -42,7 +42,7 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 
 	// Validate required fields
 	if webhook.TransactionID == "" || webhook.Amount <= 0 || webhook.Currency == "" {
-		return events.APIGatewayV2HTTPResponse{
+		return events.APIGatewayProxyResponse{
 			StatusCode: 400,
 			Body:       "Missing required fields",
 		}, nil
@@ -51,7 +51,7 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 	// Publish to SNS topic
 	messageBody, err := json.Marshal(webhook)
 	if err != nil {
-		return events.APIGatewayV2HTTPResponse{
+		return events.APIGatewayProxyResponse{
 			StatusCode: 500,
 			Body:       fmt.Sprintf("Failed to serialize message: %v", err),
 		}, nil
@@ -69,13 +69,13 @@ func handler(ctx context.Context, request events.APIGatewayV2HTTPRequest) (event
 	})
 
 	if err != nil {
-		return events.APIGatewayV2HTTPResponse{
+		return events.APIGatewayProxyResponse{
 			StatusCode: 500,
 			Body:       fmt.Sprintf("Failed to publish message: %v", err),
 		}, nil
 	}
 
-	return events.APIGatewayV2HTTPResponse{
+	return events.APIGatewayProxyResponse{
 		StatusCode: 200,
 		Body:       fmt.Sprintf("Transaction %s processed successfully", webhook.TransactionID),
 	}, nil

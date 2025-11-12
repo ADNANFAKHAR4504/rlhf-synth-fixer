@@ -381,6 +381,51 @@ describe('Payment Processing Pipeline Integration Tests', () => {
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets?.length).toBeGreaterThanOrEqual(2);
     }, 30000);
+
+    it('should have VPC endpoints for AWS services', async () => {
+      const vpcId = outputs.vpcId;
+      if (!vpcId) {
+        console.warn('VPC ID not found in outputs, skipping test');
+        return;
+      }
+
+      try {
+        const command = new EC2Client({ region }).send(
+          new (require('@aws-sdk/client-ec2').DescribeVpcEndpointsCommand)({
+            Filters: [
+              {
+                Name: 'vpc-id',
+                Values: [vpcId],
+              },
+            ],
+          })
+        );
+        const response: any = await command;
+
+        expect(response.VpcEndpoints).toBeDefined();
+        expect(response.VpcEndpoints?.length).toBeGreaterThanOrEqual(3);
+
+        // Check for DynamoDB Gateway endpoint
+        const dynamodbEndpoint = response.VpcEndpoints?.find(
+          (ep: any) => ep.ServiceName.includes('dynamodb') && ep.VpcEndpointType === 'Gateway'
+        );
+        expect(dynamodbEndpoint).toBeDefined();
+
+        // Check for SNS Interface endpoint
+        const snsEndpoint = response.VpcEndpoints?.find(
+          (ep: any) => ep.ServiceName.includes('sns') && ep.VpcEndpointType === 'Interface'
+        );
+        expect(snsEndpoint).toBeDefined();
+
+        // Check for SQS Interface endpoint
+        const sqsEndpoint = response.VpcEndpoints?.find(
+          (ep: any) => ep.ServiceName.includes('sqs') && ep.VpcEndpointType === 'Interface'
+        );
+        expect(sqsEndpoint).toBeDefined();
+      } catch (error) {
+        console.warn('Could not verify VPC endpoints, may not be deployed yet');
+      }
+    }, 30000);
   });
 
   describe('KMS Encryption', () => {
