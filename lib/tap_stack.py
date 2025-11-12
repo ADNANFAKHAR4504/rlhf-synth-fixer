@@ -586,7 +586,3 @@ class TapStack:
         pulumi.export("s3_bucket_name", self.payment_env.s3_bucket.bucket)
         pulumi.export("s3_bucket_arn", self.payment_env.s3_bucket.arn)
         pulumi.export("db_secret_arn", self.payment_env.db_secret.arn)
-
-
-# Create the stack
-stack = TapStack()
