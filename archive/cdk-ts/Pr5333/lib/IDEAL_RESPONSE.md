@@ -1,6 +1,6 @@
 ## bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -28,7 +28,7 @@ app.synth();
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';

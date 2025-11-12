@@ -28,7 +28,7 @@ I'll help you create a comprehensive multi-tier AWS infrastructure using CDKTF i
 
 ## 📁 `modules.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput } from 'cdktf';
@@ -1236,7 +1236,7 @@ export class MonitoringModule extends Construct {
 
 ## 📁 `tap-stack.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
@@ -1511,7 +1511,7 @@ cdktf destroy multi-tier-web-app
 
 ## 🧪 Unit Test Example
 
-```ts
+```typescript
 // tests/stack.test.ts
 import { Testing } from 'cdktf';
 import { MultiTierStack } from '../tap-stack';

@@ -40,7 +40,7 @@ Here's what needs to be implemented:
 
 Here's the existing stack file that needs to be updated:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

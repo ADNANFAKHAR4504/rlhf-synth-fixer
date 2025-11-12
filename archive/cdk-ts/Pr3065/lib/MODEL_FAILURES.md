@@ -16,7 +16,7 @@ This analysis compares the MODEL_RESPONSE against the PROMPT requirements and ID
 The model response directly violates the established CDK template pattern by creating all resources directly in the main stack instead of using separate, modular stacks.
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 export class ServerlessDataPipelineStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ServerlessDataPipelineStackProps) {
     super(scope, id, props);
@@ -33,7 +33,7 @@ export class ServerlessDataPipelineStack extends cdk.Stack {
 ```
 
 **IDEAL_RESPONSE Correct Pattern**:
-```ts
+```typescript
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
@@ -73,7 +73,7 @@ The model response lacks essential environment management capabilities required 
 - Missing environment-specific configuration management
 
 **IDEAL_RESPONSE Environment Strategy**:
-```ts
+```typescript
 interface ServerlessDataPipelineStackProps extends cdk.NestedStackProps {
   environmentSuffix: string;  // Required for multi-environment
   notificationEmail?: string;
@@ -101,7 +101,7 @@ roleName: `data-processing-role-${props.environmentSuffix}`,
 The model response over-engineers the Lambda implementation with external file dependencies and unnecessary modularization.
 
 **MODEL_RESPONSE Issues**:
-```ts
+```typescript
 // Creates unnecessary complexity with external files
 code: lambda.Code.fromAsset(path.join(__dirname, '../lambda/data-processor')),
 layers: [dependencyLayer],
@@ -113,7 +113,7 @@ const s3TriggerFunction = new lambda.Function(this, 'S3TriggerFunction', {
 ```
 
 **IDEAL_RESPONSE Simplicity**:
-```ts
+```typescript
 // Self-contained inline code - simpler and more maintainable
 code: lambda.Code.fromInline(`
 const { S3Client, GetObjectCommand, PutObjectCommand } = require('@aws-sdk/client-s3');
@@ -146,7 +146,7 @@ exports.handler = async (event) => {
 The model response provides minimal output configuration compared to the comprehensive integration testing support in the ideal response.
 
 **MODEL_RESPONSE Limited Outputs**:
-```ts
+```typescript
 // Only 3 basic outputs
 new cdk.CfnOutput(this, 'APIEndpoint', { value: api.url });
 new cdk.CfnOutput(this, 'BucketName', { value: dataBucket.bucketName });
@@ -154,7 +154,7 @@ new cdk.CfnOutput(this, 'SNSTopicArn', { value: notificationTopic.topicArn });
 ```
 
 **IDEAL_RESPONSE Comprehensive Integration Support**:
-```ts
+```typescript
 // 20+ detailed outputs with export names for cross-stack references
 new cdk.CfnOutput(this, 'APIGatewayId', {
   value: api.restApiId,
@@ -181,12 +181,12 @@ new cdk.CfnOutput(this, 'LambdaFunctionArn', {
 **Severity**: MEDIUM - Cost and resource optimization issue
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 reservedConcurrentExecutions: 100, // Excessive allocation
 ```
 
 **IDEAL_RESPONSE Optimization**:
-```ts
+```typescript
 reservedConcurrentExecutions: 10, // Right-sized for requirements
 ```
 
@@ -198,7 +198,7 @@ reservedConcurrentExecutions: 10, // Right-sized for requirements
 **MODEL_RESPONSE Gap**: While it creates a dashboard, it lacks integration between CloudWatch alarms and the SNS notification system.
 
 **IDEAL_RESPONSE Advantage**: Implements complete alarm-to-notification integration:
-```ts
+```typescript
 // Error and duration alarms with SNS integration
 errorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(notificationTopic));
 durationAlarm.addAlarmAction(new cloudwatchActions.SnsAction(notificationTopic));

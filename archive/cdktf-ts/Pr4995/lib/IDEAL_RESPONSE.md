@@ -30,7 +30,7 @@ All code files remain in the same structure as the original response, with corre
 
 **Change**: Export both KMS key ID and ARN
 
-```ts
+```typescript
 export class SecurityModule extends Construct {
   public readonly dbSecretArn: string;
   public readonly apiSecretArn: string;
@@ -60,7 +60,7 @@ export class SecurityModule extends Construct {
 
 **Changes**: Multiple corrections for encryption and lifecycle
 
-```ts
+```typescript
 interface DataStorageModuleProps {
   // ...
   kmsKeyId: string;
@@ -115,7 +115,7 @@ const efsFileSystem = new EfsFileSystem(this, 'efs-filesystem', {
 
 **Change**: Use KMS ARN for Kinesis encryption
 
-```ts
+```typescript
 const kinesisStream = new KinesisStream(this, 'kinesis-stream', {
   streamModeDetails: { streamMode: 'ON_DEMAND' },
   encryptionType: 'KMS',
@@ -128,7 +128,7 @@ const kinesisStream = new KinesisStream(this, 'kinesis-stream', {
 
 **Change**: Remove invalid integration
 
-```ts
+```typescript
 // API and VPC Link created successfully
 const api = new Apigatewayv2Api(this, 'api', {/*...*/});
 const vpcLink = new Apigatewayv2VpcLink(this, 'vpc-link', {
@@ -146,7 +146,7 @@ const stage = new Apigatewayv2Stage(this, 'stage', {/*...*/});
 
 **Changes**: Pass kmsKeyArn to modules
 
-```ts
+```typescript
 // Removed unsupported backend parameter
 new S3Backend(this, {
   bucket: stateBucket,

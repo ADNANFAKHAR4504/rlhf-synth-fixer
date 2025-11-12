@@ -10,13 +10,13 @@ This document identifies the critical failures and issues found in the CDKTF imp
 
 **MODEL_RESPONSE Issue**: The code attempted to use an invalid Terraform backend configuration option:
 
-```ts
+```typescript
 this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
 **IDEAL_RESPONSE Fix**: Should use proper S3 backend with DynamoDB for state locking:
 
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -28,7 +28,7 @@ new S3Backend(this, {
 
 Or use LocalBackend for testing scenarios when S3 bucket is not available:
 
-```ts
+```typescript
 new LocalBackend(this, {
   path: `terraform.${environmentSuffix}.tfstate`,
 });
@@ -52,7 +52,7 @@ new LocalBackend(this, {
 
 **MODEL_RESPONSE Issue**: Used string interpolation to reference dynamically created route tables:
 
-```ts
+```typescript
 routeTableIds: [
   publicRouteTable.id,
   ...privateSubnets.map((_, index) => {
@@ -63,7 +63,7 @@ routeTableIds: [
 
 **IDEAL_RESPONSE Fix**: Store route table references in an array and use actual object references:
 
-```ts
+```typescript
 const privateRouteTables: RouteTable[] = [];
 privateSubnets.forEach((subnet, index) => {
   const privateRouteTable = new RouteTable(/*...*/);
@@ -99,7 +99,7 @@ Client.InvalidKMSKey.InvalidState: The KMS key provided is in an incorrect state
 
 The metadata options configuration may be triggering automatic EBS encryption with an invalid or inaccessible KMS key:
 
-```ts
+```typescript
 metadataOptions: {
   httpEndpoint: 'enabled',
   httpTokens: 'required',
@@ -109,7 +109,7 @@ metadataOptions: {
 
 **IDEAL_RESPONSE Fix**: Either explicitly disable EBS encryption or ensure proper KMS key configuration:
 
-```ts
+```typescript
 // Option 1: Disable encryption for testing
 rootBlockDevice: {
   encrypted: false,
@@ -152,7 +152,7 @@ rootBlockDevice: {
 
 **MODEL_RESPONSE Issue**: Used deprecated `managedPolicyArns` property:
 
-```ts
+```typescript
 managedPolicyArns: [
   'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
 ],
@@ -160,7 +160,7 @@ managedPolicyArns: [
 
 **IDEAL_RESPONSE Fix**: Use separate `IamRolePolicyAttachment` resource:
 
-```ts
+```typescript
 // Create role without managedPolicyArns
 const ec2Role = new IamRole(this, 'ec2-ssm-role', {
   name: `payment-ec2-ssm-role-${environmentSuffix}`,
@@ -202,7 +202,7 @@ new IamRolePolicyAttachment(this, 'ec2-ssm-policy-attachment', {
 
 The code correctly implements:
 
-```ts
+```typescript
 const eip = new Eip(this, `nat-eip-${index}`, {
   domain: 'vpc',
   tags: {...},

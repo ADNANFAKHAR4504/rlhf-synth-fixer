@@ -3,7 +3,7 @@ I'll help you create a comprehensive multi-region AWS infrastructure setup using
 Here's the complete infrastructure code:
 
 ## bin/tap.ts
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -100,7 +100,7 @@ new TapStack(app, `TapStack-${environmentSuffix}-secondary`, {
 ```
 
 ## lib/tap-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingConstruct } from './networking-construct';
@@ -201,7 +201,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ## lib/networking-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -357,7 +357,7 @@ def handler(event, context):
 ```
 
 ## lib/security-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -473,7 +473,7 @@ export class SecurityConstruct extends Construct {
 ```
 
 ## lib/storage-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -543,7 +543,7 @@ export class StorageConstruct extends Construct {
 ```
 
 ## lib/database-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -635,7 +635,7 @@ export class DatabaseConstruct extends Construct {
 ```
 
 ## lib/compute-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -787,7 +787,7 @@ def handler(event, context):
 ```
 
 ## lib/monitoring-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

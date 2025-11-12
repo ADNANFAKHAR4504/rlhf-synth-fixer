@@ -7,7 +7,7 @@
 **Issue**: Model used deprecated CDK APIs that are scheduled for removal in next major release.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // VPC with deprecated cidr property
 const vpc = new ec2.Vpc(this, 'PrimaryVpc', {
   cidr: '10.0.0.0/16',
@@ -34,7 +34,7 @@ this.stateMachine = new stepfunctions.StateMachine(this, 'FailoverStateMachine',
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // VPC with new ipAddresses property
 const vpc = new ec2.Vpc(this, `Vpc-${currentRegion}`, {
   ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -91,7 +91,7 @@ this.stateMachine = new stepfunctions.StateMachine(
 **Issue**: Used Aurora MySQL 5.7 (version 2.10.2) which is deprecated and not available.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 engine: rds.DatabaseClusterEngine.auroraMysql({
   version: rds.AuroraMysqlEngineVersion.VER_2_10_2,
 }),
@@ -99,7 +99,7 @@ engineVersion: '5.7.mysql_aurora.2.10.2',
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 engine: rds.DatabaseClusterEngine.auroraMysql({
   version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
 }),
@@ -115,7 +115,7 @@ engine: rds.DatabaseClusterEngine.auroraMysql({
 **Issue**: Used Aurora MySQL 5.7 parameters that don't exist in MySQL 8.0.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 parameters: {
   'aurora_binlog_replication_max_yield_seconds': '0',
   'aurora_enable_repl_bin_log_filtering': '0',
@@ -123,7 +123,7 @@ parameters: {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 parameters: {
   innodb_buffer_pool_size: '{DBInstanceClassMemory*3/4}',
   max_connections: '5000',
@@ -143,7 +143,7 @@ parameters: {
 **Issue**: Enabled backtrack feature which is incompatible with Aurora Global Databases.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 enableBacktrack: true,
 
 if (props.enableBacktrack) {
@@ -153,7 +153,7 @@ if (props.enableBacktrack) {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 enableBacktrack: false, // Backtrack not supported for Global Databases
 // Removed backtrack configuration code entirely
 ```
@@ -167,7 +167,7 @@ enableBacktrack: false, // Backtrack not supported for Global Databases
 **Issue**: Lambda functions didn't specify ARM64 architecture, missing cost and performance optimization.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 const chaosRunner = new lambda.Function(this, 'ChaosRunner', {
   runtime: lambda.Runtime.NODEJS_18_X,
   handler: 'index.handler',
@@ -176,7 +176,7 @@ const chaosRunner = new lambda.Function(this, 'ChaosRunner', {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 const chaosRunner = new lambda.Function(this, 'ChaosRunner', {
   runtime: lambda.Runtime.NODEJS_18_X,
   handler: 'index.handler',
@@ -193,7 +193,7 @@ const chaosRunner = new lambda.Function(this, 'ChaosRunner', {
 **Issue**: No support for environment isolation (dev, staging, prod), causing resource name conflicts.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 export interface TapStackProps extends cdk.StackProps {
   domainName: string;
   certificateArn: string;
@@ -205,7 +205,7 @@ topicName: 'financial-app-global-alerts', // Hard-coded, no environment
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 export interface TapStackProps extends cdk.StackProps {
   domainName?: string;
   certificateArn?: string;
@@ -230,7 +230,7 @@ topicName: `financial-app-alerts-${this.region}-${environmentSuffix}`,
 **Issue**: Hard-coded resource names without region/environment context cause "AlreadyExists" errors.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // Global cluster ID - not unique across environments
 globalClusterIdentifier: 'financial-app-global-cluster',
 
@@ -255,7 +255,7 @@ alias: 'financial-app-db-key',
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // All resources include region and environment suffix
 globalClusterIdentifier: `financial-app-global-cluster-${envSuffix}`,
 topicName: `financial-app-alerts-${this.region}-${environmentSuffix}`,
@@ -276,7 +276,7 @@ alias: `financial-app-db-key-${currentRegion}-${envSuffix}`,
 **Issue**: Global cluster created with conflicting properties and wrong pattern.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 this.globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
   globalClusterIdentifier: 'financial-app-global-cluster',
   sourceDbClusterIdentifier: undefined, // Set later - WRONG PATTERN
@@ -290,7 +290,7 @@ this.globalCluster.sourceDbClusterIdentifier = this.primaryCluster.clusterArn;
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // Only create in primary region
 if (isPrimaryRegion) {
   // When using sourceDbClusterIdentifier, engine properties are inherited
@@ -311,7 +311,7 @@ if (isPrimaryRegion) {
 **Issue**: Attempted to create all regional resources in a single stack, which doesn't work for multi-region.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // Tries to create all regions in ONE stack
 private deployRegionalInfrastructure(props: TapStackProps) {
   for (const region of REGIONS) {
@@ -333,7 +333,7 @@ private createSecondaryClusters(regions: string[], encryptionKey: kms.IKey) {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // Each stack deploys only to ITS region
 private deployRegionalInfrastructure(props: TapStackProps) {
   const regionalApi = new RegionalApi(this, `RegionalApi-${this.region}`, {
@@ -356,7 +356,7 @@ private deployRegionalInfrastructure(props: TapStackProps) {
 **Issue**: Domain name and certificate marked as required, preventing dev/test deployments.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 export interface TapStackProps extends cdk.StackProps {
   domainName: string; // Required
   certificateArn: string; // Required
@@ -370,7 +370,7 @@ export interface RegionalApiProps {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 export interface TapStackProps extends cdk.StackProps {
   domainName?: string; // Optional
   certificateArn?: string; // Optional
@@ -401,7 +401,7 @@ if (props.domainName && props.certificateArn) {
 **Issue**: Lambda code paths pointed to root `lambda/` directory instead of `lib/lambda/`.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 code: lambda.Code.fromAsset('lambda/transaction-processor'),
 code: lambda.Code.fromAsset('lambda/health-checker'),
 code: lambda.Code.fromAsset('lambda/promote-replica'),
@@ -409,7 +409,7 @@ code: lambda.Code.fromAsset('lambda/chaos-runner'),
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 code: lambda.Code.fromAsset('lib/lambda/transaction-processor'),
 code: lambda.Code.fromAsset('lib/lambda/health-checker'),
 code: lambda.Code.fromAsset('lib/lambda/promote-replica'),
@@ -425,7 +425,7 @@ code: lambda.Code.fromAsset('lib/lambda/chaos-runner'),
 **Issue**: DynamoDB Global Table replicationRegions included the current region, which is invalid.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
   replicationRegions: props.isPrimary ? ['us-east-1', 'eu-west-1', 'ap-southeast-1'] : undefined,
   // Includes 'us-east-1' which might be the current region
@@ -433,7 +433,7 @@ this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
   removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev/test environments
   // replicationRegions: For production, enable global tables across regions
@@ -450,7 +450,7 @@ this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
 **Issue**: No removal policies set, making cleanup impossible in dev/test environments.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // No removal policies specified
 this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
   // No removalPolicy
@@ -461,7 +461,7 @@ logRetention: logs.RetentionDays.ONE_WEEK,
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 this.sessionTable = new dynamodb.Table(this, 'SessionTable', {
   removalPolicy: cdk.RemovalPolicy.DESTROY, // For dev/test environments
 });
@@ -485,7 +485,7 @@ const transactionLogGroup = new logs.LogGroup(
 **Issue**: Used `healthCheckId` instead of `healthCheck` in Route53 RecordSet.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 new route53.RecordSet(this, 'GlobalLatencyRouting', {
   healthCheckId: this.healthCheckSystem.getHealthCheckId(PRIMARY_REGION),
   // Wrong property name
@@ -493,7 +493,7 @@ new route53.RecordSet(this, 'GlobalLatencyRouting', {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // Property removed as healthCheck requires IHealthCheck interface, not ID
 // Health checks handled separately via Route53.CfnHealthCheck
 ```
@@ -507,7 +507,7 @@ new route53.RecordSet(this, 'GlobalLatencyRouting', {
 **Issue**: Used non-existent `apigateway.Certificate` class instead of `certificatemanager.Certificate`.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 
 certificate: apigateway.Certificate.fromCertificateArn(
@@ -518,7 +518,7 @@ certificate: apigateway.Certificate.fromCertificateArn(
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 
 certificate: certificatemanager.Certificate.fromCertificateArn(
@@ -537,7 +537,7 @@ certificate: certificatemanager.Certificate.fromCertificateArn(
 **Issue**: Used `logRetention` property which doesn't support RemovalPolicy.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 const healthChecker = new lambda.Function(this, 'HealthChecker', {
   logRetention: logs.RetentionDays.ONE_WEEK,
   // Cannot apply RemovalPolicy to logRetention
@@ -545,7 +545,7 @@ const healthChecker = new lambda.Function(this, 'HealthChecker', {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 const healthCheckerLogGroup = new logs.LogGroup(
   this,
   'HealthCheckerLogGroup',
@@ -570,7 +570,7 @@ const healthChecker = new lambda.Function(this, 'HealthChecker', {
 **Issue**: Resources not tagged with region, causing duplication errors in multi-region deployments.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // VPC name doesn't include region
 const primaryVpc = new ec2.Vpc(this, 'PrimaryVpc', {});
 
@@ -584,7 +584,7 @@ dashboardName: 'financial-app-health',
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // VPC includes region
 const vpc = new ec2.Vpc(this, `Vpc-${currentRegion}`, {});
 
@@ -606,12 +606,12 @@ dashboardName: `financial-app-health-${stackRegion}-${envSuffix}`,
 **Issue**: No stack outputs for testing and integration.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // No outputs defined in stack
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 private outputApiEndpoints() {
   // API Gateway endpoints
   new cdk.CfnOutput(this, `${region}-ApiEndpoint`, {
@@ -645,13 +645,13 @@ private outputApiEndpoints() {
 **Issue**: S3 bucket name too long, violating AWS 63-character limit.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 bucketName: `financial-app-chaos-test-results-${cdk.Stack.of(this).account}`,
 // Could exceed 63 characters with account ID
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 bucketName: `chaos-results-${stackRegion}-${envSuffix}-${cdk.Stack.of(this).account}`,
 // Shortened prefix to stay under 63 characters
 ```
@@ -665,7 +665,7 @@ bucketName: `chaos-results-${stackRegion}-${envSuffix}-${cdk.Stack.of(this).acco
 **Issue**: Used `cdk.aws_s3` instead of importing s3 module properly.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // No s3 import
 const bucket = new cdk.aws_s3.Bucket(this, 'ChaosTestResults', {
   encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
@@ -673,7 +673,7 @@ const bucket = new cdk.aws_s3.Bucket(this, 'ChaosTestResults', {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 import * as s3 from 'aws-cdk-lib/aws-s3';
 
 new s3.Bucket(this, 'ChaosTestResults', {
@@ -690,7 +690,7 @@ new s3.Bucket(this, 'ChaosTestResults', {
 **Issue**: Health check properties placed at wrong level in Route53.CfnHealthCheck.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 const healthCheck = new route53.CfnHealthCheck(this, `HealthCheck-${region}`, {
   type: 'HTTPS', // Wrong level
   resourcePath: '/health',
@@ -709,7 +709,7 @@ const healthCheck = new route53.CfnHealthCheck(this, `HealthCheck-${region}`, {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 const healthCheck = new route53.CfnHealthCheck(
   this,
   `HealthCheck-${region}`,
@@ -736,14 +736,14 @@ const healthCheck = new route53.CfnHealthCheck(
 **Issue**: Always reserved 1000 concurrency, exceeding account limits in dev/test.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 this.transactionProcessor = new lambda.Function(this, 'TransactionProcessor', {
   reservedConcurrentExecutions: 1000, // Always reserved, even in dev
 });
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 const envSuffix = props.environmentSuffix || 'dev';
 const reservedConcurrency = envSuffix === 'prod' ? 1000 : undefined;
 
@@ -765,7 +765,7 @@ this.transactionProcessor = new lambda.Function(
 **Issue**: GlobalDatabase didn't know which region it was being deployed to.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 export interface GlobalDatabaseProps {
   primaryRegion: string;
   secondaryRegions: string[];
@@ -776,7 +776,7 @@ export interface GlobalDatabaseProps {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 export interface GlobalDatabaseProps {
   primaryRegion: string;
   secondaryRegions: string[];
@@ -803,7 +803,7 @@ if (isPrimaryRegion) {
 **Issue**: getHealthCheckId() declared to return string but could return undefined.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 public getHealthCheckId(region: string): string {
   return this.healthChecks.get(region)!.attrHealthCheckId;
   // Assumes health check always exists
@@ -811,7 +811,7 @@ public getHealthCheckId(region: string): string {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 public getHealthCheckId(region: string): string | undefined {
   const healthCheck = this.healthChecks.get(region);
   return healthCheck?.attrHealthCheckId;
@@ -827,7 +827,7 @@ public getHealthCheckId(region: string): string | undefined {
 **Issue**: Construct interfaces didn't include environmentSuffix parameter.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 export interface GlobalDatabaseProps {
   // No environmentSuffix
 }
@@ -846,7 +846,7 @@ export interface ChaosTestingSystemProps {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 export interface GlobalDatabaseProps {
   environmentSuffix?: string;
 }
@@ -873,7 +873,7 @@ export interface ChaosTestingSystemProps {
 **Issue**: Assumed all features always enabled (domain, hosted zone, etc.).
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 // Always sets up Route53
 this.setupGlobalRouting(props.domainName);
 
@@ -888,7 +888,7 @@ apiEndpoint: `https://${api.apiGatewayDomainName.domainName}`,
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // Conditional Route53 setup
 if (props.domainName && props.certificateArn) {
   this.setupGlobalRouting(props.domainName);
@@ -916,7 +916,7 @@ const apiEndpoint = api.apiGatewayDomainName
 **Issue**: Database secret names not unique across regions, causing conflicts.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 this.credentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
   // No specific secretName - auto-generated but not region-specific
   generateSecretString: {
@@ -927,7 +927,7 @@ this.credentials = new secretsmanager.Secret(this, 'DatabaseCredentials', {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 credentials: rds.Credentials.fromGeneratedSecret('admin', {
   secretName: `findb-${currentRegion}-${envSuffix}`,
   // Unique per region and environment
@@ -943,7 +943,7 @@ credentials: rds.Credentials.fromGeneratedSecret('admin', {
 **Issue**: Created new parameter group for each cluster instead of reusing.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 this.primaryCluster = new rds.DatabaseCluster(this, 'PrimaryCluster', {
   parameterGroup: this.createParameterGroup(), // Creates one
 });
@@ -954,7 +954,7 @@ const secondaryCluster = new rds.DatabaseCluster(this, `SecondaryCluster-${regio
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 // Create parameter group once as class property
 this.parameterGroup = this.createParameterGroup();
 
@@ -973,7 +973,7 @@ const cluster = new rds.DatabaseCluster(this, `Cluster-${currentRegion}`, {
 **Issue**: Tried to assign to readonly metric properties.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 export class RegionalApi extends Construct {
   public readonly latencyMetric: cloudwatch.Metric;
   
@@ -985,7 +985,7 @@ export class RegionalApi extends Construct {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 export class RegionalApi extends Construct {
   public latencyMetric!: cloudwatch.Metric; // Definite assignment assertion
   
@@ -1004,7 +1004,7 @@ export class RegionalApi extends Construct {
 **Issue**: Dashboard for replication lag assumed all regions, not region-specific deployment.
 
 **MODEL_RESPONSE (Wrong)**:
-```ts
+```typescript
 private createGlobalDashboard() {
   for (const region of REGIONS) {
     widgets.push(
@@ -1018,7 +1018,7 @@ private createGlobalDashboard() {
 ```
 
 **IDEAL_RESPONSE (Fixed)**:
-```ts
+```typescript
 private createGlobalDashboard() {
   for (const region of Array.from(this.regionalApis.keys())) {
     // Only regions deployed in THIS stack

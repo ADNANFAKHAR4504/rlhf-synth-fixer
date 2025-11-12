@@ -59,7 +59,7 @@ This implementation provides a complete multi-environment data processing pipeli
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import { App } from "cdktf";
 import { DataPipelineStack } from "../lib/data-pipeline-stack";
@@ -96,7 +96,7 @@ app.synth();
 
 ## File: lib/data-pipeline-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -172,7 +172,7 @@ export class DataPipelineStack extends TerraformStack {
 
 ## File: lib/constructs/data-pipeline-construct.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { S3Bucket } from "@cdktf/provider-aws/lib/s3-bucket";
 import { S3BucketVersioningA } from "@cdktf/provider-aws/lib/s3-bucket-versioning";

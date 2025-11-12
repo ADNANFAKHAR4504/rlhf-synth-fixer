@@ -34,7 +34,7 @@ lib/
 
 **File: `lib/tap-stack.ts`**
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -122,7 +122,7 @@ export class TapStack extends TerraformStack {
 
 **File: `lib/backup-infrastructure-stack.ts`**
 
-```ts
+```typescript
 import { BackupFramework } from '@cdktf/provider-aws/lib/backup-framework';
 import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
 import { BackupReportPlan } from '@cdktf/provider-aws/lib/backup-report-plan';

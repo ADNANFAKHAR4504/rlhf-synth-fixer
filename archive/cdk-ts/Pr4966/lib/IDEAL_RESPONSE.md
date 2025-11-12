@@ -49,7 +49,7 @@ This solution demonstrates **three different architectural approaches** for impl
 
 **Best for**: Simple applications, development environments, proof-of-concepts
 
-```ts
+```typescript
 // lib/tap-stack.ts - Single comprehensive stack
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -524,7 +524,7 @@ exports.handler = async (event) => {
 
 **Best for**: Enterprise environments, shared databases, microservices architecture
 
-```ts
+```typescript
 // lib/api-stack.ts - API-focused stack depending on external DynamoDB
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -911,7 +911,7 @@ exports.handler = async (event) => {
 
 **Best for**: High-traffic applications, complex data models, PROVISIONED billing requirements
 
-```ts
+```typescript
 // lib/dynamo-stack.ts - DynamoDB-focused stack with advanced scaling
 import * as cdk from 'aws-cdk-lib';
 import * as applicationautoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
@@ -1018,7 +1018,7 @@ export class DynamoStack extends cdk.Stack {
 
 ### Pattern 1: Monolithic Stack Usage
 
-```ts
+```typescript
 // bin/tap.ts - Using monolithic stack
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -1044,7 +1044,7 @@ new TapStack(app, `TapStack${environment}`, {
 
 ### Pattern 2: Modular Stack Usage
 
-```ts
+```typescript
 // bin/tap-modular.ts - Using modular stacks
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -1089,7 +1089,7 @@ new ApiStack(app, `ApiStack${environment}`, {
 
 ### Pattern 3: Specialized Stack Usage
 
-```ts
+```typescript
 // bin/tap-specialized.ts - Using specialized DynamoDB stack
 #!/usr/bin/env node
 import 'source-map-support/register';

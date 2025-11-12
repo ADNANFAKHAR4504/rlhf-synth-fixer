@@ -1,6 +1,6 @@
 I'll help you implement a complete CI/CD pipeline in your existing `lib/tap-stack.ts` file. Here's the updated implementation that includes all your requirements:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

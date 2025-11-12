@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 // lib/modules.ts
 import { Construct } from 'constructs';
 import { Fn } from 'cdktf';
@@ -805,7 +805,7 @@ export class SsmParameterConstruct extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import {
   AwsProvider,

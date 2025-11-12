@@ -16,7 +16,7 @@ TypeError: A dynamic import callback was invoked without --experimental-vm-modul
 **Root Cause**: AWS SDK v3 uses ES modules with dynamic imports that are incompatible with Jest's default configuration. Jest runs in a CommonJS environment and cannot handle the modern ES module loading pattern used by AWS SDK v3.
 
 **IDEAL_RESPONSE Fix**: Replaced AWS SDK v3 with AWS CLI command execution using `child_process.spawn()`:
-```ts
+```typescript
 async function runAwsCommand(command: string[]): Promise<any> {
   return new Promise((resolve, reject) => {
     const proc = spawn('aws', [...command, '--region', region, '--output', 'json']);
@@ -44,7 +44,7 @@ thrown: "Exceeded timeout of 15000 ms for a test."
 **IDEAL_RESPONSE Fix**: Implemented proper timeout handling:
 1. Increased individual test timeouts to 25 seconds
 2. Added AWS CLI command-level timeout (20 seconds) with proper cleanup:
-```ts
+```typescript
 const timeout = setTimeout(() => {
   proc.kill('SIGTERM');
   reject(new Error(`AWS CLI command timed out: aws ${command.join(' ')}`));
@@ -69,17 +69,17 @@ const timeout = setTimeout(() => {
 
 **IDEAL_RESPONSE Fix**: 
 1. Dynamically extract cluster identifier from endpoint:
-```ts
+```typescript
 const clusterIdentifier = outputs.AuroraClusterEndpoint.split('.')[0];
 ```
 
 2. Use correct output property names:
-```ts
+```typescript
 expect(outputs.AuroraDBSecretArn).toBeDefined(); // Not AuroraSecretsArn
 ```
 
 3. Fix JavaScript Set property usage:
-```ts
+```typescript
 expect(new Set(azs).size).toBe(2); // Not .length
 ```
 
@@ -97,7 +97,7 @@ expect(new Set(azs).size).toBe(2); // Not .length
 **Root Cause**: Misunderstanding of integration test requirements. Integration tests should validate live infrastructure, not static configuration files.
 
 **IDEAL_RESPONSE Fix**: Implemented live AWS resource validation:
-```ts
+```typescript
 // Dynamic DMS resource discovery
 const response = await runAwsCommand(['dms', 'describe-replication-instances']);
 const dmsInstances = response.ReplicationInstances?.filter(
@@ -119,7 +119,7 @@ const dmsInstances = response.ReplicationInstances?.filter(
 **Root Cause**: Insufficient consideration of real-world AWS API failure modes and network conditions during testing.
 
 **IDEAL_RESPONSE Fix**: Comprehensive error handling with timeouts and cleanup:
-```ts
+```typescript
 proc.on('close', (code) => {
   clearTimeout(timeout);
   if (code === 0) {

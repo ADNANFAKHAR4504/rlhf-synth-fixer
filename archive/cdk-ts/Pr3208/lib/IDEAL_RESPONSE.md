@@ -1,6 +1,6 @@
 
 **bin/tap.ts**
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -30,7 +30,7 @@ new TapStack(app, stackName, {
 ```
 
 **lib/tap-stack.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';

@@ -20,7 +20,7 @@ This document outlines the infrastructure issues found in the initial MODEL_RESP
 - Used `lambda.Code.fromAsset('lib/lambdas')` to deploy pre-compiled code
 
 **Code Changes**:
-```ts
+```typescript
 // Before (requires Docker):
 const statusUpdateFunction = new NodejsFunction(this, 'StatusUpdateFunction', {
   entry: path.join(__dirname, 'lambdas/status-update.ts'),
@@ -73,7 +73,7 @@ const statusUpdateFunction = new lambda.Function(this, 'StatusUpdateFunction', {
 - Region mismatch between deployment (us-east-1) and client configuration
 
 **Fix**:
-```ts
+```typescript
 const region = process.env.AWS_REGION || 'us-east-1';
 const dynamoClient = new DynamoDBClient({ region });
 const snsClient = new SNSClient({ region });
@@ -89,7 +89,7 @@ const sqsClient = new SQSClient({ region });
 - Error: "ws_1.WebSocket is not a constructor"
 
 **Fix**:
-```ts
+```typescript
 // Before:
 import { WebSocket } from 'ws';
 

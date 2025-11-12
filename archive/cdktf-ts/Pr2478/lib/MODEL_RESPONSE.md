@@ -2,7 +2,7 @@ I'll create a secure, highly available web app environment on AWS using CDK for 
 
 ## 1. modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -528,7 +528,7 @@ EOF
 
 ## 2. tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

@@ -15,7 +15,7 @@ The model successfully generated a comprehensive AWS CDK TypeScript implementati
 - Built-in AWS Config change detection provides sub-15-minute evaluation
 - Custom Lambda evaluators respond immediately to configuration changes
 
-```ts
+```typescript
 const configRecorder = new config.CfnConfigurationRecorder(
   this,
   'ConfigRecorder',
@@ -37,7 +37,7 @@ const configRecorder = new config.CfnConfigurationRecorder(
 - Automatic transitions: IA (90 days) → Glacier (1 year) → Deep Archive (2 years)
 - 7-year retention with automatic expiration (2555 days)
 
-```ts
+```typescript
 lifecycleRules: [{
   id: 'SevenYearRetention',
   enabled: true,

@@ -6,7 +6,7 @@ I'll create a comprehensive serverless event processing pipeline for your financ
 
 ### 1. Core CDK Stack Implementation
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';
@@ -577,7 +577,7 @@ exports.handler = async (event) => {
 
 ### 2. Application Entry Point
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

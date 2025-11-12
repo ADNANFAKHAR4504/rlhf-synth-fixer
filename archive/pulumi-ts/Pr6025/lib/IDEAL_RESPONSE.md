@@ -4,7 +4,7 @@ This is the production-ready implementation of a multi-environment VPC infrastru
 
 ## File: lib/vpc-component.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -296,7 +296,7 @@ export class VpcComponent extends pulumi.ComponentResource {
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import { VpcComponent } from "./lib/vpc-component";
 

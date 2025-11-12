@@ -21,7 +21,7 @@ Property 'generation' does not exist on type 'AmazonLinux2ImageSsmParameterProps
 **Impact:** Prevented TypeScript compilation and build process.
 
 **Resolution:**
-```ts
+```typescript
 // Original (failing) code
 const amzn2Ami = ec2.MachineImage.latestAmazonLinux2({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2, // This property no longer exists
@@ -44,7 +44,7 @@ Cannot find name 'elbv2_targets'. Did you mean 'elbv2'?
 **Impact:** TypeScript compilation failure.
 
 **Resolution:**
-```ts
+```typescript
 // Added missing import
 import * as elbv2_targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
 
@@ -65,7 +65,7 @@ Property 'defaultTargets' does not exist on type 'ApplicationListenerProps'
 **Impact:** Build failure and incorrect load balancer setup.
 
 **Resolution:**
-```ts
+```typescript
 // Original (failing) code
 const httpsListener = alb.addListener(`HTTPSListener-${environmentSuffix}`, {
   port: 443,
@@ -96,7 +96,7 @@ Property 'metricUnhealthyHostCount' is deprecated. Use 'metrics.unhealthyHostCou
 **Impact:** Code quality issues and potential future compatibility problems.
 
 **Resolution:**
-```ts
+```typescript
 // Original (deprecated) code
 new cloudwatch.Alarm(this, `UnhealthyTargetsAlarm-${environmentSuffix}`, {
   metric: targetGroup.metricUnhealthyHostCount(), // Deprecated
@@ -125,7 +125,7 @@ Template error: Property KeyName cannot be empty
 **Impact:** Deployment failure due to missing required parameter.
 
 **Resolution:**
-```ts
+```typescript
 // Removed KeyPair requirement entirely for automated deployment
 // Original problematic code:
 // keyName: keyPairName.valueAsString,
@@ -160,7 +160,7 @@ Available outputs keys: ['vpc_id', 'VPCId', 'TapStackdev.VPCId', ...]
 **Impact:** Integration tests skipping validation due to missing output references.
 
 **Resolution:**
-```ts
+```typescript
 // Original (failing) test code
 const vpcId = outputs['VPCId'];
 
@@ -188,7 +188,7 @@ Received: 2
 **Impact:** Integration tests failing on valid infrastructure.
 
 **Resolution:**
-```ts
+```typescript
 // Original (too restrictive) expectation
 expect(response.Subnets!.length).toBeGreaterThanOrEqual(4);
 
@@ -211,7 +211,7 @@ Jest: "global" coverage threshold for branches (90%) not met: 33.33%
 **Impact:** Quality gate failure preventing release.
 
 **Resolution:**
-```ts
+```typescript
 // Added comprehensive branch coverage tests
 test('Uses environmentSuffix from props when provided', () => {
   const testStack = new TapStack(testApp, 'TestStack', { environmentSuffix: 'test' });
@@ -271,7 +271,7 @@ Property 'GroupDescription' does not exist on type 'SecurityGroup'
 **Impact:** Integration test compilation failure.
 
 **Resolution:**
-```ts
+```typescript
 // Original (incorrect) code
 const groupDescriptions = securityGroups.map(sg => sg.GroupDescription);
 
@@ -306,7 +306,7 @@ const groupDescriptions = securityGroups.map(sg => sg.Description);
 ### **Mitigation Strategies**
 
 #### **1. Proactive Error Prevention**
-```ts
+```typescript
 // Example: Robust error handling pattern
 try {
   const vpcId = outputs['VPCId'] || outputs[`TapStack${environmentSuffix}.VPCId`];
@@ -321,7 +321,7 @@ try {
 ```
 
 #### **2. Comprehensive Testing Strategy**
-```ts
+```typescript
 // Multi-level testing approach
 describe('Environment Configuration', () => {
   test.each([

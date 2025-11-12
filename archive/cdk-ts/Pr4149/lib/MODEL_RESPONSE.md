@@ -10,7 +10,7 @@ Let me plan out how to structure this CloudFormation stack using AWS CDK in Type
 
 Let's start coding:
 
-```ts
+```typescript
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -203,7 +203,7 @@ Let's review what I've created against the requirements:
 
 I need to refine the S3 bucket cross-region replication implementation. Let me fix this and other potential issues:
 
-```ts
+```typescript
 // cloudSetup.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -479,7 +479,7 @@ Let me review this updated code against the requirements again:
 
 I see a potential issue: I'm passing the suffix in the constructor and as a tag, which might be confusing. Let's clean up the code a bit to make the suffix parameter clearer and ensure all resources have the suffix appended to their names:
 
-```ts
+```typescript
 // cloudSetup.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -773,7 +773,7 @@ Everything looks good! The code is ready to be returned as the final solution.
 
 # `cloudSetup.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

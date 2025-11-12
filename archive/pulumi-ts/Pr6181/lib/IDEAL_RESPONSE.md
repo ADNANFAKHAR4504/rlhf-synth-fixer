@@ -8,7 +8,7 @@ Perfect implementation of multi-region DR infrastructure using Pulumi TypeScript
 - **bin/tap.ts**: Entry point with proper environment variable handling and output exports
 - **lib/tap-stack.ts**: Single comprehensive stack with all DR components
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *

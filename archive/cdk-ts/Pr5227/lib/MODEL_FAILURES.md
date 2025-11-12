@@ -68,7 +68,7 @@ message = f"""
 **Severity**: MINOR - Code quality issue
 
 **Issue**:
-```ts
+```typescript
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 ```
 

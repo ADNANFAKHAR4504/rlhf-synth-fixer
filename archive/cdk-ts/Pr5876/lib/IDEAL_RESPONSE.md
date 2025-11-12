@@ -6,7 +6,7 @@
 
 
 ### tap-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 // Import all constructs
@@ -160,7 +160,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ### interfaces/config-interfaces.ts
-```ts
+```typescript
 export interface AppConfig {
   environment: string;
   environmentSuffix: string;
@@ -206,7 +206,7 @@ export interface MonitoringConfig {
 ```
 
 ### utils/cidr-allocator.ts
-```ts
+```typescript
 export class CidrAllocator {
   private static readonly BASE_CIDR = '10.0.0.0/8';
 
@@ -267,7 +267,7 @@ export class CidrAllocator {
 ```
 
 ### utils/naming.ts
-```ts
+```typescript
 import { AppConfig } from '../interfaces/config-interfaces';
 
 export class NamingUtil {
@@ -343,7 +343,7 @@ export class TimestampUtil {
 ```
 
 ### constructs/vpc-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -452,7 +452,7 @@ export class VpcConstruct extends Construct {
 ```
 
 ### constructs/compute-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
@@ -766,7 +766,7 @@ export class ComputeConstruct extends Construct {
 ```
 
 ### constructs/database-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -961,7 +961,7 @@ export class DatabaseConstruct extends Construct {
 ```
 
 ### constructs/serverless-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1261,7 +1261,7 @@ async function storageProcessingResult(objectKey, analysis) {
 ```
 
 ### constructs/iam-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -1377,7 +1377,7 @@ export class IamConstruct extends Construct {
 ```
 
 ### constructs/monitoring-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -1701,7 +1701,7 @@ export class MonitoringConstruct extends Construct {
 ```
 
 ### constructs/dns-construct.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as cloudfrontOrigins from 'aws-cdk-lib/aws-cloudfront-origins';

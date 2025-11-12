@@ -78,7 +78,7 @@ Create a production-ready VPC infrastructure using **AWS CDK with TypeScript** t
 
 All resources must include environmentSuffix variable to avoid conflicts:
 
-```ts
+```typescript
 vpcName: `payment-vpc-${environmentSuffix}`
 ```
 

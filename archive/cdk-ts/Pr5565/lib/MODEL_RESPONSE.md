@@ -41,7 +41,7 @@ Let me create these files one by one.
 
 First, I'll create the `bin/tap.ts` file, which will be the entry point for the CDK application:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -97,7 +97,7 @@ app.synth();
 
 Now, I'll create the `lib/tap-stack.ts` file, which contains the main stack definition. This will be more complex as it includes all the resources:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -416,7 +416,7 @@ export class TapStack extends cdk.Stack {
 
 Now, I need to create the `lib/tap-aspects.ts` file for CDK aspects that enforce tagging:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { IAspect, IConstruct } from 'constructs';
 import { CfnResource, Tag } from 'aws-cdk-lib';
@@ -454,7 +454,7 @@ export class TapAspects implements IAspect {
 
 Now, I need to create the `lib/tap-pipeline.ts` file for the CI/CD pipeline:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as pipelines from 'aws-cdk-lib/pipelines';
@@ -635,7 +635,7 @@ I'm now going to provide the finalized code for the three requested files:
 
 Let's start with `bin/tap.ts`:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -684,7 +684,7 @@ app.synth();
 
 Now, let's provide the `lib/tap-stack.ts`:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -1145,7 +1145,7 @@ Now let me double check one more time to make sure I've covered all requirements
 
 I think I've captured all the requirements in the code. The CDK application should be ready to deploy and handle the configuration synchronization across environments as specified.### Answer 
 ---
-```ts
+```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -1186,7 +1186,7 @@ new TapStack(app, `TapStack-${environment}-DR`, {
 app.synth();
 ```
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

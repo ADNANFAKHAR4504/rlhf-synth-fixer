@@ -38,7 +38,7 @@ I'll help you build a production-ready, multi-region disaster recovery infrastru
 
 First, let's establish the complete project structure:
 
-```ts
+```typescript
 // package.json
 {
   "name": "multi-region-dr-infrastructure",
@@ -73,7 +73,7 @@ First, let's establish the complete project structure:
 
 ### 1. CDK Application Entry Point
 
-```ts
+```typescript
 // bin/main.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -205,7 +205,7 @@ class CostOptimizationAspect implements cdk.IAspect {
 
 ### 2. Main Infrastructure Stack
 
-```ts
+```typescript
 // lib/stacks/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -588,7 +588,7 @@ export class TapStack extends cdk.Stack {
 
 ### 3. Supporting Stack Implementations
 
-```ts
+```typescript
 // lib/stacks/database-stack.ts
 import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
@@ -760,7 +760,7 @@ export class DatabaseStack extends Construct {
 
 ### 4. Disaster Recovery Stack
 
-```ts
+```typescript
 // lib/stacks/disaster-recovery-stack.ts
 import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
@@ -1044,7 +1044,7 @@ export class DisasterRecoveryStack extends Construct {
 
 ### 5. Configuration Management
 
-```ts
+```typescript
 // lib/config/config.ts
 export interface IConfig {
   environment: string;

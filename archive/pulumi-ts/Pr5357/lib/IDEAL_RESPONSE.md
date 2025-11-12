@@ -5,7 +5,7 @@ This implementation provides a production-grade, multi-environment AWS infrastru
 
 ## lib\tap-stack.ts
 
-```ts
+```typescript
 
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
@@ -1410,7 +1410,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## bin/tap.ts
 
-```ts
+```typescript
 
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */

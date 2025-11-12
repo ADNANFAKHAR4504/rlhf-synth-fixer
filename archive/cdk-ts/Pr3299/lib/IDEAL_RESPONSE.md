@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/api-handler.ts
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -285,7 +285,7 @@ async function deleteEvent(id: string): Promise<APIGatewayProxyResult> {
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -624,7 +624,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
@@ -973,7 +973,7 @@ describe('Serverless API Infrastructure Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

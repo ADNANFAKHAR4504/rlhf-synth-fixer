@@ -11,7 +11,7 @@ The solution consists of three main component stacks:
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the Payment API ECS infrastructure.
  *
@@ -62,7 +62,7 @@ export const ecsServiceArn = stack.serviceArn;
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -181,7 +181,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/vpc-stack.ts
 
-```ts
+```typescript
 /**
  * VPC Stack Component
  *
@@ -402,7 +402,7 @@ export class VpcStack extends pulumi.ComponentResource {
 
 ## File: lib/alb-stack.ts
 
-```ts
+```typescript
 /**
  * Application Load Balancer Stack Component
  *
@@ -628,7 +628,7 @@ export class AlbStack extends pulumi.ComponentResource {
 
 ## File: lib/ecs-stack.ts
 
-```ts
+```typescript
 /**
  * ECS Stack Component
  *

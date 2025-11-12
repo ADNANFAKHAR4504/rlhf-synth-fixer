@@ -54,7 +54,7 @@ fintech-infra/
 
 ### 1. Main Application Entry Point
 
-```ts
+```typescript
 // main.ts
 import { App } from "cdktf";
 import { FintechInfrastructureStack } from "./lib/fintech-stack";
@@ -80,7 +80,7 @@ app.synth();
 
 ### 2. Complete Infrastructure Stack
 
-```ts
+```typescript
 // lib/fintech-stack.ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput, Fn } from "cdktf";

@@ -14,7 +14,7 @@ This infrastructure creates a secure, highly-available three-tier architecture s
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * TapStack - Three-tier AWS environment for payment processing application
  *

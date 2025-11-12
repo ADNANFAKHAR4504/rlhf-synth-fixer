@@ -4,7 +4,7 @@ This document presents the ideal, production-ready AWS CDK TypeScript implementa
 
 ## bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -26,7 +26,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';

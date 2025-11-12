@@ -32,7 +32,7 @@ I'll need to import the necessary CDK constructs and create the infrastructure s
 
 Here's a comprehensive TypeScript CDK v2 file that implements the multi-region setup you requested:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

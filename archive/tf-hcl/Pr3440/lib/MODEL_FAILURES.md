@@ -87,7 +87,7 @@ description = "Redis cache for recommendations"
 
 ### Fix Applied
 ✅ Added optional chaining operators in integration tests:
-```ts
+```typescript
 // Before
 expect(response.ServerSideEncryptionConfiguration.Rules).toBeDefined();
 expect(response.Rules.length).toBeGreaterThan(0);

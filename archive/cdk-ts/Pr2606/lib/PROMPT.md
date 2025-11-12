@@ -40,7 +40,7 @@ Here are the specific infrastructure components I need to implement:
 
 I have an existing CDK TypeScript file at `./lib/tap-stack.ts` that needs to be updated with this infrastructure. Here's the current file content:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

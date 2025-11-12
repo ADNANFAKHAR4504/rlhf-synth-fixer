@@ -38,7 +38,7 @@ The sections below retain the original failure analyses; apply the above deltas 
 - Missing environment suffix in resource properties like `bucketName`, `logGroupName`, etc.
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (problematic)
 const logGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
   logGroupName: '/aws/vpc/flowlogs/financial-platform',
@@ -81,7 +81,7 @@ new cdk.CfnOutput(this, 'VpcId', { value: this.vpc.vpcId, exportName: `VpcId-${e
 - Using deprecated or incorrect enum values
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (problematic)
 this.bastionHost.instanceArn
 
@@ -133,7 +133,7 @@ ruleAction: ec2.AclAction.ALLOW
 - Missing required properties in rule definitions
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (problematic)
 dataNetworkAcl.addEntry('AllowPrivateInbound', {
   ruleNumber: 100,
@@ -174,7 +174,7 @@ dataNetworkAcl.addEntry(`AllowPrivateInbound${environmentSuffix}`, {
 - Missing policy attachment mechanism
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (problematic)
 new iam.Policy(this, `SessionManagerMFAPolicy${environmentSuffix}`, {
   statements: [
@@ -216,7 +216,7 @@ new iam.Policy(this, `SessionManagerMFAPolicy${environmentSuffix}`, {
 - Test assertions too strict for CloudFormation template structure
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (problematic)
 beforeEach(() => {
   app = new cdk.App();
@@ -262,7 +262,7 @@ beforeEach(() => {
 - Not keeping up with CDK version updates
 
 **Fix Applied**:
-```ts
+```typescript
 // Pending: migrate to ipAddresses in next iteration
 // Updated: using MachineImage.latestAmazonLinux2() where applicable
 ```
@@ -290,7 +290,7 @@ beforeEach(() => {
 - Duplicating routes CDK already creates for public subnets
 
 **Fix Applied**:
-```ts
+```typescript
 // Ensure environment suffix in identifiers
 // Remove explicit public 0.0.0.0/0 routes; rely on VPC default routes for public subnets
 ```
@@ -317,7 +317,7 @@ beforeEach(() => {
 - Missing outbound traffic restrictions
 
 **Fix Applied**:
-```ts
+```typescript
 // Current approach for bastion: allowAllOutbound true for SSM Agent; SSH disabled; Session Manager only
 ```
 
@@ -343,7 +343,7 @@ beforeEach(() => {
 - Not properly integrating with CloudWatch alarms
 
 **Fix Applied**:
-```ts
+```typescript
 // Added environment (VPC_ID), inline policy for EC2 route ops,
 // and bound NAT status check alarms to failover Lambda.
 ```
@@ -370,7 +370,7 @@ beforeEach(() => {
 - Not properly binding alarm actions to Lambda functions
 
 **Fix Applied**:
-```ts
+```typescript
 // Added NAT status check alarms and wired to failover Lambda
 // Flow Log Group removal policy set to DESTROY and name auto-generated to avoid conflicts
 ```

@@ -7,7 +7,7 @@ This document represents the ideal response for implementing a comprehensive AWS
 
 ### **lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -659,7 +659,7 @@ export class TapStack extends cdk.Stack {
 
 ### **bin/tap.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

@@ -28,7 +28,7 @@ This solution implements a highly available, scalable Kubernetes cluster on AWS 
 
 Main orchestration stack that configures the AWS provider, S3 backend for state management, and instantiates VPC and EKS cluster stacks.
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -139,7 +139,7 @@ export class TapStack extends TerraformStack {
 
 VPC infrastructure with public and private subnets across 3 availability zones, NAT gateways for private subnet egress, and proper Kubernetes ELB tags.
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -329,7 +329,7 @@ export class VpcStack extends Construct {
 
 Complete EKS cluster with control plane, node groups, add-ons, security groups, IAM roles, and IRSA configuration.
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { EksCluster } from '@cdktf/provider-aws/lib/eks-cluster';
 import { EksNodeGroup } from '@cdktf/provider-aws/lib/eks-node-group';

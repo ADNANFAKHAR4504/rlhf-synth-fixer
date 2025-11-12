@@ -17,7 +17,7 @@ The implementation is organized in `lib/tap-stack.ts` as a Pulumi ComponentResou
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -785,7 +785,7 @@ def handler(event, context):
 
 The stack is instantiated in `bin/tap.ts` with environment-specific configuration:
 
-```ts
+```typescript
 new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,

@@ -88,7 +88,7 @@ MODEL_RESPONSE Issue:
 Integration tests validated template syntax rather than deployed infrastructure. All tests used file system reads and string matching instead of AWS API calls.
 
 Original inadequate implementation:
-```ts
+```typescript
 describe('Resource Count Validation', () => {
   test('should have all required AWS resources defined', () => {
     const yamlContent = fs.readFileSync(templatePath, 'utf8');
@@ -100,7 +100,7 @@ describe('Resource Count Validation', () => {
 
 IDEAL_RESPONSE Fix:
 Real infrastructure validation with AWS SDK v3:
-```ts
+```typescript
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 

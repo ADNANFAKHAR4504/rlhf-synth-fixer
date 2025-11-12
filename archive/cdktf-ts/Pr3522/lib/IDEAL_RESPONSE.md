@@ -7,7 +7,7 @@ This implementation provides a comprehensive portfolio tracking platform using C
 
 ### Main Stack (tap-stack.ts)
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -177,7 +177,7 @@ export class TapStack extends TerraformStack {
 
 ### Network Stack (network-stack.ts)
 
-```ts
+```typescript
 import { Fn } from 'cdktf';
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -314,7 +314,7 @@ export class NetworkStack extends Construct {
 
 ### Compute Stack (compute-stack.ts)
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -554,7 +554,7 @@ echo "Portfolio tracking app initialization complete"`;
 
 ### Database Stack (database-stack.ts)
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -724,7 +724,7 @@ export class DatabaseStack extends Construct {
 
 ### API Stack (api-stack.ts)
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Alb } from '@cdktf/provider-aws/lib/alb';
@@ -874,7 +874,7 @@ export class ApiStack extends Construct {
 
 ### Monitoring Stack (monitoring-stack.ts)
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';

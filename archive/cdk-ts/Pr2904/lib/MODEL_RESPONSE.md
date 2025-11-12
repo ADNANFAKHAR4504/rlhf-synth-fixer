@@ -44,7 +44,7 @@ Let me write this out:
 
 I'll help you update your existing `TapStack` class with all the required serverless infrastructure components. Here's the complete implementation:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

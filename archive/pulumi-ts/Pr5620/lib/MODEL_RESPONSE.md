@@ -4,7 +4,7 @@ This implementation provides an optimized Lambda-based image processing infrastr
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as path from "path";

@@ -1,6 +1,6 @@
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -206,7 +206,7 @@ export class TapStack extends cdk.Stack {
 
 ## lib/ecs_trading_infra.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-applicationautoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

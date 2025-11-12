@@ -10,7 +10,7 @@ This document analyzes the model-generated response against requirements in PROM
 
 **Issue**: The model imported the wrong AWS CDK module for OpenSearch.
 
-```ts
+```typescript
 // MODEL_RESPONSE (INCORRECT):
 import * as opensearch from 'aws-cdk-lib/aws-opensearchservice';
 
@@ -34,7 +34,7 @@ import * as opensearchserverless from 'aws-cdk-lib/aws-opensearchserverless';
 **Issue**: The model created two separate state machines for the same workflow.
 
 First state machine (lines 481-496):
-```ts
+```typescript
 const investigationWorkflow = new stepfunctions.StateMachine(
   this,
   'InvestigationWorkflow',
@@ -43,7 +43,7 @@ const investigationWorkflow = new stepfunctions.StateMachine(
 ```
 
 Second state machine (lines 679-700):
-```ts
+```typescript
 const completeWorkflow = new stepfunctions.StateMachine(
   this,
   'CompleteAmlWorkflow',
@@ -77,7 +77,7 @@ Examples of missing suffixes:
 - Violates AWS resource naming best practices
 
 **Correct approach** (IDEAL_RESPONSE): Use environment suffix throughout:
-```ts
+```typescript
 const suffix = props.environmentSuffix;
 streamName: `aml-transaction-stream-${suffix}`
 ```
@@ -88,7 +88,7 @@ streamName: `aml-transaction-stream-${suffix}`
 
 **Issue**: Triage Lambda unnecessarily attached to VPC.
 
-```ts
+```typescript
 // MODEL_RESPONSE (UNNECESSARY):
 vpc: this.vpc,
 vpcSubnets: {
@@ -145,7 +145,7 @@ Missing configurations:
 - CloudFormation stack deletion failures
 
 **Correct approach** (IDEAL_RESPONSE lines 96-97, 177, 309-310):
-```ts
+```typescript
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true,
 deletionProtection: false,
@@ -185,7 +185,7 @@ Missing critical outputs:
 
 **Issue**: Wrong path to Lambda function code.
 
-```ts
+```typescript
 // MODEL_RESPONSE:
 entry: path.join(__dirname, '../lambda/triage/index.ts')
 
@@ -206,7 +206,7 @@ The PROMPT specified "Implement using AWS CDK TypeScript with separate modular s
 
 **Issue**: Model used `CallAwsService` for Neptune Gremlin queries, but this requires Neptune Data API which has limitations.
 
-```ts
+```typescript
 // MODEL_RESPONSE:
 const neptuneQueryTask = new sfnTasks.CallAwsService(this, 'QueryNeptune', {
   service: 'neptunedata',
@@ -251,7 +251,7 @@ const neptuneQueryTask = new sfnTasks.CallAwsService(this, 'QueryNeptune', {
 
 **Issue**: Used `billingMode: dynamodb.BillingMode.ON_DEMAND` instead of standard naming.
 
-```ts
+```typescript
 // MODEL_RESPONSE:
 billingMode: dynamodb.BillingMode.ON_DEMAND,
 
@@ -267,7 +267,7 @@ billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
 
 **Issue**: Placeholder values that would never work in real deployment.
 
-```ts
+```typescript
 sagemakerEndpointName: 'aml-anomaly-detection-endpoint',
 verifiedPermissionsPolicyStoreId: 'ps-12345678', // Obviously fake
 dataBucketName: 'aml-transaction-data-lake', // Generic name
@@ -319,7 +319,7 @@ These versions are outdated (current is 2.150+). While not necessarily wrong, be
 
 **Issue**: The provided Lambda code has minimal error handling.
 
-```ts
+```typescript
 for (const record of event.Records) {
   try {
     await processRecord(record);
@@ -344,7 +344,7 @@ for (const record of event.Records) {
 
 **Issue**: Aggressive parallelization settings.
 
-```ts
+```typescript
 batchSize: 100,
 maxBatchingWindow: cdk.Duration.seconds(1),
 parallelizationFactor: 10,
@@ -360,7 +360,7 @@ With 30 shards and parallelization factor 10, this creates 300 concurrent Lambda
 
 **Issue**: Cutoff set to 1TB per query.
 
-```ts
+```typescript
 bytesScannedCutoffPerQuery: 1099511627776, // 1TB limit per query
 ```
 
@@ -386,7 +386,7 @@ bytesScannedCutoffPerQuery: 1099511627776, // 1TB limit per query
 
 **Issue**: TapStack creates nested stack incorrectly.
 
-```ts
+```typescript
 // MODEL_RESPONSE:
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -409,7 +409,7 @@ export class TapStack extends cdk.Stack {
 
 **Issue**: Security Hub finding uses deprecated ProductArn format.
 
-```ts
+```typescript
 ProductArn: `arn:aws:securityhub:${this.region}:${this.account}:product/${this.account}/default`,
 ```
 

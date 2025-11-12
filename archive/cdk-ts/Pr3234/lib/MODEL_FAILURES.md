@@ -18,7 +18,7 @@ During the quality assurance process, several critical issues were identified in
 ### 2. IAM Import Error
 **Issue**: The code used `cdk.aws_iam` instead of properly importing the IAM module.
 
-```ts
+```typescript
 // Wrong
 cdk.aws_iam.PolicyStatement
 
@@ -54,7 +54,7 @@ iam.PolicyStatement
 ### 5. Deprecated S3Origin Usage
 **Issue**: Used deprecated `S3Origin` class instead of modern approach.
 
-```ts
+```typescript
 // Deprecated
 new origins.S3Origin(bucket)
 

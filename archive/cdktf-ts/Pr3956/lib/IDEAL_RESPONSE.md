@@ -10,7 +10,7 @@ This implementation provides a complete multi-account AWS landing zone with trad
 
 **File: `bin/tap.ts`**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import { App } from 'cdktf';
@@ -32,7 +32,7 @@ app.synth();
 
 **File: `lib/tap-stack.ts`**
 
-```ts
+```typescript
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';

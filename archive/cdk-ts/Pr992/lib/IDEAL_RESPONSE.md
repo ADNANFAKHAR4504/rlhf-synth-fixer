@@ -132,7 +132,7 @@ myapp-project/
 ```
 
 #### `bin/myapp.ts`
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -150,7 +150,7 @@ new MyappStack(app, 'MyappStack', {
 ```
 
 #### `lib/myapp-stack.ts`
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

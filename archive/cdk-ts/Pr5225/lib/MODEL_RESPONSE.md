@@ -2,7 +2,7 @@
 
 I'll create a CDK TypeScript stack for financial services with security controls. Here's my implementation:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';

@@ -10,13 +10,13 @@ This document analyzes the failures found in the initial MODEL_RESPONSE that req
 
 **MODEL_RESPONSE Issue**:
 The initial code specified PostgreSQL version `"14.7"` in `lib/rds-construct.ts`:
-```ts
+```typescript
 engineVersion: '14.7',
 ```
 
 **IDEAL_RESPONSE Fix**:
 Changed to major version only:
-```ts
+```typescript
 engineVersion: '15',
 ```
 
@@ -41,23 +41,23 @@ AWS recommends specifying major version only (e.g., "14", "15", "16") to let AWS
 
 **MODEL_RESPONSE Issue**:
 The code in `lib/tap-stack.ts` used the wrong endpoint property for Multi-AZ Redis without cluster mode:
-```ts
+```typescript
 cacheEndpoint: elasticache.replicationGroup.configurationEndpointAddress,
 ```
 
 And in outputs:
-```ts
+```typescript
 value: elasticache.replicationGroup.configurationEndpointAddress,
 ```
 
 **IDEAL_RESPONSE Fix**:
 Changed to use the correct property:
-```ts
+```typescript
 cacheEndpoint: elasticache.replicationGroup.primaryEndpointAddress,
 ```
 
 And in outputs:
-```ts
+```typescript
 value: elasticache.replicationGroup.primaryEndpointAddress,
 ```
 
@@ -85,7 +85,7 @@ The configuration endpoint is only available for cluster-mode enabled Redis clus
 
 **MODEL_RESPONSE Issue**:
 Integration test code in `test/tap-stack.int.test.ts` incorrectly parsed the ElastiCache endpoint:
-```ts
+```typescript
 const replicationGroupId = cacheEndpoint.split('.')[0];
 ```
 
@@ -94,7 +94,7 @@ This extracted `"master"` instead of the actual replication group ID `"payment-c
 
 **IDEAL_RESPONSE Fix**:
 Changed to extract the correct segment:
-```ts
+```typescript
 const replicationGroupId = cacheEndpoint.split('.')[1];
 ```
 

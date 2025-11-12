@@ -38,7 +38,7 @@ cfn-outputs/
 
 ### File: `bin/tap.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
@@ -83,7 +83,7 @@ app.synth();
 
 ### File: `lib/tap-stack.ts`
 
-```ts
+```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
   AwsProvider,

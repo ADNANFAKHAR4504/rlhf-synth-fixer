@@ -4,7 +4,7 @@ Generate an Infrastructure optimisation script for this code.The file should be 
 - ECS Fargate: Reduce desiredCount from 3 to 2 tasks 
 ### File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingStack } from './networking-stack';
@@ -66,7 +66,7 @@ export class TapStack extends cdk.Stack {
 
 ### File: lib/networking-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -181,7 +181,7 @@ export class NetworkingStack extends Construct {
 
 ### File: lib/database-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -269,7 +269,7 @@ export class DatabaseStack extends Construct {
 
 ### File: lib/cache-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
@@ -342,7 +342,7 @@ export class CacheStack extends Construct {
 
 ### File: lib/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -501,7 +501,7 @@ export class ComputeStack extends Construct {
 
 ### File: lib/api-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

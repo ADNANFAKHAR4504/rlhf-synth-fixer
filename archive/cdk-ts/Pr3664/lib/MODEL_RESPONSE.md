@@ -27,7 +27,7 @@ Let me structure this properly within the existing file.
 
 I'll update your existing `lib/tap-stack.ts` file to implement a comprehensive CI/CD pipeline for your Node.js application. This solution will create separate stacks for different components while working within your existing structure.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';

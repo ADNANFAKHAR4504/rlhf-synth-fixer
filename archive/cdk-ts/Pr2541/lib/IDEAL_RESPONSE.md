@@ -4,7 +4,7 @@ This document contains the ideal CDK TypeScript implementation for creating secu
 
 ## Core Stack Implementation
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -431,7 +431,7 @@ export class TapStack extends cdk.Stack {
 
 ## Entry Point
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

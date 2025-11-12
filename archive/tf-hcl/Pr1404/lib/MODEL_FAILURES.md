@@ -516,7 +516,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 - **Fix**: Updated tests to use `terraform output -json` and AWS SDK clients directly
 
 **Updated Integration Tests:**
-```ts
+```typescript
 // Before (CloudFormation approach):
 const cloudFormationClient = new CloudFormationClient({ region: 'us-east-1' });
 const stackResponse = await cloudFormationClient.send(
@@ -538,7 +538,7 @@ const terraformOutputs = JSON.parse(output);
 - ✅ **CloudTrail Test**: Updated to test S3 bucket instead of CloudTrail resource (since CloudTrail was removed)
 
 **Test Structure:**
-```ts
+```typescript
 describe('Terraform Infrastructure Integration Tests', () => {
   let terraformOutputs: any = {};
 

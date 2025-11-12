@@ -28,7 +28,7 @@ You're encountering some API differences in the AWS CDK version. Let me fix thes
 
 Here's the corrected `lib/production-stack.ts` with the issues resolved:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -607,7 +607,7 @@ Make sure your `package.json` has the correct dependencies:
 **Problem**: `generation is not a valid property`
 **Solution**:
 
-```ts
+```typescript
 // BEFORE (incorrect)
 const ami = ec2.MachineImage.latestAmazonLinux2023({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
@@ -622,7 +622,7 @@ const ami = ec2.MachineImage.latestAmazonLinux2023();
 **Problem**: `metricCPUUtilization does not exist on type Instance`
 **Solution**: Create CloudWatch metrics manually:
 
-```ts
+```typescript
 // BEFORE (incorrect)
 ec2Instance.metricCPUUtilization();
 

@@ -1,6 +1,6 @@
 I see the issues with the code. Let me provide a corrected version that fixes all the TypeScript errors and uses the proper CDKTF syntax:
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

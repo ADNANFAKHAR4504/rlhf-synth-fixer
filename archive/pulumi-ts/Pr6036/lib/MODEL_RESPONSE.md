@@ -4,7 +4,7 @@ This implementation creates a production-grade containerized order processing AP
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";

@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Fn } from 'cdktf';
 
@@ -1219,7 +1219,7 @@ export class SSMHelpers {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

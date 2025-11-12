@@ -1,6 +1,6 @@
 **lib/modules.ts**
 
-```ts
+```typescript
 
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -1076,7 +1076,7 @@ export class EBSSnapshotModule extends Construct {
 
 **lib/tap-stack.ts**
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

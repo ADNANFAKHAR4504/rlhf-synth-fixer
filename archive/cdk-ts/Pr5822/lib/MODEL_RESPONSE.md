@@ -60,7 +60,7 @@ I'll create a comprehensive multi-region disaster recovery architecture using AW
 
 ## Project Structure
 
-```ts
+```typescript
 // package.json
 {
   "name": "multi-region-dr-architecture",
@@ -86,7 +86,7 @@ I'll create a comprehensive multi-region disaster recovery architecture using AW
 
 ## Main CDK Application
 
-```ts
+```typescript
 // bin/app.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -136,7 +136,7 @@ secondaryStack.addDependency(globalStack);
 
 ## Global Resources Stack
 
-```ts
+```typescript
 // lib/global-resources-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -208,7 +208,7 @@ export class GlobalResourcesStack extends cdk.Stack {
 
 ## Multi-Region DR Stack
 
-```ts
+```typescript
 // lib/multi-region-dr-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -630,7 +630,7 @@ export class MultiRegionDRStack extends cdk.Stack {
 
 ## VPC Peering Stack
 
-```ts
+```typescript
 // lib/vpc-peering-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -673,7 +673,7 @@ export class VPCPeeringStack extends cdk.Stack {
 
 ## CDK Configuration
 
-```ts
+```typescript
 // cdk.json
 {
   "app": "npx ts-node --prefer-ts-exts bin/app.ts",
@@ -734,7 +734,7 @@ echo "Secondary API: $(aws cloudformation describe-stacks --stack-name DRStackSe
 
 ## Testing Failover
 
-```ts
+```typescript
 // test/failover-test.ts
 import axios from 'axios';
 

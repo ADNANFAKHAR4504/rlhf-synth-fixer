@@ -9,7 +9,7 @@ This document analyzes the failures and issues found in the MODEL_RESPONSE.md fo
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const processorLambda = new LambdaFunction(this, 'PatientRecordProcessor', {
   // ... other properties
   code: `
@@ -21,7 +21,7 @@ const processorLambda = new LambdaFunction(this, 'PatientRecordProcessor', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Create Lambda asset from code directory
 const lambdaAsset = new TerraformAsset(this, 'LambdaAsset', {
   path: path.resolve(__dirname, '../lambda-code'),
@@ -55,7 +55,7 @@ This error prevents TypeScript compilation entirely, blocking all deployment att
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const elasticacheCluster = new ElasticacheReplicationGroup(
   this,
   'RedisReplicationGroup',
@@ -68,7 +68,7 @@ const elasticacheCluster = new ElasticacheReplicationGroup(
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const elasticacheCluster = new ElasticacheCluster(
   this,
   'RedisCluster',
@@ -103,7 +103,7 @@ Compilation failure preventing deployment. Additionally affects HA requirements 
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -114,7 +114,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -143,14 +143,14 @@ Causes `terraform init` to fail with "Extraneous JSON object property" error, co
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 import { TerraformStack } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 // ... used in HealthcareStack which extends Construct, not TerraformStack
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Remove unused import
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 ```
@@ -170,7 +170,7 @@ Lint failure - blocks CI/CD pipelines that enforce clean linting. Easy to fix bu
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const apiStage = new Apigatewayv2Stage(this, 'ApiStage', {
   // ... configuration
 });
@@ -178,7 +178,7 @@ const apiStage = new Apigatewayv2Stage(this, 'ApiStage', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 new Apigatewayv2Stage(this, 'ApiStage', {
   // ... configuration
 });

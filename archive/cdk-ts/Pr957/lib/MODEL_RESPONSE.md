@@ -104,7 +104,7 @@ I'll help you create a basic network infrastructure in AWS using CDK TypeScript.
 ```
 
 ## bin/tap.ts
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -134,7 +134,7 @@ new TapStack(app, stackName, {
 ```
 
 ## lib/tap-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcStack } from './vpc-stack';
@@ -162,7 +162,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ## lib/vpc-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
@@ -261,7 +261,7 @@ export class VpcStack extends Construct {
 ```
 
 ## test/tap-stack.unit.test.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

@@ -30,7 +30,7 @@ Now, let's implement each of these stacks:
 
 1. First, the VPC stack:
 
-```ts
+```typescript
 // lib/vpc-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -74,7 +74,7 @@ export class VpcStack extends cdk.Stack {
 
 2. Next, the ECS cluster stack:
 
-```ts
+```typescript
 // lib/ecs-cluster-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -109,7 +109,7 @@ export class EcsClusterStack extends cdk.Stack {
 
 3. Let's create the Service Connect stack:
 
-```ts
+```typescript
 // lib/service-connect-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -150,7 +150,7 @@ export class ServiceConnectStack extends cdk.Stack {
 
 Oops, I see I need to pass the VPC to the ServiceConnectStack. Let me fix that:
 
-```ts
+```typescript
 // lib/service-connect-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -196,7 +196,7 @@ export class ServiceConnectStack extends cdk.Stack {
 
 4. Now, let's create the ALB stack:
 
-```ts
+```typescript
 // lib/alb-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -266,7 +266,7 @@ export class AlbStack extends cdk.Stack {
 
 5. Now, let's create the orders-api service stack:
 
-```ts
+```typescript
 // lib/orders-api-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -400,7 +400,7 @@ export class OrdersApiStack extends cdk.Stack {
 
 6. Let's create the restaurants-api service stack:
 
-```ts
+```typescript
 // lib/restaurants-api-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -509,7 +509,7 @@ export class RestaurantsApiStack extends cdk.Stack {
 
 7. Finally, let's create the main stack that composes all the other stacks:
 
-```ts
+```typescript
 // lib/food-delivery-app-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -577,7 +577,7 @@ export class FoodDeliveryAppStack extends cdk.Stack {
 
 Now I need to fix the main lib/tap-stack.ts file to instantiate our app stack:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -595,7 +595,7 @@ export class TapStack extends cdk.Stack {
 
 Wait, I think I'm overthinking this. The requirement seems to want each component as a separate stack file, but all of them instantiated from the lib/tap-stack.ts file. Let me fix this approach:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -676,7 +676,7 @@ Actually, I think there's a misunderstanding here. The instruction says "modular
 
 Actually, let me check the context more carefully. It's asking for "modular stack files" which suggests they should indeed be separate CDK stacks. Let's continue with the approach where each component is its own stack:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { App } from 'aws-cdk-lib';
@@ -753,7 +753,7 @@ In this approach, we're creating separate stacks for each component, with proper
 
 Actually, let me check the CDK documentation to make sure I'm using the correct pattern here. It looks like I need to be more careful about how I'm passing the App instance. Let me revise this one more time:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -820,7 +820,7 @@ But this doesn't fulfill the requirement for "modular stack files". I need to go
 
 Let me try a different approach - we'll use constructs, not stacks, for each component:
 
-```ts
+```typescript
 // lib/vpc-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -863,7 +863,7 @@ export class VpcConstruct extends Construct {
 
 And then similar patterns for the other components. Let's see how the main stack would look:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

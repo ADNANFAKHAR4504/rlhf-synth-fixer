@@ -12,7 +12,7 @@ This document outlines the critical fixes and improvements made to transform the
 - Invalid SSL policy references
 
 **Fixes Applied**:
-```ts
+```typescript
 // Fixed TapStackProps interface requirements
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -35,7 +35,7 @@ targetGroup.addTarget(new elbv2targets.InstanceIdTarget(appInstance.instanceId))
 **Issue**: Config rules had incorrect dependency syntax causing synthesis failures.
 
 **Fix Applied**:
-```ts
+```typescript
 // ❌ Before: Invalid dependsOn in props
 new config.CfnConfigRule(this, 'S3EncryptionRule', {
   dependsOn: [configRecorder], // Invalid syntax
@@ -54,7 +54,7 @@ s3EncryptionRule.addDependency(configRecorder);
 **Issue**: API Gateway was created without methods, causing CDK synthesis validation failures.
 
 **Fix Applied**:
-```ts
+```typescript
 // ✅ Added required health endpoint
 const healthResource = api.root.addResource('health');
 healthResource.addMethod(
@@ -115,7 +115,7 @@ healthResource.addMethod(
 **Fixes Applied**:
 
 #### ALB Security Group
-```ts
+```typescript
 // ✅ Added explicit outbound rules for ALB
 albSecurityGroup.addEgressRule(
   appSecurityGroup,
@@ -125,7 +125,7 @@ albSecurityGroup.addEgressRule(
 ```
 
 #### GuardDuty Data Sources
-```ts
+```typescript
 // ✅ Enhanced GuardDuty with comprehensive data sources
 dataSources: {
   s3Logs: { enable: true },
@@ -137,7 +137,7 @@ dataSources: {
 ```
 
 #### EventBridge Security Monitoring
-```ts
+```typescript
 // ✅ Added comprehensive security event routing
 const guardDutyRule = new events.Rule(this, 'GuardDutyFindingsRule', {
   eventPattern: {
@@ -153,7 +153,7 @@ guardDutyRule.addTarget(new targets.SnsTopic(securityAlertsTopic));
 **Issue**: Environment suffix logic needed to handle multiple scenarios for proper resource naming.
 
 **Fix Applied**:
-```ts
+```typescript
 // ✅ Robust environment suffix handling
 const environmentSuffix =
   props?.environmentSuffix ||                    // Props first

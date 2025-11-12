@@ -29,7 +29,7 @@ These issues demonstrate the importance of:
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (FAILED):
 bucketName: `tap-media-${environmentSuffix}-${this.account}`.toLowerCase(),
 ```
@@ -51,7 +51,7 @@ Bucket name must end with a lowercase character or number (offset: 38)
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 bucketName: `tap-media-${environmentSuffix}`.toLowerCase() + '-' + this.account,
 ```
@@ -74,7 +74,7 @@ bucketName: `tap-media-${environmentSuffix}`.toLowerCase() + '-' + this.account,
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (DEPRECATED):
 pointInTimeRecovery: config.enablePointInTimeRecovery,
 ```
@@ -95,7 +95,7 @@ pointInTimeRecovery: config.enablePointInTimeRecovery,
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: config.enablePointInTimeRecovery,
@@ -120,7 +120,7 @@ pointInTimeRecoverySpecification: {
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (SYSTEMATIC PROBLEM):
 // Multiple methods accept tags parameter but don't apply them
 
@@ -168,7 +168,7 @@ private createWAF(
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 // 1. Create a utility function for consistent tag application
 /**
@@ -227,7 +227,7 @@ private createS3Bucket(/* ... */): s3.Bucket {
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (INCOMPLETE):
 // Only API endpoint and DynamoDB table ARN were outputted
 this.apiEndpoint = new cdk.CfnOutput(this, 'ApiEndpoint', {
@@ -256,7 +256,7 @@ this.dynamodbTableArn = new cdk.CfnOutput(this, 'DynamoDBTableArn', {
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 // 1. Add missing output properties to class
 export class InfraStack extends cdk.Stack {
@@ -328,7 +328,7 @@ this.wafArn = new cdk.CfnOutput(this, 'WAFArn', {
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (INVALID):
 Tags.of(webAcl).add(
   'Rules',
@@ -353,7 +353,7 @@ Resource handler returned message: "1 validation error detected: Value 'SQL inje
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 Tags.of(webAcl).add(
   'Rules',
@@ -380,7 +380,7 @@ Tags.of(webAcl).add(
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (MISSING DEPENDENCY):
 const webAclAssociation = new wafv2.CfnWebACLAssociation(
   this,
@@ -409,7 +409,7 @@ Resource handler returned message: "AWS WAF couldn't perform the operation becau
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 const webAclAssociation = new wafv2.CfnWebACLAssociation(
   this,
@@ -445,7 +445,7 @@ webAclAssociation.addDependency(
 
 **Issue:**
 
-```ts
+```typescript
 // MODEL (MISSING CACHING):
 const api = new apigateway.RestApi(this, 'TapApi', {
   restApiName: `tap-api-${environmentSuffix}`,
@@ -478,7 +478,7 @@ const api = new apigateway.RestApi(this, 'TapApi', {
 
 **Fix:**
 
-```ts
+```typescript
 // IDEAL (CORRECT):
 // 1. Add caching configuration to InfraStackProps
 export interface InfraStackProps extends cdk.StackProps {

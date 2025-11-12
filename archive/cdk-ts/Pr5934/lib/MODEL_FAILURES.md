@@ -13,7 +13,7 @@ This document details the 6 critical fixes required to make the multi-environmen
 The initial implementation did not enable storage encryption for the RDS PostgreSQL database. This is a critical security vulnerability as database storage would contain unencrypted data at rest, violating security best practices and compliance requirements.
 
 **Original Code**:
-```ts
+```typescript
 this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuffix}`, {
   engine: rds.DatabaseInstanceEngine.postgres({
     version: rds.PostgresEngineVersion.VER_14_15,
@@ -29,7 +29,7 @@ this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuff
 ```
 
 **Fixed Code**:
-```ts
+```typescript
 this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuffix}`, {
   engine: rds.DatabaseInstanceEngine.postgres({
     version: rds.PostgresEngineVersion.VER_14_15,
@@ -63,7 +63,7 @@ this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuff
 The initial implementation hardcoded RDS instance type as T3.MICRO instead of reading from environment configuration. This meant all environments (dev, staging, prod) would use the same tiny instance size, causing performance issues in staging and production.
 
 **Original Code**:
-```ts
+```typescript
 this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuffix}`, {
   engine: rds.DatabaseInstanceEngine.postgres({
     version: rds.PostgresEngineVersion.VER_14_15,
@@ -77,7 +77,7 @@ this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuff
 ```
 
 **Fixed Code**:
-```ts
+```typescript
 // Parse RDS instance type from config string (e.g., "db.t3.micro" -> T3, MICRO)
 const instanceParts = props.config.rdsInstanceClass.split('.');
 const instanceClass = instanceParts[1].toUpperCase() as keyof typeof ec2.InstanceClass;
@@ -114,7 +114,7 @@ this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuff
 The initial implementation hardcoded log retention to ONE_WEEK instead of using the environment-specific retention configuration. The CloudWatch RetentionDays enum requires specific constant names (DAYS_7, DAYS_30, DAYS_90), not numeric values.
 
 **Original Code**:
-```ts
+```typescript
 const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuffix}`, {
   logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
   retention: logs.RetentionDays.ONE_WEEK,  // Hardcoded! Ignores config.logRetention
@@ -122,7 +122,7 @@ const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuff
 ```
 
 **Fixed Code**:
-```ts
+```typescript
 const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuffix}`, {
   logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
   retention: logs.RetentionDays[`DAYS_${props.config.logRetention}` as keyof typeof logs.RetentionDays],
@@ -149,7 +149,7 @@ const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuff
 The initial implementation did not set RemovalPolicy.DESTROY for CloudWatch log groups. The default behavior is to retain log groups after stack deletion, causing issues with redeployment and cleanup in CI/CD environments.
 
 **Original Code**:
-```ts
+```typescript
 const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuffix}`, {
   logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
   retention: logs.RetentionDays[`DAYS_${props.config.logRetention}` as keyof typeof logs.RetentionDays],
@@ -158,7 +158,7 @@ const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuff
 ```
 
 **Fixed Code**:
-```ts
+```typescript
 const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuffix}`, {
   logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
   retention: logs.RetentionDays[`DAYS_${props.config.logRetention}` as keyof typeof logs.RetentionDays],
@@ -185,7 +185,7 @@ const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuff
 The initial implementation only checked if configuration exists but did not validate the environment name against allowed values. This could lead to silent failures or unexpected behavior with typos or invalid environment names.
 
 **Original Code**:
-```ts
+```typescript
 export function getEnvironmentConfig(env: string): EnvironmentConfig {
   const config = configs[env];
   if (!config) {
@@ -196,7 +196,7 @@ export function getEnvironmentConfig(env: string): EnvironmentConfig {
 ```
 
 **Fixed Code**:
-```ts
+```typescript
 export function getEnvironmentConfig(env: string): EnvironmentConfig {
   // FIX: Validate against allowed values first
   const validEnvironments = ['dev', 'staging', 'prod'];
@@ -230,7 +230,7 @@ export function getEnvironmentConfig(env: string): EnvironmentConfig {
 While the initial implementation included environment-specific configurations, this fix ensures they are complete and properly documented with the correct values for each environment tier.
 
 **Configuration Values**:
-```ts
+```typescript
 const configs: Record<string, EnvironmentConfig> = {
   dev: {
     vpcCidr: '10.0.0.0/16',              // Separate CIDR per environment

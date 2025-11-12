@@ -26,7 +26,7 @@ This document analyzes the failures and successes of an LLM model tasked with ge
 
 The model correctly implemented multi-region AWS providers:
 
-```ts
+```typescript
 // Model's implementation (CORRECT)
 const providers: { [key: string]: aws.Provider } = {};
 allRegions.forEach(region => {
@@ -44,7 +44,7 @@ allRegions.forEach(region => {
 
 The model properly implemented KMS encryption keys with key rotation:
 
-```ts
+```typescript
 // Model's implementation (CORRECT)
 const kmsKeys: { [key: string]: aws.kms.Key } = {};
 allRegions.forEach(region => {
@@ -65,7 +65,7 @@ allRegions.forEach(region => {
 
 The model used `awsx.ec2.Vpc` for simplified VPC creation:
 
-```ts
+```typescript
 // Model's implementation (CORRECT approach)
 vpcs[region] = new awsx.ec2.Vpc(`vpc-${region}`, {
     cidrBlock: "10.29.0.0/16",
@@ -90,7 +90,7 @@ vpcs[region] = new awsx.ec2.Vpc(`vpc-${region}`, {
 
 The model correctly implemented Aurora Global Database structure:
 
-```ts
+```typescript
 // Model's implementation (CORRECT)
 const globalCluster = new aws.rds.GlobalCluster(`global-cluster`, {
     globalClusterIdentifier: `${projectName}-global`,
@@ -114,7 +114,7 @@ const primaryCluster = new aws.rds.Cluster(`primary-cluster`, {
 
 The model implemented comprehensive S3 security:
 
-```ts
+```typescript
 // Model's implementation (CORRECT)
 s3Buckets[region] = new aws.s3.Bucket(`transaction-archive-${region}`, {
     versioning: { enabled: true },
@@ -146,7 +146,7 @@ s3Buckets[region] = new aws.s3.Bucket(`transaction-archive-${region}`, {
 
 The model correctly configured DynamoDB with global replication:
 
-```ts
+```typescript
 // Model's implementation (CORRECT)
 const dynamoTable = new aws.dynamodb.Table(`session-table`, {
     name: `${projectName}-sessions`,
@@ -174,7 +174,7 @@ const dynamoTable = new aws.dynamodb.Table(`session-table`, {
 **Problem:** The model generated a **single 1000+ line file** with all infrastructure inline, violating fundamental software engineering principles.
 
 #### Model's Approach (WRONG):
-```ts
+```typescript
 // Everything in one massive file
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -200,7 +200,7 @@ const auroraSGs = { ... };
 - Not scalable
 
 #### Correct Fix (MODULAR):
-```ts
+```typescript
 // tap-stack.ts - Main orchestrator
 import { NetworkStack } from './global-banking/network-stack';
 import { SecurityStack } from './global-banking/security-stack';
@@ -241,7 +241,7 @@ export class TapStack extends pulumi.ComponentResource {
 **Problem:** The model failed to use Pulumi's `ComponentResource` pattern, which is essential for building reusable infrastructure components.
 
 #### Model's Approach (WRONG):
-```ts
+```typescript
 // Just creates resources directly without abstraction
 const vpc = new awsx.ec2.Vpc("vpc", { ... });
 const cluster = new aws.ecs.Cluster("cluster", { ... });
@@ -249,7 +249,7 @@ const cluster = new aws.ecs.Cluster("cluster", { ... });
 ```
 
 #### Correct Fix:
-```ts
+```typescript
 // Each stack is a proper ComponentResource with clear interface
 export interface NetworkStackArgs {
   environmentSuffix: string;
@@ -290,7 +290,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 **Problem:** No explicit dependency ordering, leading to potential race conditions and deployment failures.
 
 #### Model's Approach (WRONG):
-```ts
+```typescript
 // Resources created without dependency management
 const vpc = new awsx.ec2.Vpc("vpc", { ... });
 const database = new aws.rds.Cluster("db", { ... }); // Might deploy before VPC!
@@ -298,7 +298,7 @@ const ecs = new aws.ecs.Cluster("ecs", { ... }); // Might deploy before network!
 ```
 
 #### Correct Fix:
-```ts
+```typescript
 // Explicit dependency graph with proper ordering
 export class TapStack extends pulumi.ComponentResource {
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
@@ -352,7 +352,7 @@ export class TapStack extends pulumi.ComponentResource {
 The model generated **zero** Step Functions code despite explicit requirements.
 
 #### Correct Fix (Should have been in ComputeStack or separate WorkflowStack):
-```ts
+```typescript
 // This should have been implemented
 export class WorkflowStack extends pulumi.ComponentResource {
   constructor(/*...*/) {
@@ -418,7 +418,7 @@ export class WorkflowStack extends pulumi.ComponentResource {
 No fraud detection resources were created.
 
 #### Correct Fix (Should have been in SecurityStack or FraudDetectionStack):
-```ts
+```typescript
 // This critical security component was completely omitted
 const fraudDetector = new aws.frauddetector.Detector("transaction-fraud-detector", {
   detectorId: "banking-transaction-detector",
@@ -455,7 +455,7 @@ const fraudModel = new aws.frauddetector.Model("fraud-model", {
 The model mentioned Global Accelerator but never actually created it.
 
 #### Correct Fix (Implemented in ApiStack):
-```ts
+```typescript
 // Should have been fully implemented
 export class ApiStack extends pulumi.ComponentResource {
   public readonly globalAcceleratorDns: pulumi.Output<string>;
@@ -511,7 +511,7 @@ export class ApiStack extends pulumi.ComponentResource {
 No DR automation was created.
 
 #### Correct Fix (Should have been in ComplianceStack or DRStack):
-```ts
+```typescript
 // Critical DR automation missing
 const failoverLambdaRole = new aws.iam.Role("dr-failover-role", {
   assumeRolePolicy: JSON.stringify({
@@ -585,7 +585,7 @@ const dbFailureAlarm = new aws.cloudwatch.MetricAlarm("aurora-failure-alarm", {
 The model created a backup vault and plan but without proper resource selection and cross-region configuration.
 
 #### Model's Partial Implementation:
-```ts
+```typescript
 // Model created this but incomplete
 const backupPlan = new aws.backup.Plan(`backup-plan`, {
     name: `${projectName}-plan`,
@@ -599,7 +599,7 @@ const backupPlan = new aws.backup.Plan(`backup-plan`, {
 ```
 
 #### Correct Fix (Should have been in ComplianceStack):
-```ts
+```typescript
 // Complete implementation with resource selection
 export class ComplianceStack extends pulumi.ComponentResource {
   constructor(/*...*/) {
@@ -652,7 +652,7 @@ export class ComplianceStack extends pulumi.ComponentResource {
 **Problem:** The model created ALBs and target groups but **never created listeners**, making the load balancers non-functional.
 
 #### Model's Implementation (INCOMPLETE):
-```ts
+```typescript
 // Created ALB
 albs[region] = new aws.lb.LoadBalancer(`alb-${region}`, { ... });
 
@@ -663,7 +663,7 @@ albTargetGroups[region] = new aws.lb.TargetGroup(`alb-tg-${region}`, { ... });
 ```
 
 #### Correct Fix (Implemented in ApiStack):
-```ts
+```typescript
 // Must create listeners for ALB to function
 const httpsListener = new aws.lb.Listener("https-listener", {
   loadBalancerArn: alb.arn,
@@ -703,7 +703,7 @@ const httpListener = new aws.lb.Listener("http-listener", {
 **Problem:** The model created IAM roles but with minimal or missing policies.
 
 #### Model's Approach (INCOMPLETE):
-```ts
+```typescript
 const lambdaRole = new aws.iam.Role(`lambda-role`, {
     assumeRolePolicy: JSON.stringify({ /* ... */ }),
     managedPolicyArns: [
@@ -715,7 +715,7 @@ const lambdaRole = new aws.iam.Role(`lambda-role`, {
 ```
 
 #### Correct Fix:
-```ts
+```typescript
 const lambdaRole = new aws.iam.Role("lambda-role", {
   assumeRolePolicy: JSON.stringify({ /* ... */ })
 });
@@ -778,7 +778,7 @@ new aws.iam.RolePolicyAttachment("lambda-custom", {
 **Problem:** The model references a JAR file that doesn't exist.
 
 #### Model's Approach (WILL FAIL):
-```ts
+```typescript
 lambdaFunctions[region] = new aws.lambda.Function(`transaction-processor-${region}`, {
     runtime: "java17",
     handler: "com.banking.TransactionHandler::handleRequest",
@@ -790,7 +790,7 @@ lambdaFunctions[region] = new aws.lambda.Function(`transaction-processor-${regio
 ```
 
 #### Correct Fix:
-```ts
+```typescript
 // Create a placeholder or check if file exists
 const lambdaCode = fs.existsSync("./lambda-deployment-package.jar")
   ? new pulumi.asset.FileArchive("./lambda-deployment-package.jar")
@@ -822,7 +822,7 @@ const lambdaFunction = new aws.lambda.Function("transaction-processor", {
 **Problem:** The model created API Gateway but never integrated it with anything.
 
 #### Model's Approach (INCOMPLETE):
-```ts
+```typescript
 apiGateways[region] = new aws.apigatewayv2.Api(`api-gateway-${region}`, {
     name: `${projectName}-api-${region}`,
     protocolType: "HTTP",
@@ -832,7 +832,7 @@ apiGateways[region] = new aws.apigatewayv2.Api(`api-gateway-${region}`, {
 ```
 
 #### Correct Fix (Implemented in ApiStack):
-```ts
+```typescript
 export class ApiStack extends pulumi.ComponentResource {
   constructor(/*...*/) {
     // Create API Gateway
@@ -893,7 +893,7 @@ export class ApiStack extends pulumi.ComponentResource {
 **Problem:** The model created ECS clusters but no services or task definitions.
 
 #### Model's Approach (INCOMPLETE):
-```ts
+```typescript
 ecsClusters[region] = new aws.ecs.Cluster(`ecs-cluster-${region}`, {
     name: `${projectName}-${region}`,
     settings: [{
@@ -905,7 +905,7 @@ ecsClusters[region] = new aws.ecs.Cluster(`ecs-cluster-${region}`, {
 ```
 
 #### Correct Fix (Implemented in ComputeStack):
-```ts
+```typescript
 export class ComputeStack extends pulumi.ComponentResource {
   constructor(/*...*/) {
     // Create ECS cluster
@@ -996,7 +996,7 @@ export class ComputeStack extends pulumi.ComponentResource {
 **Problem:** The model created App Mesh but no virtual nodes, routers, or services.
 
 #### Model's Approach (INCOMPLETE):
-```ts
+```typescript
 appMeshes[region] = new aws.appmesh.Mesh(`app-mesh-${region}`, {
     name: `${projectName}-mesh-${region}`,
     spec: {
@@ -1007,7 +1007,7 @@ appMeshes[region] = new aws.appmesh.Mesh(`app-mesh-${region}`, {
 ```
 
 #### Correct Fix (Should be in ComputeStack):
-```ts
+```typescript
 // Create App Mesh
 const mesh = new aws.appmesh.Mesh("mesh", {
   name: `${args.environmentSuffix}-banking-mesh`,
@@ -1129,7 +1129,7 @@ tap-stack.ts (Main Orchestrator)
 
 ### Deployment Order with Dependencies
 
-```ts
+```typescript
 export class TapStack extends pulumi.ComponentResource {
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -1294,7 +1294,7 @@ export class TapStack extends pulumi.ComponentResource {
 ### Network Stack: Monolithic vs. Modular
 
 #### Model's Monolithic Approach:
-```ts
+```typescript
 // All networking code inline in main file
 const vpcs: { [key: string]: awsx.ec2.Vpc } = {};
 const transitGateways: { [key: string]: aws.ec2transitgateway.TransitGateway } = {};
@@ -1324,7 +1324,7 @@ allRegions.forEach(region => {
 ```
 
 #### Correct Modular Approach:
-```ts
+```typescript
 // network-stack.ts - Separate, reusable component
 export interface NetworkStackArgs {
   environmentSuffix: string;
@@ -1511,7 +1511,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 ### Database Stack: Inline vs. ComponentResource
 
 #### Model's Inline Approach:
-```ts
+```typescript
 // Everything inline in main file
 const dbSubnetGroups: { [key: string]: aws.rds.SubnetGroup } = {};
 const auroraSGs: { [key: string]: aws.ec2.SecurityGroup } = {};
@@ -1540,7 +1540,7 @@ const globalCluster = new aws.rds.GlobalCluster(`global-cluster`, {
 ```
 
 #### Correct ComponentResource Approach:
-```ts
+```typescript
 // database-stack.ts - Encapsulated, testable component
 export interface DatabaseStackArgs {
   environmentSuffix: string;
@@ -1800,14 +1800,14 @@ export class DatabaseStack extends pulumi.ComponentResource {
 ### 1. Always Use ComponentResource Pattern
 
 **Bad:**
-```ts
+```typescript
 // Creating resources directly
 const vpc = new aws.ec2.Vpc("vpc", { ... });
 const cluster = new aws.ecs.Cluster("cluster", { ... });
 ```
 
 **Good:**
-```ts
+```typescript
 // Wrap in ComponentResource
 export class InfraStack extends pulumi.ComponentResource {
   constructor(name: string, args: Args, opts?: ResourceOptions) {
@@ -1823,14 +1823,14 @@ export class InfraStack extends pulumi.ComponentResource {
 ### 2. Explicit Dependency Management
 
 **Bad:**
-```ts
+```typescript
 // Implicit dependencies - might fail
 const database = new Database({ ... });
 const api = new ApiGateway({ ... }); // Might deploy before database!
 ```
 
 **Good:**
-```ts
+```typescript
 // Explicit dependencies
 const database = new Database({ ... });
 const api = new ApiGateway({ ... }, { dependsOn: [database] });
@@ -1841,7 +1841,7 @@ const api = new ApiGateway({ ... }, { dependsOn: [database] });
 ### 3. Separation of Concerns
 
 **Bad:**
-```ts
+```typescript
 // Everything mixed together
 const kms = new aws.kms.Key("key", { ... });
 const vpc = new aws.ec2.Vpc("vpc", { ... });
@@ -1849,7 +1849,7 @@ const db = new aws.rds.Cluster("db", { ... });
 ```
 
 **Good:**
-```ts
+```typescript
 // Organized by responsibility
 const securityStack = new SecurityStack({ ... });
 const networkStack = new NetworkStack({ ... });
@@ -1861,13 +1861,13 @@ const databaseStack = new DatabaseStack({ ... });
 ### 4. Type-Safe Interfaces
 
 **Bad:**
-```ts
+```typescript
 // Untyped, error-prone
 function createStack(options: any) { ... }
 ```
 
 **Good:**
-```ts
+```typescript
 // Type-safe interface
 export interface StackArgs {
   environmentSuffix: string;
@@ -1885,7 +1885,7 @@ export class Stack extends pulumi.ComponentResource {
 ### 5. Clear Input/Output Contracts
 
 **Bad:**
-```ts
+```typescript
 // Unclear what the component exposes
 export class Stack {
   // No clear outputs
@@ -1893,7 +1893,7 @@ export class Stack {
 ```
 
 **Good:**
-```ts
+```typescript
 // Clear outputs
 export class Stack extends pulumi.ComponentResource {
   public readonly vpcId: pulumi.Output<string>;

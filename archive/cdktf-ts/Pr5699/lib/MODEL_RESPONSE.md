@@ -4,7 +4,7 @@ This implementation creates a complete multi-tier VPC infrastructure with proper
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -98,7 +98,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/networking-construct.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';

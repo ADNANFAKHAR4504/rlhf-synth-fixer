@@ -9,7 +9,7 @@ This document identifies the critical infrastructure issues found in the origina
 ### 1. DatabaseEngine API Usage Error
 
 **Issue Identified:**
-```ts
+```typescript
 // FAILED: Incorrect API usage in MODEL_RESPONSE files
 engine: rds.DatabaseEngine.postgres({
   version: rds.PostgresEngineVersion.VER_15_4,
@@ -25,7 +25,7 @@ DatabaseEngine does not exist on type aws-rds module
 The model responses used an incorrect API reference for the RDS database engine. The AWS CDK API changed and `rds.DatabaseEngine.postgres()` should be `rds.DatabaseInstanceEngine.postgres()`.
 
 **Required Fix:**
-```ts
+```typescript
 // CORRECT: Proper API usage
 engine: rds.DatabaseInstanceEngine.postgres({
   version: rds.PostgresEngineVersion.VER_15,
@@ -37,7 +37,7 @@ engine: rds.DatabaseInstanceEngine.postgres({
 ### 2. Amazon Linux 2023 AMI Configuration Error
 
 **Issue Identified:**
-```ts
+```typescript
 // FAILED: Invalid property in MODEL_RESPONSE files
 const ami = ec2.MachineImage.latestAmazonLinux2023({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2023,
@@ -53,7 +53,7 @@ generation is not a valid property in AmazonLinux2023ImageSsmParameterProps
 The Amazon Linux 2023 AMI selection API does not accept a `generation` property. The `latestAmazonLinux2023()` method automatically selects the correct generation.
 
 **Required Fix:**
-```ts
+```typescript
 // CORRECT: Simplified AMI selection
 const ami = ec2.MachineImage.latestAmazonLinux2023();
 ```
@@ -63,7 +63,7 @@ const ami = ec2.MachineImage.latestAmazonLinux2023();
 ### 3. RDS Metrics API Inconsistency
 
 **Issue Identified:**
-```ts
+```typescript
 // FAILED: Non-existent methods in MODEL_RESPONSE files
 metric: database.metricReadLatency()
 metric: database.metricWriteLatency()
@@ -79,7 +79,7 @@ metricWriteLatency does not exist on type DatabaseInstance
 The AWS CDK DatabaseInstance class does not provide direct methods for read and write latency metrics. These metrics must be created manually using CloudWatch Metric constructors.
 
 **Required Fix:**
-```ts
+```typescript
 // CORRECT: Manual metric creation
 const rdsReadLatencyMetric = new cloudwatch.Metric({
   namespace: 'AWS/RDS',
@@ -107,7 +107,7 @@ const rdsWriteLatencyMetric = new cloudwatch.Metric({
 ### 4. Missing EC2 Instance Metrics
 
 **Issue Identified:**
-```ts
+```typescript
 // FAILED: Non-existent method in MODEL_RESPONSE files
 metric: ec2Instance.metricCPUUtilization()
 ```
@@ -121,7 +121,7 @@ metricCPUUtilization does not exist on type Instance
 EC2 Instance construct does not provide direct metric methods like RDS instances do. CPU and other metrics must be created manually.
 
 **Required Fix:**
-```ts
+```typescript
 // CORRECT: Manual EC2 metric creation
 const ec2CpuMetric = new cloudwatch.Metric({
   namespace: 'AWS/EC2',
@@ -185,7 +185,7 @@ Security implementation had several gaps:
 ## Test Case Requirements
 
 ### Unit Test Fixes Needed:
-```ts
+```typescript
 // Test environment suffix integration
 test('resources include environment suffix', () => {
   const template = Template.fromStack(stack);
@@ -213,7 +213,7 @@ test('creates all required CloudWatch alarms', () => {
 ```
 
 ### Integration Test Fixes Needed:
-```ts
+```typescript
 // Test actual database connectivity
 test('database accepts connections from EC2', async () => {
   const outputs = require('../cfn-outputs/flat-outputs.json');

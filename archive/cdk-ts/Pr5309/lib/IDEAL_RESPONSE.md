@@ -25,7 +25,7 @@ I'll design and implement a comprehensive CI/CD pipeline for your Hono TypeScrip
 
 ### 1. Entry Point (bin/tap.ts)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -56,7 +56,7 @@ new TapStack(app, stackName, {
 
 ### 2. Main Stack (lib/tap-stack.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -235,7 +235,7 @@ export class TapStack extends cdk.Stack {
 
 ### 3. Configuration (lib/config/pipeline-config.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 
 export interface PipelineConfig {
@@ -292,7 +292,7 @@ export function getPipelineConfig(
 
 ### 4. Security Infrastructure (lib/constructs/security-infrastructure.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -368,7 +368,7 @@ export class SecurityInfrastructure extends Construct {
 
 ### 5. Application Infrastructure (lib/constructs/application-infrastructure.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -605,7 +605,7 @@ export class ApplicationInfrastructure extends Construct {
 
 ### 6. Pipeline Infrastructure (lib/constructs/pipeline-infrastructure.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
@@ -1061,7 +1061,7 @@ export class PipelineInfrastructure extends Construct {
 
 ### 7. Monitoring Infrastructure (lib/constructs/monitoring-infrastructure.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';

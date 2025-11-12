@@ -16,7 +16,7 @@ The infrastructure includes:
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingConstruct } from './constructs/networking-construct';
@@ -195,7 +195,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/constructs/networking-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -257,7 +257,7 @@ export class NetworkingConstruct extends Construct {
 
 ## File: lib/constructs/database-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -345,7 +345,7 @@ export class DatabaseConstruct extends Construct {
 
 ## File: lib/constructs/storage-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
@@ -409,7 +409,7 @@ export class StorageConstruct extends Construct {
 
 ## File: lib/constructs/messaging-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
 import { Construct } from 'constructs';
@@ -459,7 +459,7 @@ export class MessagingConstruct extends Construct {
 
 ## File: lib/constructs/compute-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -577,7 +577,7 @@ export class ComputeConstruct extends Construct {
 
 ## File: lib/constructs/api-gateway-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -714,7 +714,7 @@ export class ApiGatewayConstruct extends Construct {
 
 ## File: lib/constructs/monitoring-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

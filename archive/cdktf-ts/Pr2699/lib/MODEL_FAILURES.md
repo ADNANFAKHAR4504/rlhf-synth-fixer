@@ -100,7 +100,7 @@
 
 ### 1. **Critical Import Failures**
 
-```ts
+```typescript
 // Model Response - INCORRECT
 import {
   AwsProvider,
@@ -124,7 +124,7 @@ import {
 ### 2. **Missing State Management**
 
 **Model Response Issue:**
-```ts
+```typescript
 class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     // No S3Backend configuration
@@ -150,7 +150,7 @@ class TapStack extends TerraformStack {
 
 **Model Response Security Issues:**
 
-```ts
+```typescript
 // Hardcoded password - SECURITY RISK
 username: "admin",
 password: "changeme123!", 
@@ -171,7 +171,7 @@ password: "changeme123!",
 ### 4. **Configuration Inflexibility**
 
 **Model Response Issues:**
-```ts
+```typescript
 const config = {
   region: "us-east-1", // Hardcoded
   amiId: "ami-0c02fb55956c7d316", // Fixed
@@ -203,7 +203,7 @@ const config = {
    - No state encryption
 
 2. **Improper App Initialization:**
-   ```ts
+   ```typescript
    // At bottom of stack file - INCORRECT
    const app = new App();
    new TapStack(app, "tap-infrastructure");
@@ -227,13 +227,13 @@ const config = {
 **Model Response Problems:**
 
 1. **Database Configuration:**
-   ```ts
+   ```typescript
    engineVersion: "8.0", // Incomplete version specification
    monitoringInterval: 60, // Basic monitoring only
    ```
 
 2. **S3 Configuration:**
-   ```ts
+   ```typescript
    // Missing advanced lifecycle rules
    // No advanced encryption configuration
    // Limited policy management

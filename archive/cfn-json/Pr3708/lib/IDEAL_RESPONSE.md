@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.d.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 export {};
 
@@ -969,7 +969,7 @@ export {};
 
 ## ./lib/tap-stack.d.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 interface TapStackProps extends cdk.StackProps {
@@ -984,14 +984,14 @@ export {};
 
 ## ./test/tap-stack.int.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 import fs from 'fs';
 import {
   DynamoDBClient,
@@ -1608,14 +1608,14 @@ describe('News Aggregator Stack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import fs from 'fs';
 import path from 'path';
 

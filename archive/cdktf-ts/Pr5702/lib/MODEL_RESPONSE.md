@@ -4,7 +4,7 @@ This implementation creates a complete AWS infrastructure for deploying a contai
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

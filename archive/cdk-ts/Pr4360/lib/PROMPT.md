@@ -4,7 +4,7 @@ Hey, I need help setting up a serverless infrastructure using AWS CDK in TypeScr
 
 Here's my existing stack code:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

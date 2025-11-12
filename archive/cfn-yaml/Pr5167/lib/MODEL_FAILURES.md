@@ -109,7 +109,7 @@ Error: Output PrivateSubnets not found in stack TapStackpr5158
 **Root Cause**: Integration tests assumed specific CloudFormation output structure that varied across different stack types and deployment patterns.
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 const region = 'ap-northeast-1';
@@ -124,7 +124,7 @@ const getOutputValue = async (key: string): Promise<string> => {
 
 **IDEAL_RESPONSE Fix**:
 Ultra-dynamic stack discovery with graceful adaptation:
-```ts
+```typescript
 // Helper function to dynamically discover available CloudFormation stacks
 const discoverStack = async (): Promise<any> => {
   const regionsToSearch = [region, 'ap-northeast-1', 'us-east-1'];
@@ -172,7 +172,7 @@ Tests assumed media processing pipeline infrastructure but failed on:
 **Root Cause**: Integration tests designed for single infrastructure pattern, not adaptable to various CloudFormation stack types.
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // Hardcoded assumption of specific infrastructure 
 test('RDS PostgreSQL instance should be running', async () => {
   const rdsEndpoint = await getOutputValue('RDSEndpoint'); // FAILS if no RDS
@@ -183,7 +183,7 @@ test('RDS PostgreSQL instance should be running', async () => {
 
 **IDEAL_RESPONSE Fix**:
 Conditional testing with graceful skipping:
-```ts
+```typescript
 test('RDS PostgreSQL instance should be running (if deployed)', async () => {
   const dbInstanceId = `media-postgres-${environmentSuffix}`;
   
@@ -462,7 +462,7 @@ TypeError: outputs.find is not a function
 
 **IDEAL_RESPONSE Fix**:
 Complete rewrite to dynamic stack discovery:
-```ts
+```typescript
 // Dynamic CloudFormation Stack Integration Tests
 const getStackOutputs = async (): Promise<any> => {
   const { stdout } = await execAsync(`aws cloudformation describe-stacks --stack-name ${stackName} --region ${region} --query 'Stacks[0].Outputs' --output json`);

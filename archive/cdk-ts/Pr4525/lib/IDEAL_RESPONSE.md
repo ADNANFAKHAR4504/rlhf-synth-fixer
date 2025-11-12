@@ -115,7 +115,7 @@ A comprehensive serverless application using AWS CDK in TypeScript with modular 
 
 ### 4. **bin/tap.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -142,7 +142,7 @@ new TapStack(app, `ServerlessInfra-${environmentSuffix}`, {
 
 ### 5. **lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ApiGatewayConstruct } from './constructs/api-gateway-construct';
@@ -256,7 +256,7 @@ export class TapStack extends cdk.Stack {
 
 ### 6. **lib/constructs/kms-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -353,7 +353,7 @@ export class KmsConstruct extends Construct {
 
 ### 7. **lib/constructs/dynamodb-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
@@ -421,7 +421,7 @@ export class DynamoDBConstruct extends Construct {
 
 ### 8. **lib/constructs/lambda-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -524,7 +524,7 @@ export class LambdaConstruct extends Construct {
 
 ### 9. **lib/constructs/api-gateway-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -705,7 +705,7 @@ export class ApiGatewayConstruct extends Construct {
 
 ### 10. **lib/constructs/monitoring-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -950,7 +950,7 @@ export class MonitoringConstruct extends Construct {
 
 ### 11. **lambda/handler.ts**
 
-```ts
+```typescript
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Tracer } from '@aws-lambda-powertools/tracer';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';

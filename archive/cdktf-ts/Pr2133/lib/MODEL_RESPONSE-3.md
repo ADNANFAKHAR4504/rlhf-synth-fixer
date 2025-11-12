@@ -1,6 +1,6 @@
 I'll fix the TypeScript errors and other issues in the code. The main problem is with the S3 lifecycle configuration structure and some other type mismatches.
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

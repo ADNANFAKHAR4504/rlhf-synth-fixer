@@ -30,7 +30,7 @@ Let's start by outlining the CloudFormation TypeScript structure:
 
 Let's start coding the solution:
 
-```ts
+```typescript
 // File: infrastructure/stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -348,7 +348,7 @@ export class NovaServerlessStack extends cdk.Stack {
 
 Now, let's create the entry point for the CDK app:
 
-```ts
+```typescript
 // File: bin/nova-app.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -406,7 +406,7 @@ Next, let's add a package.json file for the project:
 
 Now, let's create a basic post-deployment validation script:
 
-```ts
+```typescript
 // File: scripts/validate-deployment.ts
 import * as AWS from 'aws-sdk';
 import { execSync } from 'child_process';
@@ -655,7 +655,7 @@ npm run destroy
 
 Let's also include a basic Lambda function template for each of our services:
 
-```ts
+```typescript
 // File: src/lambda/user/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import * as AWS from 'aws-sdk';
@@ -879,7 +879,7 @@ The solution provides a complete TypeScript CloudFormation implementation with:
 
 ### Main Stack Implementation (`infrastructure/stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -1196,7 +1196,7 @@ export class NovaServerlessStack extends cdk.Stack {
 
 ### CDK App Entry Point (`bin/nova-app.ts`)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -1214,7 +1214,7 @@ new NovaServerlessStack(app, 'NovaServerlessStack', {
 
 ### Sample Lambda Implementation (`src/lambda/user/index.ts`)
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import * as AWS from 'aws-sdk';
 
@@ -1364,7 +1364,7 @@ export const handler = async (
 
 ### Post-Deployment Validation Script (`scripts/validate-deployment.ts`)
 
-```ts
+```typescript
 import * as AWS from 'aws-sdk';
 import { execSync } from 'child_process';
 

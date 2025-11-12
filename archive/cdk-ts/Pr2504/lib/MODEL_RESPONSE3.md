@@ -4,7 +4,7 @@
 
 Here's the corrected version that removes the conflicting bucket policy:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -356,7 +356,7 @@ def handler(event, context):
 
 ## Updated test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack, TapStackProps } from '../lib/tapstack';

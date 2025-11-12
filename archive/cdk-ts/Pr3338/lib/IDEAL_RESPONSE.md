@@ -6,7 +6,7 @@ This is the complete, production-ready CDK TypeScript infrastructure solution fo
 
 ### 1. **lib/tap-stack.ts** - Main CDK Stack
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Aws, Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -186,7 +186,7 @@ aws s3 cp /usr/share/nginx/html/index.html s3://${logsBucket.bucketName}/deploye
 
 ### 2. **bin/tap.ts** - CDK Application Entry Point
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

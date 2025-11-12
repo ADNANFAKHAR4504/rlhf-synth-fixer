@@ -5,7 +5,7 @@
 ### 1. Incorrect Data Source Usage for Availability Zones
 
 **Model Response Implementation:**
-```ts
+```typescript
 const availabilityZones = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
   this, 'azs', { state: 'available' }
 );
@@ -14,7 +14,7 @@ availabilityZone: availabilityZones.names.get(i),
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 const availabilityZones = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
   this, 'azs', { state: 'available' }
 );
@@ -48,7 +48,7 @@ subnetAZs = availabilityZones.names;
 ### 2. Incorrect S3 Bucket Resource Class Names
 
 **Model Response Implementation:**
-```ts
+```typescript
 this.bucketVersioning = new aws.s3BucketVersioningV2.S3BucketVersioningV2(
   this, 'bucket-versioning', { ... }
 );
@@ -63,7 +63,7 @@ this.bucketLogging = new aws.s3BucketLoggingV2.S3BucketLoggingV2(
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 this.bucketVersioning = new aws.s3BucketVersioning.S3BucketVersioningA(
   this, 'bucket-versioning', { ... }
 );
@@ -103,7 +103,7 @@ this.bucketLogging = new aws.s3BucketLogging.S3BucketLoggingA(
 ### 3. Insecure Secrets Management with Hardcoded Random Password
 
 **Model Response Implementation:**
-```ts
+```typescript
 // Generate random password
 const randomPassword = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
   this, 'db-password', {
@@ -125,7 +125,7 @@ this.dbSecretVersion = new aws.secretsmanagerSecretVersion.SecretsmanagerSecretV
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 this.dbSecretVersion = new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
   this, 'db-secret-version', {
     secretId: this.dbSecret.id,
@@ -164,7 +164,7 @@ this.dbSecretVersion = new aws.secretsmanagerSecretVersion.SecretsmanagerSecretV
 ### 4. RDS Module: Missing Managed Master Password Feature
 
 **Model Response Implementation:**
-```ts
+```typescript
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   // ... other properties
   username: props.username,
@@ -174,7 +174,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   // ... other properties
   username: props.username,
@@ -210,7 +210,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 ### 5. Incomplete AWS Provider Configuration
 
 **Model Response Implementation:**
-```ts
+```typescript
 new aws.provider.AwsProvider(this, 'aws', {
   region: process.env.AWS_REGION || 'us-east-1',
   defaultTags: [{
@@ -225,7 +225,7 @@ new aws.provider.AwsProvider(this, 'aws', {
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 new AwsProvider(this, 'aws', {
   region: awsRegion,
   defaultTags: [{
@@ -265,13 +265,13 @@ new AwsProvider(this, 'aws', {
 ### 6. Missing S3 Backend Configuration with State Locking
 
 **Model Response Implementation:**
-```ts
+```typescript
 // No S3 backend configuration present
 // No state locking mechanism
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -312,7 +312,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 7. Incomplete VPC Module Interface
 
 **Model Response Implementation:**
-```ts
+```typescript
 constructor(scope: Construct, id: string, props: {
   cidrBlock: string;
   azCount: number;
@@ -323,7 +323,7 @@ constructor(scope: Construct, id: string, props: {
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 constructor(
   scope: Construct,
   id: string,
@@ -371,7 +371,7 @@ constructor(
 ### 8. Missing RDS Username Configuration
 
 **Model Response Implementation:**
-```ts
+```typescript
 const rds = new RdsModule(this, 'rds-module', {
   vpcId: vpc.vpc.id,
   subnetIds: vpc.privateSubnets.map(subnet => subnet.id),
@@ -384,7 +384,7 @@ const rds = new RdsModule(this, 'rds-module', {
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 const rds = new RdsModule(this, 'rds-module', {
   vpcId: vpc.vpc.id,
   subnetIds: vpc.privateSubnets.map(subnet => subnet.id),
@@ -421,7 +421,7 @@ const rds = new RdsModule(this, 'rds-module', {
 ### 9. Improper Secret Data Retrieval Pattern
 
 **Model Response Implementation:**
-```ts
+```typescript
 // Inside tap-stack.ts
 const dbSecretData = new aws.dataAwsSecretsmanagerSecretVersion.DataAwsSecretsmanagerSecretVersion(
   this, 'db-secret-data', {
@@ -440,7 +440,7 @@ const rds = new RdsModule(this, 'rds-module', {
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 const rds = new RdsModule(this, 'rds-module', {
   vpcId: vpc.vpc.id,
   subnetIds: vpc.privateSubnets.map(subnet => subnet.id),
@@ -479,7 +479,7 @@ const rds = new RdsModule(this, 'rds-module', {
 ### 10. Missing Engine Version Specification
 
 **Model Response Implementation:**
-```ts
+```typescript
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   identifier: `${id}-db`,
   engine: 'mysql',
@@ -489,7 +489,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   identifier: `${id}-db`,
   engine: 'mysql',
@@ -527,12 +527,12 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 ### 11. Incomplete CloudWatch Logs Export
 
 **Model Response Implementation:**
-```ts
+```typescript
 enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 enabledCloudwatchLogsExports: ['error'],
 ```
 
@@ -569,7 +569,7 @@ enabledCloudwatchLogsExports: ['error'],
 ### 12. AMI ID Hardcoding
 
 **Model Response Implementation:**
-```ts
+```typescript
 this.launchTemplate = new aws.launchTemplate.LaunchTemplate(
   this, 'launch-template', {
     name: `${id}-launch-template`,
@@ -580,7 +580,7 @@ this.launchTemplate = new aws.launchTemplate.LaunchTemplate(
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 this.launchTemplate = new aws.launchTemplate.LaunchTemplate(
   this, 'launch-template', {
     name: `${id}-launch-template`,
@@ -599,7 +599,7 @@ this.launchTemplate = new aws.launchTemplate.LaunchTemplate(
 
 **What Both Should Have Done:**
 
-```ts
+```typescript
 // Best practice approach
 const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'amazon-linux-2', {
   mostRecent: true,
@@ -630,7 +630,7 @@ this.launchTemplate = new aws.launchTemplate.LaunchTemplate(
 ### 13. Stack Integration and Orchestration
 
 **Model Response Implementation:**
-```ts
+```typescript
 // Application Entry Point
 const app = new App();
 new TapStack(app, 'tap-webapp-infrastructure');
@@ -638,7 +638,7 @@ app.synth();
 ```
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -680,7 +680,7 @@ export class TapStack extends TerraformStack {
 ### 14. Comprehensive Output Management
 
 **Ideal Response Implementation:**
-```ts
+```typescript
 new TerraformOutput(this, 'rds-secret-arn', {
   value: rds.dbInstance.masterUserSecret.get(0).secretArn,
   description: 'RDS Master User Secret ARN (managed by RDS)',
@@ -689,7 +689,7 @@ new TerraformOutput(this, 'rds-secret-arn', {
 ```
 
 **Model Response:**
-```ts
+```typescript
 new TerraformOutput(this, 'secret-arn', {
   value: secrets.dbSecret.arn,
   description: 'Database Secret ARN',

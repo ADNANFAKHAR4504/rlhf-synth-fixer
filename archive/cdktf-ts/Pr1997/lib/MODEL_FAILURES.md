@@ -7,12 +7,12 @@ The ideal response is better because it correctly implements a robust, multi-reg
   * **Issue**: The model response lacks the foundational configuration for managing resources in a separate backup region. Without a separate provider, the infrastructure is not resilient to a regional outage.
   * **Example**:
       * **Model Response (Failure)**: No separate provider is defined for the backup region. The code also fails to create a dedicated KMS key for the backup vault.
-        ```ts
+        ```typescript
         // No separate provider for the backup region.
         // No backup KMS key is created.
         ```
       * **Ideal Response (Correct)**: Defines a new `AwsProvider` with an alias and region for backups. It also creates a dedicated KMS key for the backup vault in that separate region, a critical security and operational practice.
-        ```ts
+        ```typescript
         // Ideal Response
         const backupProvider = new provider.AwsProvider(this, 'backup-provider', {
           region: config.backupRegion,
@@ -34,7 +34,7 @@ The ideal response provides a more comprehensive and secure KMS key policy that 
   * **Issue**: The model response's KMS key policy is overly permissive and lacks specific grants for essential AWS services, such as CloudWatch Logs and CloudTrail.
   * **Example**:
       * **Model Response (Insecure)**: The KMS policy is missing the specific permission blocks for `CloudWatch Logs` and `CloudTrail`.
-        ```ts
+        ```typescript
         // Model Response
         policy: JSON.stringify({
           Version: "2012-10-17",
@@ -44,7 +44,7 @@ The ideal response provides a more comprehensive and secure KMS key policy that 
         })
         ```
       * **Ideal Response (Secure & Correct)**: The policy includes explicit `Allow` statements with specific actions and `Condition` blocks for services to use the key. This fine-grained control is a key security practice.
-        ```ts
+        ```typescript
         // Ideal Response
         {
           // Allow CloudWatch Logs to use the key
@@ -79,12 +79,12 @@ The ideal response correctly configures a dedicated bucket policy that allows Cl
   * **Issue**: The model response fails to create the required S3 bucket policy for CloudTrail logging.
   * **Example**:
       * **Model Response (Failure)**: No `s3BucketPolicy` resource is defined or attached to the log bucket.
-        ```ts
+        ```typescript
         // Model Response
         // No s3BucketPolicy resource is created.
         ```
       * **Ideal Response (Correct)**: Defines and attaches a policy that explicitly grants CloudTrail permission to write to the bucket.
-        ```ts
+        ```typescript
         // Ideal Response
         new s3BucketPolicy.S3BucketPolicy(this, 'CloudTrail-S3-Policy', {
           bucket: this.logBucket.id,
@@ -121,12 +121,12 @@ The ideal response creates a robust, automated backup plan using `aws_backup_vau
   * **Issue**: The model response lacks a proper and automated backup plan.
   * **Example**:
       * **Model Response (Missing)**: No `backupVault`, `backupPlan`, or `backupSelection` resources are defined.
-        ```ts
+        ```typescript
         // Model Response
         // No backup resources are created.
         ```
       * **Ideal Response (Correct)**: Creates the necessary resources to automate backups and links them to the cross-region provider and KMS key.
-        ```ts
+        ```typescript
         // Ideal Response
         this.backupVault = new backupVault.BackupVault(this, 'BackupVault', {
           name: 'Secure-Infrastructure-Backup-Vault',

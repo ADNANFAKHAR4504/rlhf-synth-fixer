@@ -1,4 +1,4 @@
-```ts
+```typescript
 // lib/tap-stack.ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';

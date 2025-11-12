@@ -1,6 +1,6 @@
 I see the issues. Let me fix the TypeScript errors by correcting the property names and types. Here's the corrected version:
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";

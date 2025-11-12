@@ -61,7 +61,7 @@ Password: `Passw0rd12345678` (no special characters @, !, ", /, or spaces)
 **MODEL_RESPONSE Issue**:
 Integration tests validated Terraform PLANS, not DEPLOYED infrastructure:
 
-```ts
+```typescript
 describe('Terraform Integration Tests', () => {
   beforeAll(() => {
     execSync('terraform init', { cwd: libDir, stdio: 'inherit' });
@@ -88,7 +88,7 @@ describe('Terraform Integration Tests', () => {
 **IDEAL_RESPONSE Fix**:
 True end-to-end integration tests that query actual AWS resources:
 
-```ts
+```typescript
 describe('Terraform Integration Tests - Deployed Infrastructure', () => {
   let outputs: any;
   const ec2Client = new EC2Client({ region });

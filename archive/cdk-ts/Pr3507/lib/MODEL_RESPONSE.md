@@ -4,7 +4,7 @@ Here's the CDK infrastructure code for the SageMaker model training platform:
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingStack } from './networking-stack';
@@ -59,7 +59,7 @@ export class TapStack extends cdk.Stack {
 
 ## networking-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -125,7 +125,7 @@ export class NetworkingStack extends cdk.NestedStack {
 
 ## storage-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -186,7 +186,7 @@ export class StorageStack extends cdk.NestedStack {
 
 ## sagemaker-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as sagemaker from 'aws-cdk-lib/aws-sagemaker';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -294,7 +294,7 @@ export class SageMakerStack extends cdk.NestedStack {
 
 ## batch-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as batch from 'aws-cdk-lib/aws-batch';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -418,7 +418,7 @@ export class BatchStack extends cdk.NestedStack {
 
 ## monitoring-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';

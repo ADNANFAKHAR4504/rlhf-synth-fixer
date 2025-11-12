@@ -22,7 +22,7 @@ This is the final, production-ready implementation after completing all QA valid
 - `throttleSettings` in `aws.apigateway.Stage`
 
 **Fix**: Updated to use proper Pulumi AWS provider patterns
-```ts
+```typescript
 // Deployment without stageName
 const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
   restApi: api.id,
@@ -208,7 +208,7 @@ This document analyzes the failures found in the MODEL_RESPONSE implementation a
 **Impact Level**: High (Build Blocker)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
   restApi: api.id,
   stageName: 'prod',  // ??? Deprecated property
@@ -218,7 +218,7 @@ const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environme
 **Error**: `error TS2353: Object literal may only specify known properties, and 'stageName' does not exist in type 'DeploymentArgs'.`
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
   restApi: api.id,
   // ??? stageName removed
@@ -236,7 +236,7 @@ const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environme
 **Impact Level**: High (Build Blocker + Requirement Violation)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
   restApi: api.id,
   deployment: deployment.id,
@@ -252,7 +252,7 @@ const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
 **Error**: `error TS2353: Object literal may only specify known properties, and 'throttleSettings' does not exist in type 'StageArgs'.`
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
   restApi: api.id,
   deployment: deployment.id,
@@ -337,7 +337,7 @@ This implementation provides a complete serverless webhook processing system usi
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -1023,7 +1023,7 @@ exports.handler = async (event) => {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';

@@ -2,7 +2,7 @@ I'll help you set up the infrastructure for the university LMS using CDKTF with 
 
 ## lib/lms-stack.ts
 
-```ts
+```typescript
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
@@ -621,7 +621,7 @@ export class LmsStack extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

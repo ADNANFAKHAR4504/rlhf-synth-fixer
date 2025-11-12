@@ -99,7 +99,7 @@ All resources include environment suffix to enable multiple deployments:
 ### 5. Test Coverage Requirements
 
 **Unit Tests:**
-```ts
+```typescript
 // Example unit test structure for VPC creation
 describe('TapStack VPC', () => {
   test('creates VPC with correct CIDR', () => {
@@ -117,7 +117,7 @@ describe('TapStack VPC', () => {
 ```
 
 **Integration Tests:**
-```ts
+```typescript
 // Example integration test for database connectivity
 describe('Database Integration', () => {
   test('RDS instance is accessible from EC2', async () => {

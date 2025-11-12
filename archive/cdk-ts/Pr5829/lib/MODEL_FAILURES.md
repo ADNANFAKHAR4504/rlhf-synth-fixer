@@ -30,7 +30,7 @@ This document outlines the gaps, errors, and improvements made between the initi
 
 ### 3. Cross-Account Role Trust Policy
 **Issue:** Initial implementation used `.map()` arrow function for trusted accounts processing:
-```ts
+```typescript
 const crossAccountAssumeBy =
   trustedAccounts.length > 0
     ? new iam.CompositePrincipal(
@@ -40,7 +40,7 @@ const crossAccountAssumeBy =
 ```
 
 **Fix:** Refactored to explicit `for` loop for better test coverage:
-```ts
+```typescript
 let crossAccountAssumeBy: iam.IPrincipal;
 if (trustedAccounts.length > 0) {
   const arnPrincipals: iam.ArnPrincipal[] = [];
@@ -61,7 +61,7 @@ if (trustedAccounts.length > 0) {
 ### 4. Unit Test Property Names
 **Issue:** Unit tests used incorrect property name `trustedAccounts` instead of `trustedAccountArns`.
 **Fix:** Updated all test cases to use correct interface property:
-```ts
+```typescript
 // Before
 trustedAccounts: ['arn:aws:iam::123456789012:root']
 
@@ -92,7 +92,7 @@ trustedAccountArns: ['arn:aws:iam::123456789012:root']
 ### 6. TypeScript Type Safety
 **Issue:** Missing explicit type annotations in some areas.
 **Fix:** Added explicit `IPrincipal` type annotation:
-```ts
+```typescript
 let crossAccountAssumeBy: iam.IPrincipal;
 ```
 

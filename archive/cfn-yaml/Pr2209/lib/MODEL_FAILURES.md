@@ -187,7 +187,7 @@ console.log: Warning: Could not verify IAM role, may not be deployed yet
 
 **Current Mitigation:**
 
-```ts
+```typescript
 // In integration tests - graceful handling
 if (!outputs[output]) {
   console.log(`Skipping test - ${output} not found in outputs`);
@@ -197,7 +197,7 @@ if (!outputs[output]) {
 
 **Improved Solution:**
 
-```ts
+```typescript
 // Enhanced test structure with mocking
 describe('Integration Tests', () => {
   let mockMode = false;
@@ -349,7 +349,7 @@ KeyPolicy:
 
 **Monitoring Solution:**
 
-```ts
+```typescript
 // Resource usage monitoring
 const checkResourceLimits = async () => {
   const limits = {

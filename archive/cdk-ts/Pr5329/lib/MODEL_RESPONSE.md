@@ -24,7 +24,7 @@ Below is a complete, production-ready CDK application that implements all specif
 
 ### **Complete CDK Stack Implementation**
 
-```ts
+```typescript
 // bookstore-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

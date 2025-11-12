@@ -19,7 +19,7 @@
 ### 2. **Production-Grade Security Implementation**
 
 **Ideal Response Security Excellence:**
-```ts
+```typescript
 // KMS encryption for S3 with proper configuration
 this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
   description: 'KMS key for S3 bucket encryption',
@@ -50,7 +50,7 @@ new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionCo
 ### 3. **Proper State Management Configuration**
 
 **Ideal Response State Management:**
-```ts
+```typescript
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -71,7 +71,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 4. **Comprehensive Resource Tagging Strategy**
 
 **Ideal Response Tagging:**
-```ts
+```typescript
 // Consistent tagging across all resources
 tags: {
   Name: 'production-vpc',
@@ -109,7 +109,7 @@ tags: {
 ### 2. **Security Implementation Failures**
 
 #### **KMS Encryption Deficiencies**
-```ts
+```typescript
 // Model Response - Incomplete Implementation
 serverSideEncryption: {
   enabled: true
@@ -144,7 +144,7 @@ serverSideEncryption: {
 ### 4. **Production Readiness Failures**
 
 #### **State Management Absence**
-```ts
+```typescript
 // Completely Missing in Model Response:
 new S3Backend(this, {
   bucket: stateBucket,

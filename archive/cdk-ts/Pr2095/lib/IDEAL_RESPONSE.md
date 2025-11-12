@@ -9,7 +9,7 @@ This solution provides a comprehensive, production-ready AWS infrastructure usin
 ### 🔐 Security-First Design
 
 **KMS Encryption**
-```ts
+```typescript
 const kmsKey = new kms.Key(this, `SecureAppKMSKey${environmentSuffix}`, {
   alias: `SecureApp-encryption-key-${environmentSuffix}`,
   description: `KMS key for SecureApp encryption at rest - ${environmentSuffix}`,
@@ -21,7 +21,7 @@ const kmsKey = new kms.Key(this, `SecureAppKMSKey${environmentSuffix}`, {
 ```
 
 **WAF v2 Protection**
-```ts
+```typescript
 const webAcl = new wafv2.CfnWebACL(this, `SecureAppWebACL${environmentSuffix}`, {
   name: `SecureApp-WebACL-${environmentSuffix}`,
   scope: 'REGIONAL',
@@ -46,7 +46,7 @@ const webAcl = new wafv2.CfnWebACL(this, `SecureAppWebACL${environmentSuffix}`, 
 ### 🌐 Multi-AZ Network Architecture
 
 **VPC with Subnet Separation**
-```ts
+```typescript
 const vpc = new ec2.Vpc(this, `SecureAppVPC${environmentSuffix}`, {
   vpcName: `SecureApp-VPC-${environmentSuffix}`,
   maxAzs: 3, // Multi-AZ for HA
@@ -75,7 +75,7 @@ const vpc = new ec2.Vpc(this, `SecureAppVPC${environmentSuffix}`, {
 ### 🏗️ Container Platform
 
 **ECS Fargate with Auto-Scaling**
-```ts
+```typescript
 const cluster = new ecs.Cluster(this, `SecureAppCluster${environmentSuffix}`, {
   clusterName: `SecureApp-Cluster-${environmentSuffix}`,
   vpc,
@@ -112,7 +112,7 @@ scaling.scaleOnCpuUtilization(`SecureAppCPUScaling${environmentSuffix}`, {
 ### ⚖️ Load Balancer with SSL Termination
 
 **Application Load Balancer**
-```ts
+```typescript
 const alb = new elbv2.ApplicationLoadBalancer(this, `SecureAppALB${environmentSuffix}`, {
   loadBalancerName: `SecureApp-ALB-${environmentSuffix}`,
   vpc,
@@ -147,7 +147,7 @@ alb.addListener(`SecureAppHTTPListener${environmentSuffix}`, {
 ### 📊 Comprehensive Monitoring
 
 **CloudWatch Log Groups with Encryption**
-```ts
+```typescript
 const appLogGroup = new logs.LogGroup(this, `SecureAppApplicationLogs${environmentSuffix}`, {
   logGroupName: `/aws/ecs/SecureApp-application-${environmentSuffix}`,
   retention: logs.RetentionDays.ONE_MONTH,
@@ -164,7 +164,7 @@ const vpcFlowLogGroup = new logs.LogGroup(this, `SecureAppVPCFlowLogs${environme
 ```
 
 **ALB Access Logs**
-```ts
+```typescript
 const albLogsBucket = new s3.Bucket(this, `SecureAppALBLogsBucket${environmentSuffix}`, {
   bucketName: `secureapp-alb-logs-${environmentSuffix}-${this.account}-${this.region}`,
   encryption: s3.BucketEncryption.KMS,
@@ -188,7 +188,7 @@ const albLogsBucket = new s3.Bucket(this, `SecureAppALBLogsBucket${environmentSu
 ### 🛡️ Security Groups (Least Privilege)
 
 **ALB Security Group**
-```ts
+```typescript
 const albSecurityGroup = new ec2.SecurityGroup(this, `SecureAppALBSecurityGroup${environmentSuffix}`, {
   vpc,
   securityGroupName: `SecureApp-ALB-SG-${environmentSuffix}`,
@@ -210,7 +210,7 @@ albSecurityGroup.addIngressRule(
 ```
 
 **ECS Security Group**
-```ts
+```typescript
 const ecsSecurityGroup = new ec2.SecurityGroup(this, `SecureAppECSSecurityGroup${environmentSuffix}`, {
   vpc,
   securityGroupName: `SecureApp-ECS-SG-${environmentSuffix}`,
@@ -234,7 +234,7 @@ ecsSecurityGroup.addEgressRule(
 ### 👥 IAM Roles (Least Privilege)
 
 **Task Execution Role**
-```ts
+```typescript
 const executionRole = new iam.Role(this, `SecureAppExecutionRole${environmentSuffix}`, {
   roleName: `SecureApp-ExecutionRole-${environmentSuffix}`,
   assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -247,7 +247,7 @@ kmsKey.grantDecrypt(executionRole);
 ```
 
 **Application Task Role**
-```ts
+```typescript
 const taskRole = new iam.Role(this, `SecureAppTaskRole${environmentSuffix}`, {
   roleName: `SecureApp-TaskRole-${environmentSuffix}`,
   assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),

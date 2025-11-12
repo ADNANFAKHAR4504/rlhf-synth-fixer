@@ -331,7 +331,7 @@ coverage/
 
 ### bin/multi-env-aws-infra.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -462,7 +462,7 @@ cdk.Tags.of(app).add('Application', 'multi-env-infra');
 
 ### lib/interfaces/config-interfaces.ts
 
-```ts
+```typescript
 export interface AppConfig {
   environment: string;
   regions: string[];
@@ -484,7 +484,7 @@ export interface RegionalConfig {
 
 ### lib/utils/naming.ts
 
-```ts
+```typescript
 import { AppConfig } from '../interfaces/config-interfaces';
 
 export class NamingUtil {
@@ -511,7 +511,7 @@ export class NamingUtil {
 
 ### lib/utils/cidr-allocator.ts
 
-```ts
+```typescript
 export class CidrAllocator {
   private static readonly BASE_CIDR = '10.0.0.0/8';
   private static readonly ENVIRONMENT_OFFSETS: { [key: string]: number } = {
@@ -534,7 +534,7 @@ export class CidrAllocator {
 
 ### lib/stacks/networking-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -599,7 +599,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ### lib/stacks/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -790,7 +790,7 @@ export class ComputeStack extends cdk.Stack {
 
 ### lib/stacks/database-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -911,7 +911,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ### lib/stacks/serverless-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -1076,7 +1076,7 @@ export class ServerlessStack extends cdk.Stack {
 
 ### lib/stacks/monitoring-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -1251,7 +1251,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ### lib/stacks/dns-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -1412,7 +1412,7 @@ export class DnsStack extends cdk.Stack {
 
 ### lib/stacks/iam-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -1577,7 +1577,7 @@ export class IamStack extends cdk.Stack {
 
 ### test/unit/vpc.test.ts
 
-```ts
+```typescript
 import { Template } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
 import { NetworkingStack } from '../../lib/stacks/networking-stack';
@@ -1647,7 +1647,7 @@ describe('NetworkingStack', () => {
 
 ### test/unit/compute.test.ts
 
-```ts
+```typescript
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1742,7 +1742,7 @@ describe('ComputeStack', () => {
 
 ### test/unit/database.test.ts
 
-```ts
+```typescript
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1819,7 +1819,7 @@ describe('DatabaseStack', () => {
 
 ### test/unit/serverless.test.ts
 
-```ts
+```typescript
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1911,7 +1911,7 @@ describe('ServerlessStack', () => {
 
 ### test/integration/smoke-tests.ts
 
-```ts
+```typescript
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { CloudFormationClient, DescribeStacksCommand } from '@aws-sdk/client-cloudformation';

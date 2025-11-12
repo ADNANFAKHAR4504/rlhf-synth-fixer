@@ -4,7 +4,7 @@ This implementation provides a comprehensive, production-ready zero-trust securi
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -793,7 +793,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -824,7 +824,7 @@ app.synth();
 
 ## File: test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
@@ -1261,7 +1261,7 @@ aws sts assume-role \
 
 Lambda functions should be configured to use the department-specific Lambda execution roles:
 
-```ts
+```typescript
 const myFunction = new lambda.Function(this, 'MyFunction', {
   runtime: lambda.Runtime.NODEJS_18_X,
   handler: 'index.handler',

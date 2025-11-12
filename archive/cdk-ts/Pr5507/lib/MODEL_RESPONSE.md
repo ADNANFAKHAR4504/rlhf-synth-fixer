@@ -45,7 +45,7 @@ The key challenge lies in establishing secure, performant cross-VPC database rep
 ### Answer 
 ---
 
-```ts
+```typescript
 // main.ts
 import * as cdk from 'aws-cdk-lib';
 import { PaymentProcessingStack } from './tapstack';
@@ -134,7 +134,7 @@ new PaymentProcessingStack(app, `PaymentProcessing-${environment}`, {
 app.synth();
 ```
 
-```ts
+```typescript
 // tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

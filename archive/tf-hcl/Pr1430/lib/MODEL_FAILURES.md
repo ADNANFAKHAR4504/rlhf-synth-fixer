@@ -119,7 +119,7 @@ event_selector {
 **Fix Applied:**
 
 - Updated unit tests to match dynamic naming:
-  ```ts
+  ```typescript
   expect(terraformContent).toMatch(
     /name\s*=\s*"secure-storage-app-role-\$\{random_id\.bucket_suffix\.hex\}"/
   );

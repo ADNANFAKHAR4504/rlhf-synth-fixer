@@ -67,7 +67,7 @@ aml-monitoring-platform/
 
 ### 1. Main AML Pipeline Stack (`lib/aml-pipeline-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -718,7 +718,7 @@ export class AmlPipelineStack extends cdk.Stack {
 
 ### 2. TAP Stack (`lib/tap-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AmlPipelineStack } from './aml-pipeline-stack';
@@ -747,7 +747,7 @@ export class TapStack extends cdk.Stack {
 
 ### 3. Sample Lambda Function (`lambda/triage/index.ts`)
 
-```ts
+```typescript
 import { KinesisStreamEvent, KinesisStreamRecord, Context } from 'aws-lambda';
 import { createClient } from 'redis';
 import {

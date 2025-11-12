@@ -14,7 +14,7 @@
 - **Current State**: False sense of security - no actual SSL enforcement deployed
 
 **Code Analysis**:
-```ts
+```typescript
 // SECURITY VIOLATION - Line 26
 const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
   displayName: `Security Alerts - ${props.environmentSuffix}`,
@@ -23,7 +23,7 @@ const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
 ```
 
 **Expected Implementation** (from IDEAL_RESPONSE.md):
-```ts
+```typescript
 // Apply SSL enforcement policy to SNS topic
 securityAlertsTopic.addToResourcePolicy(
   new iam.PolicyStatement({

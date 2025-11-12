@@ -9,7 +9,7 @@ A comprehensive security-first AWS infrastructure implementation using CDK TypeS
 ## Core Infrastructure Components
 
 ### 1. Network Security Foundation
-```ts
+```typescript
 // VPC with proper CIDR and subnet isolation
 const vpc = new ec2.Vpc(this, 'SecureVpc', {
   ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -25,7 +25,7 @@ const vpc = new ec2.Vpc(this, 'SecureVpc', {
 ```
 
 ### 2. Encryption Infrastructure
-```ts
+```typescript
 // KMS Key with automatic rotation and proper permissions
 const encryptionKey = new kms.Key(this, 'EncryptionKey', {
   description: 'Key for encrypting resources in secure infrastructure',
@@ -61,7 +61,7 @@ const encryptionKey = new kms.Key(this, 'EncryptionKey', {
 ```
 
 ### 3. Security Groups with Least Privilege
-```ts
+```typescript
 // Web tier security group
 const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', {
   vpc: this.vpc,
@@ -87,7 +87,7 @@ databaseSecurityGroup.addIngressRule(webSecurityGroup, ec2.Port.tcp(5432), 'Allo
 ```
 
 ### 4. Web Application Firewall (WAF)
-```ts
+```typescript
 const webApplicationFirewall = new wafv2.CfnWebACL(this, 'WebApplicationFirewall', {
   scope: 'REGIONAL', // Correct scope for us-west-2 deployment
   defaultAction: { allow: {} },
@@ -134,7 +134,7 @@ const webApplicationFirewall = new wafv2.CfnWebACL(this, 'WebApplicationFirewall
 ```
 
 ### 5. Network Firewall Implementation
-```ts
+```typescript
 // Network Firewall Rule Group with proper rule definitions
 const threatIntelRuleGroup = new networkfirewall.CfnRuleGroup(this, 'ThreatIntelRuleGroup', {
   type: 'STATELESS',
@@ -164,7 +164,7 @@ const threatIntelRuleGroup = new networkfirewall.CfnRuleGroup(this, 'ThreatIntel
 ```
 
 ### 6. Compliance and Governance
-```ts
+```typescript
 // AWS Config Rules for security compliance
 const rootAccessKeyCheck = new config.CfnConfigRule(this, 'RootAccessKeyCheck', {
   configRuleName: `root-account-mfa-enabled-${environmentSuffix}`,
@@ -193,7 +193,7 @@ const securityHub = new securityhub.CfnHub(this, 'SecurityHub', {
 ```
 
 ### 7. Monitoring and Logging
-```ts
+```typescript
 // Encrypted CloudWatch Log Group
 const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
   logGroupName: `/aws/secure-infrastructure/tap-${environmentSuffix}`,
@@ -225,7 +225,7 @@ const securityDashboard = new cloudwatch.Dashboard(this, 'SecurityDashboard', {
 ```
 
 ### 8. IAM Security with MFA Enforcement
-```ts
+```typescript
 // Application role with least privilege
 const applicationRole = new iam.Role(this, 'ApplicationRole', {
   assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),

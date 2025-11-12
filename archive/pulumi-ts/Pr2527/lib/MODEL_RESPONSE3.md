@@ -1,6 +1,6 @@
 I'll fix the remaining TypeScript errors. The main issue is with the VPC Flow Log configuration. Let me provide the corrected code:
 
-```ts
+```typescript
 import * as aws from "@pulumi/aws";
 import * as pulumi from "@pulumi/pulumi";
 

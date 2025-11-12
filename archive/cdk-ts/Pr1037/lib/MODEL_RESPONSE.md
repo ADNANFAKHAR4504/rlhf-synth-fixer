@@ -4,7 +4,7 @@ Here's the CDK TypeScript implementation for a comprehensive CI/CD pipeline usin
 
 ## bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -27,7 +27,7 @@ new TapStack(app, `TapStack${envSuffix}`, {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

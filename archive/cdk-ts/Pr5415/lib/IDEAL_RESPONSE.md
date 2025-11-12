@@ -20,7 +20,7 @@ The infrastructure consolidates multiple Lambda functions into a single ARM64 Gr
 
 ### CDK Stack Definition (`lib/tap-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Duration, RemovalPolicy, Tags } from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
@@ -431,7 +431,7 @@ export class TapStack extends cdk.Stack {
 
 ### CDK App Entry Point (`bin/tap.ts`)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

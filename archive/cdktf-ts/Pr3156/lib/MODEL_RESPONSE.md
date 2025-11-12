@@ -45,7 +45,7 @@ I'll help you create a secure, compliant AWS infrastructure using CDK for Terraf
 
 ## `modules.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import {
   AwsProvider,
@@ -975,7 +975,7 @@ export class KmsModule extends Construct {
 
 ## `tap-stack.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws';

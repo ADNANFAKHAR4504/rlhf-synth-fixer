@@ -39,7 +39,7 @@ The infrastructure creates a complete VPC environment with the following compone
 
 Complete implementation of the migration infrastructure:
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -542,7 +542,7 @@ export const s3VpcEndpointId = s3VpcEndpoint.id;
 
 Skeleton component resource for organizing infrastructure:
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -718,7 +718,7 @@ To import an existing RDS snapshot:
 
 1. Share the snapshot from the source account to the target account
 2. Modify the RDS resource in `lib/index.ts` to include:
-   ```ts
+   ```typescript
    snapshotIdentifier: 'shared-snapshot-id',
    ```
 

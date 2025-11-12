@@ -54,7 +54,7 @@ npm install @aws-cdk/aws-apigateway @aws-cdk/aws-lambda @aws-cdk/aws-dynamodb @a
 
 Here's the complete CDK stack implementation:
 
-```ts
+```typescript
 // lib/serverless-app-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -458,7 +458,7 @@ export class ServerlessAppStack extends cdk.Stack {
 
 Update the main app file:
 
-```ts
+```typescript
 // bin/serverless-app-cdk.ts
 #!/usr/bin/env node
 import 'source-map-support/register';

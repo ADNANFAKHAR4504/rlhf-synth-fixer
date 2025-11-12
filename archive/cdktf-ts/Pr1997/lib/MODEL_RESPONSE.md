@@ -2,7 +2,7 @@ I'll create a comprehensive security-first AWS setup using CDK for Terraform (CD
 
 ## modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { 
   AwsProvider,
@@ -736,7 +736,7 @@ export class SecureInfrastructureModules extends Construct {
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";

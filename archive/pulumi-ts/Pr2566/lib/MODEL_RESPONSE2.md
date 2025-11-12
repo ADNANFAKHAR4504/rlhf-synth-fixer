@@ -1,6 +1,6 @@
 Here's the corrected code with all the TypeScript errors fixed:
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 

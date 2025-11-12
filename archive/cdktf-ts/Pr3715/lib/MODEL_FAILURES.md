@@ -6,7 +6,7 @@ This document analyzes the original model response in `MODEL_RESPONSE.md` and id
 
 ### 1. **KMS Configuration Bug** ❌
 
-```ts
+```typescript
 // MODEL_RESPONSE.md (INCORRECT)
 serverSideEncryption: {
   enabled: true,
@@ -24,7 +24,7 @@ serverSideEncryption: {
 
 ### 2. **LSI Hash Key Redundancy** ❌
 
-```ts
+```typescript
 // MODEL_RESPONSE.md (INCORRECT)
 localSecondaryIndex: [
   {
@@ -50,7 +50,7 @@ localSecondaryIndex: [
 
 ### 3. **Static Resource Naming** ⚠️
 
-```ts
+```typescript
 // MODEL_RESPONSE.md (BASIC)
 name: 'GamePlayerProfiles';
 
@@ -62,7 +62,7 @@ name: `GamingPlayerProfiles-${environment}-${timestamp}`;
 
 ### 4. **Limited Configurability** ⚠️
 
-```ts
+```typescript
 // MODEL_RESPONSE.md (BASIC)
 class GamingDatabaseStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
@@ -89,7 +89,7 @@ interface GamingDatabaseStackProps {
 
 The model response doesn't include proper app instantiation or synthesis code:
 
-```ts
+```typescript
 // MISSING FROM MODEL_RESPONSE.md
 const app = new App();
 new GamingDatabaseStack(app, 'gaming-database-stack');
@@ -98,14 +98,14 @@ app.synth();
 
 ### 2. **No Environment Variable Support** ❌
 
-```ts
+```typescript
 // MISSING FROM MODEL_RESPONSE.md
 enableAutoScaling: process.env.ENABLE_AUTO_SCALING === 'true';
 ```
 
 ### 3. **No Export Aliases** ❌
 
-```ts
+```typescript
 // MISSING FROM MODEL_RESPONSE.md
 export const TapStack = GamingDatabaseStack;
 ```

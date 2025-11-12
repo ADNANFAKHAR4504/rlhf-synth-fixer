@@ -74,7 +74,7 @@ Let's start implementing the CDK code for each stack:
 
 1. First, let's create the `regional-stack.ts` that will define the infrastructure for each region:
 
-```ts
+```typescript
 // lib/regional-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -279,7 +279,7 @@ export class RegionalStack extends cdk.Stack {
 
 2. Now, let's create the `database-stack.ts` for the DynamoDB Global Table:
 
-```ts
+```typescript
 // lib/database-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -346,7 +346,7 @@ export class DatabaseStack extends cdk.Stack {
 
 3. Let's create the `security-stack.ts` for WAF and other security measures:
 
-```ts
+```typescript
 // lib/security-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -444,7 +444,7 @@ export class SecurityStack extends cdk.Stack {
 
 4. Now, let's create the `global-stack.ts` for the Route53 and CloudFront distribution:
 
-```ts
+```typescript
 // lib/global-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -652,7 +652,7 @@ export class GlobalStack extends cdk.Stack {
 
 5. Now, let's create the main stack that will orchestrate all the other stacks:
 
-```ts
+```typescript
 // lib/global-payments-gateway-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -761,7 +761,7 @@ export class GlobalPaymentsGatewayStack extends cdk.Stack {
 
 For the authorizer Lambda:
 
-```ts
+```typescript
 // lambda/authorizer/index.ts
 export const handler = async (event: any): Promise<any> => {
   console.log('Event:', JSON.stringify(event, null, 2));
@@ -805,7 +805,7 @@ export const handler = async (event: any): Promise<any> => {
 
 For the transfer Lambda:
 
-```ts
+```typescript
 // lambda/transfer/index.ts
 import { DynamoDB } from 'aws-sdk';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
@@ -1061,7 +1061,7 @@ export const handler = async (
 
 8. Finally, let's create the CDK app entry point:
 
-```ts
+```typescript
 // bin/global-payments-gateway.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -1208,7 +1208,7 @@ Let's start by implementing each of the stacks:
 
 This stack creates the DynamoDB Global Table with encryption and auditing:
 
-```ts
+```typescript
 // lib/database-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -1260,7 +1260,7 @@ export class DatabaseStack extends cdk.Stack {
 
 This stack creates region-specific infrastructure:
 
-```ts
+```typescript
 // lib/regional-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -1451,7 +1451,7 @@ export class RegionalStack extends cdk.Stack {
 
 This stack implements WAF protection:
 
-```ts
+```typescript
 // lib/security-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -1545,7 +1545,7 @@ export class SecurityStack extends cdk.Stack {
 
 This stack implements the global routing and failover:
 
-```ts
+```typescript
 // lib/global-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

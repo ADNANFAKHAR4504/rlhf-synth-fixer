@@ -477,7 +477,7 @@ Outputs:
 
 **Examples**:
 
-```ts
+```typescript
 // BAD: Superficial test
 test('template should have resources', () => {
   expect(template.Resources).toBeDefined();
@@ -505,7 +505,7 @@ test('S3 bucket should have correct replication configuration', () => {
 
 **Examples**:
 
-```ts
+```typescript
 // BAD: Placeholder test
 test('integration tests', () => {
   expect(true).toBe(true);

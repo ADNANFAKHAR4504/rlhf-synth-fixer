@@ -6,14 +6,14 @@
 **Original Issue**: Resources lacked environment suffix, causing naming conflicts in multi-environment deployments.
 
 **Before**:
-```ts
+```typescript
 const audioBucket = new aws.s3.Bucket('podcast-audio-bucket', {
   // No unique naming
 });
 ```
 
 **After**:
-```ts
+```typescript
 const audioBucket = new aws.s3.Bucket(
   `podcast-audio-bucket-${environmentSuffix}`,
   {
@@ -26,14 +26,14 @@ const audioBucket = new aws.s3.Bucket(
 **Original Issue**: Used `.example.com` domain which is reserved by AWS, causing deployment failure.
 
 **Before**:
-```ts
+```typescript
 const hostedZone = new aws.route53.Zone('podcast-zone', {
   name: 'podcast.example.com', // Reserved domain
 });
 ```
 
 **After**:
-```ts
+```typescript
 const hostedZone = new aws.route53.Zone(
   `podcast-zone-${environmentSuffix}`,
   {
@@ -46,7 +46,7 @@ const hostedZone = new aws.route53.Zone(
 **Original Issue**: Dashboard metrics included dimensions object incorrectly, violating CloudWatch API schema.
 
 **Before**:
-```ts
+```typescript
 metrics: [
   ['AWS/DynamoDB', 'ConsumedReadCapacityUnits',
     { dimensions: { TableName: subscriberTable.name } }], // Invalid format
@@ -54,7 +54,7 @@ metrics: [
 ```
 
 **After**:
-```ts
+```typescript
 metrics: [
   ['AWS/DynamoDB', 'ConsumedReadCapacityUnits'], // Correct format
   ['AWS/DynamoDB', 'ConsumedWriteCapacityUnits'],
@@ -65,7 +65,7 @@ metrics: [
 **Original Issue**: Incorrect provider configuration for Lambda@Edge function.
 
 **Before**:
-```ts
+```typescript
 const authLambda = new aws.lambda.Function('auth-lambda-edge', {
   // ...
 }, { parent: this }, { provider: new aws.Provider('us-east-1-provider', { region: 'us-east-1' }) });
@@ -73,7 +73,7 @@ const authLambda = new aws.lambda.Function('auth-lambda-edge', {
 ```
 
 **After**:
-```ts
+```typescript
 const usEast1Provider = new aws.Provider(
   `us-east-1-provider-${environmentSuffix}`,
   { region: 'us-east-1' },
@@ -91,7 +91,7 @@ const authLambda = new aws.lambda.Function(
 **Original Issue**: Resources lacked deletion configuration, preventing cleanup.
 
 **Before**:
-```ts
+```typescript
 const audioBucket = new aws.s3.Bucket('podcast-audio-bucket', {
   // No forceDestroy
 });
@@ -102,7 +102,7 @@ const subscriberTable = new aws.dynamodb.Table('subscriber-table', {
 ```
 
 **After**:
-```ts
+```typescript
 const audioBucket = new aws.s3.Bucket(
   `podcast-audio-bucket-${environmentSuffix}`,
   {
@@ -122,7 +122,7 @@ const subscriberTable = new aws.dynamodb.Table(
 **Original Issue**: Stack didn't export all required outputs.
 
 **Before**:
-```ts
+```typescript
 // Only 3 outputs
 this.bucketName = audioBucket.id;
 this.distributionDomainName = distribution.domainName;
@@ -130,7 +130,7 @@ this.hostedZoneId = hostedZone.zoneId;
 ```
 
 **After**:
-```ts
+```typescript
 // All 5 required outputs
 this.bucketName = audioBucket.id;
 this.distributionDomainName = distribution.domainName;
@@ -143,7 +143,7 @@ this.mediaConvertRoleArn = mediaConvertRole.arn;
 **Original Issue**: Basic mocks didn't properly simulate Pulumi resources.
 
 **Before**:
-```ts
+```typescript
 pulumi.runtime.setMocks({
   newResource: (args) => ({
     id: `${args.name}_id`,
@@ -153,7 +153,7 @@ pulumi.runtime.setMocks({
 ```
 
 **After**:
-```ts
+```typescript
 pulumi.runtime.setMocks({
   newResource: (args) => {
     switch (args.type) {
@@ -178,7 +178,7 @@ pulumi.runtime.setMocks({
 **Original Issue**: Used incorrect property name for CloudWatch alarm.
 
 **Before**:
-```ts
+```typescript
 const highTrafficAlarm = new aws.cloudwatch.MetricAlarm(
   `high-traffic-alarm-${environmentSuffix}`,
   {
@@ -188,7 +188,7 @@ const highTrafficAlarm = new aws.cloudwatch.MetricAlarm(
 ```
 
 **After**:
-```ts
+```typescript
 const highTrafficAlarm = new aws.cloudwatch.MetricAlarm(
   `high-traffic-alarm-${environmentSuffix}`,
   {

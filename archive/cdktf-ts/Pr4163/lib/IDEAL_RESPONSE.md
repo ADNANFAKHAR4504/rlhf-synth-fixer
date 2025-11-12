@@ -1,6 +1,6 @@
 **tap-stack.ts**
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -206,7 +206,7 @@ export class TapStack extends TerraformStack {
 ```
 **modules.ts**
 
-```ts
+```typescript
 // lib/modules.ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';

@@ -2,7 +2,7 @@ I'll generate a complete AWS CDK TypeScript project that implements a full CI/CD
 
 ## bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -24,7 +24,7 @@ app.synth();
 
 ## lib/tapstack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

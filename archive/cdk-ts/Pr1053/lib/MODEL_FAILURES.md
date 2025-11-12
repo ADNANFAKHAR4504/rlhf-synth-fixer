@@ -4,26 +4,26 @@
 
 ### 1. PostgreSQL Version Compatibility
 **Issue**: The original implementation used PostgreSQL version 15.4 which is not available in AWS RDS.
-```ts
+```typescript
 // BROKEN - Version not available
 version: rds.PostgresEngineVersion.VER_15_4,
 ```
 
 **Fix**: Updated to use PostgreSQL version 15.8 which is available.
-```ts
+```typescript
 // FIXED - Using available version
 version: rds.PostgresEngineVersion.VER_15_8,
 ```
 
 ### 2. Circular Dependency Between Stacks
 **Issue**: Database stack depended on compute stack for security group, while compute stack needed to grant permissions to database credentials, creating a circular dependency.
-```ts
+```typescript
 // BROKEN - Causes circular dependency
 databaseStack.dbCredentials.grantRead(computeStack.ec2Role);
 ```
 
 **Fix**: Implemented pattern-based IAM policy in the compute stack to avoid direct cross-stack references.
-```ts
+```typescript
 // FIXED - Pattern-based IAM policy
 this.ec2Role.addToPolicy(new iam.PolicyStatement({
   actions: ['secretsmanager:GetSecretValue', 'secretsmanager:DescribeSecret'],
@@ -33,26 +33,26 @@ this.ec2Role.addToPolicy(new iam.PolicyStatement({
 
 ### 3. Deprecated VPC CIDR Configuration
 **Issue**: Using deprecated `cidr` property for VPC configuration.
-```ts
+```typescript
 // DEPRECATED
 cidr: '10.0.0.0/16',
 ```
 
 **Fix**: Updated to use the new `ipAddresses` API.
-```ts
+```typescript
 // FIXED - Modern API
 ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
 ```
 
 ### 4. Missing IAM Role Exposure
 **Issue**: EC2 IAM role was not exposed as a public property, preventing proper permission grants.
-```ts
+```typescript
 // BROKEN - Role not accessible
 const ec2Role = new iam.Role(...);
 ```
 
 **Fix**: Exposed role as public property.
-```ts
+```typescript
 // FIXED - Role accessible for grants
 public readonly ec2Role: iam.Role;
 this.ec2Role = new iam.Role(...);
@@ -60,7 +60,7 @@ this.ec2Role = new iam.Role(...);
 
 ### 5. VPC Block Public Access Misconfiguration
 **Issue**: Attempted to apply VPC Block Public Access at VPC level with incorrect property.
-```ts
+```typescript
 // BROKEN - Invalid property
 new ec2.CfnVPCBlockPublicAccessOptions(this, id, {
   vpcId: this.vpc.vpcId,  // This property doesn't exist

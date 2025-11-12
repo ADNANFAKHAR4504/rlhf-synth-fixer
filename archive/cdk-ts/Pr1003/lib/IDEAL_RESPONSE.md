@@ -1,4 +1,4 @@
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -332,7 +332,7 @@ export class TapStack extends cdk.Stack {
 
 ```
 
-```ts 
+```typescript 
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';

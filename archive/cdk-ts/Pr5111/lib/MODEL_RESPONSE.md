@@ -62,7 +62,7 @@ graph TB
 
 ### 1. Security Event Stack (`lib/security_event.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kinesisfirehose from 'aws-cdk-lib/aws-kinesisfirehose';
@@ -566,7 +566,7 @@ export class SecurityEventStack extends cdk.Stack {
 
 ### 2. Main Stack Integration (`lib/tap-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { SecurityEventStack } from './security_event';

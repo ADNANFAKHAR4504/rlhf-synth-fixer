@@ -616,7 +616,7 @@ Outputs:
 
 ## TypeScript Helper Class (tap-stack.ts)
 
-```ts
+```typescript
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';

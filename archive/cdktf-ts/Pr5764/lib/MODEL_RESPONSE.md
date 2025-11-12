@@ -15,7 +15,7 @@ The infrastructure includes:
 
 ### File: lib/environment-config.ts
 
-```ts
+```typescript
 /**
  * Environment-specific configuration interface
  */
@@ -79,7 +79,7 @@ export function validateEnvironment(env: string): void {
 
 ### File: lib/data-processing-stack.ts
 
-```ts
+```typescript
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
@@ -430,7 +430,7 @@ export class DataProcessingStack extends TerraformStack {
 
 ### File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -636,7 +636,7 @@ async function processData(event) {
 
 ### File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';

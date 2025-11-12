@@ -9,7 +9,7 @@ This is the corrected version of the MODEL_RESPONSE with fixes applied for CDK-s
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

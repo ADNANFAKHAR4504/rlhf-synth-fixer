@@ -32,7 +32,7 @@ The solution implements a robust multi-region architecture with:
 
 ### bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -86,7 +86,7 @@ primaryStack.addDependency(secondaryStack);
 
 ### lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';

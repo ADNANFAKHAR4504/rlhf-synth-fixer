@@ -1,4 +1,4 @@
-```ts
+```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
@@ -25,7 +25,7 @@ new TapStack(app, stackName, {
   },
 });
 ```
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

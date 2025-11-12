@@ -35,7 +35,7 @@ I'll now build out the complete solution:
 8. Ensure everything has proper naming with 'prod-' prefix
 
 Let me start building this solution:
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -362,7 +362,7 @@ Everything looks good, but I notice I need to clarify the resource naming strate
 
 Let me finalize the implementation with some minor improvements:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -667,7 +667,7 @@ This should now fully satisfy all the requirements you specified while maintaini
 
 I've updated your `lib/tap-stack.ts` file to include all the serverless components you requested. This implementation creates a complete production-ready serverless architecture with Lambda, API Gateway, DynamoDB, S3, CloudWatch monitoring, and proper error handling.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

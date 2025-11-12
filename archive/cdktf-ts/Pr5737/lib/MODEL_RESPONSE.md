@@ -4,7 +4,7 @@ This implementation provides a complete, reusable CDKTF construct for deploying 
 
 ## File: lib/payment-api-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -454,7 +454,7 @@ export class PaymentApiStack extends TerraformStack {
 
 ## File: lib/lambda/payment-processor/index.ts
 
-```ts
+```typescript
 import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
@@ -588,7 +588,7 @@ export const handler = async (
 
 ## File: main.ts
 
-```ts
+```typescript
 import { App } from "cdktf";
 import { PaymentApiStack } from "./lib/payment-api-stack";
 

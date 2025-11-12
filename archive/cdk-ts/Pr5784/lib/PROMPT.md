@@ -129,7 +129,7 @@ also consider:
 
 basic layout:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -163,7 +163,7 @@ export class TapStack extends cdk.Stack {
 ## testing
 
 integration tests use aws sdk v2, test against actual resources. load outputs like:
-```ts
+```typescript
 const outputs = JSON.parse(fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8'));
 ```
 

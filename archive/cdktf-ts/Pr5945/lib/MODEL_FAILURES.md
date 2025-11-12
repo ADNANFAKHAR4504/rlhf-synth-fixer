@@ -7,12 +7,12 @@
 **Location:** `VpcModule` class, subnet creation loop
 
 **Model Response (Incorrect):**
-```ts
+```typescript
 availabilityZone: `${azs.names.get(i)}`,
 ```
 
 **Ideal Response (Correct):**
-```ts
+```typescript
 availabilityZone: Fn.element(azs.names, i),
 ```
 
@@ -40,7 +40,7 @@ The `Fn.element()` function is the proper CDKTF way to access array elements fro
 **Model Response Problems:**
 
 #### Problem 2a: Using Deprecated ACL Resource
-```ts
+```typescript
 this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, 'acl', {
   bucket: this.bucket.id,
   acl: 'private',
@@ -55,7 +55,7 @@ this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, 'acl', {
 - Modern AWS accounts may reject this configuration
 
 **Ideal Response Solution:**
-```ts
+```typescript
 this.bucketOwnershipControls =
   new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
     this,
@@ -76,7 +76,7 @@ this.bucketOwnershipControls =
 - Failed CloudFront integration due to permission issues
 
 #### Problem 2b: Incorrect Resource Class Names
-```ts
+```typescript
 // Model uses deprecated V2 classes
 S3BucketVersioningV2
 S3BucketServerSideEncryptionConfigurationV2
@@ -85,7 +85,7 @@ S3BucketLifecycleConfigurationV2
 ```
 
 **Ideal Response:**
-```ts
+```typescript
 // Uses correct class names
 S3BucketVersioningA
 S3BucketServerSideEncryptionConfigurationA
@@ -107,7 +107,7 @@ S3BucketLifecycleConfiguration
 **Model Response Problems:**
 
 #### Problem 3a: Synchronous Archive Operations
-```ts
+```typescript
 const output = fs.createWriteStream(zipPath);
 const archive = archiver('zip', { zlib: { level: 9 } });
 archive.pipe(output);
@@ -130,14 +130,14 @@ return zipPath; // Returns immediately!
 - Unpredictable behavior in CI/CD pipelines
 
 #### Problem 3b: Hardcoded Lambda Source Configuration
-```ts
+```typescript
 // Model Response
 sourceBucket: config.sourceBucket,
 sourceKey: config.sourceKey,
 ```
 
 **Ideal Response:**
-```ts
+```typescript
 s3Bucket: config.sourceBucket,
 s3Key: config.sourceKey,
 ```
@@ -154,7 +154,7 @@ s3Key: config.sourceKey,
 **Location:** `CloudFrontModule` class, `createWafAcl()` method
 
 **Model Response (Incorrect):**
-```ts
+```typescript
 statement: {
   rateBasedStatement: {
     limit: 2000,
@@ -163,7 +163,7 @@ statement: {
 },
 ```
 
-```ts
+```typescript
 statement: {
   managedRuleGroupStatement: {
     vendorName: 'AWS',  // Wrong: camelCase
@@ -173,7 +173,7 @@ statement: {
 ```
 
 **Ideal Response (Correct):**
-```ts
+```typescript
 statement: {
   rate_based_statement: {  // Correct: snake_case
     limit: 2000,
@@ -182,7 +182,7 @@ statement: {
 },
 ```
 
-```ts
+```typescript
 statement: {
   managed_rule_group_statement: {  // Correct: snake_case
     vendor_name: 'AWS',  // Correct: snake_case
@@ -211,7 +211,7 @@ statement: {
 **Location:** `S3Module` class and stack usage
 
 **Model Response:**
-```ts
+```typescript
 lifecycleRules: [
   {
     id: 'delete-old-versions',
@@ -224,7 +224,7 @@ lifecycleRules: [
 ```
 
 **Ideal Response:**
-```ts
+```typescript
 lifecycleRules: [
   {
     id: 'delete-old-logs',
@@ -255,7 +255,7 @@ lifecycleRules: [
 **Location:** Model Response tap-stack.ts
 
 **Model Response:**
-```ts
+```typescript
 // Missing import
 new aws.iamRolePolicy.IamRolePolicy(this, 'lambda-secrets-policy', {
 ```
@@ -266,7 +266,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'lambda-secrets-policy', {
 - Code cannot be executed
 
 **Ideal Response:**
-```ts
+```typescript
 import * as aws from '@cdktf/provider-aws';
 // Then uses aws.iamRolePolicy.IamRolePolicy
 ```
@@ -283,7 +283,7 @@ import * as aws from '@cdktf/provider-aws';
 **Location:** `ApiGatewayModule` class
 
 **Model Response:**
-```ts
+```typescript
 this.stage = new aws.apigatewayv2Stage.Apigatewayv2Stage(this, 'stage', {
   apiId: this.api.id,
   name: config.environment,
@@ -302,7 +302,7 @@ this.stage = new aws.apigatewayv2Stage.Apigatewayv2Stage(this, 'stage', {
 - Terraform will reject this configuration
 
 **Ideal Response:**
-```ts
+```typescript
 // Does not include throttleSettings - correctly recognizes HTTP API limitations
 this.stage = new aws.apigatewayv2Stage.Apigatewayv2Stage(this, 'stage', {
   apiId: this.api.id,
@@ -326,7 +326,7 @@ this.stage = new aws.apigatewayv2Stage.Apigatewayv2Stage(this, 'stage', {
 **Location:** `LambdaModule` class
 
 **Model Response Includes:**
-```ts
+```typescript
 deadLetterConfig: {
   targetArn: this.createDeadLetterQueue(config.functionName).arn,
 },
@@ -343,7 +343,7 @@ deadLetterConfig: {
 
 **However, this is one area where the model shows initiative**, though the implementation should be optional:
 
-```ts
+```typescript
 // Better approach (optional DLQ):
 deadLetterConfig: config.enableDLQ ? {
   targetArn: this.createDeadLetterQueue(config.functionName).arn,

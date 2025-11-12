@@ -140,7 +140,7 @@ secure-cloud-env/
 
 **bin/app.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -175,7 +175,7 @@ new SecureCloudStack(app, 'SecureCloudStack', {
 
 **lib/secure-cloud-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -555,7 +555,7 @@ EOF`,
 
 **test/secure-cloud-stack.test.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { SecureCloudStack } from '../lib/secure-cloud-stack';

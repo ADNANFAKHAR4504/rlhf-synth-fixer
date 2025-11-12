@@ -1,6 +1,6 @@
 Web application stack with VPC, EC2 Auto Scaling, RDS, CloudFront, S3, monitoring, and CI/CD pipeline.
 
-```ts
+```typescript
 // lib/infrastructure.ts
 
 import * as cdk from 'aws-cdk-lib';
@@ -1121,7 +1121,7 @@ export class Infrastructure extends cdk.Stack {
 
 Create an `app.ts` file to instantiate the stack:
 
-```ts
+```typescript
 // bin/app.ts
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

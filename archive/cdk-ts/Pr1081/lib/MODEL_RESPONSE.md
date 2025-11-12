@@ -138,7 +138,7 @@
 ```
 
 ### `bin/secure-web-app.ts`
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -154,7 +154,7 @@ new SecureWebAppStack(app, 'SecureWebAppStack', {
 ```
 
 ### `lib/secure-web-app-stack.ts`
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

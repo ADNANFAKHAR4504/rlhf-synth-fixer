@@ -4,7 +4,7 @@ I'll create a complete serverless payment webhook processing system using Pulumi
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -123,7 +123,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/dynamodb-stack.ts
 
-```ts
+```typescript
 /**
  * dynamodb-stack.ts
  *
@@ -178,7 +178,7 @@ export class DynamoDBStack extends pulumi.ComponentResource {
 
 ## File: lib/s3-stack.ts
 
-```ts
+```typescript
 /**
  * s3-stack.ts
  *
@@ -241,7 +241,7 @@ export class S3Stack extends pulumi.ComponentResource {
 
 ## File: lib/cloudwatch-stack.ts
 
-```ts
+```typescript
 /**
  * cloudwatch-stack.ts
  *
@@ -299,7 +299,7 @@ export class CloudWatchStack extends pulumi.ComponentResource {
 
 ## File: lib/lambda-stack.ts
 
-```ts
+```typescript
 /**
  * lambda-stack.ts
  *
@@ -661,7 +661,7 @@ exports.handler = async (event) => {
 
 ## File: lib/apigateway-stack.ts
 
-```ts
+```typescript
 /**
  * apigateway-stack.ts
  *
@@ -858,7 +858,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * bin/tap.ts
  *

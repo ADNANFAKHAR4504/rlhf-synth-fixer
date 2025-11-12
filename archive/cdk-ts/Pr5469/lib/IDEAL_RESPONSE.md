@@ -125,7 +125,7 @@ cdk-cicd-pipeline/
 
 **lib/lambda/src/index.ts**
 
-```ts
+```typescript
 import {
   DynamoDBClient,
   GetItemCommand,
@@ -554,7 +554,7 @@ export const handler = serverless(app, {
 
 **lib/constructs/storage-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -754,7 +754,7 @@ export class StorageConstruct extends Construct {
 
 **lib/constructs/lambda-api-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
@@ -966,7 +966,7 @@ export class LambdaApiConstruct extends Construct {
 
 **lib/constructs/pipeline-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
@@ -1270,7 +1270,7 @@ export class PipelineConstruct extends Construct {
 
 **lib/constructs/monitoring-construct.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -1560,7 +1560,7 @@ export class MonitoringConstruct extends Construct {
 
 **lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -1744,7 +1744,7 @@ export class TapStack extends cdk.Stack {
 
 **bin/app.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

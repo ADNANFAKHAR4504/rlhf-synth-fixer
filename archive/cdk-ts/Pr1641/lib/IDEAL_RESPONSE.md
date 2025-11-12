@@ -88,7 +88,7 @@ iac-test-automations/
 ### Key Components
 
 #### CDK App Entry Point (bin/tap.ts)
-```ts
+```typescript
 // Creates two stack instances for multi-region deployment
 new TapStack(app, 'stackName-us-east-1', {
   env: { account: process.env.CDK_DEFAULT_ACCOUNT, region: 'us-east-1' }

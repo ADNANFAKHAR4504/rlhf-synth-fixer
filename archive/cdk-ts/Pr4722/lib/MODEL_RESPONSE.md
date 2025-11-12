@@ -9,7 +9,7 @@ Let's build the AWS CDK infrastructure for the "MarketGrid" multi-vendor e-comme
 
 First, let's design the `webhook.ts` file which will contain all the necessary components for our serverless payment processing system.
 
-```ts
+```typescript
 // lib/webhook.ts
 
 import * as cdk from 'aws-cdk-lib';
@@ -611,7 +611,7 @@ export class WebhookStack extends cdk.NestedStack {
 
 Now, let's create the main stack file that instantiates the WebhookStack:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 
 import * as cdk from 'aws-cdk-lib';
@@ -697,7 +697,7 @@ Let's build a resilient, high-throughput payment processing system using AWS ser
 
 ### lib/webhook.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -1279,7 +1279,7 @@ export class WebhookStack extends cdk.NestedStack {
 
 ### lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { WebhookStack } from './webhook';

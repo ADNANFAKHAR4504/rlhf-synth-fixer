@@ -25,7 +25,7 @@ I'll use CDK v2 (aws-cdk-lib) as shown in their imports.
 
 I'll update your `tap-stack.ts` file with all the required serverless infrastructure components. Here's the complete implementation:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -361,7 +361,7 @@ export class TapStack extends cdk.Stack {
 
 To deploy this stack, you can use:
 
-```ts
+```typescript
 // In your app.ts or bin/tap.ts file
 import { App } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';

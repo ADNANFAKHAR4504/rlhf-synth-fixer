@@ -24,7 +24,7 @@ I'll build a comprehensive security framework for your financial services app wi
 
 ## Complete Implementation
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -890,7 +890,7 @@ export function generateSessionPolicy(
 
 ## Unit Tests
 
-```ts
+```typescript
 // test/tap-stack.test.ts
 import { Template } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
@@ -1100,7 +1100,7 @@ describe('TapStack Security Tests', () => {
 
 ## Integration Tests
 
-```ts
+```typescript
 // test/integration/tap-stack.integration.test.ts
 import * as AWS from 'aws-sdk';
 import * as fs from 'fs';
@@ -1309,7 +1309,7 @@ describe('TapStack Integration Tests', () => {
 
 ## Deployment Script
 
-```ts
+```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import 'source-map-support/register';

@@ -2,7 +2,7 @@
 
 ### `lib/tap-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -209,7 +209,7 @@ export class TapStack extends cdk.Stack {
 
 ### `lib/pipeline-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
@@ -426,7 +426,7 @@ export class PipelineStack extends cdk.Stack {
 
 ### `lib/constructs/secure-bucket.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -496,7 +496,7 @@ export class SecureBucket extends Construct {
 
 ### `lib/constructs/lambda-with-canary.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -552,7 +552,7 @@ export class LambdaWithCanary extends Construct {
 
 ### `src/lambda/handler.ts`
 
-```ts
+```typescript
 import { Context, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, GetObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
@@ -704,7 +704,7 @@ cache:
 
 ### `bin/tap-app.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -786,7 +786,7 @@ regions.forEach((region) => {
 
 ### `test/tap-stack.test.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

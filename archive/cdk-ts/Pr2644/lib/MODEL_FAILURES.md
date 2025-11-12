@@ -17,13 +17,13 @@
 ### 2. Incorrect CDKTF Import Statements
 
 **Issue**: The imports used incorrect paths for CDKTF AWS provider modules:
-```ts
+```typescript
 // Incorrect
 import { Vpc, Subnet, InternetGateway } from '@cdktf/provider-aws/lib/vpc';
 ```
 
 **Fix**: Each resource requires its own import from the specific module:
-```ts
+```typescript
 // Correct
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -37,7 +37,7 @@ import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 **Issue**: S3 lifecycle rules lacked required `filter` property, causing deployment failures.
 
 **Fix**: Added empty filter objects to all lifecycle rules:
-```ts
+```typescript
 rule: [
   {
     id: 'transition-to-ia',
@@ -55,7 +55,7 @@ rule: [
 **Issue**: Used non-existent `S3BucketVersioning` class.
 
 **Fix**: Changed to correct class name:
-```ts
+```typescript
 // Incorrect
 import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 
@@ -70,7 +70,7 @@ import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versionin
 **Issue**: No `main.ts` file existed to instantiate and synthesize the stack.
 
 **Fix**: Created proper entry point:
-```ts
+```typescript
 import { App } from 'cdktf';
 import { TapStack } from './lib/tap-stack';
 import { getEnvironmentConfig } from './lib/config/environment';
@@ -115,7 +115,7 @@ app.synth();
 **Issue**: Used `Date.now()` in bucket names, causing non-deterministic names.
 
 **Fix**: Changed to predictable naming pattern:
-```ts
+```typescript
 bucket: `${bucketPrefix}-${environmentSuffix}-${region}`
 ```
 
@@ -138,7 +138,7 @@ bucket: `${bucketPrefix}-${environmentSuffix}-${region}`
 **Issue**: IAM assume role policy lacked proper condition checks.
 
 **Fix**: Added external ID validation when trusted account is specified:
-```ts
+```typescript
 condition: trustedAccountId ? [
   {
     test: 'StringEquals',

@@ -37,7 +37,7 @@ I need to create a complete CI/CD pipeline that handles everything from source c
 
 **CRITICAL**: I already have an existing CDK stack file at `lib/tap-stack.ts`. Here's the current code:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

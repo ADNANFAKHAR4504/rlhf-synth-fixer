@@ -23,7 +23,7 @@ I'll create a secure, scalable AWS infrastructure using CDKTF in TypeScript. Her
 
 ## `modules.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput } from 'cdktf';
@@ -713,7 +713,7 @@ export class LoggingModule extends Construct {
 
 ## `tap-stack.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
@@ -1052,7 +1052,7 @@ cdktf destroy tap-webapp-infrastructure
 
 Create `tap-stack.test.ts`:
 
-```ts
+```typescript
 import { Testing } from 'cdktf';
 import { TapStack } from './tap-stack';
 

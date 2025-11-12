@@ -25,7 +25,7 @@ The MODEL_RESPONSE generated a comprehensive ECS Fargate infrastructure but cont
 **MODEL_RESPONSE Issue**:
 The generated code created private subnets for ECS tasks but completely omitted the NAT Gateway required for outbound internet connectivity:
 
-```ts
+```typescript
 // Private Subnets for ECS Tasks
 const privateSubnet1 = new Subnet(this, 'private-subnet-1', {
   vpcId: vpc.id,
@@ -56,7 +56,7 @@ networkConfiguration: {
 **IDEAL_RESPONSE Fix**:
 Added Elastic IP, NAT Gateway, and proper routing:
 
-```ts
+```typescript
 // Elastic IP for NAT Gateway
 const natEip = new Eip(this, 'nat-eip', {
   domain: 'vpc',
@@ -127,7 +127,7 @@ NAT Gateway costs ~$32/month + data transfer (~$0.045/GB) - necessary expense fo
 **MODEL_RESPONSE Issue**:
 ALB access logging was enabled, but no bucket policy was created to grant ALB permission to write logs:
 
-```ts
+```typescript
 // S3 Bucket for ALB Access Logs
 const albLogsBucket = new S3Bucket(this, 'alb-logs-bucket', {
   bucket: `alb-logs-${props.environmentSuffix}`,
@@ -158,7 +158,7 @@ const alb = new Lb(this, 'alb', {
 **IDEAL_RESPONSE Fix**:
 Added ELB service account data source and bucket policy:
 
-```ts
+```typescript
 // Get ELB service account for ALB logging
 const elbServiceAccount = new DataAwsElbServiceAccount(
   this,
@@ -231,7 +231,7 @@ CRITICAL - ALB access logs are often required for:
 **MODEL_RESPONSE Issue**:
 Private subnets were created but had no route table associations, leaving them with only the default local VPC route:
 
-```ts
+```typescript
 // Private Subnets created
 const privateSubnet1 = new Subnet(this, 'private-subnet-1', { ... });
 const privateSubnet2 = new Subnet(this, 'private-subnet-2', { ... });
@@ -277,7 +277,7 @@ Without proper routing:
 **MODEL_RESPONSE Issue**:
 Used incorrect API syntax for accessing certificate domain validation options:
 
-```ts
+```typescript
 // DNS Validation Records - COMPILATION ERROR
 const validationRecord = new Route53Record(this, 'cert-validation-record', {
   zoneId: hostedZone.zoneId,
@@ -297,7 +297,7 @@ lib/tap-stack.ts(385,25): error TS2349: This expression is not callable.
 **IDEAL_RESPONSE Fix**:
 Corrected to use `.get()` method instead of function call:
 
-```ts
+```typescript
 // DNS Validation Records - CORRECT
 const validationRecord = new Route53Record(this, 'cert-validation-record', {
   zoneId: hostedZone.zoneId,
@@ -341,7 +341,7 @@ CRITICAL - demonstrates:
 **MODEL_RESPONSE Issue**:
 Enabled deletion protection on ALB, violating the "all resources must be destroyable" requirement:
 
-```ts
+```typescript
 const alb = new Lb(this, 'alb', {
   name: `nodejs-api-alb-${props.environmentSuffix}`,
   enableDeletionProtection: true,  // ❌ Blocks stack deletion!
@@ -352,7 +352,7 @@ const alb = new Lb(this, 'alb', {
 **IDEAL_RESPONSE Fix**:
 Changed to false for test/dev environments:
 
-```ts
+```typescript
 const alb = new Lb(this, 'alb', {
   name: `nodejs-api-alb-${props.environmentSuffix}`,
   enableDeletionProtection: false,  // ✅ Allows clean destroy

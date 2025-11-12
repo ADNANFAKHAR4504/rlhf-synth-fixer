@@ -1,6 +1,6 @@
 Here's a complete TypeScript file that meets all your requirements for a production-ready, secure, and highly available AWS environment using CDK v2:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

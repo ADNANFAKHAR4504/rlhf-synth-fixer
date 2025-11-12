@@ -23,7 +23,7 @@ The MODEL_RESPONSE generated infrastructure code that was syntactically correct 
 **Impact Level**: Critical (Deployment Blocker)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 logConfiguration: {
   logDriver: 'awslogs',
   options: {
@@ -42,7 +42,7 @@ ClientException: Log driver awslogs option 'awslogs-group' contains invalid char
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 logConfiguration: {
   logDriver: 'awslogs',
   options: {
@@ -68,7 +68,7 @@ logConfiguration: {
 **Impact Level**: Critical (Deployment Blocker)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const certificate = new aws.acm.Certificate(
   `cert-${args.environmentSuffix}`,
   {
@@ -118,14 +118,14 @@ InvalidParameterException: The target group...does not have an associated load b
 **IDEAL_RESPONSE Fix**:
 
 1. Export listener from ALB stack:
-```ts
+```typescript
 export class AlbStack extends pulumi.ComponentResource {
   public readonly httpListener: aws.lb.Listener;  // Added
 }
 ```
 
 2. Pass listener to ECS stack and add dependency:
-```ts
+```typescript
 { parent: this, dependsOn: [taskDefinition, args.albListener] }
 ```
 

@@ -27,7 +27,7 @@ I need to structure this as a reusable CDK stack class that can be deployed to d
 
 Here's a comprehensive TypeScript CDK v2 implementation that meets all requirements:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

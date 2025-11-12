@@ -2,7 +2,7 @@ I'll generate a comprehensive AWS CDK TypeScript project that meets all your req
 
 ## bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -25,7 +25,7 @@ new TapStack(app, 'TapStack', {
 
 ## lib/tapstack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -321,7 +321,7 @@ def handler(event, context):
 
 ## test/tapstack.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tapstack';

@@ -1,4 +1,4 @@
-```ts
+```typescript
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -883,7 +883,7 @@ This TypeScript class provides a comprehensive, secure AWS infrastructure implem
 
 ## Usage Example:
 
-```ts
+```typescript
 const infrastructure = new SecureInfrastructure('ap-south-1', 'production', {
   Project: 'MyApp',
   Owner: 'DevOps Team',

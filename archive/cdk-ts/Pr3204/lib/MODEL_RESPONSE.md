@@ -33,7 +33,7 @@ I need to be careful about:
 
 I'll update your existing TapStack class to include a comprehensive CI/CD pipeline implementation. Here's the enhanced version with all the required components:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

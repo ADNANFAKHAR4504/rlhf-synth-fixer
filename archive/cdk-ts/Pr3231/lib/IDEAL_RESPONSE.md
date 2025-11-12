@@ -4,7 +4,7 @@ This implementation provides a complete, production-ready CDK TypeScript infrast
 
 ## Main Stack File - lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { BlogInfrastructureStack } from './blog-infrastructure-stack';
@@ -31,7 +31,7 @@ export class TapStack extends cdk.Stack {
 
 ## Blog Infrastructure Stack - lib/blog-infrastructure-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';

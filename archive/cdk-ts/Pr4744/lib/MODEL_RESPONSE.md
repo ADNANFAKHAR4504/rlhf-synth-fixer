@@ -21,7 +21,7 @@ I'll need to import the necessary CDK modules and create all resources directly 
 
 I'll update your existing TapStack to include all the required security and infrastructure components. Here's the comprehensive updated code that addresses all your requirements:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

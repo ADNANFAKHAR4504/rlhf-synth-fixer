@@ -6,7 +6,7 @@ Hey, I need help building a serverless application using AWS CDK with TypeScript
 
 Here's my existing stack file at `lib/tap-stack.ts`:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

@@ -1,6 +1,6 @@
 ## 1. modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
@@ -826,7 +826,7 @@ export class ShieldConstruct extends Construct {
 
 ## 2. tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

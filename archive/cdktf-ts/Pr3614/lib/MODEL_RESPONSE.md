@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 /**
  * Reusable modular constructs for AWS infrastructure
  * All modules follow security best practices with production-ready configurations
@@ -1005,7 +1005,7 @@ export class CloudWatchDashboardModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * Main TAP Stack - Composes all infrastructure modules
  * Implements a secure, resilient multi-tier architecture

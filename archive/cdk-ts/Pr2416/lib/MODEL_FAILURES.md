@@ -12,14 +12,14 @@ This document explains the infrastructure fixes made to reach the ideal response
 
 **Fix Applied**:
 1. **Extended StackProps Interface**: Created a custom TapStackProps interface that extends CDK's StackProps to include the environmentSuffix property:
-   ```ts
+   ```typescript
    interface TapStackProps extends cdk.StackProps {
      environmentSuffix: string;
    }
    ```
 
 2. **Updated Constructor Signature**: Changed the stack constructor to require the custom props type:
-   ```ts
+   ```typescript
    constructor(scope: Construct, id: string, props: TapStackProps)
    ```
 
@@ -48,7 +48,7 @@ This document explains the infrastructure fixes made to reach the ideal response
 - DynamoDB had removalPolicy: cdk.RemovalPolicy.RETAIN
 
 **Fix Applied**: Updated policies to allow complete cleanup:
-```ts
+```typescript
 // RDS changes
 deletionProtection: false,
 deleteAutomatedBackups: true,
@@ -63,7 +63,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 **Warning**: aws-cdk-lib.aws_dynamodb.TableOptions#pointInTimeRecovery is deprecated
 
 **Fix Applied**: Updated to use the current API specification:
-```ts
+```typescript
 // Old deprecated approach
 pointInTimeRecovery: true,
 
@@ -81,7 +81,7 @@ pointInTimeRecoverySpecification: {
 2. Non-functional load balancer
 
 **Fix Applied**: Connected the target group to the HTTP listener:
-```ts
+```typescript
 alb.addListener(`listener-http-${environmentSuffix}`, {
   port: 80,
   protocol: elbv2.ApplicationProtocol.HTTP,

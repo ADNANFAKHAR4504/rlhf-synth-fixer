@@ -1,6 +1,6 @@
 I'll fix the TypeScript errors by using the correct property names and approaches for the Pulumi AWS resources. Here's the corrected code:
 
-```ts
+```typescript
 import * as aws from "@pulumi/aws";
 import * as pulumi from "@pulumi/pulumi";
 

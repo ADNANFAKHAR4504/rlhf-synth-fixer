@@ -47,7 +47,7 @@ I'll help you build a comprehensive serverless data processing pipeline using AW
 
 First, let's set up the project structure:
 
-```ts
+```typescript
 // package.json
 {
   "name": "serverless-data-pipeline",
@@ -75,7 +75,7 @@ First, let's set up the project structure:
 
 ## CDK Stack Implementation
 
-```ts
+```typescript
 // lib/serverless-data-pipeline-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -411,7 +411,7 @@ export class ServerlessDataPipelineStack extends cdk.Stack {
 
 ### Main Data Processor
 
-```ts
+```typescript
 // lambda/data-processor/index.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
@@ -631,7 +631,7 @@ async function sendErrorNotification(error: Error): Promise<void> {
 
 ### S3 Trigger Function
 
-```ts
+```typescript
 // lambda/s3-trigger/index.ts
 import { S3Event, Context } from 'aws-lambda';
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
@@ -699,7 +699,7 @@ function determineProcessingType(
 
 ## App Entry Point
 
-```ts
+```typescript
 // bin/app.ts
 #!/usr/bin/env node
 import 'source-map-support/register';

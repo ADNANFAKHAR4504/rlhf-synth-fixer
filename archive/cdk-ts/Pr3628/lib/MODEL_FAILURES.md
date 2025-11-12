@@ -15,7 +15,7 @@ This document analyzes the failures and challenges encountered during the implem
 - Incorrect nesting of properties in `BotLocales` and `Intents`
 
 **Resolution**:
-```ts
+```typescript
 // Fixed property names to match CloudFormation schema
 const lexBot = new lex.CfnBot(this, 'OmnichannelAIBot', {
   Name: `OmnichannelAIBot-${environmentSuffix}`, // Changed from 'name'
@@ -39,7 +39,7 @@ const lexBot = new lex.CfnBot(this, 'OmnichannelAIBot', {
 - Missing proper dependency chain
 
 **Resolution**:
-```ts
+```typescript
 // Created explicit BotVersion resource
 const lexBotVersion = new lex.CfnBotVersion(this, 'OmnichannelAIBotVersion', {
   BotId: lexBot.getAtt('Id').toString(),
@@ -76,7 +76,7 @@ botAlias.node.addDependency(lexBotVersion);
 - Missing CloudWatch logging permissions
 
 **Resolution**:
-```ts
+```typescript
 const firehoseRole = new iam.Role(this, 'FirehoseDeliveryRole', {
   assumedBy: new iam.ServicePrincipal('firehose.amazonaws.com'), // Removed regional principal
   inlinePolicies: {
@@ -112,7 +112,7 @@ const firehoseRole = new iam.Role(this, 'FirehoseDeliveryRole', {
 - Subnet type mismatch (PRIVATE_WITH_EGRESS vs PRIVATE_ISOLATED)
 
 **Resolution**:
-```ts
+```typescript
 // Used existing VPC instead of creating new one
 const vpc = ec2.Vpc.fromLookup(this, 'AIplatformVPC', {
   vpcId: 'vpc-05268f2804fb3a5f5', // Existing VPC with proper subnet types
@@ -136,7 +136,7 @@ vpc.selectSubnets({
 - Missing proper error handling
 
 **Resolution**:
-```ts
+```typescript
 // Simplified Lambda function to avoid external dependencies
 const fulfillmentLambda = new lambda.Function(this, 'FulfillmentLambda', {
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -198,7 +198,7 @@ exports.handler = async (event) => {
 - Missing error handling for deployment states
 
 **Resolution**:
-```ts
+```typescript
 // Fixed AWS SDK client initialization
 const lexModels = new AWS.LexModelBuildingService({ region: 'us-west-2' }); // Correct service
 const lex = new AWS.LexRuntimeV2({ region: 'us-west-2' }); // Runtime client
@@ -238,7 +238,7 @@ try {
 - Missing environment context for VPC lookup
 
 **Resolution**:
-```ts
+```typescript
 // Updated test expectations to match simplified Lambda code
 expect(functionCode).toContain('exports.handler = async (event) =>');
 expect(functionCode).toContain('console.log(\'Received event:\'');

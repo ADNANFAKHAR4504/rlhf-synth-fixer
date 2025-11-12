@@ -11,7 +11,7 @@ This document analyzes the failures and issues in the MODEL_RESPONSE.md generate
 **MODEL_RESPONSE Issue**:
 The `DocumentManagementStack` class incorrectly extends `TerraformStack`:
 
-```ts
+```typescript
 export class DocumentManagementStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: DocumentManagementStackProps) {
     super(scope, id);
@@ -23,7 +23,7 @@ export class DocumentManagementStack extends TerraformStack {
 **IDEAL_RESPONSE Fix**:
 The `DocumentManagementStack` should extend `Construct`, not `TerraformStack`:
 
-```ts
+```typescript
 export class DocumentManagementStack extends Construct {
   constructor(scope: Construct, id: string, props: DocumentManagementStackProps) {
     super(scope, id);
@@ -61,7 +61,7 @@ Error: Validation failed with the following errors:
 **MODEL_RESPONSE Issue**:
 Uses invalid `use_lockfile` parameter for S3 backend:
 
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -74,7 +74,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 **IDEAL_RESPONSE Fix**:
 Remove the invalid `use_lockfile` override:
 
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -107,7 +107,7 @@ No argument or block type is named "use_lockfile"
 **MODEL_RESPONSE Issue**:
 S3 bucket and DynamoDB table names use `environment` instead of `environmentSuffix`:
 
-```ts
+```typescript
 // S3 Bucket
 const documentBucket = new S3Bucket(this, 'DocumentBucket', {
   bucket: `company-docs-${environment}`,  // WRONG
@@ -124,7 +124,7 @@ const metadataTable = new DynamodbTable(this, 'MetadataTable', {
 **IDEAL_RESPONSE Fix**:
 All resource names must use `environmentSuffix`:
 
-```ts
+```typescript
 // S3 Bucket
 const documentBucket = new S3Bucket(this, 'DocumentBucket', {
   bucket: `company-docs-${environmentSuffix}`,  // CORRECT

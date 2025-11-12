@@ -6,7 +6,7 @@
 ### 1. KMS Key Policy Missing
 
 **Model Response Issue:**
-```ts
+```typescript
 this.key = new aws.kmsKey.KmsKey(this, 'main-key', {
   description: 'Main KMS key for infrastructure encryption',
   enableKeyRotation: true,
@@ -16,7 +16,7 @@ this.key = new aws.kmsKey.KmsKey(this, 'main-key', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 this.key = new aws.kmsKey.KmsKey(this, 'main-key', {
   description: 'Main KMS key for infrastructure encryption',
   enableKeyRotation: true,
@@ -59,7 +59,7 @@ this.key = new aws.kmsKey.KmsKey(this, 'main-key', {
 ### 2. Hardcoded Availability Zones
 
 **Model Response Issue:**
-```ts
+```typescript
 // Hardcoded in VpcModule
 const azs = ['us-east-1a', 'us-east-1b'];
 
@@ -72,7 +72,7 @@ for (let i = 0; i < 2; i++) {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 constructor(scope: Construct, id: string, kmsKeyArn: string, azs: string[]) {
   super(scope, id);
   // Uses passed AZ array
@@ -103,7 +103,7 @@ const vpcModule = new VpcModule(this, 'vpc', kmsModule.key.arn, azs);
 ### 3. VPC Flow Log Configuration Error
 
 **Model Response Issue:**
-```ts
+```typescript
 this.flowLog = new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
   iamRoleArn: flowLogRole.arn,
   logDestinationType: 'cloud-watch-logs',
@@ -114,7 +114,7 @@ this.flowLog = new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 this.flowLog = new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
   iamRoleArn: flowLogRole.arn,
   logDestinationType: 'cloud-watch-logs',
@@ -139,7 +139,7 @@ this.flowLog = new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
 ### 4. RDS Configuration Issues
 
 **Model Response Issue:**
-```ts
+```typescript
 this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
   identifier: 'tap-postgres-db',
   engine: 'postgres',
@@ -156,7 +156,7 @@ this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
   identifier: 'tap-postgres-db',
   engine: 'postgres',
@@ -205,7 +205,7 @@ this.instance = new aws.dbInstance.DbInstance(this, 'postgres', {
 ### 5. EC2 IAM Role Naming Conflict
 
 **Model Response Issue:**
-```ts
+```typescript
 this.role = new aws.iamRole.IamRole(this, 'ec2-role', {
   name: 'tap-ec2-role',  // Static name
   // ...
@@ -218,7 +218,7 @@ const instanceProfile = new aws.iamInstanceProfile.IamInstanceProfile(this, 'ec2
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 this.role = new aws.iamRole.IamRole(this, 'ec2-role', {
   name: 'tap-ec2-role-ts-1234',  // Unique suffix
   // ...
@@ -245,7 +245,7 @@ const instanceProfile = new aws.iamInstanceProfile.IamInstanceProfile(this, 'ec2
 ### 6. EC2 Root Volume Missing KMS Encryption
 
 **Model Response Issue:**
-```ts
+```typescript
 rootBlockDevice: {
   volumeType: 'gp3',
   volumeSize: 20,
@@ -256,7 +256,7 @@ rootBlockDevice: {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 rootBlockDevice: {
   volumeType: 'gp3',
   volumeSize: 20,
@@ -281,7 +281,7 @@ rootBlockDevice: {
 ### 7. S3 Bucket Self-Logging Recursion Issue
 
 **Model Response Issue:**
-```ts
+```typescript
 this.bucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
   bucket: 'tap-ec2-logs-bucket',  // Also static name
   // ...
@@ -293,7 +293,7 @@ this.bucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // Generate unique bucket name
 const timestamp = new Date().getTime().toString().slice(-6);
 const bucketName = `tap-ec2-logs-bucket-${timestamp}`;
@@ -321,7 +321,7 @@ this.bucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
 ### 8. CloudWatch Metric Filter DefaultValue Type Error
 
 **Model Response Issue:**
-```ts
+```typescript
 this.metricFilter = new aws.cloudwatchLogMetricFilter.CloudwatchLogMetricFilter(
   this,
   'rds-connection-failures',
@@ -338,7 +338,7 @@ this.metricFilter = new aws.cloudwatchLogMetricFilter.CloudwatchLogMetricFilter(
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 this.metricFilter = new aws.cloudwatchLogMetricFilter.CloudwatchLogMetricFilter(
   this,
   'rds-connection-failures',
@@ -369,7 +369,7 @@ this.metricFilter = new aws.cloudwatchLogMetricFilter.CloudwatchLogMetricFilter(
 ### 9. SNS Topic Missing KMS Key ID Property
 
 **Model Response Issue:**
-```ts
+```typescript
 const snsTopic = new aws.snsTopic.SnsTopic(this, 'alarm-topic', {
   name: 'tap-infrastructure-alarms',
   kmsKeyId: kmsKeyArn,  // Should be kmsMasterKeyId
@@ -378,7 +378,7 @@ const snsTopic = new aws.snsTopic.SnsTopic(this, 'alarm-topic', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 const snsTopic = new aws.snsTopic.SnsTopic(this, 'alarm-topic', {
   name: 'tap-infrastructure-alarms',
   kmsMasterKeyId: kmsKeyArn,  // Correct property name
@@ -401,7 +401,7 @@ const snsTopic = new aws.snsTopic.SnsTopic(this, 'alarm-topic', {
 ### 10. Circular Dependency in S3 Module
 
 **Model Response Issue:**
-```ts
+```typescript
 // In tap-stack.ts
 // Problem: Need EC2 role ARN before EC2 module is created
 const ec2RoleArn = `arn:aws:iam::${accountId}:role/tap-ec2-role`;
@@ -421,7 +421,7 @@ const ec2Module = new Ec2Module(this, 'ec2', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // Step 1: Create EC2 module with empty S3 bucket ARN
 const ec2Module = new Ec2Module(this, 'ec2', {
   vpcId: vpcModule.vpc.id,
@@ -469,7 +469,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-s3-policy-update', {
 ### 11. Missing Conditional S3 Policy in EC2 Module
 
 **Model Response Issue:**
-```ts
+```typescript
 // EC2 IAM Policy always includes S3 statement
 new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-policy', {
   role: this.role.id,
@@ -488,7 +488,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-policy', {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-policy', {
   role: this.role.id,
   policy: JSON.stringify({
@@ -523,7 +523,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'ec2-policy', {
 ### 12. Missing Provider and Backend Configuration
 
 **Model Response Issue:**
-```ts
+```typescript
 class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -542,7 +542,7 @@ class TapStack extends TerraformStack {
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -615,7 +615,7 @@ export class TapStack extends TerraformStack {
 ### 13. Missing Environment Differentiation
 
 **Model Response Issue:**
-```ts
+```typescript
 // All resource names are static
 vpc: 'tap-vpc'
 rds: 'tap-postgres-db'
@@ -624,7 +624,7 @@ bucket: 'tap-ec2-logs-bucket'
 ```
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // Resources tagged with environment
 const environmentSuffix = props?.environmentSuffix || 'dev';
 

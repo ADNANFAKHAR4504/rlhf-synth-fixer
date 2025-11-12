@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambdas/access-key-cleanup.ts
 
-```ts
+```typescript
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { IAM, SNS } from 'aws-sdk';
 
@@ -194,7 +194,7 @@ export const handler = async (): Promise<void> => {
 
 ## ./lib/lambdas/cloudtrail-processor.ts
 
-```ts
+```typescript
 import { S3Event } from 'aws-lambda';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { S3, SNS } from 'aws-sdk';
@@ -339,7 +339,7 @@ export const handler = async (event: S3Event): Promise<void> => {
 
 ## ./lib/lambdas/cost-monitor.ts
 
-```ts
+```typescript
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { CostExplorer, SNS } from 'aws-sdk';
 
@@ -523,7 +523,7 @@ export const handler = async (): Promise<void> => {
 
 ## ./lib/stacks/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -740,7 +740,7 @@ export class ComputeStack extends cdk.NestedStack {
 
 ## ./lib/stacks/database-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -823,7 +823,7 @@ export class DatabaseStack extends cdk.NestedStack {
 
 ## ./lib/stacks/monitoring-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as inspector from 'aws-cdk-lib/aws-inspectorv2';
@@ -964,7 +964,7 @@ export class MonitoringStack extends cdk.NestedStack {
 
 ## ./lib/stacks/networking-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -1133,7 +1133,7 @@ export class NetworkingStack extends cdk.NestedStack {
 
 ## ./lib/stacks/security-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -1289,7 +1289,7 @@ export class SecurityStack extends cdk.NestedStack {
 
 ## ./lib/stacks/storage-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -1402,7 +1402,7 @@ export class StorageStack extends cdk.NestedStack {
 
 ## ./lib/stacks/waf-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -1515,7 +1515,7 @@ export class WAFStack extends cdk.NestedStack {
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -1728,7 +1728,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 import * as fs from 'fs';
 import {
   CloudFormationClient,
@@ -2239,7 +2239,7 @@ describe('TapStack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

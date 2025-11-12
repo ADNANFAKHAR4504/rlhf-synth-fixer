@@ -28,7 +28,7 @@ I'll build a comprehensive multi-environment ECS infrastructure with Pulumi Type
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
@@ -875,7 +875,7 @@ export default function () {
 
 ## tests/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
@@ -1093,7 +1093,7 @@ describe('TapStack Unit Tests', () => {
 
 ## tests/tap-stack.int.test.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';

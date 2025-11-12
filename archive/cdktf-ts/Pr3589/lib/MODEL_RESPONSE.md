@@ -48,7 +48,7 @@ Let's start by defining what each module in `modules.ts` should do, and then bui
    - Create security groups with restricted inbound rules for HTTP and SSH
 
 Now, let's actually implement these modules.
-```ts
+```typescript
 // modules.ts
 import { Construct } from "constructs";
 import { TerraformOutput, TerraformStack } from "cdktf";
@@ -516,7 +516,7 @@ export class SecurityGroupsModule extends Construct {
 
 Now let's implement the main stack in `tap-stack.ts`:
 
-```ts
+```typescript
 // tap-stack.ts
 import { Construct } from "constructs";
 import { App, TerraformOutput, TerraformStack } from "cdktf";
@@ -766,7 +766,7 @@ I'll implement a secure, auditable AWS infrastructure using CDKTF with TypeScrip
 
 ## 1. `modules.ts`
 
-```ts
+```typescript
 // modules.ts
 import { Construct } from "constructs";
 import {
@@ -1357,7 +1357,7 @@ export class SecurityGroupsModule extends Construct {
 
 ## 2. `tap-stack.ts`
 
-```ts
+```typescript
 // tap-stack.ts
 import { Construct } from "constructs";
 import { App, TerraformOutput, TerraformStack } from "cdktf";

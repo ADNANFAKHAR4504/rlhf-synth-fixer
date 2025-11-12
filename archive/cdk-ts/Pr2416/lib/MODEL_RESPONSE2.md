@@ -4,7 +4,7 @@ I'll fix those TypeScript errors for you. The issues are related to incorrect pr
 
 ### lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -399,7 +399,7 @@ export class TapStack extends cdk.Stack {
 
 ### bin/tap.ts (Example of how it should look)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

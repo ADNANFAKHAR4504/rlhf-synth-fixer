@@ -2,7 +2,7 @@
 
 ## lib/secure-infra-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

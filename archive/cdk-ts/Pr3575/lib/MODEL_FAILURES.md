@@ -31,7 +31,7 @@ This document outlines the infrastructure changes needed to transform the MODEL_
 - Blocks CI/CD automation
 
 **Fix**: Add explicit removal policies to all resources:
-```ts
+```typescript
 removalPolicy: cdk.RemovalPolicy.DESTROY
 ```
 
@@ -75,7 +75,7 @@ Resources requiring this:
 - Job submission fails
 
 **Fix**: Create separate IAM role:
-```ts
+```typescript
 const mediaConvertRole = new iam.Role(this, 'MediaConvertRole', {
   assumedBy: new iam.ServicePrincipal('mediaconvert.amazonaws.com'),
 });
@@ -94,7 +94,7 @@ Pass this role ARN to processor Lambda via environment variable.
 - Cannot submit MediaConvert jobs
 
 **Fix**: Add PassRole policy to processor role:
-```ts
+```typescript
 processorRole.addToPolicy(new iam.PolicyStatement({
   actions: ['iam:PassRole'],
   resources: ['*'],
@@ -116,7 +116,7 @@ processorRole.addToPolicy(new iam.PolicyStatement({
 - Not using latest security patches
 
 **Fix**: Update all Lambda functions:
-```ts
+```typescript
 runtime: lambda.Runtime.NODEJS_20_X
 ```
 
@@ -142,7 +142,7 @@ runtime: lambda.Runtime.NODEJS_20_X
 - May cause build issues
 
 **Fix**: Use explicit import:
-```ts
+```typescript
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 new s3n.LambdaDestination(uploadHandlerFunction)
 ```
@@ -156,7 +156,7 @@ new s3n.LambdaDestination(uploadHandlerFunction)
 - May not cover all SQS operations needed
 
 **Fix**: Grant full permissions via event source mapping:
-```ts
+```typescript
 processorFunction.addEventSource(new lambdaEventSources.SqsEventSource(jobQueue))
 ```
 This automatically grants required permissions.
@@ -179,7 +179,7 @@ This automatically grants required permissions.
 - `AWS_REGION`
 
 **Fix**: Add to processor environment:
-```ts
+```typescript
 environment: {
   UPLOAD_BUCKET: uploadBucket.bucketName,
   OUTPUT_BUCKET: outputBucket.bucketName,

@@ -4,7 +4,7 @@ This implementation provides a comprehensive disaster recovery solution with mul
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -103,7 +103,7 @@ export class TapStack extends TerraformStack {
 
 ## lib/storage-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -378,7 +378,7 @@ export class StorageStack extends Construct {
 
 ## lib/database-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
 import { RdsClusterInstance } from '@cdktf/provider-aws/lib/rds-cluster-instance';
@@ -745,7 +745,7 @@ export class DatabaseStack extends Construct {
 
 ## lib/monitoring-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
 import { SnsTopicSubscription } from '@cdktf/provider-aws/lib/sns-topic-subscription';
@@ -901,7 +901,7 @@ export class MonitoringStack extends Construct {
 
 ## lib/disaster-recovery-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -1171,7 +1171,7 @@ export class DisasterRecoveryStack extends Construct {
 
 ## lib/lambda/failover-handler.ts
 
-```ts
+```typescript
 import { RDSClient, PromoteReadReplicaCommand, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';

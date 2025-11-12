@@ -26,7 +26,7 @@ I'll help you build a secure and highly available AWS infrastructure using CDKTF
 
 ## File 1: modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 
@@ -811,7 +811,7 @@ export class CloudWatchModule extends Construct {
 
 ## File 2: tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
@@ -1027,7 +1027,7 @@ cdktf destroy
 
 Create a file `tap-stack.test.ts`:
 
-```ts
+```typescript
 import { Testing } from 'cdktf';
 import { TapStack } from './tap-stack';
 

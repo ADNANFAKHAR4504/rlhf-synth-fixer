@@ -4,7 +4,7 @@ This implementation creates a security-hardened S3 data lake with KMS encryption
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -293,7 +293,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from './lib/tap-stack';
 

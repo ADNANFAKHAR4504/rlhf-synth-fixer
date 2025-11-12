@@ -175,7 +175,7 @@
 ```
 
 ### `bin/tap.ts`
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -196,7 +196,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 ```
 
 ### `lib/tap-stack.ts`
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as config from 'aws-cdk-lib/aws-config';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

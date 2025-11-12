@@ -31,7 +31,7 @@ I need to ensure all resources have the Environment: Production tag and follow b
 ### Answer 
 ---
 
-```ts
+```typescript
 // --- modules.ts ---
 
 import { Construct } from "constructs";
@@ -375,7 +375,7 @@ export class SecretsConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // --- taps-stack.ts ---
 
 import { Construct } from "constructs";

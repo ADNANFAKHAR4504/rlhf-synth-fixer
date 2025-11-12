@@ -132,7 +132,7 @@ module.exports = {
 
 ### `test/setup.ts`
 
-```ts
+```typescript
 import { Testing } from 'cdktf';
 
 // Extend Jest matchers

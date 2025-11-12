@@ -4,7 +4,7 @@ Complete three-tier web application infrastructure using AWS CDK with TypeScript
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -467,7 +467,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -537,7 +537,7 @@ Before the application is fully functional, you need to build and push your cont
 1. Build your Node.js API application Docker image
 2. Push to Amazon ECR or another container registry
 3. Update line 135 in `lib/tap-stack.ts` with your image URI:
-```ts
+```typescript
 image: ecs.ContainerImage.fromRegistry('your-account.dkr.ecr.us-east-1.amazonaws.com/api:latest'),
 ```
 4. Redeploy: `cdk deploy --context environmentSuffix=dev`

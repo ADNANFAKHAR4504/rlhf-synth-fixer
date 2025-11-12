@@ -30,7 +30,7 @@ You're absolutely right about the AWS services needed! I'll help you build a rob
 
 Here's a comprehensive Pulumi program that sets up your document storage infrastructure:
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 

@@ -2,7 +2,7 @@ Here's a complete Pulumi TypeScript implementation that creates a secure and mon
 
 ## File: infrastructure.ts
 
-```ts
+```typescript
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -630,7 +630,7 @@ echo '{
 
 ## File: tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 

@@ -4,7 +4,7 @@ Here's the complete AWS CDK TypeScript infrastructure code for your serverless A
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

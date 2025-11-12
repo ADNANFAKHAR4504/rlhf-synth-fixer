@@ -1,6 +1,6 @@
 ### modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import {
   vpc,
@@ -919,7 +919,7 @@ export class KmsModule extends Construct {
 
 ### tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

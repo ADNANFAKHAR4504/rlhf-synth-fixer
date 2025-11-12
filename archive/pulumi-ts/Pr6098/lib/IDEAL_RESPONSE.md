@@ -1,6 +1,6 @@
 # E-commerce Containerized Application - Corrected Implementation
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *

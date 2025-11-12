@@ -9,7 +9,7 @@ This document identifies the issues present in the MODEL_RESPONSE.md that need t
 **Location**: bin/tap.ts, line 18
 **Issue**: Region is set to `ca-central-1` instead of the required `us-east-1`
 
-```ts
+```typescript
 // WRONG
 env: {
   account: process.env.CDK_DEFAULT_ACCOUNT,
@@ -25,7 +25,7 @@ env: {
 **Location**: lib/tap-stack.ts, container definition
 **Issue**: Using a generic Node.js image instead of an actual application image
 
-```ts
+```typescript
 // PLACEHOLDER - Not production ready
 image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/node:18-alpine'),
 ```
@@ -54,7 +54,7 @@ image: ecs.ContainerImage.fromRegistry('public.ecr.aws/docker/library/node:18-al
 **Location**: lib/tap-stack.ts, target group health check
 **Issue**: Health check path set to `/health` but no documentation that the application must implement this endpoint
 
-```ts
+```typescript
 healthCheck: {
   path: '/health',
   // ...

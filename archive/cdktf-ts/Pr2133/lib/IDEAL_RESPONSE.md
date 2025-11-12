@@ -28,7 +28,7 @@ This document outlines a secure, self-contained, and compliant AWS infrastructur
 
 The following file contains the complete and final implementation for the unified, secure stack.
 
-```ts
+```typescript
 import { Fn, TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

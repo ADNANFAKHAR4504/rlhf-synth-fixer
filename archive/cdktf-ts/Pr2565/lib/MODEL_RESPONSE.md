@@ -2,7 +2,7 @@ I'll design a secure and efficient AWS environment using CDKTF in TypeScript tha
 
 ## modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformVariable } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -464,7 +464,7 @@ systemctl enable awslogsd
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformVariable, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

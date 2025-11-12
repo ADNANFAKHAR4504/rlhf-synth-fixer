@@ -5,7 +5,7 @@ Complete Pulumi TypeScript infrastructure for a media company's web application 
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * Main Pulumi stack for TAP (Test Automation Platform) infrastructure.
  * Orchestrates all sub-stacks and manages environment-specific configurations.
@@ -178,7 +178,7 @@ All resources include:
 
 ### lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -441,7 +441,7 @@ export class VpcStack extends pulumi.ComponentResource {
 
 ### lib/ec2-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -704,7 +704,7 @@ echo "<h1>Media Company Web Application - Instance $(ec2-metadata --instance-id 
 
 ### lib/alb-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -860,7 +860,7 @@ export class AlbStack extends pulumi.ComponentResource {
 
 ### lib/s3-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -986,7 +986,7 @@ export class S3Stack extends pulumi.ComponentResource {
 
 ### lib/cloudwatch-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';

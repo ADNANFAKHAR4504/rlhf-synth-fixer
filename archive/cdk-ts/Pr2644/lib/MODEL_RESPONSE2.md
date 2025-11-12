@@ -1,7 +1,7 @@
 
 ## lib/tapstack.ts (Updated)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -442,7 +442,7 @@ export class TapStack extends cdk.Stack {
 ## Key Changes Made
 
 ### 1. **Updated Interface**
-```ts
+```typescript
 export interface TapStackProps extends cdk.StackProps {
   /**
    * Environment suffix to append to resource names (e.g., 'dev', 'staging', 'prod')
@@ -481,7 +481,7 @@ export interface TapStackProps extends cdk.StackProps {
 
 ## Usage Examples
 
-```ts
+```typescript
 // Development environment
 new TapStack(app, 'TapStack', {
   environmentSuffix: 'dev',

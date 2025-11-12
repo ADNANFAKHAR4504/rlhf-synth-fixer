@@ -43,7 +43,7 @@ Here's my current stack file that needs to be updated:
 
 **File: lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

@@ -9,7 +9,7 @@
 
 
 ### tap-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import {
@@ -112,7 +112,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ### multi-component-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -1419,7 +1419,7 @@ export class MultiComponentApplicationConstruct extends Construct {
 ```
 
 ### name-utils.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 
 /**
@@ -1468,7 +1468,7 @@ export default canonicalResourceName;
 ```
 
 ### string-utils.ts
-```ts
+```typescript
 export function safeSuffix(input?: string): string {
   // Normalize input to a safe suffix: lowercase, keep a-z0-9, hyphen and underscore
   const base = (input ?? '').toString();

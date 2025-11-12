@@ -1,6 +1,6 @@
 ### `lib/tap-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -199,7 +199,7 @@ export class TapStack extends cdk.Stack {
 
 ### `lib/constructs/networking.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as cdk from 'aws-cdk-lib';
@@ -273,7 +273,7 @@ export class NetworkingConstruct extends Construct {
 
 ### `lib/constructs/security.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
@@ -375,7 +375,7 @@ export class SecurityConstruct extends Construct {
 
 ### `lib/constructs/database.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -456,7 +456,7 @@ export class DatabaseConstruct extends Construct {
 
 ### `bin/app.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

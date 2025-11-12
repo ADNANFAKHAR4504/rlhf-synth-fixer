@@ -4,7 +4,7 @@ I'll create a complete serverless polling system using AWS CDK with TypeScript. 
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -623,7 +623,7 @@ boto3>=1.34.0
 
 ## test/tap-stack.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

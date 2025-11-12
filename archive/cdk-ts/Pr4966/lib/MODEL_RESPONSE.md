@@ -47,7 +47,7 @@ Let's implement each file:
 
 1. First, the entry point (`bin/serverless-api.ts`):
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -76,7 +76,7 @@ new ServerlessApiStack(app, `ServerlessApiStack-${environment}`, {
 
 2. Now the main stack (`lib/serverless-api-stack.ts`):
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -452,7 +452,7 @@ export class ServerlessApiStack extends cdk.Stack {
 
 First, `lambda/create-item.ts`:
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDB, SecretsManager } from 'aws-sdk';
 import { v4 as uuidv4 } from 'uuid';
@@ -525,7 +525,7 @@ export async function handler(
 
 Next, `lambda/read-item.ts`:
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDB, SecretsManager } from 'aws-sdk';
 
@@ -620,7 +620,7 @@ export async function handler(
 
 Now, `lambda/update-item.ts`:
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDB, SecretsManager } from 'aws-sdk';
 
@@ -723,7 +723,7 @@ export async function handler(
 
 Finally, `lambda/delete-item.ts`:
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDB, SecretsManager } from 'aws-sdk';
 
@@ -942,7 +942,7 @@ Actually, let's enhance this a bit further by adding a global secondary index (G
 
 Updated `serverless-api-stack.ts` with these enhancements:
 
-```ts
+```typescript
 // Inside the ServerlessApiStack constructor, add a GSI to the DynamoDB table
 this.itemsTable = new dynamodb.Table(this, 'ItemsTable', {
   partitionKey: { name: 'id', type: dynamodb.AttributeType.STRING },
@@ -1063,7 +1063,7 @@ serverless-api/
 
 Let's start with the main stack implementation that provisions all required resources:
 
-```ts
+```typescript
 // lib/serverless-api-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -1374,7 +1374,7 @@ export class ServerlessApiStack extends cdk.Stack {
 
 Now, let's create the CDK app entry point with environment-based configuration:
 
-```ts
+```typescript
 // bin/serverless-api.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -1405,7 +1405,7 @@ new ServerlessApiStack(app, `ServerlessApiStack-${environment}`, {
 
 Now, let's implement the Lambda handlers for CRUD operations:
 
-```ts
+```typescript
 // lambda/create-item.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDB, SecretsManager } from 'aws-sdk';
@@ -1476,7 +1476,7 @@ export async function handler(
 }
 ```
 
-```ts
+```typescript
 // lambda/read-item.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDB, SecretsManager } from 'aws-sdk';

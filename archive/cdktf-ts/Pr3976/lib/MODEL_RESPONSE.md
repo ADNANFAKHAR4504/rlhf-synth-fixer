@@ -27,7 +27,7 @@ I'll create a comprehensive CDKTF solution for your AWS web application infrastr
 
 ## `modules.ts` - Infrastructure Modules
 
-```ts
+```typescript
 // modules.ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
@@ -1456,7 +1456,7 @@ export class MonitoringModule extends Construct {
 
 ## `tap-stack.ts` - Complete Main Stack Composition
 
-```ts
+```typescript
 // tap-stack.ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';

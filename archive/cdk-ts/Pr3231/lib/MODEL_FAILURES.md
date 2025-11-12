@@ -4,7 +4,7 @@
 
 ### 1. Auto Scaling Group Target Group Attachment
 **Issue**: The original code used `targetGroupArns` property which doesn't exist in CDK's AutoScalingGroup props.
-```ts
+```typescript
 // INCORRECT - This property doesn't exist
 const asg = new autoscaling.AutoScalingGroup(this, 'BlogAutoScalingGroup', {
   targetGroupArns: [targetGroup.targetGroupArn],
@@ -13,7 +13,7 @@ const asg = new autoscaling.AutoScalingGroup(this, 'BlogAutoScalingGroup', {
 ```
 
 **Fix**: Use the `attachToApplicationTargetGroup` method after creating the ASG.
-```ts
+```typescript
 // CORRECT
 const asg = new autoscaling.AutoScalingGroup(this, 'BlogAutoScalingGroup', {
   // ... other props without targetGroupArns
@@ -23,13 +23,13 @@ asg.attachToApplicationTargetGroup(targetGroup);
 
 ### 2. S3 Bucket Removal Policy
 **Issue**: The S3 bucket had `RETAIN` removal policy, preventing clean stack deletion.
-```ts
+```typescript
 // INCORRECT - Bucket won't be deleted on stack destruction
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 ```
 
 **Fix**: Changed to `DESTROY` with `autoDeleteObjects` for complete cleanup.
-```ts
+```typescript
 // CORRECT
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true,
@@ -37,14 +37,14 @@ autoDeleteObjects: true,
 
 ### 3. Missing Environment Suffix on Critical Resources
 **Issue**: Some resources lacked environment suffix, causing naming conflicts between deployments.
-```ts
+```typescript
 // INCORRECT - No environment suffix
 const vpc = new ec2.Vpc(this, 'BlogVpc', {
 const alb = new elbv2.ApplicationLoadBalancer(this, 'BlogALB', {
 ```
 
 **Fix**: Added environment suffix to ensure unique resource names.
-```ts
+```typescript
 // CORRECT
 const vpc = new ec2.Vpc(this, `BlogVpc${environmentSuffix}`, {
 const alb = new elbv2.ApplicationLoadBalancer(this, `BlogALB${environmentSuffix}`, {
@@ -57,7 +57,7 @@ const alb = new elbv2.ApplicationLoadBalancer(this, `BlogALB${environmentSuffix}
 **Issue**: Log group lacked proper retention and removal policies.
 
 **Fix**: Added explicit retention period and DESTROY removal policy.
-```ts
+```typescript
 const logGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
   retention: logs.RetentionDays.ONE_WEEK,
   removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -98,14 +98,14 @@ const logGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
 
 ### 8. Health Check Configuration
 **Issue**: Used deprecated health check methods.
-```ts
+```typescript
 healthCheck: autoscaling.HealthCheck.elb({
   grace: cdk.Duration.minutes(5),
 }),
 ```
 
 **Fix**: While the code works, CDK warns about deprecation. In production, consider using the newer `healthChecks` property:
-```ts
+```typescript
 // Future-proof version (not implemented to maintain compatibility)
 healthChecks: [
   autoscaling.HealthChecks.elb({
@@ -120,7 +120,7 @@ healthChecks: [
 **Issue**: Original implementation didn't explicitly block public access.
 
 **Fix**: Added explicit public access blocking:
-```ts
+```typescript
 blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 ```
 

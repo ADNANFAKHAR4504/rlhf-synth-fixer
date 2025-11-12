@@ -5,7 +5,7 @@ Used incorrect JavaScript template literal syntax (`\${...}`) to reference the o
 
 **Evidence of Model Failure:**
 
-```ts
+```typescript
 // From uploaded:MODEL_RESPONSE.md (VpcModule)
 const az = `\${element(${azs.names}.*, ${i})}`;
 ```
@@ -15,7 +15,7 @@ Uses the correct `Fn.element` helper from the `cdktf` library, ensuring the expr
 
 **Evidence of Ideal Implementation:**
 
-```ts
+```typescript
 // From uploaded:IDEAL_RESPONSE.md (VpcModule)
 import { Fn } from 'cdktf';
 // ...
@@ -37,7 +37,7 @@ Includes the critical resource to complete the Flow Log setup, linking the previ
 
 **Evidence of Ideal Implementation:**
 
-```ts
+```typescript
 // From uploaded:IDEAL_RESPONSE.md (VpcModule)
 new aws.vpcFlowLog.FlowLog(this, 'vpc-flow-log', {
   iamRoleArn: flowLogRole.arn,
@@ -58,7 +58,7 @@ Used snake\_case (`snake_case`) for properties within the ALB Target Group and A
 
 **Evidence of Model Failure (Target Group):**
 
-```ts
+```typescript
 // From uploaded:MODEL_RESPONSE.md (Ec2Module)
 healthCheck: {
   enabled: true,
@@ -70,7 +70,7 @@ healthCheck: {
 
 **Evidence of Model Failure (ASG Tag):**
 
-```ts
+```typescript
 // From uploaded:MODEL_RESPONSE.md (Ec2Module)
 tags: [{
   key: 'Name',
@@ -84,7 +84,7 @@ Uses the correct camelCase properties consistent with the CDKTF TypeScript schem
 
 **Evidence of Ideal Implementation (Target Group):**
 
-```ts
+```typescript
 // From uploaded:IDEAL_RESPONSE.md (Ec2Module)
 healthCheck: {
   enabled: true,
@@ -110,7 +110,7 @@ A production-ready solution, as inferred by the Ideal Response's overall structu
 **Evidence of Ideal Implementation (Implicit in structure, requiring explicit RDS egress):**
 The Ideal Response's structure supports adding this critical rule by correctly exporting the security groups, allowing the RDS module (or a linking rule) to be configured:
 
-```ts
+```typescript
 // The necessary rule (conceptually) is supported by the Ideal Response's structure:
 new aws.securityGroupRule.SecurityGroupRule(this, 'backend-to-rds-egress', {
   type: 'egress',

@@ -10,7 +10,7 @@ This document analyzes the discrepancies between the AWS CDK model response in `
 
 **Model Response Code**:
 
-```ts
+```typescript
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
 storage.dataBucket.addEventNotification(
   s3n.EventType.OBJECT_CREATED, // This is incorrect
@@ -18,7 +18,7 @@ storage.dataBucket.addEventNotification(
 
 **Corrected Implementation**:
 
-```ts
+```typescript
 import * as s3 from 'aws-cdk-lib/aws-s3';
 storage.dataBucket.addEventNotification(
   s3.EventType.OBJECT_CREATED, // Fixed import source
@@ -30,7 +30,7 @@ storage.dataBucket.addEventNotification(
 
 ### Model Response Code
 
-```ts
+```typescript
 lifecycleRules: [
   {
     noncurrentVersionExpiration: { days: 30 }, // Incorrect format
@@ -45,7 +45,7 @@ lifecycleRules: [
 
 ### Corrected Implementation
 
-```ts
+```typescript
 lifecycleRules: [
   {
     noncurrentVersionExpiration: Duration.days(30), // Correct CDK v2 format
@@ -74,14 +74,14 @@ lifecycleRules: [
 
 ### Model Response Code
 
-```ts
+```typescript
 import { Metrics, MetricUnits } from '@aws-lambda-powertools/metrics';
 metrics.addMetric('ProcessedEvents', MetricUnits.Count, event.Records.length);
 ```
 
 ### Actual Working Implementation
 
-```ts
+```typescript
 import { MetricUnit, Metrics } from '@aws-lambda-powertools/metrics';
 metrics.addMetric('ProcessedEvents', MetricUnit.Count, event.Records.length);
 ```
@@ -96,7 +96,7 @@ metrics.addMetric('ProcessedEvents', MetricUnit.Count, event.Records.length);
 
 ### Model Response Code
 
-```ts
+```typescript
 logger.info('Processing S3 event', {
   requestId: context.requestId, // This property doesn't exist
 });
@@ -104,7 +104,7 @@ logger.info('Processing S3 event', {
 
 ### Corrected Implementation
 
-```ts
+```typescript
 logger.info('Processing S3 event', {
   requestId: context.awsRequestId, // Correct property name
 });
@@ -118,7 +118,7 @@ logger.info('Processing S3 event', {
 
 **Model Response Included**:
 
-```ts
+```typescript
 this.dataProcessor.addLayers(
   lambda.LayerVersion.fromLayerVersionArn(
     this,
@@ -136,7 +136,7 @@ this.dataProcessor.addLayers(
 
 **Model Response Included**:
 
-```ts
+```typescript
 reservedConcurrentExecutions: environment === 'prod' ? 100 : 10,
 ```
 

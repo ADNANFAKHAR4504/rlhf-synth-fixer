@@ -13,7 +13,7 @@
 - SNS topics: `topicName: 'TAPHighRiskTransactionAlerts'`
 
 **IDEAL_RESPONSE Fix**: All resources must include environmentSuffix in naming:
-```ts
+```typescript
 // Correct approach
 bucketName: `transaction-processing-${environmentSuffix}`
 tableName: `transaction-metadata-${environmentSuffix}`
@@ -33,7 +33,7 @@ functionName: `transaction-validator-${environmentSuffix}`
 **MODEL_RESPONSE Issue**: Defined sort key as NUMBER type but used Date.now() (number) in Lambda code, while the prompt specifies timestamp handling that should be STRING for better query patterns.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING }
 // In Lambda code:
 timestamp: new Date().toISOString(), // Store as ISO string
@@ -52,7 +52,7 @@ timestamp: new Date().toISOString(), // Store as ISO string
 **MODEL_RESPONSE Issue**: Created GSIs for StatusIndex and RiskLevelIndex, but the prompt requires "Global secondary indexes for query optimization" without specifying exact names. However, the model missed the RiskStatusIndex that was explicitly mentioned in the requirements.
 
 **IDEAL_RESPONSE Fix**: Add the missing GSI:
-```ts
+```typescript
 transactionTable.addGlobalSecondaryIndex({
   indexName: 'RiskStatusIndex',
   partitionKey: { name: 'riskStatus', type: dynamodb.AttributeType.STRING },
@@ -74,7 +74,7 @@ transactionTable.addGlobalSecondaryIndex({
 **MODEL_RESPONSE Issue**: Created parallel processing but used DynamoUpdateItem task which is complex and error-prone. The workflow should focus on Lambda orchestration rather than direct DynamoDB operations within Step Functions.
 
 **IDEAL_RESPONSE Fix**: Simplify workflow to focus on Lambda orchestration:
-```ts
+```typescript
 const parallelChecks = new stepfunctions.Parallel(this, 'ParallelAnalysis')
   .branch(getRiskAnalysisTask)
   .branch(getComplianceCheckTask)
@@ -94,7 +94,7 @@ const parallelChecks = new stepfunctions.Parallel(this, 'ParallelAnalysis')
 **MODEL_RESPONSE Issue**: Created separate access logs bucket but didn't include proper lifecycle rules for the main transaction bucket, and the access logs bucket naming doesn't follow the environmentSuffix convention.
 
 **IDEAL_RESPONSE Fix**: Ensure both buckets have proper lifecycle rules:
-```ts
+```typescript
 // Main bucket lifecycle
 lifecycleRules: [{
   id: 'GlacierTransition',
@@ -129,7 +129,7 @@ const accessLogsBucket = new s3.Bucket(this, `AccessLogsBucket${environmentSuffi
 **MODEL_RESPONSE Issue**: Lambda functions use hardcoded environment variable names that don't follow consistent naming patterns.
 
 **IDEAL_RESPONSE Fix**: Use consistent environment variable naming:
-```ts
+```typescript
 environment: {
   METADATA_TABLE: transactionTable.tableName,
   RISK_THRESHOLD_PARAM: riskThresholdParameter.parameterName,

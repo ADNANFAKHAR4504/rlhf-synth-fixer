@@ -1,6 +1,6 @@
 ## 1. modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformLocal } from 'cdktf';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -558,7 +558,7 @@ export class WebAppModules extends Construct {
 
 ## 2. tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

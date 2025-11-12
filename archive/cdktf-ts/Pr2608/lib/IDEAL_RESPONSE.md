@@ -65,7 +65,7 @@ npx cdktf deploy
 
 ### `bin/tap.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
@@ -80,7 +80,7 @@ app.synth();
 
 ### `lib/tap-stack.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, Fn } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
@@ -595,7 +595,7 @@ export class TapStack extends TerraformStack {
 
 ### `tests/tap-stack.unit.test.ts`
 
-```ts
+```typescript
 import './setup.js';
 
 declare global {
@@ -672,7 +672,7 @@ describe('Unit Tests for Multi-Region TapStack', () => {
 
 ### `tests/tap-stack.int.test.ts`
 
-```ts
+```typescript
 import './setup.js';
 
 declare global {

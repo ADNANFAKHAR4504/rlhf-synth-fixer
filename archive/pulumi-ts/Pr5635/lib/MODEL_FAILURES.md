@@ -17,7 +17,7 @@ The model assumed that all AWS services mentioned in the PROMPT have correspondi
 - `aws.devopsguru.ResourceCollection` and `aws.devopsguru.NotificationChannel` (lib/devops-guru-stack.ts)
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Stubbed implementation with TODO comment
 constructor(name: string, args: WellArchitectedStackArgs, opts?: pulumi.ComponentResourceOptions) {
   super('tap:operations:WellArchitected', name, args, opts);
@@ -55,7 +55,7 @@ The model didn't verify which AWS services are actually available in the @pulumi
 **MODEL_RESPONSE Issue**:
 The generated `bin/tap.ts` entry point didn't pass the `environmentSuffix` to the TapStack:
 
-```ts
+```typescript
 // MODEL_RESPONSE version
 new TapStack('pulumi-infra', {
   tags: defaultTags,
@@ -63,7 +63,7 @@ new TapStack('pulumi-infra', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,

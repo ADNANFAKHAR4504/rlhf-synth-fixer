@@ -8,7 +8,7 @@ Here's the complete infrastructure organized into separate files:
 
 ### 1. Main Stack File - `lib/tap-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -259,7 +259,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Multi-Region Security Stack - `lib/multi-region-security-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -353,7 +353,7 @@ export class MultiRegionSecurityStack extends cdk.Stack {
 
 ### 3. Security Monitoring Stack - `lib/security-monitoring-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -450,7 +450,7 @@ export class SecurityMonitoringStack extends cdk.Stack {
 
 ### 4. IAM Security Policies - `lib/security-policies.ts`
 
-```ts
+```typescript
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

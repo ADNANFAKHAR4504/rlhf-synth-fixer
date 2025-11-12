@@ -14,7 +14,7 @@ This is the ideal implementation of a secure, scalable AWS infrastructure using 
 ### 🏗️ **Infrastructure Components**
 
 #### Networking (Multi-AZ High Availability)
-```ts
+```typescript
 // VPC with unique naming and comprehensive subnet strategy
 this.vpc = new ec2.Vpc(this, `VPC-${environmentSuffix}-${randomSuffix}`, {
   ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -38,7 +38,7 @@ this.vpc = new ec2.Vpc(this, `VPC-${environmentSuffix}-${randomSuffix}`, {
 ```
 
 #### Security Layer (Defense in Depth)
-```ts
+```typescript
 // Customer-managed KMS key with automatic rotation
 const kmsKey = new kms.Key(this, `KMSKey-${environmentSuffix}-${randomSuffix}`, {
   description: `Infrastructure encryption key - ${environmentSuffix}-${randomSuffix}`,
@@ -62,7 +62,7 @@ this.dbSecret = new secretsmanager.Secret(this, `DBSecret-${environmentSuffix}-$
 ```
 
 #### Database Layer (High Availability & Security)
-```ts
+```typescript
 // PostgreSQL with Multi-AZ, encryption, and monitoring
 this.database = new rds.DatabaseInstance(this, `PostgreSQL-${environmentSuffix}-${randomSuffix}`, {
   instanceIdentifier: `postgresql-${environmentSuffix}-${randomSuffix}`,
@@ -87,7 +87,7 @@ this.database = new rds.DatabaseInstance(this, `PostgreSQL-${environmentSuffix}-
 ```
 
 #### Compute Layer (ECS with Auto Scaling)
-```ts
+```typescript
 // ECS Cluster with Container Insights
 this.ecsCluster = new ecs.Cluster(this, `ECSCluster-${environmentSuffix}-${randomSuffix}`, {
   vpc: this.vpc,
@@ -127,7 +127,7 @@ const launchTemplate = new ec2.LaunchTemplate(this, `ECSLaunchTemplate-${environ
 - **No Direct Internet Access**: Database layer completely isolated
 
 #### Identity and Access Management
-```ts
+```typescript
 // Least privilege IAM with conditions
 ecsInstanceRole.addToPolicy(
   new iam.PolicyStatement({
@@ -190,7 +190,7 @@ EOF
 - **Security Compliance**: KMS encryption and IAM permission validation
 
 ### 🏷️ **Enhanced Resource Tagging**
-```ts
+```typescript
 // Comprehensive tagging strategy
 cdk.Tags.of(this).add('Environment', environmentSuffix);
 cdk.Tags.of(this).add('Project', 'AWS-Migration');
@@ -215,7 +215,7 @@ cdk.Tags.of(this).add('Monitoring', 'Enabled');
 ### 🚀 **Deployment Best Practices**
 
 #### Environment Configuration
-```ts
+```typescript
 export interface InfraStackProps extends cdk.StackProps {
   vpcCidr?: string;
   domainName?: string;

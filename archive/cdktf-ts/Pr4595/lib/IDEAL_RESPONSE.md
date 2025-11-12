@@ -1,6 +1,6 @@
 ## modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 // VPC
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -1312,7 +1312,7 @@ export class CloudWatchAlarmsHelper {
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

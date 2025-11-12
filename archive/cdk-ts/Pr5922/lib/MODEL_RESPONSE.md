@@ -4,7 +4,7 @@ This implementation creates a complete event-driven transaction processing pipel
 
 ## File: lib/transaction-processing-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sns from 'aws-cdk-lib/aws-sns';

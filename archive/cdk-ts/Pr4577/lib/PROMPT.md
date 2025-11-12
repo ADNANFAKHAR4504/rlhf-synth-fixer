@@ -15,7 +15,7 @@ I need a complete serverless architecture that includes:
 
 Here's my current stack file (lib/tap-stack.ts):
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

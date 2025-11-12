@@ -1,6 +1,6 @@
 # Fully compliant AWS infrastructure
 
-```ts
+```typescript
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 

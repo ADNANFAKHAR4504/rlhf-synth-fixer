@@ -7,7 +7,7 @@ This document captures common failure patterns and mistakes that language models
 ### 1. VPC Configuration Mistakes
 
 **Failure Pattern**: Model creates VPC but fails to implement DynamoDB VPC Gateway Endpoint
-```ts
+```typescript
 // INCORRECT - Missing DynamoDB endpoint
 const vpc = new ec2.Vpc(this, 'MyVpc', {
   maxAzs: 2
@@ -22,7 +22,7 @@ const vpc = new ec2.Vpc(this, 'MyVpc', {
 ### 2. Lambda Layer Implementation Failures
 
 **Failure Pattern**: Model tries to create Lambda layers with external file dependencies
-```ts
+```typescript
 // INCORRECT - Requires external files
 const layer = new lambda.LayerVersion(this, 'Layer', {
   code: lambda.Code.fromAsset('lambda-layers/dependencies')
@@ -36,7 +36,7 @@ const layer = new lambda.LayerVersion(this, 'Layer', {
 ### 3. API Gateway Logging Configuration Failures
 
 **Failure Pattern**: Model enables API Gateway logging without setting up CloudWatch role
-```ts
+```typescript
 // INCORRECT - Missing IAM role setup
 deployOptions: {
   loggingLevel: apigateway.MethodLoggingLevel.INFO,
@@ -53,7 +53,7 @@ deployOptions: {
 ### 4. Overprivileged IAM Policies
 
 **Failure Pattern**: Model grants overly broad permissions
-```ts
+```typescript
 // INCORRECT - Too broad permissions
 new iam.PolicyStatement({
   actions: ['dynamodb:*'],
@@ -68,7 +68,7 @@ new iam.PolicyStatement({
 ### 5. Missing API Key Authentication
 
 **Failure Pattern**: Model creates API Gateway without requiring API keys
-```ts
+```typescript
 // INCORRECT - No API key requirement
 resource.addMethod('GET', integration, {
   authorizationType: apigateway.AuthorizationType.NONE
@@ -82,7 +82,7 @@ resource.addMethod('GET', integration, {
 ### 6. Incomplete CORS Configuration
 
 **Failure Pattern**: Model partially implements CORS headers
-```ts
+```typescript
 // INCORRECT - Incomplete CORS
 defaultCorsPreflightOptions: {
   allowOrigins: ['*']
@@ -99,7 +99,7 @@ defaultCorsPreflightOptions: {
 ### 7. DynamoDB Capacity and TTL Mistakes
 
 **Failure Pattern**: Model sets insufficient capacity or forgets TTL
-```ts
+```typescript
 // INCORRECT - Insufficient capacity and missing TTL
 new dynamodb.Table(this, 'Table', {
   readCapacity: 1,  // Too low
@@ -115,7 +115,7 @@ new dynamodb.Table(this, 'Table', {
 ### 8. Lambda Configuration Oversights
 
 **Failure Pattern**: Model misses critical Lambda configuration
-```ts
+```typescript
 // INCORRECT - Missing required configurations
 new lambda.Function(this, 'Function', {
   runtime: lambda.Runtime.NODEJS_18_X, // Wrong runtime
@@ -130,7 +130,7 @@ new lambda.Function(this, 'Function', {
 ### 9. Missing Resource Tagging
 
 **Failure Pattern**: Model creates resources without required tags
-```ts
+```typescript
 // INCORRECT - No tagging strategy
 new dynamodb.Table(this, 'Table', {
   tableName: 'my-table'
@@ -147,7 +147,7 @@ new dynamodb.Table(this, 'Table', {
 ### 10. Incomplete X-Ray Configuration
 
 **Failure Pattern**: Model enables X-Ray on Lambda but not API Gateway
-```ts
+```typescript
 // INCORRECT - Partial X-Ray configuration
 new lambda.Function(this, 'Function', {
   tracing: lambda.Tracing.ACTIVE
@@ -162,7 +162,7 @@ new lambda.Function(this, 'Function', {
 ### 11. CloudWatch Logs Policy Mistakes
 
 **Failure Pattern**: Model creates log groups without proper retention or access policies
-```ts
+```typescript
 // INCORRECT - Missing retention and policies
 new logs.LogGroup(this, 'LogGroup', {
   logGroupName: '/aws/lambda/my-function'
@@ -193,7 +193,7 @@ def handler(event, context):
 ### 13. Missing Usage Plan Configuration
 
 **Failure Pattern**: Model creates API key but no usage plan
-```ts
+```typescript
 // INCORRECT - API key without usage plan
 const apiKey = new apigateway.ApiKey(this, 'Key');
 // Missing: Usage plan with throttling
@@ -208,7 +208,7 @@ const apiKey = new apigateway.ApiKey(this, 'Key');
 ### 14. Hardcoded Values Instead of Environment-Aware Configuration
 
 **Failure Pattern**: Model hardcodes resource names and regions
-```ts
+```typescript
 // INCORRECT - Hardcoded values
 tableName: 'my-table-production',
 // Missing: Environment suffix usage
@@ -221,7 +221,7 @@ tableName: 'my-table-production',
 ### 15. Incomplete Stack Outputs
 
 **Failure Pattern**: Model forgets required CloudFormation outputs
-```ts
+```typescript
 // INCORRECT - Missing outputs
 // No CfnOutput declarations
 ```
@@ -235,7 +235,7 @@ tableName: 'my-table-production',
 ### 16. Insufficient Test Coverage
 
 **Failure Pattern**: Model creates basic tests without comprehensive validation
-```ts
+```typescript
 // INCORRECT - Minimal testing
 test('stack exists', () => {
   expect(stack).toBeDefined();
@@ -249,7 +249,7 @@ test('stack exists', () => {
 ### 17. Integration Tests Without Real AWS Resources
 
 **Failure Pattern**: Model mocks AWS SDK calls instead of testing live resources
-```ts
+```typescript
 // INCORRECT - Mocked AWS calls
 jest.mock('@aws-sdk/client-dynamodb');
 ```

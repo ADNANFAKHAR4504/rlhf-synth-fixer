@@ -19,7 +19,7 @@ The ideal response demonstrates a production-ready Pulumi infrastructure applica
 
 ### Ideal Code Implementation
 ## Main Stack Implementation (`lib/tap-stack.ts`)
-```ts
+```typescript
 /* eslint-disable prettier/prettier */
 
 /**

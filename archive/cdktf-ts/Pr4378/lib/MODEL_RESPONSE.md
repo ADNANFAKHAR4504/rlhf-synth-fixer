@@ -41,7 +41,7 @@ I'll create a comprehensive CDKTF implementation for your secure AWS environment
 
 ## **modules.ts**
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput } from 'cdktf';
@@ -1027,7 +1027,7 @@ export class OpenSearchModule extends Construct {
 
 ## **tap-stack.ts**
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
@@ -1434,7 +1434,7 @@ cdktf destroy tap-infrastructure
 ```
 
 ### **4. Unit Test Examples**
-```ts
+```typescript
 // test/tap-stack.test.ts
 import { Testing } from 'cdktf';
 import { TapStack } from '../tap-stack';

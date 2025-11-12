@@ -38,7 +38,7 @@ All code files are located in `lib/` directory with proper formatting and TypeSc
 ### 1. Environment Suffix Usage
 
 ALL resources include `environmentSuffix` in their names:
-```ts
+```typescript
 const vpc = new aws.ec2.Vpc(`vpc-${environmentSuffix}`, ...);
 const cluster = new aws.ecs.Cluster(`ecs-cluster-${environmentSuffix}`, ...);
 const alb = new aws.lb.LoadBalancer(`alb-${environmentSuffix}`, ...);
@@ -68,7 +68,7 @@ docker push $API_ECR:latest
 ### 3. Stack Outputs
 
 The stack exports all required outputs:
-```ts
+```typescript
 export const albDnsName = stack.albDnsName;        // ALB DNS for accessing services
 export const apiEcrUrl = stack.apiEcrUrl;          // ECR URL for API service
 export const workerEcrUrl = stack.workerEcrUrl;    // ECR URL for worker service

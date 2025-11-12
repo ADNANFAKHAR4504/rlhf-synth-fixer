@@ -4,7 +4,7 @@ IDEAL_RESPONSE.md
 
 ## bin/tap.ts
 
-```ts
+```typescript
 
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
@@ -336,7 +336,7 @@ export const completeStackOutputs = stack.outputs;
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable quotes */

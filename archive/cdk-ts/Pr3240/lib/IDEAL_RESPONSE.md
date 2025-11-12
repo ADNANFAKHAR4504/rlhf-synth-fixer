@@ -4,7 +4,7 @@
 
 ### Stack Implementation (lib/tap-stack.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -322,7 +322,7 @@ export class TapStack extends cdk.Stack {
 
 ### CDK App Entry Point (bin/tap.ts)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

@@ -1,6 +1,6 @@
 ## File 1: lib/modules.ts
 
-```ts
+```typescript
 import { TerraformModule } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
@@ -125,7 +125,7 @@ echo "Instance initialized for ${config.name}" > /var/log/init.log
 
 ## File 2: lib/tap-stack.ts
 
-```ts
+```typescript
 import { TerraformStack } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import { Construct } from "constructs";
@@ -292,7 +292,7 @@ export class TapStack extends TerraformStack {
 ### 📋 **Usage Example**
 This code can be used in a `main.ts` file like this:
 
-```ts
+```typescript
 import { App } from "cdktf";
 import { TapStack } from "./lib/tap-stack";
 

@@ -10,7 +10,7 @@
 
 ---
 
-```ts
+```typescript
 // lib/runtime/normalize-event.ts
 import { APIGatewayProxyEvent } from 'aws-lambda';
 
@@ -190,7 +190,7 @@ export function normalizeEvent(event: unknown): APIGatewayProxyEvent {
 
 ---
 
-```ts
+```typescript
 // lib/runtime/user-service.ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -461,7 +461,7 @@ export const handler = async (
 
 ---
 
-```ts
+```typescript
 // lib/runtime/product-service.ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -742,7 +742,7 @@ export const handler = async (
 
 ---
 
-```ts
+```typescript
 // lib/runtime/order-service.ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -1017,7 +1017,7 @@ export const handler = async (
 
 ---
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import {

@@ -6,7 +6,7 @@ Hey, I need your help updating an existing AWS CDK stack to meet some specific s
 
 Here's the existing stack file (lib/tap-stack.ts) that needs to be updated:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

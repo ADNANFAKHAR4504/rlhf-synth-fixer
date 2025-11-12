@@ -4,7 +4,7 @@ You're right! The `createMathExpression` method doesn't exist on the `Metric` ty
 
 Replace the CloudWatch alarm section in the template with this corrected version:
 
-```ts
+```typescript
 // CloudWatch Alarm for Lambda Error Rate
 const errorRateAlarm = new cloudwatch.Alarm(this, 'LambdaErrorRateAlarm', {
   alarmName: `lambda-error-rate-${environmentParam.valueAsString}`,
@@ -36,7 +36,7 @@ const errorRateAlarm = new cloudwatch.Alarm(this, 'LambdaErrorRateAlarm', {
 
 If you prefer a simpler approach that just monitors the absolute number of errors instead of percentage, you can use:
 
-```ts
+```typescript
 // CloudWatch Alarm for Lambda Errors (Alternative - monitors absolute errors)
 const errorCountAlarm = new cloudwatch.Alarm(this, 'LambdaErrorCountAlarm', {
   alarmName: `lambda-error-count-${environmentParam.valueAsString}`,
@@ -58,7 +58,7 @@ const errorCountAlarm = new cloudwatch.Alarm(this, 'LambdaErrorCountAlarm', {
 
 Here's the complete template with the fix applied:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

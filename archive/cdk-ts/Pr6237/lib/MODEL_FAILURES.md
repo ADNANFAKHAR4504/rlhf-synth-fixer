@@ -18,7 +18,7 @@ This document catalogs all bugs, security issues, and improvements made between 
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 const suffix = 'dev';
 ```
 
@@ -28,7 +28,7 @@ const suffix = 'dev';
 - Cannot isolate dev/staging/prod infrastructure
 
 **Fix**:
-```ts
+```typescript
 const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
 ```
 
@@ -52,7 +52,7 @@ Resources created without mandatory tags (Department, Environment, DataClassific
 
 **Fix**:
 Added comprehensive tagging to all resources:
-```ts
+```typescript
 cdk.Tags.of(bucket).add('Department', dept);
 cdk.Tags.of(bucket).add('Environment', environmentSuffix);
 cdk.Tags.of(bucket).add('DataClassification', dataClassifications[index]);
@@ -77,7 +77,7 @@ KMS key created without proper CloudWatch Logs service policy or alias for easy 
 
 **Fix**:
 Added service principal policy and alias:
-```ts
+```typescript
 logsKey.addToResourcePolicy(new iam.PolicyStatement({
   sid: 'AllowCloudWatchLogs',
   principals: [new iam.ServicePrincipal(`logs.${region}.amazonaws.com`)],
@@ -100,7 +100,7 @@ logsKey.addToResourcePolicy(new iam.PolicyStatement({
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 bucketName: `${dept}-data-bucket`
 ```
 
@@ -110,7 +110,7 @@ bucketName: `${dept}-data-bucket`
 - Cannot deploy to same account with different suffixes
 
 **Fix**:
-```ts
+```typescript
 bucketName: `${dept}-data-${environmentSuffix}-${account}`
 ```
 
@@ -124,7 +124,7 @@ bucketName: `${dept}-data-${environmentSuffix}-${account}`
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 encryption: s3.BucketEncryption.S3_MANAGED
 ```
 
@@ -135,7 +135,7 @@ encryption: s3.BucketEncryption.S3_MANAGED
 - Audit requirements not met
 
 **Fix**:
-```ts
+```typescript
 encryption: s3.BucketEncryption.KMS,
 encryptionKey: s3Key
 ```
@@ -158,7 +158,7 @@ No bucket policy to deny non-SSL requests.
 - Security vulnerability
 
 **Fix**:
-```ts
+```typescript
 bucket.addToResourcePolicy(new iam.PolicyStatement({
   sid: 'DenyInsecureTransport',
   effect: iam.Effect.DENY,
@@ -181,7 +181,7 @@ bucket.addToResourcePolicy(new iam.PolicyStatement({
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 tableName: `${dept}-data-table`
 ```
 
@@ -191,7 +191,7 @@ tableName: `${dept}-data-table`
 - Deployment failures
 
 **Fix**:
-```ts
+```typescript
 tableName: `${dept}-data-${environmentSuffix}`
 ```
 
@@ -205,7 +205,7 @@ tableName: `${dept}-data-${environmentSuffix}`
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 encryption: dynamodb.TableEncryption.DEFAULT
 ```
 
@@ -216,7 +216,7 @@ encryption: dynamodb.TableEncryption.DEFAULT
 - No key rotation control
 
 **Fix**:
-```ts
+```typescript
 encryption: dynamodb.TableEncryption.CUSTOMER_MANAGED,
 encryptionKey: dynamoKey
 ```
@@ -239,7 +239,7 @@ Trust policy missing IP restrictions and MFA requirements.
 - Compliance violation for zero-trust requirements
 
 **Fix**:
-```ts
+```typescript
 financeTrustPolicy.addStatements(new iam.PolicyStatement({
   conditions: {
     IpAddress: { 'aws:SourceIp': ['10.0.0.0/8'] },
@@ -258,7 +258,7 @@ financeTrustPolicy.addStatements(new iam.PolicyStatement({
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 maxSessionDuration: cdk.Duration.hours(2)
 ```
 
@@ -268,7 +268,7 @@ maxSessionDuration: cdk.Duration.hours(2)
 - Compliance violation
 
 **Fix**:
-```ts
+```typescript
 maxSessionDuration: cdk.Duration.hours(1)
 ```
 
@@ -282,7 +282,7 @@ maxSessionDuration: cdk.Duration.hours(1)
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 financeRole.addToPolicy(new iam.PolicyStatement({
   actions: ['s3:*', 'dynamodb:*'],
   resources: ['*']
@@ -296,7 +296,7 @@ financeRole.addToPolicy(new iam.PolicyStatement({
 - Compliance violation
 
 **Fix**:
-```ts
+```typescript
 financeRole.addToPolicy(new iam.PolicyStatement({
   sid: 'FinanceS3Access',
   actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
@@ -314,7 +314,7 @@ financeRole.addToPolicy(new iam.PolicyStatement({
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 marketingRole.addToPolicy(new iam.PolicyStatement({
   actions: ['s3:*'],
   resources: ['arn:aws:s3:::marketing-*']
@@ -327,7 +327,7 @@ marketingRole.addToPolicy(new iam.PolicyStatement({
 - Potential access to unintended resources
 
 **Fix**:
-```ts
+```typescript
 marketingRole.addToPolicy(new iam.PolicyStatement({
   actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
   resources: [buckets['marketing'].bucketArn, `${buckets['marketing'].bucketArn}/*`]
@@ -352,7 +352,7 @@ Cross-department roles don't require external ID.
 - Major security vulnerability for cross-account/cross-department access
 
 **Fix**:
-```ts
+```typescript
 const financeToMarketingRole = new iam.Role(this, 'FinanceToMarketingRole', {
   assumedBy: new iam.AccountPrincipal(account).withConditions({
     StringEquals: { 'sts:ExternalId': externalId },
@@ -372,7 +372,7 @@ const financeToMarketingRole = new iam.Role(this, 'FinanceToMarketingRole', {
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 financeToMarketingRole.addToPolicy(new iam.PolicyStatement({
   actions: ['s3:GetObject', 's3:PutObject'],
   ...
@@ -385,7 +385,7 @@ financeToMarketingRole.addToPolicy(new iam.PolicyStatement({
 - Data integrity risk
 
 **Fix**:
-```ts
+```typescript
 financeToMarketingRole.addToPolicy(new iam.PolicyStatement({
   sid: 'ReadOnlyMarketingSharedData',
   actions: ['s3:GetObject', 's3:ListBucket'],
@@ -411,7 +411,7 @@ Lambda execution role missing CloudWatch Logs permissions.
 - Operational blind spot
 
 **Fix**:
-```ts
+```typescript
 const financeLambdaRole = new iam.Role(this, 'FinanceLambdaRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
   managedPolicies: [
@@ -430,7 +430,7 @@ const financeLambdaRole = new iam.Role(this, 'FinanceLambdaRole', {
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 financeLambdaRole.addToPolicy(new iam.PolicyStatement({
   actions: ['s3:GetObject', 's3:PutObject'],
   resources: ['*']
@@ -443,7 +443,7 @@ financeLambdaRole.addToPolicy(new iam.PolicyStatement({
 - Security vulnerability
 
 **Fix**:
-```ts
+```typescript
 financeLambdaRole.addToPolicy(new iam.PolicyStatement({
   sid: 'FinanceLambdaS3Access',
   actions: ['s3:GetObject', 's3:PutObject'],
@@ -463,7 +463,7 @@ financeLambdaRole.addToPolicy(new iam.PolicyStatement({
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 const financeLogGroup = new logs.LogGroup(this, 'FinanceLogGroup', {
   logGroupName: '/aws/lambda/finance',
   retention: logs.RetentionDays.ONE_WEEK
@@ -476,7 +476,7 @@ const financeLogGroup = new logs.LogGroup(this, 'FinanceLogGroup', {
 - Sensitive data in logs unprotected
 
 **Fix**:
-```ts
+```typescript
 const financeLogGroup = new logs.LogGroup(this, 'FinanceLogGroup', {
   logGroupName: `/aws/lambda/finance-${environmentSuffix}`,
   retention: logs.RetentionDays.THREE_MONTHS,
@@ -495,7 +495,7 @@ const financeLogGroup = new logs.LogGroup(this, 'FinanceLogGroup', {
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 retention: logs.RetentionDays.ONE_WEEK
 ```
 
@@ -505,7 +505,7 @@ retention: logs.RetentionDays.ONE_WEEK
 - Insufficient audit trail
 
 **Fix**:
-```ts
+```typescript
 retention: logs.RetentionDays.THREE_MONTHS // 90 days
 ```
 
@@ -519,7 +519,7 @@ retention: logs.RetentionDays.THREE_MONTHS // 90 days
 **File**: lib/tap-stack.ts
 
 **Problem**:
-```ts
+```typescript
 const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
   displayName: 'Security Alerts'
 });
@@ -531,7 +531,7 @@ const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
 - Sensitive alert data exposed
 
 **Fix**:
-```ts
+```typescript
 const securityAlertsTopic = new sns.Topic(this, 'SecurityAlertsTopic', {
   topicName: `security-alerts-${environmentSuffix}`,
   displayName: 'Security Alerts',
@@ -557,7 +557,7 @@ Alarm created without corresponding metric filter to generate metrics from logs.
 - False sense of security
 
 **Fix**:
-```ts
+```typescript
 const unauthorizedApiCallsMetricFilter = new logs.MetricFilter(this, 'UnauthorizedApiCallsFilter', {
   logGroup: financeLogGroup,
   metricNamespace: 'SecurityMetrics',
@@ -585,7 +585,7 @@ Alarm created but no actions configured.
 - Events go unnoticed
 
 **Fix**:
-```ts
+```typescript
 unauthorizedApiCallsAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertsTopic));
 ```
 
@@ -607,7 +607,7 @@ Only one Config rule created, missing critical compliance rules.
 - Audit failures
 
 **Fix**:
-```ts
+```typescript
 const iamPasswordPolicyRule = new config.ManagedRule(this, 'IamPasswordPolicyRule', {
   configRuleName: `iam-password-policy-${environmentSuffix}`,
   identifier: 'IAM_PASSWORD_POLICY',
@@ -633,7 +633,7 @@ No monitoring for MFA enablement on IAM users.
 - Weak authentication
 
 **Fix**:
-```ts
+```typescript
 const mfaEnabledRule = new config.ManagedRule(this, 'MfaEnabledRule', {
   configRuleName: `mfa-enabled-for-iam-console-${environmentSuffix}`,
   identifier: 'MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS',
@@ -659,7 +659,7 @@ No monitoring to ensure CloudTrail is enabled.
 - No audit trail
 
 **Fix**:
-```ts
+```typescript
 const cloudTrailEnabledRule = new config.ManagedRule(this, 'CloudTrailEnabledRule', {
   configRuleName: `cloudtrail-enabled-${environmentSuffix}`,
   identifier: 'CLOUD_TRAIL_ENABLED',
@@ -685,7 +685,7 @@ No stack outputs for role ARNs and other key values.
 - Poor operational experience
 
 **Fix**:
-```ts
+```typescript
 new cdk.CfnOutput(this, 'FinanceRoleArn', {
   value: financeRole.roleArn,
   description: 'Finance department role ARN',
@@ -705,7 +705,7 @@ new cdk.CfnOutput(this, 'FinanceRoleArn', {
 **File**: bin/tap.ts
 
 **Problem**:
-```ts
+```typescript
 new TapStack(app, 'TapStack', {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
@@ -720,7 +720,7 @@ new TapStack(app, 'TapStack', {
 - Multi-environment deployment broken
 
 **Fix**:
-```ts
+```typescript
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stack = new TapStack(app, `TapStack-${environmentSuffix}`, {
   env: {
@@ -749,7 +749,7 @@ Stack created without tags.
 - Compliance tracking issues
 
 **Fix**:
-```ts
+```typescript
 tags: {
   Environment: environmentSuffix,
   Project: 'ZeroTrustSecurityPlatform',
@@ -778,7 +778,7 @@ No test verifying environmentSuffix is used in resource names.
 - Quality issue
 
 **Fix**:
-```ts
+```typescript
 test('Creates S3 buckets for each department with environmentSuffix', () => {
   template.hasResourceProperties('AWS::S3::Bucket', {
     BucketName: Match.stringLikeRegexp('finance-data-test-.*')
@@ -803,7 +803,7 @@ No test verifying KMS encryption is used.
 - Security regression risk
 
 **Fix**:
-```ts
+```typescript
 test('S3 buckets use KMS encryption', () => {
   template.hasResourceProperties('AWS::S3::Bucket', {
     BucketEncryption: {
@@ -835,7 +835,7 @@ No tests for external ID, IP restrictions, MFA requirements.
 - Cannot verify zero-trust requirements
 
 **Fix**:
-```ts
+```typescript
 test('Cross-department roles have external ID validation', () => {
   template.hasResourceProperties('AWS::IAM::Role', {
     RoleName: 'finance-to-marketing-test',
@@ -880,7 +880,7 @@ Missing tests for:
 
 **Fix**:
 Added comprehensive test suites for all components:
-```ts
+```typescript
 describe('CloudWatch Monitoring', () => {
   test('Creates CloudWatch alarms for security monitoring', () => {
     template.resourceCountIs('AWS::CloudWatch::Alarm', 5);

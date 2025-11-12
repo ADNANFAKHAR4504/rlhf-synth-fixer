@@ -11,7 +11,7 @@ This document analyzes the issues in the MODEL_RESPONSE that prevented successfu
 **MODEL_RESPONSE Issue**:
 The CodePipeline IAM policy used `snsTopic.arn` directly in the Resource field without including it in `pulumi.all()`:
 
-```ts
+```typescript
 policy: pulumi
   .all([
     artifactBucket.arn,
@@ -33,7 +33,7 @@ policy: pulumi
 **IDEAL_RESPONSE Fix**:
 Include `snsTopic.arn` in the `pulumi.all()` array and add it to the destructured parameters:
 
-```ts
+```typescript
 policy: pulumi
   .all([
     artifactBucket.arn,
@@ -72,7 +72,7 @@ policy: pulumi
 **MODEL_RESPONSE Issue**:
 Used `artifactStores` array with `region` field for single-region pipeline:
 
-```ts
+```typescript
 artifactStores: [
   {
     location: artifactBucket.bucket,
@@ -89,7 +89,7 @@ artifactStores: [
 **IDEAL_RESPONSE Fix**:
 Remove the `region` field (AWS API requires this for single-region pipelines):
 
-```ts
+```typescript
 artifactStores: [
   {
     location: artifactBucket.bucket,
@@ -123,7 +123,7 @@ artifactStores: [
 **MODEL_RESPONSE Issue**:
 Used boolean `true` instead of string `'true'`:
 
-```ts
+```typescript
 configuration: {
   S3Bucket: artifactBucket.bucket,
   S3ObjectKey: 'source.zip',
@@ -134,7 +134,7 @@ configuration: {
 **IDEAL_RESPONSE Fix**:
 Change to string type:
 
-```ts
+```typescript
 configuration: {
   S3Bucket: artifactBucket.bucket,
   S3ObjectKey: 'source.zip',
@@ -162,7 +162,7 @@ configuration: {
 **MODEL_RESPONSE Issue**:
 Declared but never used two variables:
 
-```ts
+```typescript
 const current = aws.getCallerIdentity({});
 const region = aws.getRegion({});  // ERROR: Declared but unused
 // ...
@@ -176,7 +176,7 @@ const ecrLifecyclePolicy = new aws.ecr.LifecyclePolicy(  // ERROR: Assigned but 
 1. Remove unused `region` variable
 2. Remove variable assignment for lifecycle policy (keep the resource creation):
 
-```ts
+```typescript
 const current = aws.getCallerIdentity({});
 // FIXED: Removed unused region variable
 

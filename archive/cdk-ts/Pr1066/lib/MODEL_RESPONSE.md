@@ -14,7 +14,7 @@ The solution includes:
 
 ## File: lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -88,7 +88,7 @@ export class VpcStack extends cdk.Stack {
 
 ## File: lib/security-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -163,7 +163,7 @@ export class SecurityStack extends cdk.Stack {
 
 ## File: lib/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -266,7 +266,7 @@ export class ComputeStack extends cdk.Stack {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcStack } from './vpc-stack';

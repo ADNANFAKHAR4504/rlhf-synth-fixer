@@ -24,7 +24,7 @@ The infrastructure creates a highly available, multi-AZ VPC setup with:
 
 ### lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';

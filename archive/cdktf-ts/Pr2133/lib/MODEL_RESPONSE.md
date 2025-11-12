@@ -1,6 +1,6 @@
 I'll create a comprehensive CDKTF TypeScript setup that meets all your security requirements. Here's a complete monolithic implementation:
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

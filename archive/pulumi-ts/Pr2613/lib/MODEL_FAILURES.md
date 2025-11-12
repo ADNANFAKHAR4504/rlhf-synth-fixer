@@ -6,7 +6,7 @@
 **Description**: Model used direct constructor instantiation with async operations instead of factory pattern
 **Model Code**:
 
-```ts
+```typescript
 constructor(
   region: string = 'us-east-1',
   environment: string,
@@ -19,7 +19,7 @@ constructor(
 
 **Correct Code**:
 
-```ts
+```typescript
 static create(region: string, environment: string, tags: pulumi.Input<{ [key: string]: string }>): WebAppDeploymentStack {
   // Async operations handled before constructor
   const availabilityZones = pulumi.output(aws.getAvailabilityZones(...))
@@ -35,7 +35,7 @@ private constructor(...) { /* No async operations */ }
 **Description**: Model hardcoded database password in plain text instead of using AWS-managed passwords
 **Model Code**:
 
-```ts
+```typescript
 this.secretVersion = new aws.secretsmanager.SecretVersion(
   `app-secrets-version-${environment}`,
   {
@@ -54,7 +54,7 @@ this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
 
 **Correct Code**:
 
-```ts
+```typescript
 this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
   manageMasterUserPassword: true, // AWS-managed password
   // No hardcoded password
@@ -67,7 +67,7 @@ this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
 **Description**: Model placed ALB in mixed subnet types (public + private) instead of multiple public subnets
 **Model Code**:
 
-```ts
+```typescript
 this.alb = new aws.lb.LoadBalancer(`alb-${environment}`, {
   subnets: [this.publicSubnet.id, this.privateSubnet2.id], // WRONG: Mixed subnet types
 });
@@ -75,7 +75,7 @@ this.alb = new aws.lb.LoadBalancer(`alb-${environment}`, {
 
 **Correct Code**:
 
-```ts
+```typescript
 this.alb = new aws.lb.LoadBalancer(`alb-${environment}`, {
   subnets: [this.publicSubnet.id, this.publicSubnet2.id], // CORRECT: Both public subnets
 });
@@ -87,7 +87,7 @@ this.alb = new aws.lb.LoadBalancer(`alb-${environment}`, {
 **Description**: Model deployed Auto Scaling Group in single subnet instead of multiple AZs
 **Model Code**:
 
-```ts
+```typescript
 this.autoScalingGroup = new aws.autoscaling.Group(`asg-${environment}`, {
   vpcZoneIdentifiers: [this.publicSubnet.id], // WRONG: Single AZ
 });
@@ -95,7 +95,7 @@ this.autoScalingGroup = new aws.autoscaling.Group(`asg-${environment}`, {
 
 **Correct Code**:
 
-```ts
+```typescript
 this.autoScalingGroup = new aws.autoscaling.Group(`asg-${environment}`, {
   vpcZoneIdentifiers: [this.publicSubnet.id, this.publicSubnet2.id], // CORRECT: Multi-AZ
 });
@@ -107,14 +107,14 @@ this.autoScalingGroup = new aws.autoscaling.Group(`asg-${environment}`, {
 **Description**: Model failed to create NAT Gateways and routes for private subnet internet access
 **Model Code**:
 
-```ts
+```typescript
 // Missing NAT Gateway implementation
 // Missing private subnet routes to NAT Gateway
 ```
 
 **Correct Code**:
 
-```ts
+```typescript
 this.eip = new aws.ec2.Eip(`eip-${environment}`, { domain: 'vpc' });
 this.natGateway = new aws.ec2.NatGateway(`nat-${environment}`, {
   allocationId: this.eip.id,
@@ -134,14 +134,14 @@ new aws.ec2.Route(`private-route-${environment}`, {
 **Description**: Model missing CloudFront CDN with WAF protection
 **Model Code**:
 
-```ts
+```typescript
 // Missing CloudFront Distribution
 // Missing WAF Web ACL
 ```
 
 **Correct Code**:
 
-```ts
+```typescript
 this.waf = new aws.wafv2.WebAcl(`waf-${environment}`, {
   scope: 'CLOUDFRONT',
   defaultAction: { allow: {} },
@@ -162,7 +162,7 @@ this.cloudFront = new aws.cloudfront.Distribution(`cloudfront-${environment}`, {
 **Description**: Model missing KMS encryption, S3 storage, Lambda functions, and additional EC2 instances
 **Model Code**:
 
-```ts
+```typescript
 // Missing KMS Key
 // Missing S3 Bucket
 // Missing Lambda Function
@@ -172,7 +172,7 @@ this.cloudFront = new aws.cloudfront.Distribution(`cloudfront-${environment}`, {
 
 **Correct Code**:
 
-```ts
+```typescript
 this.kmsKey = new aws.kms.Key(`kms-key-${environment}`, {
   description: `KMS key for ${environment} environment`,
 });
@@ -200,13 +200,13 @@ this.lambdaFunction = new aws.lambda.Function(
 **Description**: Model missing Session Manager policy attachment for secure EC2 access
 **Model Code**:
 
-```ts
+```typescript
 // Missing Session Manager policy attachment
 ```
 
 **Correct Code**:
 
-```ts
+```typescript
 new aws.iam.RolePolicyAttachment(`ec2-ssm-policy-attachment-${environment}`, {
   role: this.ec2Role.name,
   policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
@@ -219,7 +219,7 @@ new aws.iam.RolePolicyAttachment(`ec2-ssm-policy-attachment-${environment}`, {
 **Description**: Model used older PostgreSQL version instead of latest supported version
 **Model Code**:
 
-```ts
+```typescript
 this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
   engineVersion: '14.9', // Older version
 });
@@ -227,7 +227,7 @@ this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
 
 **Correct Code**:
 
-```ts
+```typescript
 this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
   engineVersion: '15', // Latest supported version
 });
@@ -239,7 +239,7 @@ this.rdsInstance = new aws.rds.Instance(`rds-${environment}`, {
 **Description**: Model created second private subnet but missing corresponding public subnet for multi-AZ deployment
 **Model Code**:
 
-```ts
+```typescript
 // Has privateSubnet2 but missing publicSubnet2
 this.privateSubnet2 = new aws.ec2.Subnet(`private-subnet-2-${environment}`, {
   cidrBlock: '10.0.3.0/24', // WRONG CIDR - conflicts with public subnet range
@@ -248,7 +248,7 @@ this.privateSubnet2 = new aws.ec2.Subnet(`private-subnet-2-${environment}`, {
 
 **Correct Code**:
 
-```ts
+```typescript
 this.publicSubnet2 = new aws.ec2.Subnet(`public-subnet-2-${environment}`, {
   cidrBlock: '10.0.3.0/24',
   mapPublicIpOnLaunch: true,
@@ -265,13 +265,13 @@ this.privateSubnet2 = new aws.ec2.Subnet(`private-subnet-2-${environment}`, {
 **Description**: Model missing route table association for second public subnet
 **Model Code**:
 
-```ts
+```typescript
 // Missing publicRouteTableAssociation2
 ```
 
 **Correct Code**:
 
-```ts
+```typescript
 this.publicRouteTableAssociation2 = new aws.ec2.RouteTableAssociation(
   `public-rta-2-${environment}`,
   {
@@ -287,14 +287,14 @@ this.publicRouteTableAssociation2 = new aws.ec2.RouteTableAssociation(
 **Description**: Model outputs not properly formatted for integration with testing and deployment systems
 **Model Code**:
 
-```ts
+```typescript
 // Missing proper output exports
 // No conversion of Pulumi Output arrays to comma-separated strings
 ```
 
 **Correct Code**:
 
-```ts
+```typescript
 export const public_subnet_ids = stack.publicSubnetIds.apply(ids =>
   ids.join(',')
 );

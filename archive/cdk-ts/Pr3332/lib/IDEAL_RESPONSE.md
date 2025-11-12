@@ -8,7 +8,7 @@ This document describes the ideal response for the ML Inference Pipeline AWS CDK
 
 ### S3 Buckets:
 
-```ts
+```typescript
 // Model artifacts bucket with versioning
 const modelBucket = new s3.Bucket(this, 'ModelArtifactsBucket', {
   bucketName: `ml-models-prod-us-east-1-${this.account}`,
@@ -35,7 +35,7 @@ const dataBucket = new s3.Bucket(this, 'DataBucket', {
 
 ### DynamoDB with TTL:
 
-```ts
+```typescript
 const predictionsTable = new dynamodb.Table(this, 'PredictionsTable', {
   partitionKey: { name: 'predictionId', type: dynamodb.AttributeType.STRING },
   sortKey: { name: 'timestamp', type: dynamodb.AttributeType.NUMBER },
@@ -56,7 +56,7 @@ predictionsTable.addGlobalSecondaryIndex({
 
 ### Parameter Store for Model Versioning:
 
-```ts
+```typescript
 const activeModelVersionParam = new ssm.StringParameter(this, 'ActiveModelVersion', {
   parameterName: '/ml-pipeline/models/active-version',
   stringValue: 'v1.0.0',
@@ -77,7 +77,7 @@ const modelMetadataParam = new ssm.StringParameter(this, 'ModelMetadata', {
 
 ### Multi-Variant SageMaker Endpoint for A/B Testing:
 
-```ts
+```typescript
 const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'EndpointConfig', {
   endpointConfigName: `ml-endpoint-config-prod`,
   productionVariants: [
@@ -106,7 +106,7 @@ const endpointConfig = new sagemaker.CfnEndpointConfig(this, 'EndpointConfig', {
 
 ### Auto-Scaling Configuration:
 
-```ts
+```typescript
 const scalingTargetA = new applicationautoscaling.ScalableTarget(this, 'ScalingTargetA', {
   serviceNamespace: applicationautoscaling.ServiceNamespace.SAGEMAKER,
   resourceId: `endpoint/${endpoint.endpointName}/variant/ModelA`,
@@ -185,7 +185,7 @@ def handler(event, context):
 
 ### API Gateway with Caching:
 
-```ts
+```typescript
 const api = new apigateway.RestApi(this, 'InferenceAPI', {
   restApiName: 'ml-inference-api-prod',
   deployOptions: {
@@ -212,7 +212,7 @@ predictResource.addMethod(
 
 ### Kinesis Data Streams:
 
-```ts
+```typescript
 const inferenceStream = new kinesis.Stream(this, 'InferenceStream', {
   streamName: 'ml-inference-stream-prod',
   shardCount: 2,
@@ -236,7 +236,7 @@ streamProcessorLambda.addEventSourceMapping('KinesisSource', {
 
 ### AWS Batch Configuration:
 
-```ts
+```typescript
 const batchComputeEnvironment = new batch.CfnComputeEnvironment(this, 'BatchCompute', {
   type: 'MANAGED',
   computeResources: {
@@ -267,7 +267,7 @@ const batchJobDefinition = new batch.CfnJobDefinition(this, 'BatchJobDef', {
 
 ### Step Functions Workflow:
 
-```ts
+```typescript
 const batchWorkflow = new stepfunctions.StateMachine(this, 'BatchWorkflow', {
   definition: new stepfunctions.Parallel(this, 'ParallelProcessing')
     .branch(
@@ -298,7 +298,7 @@ const batchWorkflow = new stepfunctions.StateMachine(this, 'BatchWorkflow', {
 
 ### EventBridge Scheduling:
 
-```ts
+```typescript
 const batchScheduleRule = new events.Rule(this, 'BatchSchedule', {
   schedule: events.Schedule.cron({ hour: '2', minute: '0' }), // Daily at 2 AM UTC
   description: 'Trigger batch inference workflow daily',
@@ -311,7 +311,7 @@ batchScheduleRule.addTarget(new events_targets.SfnStateMachine(batchWorkflow));
 
 ### CloudWatch Dashboard:
 
-```ts
+```typescript
 const dashboard = new cloudwatch.Dashboard(this, 'MLPipelineDashboard', {
   dashboardName: 'ml-pipeline-metrics-prod',
 });
@@ -373,7 +373,7 @@ dashboard.addWidgets(
 
 ### CloudWatch Alarms:
 
-```ts
+```typescript
 // High latency alarm
 const latencyAlarm = new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
   metric: new cloudwatch.Metric({
@@ -410,7 +410,7 @@ errorAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(alertTopic));
 
 ### SNS Topic:
 
-```ts
+```typescript
 const alertTopic = new sns.Topic(this, 'AlertTopic', {
   topicName: 'ml-pipeline-alerts-prod',
   displayName: 'ML Pipeline Alerts',
@@ -425,7 +425,7 @@ alertTopic.addSubscription(
 
 ### VPC with Private Subnets:
 
-```ts
+```typescript
 const vpc = new ec2.Vpc(this, 'MLPipelineVPC', {
   vpcName: 'ml-pipeline-vpc-prod',
   maxAzs: 2,
@@ -442,7 +442,7 @@ const vpc = new ec2.Vpc(this, 'MLPipelineVPC', {
 
 ### VPC Endpoints:
 
-```ts
+```typescript
 // S3 Gateway Endpoint
 const s3Endpoint = new ec2.GatewayVpcEndpoint(this, 'S3Endpoint', {
   service: ec2.GatewayVpcEndpointAwsService.S3,
@@ -465,7 +465,7 @@ const sagemakerEndpoint = new ec2.InterfaceVpcEndpoint(this, 'SageMakerEndpoint'
 
 ### IAM Least Privilege:
 
-```ts
+```typescript
 const lambdaRole = new iam.Role(this, 'LambdaRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
   inlinePolicies: {
@@ -490,7 +490,7 @@ modelBucket.grantRead(lambdaRole);
 
 ### Glue Data Catalog:
 
-```ts
+```typescript
 const glueDatabase = new glue.CfnDatabase(this, 'GlueDatabase', {
   catalogId: this.account,
   databaseInput: {
@@ -516,7 +516,7 @@ const glueCrawler = new glue.CfnCrawler(this, 'GlueCrawler', {
 
 ### Athena Workgroup:
 
-```ts
+```typescript
 const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
   name: 'ml-pipeline-analytics-prod',
   workGroupConfiguration: {
@@ -537,7 +537,7 @@ const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
 
 ## Unit Tests (>80% Coverage)
 
-```ts
+```typescript
 // tests/tap-stack.unit.test.ts
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { App } from 'aws-cdk-lib';
@@ -631,7 +631,7 @@ describe('TapStack Unit Tests', () => {
 
 ## Integration Tests
 
-```ts
+```typescript
 // tests/tap-stack.int.test.ts
 import { App } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';

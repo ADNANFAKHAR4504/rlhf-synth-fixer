@@ -6,7 +6,7 @@ I see the issues. Let me fix them:
 
 Here's the corrected code:
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";

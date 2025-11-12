@@ -8,7 +8,7 @@ First, let's create the modular stack file `ecs_trading_infra.ts` in the `lib/` 
 
 Let's start with creating the skeleton of the `ecs_trading_infra.ts` file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -45,7 +45,7 @@ Now, let's implement each section one by one:
 
 This section includes setting up the ECS cluster, task definition with right-sized CPU/memory, a Fargate capacity provider with a warm pool, and predictive auto-scaling.
 
-```ts
+```typescript
 // Create ECS Cluster
 this.ecsCluster = new ecs.Cluster(this, 'TradingCluster', {
   vpc: props.vpc,
@@ -212,7 +212,7 @@ scaling.scaleOnSchedule('PreMarketCloseScale', eveningScaleUpSchedule);
 
 Now let's implement the blue-green deployment setup with AWS CodeDeploy:
 
-```ts
+```typescript
 // Create a CodeDeploy Application
 const codeDeployApp = new codedeploy.EcsApplication(
   this,
@@ -267,7 +267,7 @@ const deploymentGroup = new codedeploy.EcsDeploymentGroup(
 
 Now, let's implement the enhanced observability features:
 
-```ts
+```typescript
 // Create an SNS topic for alarms
 const alarmTopic = new sns.Topic(this, 'OrderBrokerAlarmTopic', {
   displayName: 'OrderBroker Alarms',
@@ -367,7 +367,7 @@ memoryUtilizationAlarm.addOkAction(new cloudwatch.SnsAction(alarmTopic));
 
 Now, let's implement the security and governance features:
 
-```ts
+```typescript
 // Create a least-privilege IAM role for the OrderBroker service
 const orderBrokerTaskRole = new iam.Role(this, 'OrderBrokerTaskRole', {
   assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
@@ -434,7 +434,7 @@ cdk.Aspects.of(this).add(new TaggingAspect());
 
 Now, let's put together the main stack file `tap-stack.ts` that instantiates our `EcsTradingInfra`:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -520,7 +520,7 @@ Let me now clean up and ensure our implementation is complete and consistent.
 
 For clarity and completeness, I should add a bit more to the integration with Fargate Capacity Providers. AWS now supports capacity providers for Fargate, which can help manage compute capacity for ECS tasks. Let me add that:
 
-```ts
+```typescript
 // Create the ECS cluster with capacity providers
 this.ecsCluster = new ecs.Cluster(this, 'TradingCluster', {
   vpc: props.vpc,
@@ -549,7 +549,7 @@ With these additions, our implementation should comprehensively address all the 
 
 Let me consolidate all the code and ensure it's properly structured. Here's the final implementation:
 
-```ts
+```typescript
 // lib/ecs_trading_infra.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -961,7 +961,7 @@ class TaggingAspect implements cdk.IAspect {
 
 And here's the main stack file:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -1037,7 +1037,7 @@ Let's start with the implementation:
 
 ## First File: `lib/ecs_trading_infra.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -1437,7 +1437,7 @@ class TaggingAspect implements cdk.IAspect {
 
 ## Second File: `lib/tap-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

@@ -4,7 +4,7 @@ I'll create a complete Pulumi TypeScript solution for migrating payment infrastr
 
 ## File: lib/config.ts
 
-```ts
+```typescript
 /**
  * Configuration types and utilities for the payment infrastructure migration
  */
@@ -45,7 +45,7 @@ export function loadDevConfig(configPath: string): DevConfig {
 
 ## File: lib/kms.ts
 
-```ts
+```typescript
 /**
  * KMS key management for encryption
  */
@@ -95,7 +95,7 @@ export class KmsKey extends pulumi.ComponentResource {
 
 ## File: lib/s3.ts
 
-```ts
+```typescript
 /**
  * S3 bucket creation with versioning, lifecycle, and encryption
  */
@@ -200,7 +200,7 @@ export class S3Migration extends pulumi.ComponentResource {
 
 ## File: lib/dynamodb.ts
 
-```ts
+```typescript
 /**
  * DynamoDB table creation with on-demand billing and PITR
  */
@@ -248,7 +248,7 @@ export class DynamoMigration extends pulumi.ComponentResource {
 
 ## File: lib/dynamodb-backup.ts
 
-```ts
+```typescript
 /**
  * DynamoDB backup plan for automated daily backups
  */
@@ -352,7 +352,7 @@ export class DynamoBackupPlan extends pulumi.ComponentResource {
 
 ## File: lib/iam.ts
 
-```ts
+```typescript
 /**
  * IAM roles and policies with region restrictions
  */
@@ -446,7 +446,7 @@ export class LambdaRole extends pulumi.ComponentResource {
 
 ## File: lib/lambda.ts
 
-```ts
+```typescript
 /**
  * Lambda function deployment with X-Ray tracing
  */
@@ -519,7 +519,7 @@ export class LambdaMigration extends pulumi.ComponentResource {
 
 ## File: lib/waf.ts
 
-```ts
+```typescript
 /**
  * WAF Web ACL for API Gateway protection
  */
@@ -603,7 +603,7 @@ export class WafWebAcl extends pulumi.ComponentResource {
 
 ## File: lib/apigateway.ts
 
-```ts
+```typescript
 /**
  * API Gateway with WAF, throttling, and X-Ray
  */
@@ -762,7 +762,7 @@ export class ApiGatewayMigration extends pulumi.ComponentResource {
 
 ## File: lib/cloudwatch.ts
 
-```ts
+```typescript
 /**
  * CloudWatch alarms and dashboard
  */
@@ -969,7 +969,7 @@ export class CloudWatchMonitoring extends pulumi.ComponentResource {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * Main stack orchestrating the payment infrastructure migration
  */

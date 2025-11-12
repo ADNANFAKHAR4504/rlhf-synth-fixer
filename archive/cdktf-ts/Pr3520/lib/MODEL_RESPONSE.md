@@ -2,7 +2,7 @@
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -88,7 +88,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/artifact-storage-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -264,7 +264,7 @@ export class ArtifactStorageStack extends Construct {
 
 ## File: lib/artifact-metadata-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 
@@ -319,7 +319,7 @@ export class ArtifactMetadataStack extends Construct {
 
 ## File: lib/artifact-cleanup-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { LambdaFunction } from '@cdktf/provider-aws/lib/lambda-function';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -463,7 +463,7 @@ export class ArtifactCleanupStack extends Construct {
 
 ## File: lib/package-management-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { CodeartifactDomain } from '@cdktf/provider-aws/lib/codeartifact-domain';
 import { CodeartifactRepository } from '@cdktf/provider-aws/lib/codeartifact-repository';
@@ -547,7 +547,7 @@ export class PackageManagementStack extends Construct {
 
 ## File: lib/monitoring-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { CloudwatchDashboard } from '@cdktf/provider-aws/lib/cloudwatch-dashboard';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
@@ -685,7 +685,7 @@ export class MonitoringStack extends Construct {
 
 ## File: lib/access-control-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';

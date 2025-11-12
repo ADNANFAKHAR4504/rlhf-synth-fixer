@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/s3-processor.ts
 
-```ts
+```typescript
 import { S3Event, S3EventRecord, Context } from 'aws-lambda';
 import { S3Client, HeadObjectCommand } from '@aws-sdk/client-s3';
 
@@ -283,7 +283,7 @@ async function simulateMetadataExtraction(key: string): Promise<void> {
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Duration, RemovalPolicy, Tags } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -544,7 +544,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 import fs from 'fs';
 import {
   S3Client,
@@ -908,7 +908,7 @@ describe('TapStack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

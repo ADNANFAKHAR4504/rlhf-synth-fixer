@@ -27,7 +27,7 @@ This document catalogs the specific failures, issues, and problems identified in
 
 ### 4. **Incorrect CloudFront Origin Access Control Implementation**
 **Model Failure**: Used deprecated `cloudfront.OriginAccessControl` constructor with incorrect parameters:
-```ts
+```typescript
 const originAccessControl = new cloudfront.OriginAccessControl(this, 'OAC', {
   originAccessControlName: `${namePrefix}-oac-${environmentSuffix}`,
   description: 'Origin Access Control for S3 bucket',
@@ -37,7 +37,7 @@ const originAccessControl = new cloudfront.OriginAccessControl(this, 'OAC', {
 ```
 
 **Ideal Response**: Uses the correct `cloudfront.S3OriginAccessControl` constructor:
-```ts
+```typescript
 const originAccessControl = new cloudfront.S3OriginAccessControl(this, 'OAC', {
   originAccessControlName: `${namePrefix}-oac-${environmentSuffix}`,
   description: 'Origin Access Control for S3 bucket',
@@ -49,14 +49,14 @@ const originAccessControl = new cloudfront.S3OriginAccessControl(this, 'OAC', {
 
 ### 5. **Incorrect RDS Engine Configuration**
 **Model Failure**: Used deprecated `rds.DatabaseEngine.mysql()` method:
-```ts
+```typescript
 engine: rds.DatabaseEngine.mysql({
   version: rds.MysqlEngineVersion.VER_8_0,
 }),
 ```
 
 **Ideal Response**: Uses the correct `rds.DatabaseInstanceEngine.mysql()` method:
-```ts
+```typescript
 engine: rds.DatabaseInstanceEngine.mysql({
   version: rds.MysqlEngineVersion.VER_8_0,
 }),
@@ -66,12 +66,12 @@ engine: rds.DatabaseInstanceEngine.mysql({
 
 ### 6. **Incorrect CloudWatch Logs Export Configuration**
 **Model Failure**: Used incorrect log export name:
-```ts
+```typescript
 cloudwatchLogsExports: ['error', 'general', 'slow-query'],
 ```
 
 **Ideal Response**: Uses the correct log export name:
-```ts
+```typescript
 cloudwatchLogsExports: ['error', 'general', 'slowquery'],
 ```
 

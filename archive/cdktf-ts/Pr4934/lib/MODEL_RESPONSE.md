@@ -2,7 +2,7 @@ I'll help you set up the infrastructure for the university LMS using CDKTF with 
 
 ## lib/lms-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -312,7 +312,7 @@ export class LmsStack extends TerraformStack {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

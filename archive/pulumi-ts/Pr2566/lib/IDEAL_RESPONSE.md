@@ -1,6 +1,6 @@
 Here's a complete Pulumi TypeScript implementation for a production-ready AWS infrastructure stack:
 
-```ts
+```typescript
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 

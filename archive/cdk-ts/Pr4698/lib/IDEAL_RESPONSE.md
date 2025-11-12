@@ -61,7 +61,7 @@ This ideal response contains the corrected, production-ready implementation of t
 
 ### File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AnalyticsStack } from './analytics';
@@ -92,7 +92,7 @@ export class TapStack extends cdk.Stack {
 
 ### File: lib/analytics.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -580,7 +580,7 @@ export class AnalyticsStack extends cdk.NestedStack {
 
 ### File: lib/src/validation-lambda.ts
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -652,7 +652,7 @@ export const handler = async (
 
 ### File: lib/src/transformation-lambda.ts
 
-```ts
+```typescript
 import { S3Event } from 'aws-lambda';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';

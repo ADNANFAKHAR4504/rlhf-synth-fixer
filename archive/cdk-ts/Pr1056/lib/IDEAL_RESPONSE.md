@@ -7,7 +7,7 @@ This implementation provides a comprehensive security-focused infrastructure usi
 ### Core Infrastructure Components
 
 #### 1. VPC Architecture
-```ts
+```typescript
 // Production VPC with proper segmentation
 const productionVpc = new ec2.Vpc(this, 'ProductionVPC', {
   vpcName: `ProductionVPC-${environmentSuffix}`,
@@ -52,7 +52,7 @@ const stagingVpc = new ec2.Vpc(this, 'StagingVPC', {
 ```
 
 #### 2. Security Groups with Strict Controls
-```ts
+```typescript
 // Production Security Group - Highly Restricted
 const productionSecurityGroup = new ec2.SecurityGroup(
   this,
@@ -96,7 +96,7 @@ stagingSecurityGroup.addIngressRule(
 ```
 
 #### 3. Network ACLs for Additional Layer of Security
-```ts
+```typescript
 // Block all outbound internet traffic from private subnets
 const productionPrivateNetworkAcl = new ec2.NetworkAcl(
   this,
@@ -129,7 +129,7 @@ productionPrivateNetworkAcl.addEntry('AllowInboundVPC', {
 ```
 
 #### 4. S3 Buckets with Maximum Security
-```ts
+```typescript
 // KMS key for S3 encryption with automatic rotation
 const s3KmsKey = new kms.Key(this, 'S3EncryptionKey', {
   description: 'Customer-managed KMS key for S3 bucket encryption',
@@ -153,7 +153,7 @@ const applicationBucket = new s3.Bucket(this, 'ApplicationBucket', {
 ```
 
 #### 5. IAM Roles with Least Privilege
-```ts
+```typescript
 // EC2 Instance Role with minimal permissions
 const ec2InstanceRole = new iam.Role(this, 'EC2InstanceRole', {
   assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
@@ -167,7 +167,7 @@ const ec2InstanceRole = new iam.Role(this, 'EC2InstanceRole', {
 ```
 
 #### 6. VPC Flow Logs with Encrypted Storage
-```ts
+```typescript
 // KMS key for CloudWatch Logs encryption
 const logGroupKmsKey = new kms.Key(this, 'LogGroupKmsKey', {
   description: 'KMS key for CloudWatch Logs encryption',
@@ -229,7 +229,7 @@ new ec2.FlowLog(this, 'StagingVPCFlowLog', {
 ```
 
 #### 7. Resource Tagging for Cost Management
-```ts
+```typescript
 // Apply common tags to all resources
 const commonTags = {
   Environment: environmentSuffix,
@@ -242,7 +242,7 @@ Object.entries(commonTags).forEach(([key, value]) => {
 ```
 
 #### 8. Stack Outputs for Integration
-```ts
+```typescript
 // Export important resource identifiers
 new cdk.CfnOutput(this, 'ProductionVpcId', {
   value: productionVpc.vpcId,

@@ -1,6 +1,6 @@
 I notice there's a discrepancy in your request - you mentioned generating a CDK TypeScript template (`secure_infrastructure.ts`) in the objective, but then specified a YAML format (`secure_infrastructure.yaml`) in the output requirements. Based on the objective and persona, I'll provide the CDK TypeScript template as that aligns better with the initial request and modern infrastructure-as-code practices.
 
-```ts
+```typescript
 // secure_infrastructure.ts
 /**
  * Secure Infrastructure CDK Template

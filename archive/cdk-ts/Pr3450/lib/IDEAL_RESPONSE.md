@@ -17,7 +17,7 @@ This is the production-ready CDK TypeScript implementation for a fully resilient
 
 ### bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -50,7 +50,7 @@ new TapStack(app, stackName, {
 
 ### lib/tap-stack.ts (Main Orchestrator)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcStack } from './vpc-stack';
@@ -259,7 +259,7 @@ export class TapStack extends cdk.Stack {
 
 ### lib/vpc-stack.ts (Network Foundation)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -337,7 +337,7 @@ export class VpcStack extends cdk.Stack {
 
 ### lib/security-stack.ts (Security Resources)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -414,7 +414,7 @@ export class SecurityStack extends cdk.Stack {
 
 ### lib/storage-stack.ts (EFS File Systems)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -484,7 +484,7 @@ export class StorageStack extends cdk.Stack {
 
 ### lib/database-stack.ts (RDS with Cross-Region Replication)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -615,7 +615,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ### lib/compute-stack.ts (ALB + Auto Scaling + EC2)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -875,7 +875,7 @@ export class ComputeStack extends cdk.Stack {
 
 ### lib/dns-stack.ts (Route 53 Failover)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -1009,7 +1009,7 @@ export class DnsStack extends cdk.Stack {
 
 ### lib/vpc-peering-stack.ts (Cross-Region VPC Peering)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1230,7 +1230,7 @@ export class VpcPeeringStack extends cdk.Stack {
 
 ### lib/resilience-stack.ts (FIS + Resilience Hub)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as fis from 'aws-cdk-lib/aws-fis';

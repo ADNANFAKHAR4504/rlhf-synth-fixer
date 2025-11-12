@@ -2,7 +2,7 @@ I'll create a robust AWS web application infrastructure using CDK TypeScript wit
 
 ## lib/networking-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -52,7 +52,7 @@ export class NetworkingConstruct extends Construct {
 
 ## lib/compute-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -136,7 +136,7 @@ export class ComputeConstruct extends Construct {
 
 ## lib/database-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -193,7 +193,7 @@ export class DatabaseConstruct extends Construct {
 
 ## lib/storage-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
@@ -258,7 +258,7 @@ export class StorageConstruct extends Construct {
 
 ## lib/security-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -378,7 +378,7 @@ export class SecurityConstruct extends Construct {
 
 ## lib/monitoring-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -467,7 +467,7 @@ export class MonitoringConstruct extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingConstruct } from './networking-construct';

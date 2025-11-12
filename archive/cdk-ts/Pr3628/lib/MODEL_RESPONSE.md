@@ -39,7 +39,7 @@ I'll create a comprehensive CDK solution for your omnichannel AI platform. This 
 
 ## `ai-platform-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lex from 'aws-cdk-lib/aws-lexv2models';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -683,7 +683,7 @@ exports.handler = async (event) => {
 
 ## `main.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

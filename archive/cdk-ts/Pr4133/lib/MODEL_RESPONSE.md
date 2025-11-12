@@ -16,7 +16,7 @@ The system uses the following AWS services:
 
 ### 1. Core Infrastructure Stack
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ses from 'aws-cdk-lib/aws-ses';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -109,7 +109,7 @@ export class EmailNotificationStack extends cdk.Stack {
 
 ### 2. Email Processing Lambda Function
 
-```ts
+```typescript
 // lambda/email-processor/index.ts
 import { SQSEvent, SQSRecord } from 'aws-lambda';
 import { SESv2Client, SendEmailCommand } from '@aws-sdk/client-sesv2';
@@ -189,7 +189,7 @@ async function sendEmail(emailData: any) {
 
 ### 3. Email Templates
 
-```ts
+```typescript
 // Email template structure in DynamoDB
 const orderConfirmationTemplate = {
   templateId: 'order-confirmation',
@@ -254,7 +254,7 @@ const orderConfirmationTemplate = {
 
 ### 4. Monitoring and Alarms
 
-```ts
+```typescript
 // CloudWatch Alarms
 const emailFailureAlarm = new cloudwatch.Alarm(this, 'EmailFailureAlarm', {
   alarmName: `ecommerce-email-failures-${suffix}`,
@@ -282,7 +282,7 @@ emailFailureAlarm.addAlarmAction(
 
 ### 5. Security and IAM
 
-```ts
+```typescript
 // Minimal IAM permissions
 const emailProcessorRole = new iam.Role(this, 'EmailProcessorRole', {
   roleName: `ecommerce-email-processor-role-${suffix}`,
@@ -312,7 +312,7 @@ const emailProcessorRole = new iam.Role(this, 'EmailProcessorRole', {
 
 ### 6. Deployment Configuration
 
-```ts
+```typescript
 // cdk.json
 {
   "app": "npx ts-node --prefer-ts-exts bin/tap.ts",
@@ -355,7 +355,7 @@ new EmailNotificationStack(app, 'EmailNotificationStack', {
 
 ## Testing
 
-```ts
+```typescript
 // test/email-notification.test.ts
 import { Template } from 'aws-cdk-lib/assertions';
 import { EmailNotificationStack } from '../lib/email-notification-stack';
@@ -419,7 +419,7 @@ This implementation provides a complete, production-ready email notification sys
 ### 1. Main Application Entry Point
 
 **bin/app.ts**
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -478,7 +478,7 @@ app.synth();
 ### 2. Main Recovery System Stack
 
 **src/stacks/RecoverySystemStack.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -703,7 +703,7 @@ export class RecoverySystemStack extends cdk.Stack {
 ### 3. Recovery Orchestration Construct
 
 **src/constructs/RecoveryOrchestration.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sfn from 'aws-cdk-lib/aws-stepfunctions';
@@ -876,7 +876,7 @@ export class RecoveryOrchestration extends Construct {
 ### 4. Stack Monitor Lambda
 
 **src/lambdas/stackMonitor/index.ts**
-```ts
+```typescript
 import { CloudFormationClient, DescribeStacksCommand, DescribeStackEventsCommand, Stack, StackEvent } from '@aws-sdk/client-cloudformation';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { CloudWatchLogsClient, PutLogEventsCommand, CreateLogStreamCommand } from '@aws-sdk/client-cloudwatch-logs';
@@ -1032,7 +1032,7 @@ async function logEvent(logGroupName: string, logStreamName: string, message: st
 ### 5. Recovery Executor Lambda
 
 **src/lambdas/recoveryExecutor/index.ts**
-```ts
+```typescript
 import {
   CloudFormationClient,
   DescribeStacksCommand,
@@ -1259,7 +1259,7 @@ async function storeRecoveryResults(stackName: string, actions: string[]): Promi
 ### 6. Monitoring Construct
 
 **src/constructs/MonitoringConstruct.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -1390,7 +1390,7 @@ export class MonitoringConstruct extends Construct {
 ### 7. Utils
 
 **src/utils/naming.ts**
-```ts
+```typescript
 export function generateResourceName(
   app: string,
   purpose: string,
@@ -1407,7 +1407,7 @@ export function generateResourceName(
 ```
 
 **src/utils/tagging.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -1431,7 +1431,7 @@ export function applyTags(scope: Construct, tags: StandardTags): void {
 ```
 
 **src/utils/config.ts**
-```ts
+```typescript
 export interface RecoveryConfig {
   environment: string;
   suffix: string;
@@ -1460,7 +1460,7 @@ export function getConfig(): RecoveryConfig {
 ### 8. Unit Tests
 
 **test/lambdas/stackMonitor.test.ts**
-```ts
+```typescript
 import { handler, StackMonitorEvent, StackAnalysis } from '../../src/lambdas/stackMonitor';
 import { CloudFormationClient, DescribeStacksCommand, DescribeStackEventsCommand } from '@aws-sdk/client-cloudformation';
 import { S3Client } from '@aws-sdk/client-s3';

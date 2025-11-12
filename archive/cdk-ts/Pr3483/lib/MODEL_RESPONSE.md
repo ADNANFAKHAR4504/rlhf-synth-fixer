@@ -4,7 +4,7 @@ Here's the complete infrastructure code for your wiki platform:
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkStack } from './network-stack';
@@ -67,7 +67,7 @@ export class TapStack extends cdk.Stack {
 
 ## lib/network-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';
@@ -143,7 +143,7 @@ export class NetworkStack extends Construct {
 
 ## lib/database-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -219,7 +219,7 @@ export class DatabaseStack extends Construct {
 
 ## lib/storage-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
@@ -342,7 +342,7 @@ export class StorageStack extends Construct {
 
 ## lib/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -570,7 +570,7 @@ export class ComputeStack extends Construct {
 
 ## lib/monitoring-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

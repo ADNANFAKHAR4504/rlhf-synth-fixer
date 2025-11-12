@@ -8,7 +8,7 @@
 - The model response defines `CommonTags` without an index signature
 - This causes TypeScript compilation errors when spreading tags with additional properties
 
-```ts
+```typescript
 // Model Response - INCORRECT
 export interface CommonTags {
   Environment: string;
@@ -29,7 +29,7 @@ export interface CommonTags {
 - All resource tag operations will fail
 
 **Ideal Response Solution:**
-```ts
+```typescript
 export interface CommonTags {
   Environment: string;
   Department: string;
@@ -45,7 +45,7 @@ export interface CommonTags {
 - Model response includes AMI lookup logic inside the EC2Module
 - This violates the single responsibility principle and reduces reusability
 
-```ts
+```typescript
 // Model Response - INCORRECT placement
 export class EC2Module extends Construct {
   constructor(scope: Construct, id: string, config: EC2ModuleConfig) {
@@ -74,7 +74,7 @@ export class EC2Module extends Construct {
 - Every environment must use the same AMI selection logic
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // In tap-stack.ts - CORRECT placement
 const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'ami', {
   mostRecent: true,
@@ -93,7 +93,7 @@ const ec2Module = new EC2Module(this, 'ec2', {
 **Failure Details:**
 - Model uses `aws.provider.AwsProvider` which is incorrect for @cdktf/provider-aws
 
-```ts
+```typescript
 // Model Response - INCORRECT
 new aws.provider.AwsProvider(this, 'aws', {
   region: config.region,
@@ -112,7 +112,7 @@ new aws.provider.AwsProvider(this, 'aws', {
 - Wastes developer time troubleshooting
 
 **Ideal Response Solution:**
-```ts
+```typescript
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
 
 new AwsProvider(this, 'aws', {
@@ -126,7 +126,7 @@ new AwsProvider(this, 'aws', {
 **Failure Details:**
 - Uses `S3BucketVersioningA` which is an invalid construct name
 
-```ts
+```typescript
 // Model Response - INCORRECT
 new aws.s3BucketVersioningA.S3BucketVersioningA(this, 'bucket-versioning', {
 ```
@@ -144,7 +144,7 @@ new aws.s3BucketVersioningA.S3BucketVersioningA(this, 'bucket-versioning', {
 - Misleading construct name suggests incorrect documentation reading
 
 **Ideal Response Solution:**
-```ts
+```typescript
 new aws.s3BucketVersioning.S3BucketVersioningA(this, 'bucket-versioning', {
   bucket: this.bucket.id,
   versioningConfiguration: {
@@ -160,7 +160,7 @@ new aws.s3BucketVersioning.S3BucketVersioningA(this, 'bucket-versioning', {
 **Failure Details:**
 - Uses wrong construct path for server-side encryption configuration
 
-```ts
+```typescript
 // Model Response - INCORRECT
 new aws.s3BucketServerSideEncryptionConfigurationA.S3BucketServerSideEncryptionConfigurationA(
 ```
@@ -180,7 +180,7 @@ new aws.s3BucketServerSideEncryptionConfigurationA.S3BucketServerSideEncryptionC
 - Potential regulatory fines
 
 **Ideal Response Solution:**
-```ts
+```typescript
 new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(
   this,
   'bucket-encryption',
@@ -202,7 +202,7 @@ new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionCo
 **Failure Details:**
 - Model hardcodes `us-east-1` in S3 VPC endpoint service name
 
-```ts
+```typescript
 // Model Response - INCORRECT
 this.vpcEndpoint = new aws.vpcEndpoint.VpcEndpoint(this, 's3-endpoint', {
   vpcId: config.vpcId,
@@ -223,7 +223,7 @@ this.vpcEndpoint = new aws.vpcEndpoint.VpcEndpoint(this, 's3-endpoint', {
 - Reduced network performance
 
 **Ideal Response Solution:**
-```ts
+```typescript
 serviceName: `com.amazonaws.${config.tags.Region || 'eu-north-1'}.s3`,
 ```
 
@@ -234,7 +234,7 @@ serviceName: `com.amazonaws.${config.tags.Region || 'eu-north-1'}.s3`,
 **Failure Details:**
 - Model hardcodes PostgreSQL engine version `15.4`
 
-```ts
+```typescript
 // Model Response - PROBLEMATIC
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres', {
   engine: 'postgres',
@@ -254,7 +254,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres', {
 - Blocks adoption of security patches
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // Omits engineVersion to use default latest stable version
 engine: 'postgres',
 // No engineVersion specified - allows AWS to use latest compatible
@@ -267,7 +267,7 @@ engine: 'postgres',
 **Failure Details:**
 - Uses `azs.names.get(0)` which is incorrect for Terraform outputs
 
-```ts
+```typescript
 // Model Response - INCORRECT
 availabilityZones: [
   azs.names.get(0),  // ✗ Wrong method
@@ -287,7 +287,7 @@ availabilityZones: [
 - Error message is unclear and hard to debug
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // Uses static availability zone strings
 const availabilityZones = [`${awsRegion}a`, `${awsRegion}b`];
 ```
@@ -299,7 +299,7 @@ const availabilityZones = [`${awsRegion}a`, `${awsRegion}b`];
 **Failure Details:**
 - Attempts to associate route tables using subnet IDs instead of route table IDs
 
-```ts
+```typescript
 // Model Response - INCORRECT
 const routeTableIds = [
   ...vpcModule.publicSubnets.map(subnet => subnet.id),  // ✗ These are subnet IDs
@@ -320,7 +320,7 @@ const routeTableIds = [
 - Increased costs and reduced security
 
 **Ideal Response Solution:**
-```ts
+```typescript
 const routeTables = new aws.dataAwsRouteTables.DataAwsRouteTables(
   this,
   'route-tables',
@@ -376,7 +376,7 @@ new aws.vpcEndpointRouteTableAssociation.VpcEndpointRouteTableAssociation(
 - Reduced operational flexibility
 
 **Ideal Response Solution:**
-```ts
+```typescript
 // S3 Backend with locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -394,7 +394,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 **Failure Details:**
 - Model's user data script is minimal and incomplete
 
-```ts
+```typescript
 // Model Response - MINIMAL
 userData: Fn.base64encode(`#!/bin/bash
 yum update -y
@@ -418,7 +418,7 @@ systemctl enable amazon-ssm-agent
 - Increased manual configuration time
 
 **Ideal Response Solution:**
-```ts
+```typescript
 userData: Fn.base64encode(
   Fn.rawString(`#!/bin/bash
 # Update system
@@ -470,7 +470,7 @@ echo "Instance setup complete"
 **Failure Details:**
 - Model's `TapStackConfig` interface is rigid and limited
 
-```ts
+```typescript
 // Model Response - LIMITED
 export interface TapStackConfig {
   region: string;
@@ -495,7 +495,7 @@ export interface TapStackConfig {
 - Forces specific architecture patterns
 
 **Ideal Response Solution:**
-```ts
+```typescript
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -513,7 +513,7 @@ interface TapStackProps {
 - Model includes `keyName?: string` but should be `useKeyPair?: boolean`
 - Model also includes `amiId` missing from the interface
 
-```ts
+```typescript
 // Model Response - INCONSISTENT
 export interface EC2ModuleConfig {
   // ... other fields
@@ -534,7 +534,7 @@ export interface EC2ModuleConfig {
 - Type safety issues (amiId not in interface)
 
 **Ideal Response Solution:**
-```ts
+```typescript
 export interface EC2ModuleConfig {
   vpcId: string;
   subnetId: string;

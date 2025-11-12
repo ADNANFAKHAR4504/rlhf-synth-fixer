@@ -73,7 +73,7 @@ The original failed response had these architectural problems:
 
 The failed implementation would have caused these test failures:
 
-```ts
+```typescript
 // These tests would have failed with the original response:
 test('should have valid VPC in all regions', () => {
   // FAIL: Only us-east-1 would exist

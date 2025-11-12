@@ -62,7 +62,7 @@ This CDK TypeScript implementation provides an enterprise-grade backup solution 
 
 ## Complete Implementation Code
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';

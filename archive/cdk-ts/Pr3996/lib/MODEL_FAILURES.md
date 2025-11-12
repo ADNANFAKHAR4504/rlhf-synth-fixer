@@ -32,7 +32,7 @@ The MODEL_RESPONSE followed the PROMPT literally, but the actual implementation 
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 export class NetworkingStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id, props);
@@ -40,7 +40,7 @@ export class NetworkingStack extends cdk.Stack {
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 export class NetworkingStack extends Construct {
   constructor(scope: Construct, id: string, props: NetworkingStackProps) {
     super(scope, id);
@@ -90,7 +90,7 @@ The MODEL_RESPONSE entry point directly instantiates multiple stack classes and 
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -115,7 +115,7 @@ The MODEL_RESPONSE doesn't properly implement environment suffix support, which 
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 // Create a secondary Aurora cluster in the secondary region
 const secondaryClusterStack = new cdk.Stack(
   scope,
@@ -140,7 +140,7 @@ const cfnSecondaryCluster = new rds.CfnDBCluster(
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 // Only creates primary cluster in primary region
 this.primaryCluster = new rds.DatabaseCluster(
   this,
@@ -170,7 +170,7 @@ MODEL_RESPONSE tries to create a secondary database cluster and even a separate 
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 public addPeering(peerStack: NetworkingStack): void {
   const tgwPeering = new ec2.CfnTransitGatewayPeeringAttachment(
     this,
@@ -217,7 +217,7 @@ MODEL_RESPONSE shows a method-based approach to TGW peering that:
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 interface GlobalStackProps extends cdk.StackProps {
   primaryAlb: elbv2.ApplicationLoadBalancer;
   secondaryAlb: elbv2.ApplicationLoadBalancer;  // Takes both ALBs
@@ -245,7 +245,7 @@ euEndpointGroup.addLoadBalancerEndpoint(
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 interface GlobalStackProps {
   primaryAlb: elbv2.ApplicationLoadBalancer; // Only takes primary ALB
   environmentSuffix: string;
@@ -282,7 +282,7 @@ MODEL_RESPONSE tries to add both primary and secondary ALBs to Global Accelerato
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 image: ecs.ContainerImage.fromRegistry(
   'account.dkr.ecr.region.amazonaws.com/trading-engine:latest'
 ),
@@ -290,7 +290,7 @@ image: ecs.ContainerImage.fromRegistry(
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 image: ecs.ContainerImage.fromRegistry('amazon/amazon-ecs-sample'),
 ```
 
@@ -309,7 +309,7 @@ MODEL_RESPONSE uses placeholder strings that contain literal text "account" and 
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 new cdk.CfnOutput(this, 'PrimaryClusterEndpoint', {
   value: this.primaryCluster.clusterEndpoint.socketAddress,
   exportName: 'PrimaryClusterEndpoint',
@@ -318,7 +318,7 @@ new cdk.CfnOutput(this, 'PrimaryClusterEndpoint', {
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 new cdk.CfnOutput(this, `VpcId${props.environmentSuffix}`, {
   value: this.vpc.vpcId,
   exportName: `VpcId-${stack.region}-${props.environmentSuffix}`,
@@ -350,7 +350,7 @@ MODEL_RESPONSE has minimal CloudFormation outputs:
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 const tradingTaskDefinition = new ecs.FargateTaskDefinition(
   this,
   'TradingTaskDef',
@@ -364,7 +364,7 @@ const tradingTaskDefinition = new ecs.FargateTaskDefinition(
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 const tradingTaskDefinition = new ecs.FargateTaskDefinition(
   this,
   `TradingTaskDef${props.environmentSuffix}`,
@@ -391,7 +391,7 @@ MODEL_RESPONSE uses larger task sizes (2048MB/1024CPU) compared to IDEAL_RESPONS
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 this.vpc = new ec2.Vpc(this, 'VPC', {
   cidr: props.cidr,
   ...
@@ -404,7 +404,7 @@ this.transitGateway = new ec2.CfnTransitGateway(this, 'TransitGateway', {
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 this.vpc = new ec2.Vpc(this, `VPC${props.environmentSuffix}`, {
   ipAddresses: ec2.IpAddresses.cidr(props.cidr),
   ...
@@ -434,7 +434,7 @@ MODEL_RESPONSE doesn't include environmentSuffix in construct IDs, which:
 
 **MODEL_RESPONSE.md:**
 
-```ts
+```typescript
 this.vpc = new ec2.Vpc(this, 'VPC', {
   cidr: props.cidr,  // Deprecated property
   maxAzs: 3,
@@ -444,7 +444,7 @@ this.vpc = new ec2.Vpc(this, 'VPC', {
 
 **IDEAL_RESPONSE.md:**
 
-```ts
+```typescript
 this.vpc = new ec2.Vpc(this, `VPC${props.environmentSuffix}`, {
   ipAddresses: ec2.IpAddresses.cidr(props.cidr),  // Current API
   maxAzs: 3,

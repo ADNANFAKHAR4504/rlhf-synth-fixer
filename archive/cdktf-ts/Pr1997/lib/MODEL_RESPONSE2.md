@@ -2,7 +2,7 @@ You're absolutely right! Let me provide the corrected files. The CDKTF provider 
 
 ## modules.ts (Corrected)
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { 
   AwsProvider,
@@ -746,7 +746,7 @@ export class SecureInfrastructureModules extends Construct {
 
 ## tap-stack.ts (Complete)
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";

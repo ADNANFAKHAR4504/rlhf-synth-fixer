@@ -4,7 +4,7 @@ IDEAL_RESPONSE.md
 
 ## bin/tap.ts
 
-```ts
+```typescript
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable quotes */
@@ -118,7 +118,7 @@ export const getHostedZoneId = (region: string) => stack.getHostedZoneId(region)
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable quotes */

@@ -1,6 +1,6 @@
 ## modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 
@@ -1504,7 +1504,7 @@ export class CloudFrontWafModule extends BaseModule {
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

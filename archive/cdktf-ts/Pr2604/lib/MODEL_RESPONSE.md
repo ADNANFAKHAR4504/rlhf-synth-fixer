@@ -16,7 +16,7 @@ npm install -D @types/node typescript
 
 Here's the complete `main.ts` file that implements all your requirements:
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

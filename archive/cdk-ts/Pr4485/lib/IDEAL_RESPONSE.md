@@ -4,7 +4,7 @@
 
 Here's the corrected implementation for `lib/tap-stack.ts`:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigatewayv2Integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';

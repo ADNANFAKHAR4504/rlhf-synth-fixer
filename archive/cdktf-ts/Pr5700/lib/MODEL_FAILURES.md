@@ -19,12 +19,12 @@ This document tracks issues found during code generation and the corrections app
 **Location**: `bin/tap.ts:12`
 
 **Original Code**:
-```ts
+```typescript
 const awsRegion = process.env.AWS_REGION || 'us-east-1';
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 const awsRegion = process.env.AWS_REGION || 'ap-southeast-1';
 ```
 
@@ -39,7 +39,7 @@ const awsRegion = process.env.AWS_REGION || 'ap-southeast-1';
 **Location**: `bin/tap.ts:20-26`
 
 **Original Code**:
-```ts
+```typescript
 const defaultTags = {
   tags: {
     Environment: environmentSuffix,
@@ -50,7 +50,7 @@ const defaultTags = {
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 const defaultTags = {
   tags: {
     Environment: 'Production',
@@ -190,7 +190,7 @@ All constraints met:
 **Location**: `lib/tap-stack.ts:432-469`
 
 **Original Code**:
-```ts
+```typescript
 new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
   metricName: 'Errors',
   namespace: 'AWS/Lambda',
@@ -200,7 +200,7 @@ new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
   threshold: 1.0,
   metricQuery: [
@@ -247,14 +247,14 @@ new CloudwatchMetricAlarm(this, `validator-error-alarm-${environmentSuffix}`, {
 **Location**: `lib/tap-stack.ts:526`
 
 **Original Code**:
-```ts
+```typescript
 new TerraformOutput(this, 'api-endpoint', {
   value: `${api.executionArn}/prod/webhooks`, // WRONG: Not a valid URL
 });
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 new TerraformOutput(this, 'api-endpoint', {
   value: `https://${api.id}.execute-api.${awsRegion}.amazonaws.com/${stage.stageName}/webhooks`,
 });
@@ -271,14 +271,14 @@ new TerraformOutput(this, 'api-endpoint', {
 **Location**: `lib/tap-stack.ts:74`
 
 **Original Code**:
-```ts
+```typescript
 const resultsBucket = new S3Bucket(this, `webhook-results-${environmentSuffix}`, {
   bucket: `webhook-results-${environmentSuffix}`, // WRONG: Not globally unique
 });
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 const resultsBucket = new S3Bucket(this, `webhook-results-${environmentSuffix}`, {
   bucket: `webhook-results-${environmentSuffix}-${current.accountId}`, // FIXED: Includes account ID
 });
@@ -295,14 +295,14 @@ const resultsBucket = new S3Bucket(this, `webhook-results-${environmentSuffix}`,
 **Location**: `lib/tap-stack.ts:392`
 
 **Original Code**:
-```ts
+```typescript
 new LambdaPermission(this, `api-lambda-permission-${environmentSuffix}`, {
   statementId: 'AllowAPIGatewayInvoke', // WRONG: Not unique per environment
 });
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 new LambdaPermission(this, `api-lambda-permission-${environmentSuffix}`, {
   statementId: `AllowAPIGatewayInvoke-${environmentSuffix}`, // FIXED: Includes environment suffix
 });
@@ -319,7 +319,7 @@ new LambdaPermission(this, `api-lambda-permission-${environmentSuffix}`, {
 **Location**: `lib/tap-stack.ts:408`
 
 **Original Code**:
-```ts
+```typescript
 const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentSuffix}`, {
   restApiId: api.id,
   dependsOn: [postMethod, getMethod], // WRONG: Missing integrations
@@ -328,7 +328,7 @@ const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentS
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentSuffix}`, {
   restApiId: api.id,
   dependsOn: [postMethod, getMethod, postIntegration, getIntegration], // FIXED: Includes integrations
@@ -357,7 +357,7 @@ const deployment = new ApiGatewayDeployment(this, `api-deployment-${environmentS
 **Location**: `lib/tap-stack.ts:330`
 
 **Original Code**:
-```ts
+```typescript
 new LambdaEventSourceMapping(this, `processor-event-source-${environmentSuffix}`, {
   eventSourceArn: webhookQueue.arn,
   functionName: processorLambda.functionName,
@@ -367,7 +367,7 @@ new LambdaEventSourceMapping(this, `processor-event-source-${environmentSuffix}`
 ```
 
 **Corrected Code**:
-```ts
+```typescript
 new LambdaEventSourceMapping(this, `processor-event-source-${environmentSuffix}`, {
   eventSourceArn: webhookQueue.arn,
   functionName: processorLambda.functionName,

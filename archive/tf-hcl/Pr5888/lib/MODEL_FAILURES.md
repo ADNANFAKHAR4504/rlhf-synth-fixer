@@ -24,7 +24,7 @@ The MODEL_RESPONSE generated a comprehensive Terraform implementation for a serv
 **MODEL_RESPONSE Issue**:
 The model provided infrastructure code but NO unit tests or integration tests. The original test files contained only placeholder tests:
 
-```ts
+```typescript
 // test/terraform.unit.test.ts - ORIGINAL
 describe('Terraform single-file stack: tap_stack.tf', () => {
   test('tap_stack.tf exists', () => {

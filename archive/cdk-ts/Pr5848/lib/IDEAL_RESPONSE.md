@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -590,7 +590,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 import * as fs from 'fs';
 import * as path from 'path';
 import { EC2Client, DescribeVpcsCommand, DescribeSubnetsCommand, DescribeTransitGatewaysCommand, DescribeTransitGatewayAttachmentsCommand, DescribeInstancesCommand, DescribeVpcEndpointsCommand, DescribeFlowLogsCommand, DescribeTransitGatewayRouteTablesCommand, SearchTransitGatewayRoutesCommand, DescribeSecurityGroupsCommand } from '@aws-sdk/client-ec2';
@@ -1271,7 +1271,7 @@ describe('TAP Network Foundation Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

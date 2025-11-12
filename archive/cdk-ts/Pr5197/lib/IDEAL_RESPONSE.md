@@ -11,7 +11,7 @@ Files included below:
 
 Notes and conventions:
 
-- All code blocks are formatted using a TypeScript fenced block (```ts) per repository/style guidance. JavaScript handler files are included using the same fence for consistent rendering.
+- All code blocks are formatted using a TypeScript fenced block (```typescript) per repository/style guidance. JavaScript handler files are included using the same fence for consistent rendering.
 - The construct applies a tag `iac-rlhf-amazon` to resources, uses timestamped `-<environment>-<timestamp>` suffixes, and sets removal policies (e.g., S3 bucket `RemovalPolicy.DESTROY` with `autoDeleteObjects: true`) to make test and CI cleanup easier.
 - The Lambda layer is created from `lib/lambda_layer` and Lambda code comes from `lib/lambda_handlers`.
 
@@ -19,7 +19,7 @@ Notes and conventions:
 
 ### compliance-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -528,7 +528,7 @@ export { ComplianceConstruct as ComplianceStack };
 
 ### tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ComplianceConstruct } from './compliance-stack';
@@ -560,7 +560,7 @@ export class TapStack extends cdk.Stack {
 
 ### lambda_handlers/index.js
 
-```ts
+```typescript
 const AWS = require('aws-sdk');
 const ec2 = new AWS.EC2();
 const rds = new AWS.RDS();
@@ -726,7 +726,7 @@ exports.scanS3Handler = async (event) => {
 
 ### lambda_layer/nodejs/index.js
 
-```ts
+```typescript
 // Small helper to be available in the layer for compliance lambdas
 module.exports = {
 	layerHelper: function () {

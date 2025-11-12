@@ -20,7 +20,7 @@ The solution creates separate stacks for each environment (dev, staging, prod) w
 
 ## File: lib/migration-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -615,7 +615,7 @@ export class MigrationStack extends cdk.Stack {
 
 ## File: lib/route53-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as targets from 'aws-cdk-lib/aws-route53-targets';
@@ -711,7 +711,7 @@ export class Route53Stack extends cdk.Stack {
 
 ## File: lib/vpc-peering-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -777,7 +777,7 @@ export class VpcPeeringStack extends cdk.Stack {
 
 ## File: lib/pipeline-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -931,7 +931,7 @@ export class PipelineStack extends cdk.Stack {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { MigrationStack } from './migration-stack';
@@ -961,7 +961,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

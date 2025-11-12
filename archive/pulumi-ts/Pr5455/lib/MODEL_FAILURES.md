@@ -11,7 +11,7 @@ This document analyzes the critical error in MODEL_RESPONSE that prevented succe
 **MODEL_RESPONSE Issue**:
 The model generated code using the incorrect property name for CodePipeline artifact store configuration. At line 545 of the MODEL_RESPONSE, the code used:
 
-```ts
+```typescript
 const pipeline = new aws.codepipeline.Pipeline(
   `container-pipeline-${environmentSuffix}`,
   {
@@ -29,7 +29,7 @@ const pipeline = new aws.codepipeline.Pipeline(
 **IDEAL_RESPONSE Fix**:
 The correct implementation uses `artifactStores` (plural, array format) as required by Pulumi AWS provider v7.x:
 
-```ts
+```typescript
 const pipeline = new aws.codepipeline.Pipeline(
   `container-pipeline-${environmentSuffix}`,
   {
@@ -74,7 +74,7 @@ While AWS CloudFormation documentation shows `ArtifactStore` (singular), Pulumi'
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE code in bin/tap.ts did not export the stack outputs for use in integration tests and deployment verification:
 
-```ts
+```typescript
 // MODEL_RESPONSE (lines 36-41)
 new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
@@ -89,7 +89,7 @@ new TapStack('pulumi-infra', {
 The model included commented suggestions but did not implement the actual exports, leaving integration tests without access to deployment outputs.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
@@ -126,7 +126,7 @@ https://www.pulumi.com/docs/concepts/inputs-outputs/#outputs-and-exports
 **MODEL_RESPONSE Issue**:
 The TapStack class in MODEL_RESPONSE only exposed 3 outputs:
 
-```ts
+```typescript
 export class TapStack extends pulumi.ComponentResource {
   public readonly artifactBucketName: pulumi.Output<string>;
   public readonly ecrRepositoryUrl: pulumi.Output<string>;
@@ -138,7 +138,7 @@ export class TapStack extends pulumi.ComponentResource {
 However, the existing integration tests (in test/tap-stack.int.test.ts) require `codeBuildProjectName` and `lambdaFunctionName` outputs to validate those resources.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 export class TapStack extends pulumi.ComponentResource {
   public readonly artifactBucketName: pulumi.Output<string>;
   public readonly ecrRepositoryUrl: pulumi.Output<string>;
@@ -149,7 +149,7 @@ export class TapStack extends pulumi.ComponentResource {
 ```
 
 And in the constructor:
-```ts
+```typescript
 this.pipelineName = pipeline.name;
 this.codeBuildProjectName = codeBuildProject.name;  // Added
 this.lambdaFunctionName = ecrTaggerLambda.name;     // Added

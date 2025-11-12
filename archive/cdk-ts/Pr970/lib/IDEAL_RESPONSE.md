@@ -8,7 +8,7 @@ This CDK TypeScript implementation delivers a production-ready serverless REST A
 
 ### Core Infrastructure
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -47,7 +47,7 @@ export class TapStack extends cdk.Stack {
 
 ### Networking Layer
 
-```ts
+```typescript
     // VPC with public and private subnets across 2 AZs
     const vpc = new ec2.Vpc(this, 'srvrless-vpc', {
       vpcName: `srvrless-vpc-${environmentSuffix}`,
@@ -85,7 +85,7 @@ export class TapStack extends cdk.Stack {
 
 ### Data Layer
 
-```ts
+```typescript
     // DynamoDB table with pay-per-request billing
     const table = new dynamodb.Table(this, 'srvrless-table', {
       tableName: `srvrless-items-${environmentSuffix}`,
@@ -101,7 +101,7 @@ export class TapStack extends cdk.Stack {
 
 ### Event-Driven Architecture (EventBridge)
 
-```ts
+```typescript
     // Custom EventBridge event bus for application events
     const eventBus = new events.EventBus(this, 'srvrless-event-bus', {
       eventBusName: `srvrless-event-bus-${environmentSuffix}`,
@@ -149,7 +149,7 @@ export class TapStack extends cdk.Stack {
 
 ### Observability (X-Ray)
 
-```ts
+```typescript
     // X-Ray sampling rule for enhanced tracing
     const xraySamplingRule = new xray.CfnSamplingRule(this, 'srvrless-xray-sampling', {
       samplingRule: {
@@ -170,7 +170,7 @@ export class TapStack extends cdk.Stack {
 
 ### IAM Security
 
-```ts
+```typescript
     // IAM role for Lambda functions with least privilege
     const lambdaRole = new iam.Role(this, 'srvrless-lambda-role', {
       roleName: `srvrless-lambda-role-${environmentSuffix}`,
@@ -200,7 +200,7 @@ export class TapStack extends cdk.Stack {
 
 ### Lambda Functions with Event Publishing and Tracing
 
-```ts
+```typescript
     // CREATE Lambda function with EventBridge and X-Ray integration
     const createFunction = new lambda.Function(this, 'srvrless-create-function', {
       functionName: `srvrless-create-item-${environmentSuffix}`,
@@ -272,7 +272,7 @@ export class TapStack extends cdk.Stack {
 
 ### API Gateway with X-Ray Tracing
 
-```ts
+```typescript
     // REST API with X-Ray tracing enabled
     const api = new apigateway.RestApi(this, 'srvrless-api', {
       restApiName: `srvrless-rest-api-${environmentSuffix}`,
@@ -318,7 +318,7 @@ export class TapStack extends cdk.Stack {
 
 ### Event Processor Function
 
-```ts
+```typescript
     // Event processor Lambda for demonstrating EventBridge functionality
     const eventProcessorFunction = new lambda.Function(this, 'srvrless-event-processor', {
       functionName: `srvrless-event-processor-${environmentSuffix}`,
@@ -360,7 +360,7 @@ export class TapStack extends cdk.Stack {
 
 ### CloudFormation Outputs
 
-```ts
+```typescript
     // Comprehensive outputs for integration
     new cdk.CfnOutput(this, 'ApiUrl', {
       value: api.url,

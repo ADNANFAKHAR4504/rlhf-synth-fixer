@@ -12,7 +12,7 @@ This document details the infrastructure issues identified in the initial MODEL_
 - Missing permissions for CloudWatch Logs to use the KMS key for encryption
 
 **Fix Applied:**
-```ts
+```typescript
 // Before:
 this.kmsKey = new kms.Key(this, 'EncryptionKey', {
   keyRotation: true,  // INCORRECT
@@ -44,7 +44,7 @@ this.kmsKey.addToResourcePolicy(
 - Launch template configuration was incompatible with EC2 instance creation
 
 **Fix Applied:**
-```ts
+```typescript
 // Before:
 const webLaunchTemplate = new ec2.LaunchTemplate(this, 'WebLaunchTemplate', {
   // ... template config
@@ -79,7 +79,7 @@ const webInstance = new ec2.Instance(this, `WebServer${i}`, {
 - S3 buckets lacked proper removal policies for automated cleanup
 
 **Fix Applied:**
-```ts
+```typescript
 // RDS - Added deletion protection control:
 new rds.DatabaseInstance(this, `Database${config.id}`, {
   deletionProtection: false,  // Allow deletion for non-production environments
@@ -102,7 +102,7 @@ new s3.Bucket(this, `${name}-bucket`, {
 - No mechanism to pass environment suffix to nested stacks
 
 **Fix Applied:**
-```ts
+```typescript
 // Added environment suffix to all stacks:
 export interface StorageStackProps extends cdk.StackProps {
   vpc: ec2.Vpc;
@@ -130,7 +130,7 @@ const storageStack = new StorageStack(this, `StorageStack${environmentSuffix}`, 
 - Missing proper configuration for Config rules
 
 **Fix Applied:**
-```ts
+```typescript
 // Before:
 const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder', {
   recordingGroup: {
@@ -150,7 +150,7 @@ const configRecorder = new config.CfnConfigurationRecorder(this, 'ConfigRecorder
 - Used `kubernetesAuditLogs` instead of nested `kubernetes.auditLogs`
 
 **Fix Applied:**
-```ts
+```typescript
 // Before:
 new guardduty.CfnDetector(this, 'GuardDuty', {
   dataSources: {
@@ -170,7 +170,7 @@ new guardduty.CfnDetector(this, 'GuardDuty', {
 - Would cause deployment failures due to service conflicts
 
 **Fix Applied:**
-```ts
+```typescript
 // Simplified SecurityServicesStack to avoid conflicts:
 export class SecurityServicesStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -191,7 +191,7 @@ export class SecurityServicesStack extends cdk.Stack {
 - Outputs not properly exported for cross-stack references
 
 **Fix Applied:**
-```ts
+```typescript
 // Added comprehensive outputs to main stack:
 new cdk.CfnOutput(this, 'VPCId', {
   value: networkingStack.vpc.vpcId,
@@ -219,7 +219,7 @@ new cdk.CfnOutput(this, 'EnvironmentSuffix', {
 - Missing proper AWS SDK configuration for testing
 
 **Fix Applied:**
-```ts
+```typescript
 // Dynamic configuration from deployment outputs:
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
@@ -242,7 +242,7 @@ test('VPC should exist and be configured correctly', async () => {
 - Not necessary for development/testing environments
 
 **Fix Applied:**
-```ts
+```typescript
 new rds.DatabaseInstance(this, `Database${config.id}`, {
   multiAz: false,  // Disabled for faster deployment in non-production
   // Production would set this to true

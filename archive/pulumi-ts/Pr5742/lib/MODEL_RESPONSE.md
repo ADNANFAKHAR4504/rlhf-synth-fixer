@@ -23,7 +23,7 @@ I'll create a comprehensive TypeScript file that addresses all these requirement
 
 I'll create a comprehensive Pulumi TypeScript program for your security-hardened AWS environment. This will be a single file that implements all your requirements with a zero-trust architecture approach.
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';

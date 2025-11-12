@@ -27,7 +27,7 @@ I'll provide a comprehensive Pulumi TypeScript implementation for your AWS cross
 
 ## `lib/tap-stack.ts`
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as crypto from "crypto";
@@ -659,7 +659,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## `tests/tap-stack.unit.test.ts`
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import { TapStack, TapStackArgs } from "../lib/tap-stack";
 import * as aws from "@pulumi/aws";
@@ -1013,7 +1013,7 @@ describe('TapStack Unit Tests', () => {
 
 ## `tests/tap-stack.int.test.ts`
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { TapStack, TapStackArgs } from "../lib/tap-stack";

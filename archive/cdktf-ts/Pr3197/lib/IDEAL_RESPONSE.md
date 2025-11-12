@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -754,7 +754,7 @@ export class SnsModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

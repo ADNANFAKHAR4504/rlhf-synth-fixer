@@ -6,7 +6,7 @@ I'll create a comprehensive testing infrastructure for the healthcare monitoring
 
 ### Unit Tests (test/infrastructure.unit.test.ts)
 
-```ts
+```typescript
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -44,7 +44,7 @@ describe("Infrastructure Unit Tests", () => {
 
 ### Integration Tests (test/infrastructure.int.test.ts)
 
-```ts
+```typescript
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';

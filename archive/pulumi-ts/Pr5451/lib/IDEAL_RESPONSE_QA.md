@@ -20,7 +20,7 @@ This is the final, production-ready implementation after completing all QA valid
 - `throttleSettings` in `aws.apigateway.Stage`
 
 **Fix**: Updated to use proper Pulumi AWS provider patterns
-```ts
+```typescript
 // Deployment without stageName
 const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
   restApi: api.id,

@@ -9,7 +9,7 @@ This document analyzes the issues found in the MODEL_RESPONSE implementation dur
 **Impact Level**: Critical - Deployment Failure
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 natGateways: 3, // One NAT Gateway per AZ for high availability
 ```
 
@@ -20,7 +20,7 @@ Resource handler returned message: "The maximum number of addresses has been rea
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 natGateways: 1, // One NAT Gateway to save costs and EIP addresses
 ```
 
@@ -39,7 +39,7 @@ natGateways: 1, // One NAT Gateway to save costs and EIP addresses
 **Impact Level**: Critical - CI/CD Pipeline Failure
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 import fs from 'fs';
 
 const outputs = JSON.parse(
@@ -59,7 +59,7 @@ ENOENT: no such file or directory, open 'cfn-outputs/flat-outputs.json'
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 import {
   CloudFormationClient,
   DescribeStacksCommand,
@@ -110,7 +110,7 @@ describe('Payment Processing VPC Integration Tests', () => {
 **Impact Level**: High - Multi-Region Deployment Failure
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const ec2Client = new EC2Client({ region: process.env.AWS_REGION || 'us-east-1' });
 const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' });
 
@@ -120,7 +120,7 @@ const s3Client = new S3Client({ region: process.env.AWS_REGION || 'us-east-1' })
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const region = process.env.AWS_REGION || 'us-east-2';
 
 const cfnClient = new CloudFormationClient({ region });
@@ -150,7 +150,7 @@ const s3Client = new S3Client({ region });
 Tests assumed stack outputs would be in a pre-existing file, with no mechanism to discover the correct stack name for the environment.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
@@ -175,7 +175,7 @@ async function getStackOutputs(): Promise<Record<string, string>> {
 **Impact Level**: Medium - Test Maintenance
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 test('3 NAT Gateways exist in public subnets', async () => {
   // ...
   expect(response.NatGateways).toHaveLength(3);
@@ -183,7 +183,7 @@ test('3 NAT Gateways exist in public subnets', async () => {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 test('NAT Gateway exists in public subnet', async () => {
   // ...
   expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
@@ -203,7 +203,7 @@ test('NAT Gateway exists in public subnet', async () => {
 **Impact Level**: Low - Code Quality
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 import * as iam from 'aws-cdk-lib/aws-iam';
 ```
 

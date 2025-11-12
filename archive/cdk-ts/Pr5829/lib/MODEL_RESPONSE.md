@@ -25,7 +25,7 @@ Let me create a comprehensive single file that contains all these resources, pro
 
 Below is the complete production-ready `lib/tap-stack.ts` file that implements all required security infrastructure components for the financial services payment processing system.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -1098,7 +1098,7 @@ npm install aws-cdk-lib constructs
 ```
 
 2. **Configure Stack Properties**:
-```ts
+```typescript
 const app = new cdk.App();
 new TapStack(app, 'TapSecurityStack', {
   environmentName: 'prod',

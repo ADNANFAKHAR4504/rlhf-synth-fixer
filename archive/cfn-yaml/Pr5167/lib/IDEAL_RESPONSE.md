@@ -2181,7 +2181,7 @@ Outputs:
 
 ## File: test/tap-stack.int.test.ts
 
-```ts
+```typescript
 // Ultra-Dynamic CloudFormation Stack Integration Tests - Zero Hardcoded Values
 import { exec } from 'child_process';
 import https from 'https';

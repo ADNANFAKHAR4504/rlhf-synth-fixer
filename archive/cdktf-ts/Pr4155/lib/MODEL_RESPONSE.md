@@ -1,10 +1,10 @@
-````ts
+````typescript
 
  I'll create a production-ready CDKTF project in TypeScript for a multi-availability zone AWS environment. Here's the complete implementation:
 
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
@@ -500,7 +500,7 @@ export class S3Module extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
@@ -724,7 +724,7 @@ You'll also need these configuration files:
 
 ### main.ts
 
-```ts
+```typescript
 import { App } from 'cdktf';
 import { TapStack } from './lib/tap-stack';
 const app = new App();

@@ -10,7 +10,7 @@ Deployment fails immediately during the `terraform plan` phase with a "Configura
 
 **Actual Failure (MODEL\_RESPONSE.md):**
 
-```ts
+```typescript
 // DatabaseModule - L178-185
 new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(this, "db-secret-version", {
   secretId: this.secretsManager.id,
@@ -27,7 +27,7 @@ new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(this, "db-secret
 
 **Fix Applied (IDEAL\_RESPONSE.md):**
 
-```ts
+```typescript
 // DatabaseModule - L204-213
 new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
   this,
@@ -57,7 +57,7 @@ The model used incorrect object access syntax (`.get(i)`) to retrieve an Availab
 
 **Actual Failure (MODEL\_RESPONSE.md - NetworkingModule):**
 
-```ts
+```typescript
 // NetworkingModule - L63
 for (let i = 0; i < 3; i++) {
   const publicSubnet = new aws.subnet.Subnet(this, `public-subnet-${i}`, {
@@ -68,7 +68,7 @@ for (let i = 0; i < 3; i++) {
 // ...
 ```
 **Fix Applied (IDEAL\_RESPONSE.md - NetworkingModule):**
-```ts
+```typescript
 // NetworkingModule - L4, L71
 import { Fn } from 'cdktf'; // Must import Fn helper
 // ...
@@ -87,7 +87,7 @@ The model provided a numerical literal (`30`) for the `deregistrationDelay` prop
 **Result:**
 Potential **deployment failure** or runtime warning due to schema validation requiring a string type.
 **Actual Failure (MODEL\_RESPONSE.md):**
-```ts
+```typescript
 // aws.lbTargetGroup.LbTargetGroup definition - L470
 this.targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, "tg", {
   // ...
@@ -101,7 +101,7 @@ this.targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, "tg", {
 });
 ```
 **Fix Applied (IDEAL\_RESPONSE.md):**
-```ts
+```typescript
 // aws.lbTargetGroup.LbTargetGroup definition - L551
 this.targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, 'tg', {
   // ...

@@ -33,7 +33,7 @@ I'll create a comprehensive CDK TypeScript stack for your financial services tra
 
 ## Solution: CDK TypeScript Stack for Financial Services Trading Platform
 
-```ts
+```typescript
 // lib/tap-stack.ts
 
 import * as cdk from 'aws-cdk-lib';

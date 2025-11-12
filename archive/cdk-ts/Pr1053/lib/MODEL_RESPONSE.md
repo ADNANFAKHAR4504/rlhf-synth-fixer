@@ -2,7 +2,7 @@ I'll help you set up a cloud environment on AWS using CDK with TypeScript. Here'
 
 ## lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -73,7 +73,7 @@ export class VpcStack extends cdk.Stack {
 
 ## lib/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -170,7 +170,7 @@ export class ComputeStack extends cdk.Stack {
 
 ## lib/database-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -268,7 +268,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcStack } from './vpc-stack';

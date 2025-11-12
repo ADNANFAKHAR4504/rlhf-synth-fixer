@@ -9,7 +9,7 @@ This document details the critical infrastructure issues identified in the origi
 **Original Issue:**
 The model's response used nested stacks which created circular dependencies between stacks when trying to reference resources across regions. CloudFormation does not allow cross-stack references that create dependency cycles.
 
-```ts
+```typescript
 // Original approach with nested stacks
 const primaryNetwork = new NetworkStack(this, 'PrimaryNetwork', {...});
 const primarySecurity = new SecurityStack(this, 'PrimarySecurity', {...});
@@ -23,7 +23,7 @@ const primaryDatabase = new DatabaseStack(this, 'PrimaryDatabase', {
 **Fix Applied:**
 Consolidated all resources into a single flat stack, eliminating circular dependencies:
 
-```ts
+```typescript
 // Fixed approach with single stack
 export class SimplifiedStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: SimplifiedStackProps) {
@@ -43,7 +43,7 @@ export class SimplifiedStack extends cdk.Stack {
 **Original Issue:**
 The model configured ElastiCache with automatic failover enabled while specifying only 1 cache cluster, which is invalid:
 
-```ts
+```typescript
 // Original incorrect configuration
 new elasticache.CfnReplicationGroup(this, 'CacheReplicationGroup', {
   numCacheClusters: 3,  // Model had 3 but changed to 1 for single region
@@ -54,7 +54,7 @@ new elasticache.CfnReplicationGroup(this, 'CacheReplicationGroup', {
 **Fix Applied:**
 Disabled automatic failover for single-node configuration:
 
-```ts
+```typescript
 // Fixed configuration
 new elasticache.CfnReplicationGroup(this, 'Cache', {
   numCacheClusters: 1,
@@ -81,7 +81,7 @@ Simplified to a robust single-region architecture with multi-AZ for high availab
 **Original Issue:**
 The model used RETAIN and SNAPSHOT removal policies, preventing stack deletion during testing:
 
-```ts
+```typescript
 // Original - prevents deletion
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 deletionProtection: true,
@@ -90,7 +90,7 @@ deletionProtection: true,
 **Fix Applied:**
 Set appropriate removal policies for test environments:
 
-```ts
+```typescript
 // Fixed - allows cleanup
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 deletionProtection: false,
@@ -101,7 +101,7 @@ deletionProtection: false,
 **Original Issue:**
 The model attempted to enable automatic rotation for database secrets without providing a rotation Lambda:
 
-```ts
+```typescript
 // Original - incomplete rotation setup
 this.databaseSecret.addRotationSchedule('RotationSchedule', {
   automaticallyAfter: cdk.Duration.days(30),
@@ -117,7 +117,7 @@ Removed automatic rotation schedule to avoid deployment errors. For production, 
 **Original Issue:**
 ECS tasks could not mount EFS volumes due to missing security group rules and permissions:
 
-```ts
+```typescript
 // Original - missing proper security configuration
 taskDefinition.addVolume({
   name: volumeName,
@@ -131,7 +131,7 @@ taskDefinition.addVolume({
 **Fix Applied:**
 Simplified EFS configuration and added proper security group rules:
 
-```ts
+```typescript
 // Fixed - proper security setup
 taskDefinition.addVolume({
   name: 'efs',

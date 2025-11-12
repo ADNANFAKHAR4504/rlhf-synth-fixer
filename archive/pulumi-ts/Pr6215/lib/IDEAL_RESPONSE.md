@@ -4,7 +4,7 @@ This is the corrected implementation with improvements for production readiness.
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as k8s from "@pulumi/kubernetes";
 

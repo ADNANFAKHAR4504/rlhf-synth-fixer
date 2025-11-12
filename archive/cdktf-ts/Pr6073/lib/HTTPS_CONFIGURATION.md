@@ -7,7 +7,7 @@ This stack supports multiple HTTPS configuration modes for different deployment 
 ### Option 1: HTTP Only (Testing/Development)
 **Use this for quick testing without a domain or certificate.**
 
-```ts
+```typescript
 const stack = new TapStack(app, 'TapStack', {
   environmentSuffix: 'dev',
   enableHttps: false, // Disable HTTPS
@@ -25,7 +25,7 @@ const stack = new TapStack(app, 'TapStack', {
 ### Option 2: HTTPS with Existing Certificate
 **Use this when you already have a validated ACM certificate.**
 
-```ts
+```typescript
 const stack = new TapStack(app, 'TapStack', {
   environmentSuffix: 'prod',
   enableHttps: true,
@@ -54,7 +54,7 @@ aws acm describe-certificate --certificate-arn arn:aws:acm:us-east-1:xxx:certifi
 ### Option 3: HTTPS with New Certificate and Custom Domain
 **Use this for full production deployment with your own domain.**
 
-```ts
+```typescript
 const stack = new TapStack(app, 'TapStack', {
   environmentSuffix: 'prod',
   enableHttps: true,
@@ -89,7 +89,7 @@ For the current branch (testing), use **Option 1** or **Option 2**:
 
 Edit `bin/tap.ts` or `main.ts` to disable HTTPS temporarily:
 
-```ts
+```typescript
 const stack = new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix: environmentSuffix,
   stateBucket: 'iac-rlhf-tf-states',
@@ -125,7 +125,7 @@ aws acm request-certificate \
 ```
 
 ### 2. Use the Certificate ARN in your stack
-```ts
+```typescript
 const stack = new TapStack(app, `TapStack${environmentSuffix}`, {
   environmentSuffix: environmentSuffix,
   enableHttps: true,

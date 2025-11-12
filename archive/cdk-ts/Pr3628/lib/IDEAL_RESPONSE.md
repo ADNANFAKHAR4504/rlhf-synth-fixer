@@ -7,7 +7,7 @@ The ideal response should implement a comprehensive conversational AI platform u
 
 ### 1. Main Stack File (`lib/tap-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -537,7 +537,7 @@ exports.handler = async (event) => {
 
 ### 2. Application Entry Point (`bin/tap.ts`)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

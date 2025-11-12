@@ -4,7 +4,7 @@ This implementation creates a complete containerized application deployment usin
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -96,7 +96,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/network-stack.ts
 
-```ts
+```typescript
 /**
  * network-stack.ts
  *
@@ -316,7 +316,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## File: lib/ecs-stack.ts
 
-```ts
+```typescript
 /**
  * ecs-stack.ts
  *
@@ -706,7 +706,7 @@ export class EcsStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

@@ -1,6 +1,6 @@
 I'll help you build this comprehensive serverless application! Here's the updated `tap-stack.ts` file with all the AWS resources you need:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

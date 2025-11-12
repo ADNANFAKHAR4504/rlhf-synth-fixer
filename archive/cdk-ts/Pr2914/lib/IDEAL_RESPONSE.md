@@ -26,7 +26,7 @@ The complete working implementation includes:
 ### Critical Configuration Details
 
 #### VPC and Naming
-```ts
+```typescript
 // VPC tagged as tap-vpc-dev (not vpc-us-east-1-dev)
 cdk.Tags.of(vpc).add('Name', `tap-vpc-${environmentSuffix}`);
 
@@ -38,7 +38,7 @@ const environmentSuffix =
 ```
 
 #### Auto Scaling Groups
-```ts
+```typescript
 // Web ASG: min=2, max=10, desired=2 (not 1,3,2)
 const webAutoScalingGroup = new autoscaling.AutoScalingGroup(
   this,
@@ -65,7 +65,7 @@ const appAutoScalingGroup = new autoscaling.AutoScalingGroup(
 ```
 
 #### Database Configuration
-```ts
+```typescript
 // RDS configuration with correct version and Multi-AZ
 const database = new rds.DatabaseInstance(this, 'Database', {
   engine: rds.DatabaseInstanceEngine.mysql({
@@ -81,7 +81,7 @@ const database = new rds.DatabaseInstance(this, 'Database', {
 ```
 
 #### Security Groups Architecture
-```ts
+```typescript
 // 4 Security Groups (not 3):
 // 1. ALB SG: web-us-east-1-alb-sg-dev (HTTP/HTTPS from internet)
 // 2. Web SG: web-us-east-1-ec2-sg-dev (HTTP from ALB)  
@@ -108,7 +108,7 @@ dbSecurityGroup.addIngressRule(
 ```
 
 #### Scaling Policies
-```ts
+```typescript
 // Single scaling policy with multiple steps (not separate up/down policies)
 webAutoScalingGroup.scaleOnMetric('WebScaleUp', {
   metric: new cloudwatch.Metric({
@@ -188,7 +188,7 @@ webAutoScalingGroup.scaleOnMetric('WebScaleUp', {
 
 The complete `lib/tap-stack.ts` file (511 lines) that achieves 100% test coverage:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

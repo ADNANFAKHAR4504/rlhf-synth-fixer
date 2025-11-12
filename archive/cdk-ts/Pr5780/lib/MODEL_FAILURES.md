@@ -19,7 +19,7 @@ This document outlines the failures found during code review and the fixes that 
 - This enables zero-downtime deployments where new versions are deployed to the green environment, tested, and traffic is shifted from blue to green
 
 **Code Changes:**
-```ts
+```typescript
 // Blue Target Group (primary)
 const blueTargetGroup = new elbv2.ApplicationTargetGroup(
   this,
@@ -74,7 +74,7 @@ const testListener = alb.addListener(`${envPrefix}-test-listener`, {
 - This ensures resources are properly cleaned up when stacks are deleted
 
 **Code Changes:**
-```ts
+```typescript
 // Before
 removalPolicy: isProd ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: !isProd,

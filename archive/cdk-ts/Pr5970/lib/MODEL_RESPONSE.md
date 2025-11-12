@@ -38,7 +38,7 @@ For this example, I'll use "acme" as company and "microservice" as service.
 ### Answer 
 ---
 
-```ts
+```typescript
 // main.ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';
@@ -70,7 +70,7 @@ new TapStack(app, 'acme-microservice-pipeline-stack', {
 app.synth();
 ```
 
-```ts
+```typescript
 // tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';

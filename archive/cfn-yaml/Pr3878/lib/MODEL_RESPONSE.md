@@ -1097,7 +1097,7 @@ Outputs:
 
 ## tests/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import { Template } from 'aws-cdk-lib/assertions';
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';
@@ -1392,7 +1392,7 @@ describe('TapStack Unit Tests', () => {
 
 ## tests/tap-stack.int.test.ts
 
-```ts
+```typescript
 import { Template } from 'aws-cdk-lib/assertions';
 import * as yaml from 'js-yaml';
 import * as fs from 'fs';

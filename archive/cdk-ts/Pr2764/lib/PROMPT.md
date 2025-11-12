@@ -42,7 +42,7 @@ Important implementation notes:
 
 Please update the existing file at ./lib/tap-stack.ts with all the CDK code. The current file has the following content:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

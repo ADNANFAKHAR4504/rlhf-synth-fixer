@@ -6,7 +6,7 @@
 **Issue Location**: `modules.ts` - VpcModule class
 
 **Model Response Approach**:
-```ts
+```typescript
 const azs = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(this, 'azs', {
   state: 'available'
 });
@@ -26,7 +26,7 @@ for (let i = 0; i < config.azCount; i++) {
 - No guarantee that the requested number of AZs actually exist in the region
 
 **Ideal Response Approach**:
-```ts
+```typescript
 export interface VpcModuleConfig {
   availabilityZones: string[];  // Explicit AZ array
   // ...
@@ -58,7 +58,7 @@ config.availabilityZones.forEach((az, i) => {
 **Issue Location**: `modules.ts` - S3Module class
 
 **Model Response Approach**:
-```ts
+```typescript
 this.bucketName = `${config.bucketPrefix}-${Date.now()}`;
 ```
 
@@ -70,7 +70,7 @@ this.bucketName = `${config.bucketPrefix}-${Date.now()}`;
 - Violates core Terraform principle of declarative infrastructure
 
 **Ideal Response Approach**:
-```ts
+```typescript
 this.bucketName = `${config.bucketPrefix}-ts`;
 ```
 
@@ -94,7 +94,7 @@ this.bucketName = `${config.bucketPrefix}-ts`;
 **Issue Location**: `modules.ts` - RdsModule class
 
 **Model Response Approach**:
-```ts
+```typescript
 export interface RdsModuleConfig {
   masterPasswordParameterName: string;
   // ...
@@ -120,7 +120,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 - State file becomes a security liability
 
 **Ideal Response Approach**:
-```ts
+```typescript
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   manageMasterUserPassword: true,  // AWS Secrets Manager integration
   // ...
@@ -148,7 +148,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 **Issue Location**: `modules.ts` - S3Module class
 
 **Model Response Approach**:
-```ts
+```typescript
 new aws.s3BucketVersioning.S3BucketVersioning(this, 'versioning', {
   // Wrong resource type
 });
@@ -169,7 +169,7 @@ new aws.s3BucketLogging.S3BucketLogging(this, 'logging', {
 - Reflects outdated provider documentation usage
 
 **Ideal Response Approach**:
-```ts
+```typescript
 new aws.s3BucketVersioning.S3BucketVersioningA(this, 'versioning', {
   // Correct resource type
 });
@@ -200,7 +200,7 @@ new aws.s3BucketLogging.S3BucketLoggingA(this, 'logging', {
 **Issue Location**: `tap-stack.ts` - Logs bucket creation
 
 **Model Response Approach**:
-```ts
+```typescript
 const logsBucket = new S3Module(this, 'logs-bucket', {
   bucketPrefix: 'tap-logs',
   // ... no ACL consideration
@@ -215,7 +215,7 @@ const logsBucket = new S3Module(this, 'logs-bucket', {
 - Missing proper bucket policies for service access
 
 **Ideal Response Approach**:
-```ts
+```typescript
 // Create bucket
 const logsBucket = new aws.s3Bucket.S3Bucket(this, 'logs-bucket', {
   bucket: 'tap-logs-655',
@@ -260,7 +260,7 @@ new aws.s3BucketAcl.S3BucketAcl(this, 'logs-bucket-acl', {
 **Issue Location**: `modules.ts` - CloudTrailModule class
 
 **Model Response Approach**:
-```ts
+```typescript
 const logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'trail-log-group', {
   name: `/aws/cloudtrail/${id}`,
   retentionInDays: 90,  // MISSING IN IDEAL BUT PRESENT IN MODEL
@@ -277,7 +277,7 @@ This is actually an area where the model response is slightly better than the id
 - Follows AWS cost optimization best practices
 
 **Ideal Response Issue**:
-```ts
+```typescript
 const logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
   this,
   'trail-log-group',
@@ -298,7 +298,7 @@ const logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
 **Issue Location**: `tap-stack.ts` - S3 bucket policy
 
 **Model Response Approach**:
-```ts
+```typescript
 const elbAccountId = '127311923021'; // US East 1 ELB Account ID
 ```
 
@@ -309,7 +309,7 @@ const elbAccountId = '127311923021'; // US East 1 ELB Account ID
 - No dynamic region detection
 
 **Ideal Response Approach**:
-```ts
+```typescript
 const ELB_SERVICE_ACCOUNT_IDS: { [key: string]: string } = {
   'us-east-1': '127311923021',
   'us-east-2': '033677994240',
@@ -339,7 +339,7 @@ const elbServiceAccountId = ELB_SERVICE_ACCOUNT_IDS[awsRegion] ||
 **Issue Location**: `modules.ts` - RdsModule class
 
 **Model Response Approach**:
-```ts
+```typescript
 const parameterGroup = new aws.dbParameterGroup.DbParameterGroup(
   this,
   'db-parameter-group',
@@ -363,7 +363,7 @@ const parameterGroup = new aws.dbParameterGroup.DbParameterGroup(
 
 **Analysis**:
 Both responses share this weakness. A better approach would be:
-```ts
+```typescript
 // Extract major version from engineVersion
 const majorVersion = config.engineVersion.split('.').slice(0, 2).join('.');
 const family = `${config.engine}${majorVersion}`;
@@ -379,7 +379,7 @@ const family = `${config.engine}${majorVersion}`;
 **Issue Location**: `modules.ts` - Ec2Module class
 
 **Model Response Approach**:
-```ts
+```typescript
 tag: Object.entries(config.tags).map(([key, value]) => ({
   key,
   value,
@@ -388,7 +388,7 @@ tag: Object.entries(config.tags).map(([key, value]) => ({
 ```
 
 **Ideal Response Approach**:
-```ts
+```typescript
 tag: Object.entries(config.tags).map(([key, value]) => ({
   key,
   value,
@@ -404,7 +404,7 @@ Both responses use identical approach, which is correct for CDKTF.
 **Issue Location**: `tap-stack.ts` - Additional Security Configurations
 
 **Model Response Approach**:
-```ts
+```typescript
 // WAF for CloudFront
 const wafWebAcl = new aws.wafv2WebAcl.Wafv2WebAcl(this, 'waf-web-acl', {
   name: 'tap-waf-acl',
@@ -447,7 +447,7 @@ const configRole = new aws.iamRole.IamRole(this, 'config-role', {
 **Issue Location**: `tap-stack.ts` - CloudFront module instantiation
 
 **Model Response Approach**:
-```ts
+```typescript
 const cloudFrontModule = new CloudFrontModule(this, 'cdn', {
   certificateArn: route53Module.certificate.arn,
   domainNames: [domainName, `www.${domainName}`],
@@ -462,7 +462,7 @@ const cloudFrontModule = new CloudFrontModule(this, 'cdn', {
 - No multi-provider configuration for us-east-1 certificate
 
 **Ideal Response Approach**:
-```ts
+```typescript
 viewerCertificate: {
   cloudfrontDefaultCertificate: true,
 }
@@ -485,14 +485,14 @@ viewerCertificate: {
 **Issue Location**: `modules.ts` - RdsModule class
 
 **Model Response Approach**:
-```ts
+```typescript
 monitoringRoleArn: new aws.iamRole.IamRole(this, 'rds-monitoring-role', {
   // ... inline role creation
 }).arn,
 ```
 
 **Ideal Response Approach**:
-```ts
+```typescript
 monitoringRoleArn: new aws.iamRole.IamRole(this, 'rds-monitoring-role', {
   // ... inline role creation
 }).arn,
@@ -502,7 +502,7 @@ monitoringRoleArn: new aws.iamRole.IamRole(this, 'rds-monitoring-role', {
 Both responses use identical approach. This is acceptable but not ideal.
 
 **Better Practice Would Be**:
-```ts
+```typescript
 const monitoringRole = new aws.iamRole.IamRole(this, 'rds-monitoring-role', {
   // ...
 });
@@ -517,7 +517,7 @@ This allows reuse and better resource management.
 **Issue Location**: `modules.ts` - VpcModule class
 
 **Model Response Approach**:
-```ts
+```typescript
 new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
   trafficType: 'ALL',
   vpcId: this.vpc.id,
@@ -534,7 +534,7 @@ new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
 - Incorrect architecture for S3-based flow logs
 
 **Ideal Response Approach**:
-```ts
+```typescript
 new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
   trafficType: 'ALL',
   vpcId: this.vpc.id,
@@ -560,7 +560,7 @@ new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
 **Issue Location**: `tap-stack.ts` - S3 bucket policy for logs
 
 **Model Response Approach**:
-```ts
+```typescript
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'alb-logs-bucket-policy', {
   bucket: logsBucket.bucket.id,
   policy: JSON.stringify({
@@ -577,7 +577,7 @@ new aws.s3BucketPolicy.S3BucketPolicy(this, 'alb-logs-bucket-policy', {
 - No explicit dependency management
 
 **Ideal Response Approach**:
-```ts
+```typescript
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'logs-bucket-policy', {
   bucket: logsBucket.id,
   policy: JSON.stringify({

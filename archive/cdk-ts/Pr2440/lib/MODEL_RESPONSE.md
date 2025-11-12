@@ -1,6 +1,6 @@
 I'll help you implement a complete, production-ready AWS infrastructure using CDK TypeScript. Here's the comprehensive implementation for your `lib/tap-stack.ts` file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

@@ -9,7 +9,7 @@ This document analyzes the shortcomings of the model's initial infrastructure co
 **Requirement**: Configure Provisioned Concurrency for the Lambda function with Application Auto Scaling.
 
 **Model Response (Lines 289-294)**:
-```ts
+```typescript
 const alias = new lambda.Alias(this, 'AppFunctionAlias', {
   aliasName: 'production',
   version: appFunction.currentVersion,
@@ -23,7 +23,7 @@ const alias = new lambda.Alias(this, 'AppFunctionAlias', {
 - CDK's `currentVersion` doesn't work reliably with provisioned concurrency during stack creation
 
 **Correct Implementation**:
-```ts
+```typescript
 // Create alias without provisioned concurrency (removed due to deployment issues)
 const version = appFunction.currentVersion;
 const alias = new lambda.Alias(this, 'AppFunctionAlias', {
@@ -42,7 +42,7 @@ const alias = new lambda.Alias(this, 'AppFunctionAlias', {
 **Requirement**: Create an Application Auto Scaling policy that adjusts concurrency based on a custom metric.
 
 **Model Response (Lines 296-324)**:
-```ts
+```typescript
 const scalingTarget = new applicationautoscaling.ScalableTarget(
   this,
   'ScalableTarget',
@@ -69,7 +69,7 @@ scalingTarget.scaleOnMetric('ScaleOnCustomMetric', {
 - Auto-scaling only works with provisioned concurrency, not on-demand concurrency
 
 **Correct Implementation**:
-```ts
+```typescript
 // Note: Auto-scaling for provisioned concurrency removed since provisioned concurrency is disabled
 // The function will use on-demand concurrency scaling instead
 ```
@@ -83,7 +83,7 @@ scalingTarget.scaleOnMetric('ScaleOnCustomMetric', {
 **Requirement**: Enable access logging to CloudWatch for API Gateway.
 
 **Model Response (Lines 326-348)**:
-```ts
+```typescript
 const apiLogGroup = new logs.LogGroup(this, 'ApiLogGroup', {
   retention: logs.RetentionDays.ONE_WEEK,
 });
@@ -105,7 +105,7 @@ const api = new apigateway.RestApi(this, 'AppApi', {
 - This is a one-time account setup that CDK cannot automatically configure
 
 **Correct Implementation**:
-```ts
+```typescript
 // CloudWatch logging for API Gateway completely disabled
 // Requires account-level CloudWatch Logs role ARN configuration
 // Can be enabled after setting up the role in AWS account settings
@@ -130,7 +130,7 @@ const api = new apigateway.RestApi(this, 'AppApi', {
 **Requirement**: Use latest Lambda runtime.
 
 **Model Response (Line 216)**:
-```ts
+```typescript
 const appFunction = new lambda.Function(this, 'AppFunction', {
   runtime: lambda.Runtime.NODEJS_18_X,
   // ...
@@ -142,7 +142,7 @@ const appFunction = new lambda.Function(this, 'AppFunction', {
 - Lambda function failed with error: "Cannot find module 'aws-sdk'"
 
 **Correct Implementation**:
-```ts
+```typescript
 const appFunction = new lambda.Function(this, 'AppFunction', {
   runtime: lambda.Runtime.NODEJS_22_X, // Latest runtime
   handler: 'index.handler',
@@ -165,7 +165,7 @@ import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 ### 5. Lambda Code Deployment Method
 
 **Model Response (Lines 218-272)**:
-```ts
+```typescript
 code: lambda.Code.fromInline(`
   const AWS = require('aws-sdk');
   // ... inline code
@@ -178,7 +178,7 @@ code: lambda.Code.fromInline(`
 - Cannot include `package.json` with `"type": "module"` needed for ES modules
 
 **Correct Implementation**:
-```ts
+```typescript
 code: lambda.Code.fromAsset('lib/lambdas/app-function'),
 ```
 
@@ -200,7 +200,7 @@ lib/lambdas/app-function/
 **Requirement**: Support multiple environments with proper resource isolation.
 
 **Model Response**:
-```ts
+```typescript
 const appBucket = new s3.Bucket(this, 'AppBucket', {
   encryption: s3.BucketEncryption.S3_MANAGED,
   // No bucket name specified
@@ -224,7 +224,7 @@ const configParam = new ssm.StringParameter(this, 'ConfigParameter', {
 - Impossible to deploy multiple environments in the same account/region
 
 **Correct Implementation**:
-```ts
+```typescript
 const appBucket = new s3.Bucket(this, 'AppBucket', {
   bucketName: `app-bucket-${this.account}-${this.region}-${environmentSuffix}`,
   // ...
@@ -255,7 +255,7 @@ const appSecret = new secretsmanager.Secret(this, 'AppSecret', {
 **Requirement**: Least-privilege IAM permissions.
 
 **Model Response (Lines 162-212)**:
-```ts
+```typescript
 const lambdaRole = new iam.Role(this, 'LambdaRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
   managedPolicies: [
@@ -284,7 +284,7 @@ const lambdaRole = new iam.Role(this, 'LambdaRole', {
 - Doesn't follow CDK best practices
 
 **Better Implementation**:
-```ts
+```typescript
 const lambdaRole = new iam.Role(this, 'LambdaRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
   managedPolicies: [
@@ -308,7 +308,7 @@ appSecret.grantRead(lambdaRole);
 ### 8. Missing Resource Cleanup Configuration
 
 **Model Response**:
-```ts
+```typescript
 const appBucket = new s3.Bucket(this, 'AppBucket', {
   encryption: s3.BucketEncryption.S3_MANAGED,
   // No removal policy
@@ -328,7 +328,7 @@ const appTable = new dynamodb.Table(this, 'AppTable', {
 - Increases costs for temporary PR environments
 
 **Correct Implementation**:
-```ts
+```typescript
 const appBucket = new s3.Bucket(this, 'AppBucket', {
   bucketName: `app-bucket-${this.account}-${this.region}-${environmentSuffix}`,
   encryption: s3.BucketEncryption.S3_MANAGED,
@@ -352,7 +352,7 @@ const appTable = new dynamodb.Table(this, 'AppTable', {
 ### 9. API Gateway Integration Configuration
 
 **Model Response (Lines 350-353)**:
-```ts
+```typescript
 const integration = new apigateway.LambdaIntegration(appFunction, {
   requestTemplates: { 'application/json': '{ "statusCode": "200" }' },
 });
@@ -364,7 +364,7 @@ const integration = new apigateway.LambdaIntegration(appFunction, {
 - Doesn't utilize the production alias created for versioning
 
 **Correct Implementation**:
-```ts
+```typescript
 const integration = new apigateway.LambdaIntegration(alias);
 ```
 
@@ -377,7 +377,7 @@ const integration = new apigateway.LambdaIntegration(alias);
 **Requirement**: Tag all resources with 'environment' and 'project'.
 
 **Model Response (Lines 80-82)**:
-```ts
+```typescript
 // Default tags for all resources
 cdk.Tags.of(this).add('environment', 'production');
 cdk.Tags.of(this).add('project', 'serverless-app');
@@ -389,7 +389,7 @@ cdk.Tags.of(this).add('project', 'serverless-app');
 - All deployments (dev, staging, prod, PRs) would be tagged as 'production'
 
 **Correct Implementation**:
-```ts
+```typescript
 // Default tags for all resources
 cdk.Tags.of(this).add('project', 'serverless-app');
 // Environment tag should be dynamic based on deployment
@@ -402,7 +402,7 @@ cdk.Tags.of(this).add('project', 'serverless-app');
 ### 11. DynamoDB Stream Event Source Configuration
 
 **Model Response (Lines 388-394)**:
-```ts
+```typescript
 streamFunction.addEventSource(
   new lambdaEventSources.DynamoEventSource(appTable, {
     startingPosition: lambda.StartingPosition.TRIM_HORIZON,
@@ -417,7 +417,7 @@ streamFunction.addEventSource(
 - TypeScript compilation error
 
 **Correct Implementation**:
-```ts
+```typescript
 streamFunction.addEventSource(
   new DynamoEventSource(appTable, {
     startingPosition: lambda.StartingPosition.TRIM_HORIZON,
@@ -436,7 +436,7 @@ streamFunction.addEventSource(
 ### 12. Reserved Concurrent Executions
 
 **Model Response (Line 286)**:
-```ts
+```typescript
 reservedConcurrentExecutions: 100,
 ```
 
@@ -453,7 +453,7 @@ reservedConcurrentExecutions: 100,
 **Model Response**: Single monolithic stack.
 
 **Correct Implementation**:
-```ts
+```typescript
 // lib/tap-stack.ts - Main orchestrator
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {

@@ -30,7 +30,7 @@ lib/
 
 **lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import path from 'path';
@@ -127,7 +127,7 @@ export class TapStack extends cdk.Stack {
 
 **lib/pipeline/code-pipeline-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -427,7 +427,7 @@ export class CodePipelineStack extends Construct {
 
 **lib/pipeline/build-stage.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
@@ -683,7 +683,7 @@ export class BuildStage extends Construct {
 
 **lib/pipeline/deploy-stage.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
 import * as elasticbeanstalk from 'aws-cdk-lib/aws-elasticbeanstalk';
@@ -919,7 +919,7 @@ export class DeployStage extends Construct {
 
 **lib/security/secrets-config.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -1053,7 +1053,7 @@ export class SecurityConfig extends Construct {
 
 **lib/monitoring/cloudwatch-alarms.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -1252,7 +1252,7 @@ export class MonitoringStack extends Construct {
 
 **lib/monitoring/notifications.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -1326,7 +1326,7 @@ export class SlackNotifier extends Construct {
 
 **lib/lambda/slack-notifier.ts**
 
-```ts
+```typescript
 // eslint-disable-next-line import/no-extraneous-dependencies
 import { Context, SNSEvent } from 'aws-lambda';
 import axios from 'axios';
@@ -1622,7 +1622,7 @@ CMD ["node", "dist/index.js"]
 
 **bin/tap.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

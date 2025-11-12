@@ -1,6 +1,6 @@
 I'll create a comprehensive CDK stack that addresses all your security requirements. Here's the implementation:
 
-```ts
+```typescript
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -576,7 +576,7 @@ export class TapStack extends cdk.Stack {
 
 ## Usage Example:
 
-```ts
+```typescript
 // app.ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tap-stack';

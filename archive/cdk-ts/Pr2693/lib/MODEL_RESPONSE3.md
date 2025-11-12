@@ -1,6 +1,6 @@
 The PostgreSQL version format is incorrect. Let me fix that issue:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

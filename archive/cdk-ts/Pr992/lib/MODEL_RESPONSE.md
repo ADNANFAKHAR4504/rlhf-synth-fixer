@@ -147,7 +147,7 @@ I'll create a production-ready AWS CDK v2 TypeScript project with the specified 
 
 ### 4. `bin/myapp.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -165,7 +165,7 @@ new MyAppStack(app, 'MyAppStack', {
 
 ### 5. `lib/myapp-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

@@ -21,7 +21,7 @@ The implementation creates a complete serverless infrastructure with:
 
 ### lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -1102,7 +1102,7 @@ exports.handler = async (event) => {
 
 ### bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

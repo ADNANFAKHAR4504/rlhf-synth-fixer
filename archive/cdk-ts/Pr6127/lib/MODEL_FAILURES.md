@@ -12,7 +12,7 @@ The MODEL_RESPONSE.md contained a comprehensive multi-region CDN implementation 
 
 **MODEL_RESPONSE Issue**: Used deprecated `origins.S3Origin` instead of the recommended `origins.S3BucketOrigin`.
 
-```ts
+```typescript
 // INCORRECT - MODEL_RESPONSE
 origin: new origins.S3Origin(primaryBucket, {
   originAccessIdentity: oai,
@@ -21,7 +21,7 @@ origin: new origins.S3Origin(primaryBucket, {
 
 **IDEAL_RESPONSE Fix**: Updated to use the current `origins.S3BucketOrigin` API.
 
-```ts
+```typescript
 // CORRECT - IDEAL_RESPONSE
 origin: new origins.S3BucketOrigin(primaryBucket, {
   originAccessIdentity: oai,
@@ -42,7 +42,7 @@ origin: new origins.S3BucketOrigin(primaryBucket, {
 
 **MODEL_RESPONSE Issue**: Attempted to set `originRequestPolicyId` at the Distribution level, which doesn't exist in the CDK API.
 
-```ts
+```typescript
 // INCORRECT - MODEL_RESPONSE
 const distribution = new cloudfront.Distribution(this, 'CDNDistribution', {
   // ... other props
@@ -52,7 +52,7 @@ const distribution = new cloudfront.Distribution(this, 'CDNDistribution', {
 
 **IDEAL_RESPONSE Fix**: Moved origin request policy to individual behavior configurations.
 
-```ts
+```typescript
 // CORRECT - IDEAL_RESPONSE
 defaultBehavior: {
   // ... other behavior props
@@ -74,14 +74,14 @@ defaultBehavior: {
 
 **MODEL_RESPONSE Issue**: Used `removalPolicy: cdk.RemovalPolicy.RETAIN` which prevents resource cleanup.
 
-```ts
+```typescript
 // PROBLEMATIC - MODEL_RESPONSE
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 ```
 
 **IDEAL_RESPONSE Fix**: Changed to `DESTROY` for clean resource management.
 
-```ts
+```typescript
 // CORRECT - IDEAL_RESPONSE
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 ```
@@ -118,7 +118,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 
 **IDEAL_RESPONSE Fix**: Used `CompositePrincipal` with both `lambda.amazonaws.com` and `edgelambda.amazonaws.com`.
 
-```ts
+```typescript
 // CORRECT - IDEAL_RESPONSE
 assumedBy: new iam.CompositePrincipal(
   new iam.ServicePrincipal('lambda.amazonaws.com'),

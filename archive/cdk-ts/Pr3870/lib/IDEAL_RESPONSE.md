@@ -8,7 +8,7 @@ This implementation successfully deploys a serverless shipment tracking system w
 
 The stack uses standard Lambda functions instead of NodejsFunction to avoid Docker dependency:
 
-```ts
+```typescript
 const statusUpdateFunction = new lambda.Function(
   this,
   'StatusUpdateFunction',

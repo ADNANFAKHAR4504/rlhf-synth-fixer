@@ -1,6 +1,6 @@
 ## Project Structure
 
-```ts
+```typescript
 // package.json
 {
   "name": "serverless-cdk-infrastructure",
@@ -38,7 +38,7 @@
 
 ## Main CDK Stack Implementation
 
-```ts
+```typescript
 // lib/infrastructure.ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -780,7 +780,7 @@ exports.handler = async (event, context) => {
 
 ## Application Entry Point
 
-```ts
+```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
@@ -810,7 +810,7 @@ new TapStack(app, stackName, {
 });
 ```
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

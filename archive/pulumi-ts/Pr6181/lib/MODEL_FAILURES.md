@@ -13,7 +13,7 @@ While the MODEL_RESPONSE provided a functional multi-region DR solution, typical
 **Impact Level**: Critical (Deployment Blocker)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const lambda = new aws.lambda.Function('lambda', {
   vpcConfig: {
     subnetIds: privateSubnets,
@@ -26,7 +26,7 @@ const lambda = new aws.lambda.Function('lambda', {
 **Problem**: Lambda in VPC without NAT Gateway or VPC endpoints cannot access DynamoDB, S3, or other AWS services.
 
 **IDEAL_RESPONSE Fix**: Remove VPC configuration entirely for cost optimization and simplicity:
-```ts
+```typescript
 const lambda = new aws.lambda.Function('lambda', {
   // No vpcConfig - Lambda runs in AWS-managed VPC
   // Can access DynamoDB and S3 via AWS service endpoints
@@ -46,7 +46,7 @@ const lambda = new aws.lambda.Function('lambda', {
 **Impact Level**: High (Deployment Blocker)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const hostedZone = new aws.route53.Zone('zone', {
   name: 'example.com',
 });
@@ -60,7 +60,7 @@ const healthCheck = new aws.route53.HealthCheck('health', {
 **Problem**: Route 53 hosted zones require domain ownership verification, which isn't available in synthetic test environments.
 
 **IDEAL_RESPONSE Fix**: Omit Route 53 configuration, document as production enhancement:
-```ts
+```typescript
 // Route 53 omitted for testing - can be added for production
 // Lambda Function URLs provide direct HTTP access for validation
 ```
@@ -78,7 +78,7 @@ const healthCheck = new aws.route53.HealthCheck('health', {
 **Impact Level**: High (Build Failure)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const bucket = new aws.s3.Bucket('bucket', { ... });
 const policy = JSON.stringify({
   Resource: bucket.arn,  // ❌ Incorrect - bucket.arn is Output<string>
@@ -88,7 +88,7 @@ const policy = JSON.stringify({
 **Problem**: Directly using Pulumi Outputs in string contexts causes type errors.
 
 **IDEAL_RESPONSE Fix**: Use `.apply()` for proper Output handling:
-```ts
+```typescript
 policy: bucket.arn.apply(arn =>
   JSON.stringify({
     Resource: arn,  // ✅ Correct - arn is unwrapped string
@@ -107,7 +107,7 @@ policy: bucket.arn.apply(arn =>
 **Impact Level**: High (Deployment Failure)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const primaryBucket = new aws.s3.Bucket('primary', {
   replicationConfiguration: {
     rules: [{
@@ -124,7 +124,7 @@ const secondaryBucket = new aws.s3.Bucket('secondary', { ... });
 **Problem**: Creating primary bucket with replication before secondary bucket exists causes deployment failure.
 
 **IDEAL_RESPONSE Fix**: Explicit dependency ordering:
-```ts
+```typescript
 // 1. Create secondary bucket first
 const secondaryBucket = new aws.s3.Bucket('secondary', { ... });
 
@@ -145,7 +145,7 @@ const primaryBucket = new aws.s3.Bucket('primary', {
 **Impact Level**: Medium (Runtime Failure)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const lambdaUrl = new aws.lambda.FunctionUrl('url', {
   functionName: lambda.name,
   authorizationType: 'NONE',
@@ -156,7 +156,7 @@ const lambdaUrl = new aws.lambda.FunctionUrl('url', {
 **Problem**: Function URL created but Lambda Permission not added, resulting in 403 errors.
 
 **IDEAL_RESPONSE Fix**: Explicit Lambda Permission resource:
-```ts
+```typescript
 const lambdaUrl = new aws.lambda.FunctionUrl('url', { ... });
 
 const permission = new aws.lambda.Permission('permission', {
@@ -178,7 +178,7 @@ const permission = new aws.lambda.Permission('permission', {
 **Impact Level**: Critical (Security Vulnerability)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const dbPassword = 'Admin123!';  // ❌ Hardcoded password
 
 const cluster = new aws.rds.Cluster('cluster', {
@@ -189,7 +189,7 @@ const cluster = new aws.rds.Cluster('cluster', {
 **Problem**: Sensitive credentials in code are exposed in version control, logs, and state files.
 
 **IDEAL_RESPONSE Fix**: Use AWS Secrets Manager (when databases are used):
-```ts
+```typescript
 const secret = new aws.secretsmanager.Secret('db-password');
 const secretVersion = new aws.secretsmanager.SecretVersion('db-password-v1', {
   secretId: secret.id,
@@ -216,7 +216,7 @@ const secretVersion = new aws.secretsmanager.SecretVersion('db-password-v1', {
 **Problem**: Incomplete test coverage misses bugs and doesn't validate all code paths.
 
 **IDEAL_RESPONSE Fix**: Comprehensive test suite with Pulumi mocking:
-```ts
+```typescript
 pulumi.runtime.setMocks({
   newResource: function (args) {
     // Proper mocking of all resource types
@@ -247,7 +247,7 @@ pulumi.runtime.setMocks({
 **Impact Level**: Medium (Deployment Conflict)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const table = new aws.dynamodb.Table('table', {
   name: 'tap-global',  // ❌ No environment suffix
 });
@@ -256,7 +256,7 @@ const table = new aws.dynamodb.Table('table', {
 **Problem**: Multiple deployments to same account/region cause name conflicts.
 
 **IDEAL_RESPONSE Fix**: Include environmentSuffix in all resource names:
-```ts
+```typescript
 const table = new aws.dynamodb.Table('table', {
   name: `tap-${environmentSuffix}-global`,  // ✅ Unique per environment
 });
@@ -273,7 +273,7 @@ const table = new aws.dynamodb.Table('table', {
 **Impact Level**: Medium (Connectivity Issue)
 
 **Typical MODEL_RESPONSE Issue** (when VPC is used):
-```ts
+```typescript
 const peeringConnection = new aws.ec2.VpcPeeringConnection('peering', {
   vpcId: primaryVpc.id,
   peerVpcId: secondaryVpc.id,
@@ -285,7 +285,7 @@ const peeringConnection = new aws.ec2.VpcPeeringConnection('peering', {
 **Problem**: VPC peering created but routes not configured, preventing cross-region communication.
 
 **IDEAL_RESPONSE Fix** (if VPC were used): Add route table entries:
-```ts
+```typescript
 const route = new aws.ec2.Route('peer-route', {
   routeTableId: primaryRouteTable.id,
   destinationCidrBlock: secondaryVpcCidr,
@@ -302,7 +302,7 @@ const route = new aws.ec2.Route('peer-route', {
 **Impact Level**: High (Deployment Failure)
 
 **Typical MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const provider = new aws.Provider('provider', {
   region: 'us-west-2',
 });
@@ -315,7 +315,7 @@ const resource = new aws.s3.Bucket('bucket', { ... });
 **Problem**: Resources not explicitly tied to provider end up in default region.
 
 **IDEAL_RESPONSE Fix**: Explicit provider in resource options:
-```ts
+```typescript
 const secondaryProvider = new aws.Provider('secondary', {
   region: 'us-west-2',
 });

@@ -16,7 +16,7 @@ The model used `lambda.Code.fromAsset()` without bundling configuration, which d
 
 ### Fix Applied
 Updated the construct to include bundling configuration:
-```ts
+```typescript
 code: lambda.Code.fromAsset(
   path.join(__dirname, '../lambda/user-profile'),
   {

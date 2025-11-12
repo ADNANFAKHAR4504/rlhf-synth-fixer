@@ -21,7 +21,7 @@ This document analyzes the failures in the MODEL_RESPONSE that required fixes to
 
 The model generated IAM policy code that failed to properly resolve Pulumi Outputs:
 
-```ts
+```typescript
 // MODEL_RESPONSE (line 263-305):
 const codePipelinePolicy = new aws.iam.Policy(
   `codepipeline-policy-${environmentSuffix}`,
@@ -59,7 +59,7 @@ o.apply(v => v.toJSON())
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 // IDEAL_RESPONSE (line 310-350):
 const codePipelinePolicy = new aws.iam.Policy(
   `codepipeline-policy-${environmentSuffix}`,
@@ -110,7 +110,7 @@ This is a fundamental Pulumi pattern that the model MUST learn:
 **Rule**: When using `pulumi.Output` values inside `JSON.stringify()`, `.apply()` callbacks, or string interpolation, ALL Outputs must be collected in `pulumi.all([...])` and destructured in the callback.
 
 **Pattern**:
-```ts
+```typescript
 // Identify all Outputs being used
 const output1 = resource1.someProperty;  // Output<string>
 const output2 = pulumi.output('value');   // Output<string>
@@ -145,7 +145,7 @@ pulumi.all([output1, output2, output3])
 
 The model's initial response used `artifactStore` (singular), which caused a TypeScript compilation error:
 
-```ts
+```typescript
 // MODEL_RESPONSE (line 331-369) - Initial attempt:
 const pipeline = new aws.codepipeline.Pipeline(
   `cicd-pipeline-${environmentSuffix}`,
@@ -172,7 +172,7 @@ specify known properties, but 'artifactStore' does not exist in type
 
 After TypeScript complained, the logical fix was to use `artifactStores` (plural) as an array and include the `region` field:
 
-```ts
+```typescript
 // First fix attempt:
 artifactStores: [
   {
@@ -190,7 +190,7 @@ sdk.helper_schema: region cannot be set for a single-region CodePipeline Pipelin
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 // IDEAL_RESPONSE (line 367-372):
 artifactStores: [
   {

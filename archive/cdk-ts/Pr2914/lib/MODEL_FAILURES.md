@@ -27,7 +27,7 @@ Cannot find version 8.0.35 for mysql (Service: Rds, Status Code: 400)
 **Root Cause**: Hardcoded MySQL version in the code that doesn't exist in AWS.
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (FAILED)
 engine: rds.DatabaseInstanceEngine.mysql({
   version: rds.MysqlEngineVersion.VER_8_0_35, // ❌ Not available
@@ -53,7 +53,7 @@ Performance Insights not supported for this configuration. (Service: Rds, Status
 **Root Cause**: t3.micro instances don't support Performance Insights feature.
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (FAILED)
 enablePerformanceInsights: true, // ❌ Not supported on t3.micro
 performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
@@ -116,7 +116,7 @@ enablePerformanceInsights: false, // ✅ Disabled for t3.micro compatibility
 - Auto Scaling Group metrics access pattern incorrect
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (FAILED)
 database.metricCpuUtilization() // ❌ Method doesn't exist
 

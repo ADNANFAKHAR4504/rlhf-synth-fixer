@@ -15,7 +15,7 @@ AWS: `arn:aws:iam::*:root`,
 **Root Cause**: Template literal used for a simple string that doesn't need interpolation.
 
 **Fix**: Changed to single quotes
-```ts
+```typescript
 AWS: 'arn:aws:iam::*:root',
 ```
 
@@ -30,7 +30,7 @@ No argument or block type is named "use_lockfile"
 **Root Cause**: The `addOverride` for `use_lockfile` is not a valid S3 backend configuration option.
 
 **Fix**: Removed the invalid override:
-```ts
+```typescript
 // REMOVED: this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
@@ -45,7 +45,7 @@ Call to function "filebase64sha256" failed: open lambda.zip: no such file or dir
 **Root Cause**: The lambda.zip file path was relative and not correctly resolved during Terraform synthesis.
 
 **Fix**: Changed to use path.module for proper resolution:
-```ts
+```typescript
 filename: '${path.module}/../../../lambda.zip',
 sourceCodeHash: '${filebase64sha256("${path.module}/../../../lambda.zip")}',
 ```
@@ -61,7 +61,7 @@ Policy contains a statement with one or more invalid principals
 **Root Cause**: The KMS key policy used a wildcard `*` in the AWS principal ARN, which is not allowed.
 
 **Original code**:
-```ts
+```typescript
 Principal: {
   AWS: `arn:aws:iam::*:root`,
 }
@@ -80,7 +80,7 @@ The specified KMS key does not exist or is not allowed to be used
 **Root Cause**: The KMS key didn't have a resource policy allowing CloudWatch Logs service to use it for encryption.
 
 **Fix**: Added KmsKeyPolicy resource with proper permissions:
-```ts
+```typescript
 new KmsKeyPolicy(this, 'logs-kms-key-policy', {
   keyId: logsKmsKey.id,
   policy: JSON.stringify({
@@ -122,7 +122,7 @@ new KmsKeyPolicy(this, 'logs-kms-key-policy', {
 ```
 
 Also added DataAwsCallerIdentity to get the current AWS account ID dynamically:
-```ts
+```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 const caller = new DataAwsCallerIdentity(this, 'current', {});

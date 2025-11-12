@@ -1,6 +1,6 @@
 ## File 1: `lib/modules.ts`
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { S3Bucket, S3BucketVersioning } from "@cdktf/provider-aws/lib/s3-bucket";
 import { S3BucketServerSideEncryptionConfiguration } from "@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration";
@@ -230,7 +230,7 @@ export class VpcModule extends Construct {
 
 ## File 2: `lib/tap-stack.ts`
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, CloudBackend, NamedCloudWorkspace } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

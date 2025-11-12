@@ -22,7 +22,7 @@ Let me provide the corrected version.
 
 You're right! Here's the corrected version addressing the validation and deprecation errors:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -760,7 +760,7 @@ def lambda_handler(event, context):
 
 ### 1. **S3 Bucket Encryption Strategy**
 
-```ts
+```typescript
 // AWS Service Log Buckets - Use S3_MANAGED encryption
 const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
   encryption: s3.BucketEncryption.S3_MANAGED, // ALB logs requirement
@@ -783,7 +783,7 @@ const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
 
 ### 2. **AMI Selection Using SSM Parameter Store**
 
-```ts
+```typescript
 // Fixed: Use SSM Parameter Store for latest Amazon Linux AMI
 machineImage: ec2.MachineImage.fromSsmParameter(
   '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2',

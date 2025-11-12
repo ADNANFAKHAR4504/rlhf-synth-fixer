@@ -12,7 +12,7 @@ This document identifies the specific gaps and issues between the MODEL_RESPONSE
 **Issue**: Several resources are missing the `provider` parameter, causing them to use the default provider instead of the aliased multi-region providers.
 **Impact**: Resources may be created in the wrong region, breaking the multi-region architecture.
 **Example**:
-```ts
+```typescript
 // Model (WRONG)
 const vpc = new Vpc(this, `vpc-${region}`, {
   cidrBlock: '10.0.0.0/16',
@@ -32,7 +32,7 @@ const vpc = new Vpc(this, `vpc-${region}`, {
 **Issue**: Missing mandatory tags (DR-Role, CostCenter, Environment) on several resources.
 **Impact**: Violates tagging policy requirements; difficult to track costs and DR role.
 **Example**:
-```ts
+```typescript
 // Model (INCOMPLETE)
 tags: {
   Name: `payment-bucket-${region}`,
@@ -55,7 +55,7 @@ tags: {
 **Issue**: Resource names use hardcoded 'dev' instead of the environmentSuffix variable.
 **Impact**: Cannot deploy multiple environments; naming conflicts will occur.
 **Example**:
-```ts
+```typescript
 // Model (WRONG)
 bucket: `payment-assets-dev-${primaryRegion}`,
 
@@ -69,7 +69,7 @@ bucket: `payment-assets-${environmentSuffix}-${primaryRegion}`,
 **Issue**: ARN parsing for ALB and Target Group dimensions is incorrect or missing.
 **Impact**: CloudWatch alarms will fail to create or monitor the wrong resources.
 **Example**:
-```ts
+```typescript
 // Model (WRONG)
 dimensions: {
   LoadBalancer: primaryAlbArn, // Wrong: should extract suffix
@@ -89,7 +89,7 @@ dimensions: {
 **Issue**: Missing explicit `dependsOn` declarations causing race conditions.
 **Impact**: Resources may be created out of order, leading to deployment failures.
 **Example**:
-```ts
+```typescript
 // Model (MISSING DEPENDENCY)
 const natGateway = new NatGateway(this, `nat-${region}`, {
   allocationId: eip.id,
@@ -111,7 +111,7 @@ const natGateway = new NatGateway(this, `nat-${region}`, {
 **Issue**: Missing egress rules on security groups.
 **Impact**: Resources cannot communicate outbound; breaks functionality.
 **Example**:
-```ts
+```typescript
 // Model (MISSING EGRESS)
 new SecurityGroupRule(this, 'db-ingress', {
   type: 'ingress',
@@ -140,7 +140,7 @@ new SecurityGroupRule(this, 'db-egress', {
 **Issue**: IAM stack is instantiated with actual bucket ARNs before buckets are created.
 **Impact**: Circular dependency; deployment will fail.
 **Example**:
-```ts
+```typescript
 // Model (WRONG - Circular Dependency)
 const storageStack = new StorageStack(/* ... */);
 const iamStack = new IamStack(this, 'iam', {
@@ -162,7 +162,7 @@ const iamStack = new IamStack(this, 'iam', {
 **Issue**: LoadBalancerStack interface is missing `albZoneId` output needed for Route 53.
 **Impact**: Cannot implement DNS failover without ALB zone IDs.
 **Example**:
-```ts
+```typescript
 // Model (INCOMPLETE)
 export interface LoadBalancerStackOutputs {
   albArn: string;

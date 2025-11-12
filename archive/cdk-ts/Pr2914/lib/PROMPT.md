@@ -28,7 +28,7 @@ Resource naming conventions should follow the pattern:
 
 The existing CDK stack file is located at ./lib/tap-stack.ts with the following content:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

@@ -11,7 +11,7 @@ This document analyzes the gaps between MODEL_RESPONSE and IDEAL_RESPONSE for th
 **MODEL_RESPONSE Issue**:
 The model created a Secrets Manager secret and secret version but did not configure automatic rotation with a 30-day schedule as explicitly required.
 
-```ts
+```typescript
 // MODEL_RESPONSE - No rotation configured
 this.dbSecret = new aws.secretsmanager.Secret(
   `db-secret-${args.environmentSuffix}`,
@@ -21,7 +21,7 @@ this.dbSecret = new aws.secretsmanager.Secret(
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Added rotation Lambda function
 const rotationLambda = new aws.lambda.Function(
   `rotation-lambda-${args.environmentSuffix}`,
@@ -59,7 +59,7 @@ new aws.secretsmanager.SecretRotation(
 **MODEL_RESPONSE Issue**:
 The Lambda function was created without the `reservedConcurrentExecutions` property, despite PROMPT explicitly requiring "Configure Lambda functions with reserved concurrent executions of 50".
 
-```ts
+```typescript
 // MODEL_RESPONSE - Missing reserved concurrency
 const paymentProcessor = new aws.lambda.Function(
   `payment-processor-${args.environmentSuffix}`,
@@ -73,7 +73,7 @@ const paymentProcessor = new aws.lambda.Function(
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 this.lambdaFunction = new aws.lambda.Function(
   `payment-processor-${args.environmentSuffix}`,
   {
@@ -98,7 +98,7 @@ this.lambdaFunction = new aws.lambda.Function(
 **MODEL_RESPONSE Issue**:
 Lambda environment variables containing database connection information were not encrypted with a customer-managed KMS key as required by "Lambda environment variables must be encrypted using AWS-managed KMS keys" (note: best practice is customer-managed keys).
 
-```ts
+```typescript
 // MODEL_RESPONSE - No KMS encryption
 environment: {
   variables: {
@@ -111,7 +111,7 @@ environment: {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Created KMS key
 this.kmsKey = new aws.kms.Key(
   `kms-key-${args.environmentSuffix}`,
@@ -146,7 +146,7 @@ kmsKeyArn: this.kmsKey.arn, // KMS encryption enabled
 The PROMPT explicitly required "Deploy AWS Network Firewall for advanced network protection in the migrated infrastructure", but this was completely omitted.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Created dedicated firewall subnets
 const firewallSubnet1 = new aws.ec2.Subnet(
   `firewall-subnet-1-${args.environmentSuffix}`,
@@ -184,7 +184,7 @@ const networkFirewall = new aws.networkfirewall.Firewall(
 PROMPT required "Configure AWS Transfer Family for secure file transfer during migration" but this service was not deployed.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const transferServer = new aws.transfer.Server(
   `transfer-server-${args.environmentSuffix}`,
   {
@@ -211,7 +211,7 @@ const transferServer = new aws.transfer.Server(
 PROMPT required "Deploy Amazon CloudWatch Evidently for feature flags and A/B testing during migration" but this was omitted.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const evidentlyProject = new aws.evidently.Project(
   `evidently-project-${args.environmentSuffix}`,
   {
@@ -237,7 +237,7 @@ const evidentlyProject = new aws.evidently.Project(
 PROMPT required "Implement AWS App Runner for simplified container deployment in target environment" but this was not included.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const appRunnerService = new aws.apprunner.Service(
   `apprunner-service-${args.environmentSuffix}`,
   {
@@ -268,7 +268,7 @@ const appRunnerService = new aws.apprunner.Service(
 PROMPT required "Set up AWS Fault Injection Simulator for chaos engineering and resilience testing" but this was omitted.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const fisExperimentTemplate = new aws.fis.ExperimentTemplate(
   `fis-template-${args.environmentSuffix}`,
   {
@@ -295,7 +295,7 @@ const fisExperimentTemplate = new aws.fis.ExperimentTemplate(
 PROMPT required "Configure AWS Resource Access Manager for cross-account resource sharing" but this was not deployed.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const ramShare = new aws.ram.ResourceShare(
   `ram-share-${args.environmentSuffix}`,
   {
@@ -323,7 +323,7 @@ const ramShare = new aws.ram.ResourceShare(
 While basic tags were included (Environment, Project), the PROMPT required "Implement cost allocation tags and AWS Cost Explorer integration for budget tracking" with more comprehensive tagging.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 const defaultTags = {
   Environment: 'production',
   Project: 'payment-processing',
@@ -332,7 +332,7 @@ const defaultTags = {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const defaultTags = {
   Environment: 'production',
   Project: 'payment-processing',
@@ -357,14 +357,14 @@ const defaultTags = {
 The model exported only basic outputs (vpcId, rdsEndpoint, snsTopicArn) but integration tests would benefit from comprehensive outputs.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 export const vpcId = stack.vpc.id;
 export const rdsEndpoint = stack.rdsInstance.endpoint;
 export const snsTopicArn = stack.snsTopic.arn;
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 export const vpcId = stack.vpc.id;
 export const rdsEndpoint = stack.rdsInstance.endpoint;
 export const rdsIdentifier = stack.rdsInstance.id;

@@ -1,7 +1,7 @@
 
 Let's define the reusable modules with proper TypeScript interfaces and classes:
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { 
   AwsProvider, 
@@ -863,7 +863,7 @@ Now, let's create the lib/tap-stack.ts file:
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, S3Backend, RemoteBackend, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws';
@@ -1506,7 +1506,7 @@ The code is structured in a modular way with proper TypeScript typing, allowing 
 
 # lib/tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, S3Backend, RemoteBackend, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws';

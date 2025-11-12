@@ -7,7 +7,7 @@
 **Issue**: Model response does not create AWS Config Configuration Recorder or Delivery Channel
 
 **Model Response (Lines 154-196)**:
-```ts
+```typescript
 private setupAwsConfigRules(complianceTopic: sns.Topic): void {
   // Directly creates Config rules without recorder
   new config.ManagedRule(this, 'S3BucketEncryptionRule', {
@@ -19,7 +19,7 @@ private setupAwsConfigRules(complianceTopic: sns.Topic): void {
 ```
 
 **Ideal Response (Lines 167-217)**:
-```ts
+```typescript
 // Create S3 bucket for AWS Config
 const configBucket = new s3.Bucket(this, 'ConfigBucket', {
   bucketName: `tap-config-${this.stackName.toLowerCase()}-${this.account}-${this.region}`,
@@ -81,7 +81,7 @@ const configDeliveryChannel = new config.CfnDeliveryChannel(
 **Issue**: Config rules don't have dependencies on Configuration Recorder and Delivery Channel
 
 **Model Response**:
-```ts
+```typescript
 new config.ManagedRule(this, 'S3BucketEncryptionRule', {
   identifier: config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
   description: 'Checks that S3 buckets have server-side encryption enabled',
@@ -89,7 +89,7 @@ new config.ManagedRule(this, 'S3BucketEncryptionRule', {
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 const s3EncryptionRule = new config.ManagedRule(
   this,
   'S3BucketEncryptionRule',
@@ -115,7 +115,7 @@ s3EncryptionCfnRule.addDependency(configDeliveryChannel);
 **Issue**: `INCOMING_SSH_DISABLED` does not exist in ManagedRuleIdentifiers
 
 **Model Response**:
-```ts
+```typescript
 new config.ManagedRule(this, 'RestrictedSSHRule', {
   identifier: config.ManagedRuleIdentifiers.INCOMING_SSH_DISABLED,
   description: 'Checks that security groups do not allow unrestricted SSH access',
@@ -123,7 +123,7 @@ new config.ManagedRule(this, 'RestrictedSSHRule', {
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 const sshRule = new config.CfnConfigRule(this, 'RestrictedSSHRule', {
   configRuleName: `restricted-ssh-${this.stackName}`,
   source: {
@@ -145,7 +145,7 @@ const sshRule = new config.CfnConfigRule(this, 'RestrictedSSHRule', {
 **Issue**: KMS key policy doesn't grant CloudWatch Logs service permission to use the key
 
 **Model Response**:
-```ts
+```typescript
 const kmsKey = new kms.Key(this, 'TapKmsKey', {
   description: 'KMS key for TAP infrastructure encryption',
   enableKeyRotation: true,
@@ -155,7 +155,7 @@ const kmsKey = new kms.Key(this, 'TapKmsKey', {
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 const kmsKey = new kms.Key(this, 'TapKmsKey', {
   description: 'KMS key for TAP infrastructure encryption',
   enableKeyRotation: true,
@@ -199,7 +199,7 @@ kmsKey.addToResourcePolicy(
 **Issue**: Lambda function created without database integration
 
 **Model Response (Lines 91-118)**:
-```ts
+```typescript
 const exampleFunction = new lambda.Function(this, 'ExampleFunction', {
   // ... configuration
   environment: {
@@ -219,7 +219,7 @@ const database = new DatabaseConstruct(this, 'Database', {
 ```
 
 **Ideal Response (Lines 116-165)**:
-```ts
+```typescript
 // Create encrypted RDS database BEFORE Lambda
 const database = new DatabaseConstruct(this, 'Database', {
   vpc: networking.vpc,
@@ -257,7 +257,7 @@ const exampleFunction = new lambda.Function(this, 'ExampleFunction', {
 **Issue**: Model doesn't output Lambda function ARN and name
 
 **Model Response (Lines 137-151)**:
-```ts
+```typescript
 new cdk.CfnOutput(this, 'VpcId', {
   value: networking.vpc.vpcId,
   description: 'VPC ID',
@@ -275,7 +275,7 @@ new cdk.CfnOutput(this, 'DatabaseEndpoint', {
 ```
 
 **Ideal Response (Lines 246-259)**:
-```ts
+```typescript
 new cdk.CfnOutput(this, 'LambdaFunctionArn', {
   value: exampleFunction.functionArn,
   description: 'Lambda function ARN',
@@ -303,7 +303,7 @@ new cdk.CfnOutput(this, 'ConfigBucketName', {
 **Issue**: Config rule names don't include stack name, causing conflicts in multi-stack deployments
 
 **Model Response**:
-```ts
+```typescript
 new config.ManagedRule(this, 'S3BucketEncryptionRule', {
   identifier: config.ManagedRuleIdentifiers.S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED,
   description: 'Checks that S3 buckets have server-side encryption enabled',
@@ -311,7 +311,7 @@ new config.ManagedRule(this, 'S3BucketEncryptionRule', {
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 const s3EncryptionRule = new config.ManagedRule(
   this,
   'S3BucketEncryptionRule',
@@ -334,7 +334,7 @@ const s3EncryptionRule = new config.ManagedRule(
 **Issue**: SNS topic name doesn't include stack name
 
 **Model Response (Line 129-132)**:
-```ts
+```typescript
 const complianceTopic = new sns.Topic(this, 'ComplianceTopic', {
   topicName: `tap-${props.environment}-compliance-alerts`,
   masterKey: kmsKey,
@@ -342,7 +342,7 @@ const complianceTopic = new sns.Topic(this, 'ComplianceTopic', {
 ```
 
 **Ideal Response (Line 218-221)**:
-```ts
+```typescript
 const complianceTopic = new sns.Topic(this, 'ComplianceTopic', {
   topicName: `tap-compliance-alerts-${this.stackName}`,
   masterKey: kmsKey,
@@ -360,7 +360,7 @@ const complianceTopic = new sns.Topic(this, 'ComplianceTopic', {
 **Issue**: Alarm name not specified, may cause conflicts
 
 **Model Response (Line 190-195)**:
-```ts
+```typescript
 new cloudwatch.Alarm(this, 'NonComplianceAlarm', {
   metric: nonCompliantMetric,
   threshold: 1,
@@ -371,7 +371,7 @@ new cloudwatch.Alarm(this, 'NonComplianceAlarm', {
 ```
 
 **Ideal Response (Line 335-343)**:
-```ts
+```typescript
 new cloudwatch.Alarm(this, 'NonComplianceAlarm', {
   alarmName: `tap-non-compliance-${this.stackName}`,
   metric: nonCompliantMetric,
@@ -395,7 +395,7 @@ new cloudwatch.Alarm(this, 'NonComplianceAlarm', {
 **Issue**: Uses deprecated `instances` and `instanceProps` instead of `writer` and `readers`
 
 **Model Response (Lines 418-429)**:
-```ts
+```typescript
 this.cluster = new rds.DatabaseCluster(this, 'Database', {
   engine: rds.DatabaseClusterEngine.auroraPostgres({
     version: rds.AuroraPostgresEngineVersion.VER_14_6,
@@ -418,7 +418,7 @@ this.cluster = new rds.DatabaseCluster(this, 'Database', {
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 this.cluster = new rds.DatabaseCluster(this, 'Database', {
   engine: rds.DatabaseClusterEngine.auroraPostgres({
     version: rds.AuroraPostgresEngineVersion.VER_14_6,
@@ -458,12 +458,12 @@ this.cluster = new rds.DatabaseCluster(this, 'Database', {
 **Issue**: Deletion protection hardcoded to true for all environments
 
 **Model Response (Line 437)**:
-```ts
+```typescript
 deletionProtection: true,
 ```
 
 **Ideal Response (Line 66)**:
-```ts
+```typescript
 deletionProtection: props.environment === 'prod',
 ```
 
@@ -478,13 +478,13 @@ deletionProtection: props.environment === 'prod',
 **Issue**: Uses THIRTY_DAYS instead of ONE_MONTH
 
 **Model Response**:
-```ts
+```typescript
 retention: logs.RetentionDays.THIRTY_DAYS,  // Line 85
 cloudwatchLogsRetention: cdk.aws_logs.RetentionDays.THIRTY_DAYS,  // Line 439
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 retention: logs.RetentionDays.ONE_MONTH,
 cloudwatchLogsRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
 ```
@@ -500,7 +500,7 @@ cloudwatchLogsRetention: cdk.aws_logs.RetentionDays.ONE_MONTH,
 **Issue**: Imports route53 but never uses it
 
 **Model Response (Line 280)**:
-```ts
+```typescript
 import * as route53 from 'aws-cdk-lib/aws-route53';
 ```
 
@@ -518,12 +518,12 @@ No import of route53
 **Issue**: Method signature doesn't include required parameters for proper Config setup
 
 **Model Response (Line 154)**:
-```ts
+```typescript
 private setupAwsConfigRules(complianceTopic: sns.Topic): void {
 ```
 
 **Ideal Response (Lines 264-267)**:
-```ts
+```typescript
 private setupAwsConfigRules(
   complianceTopic: sns.Topic,
   configRecorder: config.CfnConfigurationRecorder,

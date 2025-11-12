@@ -24,7 +24,7 @@ CREATE_FAILED | AWS::ApiGateway::Stage | Resource handler returned message: "Clo
 **Issue**: The Lambda handler's `getEvent` and `deleteEvent` functions incorrectly used the partition key `id` as both the partition key and sort key value, causing 404 errors when retrieving events.
 
 **Original Flawed Code**:
-```ts
+```typescript
 async function getEvent(id: string) {
   const result = await docClient.send(
     new GetCommand({
@@ -52,7 +52,7 @@ async function getEvent(id: string) {
 **Issue**: Lambda handler accepted `null` or empty request bodies and created events with null data, which should have been rejected with HTTP 400.
 
 **Original Flawed Code**:
-```ts
+```typescript
 async function createEvent(body: string | null) {
   if (!body) {
     return { statusCode: 400, ... };

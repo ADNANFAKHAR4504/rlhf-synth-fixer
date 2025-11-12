@@ -171,7 +171,7 @@ def lambda_handler(event, context):
 
 **Examples of Failures**:
 
-```ts
+```typescript
 // WRONG - Superficial test
 describe('Lambda Function', () => {
   test('should exist', () => {
@@ -191,7 +191,7 @@ describe('DynamoDB Table', () => {
 
 **Correct Approach**:
 
-```ts
+```typescript
 // CORRECT - Comprehensive testing with real scenarios
 describe('Email Notification System Integration', () => {
   test('should process order events end-to-end', async () => {

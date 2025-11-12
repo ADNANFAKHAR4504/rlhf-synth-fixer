@@ -1,4 +1,4 @@
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput, TerraformVariable } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

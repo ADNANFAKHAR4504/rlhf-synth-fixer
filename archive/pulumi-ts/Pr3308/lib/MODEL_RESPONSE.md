@@ -4,7 +4,7 @@ Here's the complete Pulumi TypeScript infrastructure code for the media company'
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -117,7 +117,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -310,7 +310,7 @@ export class VpcStack extends pulumi.ComponentResource {
 
 ## lib/ec2-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -525,7 +525,7 @@ echo "<h1>Media Company Web Application - Instance $(ec2-metadata --instance-id 
 
 ## lib/alb-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -663,7 +663,7 @@ export class AlbStack extends pulumi.ComponentResource {
 
 ## lib/s3-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -770,7 +770,7 @@ export class S3Stack extends pulumi.ComponentResource {
 
 ## lib/cloudwatch-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';

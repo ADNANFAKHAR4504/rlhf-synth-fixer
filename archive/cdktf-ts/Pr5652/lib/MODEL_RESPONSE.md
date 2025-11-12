@@ -1,4 +1,4 @@
-```ts
+```typescript
 // main.ts - Multi-AZ Failure Recovery System with CDKTF
 
 import { Construct } from 'constructs';

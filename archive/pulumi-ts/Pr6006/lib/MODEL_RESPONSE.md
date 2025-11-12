@@ -4,7 +4,7 @@ This implementation provides a multi-AZ failover solution for a payment processi
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -273,7 +273,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from './lib/tap-stack';
 

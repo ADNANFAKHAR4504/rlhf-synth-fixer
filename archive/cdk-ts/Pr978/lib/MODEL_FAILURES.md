@@ -35,7 +35,7 @@ The bucket policy implementation attempted to access private properties of Polic
 
 ### Solution
 Refactored to create individual PolicyStatement objects and add them directly to the bucket:
-```ts
+```typescript
 const restrictToVPCAndRoleStatement = new iam.PolicyStatement({...});
 const denyInsecureConnectionsStatement = new iam.PolicyStatement({...});
 secureS3Bucket.addToResourcePolicy(restrictToVPCAndRoleStatement);

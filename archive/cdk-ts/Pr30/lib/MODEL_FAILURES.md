@@ -7,7 +7,7 @@
 * Property 'addCatch' does not exist on type 'Chain'.ts(2339)
 Model appended addCatch to a cdk.aws_stepfunctions.Chain, which is not allowed
 
-```ts
+```typescript
  definition: getMetadataFromS3
           .next(processMetadata)
           .next(prepareMetadataForOpenSearch)
@@ -38,7 +38,7 @@ To index a document a Lambda is needed with the right permissions.
 
 * Time Series OpenSearch collections need a @timestamp field. Not present in the custom api call. It is declared in the step before (PrepareMetadataForOpenSearch) but ignored in the parameters.
 
-```ts
+```typescript
 Parameters: {
           CollectionId: openSearchCollection.attrId,
           DocumentString: stepfunctions.JsonPath.stringAt('States.JsonToString($.processedMetadata.document)'),

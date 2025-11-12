@@ -103,7 +103,7 @@ CDKTF project configuration:
 
 **Configuration Interface**:
 
-```ts
+```typescript
 interface TapStackConfig {
   environmentSuffix: string;
   stateBucket: string;
@@ -115,7 +115,7 @@ interface TapStackConfig {
 
 **Backend and Providers**:
 
-```ts
+```typescript
 new S3Backend(this, {
   bucket: config.stateBucket,
   key: `${config.environmentSuffix}/terraform.tfstate`,
@@ -131,7 +131,7 @@ new AwsProvider(this, 'aws', {
 
 **Dynamic VPC Discovery**:
 
-```ts
+```typescript
 const vpc = new DataAwsVpc(this, 'prodVpc', {
   default: true, // Discovers default VPC in the region
 });
@@ -143,7 +143,7 @@ const privateSubnets = new DataAwsSubnets(this, 'privateSubnets', {
 
 **RDS Instance Configuration**:
 
-```ts
+```typescript
 const dbInstance = new DbInstance(this, 'rdsInstance', {
   identifier: `${resourcePrefix}-postgres`,
   engine: 'postgres',

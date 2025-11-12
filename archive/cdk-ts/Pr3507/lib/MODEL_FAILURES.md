@@ -11,7 +11,7 @@ The original infrastructure code contained several critical issues that prevente
 **Issue**: The original implementation used private subnets with NAT gateways, causing Elastic IP limit exhaustion in resource-constrained AWS accounts.
 
 **Original Code Problem**:
-```ts
+```typescript
 // Private subnets requiring NAT gateway (consumes EIPs)
 subnetConfiguration: [
   {
@@ -22,7 +22,7 @@ natGateways: 2, // Each NAT gateway needs an EIP
 ```
 
 **Fix Applied**: Migrated to public subnet architecture with VPC endpoints:
-```ts
+```typescript
 // Optimized configuration avoiding EIP consumption
 subnetConfiguration: [
   {
@@ -44,7 +44,7 @@ natGateways: 0, // Zero NAT gateways = zero EIP consumption
 **Issue**: SageMaker notebook instances failed to initialize due to lack of internet access in private subnets without NAT gateway.
 
 **Original Code Problem**:
-```ts
+```typescript
 // Fallback logic that still failed in constrained environments
 subnetId: props.vpc.privateSubnets.length > 0
   ? props.vpc.privateSubnets[0].subnetId  // No internet access
@@ -52,7 +52,7 @@ subnetId: props.vpc.privateSubnets.length > 0
 ```
 
 **Fix Applied**: Direct public subnet assignment for reliable internet access:
-```ts
+```typescript
 // Guaranteed internet access for notebook initialization
 subnetId: props.vpc.publicSubnets[0].subnetId,
 ```
@@ -62,7 +62,7 @@ subnetId: props.vpc.publicSubnets[0].subnetId,
 **Issue**: The Batch compute environment failed to deploy due to incorrect subnet configuration and missing internet access for container image pulls.
 
 **Original Code Problem**:
-```ts
+```typescript
 // Private subnets without internet access
 vpcSubnets: {
   subnets: props.vpc.privateSubnets, // Can't pull container images
@@ -70,7 +70,7 @@ vpcSubnets: {
 ```
 
 **Fix Applied**: Public subnet configuration for container operations:
-```ts
+```typescript
 // Public subnets for reliable container image access
 vpcSubnets: {
   subnets: props.vpc.publicSubnets, // Direct internet for ECR pulls
@@ -80,7 +80,7 @@ vpcSubnets: {
 **Issue**: Stacks didn't export necessary outputs, making integration between stacks and testing impossible.
 
 **Original Code Problem**:
-```ts
+```typescript
 // No outputs defined in stacks
 export class StorageStack extends cdk.NestedStack {
   // ... resource creation ...
@@ -89,7 +89,7 @@ export class StorageStack extends cdk.NestedStack {
 ```
 
 **Fix Applied**: Added comprehensive outputs to all stacks:
-```ts
+```typescript
 // Outputs added to enable stack integration
 new cdk.CfnOutput(this, 'DatasetBucketName', {
   value: this.datasetBucket.bucketName,
@@ -107,7 +107,7 @@ new cdk.CfnOutput(this, 'ModelBucketName', {
 **Issue**: S3 buckets had RETAIN removal policy, preventing stack deletion and causing orphaned resources.
 
 **Original Code Problem**:
-```ts
+```typescript
 this.datasetBucket = new s3.Bucket(this, 'DatasetBucket', {
   removalPolicy: cdk.RemovalPolicy.RETAIN, // Prevents cleanup
   // No autoDeleteObjects
@@ -115,7 +115,7 @@ this.datasetBucket = new s3.Bucket(this, 'DatasetBucket', {
 ```
 
 **Fix Applied**: Implemented proper cleanup policies:
-```ts
+```typescript
 this.datasetBucket = new s3.Bucket(this, 'DatasetBucket', {
   removalPolicy: cdk.RemovalPolicy.DESTROY,
   autoDeleteObjects: true, // Ensures complete cleanup
@@ -127,7 +127,7 @@ this.datasetBucket = new s3.Bucket(this, 'DatasetBucket', {
 **Issue**: Integration tests failed in CI/CD pipelines due to hardcoded environment-specific resource keys, preventing automated testing across different deployment environments.
 
 **Original Code Problem**:
-```ts
+```typescript
 // Hardcoded environment-specific keys that only work in 'dev' environment
 const publicSubnet1 = outputs.TapStackdevNetworkingStackTrainingVPCPublicSubnet1Subnet1309BF36Ref;
 const command = new DescribeAlarmsCommand({
@@ -139,7 +139,7 @@ expect(outputs.AccountId).toBe('123456789012'); // Fails in other accounts
 ```
 
 **Fix Applied**: Environment-agnostic resource discovery:
-```ts
+```typescript
 // Dynamic environment suffix detection and resource discovery
 const envSuffix = outputs.EnvironmentSuffix;
 const publicSubnetKeys = Object.keys(outputs).filter(key => 
@@ -178,7 +178,7 @@ expect(outputs.AccountId).toMatch(/^\d{12}$/);
 **Issue**: CDK deployment defaulted to wrong region instead of required us-west-2.
 
 **Original Code Problem**:
-```ts
+```typescript
 env: {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION, // No fallback
@@ -186,7 +186,7 @@ env: {
 ```
 
 **Fix Applied**:
-```ts
+```typescript
 env: {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION || 'us-west-2', // Proper fallback

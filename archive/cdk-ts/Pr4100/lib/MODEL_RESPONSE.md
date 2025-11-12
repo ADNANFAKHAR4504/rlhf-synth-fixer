@@ -83,7 +83,7 @@ enterprise-app/
 
 ### **1. Entry Point - `bin/main.ts`**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -184,7 +184,7 @@ app.synth();
 
 ### **2. Networking Stack - `lib/stacks/networking-stack.ts`**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -294,7 +294,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ### **3. Compute Stack - `lib/stacks/compute-stack.ts`**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -580,7 +580,7 @@ export class ComputeStack extends cdk.Stack {
 
 ### **4. Storage Stack - `lib/stacks/storage-stack.ts`**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -845,7 +845,7 @@ export class StorageStack extends cdk.Stack {
 
 ### **5. CI/CD Stack - `lib/stacks/cicd-stack.ts`**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -1205,7 +1205,7 @@ export class CiCdStack extends cdk.Stack {
 
 ### **6. Monitoring Stack - `lib/stacks/monitoring-stack.ts`**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';

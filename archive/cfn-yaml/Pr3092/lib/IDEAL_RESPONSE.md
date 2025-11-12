@@ -413,7 +413,7 @@ This implementation provides **defense-in-depth** security through:
 ### Comprehensive Test Coverage (100%)
 
 #### **Unit Tests (58 Test Cases)**
-```ts
+```typescript
 // Template structure validation
 describe('Template Structure', () => {
   test('should have valid CloudFormation format version');
@@ -438,7 +438,7 @@ describe('IAM Resources', () => {
 ```
 
 #### **Integration Tests (20+ Test Cases)**
-```ts
+```typescript
 // Real AWS deployment validation
 describe('Deployed Infrastructure', () => {
   test('should deploy all resources successfully');

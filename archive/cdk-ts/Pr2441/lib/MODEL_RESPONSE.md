@@ -1,6 +1,6 @@
 I'll create a comprehensive AWS CDK template that meets all your security requirements. Here's the `secure-setup.ts` file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';

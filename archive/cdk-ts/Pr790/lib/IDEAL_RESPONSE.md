@@ -1,4 +1,4 @@
-```ts
+```typescript
 // compute-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -213,7 +213,7 @@ export class ComputeStack extends cdk.Stack {
 
 ```
 
-```ts
+```typescript
 // monitoring-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -299,7 +299,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ```
 
-```ts
+```typescript
 // networking-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -348,7 +348,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ```
 
-```ts
+```typescript
 // security-services-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -382,7 +382,7 @@ export class SecurityServicesStack extends cdk.Stack {
 
 ```
 
-```ts
+```typescript
 // security-stack.ts
 import * as cdk from 'aws-cdk-lib';
 // import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
@@ -423,7 +423,7 @@ export class SecurityStack extends cdk.Stack {
 
 ```
 
-```ts
+```typescript
 // storage-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -612,7 +612,7 @@ export class StorageStack extends cdk.Stack {
 
 ```
 
-```ts
+```typescript
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

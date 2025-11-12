@@ -4,7 +4,7 @@ This document contains the corrected, production-ready implementation addressing
 
 ## File: lib/eks-cluster-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as eks from 'aws-cdk-lib/aws-eks';
@@ -571,7 +571,7 @@ export class EksClusterStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { EksClusterStack } from './eks-cluster-stack';

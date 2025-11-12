@@ -1,6 +1,6 @@
 ## modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { Fn } from 'cdktf';
@@ -1017,7 +1017,7 @@ export class MonitoringModule extends Construct {
 
 ## modules.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

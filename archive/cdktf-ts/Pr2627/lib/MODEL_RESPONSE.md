@@ -2,7 +2,7 @@ I'll create a scalable and production-ready AWS web application environment usin
 
 ## 1. modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -524,7 +524,7 @@ export class WebAppModules extends Construct {
 
 ## 2. tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { WebAppModules, WebAppModulesConfig } from "./modules";

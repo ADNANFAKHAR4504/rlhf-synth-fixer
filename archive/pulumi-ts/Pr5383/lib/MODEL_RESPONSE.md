@@ -4,7 +4,7 @@ I'll create a Pulumi TypeScript implementation that uses ComponentResource patte
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as random from "@pulumi/random";

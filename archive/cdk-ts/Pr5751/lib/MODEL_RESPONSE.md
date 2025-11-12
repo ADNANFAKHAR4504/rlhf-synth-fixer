@@ -30,7 +30,7 @@ Let me create the implementation:
 
 ## main.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -98,7 +98,7 @@ app.synth();
 
 ## tapstack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

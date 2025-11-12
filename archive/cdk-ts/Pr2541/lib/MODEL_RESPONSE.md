@@ -133,7 +133,7 @@
 
 ## bin/app.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -199,7 +199,7 @@ app.synth();
 
 ## lib/iam-core-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -756,7 +756,7 @@ aws iam simulate-custom-policy \
 ### Safe Rollback Test
 
 1. **Introduce a failing change** (safe method):
-   ```ts
+   ```typescript
    // In lib/iam-core-stack.ts, add an invalid resource reference
    role.addToPolicy(new iam.PolicyStatement({
      actions: ['s3:GetObject'],
@@ -782,7 +782,7 @@ aws iam simulate-custom-policy \
 ### Test Stack Policy Protection
 
 1. **Try to update a protected resource** (this should fail):
-   ```ts
+   ```typescript
    // Try to change KMS key description
    this.kmsKey = new kms.Key(this, 'AppEncryptionKey', {
      description: 'CHANGED DESCRIPTION', // This change will be blocked

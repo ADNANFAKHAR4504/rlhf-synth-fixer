@@ -13,7 +13,7 @@ The ideal response demonstrates superior implementation quality through proper u
 **Issue**: The model response uses incorrect import paths and non-existent CDKTF constructs.
 
 **Examples**:
-```ts
+```typescript
 // Model Response - INCORRECT
 import * as aws from "@cdktf/provider-aws";
 this.vpc = new aws.vpc.Vpc(this, "vpc", {
@@ -22,7 +22,7 @@ const subnet = new aws.vpc.Subnet(this, `public-subnet-${i}`, {
 ```
 
 **Correct Pattern** (from Ideal Response):
-```ts
+```typescript
 import * as aws from '@cdktf/provider-aws';
 this.vpc = new aws.vpc.Vpc(this, 'vpc', {
 this.internetGateway = new aws.internetGateway.InternetGateway(this, 'igw', {
@@ -45,7 +45,7 @@ const subnet = new aws.subnet.Subnet(this, `public-subnet-${i}`, {
 **Issue**: The model response passes `subnetIds` directly to `subnetGroupName`, which expects a string, not an array.
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 this.subnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(
   this,
   "subnet-group",
@@ -58,7 +58,7 @@ this.subnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 this.subnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(
   this,
   'subnet-group',
@@ -84,7 +84,7 @@ this.subnetGroup = new aws.dbSubnetGroup.DbSubnetGroup(
 **Issue**: Model response uses incorrect property names for WAF rules.
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 statement: {
   rateBasedStatement: {  // Wrong: should be rate_based_statement
     limit: 1000,
@@ -94,7 +94,7 @@ statement: {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 statement: {
   rate_based_statement: {  // Snake case as per AWS provider
     limit: 1000,
@@ -117,12 +117,12 @@ statement: {
 **Issue**: Model response uses inconsistent and incorrect SecurityGroup resource paths.
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 new aws.vpc.SecurityGroupRule(this, `ingress-${index}`, {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 new aws.securityGroupRule.SecurityGroupRule(this, `ingress-${index}`, {
 ```
 
@@ -140,7 +140,7 @@ new aws.securityGroupRule.SecurityGroupRule(this, `ingress-${index}`, {
 **Issue**: Model response attempts to inline Lambda code and create zip files using CDKTF, which is incorrect.
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 const lambdaCode = `
 import boto3
 import json
@@ -167,7 +167,7 @@ new aws.dataArchiveFile.DataArchiveFile(this, "lambda-zip", {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 // Creates S3 bucket for Lambda code
 const lambdaCodeBucket = new aws.s3Bucket.S3Bucket(
   this,
@@ -203,12 +203,12 @@ this.function = new aws.lambdaFunction.LambdaFunction(this, 'function', {
 **Issue**: Model response doesn't use the correct construct names.
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 new aws.vpc.RouteTableAssociation(this, `public-rta-${i}`, {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 new aws.routeTableAssociation.RouteTableAssociation(
   this,
   `public-rta-${i}`,
@@ -226,7 +226,7 @@ new aws.routeTableAssociation.RouteTableAssociation(
 ### 7. EIP Domain Property
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 const eips = this.publicSubnets.map(
   (_, i) =>
     new aws.ec2.Eip(this, `nat-eip-${i}`, {
@@ -234,7 +234,7 @@ const eips = this.publicSubnets.map(
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 const eips = this.publicSubnets.map(
   (_, i) =>
     new aws.eip.Eip(this, `nat-eip-${i}`, {
@@ -254,7 +254,7 @@ const eips = this.publicSubnets.map(
 **Issue**: Model response creates an ACM certificate but provides no validation mechanism.
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 private createSelfSignedCertificate(name: string): string {
   const cert = new aws.acmCertificate.AcmCertificate(this, "cert", {
     domainName: `${name}.example.com`,
@@ -266,7 +266,7 @@ private createSelfSignedCertificate(name: string): string {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 // Uses HTTP listener instead of HTTPS (or would require actual domain validation)
 this.listener = new aws.lbListener.LbListener(this, 'listener', {
   loadBalancerArn: this.alb.arn,
@@ -290,14 +290,14 @@ this.listener = new aws.lbListener.LbListener(this, 'listener', {
 ### 9. RDS Engine Version Missing
 
 **Model Response**:
-```ts
+```typescript
 this.instance = new aws.rdsDbInstance.RdsDbInstance(this, "instance", {
   engine: config.engine,
   engineVersion: "8.0.35",  // Hardcoded MySQL version
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 this.instance = new aws.dbInstance.DbInstance(this, 'instance', {
   engine: config.engine,
   // No hardcoded engine version - allows flexibility
@@ -313,7 +313,7 @@ this.instance = new aws.dbInstance.DbInstance(this, 'instance', {
 ### 10. Incorrect Data Source Usage
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 const azs = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
   this,
   "azs",
@@ -325,7 +325,7 @@ const azs = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 // Directly constructs AZ names from region
 const availabilityZones = [`${config.region}a`, `${config.region}b`];
 ```
@@ -346,7 +346,7 @@ const availabilityZones = [`${config.region}a`, `${config.region}b`];
 **Issue**: Model response creates AWS Config resources but with incomplete implementation.
 
 **Model Response Problems**:
-```ts
+```typescript
 this.config = new aws.configConfigurationRecorder.ConfigConfigurationRecorder(
   this,
   "config-recorder",
@@ -383,7 +383,7 @@ new aws.configConfigurationRecorderStatus.ConfigConfigurationRecorderStatus(
 ### 12. CloudTrail Bucket Policy Issues
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 Action: "s3:PutObject",
 Resource: `${bucket.arn}/*`,
 Condition: {
@@ -394,7 +394,7 @@ Condition: {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 Action: 's3:PutObject',
 Resource: `${bucket.arn}/*`,
 Condition: {
@@ -415,7 +415,7 @@ Condition: {
 ### 13. Password Generation in RDS Module
 
 **Model Response - PROBLEMATIC**:
-```ts
+```typescript
 private generatePassword(): string {
   return Array.from(
     { length: 32 },
@@ -428,7 +428,7 @@ private generatePassword(): string {
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 // Uses AWS managed passwords instead
 this.instance = new aws.dbInstance.DbInstance(this, 'instance', {
   ...
@@ -451,7 +451,7 @@ this.instance = new aws.dbInstance.DbInstance(this, 'instance', {
 ### 14. DynamoDB Encryption Configuration
 
 **Model Response**:
-```ts
+```typescript
 serverSideEncryption: {
   enabled: true,
   kmsKeyType: "AWS_OWNED_CMK",  // Less secure option
@@ -459,7 +459,7 @@ serverSideEncryption: {
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 serverSideEncryption: {
   enabled: true,  // Uses default AWS managed key
 },
@@ -475,12 +475,12 @@ serverSideEncryption: {
 ### 15. Monitoring Dashboard Region Hardcoding
 
 **Model Response - INCORRECT**:
-```ts
+```typescript
 region: "us-east-1",  // Hardcoded region in dashboard
 ```
 
 **Ideal Response - CORRECT**:
-```ts
+```typescript
 // Uses data source for current region
 const currentRegion = new aws.dataAwsRegion.DataAwsRegion(this, 'current');
 // Then references currentRegion.id in outputs

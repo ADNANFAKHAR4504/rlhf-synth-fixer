@@ -10,7 +10,7 @@ This document analyzes the failures in the MODEL_RESPONSE.md implementation comp
 
 **MODEL_RESPONSE Issue**: The MODEL_RESPONSE attempted to create an API Gateway Deployment with `stageName` as a direct property:
 
-```ts
+```typescript
 const deployment = new aws.apigateway.Deployment(
   `api-deployment-${environmentSuffix}`,
   {
@@ -23,7 +23,7 @@ const deployment = new aws.apigateway.Deployment(
 
 **IDEAL_RESPONSE Fix**: In Pulumi's AWS provider, API Gateway requires separate Deployment and Stage resources:
 
-```ts
+```typescript
 const deployment = new aws.apigateway.Deployment(
   `api-deployment-${environmentSuffix}`,
   {
@@ -63,14 +63,14 @@ const stage = new aws.apigateway.Stage(
 
 **MODEL_RESPONSE Issue**: The `bin/tap.ts` file imported unused Pulumi module:
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import "../lib/tap-stack";
 ```
 
 **IDEAL_RESPONSE Fix**: Remove unused import to fix linting:
 
-```ts
+```typescript
 import '../lib/tap-stack';
 ```
 

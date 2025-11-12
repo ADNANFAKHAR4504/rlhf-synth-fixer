@@ -2,7 +2,7 @@ The error is occurring because `tracingEnabled` is not a direct property of `Res
 
 ### Updated lib/serverless-api-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -260,7 +260,7 @@ export class ServerlessApiStack extends cdk.Stack {
 
 The main issue was that `tracingEnabled` was placed at the wrong level. I moved it to the correct location:
 
-```ts
+```typescript
 // BEFORE (incorrect)
 const api = new apigateway.RestApi(this, 'ApiGateway', {
   // ... other props
@@ -306,7 +306,7 @@ cdk deploy
 
 If you need more granular control over X-Ray tracing, you can also enable it using the low-level CloudFormation resource:
 
-```ts
+```typescript
 // Alternative approach using CfnStage (if needed)
 const cfnStage = api.deploymentStage.node.defaultChild as apigateway.CfnStage;
 cfnStage.tracingEnabled = true;

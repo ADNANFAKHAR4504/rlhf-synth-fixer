@@ -4,7 +4,7 @@ This implementation provides a multi-environment document management system usin
 
 ## File: lib/document-management-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
@@ -223,7 +223,7 @@ export class DocumentManagementStack extends TerraformStack {
 
 ## File: lib/lambda/index.ts
 
-```ts
+```typescript
 import { S3Event } from 'aws-lambda';
 import { DynamoDB, S3 } from 'aws-sdk';
 
@@ -263,7 +263,7 @@ export const handler = async (event: S3Event): Promise<void> => {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

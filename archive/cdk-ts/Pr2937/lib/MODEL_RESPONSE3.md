@@ -31,7 +31,7 @@ You're still encountering API issues. Let me fix these remaining problems by usi
 
 Here's the corrected `lib/production-stack.ts` with all issues resolved:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -611,7 +611,7 @@ export class ProductionStack extends cdk.Stack {
 **Problem**: `DatabaseEngine does not exist on type aws-rds module`
 **Solution**: Create the engine instance separately and reuse it:
 
-```ts
+```typescript
 // FIXED: Create engine instance first
 const postgresEngine = rds.DatabaseEngine.postgres({
   version: rds.PostgresEngineVersion.VER_15_4,
@@ -638,7 +638,7 @@ const database = new rds.DatabaseInstance(this, 'PostgreSQLDatabase', {
 **Problem**: `metricReadLatency` and `metricWriteLatency` don't exist
 **Solution**: Create CloudWatch metrics manually:
 
-```ts
+```typescript
 // FIXED: Manual RDS Read Latency Metric
 const rdsReadLatencyMetric = new cloudwatch.Metric({
   namespace: 'AWS/RDS',

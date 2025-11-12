@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -482,7 +482,7 @@ export class ComputeModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

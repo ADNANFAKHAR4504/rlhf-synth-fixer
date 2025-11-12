@@ -8,7 +8,7 @@
 
 **Model Response (INCORRECT)**:
 
-```ts
+```typescript
 // Hardcoded names - WRONG
 bucketName: `iot-sensor-data-${this.account}-${this.region}`,
 tableName: 'iot-device-state',
@@ -18,7 +18,7 @@ functionName: 'iot-stream-processor',
 
 **Correct Implementation**:
 
-```ts
+```typescript
 // Environment-aware names - CORRECT
 bucketName: `iot-sensor-data-${this.account}-${this.region}-${environmentSuffix}`,
 tableName: `iot-device-state-${environmentSuffix}`,
@@ -38,13 +38,13 @@ functionName: `iot-stream-processor-${environmentSuffix}`,
 
 **Model Response (INCORRECT)**:
 
-```ts
+```typescript
 pointInTimeRecovery: true,  // WRONG - This property doesn't exist
 ```
 
 **Correct Implementation**:
 
-```ts
+```typescript
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: true,  // CORRECT - Proper CDK property
 },
@@ -62,13 +62,13 @@ pointInTimeRecoverySpecification: {
 
 **Model Response (INCORRECT)**:
 
-```ts
+```typescript
 maxBatchingWindowInSeconds: 5,  // WRONG - Deprecated property
 ```
 
 **Correct Implementation**:
 
-```ts
+```typescript
 maxBatchingWindow: cdk.Duration.seconds(5),  // CORRECT - Current CDK API
 ```
 
@@ -84,7 +84,7 @@ maxBatchingWindow: cdk.Duration.seconds(5),  // CORRECT - Current CDK API
 
 **Model Response (MISSING)**:
 
-```ts
+```typescript
 // Missing security configurations
 blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 enforceSSL: true,
@@ -92,7 +92,7 @@ enforceSSL: true,
 
 **Correct Implementation**:
 
-```ts
+```typescript
 // Essential security configurations
 blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
 enforceSSL: true,
@@ -110,13 +110,13 @@ enforceSSL: true,
 
 **Model Response (MISSING)**:
 
-```ts
+```typescript
 // No termination protection configuration
 ```
 
 **Correct Implementation**:
 
-```ts
+```typescript
 // In bin/tap.ts
 terminationProtection: false,  // Explicitly disable for clean teardown
 ```
@@ -133,13 +133,13 @@ terminationProtection: false,  // Explicitly disable for clean teardown
 
 **Model Response (MISSING)**:
 
-```ts
+```typescript
 // No DLQ configuration for Lambda failures
 ```
 
 **Correct Implementation**:
 
-```ts
+```typescript
 // DLQ Topic for failed Lambda invocations
 const dlqTopic = new sns.Topic(this, 'IoTDLQTopic', {
   topicName: `iot-pipeline-dlq-${environmentSuffix}`,
@@ -172,13 +172,13 @@ new lambda.CfnEventInvokeConfig(this, 'StreamProcessorDLQConfig', {
 
 **Model Response (INCOMPLETE)**:
 
-```ts
+```typescript
 // Missing DLQ and Timestream monitoring
 ```
 
 **Correct Implementation**:
 
-```ts
+```typescript
 // Additional critical alarms
 new cloudwatch.Alarm(this, 'LambdaDLQMessages', {
   alarmName: `iot-lambda-dlq-messages-${environmentSuffix}`,
@@ -203,7 +203,7 @@ new cloudwatch.Alarm(this, 'DynamoDBMetricsThrottling', {
 
 **Model Response (PROBLEMATIC)**:
 
-```ts
+```typescript
 // Timestream requires special AWS support approval
 const timestreamDatabase = new timestream.CfnDatabase(this, 'IoTTimestreamDB', {
   databaseName: `iot-sensor-metrics-${environmentSuffix}`,
@@ -226,7 +226,7 @@ Error Code: AccessDeniedException)"
 
 **Correct Implementation**:
 
-```ts
+```typescript
 // Use DynamoDB for time-series data instead
 const sensorMetricsTable = new dynamodb.Table(this, 'SensorMetricsTable', {
   tableName: `iot-sensor-metrics-${environmentSuffix}`,

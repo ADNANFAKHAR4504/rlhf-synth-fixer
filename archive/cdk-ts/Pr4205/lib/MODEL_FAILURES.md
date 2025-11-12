@@ -13,7 +13,7 @@ This document catalogs the infrastructure issues found in the original MODEL_RES
 - **Inflexible deployment pattern**: Single-region deployment approach without multi-region orchestration
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Added environment suffix to all resources
 const envSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
 const resourceName = `tap-${envSuffix}-${config.regionName}`;
@@ -43,7 +43,7 @@ const stackNameRef = `${stackName}-${region.name}`;
 - **Missing Cost Optimization**: No consideration for development environment cost reduction
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Cost optimization: reduced NAT gateways
 natGateways: 1, // Changed from 2
 
@@ -70,7 +70,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY, // For development environments
 - **Missing Environment Context**: No environment suffix in database identifiers
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Updated to latest Aurora MySQL engine
 version: rds.AuroraMysqlEngineVersion.VER_3_04_2, // Updated from VER_3_04_0
 
@@ -102,7 +102,7 @@ clusterIdentifier: `tap-aurora-${envSuffix}-${config.regionName}`,
 - **Permission Errors**: CloudTrail deployment failed due to insufficient permissions
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Added explicit S3 bucket policy for CloudTrail
 auditBucket.addToResourcePolicy(
   new iam.PolicyStatement({
@@ -152,7 +152,7 @@ trailName: `tap-audit-trail-${envSuffix}-${config.regionName}`,
 - **Incorrect Resource Selection**: Attempted to backup non-existent resources in DR region
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Fixed cron expression for weekly backup
 scheduleExpression: cdk.aws_events.Schedule.cron({
   minute: '0',
@@ -205,7 +205,7 @@ if (this.globalTable && config.isPrimary) {
 - **Missing Test Infrastructure**: No test framework or validation procedures
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Comprehensive unit tests with 100% coverage
 describe('TapStack', () => {
   test('should create VPC with 1 NAT gateway for cost optimization', () => {
@@ -254,7 +254,7 @@ describe('TapStack Multi-Region Disaster Recovery Integration Tests', () => {
 - **Build Failures**: TypeScript compilation errors prevented successful builds
 
 ####  **Fixes Applied:**
-```ts
+```typescript
 // Fixed AWS SDK imports
 import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';
 // Changed from: import { ELBv2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elbv2';

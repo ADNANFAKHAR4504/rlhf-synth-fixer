@@ -15,7 +15,7 @@ The solution provisions:
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import { Fn, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
@@ -481,7 +481,7 @@ export class TapStack extends TerraformStack {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import { App } from 'cdktf';
@@ -552,7 +552,7 @@ The solution implements:
 
 The code references VPC ID 'vpc-prod-123456' which is a placeholder. Update this value in `lib/tap-stack.ts`:
 
-```ts
+```typescript
 const vpc = new DataAwsVpc(this, 'prodVpc', {
   id: 'vpc-prod-123456', // Replace with actual VPC ID
 });

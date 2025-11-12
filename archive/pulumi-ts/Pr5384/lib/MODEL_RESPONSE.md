@@ -20,7 +20,7 @@ All resources include environmentSuffix for uniqueness and follow best practices
 
 ## Complete Implementation Code
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *

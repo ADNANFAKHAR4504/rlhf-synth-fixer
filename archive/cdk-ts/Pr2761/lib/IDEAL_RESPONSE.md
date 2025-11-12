@@ -35,7 +35,7 @@ The solution implements a complete serverless application with the following arc
 
 ### bin/tap.ts - Application Entry Point
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -66,7 +66,7 @@ new TapStack(app, stackName, {
 
 ### lib/tap-stack.ts - Main Infrastructure Stack
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';

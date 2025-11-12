@@ -1,6 +1,6 @@
 Here's a complete Pulumi TypeScript implementation that creates a secure and monitorable AWS cloud environment:
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -567,7 +567,7 @@ export class SecureCloudEnvironment {
 
 To use this class, instantiate it with an environment name:
 
-```ts
+```typescript
 const environment = 'production'; // or get from Pulumi config
 const infrastructure = new SecureCloudEnvironment(environment);
 ```

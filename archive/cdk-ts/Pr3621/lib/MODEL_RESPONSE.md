@@ -42,7 +42,7 @@ I'll create a comprehensive real-time analytics platform with event-driven archi
 
 ## main.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -75,7 +75,7 @@ app.synth();
 
 ## stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

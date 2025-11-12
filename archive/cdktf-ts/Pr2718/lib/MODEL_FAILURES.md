@@ -8,7 +8,7 @@
 - Would cause CloudTrail deployment to fail entirely
 
 **Ideal Response Advantage:**
-```ts
+```typescript
 // Ideal: Proper CloudTrail bucket policy with service permissions
 new S3BucketPolicy(this, 'logs-bucket-policy', {
   bucket: this.logsBucket.id,
@@ -44,7 +44,7 @@ new S3BucketPolicy(this, 'logs-bucket-policy', {
 ### 2. KMS Key Policy Vulnerabilities
 
 **Model Failure:**
-```ts
+```typescript
 // Model: Overly permissive and incorrect KMS policy
 policy: JSON.stringify({
   Statement: [
@@ -60,7 +60,7 @@ policy: JSON.stringify({
 ```
 
 **Ideal Response Advantage:**
-```ts
+```typescript
 // Ideal: Properly scoped KMS policy with specific conditions
 policy: JSON.stringify({
   Statement: [
@@ -102,7 +102,7 @@ policy: JSON.stringify({
 ### 3. Lambda Deployment Package Error
 
 **Model Failure:**
-```ts
+```typescript
 // Model: References non-existent deployment package
 this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
   filename: 'lambda-placeholder.zip', // File doesn't exist!
@@ -112,7 +112,7 @@ this.lambdaFunction = new LambdaFunction(this, 'lambda-function', {
 ```
 
 **Ideal Response Advantage:**
-```ts
+```typescript
 // Ideal: Uses S3-based deployment with proper configuration
 this.lambdaFunction = new LambdaFunction(this, 'lambda', {
   functionName: `${config.companyName}-${config.environment}-processor`,
@@ -132,13 +132,13 @@ this.lambdaFunction = new LambdaFunction(this, 'lambda', {
 ### 4. S3 Bucket Naming Issues
 
 **Model Failure:**
-```ts
+```typescript
 // Model: Uses timestamp causing state management issues
 bucket: `${config.companyName}-${config.environment}-app-${Date.now()}`
 ```
 
 **Ideal Response Advantage:**
-```ts
+```typescript
 // Ideal: Deterministic naming for proper state management
 bucket: `${config.companyName}-${config.environment}-app`
 ```
@@ -166,13 +166,13 @@ bucket: `${config.companyName}-${config.environment}-app`
 ### 6. Resource Configuration Deficiencies
 
 **Model Failure - EC2 User Data:**
-```ts
+```typescript
 // Model: Uses userData (deprecated) instead of userDataBase64
 userData: Buffer.from(`...`).toString('base64')
 ```
 
 **Ideal Response:**
-```ts
+```typescript
 // Ideal: Proper base64 encoding with userDataBase64
 userDataBase64: Buffer.from(`...`).toString('base64')
 ```

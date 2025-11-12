@@ -10,7 +10,7 @@ The model response exhibits critical failures in network design, security best p
 
 \*\*Model Response:\*\*The `VpcModule` is incomplete, only creating the VPC and Subnets. It fails to provision core networking resources essential for a functional, multi-tier architecture:
 
-```ts
+```typescript
 // Model's VpcModule only creates Vpc and Subnets
 // ...
 // Missing Internet Gateway, NAT Gateway, EIPs, and Route Tables.
@@ -19,7 +19,7 @@ The model response exhibits critical failures in network design, security best p
 This results in a non-functional network where public subnets cannot access the internet and private subnets cannot access external services.
 \*\*Ideal Implementation:\*\*Correctly provisions and wires up all necessary network resources, creating a truly functional, secure public/private network topology:
 
-```ts
+```typescript
 // Ideal Implementation's VPCModule includes:
 // Internet Gateway
 this.internetGateway = new aws.internetGateway.InternetGateway(...)
@@ -39,7 +39,7 @@ This ensures network connectivity (IGW for public egress, NAT for private egress
 
 \*\*Model Response:\*\*Uses the low-level `AwsProvider` L1 construct with the generic `resource` block for complex resources like Target Groups, Listeners, and Route53 Zones. This approach sacrifices type safety and code quality:
 
-```ts
+```typescript
 // Example from Model's AlbModule:
 const targetGroup = new AwsProvider(this, `target-group-...`, {
   alias: 'targetGroup',
@@ -53,7 +53,7 @@ const targetGroup = new AwsProvider(this, `target-group-...`, {
 This is essentially writing HCL configuration within a TypeScript wrapper, which defeats the purpose of CDKTF's strong typing.
 \*\*Ideal Implementation:\*\*Consistently utilizes the strongly-typed **L2/L3 constructs** provided by the CDKTF AWS provider.
 
-```ts
+```typescript
 // Example from Ideal's EC2Module:
 this.targetGroup = new aws.lbTargetGroup.LbTargetGroup(this, 'tg', {
   name: resourceName('TG'),
@@ -69,7 +69,7 @@ This approach provides superior developer experience, type safety, and better in
 
 \*\*Model Response:\*\*Relies on a placeholder string that hints at manual Secrets Manager integration (`#\{AWS_SECRET\_MANAGER\_...\}`). This still requires manual out-of-band setup of the secret and does not leverage the native, zero-exposure capabilities of RDS's master password management:
 
-```ts
+```typescript
 username: config.username,
 password: `#{AWS_SECRET_MANAGER_${config.environment.toUpperCase()}_DB_PASSWORD}`,
 ```
@@ -77,7 +77,7 @@ password: `#{AWS_SECRET_MANAGER_${config.environment.toUpperCase()}_DB_PASSWORD}
 This approach is less secure as the secret reference still passes through configuration and potentially leaves artifacts.
 \*\*Ideal Implementation:\*\*Implements AWS-native password management by integrating with Secrets Manager directly:
 
-```ts
+```typescript
 // Following best practice for RDS security (as per user's format):
 manageMasterUserPassword: true,
 masterUserSecretKmsKeyId: 'alias/aws/secretsmanager', // Or similar native construct
@@ -92,7 +92,7 @@ This ensures **automatic password rotation capability** and guarantees **no pass
 
 \*\*Model Response:\*\*Employs a centralized, bulky import statement, pulling dozens of resources from the root of the `@cdktf/provider-aws` package.
 
-```ts
+```typescript
 import { 
   AwsProvider, S3Bucket, Vpc, Subnet, Instance, 
   DbInstance, LoadBalancer, Route53Record, 
@@ -104,7 +104,7 @@ import {
 This reduces tree-shaking effectiveness, leading to larger bundle sizes and slower compilation/initialization.
 \*\*Ideal Implementation:\*\*While the provided Ideal code uses a wildcard import (`import * as aws from '@cdktf/provider-aws';`), the best practice for optimized TypeScript CDKTF is to use explicit, module-level imports:
 
-```ts
+```typescript
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { LoadBalancer } from '@cdktf/provider-aws/lib/lb';
@@ -118,7 +118,7 @@ This allows for optimal **tree-shaking**, smaller bundle sizes, and clearer depe
 
 \*\*Model Response:\*\*The `Ec2Module` completely omits any explicit configuration for the Instance Metadata Service (IMDS):
 
-```ts
+```typescript
 // Model's Ec2Module and configuration interfaces are missing:
 // httpTokens: 'required' | 'optional', 
 // httpEndpoint: 'enabled' | 'disabled'
@@ -127,7 +127,7 @@ This allows for optimal **tree-shaking**, smaller bundle sizes, and clearer depe
 This leaves the instance vulnerable to potential Server-Side Request Forgery (SSRF) attacks by defaulting to IMDSv1 compatibility.
 \*\*Ideal Implementation:\*\*Should explicitly enforce a modern security posture by mandating IMDSv2 (or at least making it optional):
 
-```ts
+```typescript
 // Within an Instance or Launch Template resource:
 metadataOptions: {
   httpEndpoint: 'enabled',
@@ -144,7 +144,7 @@ This significantly enhances the security of the application running on the EC2 i
 
 \*\*Model Response:\*\*Configures all four Public Access Block settings (`blockPublicAcls`, `blockPublicPolicy`, `ignorePublicAcls`, `restrictPublicBuckets`) directly within the `S3Bucket` resource, bundling configuration logic together.
 
-```ts
+```typescript
 blockPublicAcls: config.blockPublicAccess,
 blockPublicPolicy: config.blockPublicAccess,
 ignorePublicAcls: config.blockPublicAccess,
@@ -153,7 +153,7 @@ restrictPublicBuckets: config.blockPublicAccess,
 
 \*\*Ideal Implementation:\*\*Uses the dedicated `aws_s3_bucket_public_access_block` resource, promoting separation of concerns and aligning with the principle of least privilege by treating the access block as a separate security layer that depends on the bucket.
 
-```ts
+```typescript
 // Ideal Implementation uses the dedicated L2 construct:
 public readonly bucketPublicAccessBlock: aws.s3BucketPublicAccessBlock.S3BucketPublicAccessBlock;
 // ...

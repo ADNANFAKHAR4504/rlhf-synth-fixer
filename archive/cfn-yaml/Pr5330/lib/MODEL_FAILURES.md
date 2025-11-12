@@ -197,7 +197,7 @@ BucketName: !Sub "${Environment}-transaction-archives-${EnvironmentSuffix}-${AWS
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Integration tests expected mock API keys and environments:
-```ts
+```typescript
 if (isMockEnvironment) {
     console.warn('Running with mock data');
     test.skip();
@@ -205,7 +205,7 @@ if (isMockEnvironment) {
 ```
 
 **IDEAL_RESPONSE Fix**: Enforced live deployment testing only:
-```ts
+```typescript
 if (!outputs.ApiEndpoint || outputs.ApiEndpoint.includes('mock')) {
     throw new Error('Integration tests require live AWS deployment');
 }
@@ -222,14 +222,14 @@ if (!outputs.ApiEndpoint || outputs.ApiEndpoint.includes('mock')) {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Invalid X-Ray API parameters in integration tests:
-```ts
+```typescript
 const traces = await xray.getTraceSummaries({
     TimeRangeType: 'TimeRangeByStartTime'  // Invalid value
 });
 ```
 
 **IDEAL_RESPONSE Fix**: Removed invalid parameter:
-```ts
+```typescript
 const traces = await xray.getTraceSummaries({
     TimeRangeByStartTime: startTime,
     TimeRangeByEndTime: endTime
@@ -250,12 +250,12 @@ const traces = await xray.getTraceSummaries({
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**: Direct usage of reserved keyword in DynamoDB queries:
-```ts
+```typescript
 FilterExpression: 'transaction_id = :tid AND action = :action'  // 'action' is reserved
 ```
 
 **IDEAL_RESPONSE Fix**: Used ExpressionAttributeNames for reserved keywords:
-```ts
+```typescript
 FilterExpression: 'transaction_id = :tid AND #action = :action',
 ExpressionAttributeNames: {
     '#action': 'action'
@@ -273,12 +273,12 @@ ExpressionAttributeNames: {
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**: Integration tests used dynamic naming patterns that didn't match deployed resources:
-```ts
+```typescript
 const functionName = `TapStack${environmentSuffix}-validator-prod`;
 ```
 
 **IDEAL_RESPONSE Fix**: Used explicit naming to match actual deployment:
-```ts
+```typescript
 const functionName = 'TapStackpr5330-validator-prod-pr5330';
 ```
 

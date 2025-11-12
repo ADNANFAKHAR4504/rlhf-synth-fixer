@@ -4,7 +4,7 @@ I'll create a comprehensive TypeScript-based CDK stack for your secure serverles
 
 ## Complete Infrastructure Stack Implementation
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';

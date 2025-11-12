@@ -4,7 +4,7 @@ I'll help you build a robust, multi-environment AWS infrastructure using Pulumi 
 
 **lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
@@ -682,7 +682,7 @@ export function createTapStack(name: string, config: TapStackConfig): TapStack {
 
 **test/tap-stack.unit.test.ts**
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import { TapStack, TapStackConfig } from "../lib/tap-stack";
 

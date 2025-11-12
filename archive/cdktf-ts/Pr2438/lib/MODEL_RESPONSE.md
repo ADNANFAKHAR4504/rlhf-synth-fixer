@@ -1,6 +1,6 @@
 I'll create a comprehensive CDKTF TypeScript template that provisions a highly available web application environment in AWS. This template will include all the components you specified with proper configuration for production use.
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

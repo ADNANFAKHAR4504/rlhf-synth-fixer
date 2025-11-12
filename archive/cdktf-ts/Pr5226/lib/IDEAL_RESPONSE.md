@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { Fn } from 'cdktf';
@@ -764,7 +764,7 @@ export class ComputeConstruct extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

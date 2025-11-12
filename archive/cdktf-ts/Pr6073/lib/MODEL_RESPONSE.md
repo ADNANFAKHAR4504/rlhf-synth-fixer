@@ -15,7 +15,7 @@ This implementation provides a complete infrastructure for deploying a container
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
@@ -60,7 +60,7 @@ app.synth();
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -1332,7 +1332,7 @@ MIT
    ```
 
 4. **Fargate Spot**: The implementation uses Fargate Spot with 100% weight for cost optimization. For production workloads requiring higher availability, consider using a mix:
-   ```ts
+   ```typescript
    capacityProviderStrategy: [
      { capacityProvider: 'FARGATE', weight: 50, base: 3 },
      { capacityProvider: 'FARGATE_SPOT', weight: 50, base: 0 },

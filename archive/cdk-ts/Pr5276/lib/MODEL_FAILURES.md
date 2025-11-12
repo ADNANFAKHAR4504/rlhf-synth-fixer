@@ -9,7 +9,7 @@ This analysis identifies potential failure points and areas for improvement in t
 ### 1. AWS Config Delivery Channel Syntax Error
 **Location**: `lib/tap-stack.ts:309`
 **Issue**: Missing line termination in delivery channel dependency
-```ts
+```typescript
 // Current (broken):
 deliveryChannel.addDependency(configRecorder);
 

@@ -6,7 +6,7 @@ The following issues were identified and corrected in the initial CDK TypeScript
 
 ### Database Construct Issues
 **Problem**: The `DatabaseSecret` constructor had an invalid `description` property that doesn't exist in the CDK API.
-```ts
+```typescript
 // INCORRECT
 this.credentials = new rds.DatabaseSecret(this, 'DbCredentials', {
   username: 'admin',
@@ -15,7 +15,7 @@ this.credentials = new rds.DatabaseSecret(this, 'DbCredentials', {
 ```
 
 **Solution**: Removed the invalid property.
-```ts
+```typescript
 // CORRECT
 this.credentials = new rds.DatabaseSecret(this, 'DbCredentials', {
   username: 'admin',
@@ -24,26 +24,26 @@ this.credentials = new rds.DatabaseSecret(this, 'DbCredentials', {
 
 ### RDS CloudWatch Log Export Issue
 **Problem**: The log type 'slow-query' was incompatible with MySQL 8.0.
-```ts
+```typescript
 // INCORRECT
 cloudwatchLogsExports: ['error', 'general', 'slow-query'],
 ```
 
 **Solution**: Corrected to use the proper log type name.
-```ts
+```typescript
 // CORRECT
 cloudwatchLogsExports: ['error', 'general', 'slowquery'],
 ```
 
 ### EC2 Instance Metrics Issue
 **Problem**: Direct method calls for metrics were not available on EC2 instances.
-```ts
+```typescript
 // INCORRECT
 metric: instance.metricCpuUtilization(),
 ```
 
 **Solution**: Created metrics manually using the CloudWatch Metric constructor.
-```ts
+```typescript
 // CORRECT
 metric: new cloudwatch.Metric({
   namespace: 'AWS/EC2',
@@ -60,7 +60,7 @@ metric: new cloudwatch.Metric({
 **Problem**: S3 buckets couldn't be deleted when the stack was destroyed because they contained objects.
 
 **Solution**: Added `removalPolicy` and `autoDeleteObjects` properties.
-```ts
+```typescript
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true,
 ```
@@ -69,7 +69,7 @@ autoDeleteObjects: true,
 **Problem**: Database instance couldn't be destroyed during development/testing.
 
 **Solution**: Added explicit removal policy.
-```ts
+```typescript
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 deletionProtection: false, // Set to true in production
 ```
@@ -80,7 +80,7 @@ deletionProtection: false, // Set to true in production
 **Problem**: The stack wasn't deploying to the required us-west-2 region consistently.
 
 **Solution**: Added explicit region configuration in the stack entry point.
-```ts
+```typescript
 env: {
   account: process.env.CDK_DEFAULT_ACCOUNT,
   region: process.env.CDK_DEFAULT_REGION || 'us-west-2',
@@ -93,7 +93,7 @@ env: {
 **Problem**: Database instances didn't have unique names per environment.
 
 **Solution**: Added database name with environment suffix.
-```ts
+```typescript
 databaseName: `webapp${props.environmentSuffix.replace('-', '')}`,
 ```
 
@@ -115,13 +115,13 @@ bash install
 
 ### Deprecated CDK Properties
 **Problem**: Using deprecated VPC `cidr` property.
-```ts
+```typescript
 // DEPRECATED
 cidr: props.cidrBlock || '10.0.0.0/16',
 ```
 
 **Solution**: Updated to use modern API.
-```ts
+```typescript
 // CURRENT
 ipAddresses: ec2.IpAddresses.cidr(props.cidrBlock || '10.0.0.0/16'),
 ```
@@ -130,7 +130,7 @@ ipAddresses: ec2.IpAddresses.cidr(props.cidrBlock || '10.0.0.0/16'),
 **Problem**: VPC wasn't restricting default security group.
 
 **Solution**: Added restriction flag.
-```ts
+```typescript
 restrictDefaultSecurityGroup: true,
 ```
 
@@ -184,7 +184,7 @@ restrictDefaultSecurityGroup: true,
 **Problem**: No easy way to reference EC2 instance IDs.
 
 **Solution**: Store instance IDs in SSM Parameter Store.
-```ts
+```typescript
 new ssm.StringParameter(this, `Instance${index + 1}IdParam`, {
   parameterName: `/webapp/${props.environmentSuffix}/instance-${index + 1}-id`,
   stringValue: instance.instanceId,
@@ -195,7 +195,7 @@ new ssm.StringParameter(this, `Instance${index + 1}IdParam`, {
 **Problem**: RDS lacked performance monitoring capabilities.
 
 **Solution**: Enabled Performance Insights.
-```ts
+```typescript
 enablePerformanceInsights: true,
 performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
 ```
@@ -206,7 +206,7 @@ performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
 **Problem**: No defined backup and maintenance windows.
 
 **Solution**: Added scheduled windows.
-```ts
+```typescript
 preferredBackupWindow: '03:00-04:00',
 preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
 ```
@@ -215,7 +215,7 @@ preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
 **Problem**: No clear path to enable high availability.
 
 **Solution**: Added configurable Multi-AZ with comments.
-```ts
+```typescript
 multiAz: false, // Set to true in production for high availability
 ```
 

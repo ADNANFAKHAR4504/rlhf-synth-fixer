@@ -1,6 +1,6 @@
 I'll complete the response from where it was cut off:
 
-```ts
+```typescript
     // ===========================================
     // CloudWatch Alarms
     // ===========================================

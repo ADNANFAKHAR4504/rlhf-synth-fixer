@@ -19,7 +19,7 @@ The infrastructure consists of:
 
 This is the main orchestration file that brings together all constructs:
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -138,7 +138,7 @@ export class TapStack extends TerraformStack {
 
 Creates VPC with public/private subnets, NAT Gateway, and routing:
 
-```ts
+```typescript
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { Eip } from '@cdktf/provider-aws/lib/eip';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
@@ -311,7 +311,7 @@ export class NetworkingConstruct extends Construct {
 
 Creates three KMS keys for different services with proper policies:
 
-```ts
+```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
@@ -494,7 +494,7 @@ export class KmsConstruct extends Construct {
 
 Creates PostgreSQL database with comprehensive security features:
 
-```ts
+```typescript
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -723,7 +723,7 @@ export class RdsConstruct extends Construct {
 
 Creates Redis cluster with high availability and encryption:
 
-```ts
+```typescript
 import { ElasticacheReplicationGroup } from '@cdktf/provider-aws/lib/elasticache-replication-group';
 import { ElasticacheSubnetGroup } from '@cdktf/provider-aws/lib/elasticache-subnet-group';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
@@ -834,7 +834,7 @@ export class ElastiCacheConstruct extends Construct {
 
 Creates ECS Fargate cluster with Application Load Balancer:
 
-```ts
+```typescript
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
 import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';

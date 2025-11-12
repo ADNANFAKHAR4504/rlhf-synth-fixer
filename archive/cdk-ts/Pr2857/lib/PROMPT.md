@@ -33,7 +33,7 @@ Resource naming should follow organizational standards using the pattern 'orgnam
 
 Here is the existing CDK stack file at ./lib/tap-stack.ts that needs to be updated:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

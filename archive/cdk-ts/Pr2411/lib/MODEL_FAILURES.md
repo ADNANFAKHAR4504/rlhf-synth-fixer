@@ -74,7 +74,7 @@ Root Cause: Improper resource dependency management - WAF association attempted 
 Impact: Deployment failures during infrastructure provisioning.
 
 Solution Applied: Added explicit resource dependencies:
-```ts
+```typescript
 wafAssociation.addDependency(webAcl);
 wafAssociation.node.addDependency(api.deploymentStage);
 ```

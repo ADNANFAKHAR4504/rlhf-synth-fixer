@@ -6,7 +6,7 @@ This solution implements a complete multi-environment data pipeline infrastructu
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -286,7 +286,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

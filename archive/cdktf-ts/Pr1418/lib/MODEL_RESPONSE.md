@@ -4,7 +4,7 @@ I'll create a comprehensive CDKTF configuration that meets all your security and
 
 **interfaces/config.ts**
 
-```ts
+```typescript
 export interface CommonTags {
   Project: string;
   Environment: string;
@@ -47,7 +47,7 @@ export interface AppConfig {
 
 ** Tap-stack **
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning';

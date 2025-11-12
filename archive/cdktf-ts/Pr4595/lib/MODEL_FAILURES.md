@@ -3,7 +3,7 @@
 ### 1. S3 Bucket Naming Convention Violation
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // tap-stack.ts line 97-98
 const publicS3Module = new S3BucketConstruct(this, 'public-s3', {
   bucketName: `${id}-${environmentSuffix}-public-assets`, // UPPERCASE LETTERS IN BUCKET NAME
@@ -16,7 +16,7 @@ api error InvalidBucketName: The specified bucket is not valid.
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts line 102
 bucketName: `${id.toLowerCase()}-${environmentSuffix}-pubblic-assets`, // Convert to lowercase
 ```
@@ -26,7 +26,7 @@ bucketName: `${id.toLowerCase()}-${environmentSuffix}-pubblic-assets`, // Conver
 ### 2. IAM Instance Profile Reference Error
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // tap-stack.ts line 198-199
 this.instance = new Instance(scope, 'public-instance', {
   iamInstanceProfile: ec2Role.name, // WRONG: Using role name instead of instance profile
@@ -40,7 +40,7 @@ Invalid IAM Instance Profile name
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts line 171-176
 const ec2InstanceProfile = new IamInstanceProfile(this, 'ec2-instance-profile', {
   name: `${id}-${environmentSuffix}-instannce-profile`,
@@ -56,7 +56,7 @@ iamInstanceProfile: ec2InstanceProfile.name, // Use instance profile name, not r
 ### 3. Random Password Resource Missing Declaration
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // modules.ts line 581-582
 this.secretVersion = new SecretsmanagerSecretVersion(this, 'secret-version', {
   secretString: JSON.stringify({
@@ -70,7 +70,7 @@ A managed resource "random_password" "db" has not been declared in the root modu
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts line 476-482
 // Generate random password for database
 this.dbPassword = new Password(this, 'db-password', {
@@ -84,7 +84,7 @@ password: this.dbPassword.result, // Use Password resource result
 ```
 
 **Additional Required Provider:**
-```ts
+```typescript
 // tap-stack.ts line 36
 new RandomProvider(this, 'random', {});
 ```
@@ -94,7 +94,7 @@ new RandomProvider(this, 'random', {});
 ### 4. RDS KMS Key ARN vs ID Mismatch
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // tap-stack.ts line 264
 kmsKeyId: kmsModule.key.id, // WRONG: Using .id instead of .arn
 ```
@@ -106,7 +106,7 @@ arn: invalid prefix
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts line 269
 kmsKeyId: kmsModule.key.arn, // Changed from .id to .arn
 ```
@@ -116,7 +116,7 @@ kmsKeyId: kmsModule.key.arn, // Changed from .id to .arn
 ### 5. DB Subnet Group Naming Constraint
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // modules.ts line 488
 const subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
   name: `${props.instanceIdentifier}-subnet-group`, // Can contain uppercase
@@ -129,7 +129,7 @@ and spaces allowed in "name"
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts line 488
 const subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
   name: `${props.instanceIdentifier.toLowerCase()}-subnet-group`, // Force lowercase
@@ -140,7 +140,7 @@ const subnetGroup = new DbSubnetGroup(this, 'subnet-group', {
 ### 6. Empty IAM Policy Resources Array
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // modules.ts line 312
 static getEc2InstancePolicy(bucketArns: string[], secretArns: string[]): any {
   return {
@@ -161,7 +161,7 @@ Policy statement must contain resources.
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts line 312-336
 static getEc2InstancePolicy(bucketArns: string[], secretArns: string[]): any {
   const statements: any[] = [];
@@ -190,7 +190,7 @@ static getEc2InstancePolicy(bucketArns: string[], secretArns: string[]): any {
 ### 7. IAM Role Policy Attachment Reference Error
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // modules.ts line 287
 new IamRolePolicy(this, `${config.roleName}-${policy.policyName}`, {
   role: role.id, // WRONG: Using role.id instead of role.name
@@ -202,7 +202,7 @@ Error: Invalid reference to IAM role in policy attachment
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts line 292
 new IamRolePolicy(this, `${config.roleName}-${policy.policyName}`, {
   role: role.name, // Changed from role.id to role.name
@@ -216,7 +216,7 @@ new IamRolePolicy(this, `${config.roleName}-${policy.policyName}`, {
 ### 8. RDS Instance Identifier Case Sensitivity
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // tap-stack.ts line 256
 instanceIdentifier: `${id}-${environmentSuffix}-db`, // Can contain uppercase
 ```
@@ -227,7 +227,7 @@ RDS instance identifiers must be lowercase
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts line 252 & 261
 projectName: id.toLowerCase(),
 instanceIdentifier: `${id.toLowerCase()}-${environmentSuffix}-db`,
@@ -238,13 +238,13 @@ instanceIdentifier: `${id.toLowerCase()}-${environmentSuffix}-db`,
 ### 9. S3 Bucket Typo in Resource Names
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // tap-stack.ts line 109
 bucketName: `${id.toLowerCase()}-${environmentSuffix}-private-data`,
 ```
 
 **Ideal Response (INTENTIONAL TYPOS FOR TESTING):**
-```ts
+```typescript
 // tap-stack.ts line 102 & 110
 bucketName: `${id.toLowerCase()}-${environmentSuffix}-pubblic-assets`, // "pubblic" typo
 bucketName: `${id.toLowerCase()}-${environmentSuffix}-priivate-data`,  // "priivate" typo
@@ -256,13 +256,13 @@ bucketName: `${id.toLowerCase()}-${environmentSuffix}-priivate-data`,  // "priiv
 ### 10. EC2 Role Name Typo
 
 **Model Response (FAILED):**
-```ts
+```typescript
 // tap-stack.ts line 145
 roleName: `${id}-${environmentSuffix}-ec2-role`,
 ```
 
 **Ideal Response (CONTAINS TYPO):**
-```ts
+```typescript
 // tap-stack.ts line 150
 roleName: `${id}-${environmentSuffix}-ecc2-role`, // "ecc2" typo
 ```
@@ -272,12 +272,12 @@ roleName: `${id}-${environmentSuffix}-ecc2-role`, // "ecc2" typo
 ### 11. Instance Profile Name Typo
 
 **Model Response (FAILED):**
-```ts
+```typescript
 name: `${id}-${environmentSuffix}-instance-profile`,
 ```
 
 **Ideal Response (CONTAINS TYPO):**
-```ts
+```typescript
 // tap-stack.ts line 172
 name: `${id}-${environmentSuffix}-instannce-profile`, // "instannce" typo
 ```

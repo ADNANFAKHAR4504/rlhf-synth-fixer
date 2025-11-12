@@ -1,6 +1,6 @@
 ## `lib/modules.ts`
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -388,7 +388,7 @@ export class RdsModule extends Construct {
 
 ## `lib/tap-stack.ts`
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider, DataAwsAvailabilityZones } from "@cdktf/provider-aws";
@@ -570,7 +570,7 @@ To use this CDKTF project:
    ```
 
 2. **Create main.ts** (if needed):
-   ```ts
+   ```typescript
    import { App } from "cdktf";
    import { TapStack } from "./lib/tap-stack";
 

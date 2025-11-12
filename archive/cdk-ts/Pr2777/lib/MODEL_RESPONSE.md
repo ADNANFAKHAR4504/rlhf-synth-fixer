@@ -58,7 +58,7 @@ I'll need to be careful about:
 
 I'll create a comprehensive TypeScript file that defines a production-ready AWS CDK stack meeting all your requirements. This stack follows AWS best practices for security, networking, and resource organization.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

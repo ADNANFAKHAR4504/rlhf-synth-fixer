@@ -15,7 +15,7 @@ This is the production-ready CDK TypeScript solution for creating a CI/CD pipeli
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

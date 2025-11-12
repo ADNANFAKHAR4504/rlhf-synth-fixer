@@ -1,4 +1,4 @@
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput, Fn } from 'cdktf';
 import {

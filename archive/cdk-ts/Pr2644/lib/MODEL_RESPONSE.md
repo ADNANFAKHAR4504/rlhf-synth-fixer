@@ -1,7 +1,7 @@
 
 ## lib/tapstack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -409,7 +409,7 @@ export class TapStack extends cdk.Stack {
 
 ## test/tapstack.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tapstack';
@@ -729,7 +729,7 @@ describe('TapStack', () => {
 
 To deploy this stack with a custom domain:
 
-```ts
+```typescript
 const app = new cdk.App();
 new TapStack(app, 'ProdTapStack', {
   env: {

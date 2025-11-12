@@ -10,7 +10,7 @@ Error: reading ZIP file (lambda.zip): open lambda.zip: no such file or directory
 ```
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // lib/modules.ts - LambdaFunctionConstruct
 const lambdaFunction = new LambdaFunction(this, 'function', {
   functionName: props.name,
@@ -32,7 +32,7 @@ archive.finalize();
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // lib/modules.ts - LambdaModule
 import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
 
@@ -71,13 +71,13 @@ failed to satisfy constraint: Member must have length greater than or equal to 1
 ```
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // MODEL_RESPONSE - No CloudWatch alarm for ALB metrics
 // Missing proper ALB dimension handling
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // lib/modules.ts - CloudWatchModule
 // .Proper ALB ARN parsing and validation
 if (props.albArn && props.albArn.includes('loadbalancer/app/')) {
@@ -107,7 +107,7 @@ if (props.albArn && props.albArn.includes('loadbalancer/app/')) {
 ### 3. Missing Archive Provider Configuration X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // tap-stack.ts
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, name: string, config: TapStackConfig) {
@@ -121,7 +121,7 @@ export class TapStack extends TerraformStack {
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -142,7 +142,7 @@ export class TapStack extends TerraformStack {
 ### 4. ALB Target Group VPC ID Extraction Failure X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // modules.ts - ApplicationLoadBalancerConstruct
 const targetGroup = new AlbTargetGroup(this, 'target-group', {
   name: `${props.name}-tg`,
@@ -155,7 +155,7 @@ const targetGroup = new AlbTargetGroup(this, 'target-group', {
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts - AlbModule
 constructor(
   scope: Construct,
@@ -188,7 +188,7 @@ ResourceAlreadyExistsException: The specified log group already exists
 ```
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // modules.ts - LambdaFunctionConstruct
 const logGroup = new CloudwatchLogGroup(this, 'log-group', {
   name: `/aws/lambda/${props.name}`,
@@ -204,7 +204,7 @@ const lambdaFunction = new LambdaFunction(this, 'function', {
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts - LambdaModule
 // .Creates log group BEFORE Lambda function with explicit name
 new CloudwatchLogGroup(this, 'lambda-log-group', {
@@ -224,14 +224,14 @@ this.function = new LambdaFunction(this, 'function', {
 ### 6. S3 Backend State Locking Configuration Failure X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // tap-stack.ts
 // X No S3 backend configuration - uses local state file
 // Missing state locking completely
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts
 // .Configure S3 Backend with native state locking
 new S3Backend(this, {
@@ -250,7 +250,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 7. Module Dependency Ordering Failure X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // tap-stack.ts - Wrong module creation order
 // Creates IAM roles before SQS queue exists
 const lambdaRole = new IamRoleConstruct(this, 'lambda-role', {
@@ -271,7 +271,7 @@ const sqsQueue = new SqsQueueConstruct(this, 'sqs-queue', {
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // tap-stack.ts - Correct dependency order
 // .1. Create SQS Module first
 const sqsModule = new SqsModule(this, 'sqs', {
@@ -292,7 +292,7 @@ const iamRolesModule = new IamRolesModule(this, 'iam-roles', {
 ### 8. ALB Access Logs S3 Bucket Policy Failure X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // modules.ts - ApplicationLoadBalancerConstruct
 const alb = new Alb(this, 'alb', {
   accessLogs: {
@@ -302,7 +302,7 @@ const alb = new Alb(this, 'alb', {
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts - AlbModule
 // .Creates S3 bucket with proper ALB logging permissions
 new S3BucketPolicy(this, 'alb-logs-policy', {
@@ -336,7 +336,7 @@ this.alb = new Alb(this, 'alb', {
 ### 9. Lambda Event Source Mapping Configuration Failure X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // modules.ts - Hard-coded Lambda code in constructor
 code: `
 exports.handler = async (event) => {
@@ -346,7 +346,7 @@ exports.handler = async (event) => {
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts - LambdaModule
 // .Properly structured Lambda handler code
 const handlerCode = `
@@ -389,13 +389,13 @@ async function processMessage(data) {
 ### 10. Auto Scaling Group Launch Template User Data Encoding X
 
 **Model Response (BROKEN):**
-```ts
+```typescript
 // modules.ts - AutoScalingGroupConstruct
 userData: Fn.base64encode(props.userData),  // X Double encoding
 ```
 
 **Ideal Response (FIXED):**
-```ts
+```typescript
 // modules.ts - AsgModule
 const userData = `#!/bin/bash
 yum update -y

@@ -1,6 +1,6 @@
 **lib/modules.ts**
 
-```ts
+```typescript
 /**
  * Reusable infrastructure modules for AWS security-focused components.
  * Contains functions to create KMS keys, S3 buckets, SNS topics, SQS queues, and IAM roles
@@ -506,7 +506,7 @@ export function createLeastPrivilegeIamRoles(
 
 **lib/tap-stack.ts**
 
-```ts
+```typescript
 /**
  * Main TAP (Test, Alert, Process) Stack - Production-ready AWS infrastructure
  * Creates secure S3, SNS, SQS, and KMS resources with least-privilege IAM roles.

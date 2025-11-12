@@ -30,7 +30,7 @@ Key architectural decisions:
 
 Here's a comprehensive AWS CDK v2 TypeScript implementation of a multi-region active-passive disaster recovery environment for a financial services platform:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';

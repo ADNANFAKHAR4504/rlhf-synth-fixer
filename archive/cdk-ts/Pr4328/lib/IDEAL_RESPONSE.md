@@ -25,7 +25,7 @@ cdk.json                # CDK configuration file
 
 ### File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
@@ -50,7 +50,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 
 ### File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -428,7 +428,7 @@ export class TapStack extends cdk.Stack {
 
 ### File: lib/lambda/index.ts
 
-```ts
+```typescript
 import {
   DynamoDBClient,
   PutItemCommand,

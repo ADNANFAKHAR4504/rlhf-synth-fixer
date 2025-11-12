@@ -1,6 +1,6 @@
 I'll fix the TypeScript errors in the code. Here's the corrected version:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -749,7 +749,7 @@ if (require.main === module) {
 
 1. **API Gateway Throttling Fix**:
 
-   ```ts
+   ```typescript
    // Before (invalid)
    deployOptions: {
      throttleSettings: { ... } // This property doesn't exist
@@ -769,7 +769,7 @@ if (require.main === module) {
 
 2. **X-Ray Sampling Rule Fix**:
 
-   ```ts
+   ```typescript
    // Before (missing resourceArn)
    samplingRule: {
      // ... other properties

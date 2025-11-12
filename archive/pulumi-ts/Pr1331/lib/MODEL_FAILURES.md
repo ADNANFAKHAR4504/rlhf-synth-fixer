@@ -15,7 +15,7 @@ This document outlines the critical issues found in the initial MODEL_RESPONSE i
 - Array type mismatches for subnet IDs
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (INCORRECT)
 port: '80'  // String
 
@@ -41,7 +41,7 @@ privateSubnetIds: pulumi.all(this.networkStack.privateSubnets.map(s => s.id))  /
 - Used non-existent `pulumi.providers.aws.Provider`
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (INCORRECT)
 const awsProvider = new pulumi.providers.aws.Provider('aws-provider', {
   region: 'us-west-2',
@@ -62,7 +62,7 @@ const awsProvider = new aws.Provider('aws-provider', {
 - RDS cluster would create final snapshots
 
 **Fix Applied**:
-```ts
+```typescript
 // S3 Bucket - Added forceDestroy
 this.logsBucket = new aws.s3.Bucket(
   `${name}-logs-bucket`,
@@ -92,7 +92,7 @@ this.dbCluster = new aws.rds.Cluster(
 - Elastic IP address limit exceeded
 
 **Fix Applied**:
-```ts
+```typescript
 // Changed region from us-west-2 to us-east-1
 region: 'us-east-1'
 
@@ -115,7 +115,7 @@ this.natGateways = [natGateway];
 - CI/CD pipeline couldn't override the suffix
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (INCORRECT)
 const environmentSuffix = config.get('env') || 'dev';
 
@@ -130,7 +130,7 @@ const environmentSuffix =
 - `serverSideEncryptionConfiguration` was nested incorrectly
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (INCORRECT)
 new aws.s3.BucketServerSideEncryptionConfigurationV2(
   `${name}-logs-encryption`,
@@ -164,7 +164,7 @@ new aws.s3.BucketServerSideEncryptionConfigurationV2(
 - Integration tests couldn't validate real resources
 
 **Fix Applied**:
-```ts
+```typescript
 // Added to bin/tap.ts
 export const vpcId = stack.networkStack.vpc.id;
 export const albDnsName = stack.computeStack.applicationLoadBalancer.dnsName;

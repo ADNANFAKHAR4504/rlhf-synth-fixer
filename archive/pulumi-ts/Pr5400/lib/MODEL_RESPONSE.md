@@ -16,7 +16,7 @@ The solution uses an event-driven architecture where production configuration ch
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import { DataPipelineEnvironment } from "./environment-component";
 
@@ -58,7 +58,7 @@ if (environment === "prod") {
 
 ## File: environment-component.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { EnvironmentConfig } from "./types";
@@ -406,7 +406,7 @@ export class DataPipelineEnvironment extends pulumi.ComponentResource {
 
 ## File: types.ts
 
-```ts
+```typescript
 export interface EnvironmentConfig {
     environment: string;
     environmentSuffix: string;
@@ -445,7 +445,7 @@ export interface ReplicationResult {
 
 ## File: lambda/replication/index.ts
 
-```ts
+```typescript
 import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { DynamoDBClient, GetItemCommand, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { SNSClient, PublishCommand } from "@aws-sdk/client-sns";
@@ -749,7 +749,7 @@ pulumi up
 
 To use stack references for cross-stack communication:
 
-```ts
+```typescript
 const devStack = new pulumi.StackReference("organization/project/dev");
 const devBucketName = devStack.getOutput("bucketName");
 ```

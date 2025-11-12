@@ -35,13 +35,13 @@ During the QA validation of the food delivery API infrastructure, several critic
 **Problem**: TypeScript imports were incorrectly structured for AWS Lambda Powertools.
 
 **Root Cause**: The original import attempted to use a non-existent package:
-```ts
+```typescript
 import { Logger, Metrics, Tracer } from '@aws-lambda-powertools/typescript';
 ```
 
 **Fix Applied**:
 - Corrected imports to use individual packages:
-```ts
+```typescript
 import { Logger } from '@aws-lambda-powertools/logger';
 import { Metrics, MetricUnit } from '@aws-lambda-powertools/metrics';
 import { Tracer } from '@aws-lambda-powertools/tracer';

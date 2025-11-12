@@ -31,7 +31,7 @@ Resource handler returned message: "Could not parse SecretString JSON" (RequestT
 
 **MODEL_RESPONSE Issue (Line 155 in lib/migration-stack.ts)**:
 
-```ts
+```typescript
 this.database = new rds.DatabaseInstance(
   this,
   `Database-${environmentSuffix}`,
@@ -45,7 +45,7 @@ this.database = new rds.DatabaseInstance(
 
 **IDEAL_RESPONSE Fix (Lines 204-207)**:
 
-```ts
+```typescript
 credentials: rds.Credentials.fromPassword(
   dbSecret.secretValueFromJson('username').unsafeUnwrap(),
   dbSecret.secretValueFromJson('password')
@@ -87,7 +87,7 @@ This plain format lacks the `engine` field and other RDS-specific metadata, caus
 
 When working with existing (non-RDS-generated) secrets, the credentials must be constructed using `rds.Credentials.fromPassword()` by extracting individual JSON fields:
 
-```ts
+```typescript
 credentials: rds.Credentials.fromPassword(
   dbSecret.secretValueFromJson('username').unsafeUnwrap(),
   dbSecret.secretValueFromJson('password')
@@ -137,7 +137,7 @@ The Redis cluster was successfully created but entered an invalid state during t
 When the RDS database creation failed, CloudFormation automatically attempted to rollback all successfully created resources. The ElastiCache Redis cluster (created at lines 291-309 in lib/migration-stack.ts) was in a transitional state when the rollback began, causing the deletion to fail with "InvalidReplicationGroupState".
 
 The Redis configuration itself was correct:
-```ts
+```typescript
 const redisCluster = new elasticache.CfnReplicationGroup(
   this,
   `RedisCluster-${environmentSuffix}`,
@@ -277,7 +277,7 @@ However, modern AWS CDK (v2) has built-in support for bundling Lambda dependenci
 
 Use CDK's `PythonFunction` construct instead of manual bundling:
 
-```ts
+```typescript
 import { PythonFunction } from '@aws-cdk/aws-lambda-python-alpha';
 
 const preMigrationFunction = new PythonFunction(this, `PreMigrationFunc-${environmentSuffix}`, {

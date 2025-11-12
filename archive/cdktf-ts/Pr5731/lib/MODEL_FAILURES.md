@@ -13,7 +13,7 @@ The ideal response demonstrates significantly better understanding of CDKTF arch
 **Location:** `modules.ts` - NetworkingModule constructor
 
 **Model Response Code:**
-```ts
+```typescript
 availabilityZone: `${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1" : "us-east-1"}${az}`
 ```
 
@@ -24,7 +24,7 @@ availabilityZone: `${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1"
 - This code would cause compilation errors
 
 **Ideal Response Code:**
-```ts
+```typescript
 const awsRegion = config.awsRegion || 'us-east-1';
 // Later used as:
 availabilityZone: `${awsRegion}${az}`
@@ -43,7 +43,7 @@ availabilityZone: `${awsRegion}${az}`
 **Location:** `modules.ts` - NetworkingModule NAT Gateway creation
 
 **Model Response Code:**
-```ts
+```typescript
 const eip = new aws.eip.Eip(this, `nat-eip-${az}`, {
   vpc: true,  // DEPRECATED
   tags: {...}
@@ -55,7 +55,7 @@ const eip = new aws.eip.Eip(this, `nat-eip-${az}`, {
 - Should use `domain: 'vpc'` instead
 
 **Ideal Response Code:**
-```ts
+```typescript
 const eip = new aws.eip.Eip(this, `nat-eip-${az}`, {
   domain: 'vpc',  // CORRECT
   tags: {...}
@@ -75,7 +75,7 @@ const eip = new aws.eip.Eip(this, `nat-eip-${az}`, {
 **Location:** `modules.ts` - DatabaseModule
 
 **Model Response Code:**
-```ts
+```typescript
 const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
   this,
   "db-password",
@@ -92,7 +92,7 @@ const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanag
 - Uses wrong data source entirely
 
 **Ideal Response Code:**
-```ts
+```typescript
 const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
   this,
   "db-password",
@@ -116,7 +116,7 @@ const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanag
 **Location:** `modules.ts` - DatabaseModule RDS Cluster
 
 **Model Response Code:**
-```ts
+```typescript
 this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
   // ...
   masterPassword: password.randomPassword,  // WRONG
@@ -130,7 +130,7 @@ this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
 - Ignores the better practice of `manageMasterUserPassword: true`
 
 **Ideal Response Code:**
-```ts
+```typescript
 this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
   // ...
   manageMasterUserPassword: true,  // CORRECT - AWS manages the password
@@ -156,7 +156,7 @@ this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
 - VPC peering implementation is incomplete and incorrect
 
 **Model Response Code (tap-stack.ts):**
-```ts
+```typescript
 // Add routes for VPC peering
 new aws.route.Route(stacks.staging, "staging-to-prod-route", {
   routeTableId: stacks.staging.network.privateSubnets[0].id,  // WRONG: using subnet ID instead of route table ID
@@ -172,7 +172,7 @@ new aws.route.Route(stacks.staging, "staging-to-prod-route", {
 - No reverse routes from prod to staging properly configured
 
 **Ideal Response Code:**
-```ts
+```typescript
 export class VPCPeeringModule extends Construct {
   public peeringConnection: aws.vpcPeeringConnection.VpcPeeringConnection;
   private routeCounter = 0;
@@ -219,7 +219,7 @@ stagingNetwork.privateRouteTables.forEach(rt => {
 - Cannot be accessed for VPC peering configuration
 
 **Model Response Code:**
-```ts
+```typescript
 export class NetworkingModule extends Construct {
   public vpc: aws.vpc.Vpc;
   public publicSubnets: aws.subnet.Subnet[] = [];
@@ -230,7 +230,7 @@ export class NetworkingModule extends Construct {
 ```
 
 **Ideal Response Code:**
-```ts
+```typescript
 export class NetworkingModule extends Construct {
   public vpc: aws.vpc.Vpc;
   public publicSubnets: aws.subnet.Subnet[] = [];
@@ -256,7 +256,7 @@ export class NetworkingModule extends Construct {
 **Location:** `modules.ts` - ComputeModule
 
 **Model Response Code:**
-```ts
+```typescript
 const serviceSecurityGroup = new aws.securityGroup.SecurityGroup(this, "service-sg", {
   // ...
   ingress: [{
@@ -274,7 +274,7 @@ const serviceSecurityGroup = new aws.securityGroup.SecurityGroup(this, "service-
 - Type mismatch will cause Terraform errors
 
 **Ideal Response:**
-```ts
+```typescript
 constructor(
   // ...
   albSecurityGroupId: string,  // Pass specific SG ID
@@ -305,7 +305,7 @@ constructor(
 **Location:** `modules.ts` - ComputeModule constructor signature
 
 **Model Response Code:**
-```ts
+```typescript
 export class ComputeModule extends Construct {
   constructor(
     scope: Construct,
@@ -324,7 +324,7 @@ export class ComputeModule extends Construct {
 - Violates dependency inversion principle
 
 **Ideal Response:**
-```ts
+```typescript
 export class ComputeModule extends Construct {
   constructor(
     scope: Construct,
@@ -351,7 +351,7 @@ export class ComputeModule extends Construct {
 **Location:** `modules.ts` - ComputeModule
 
 **Model Response Code:**
-```ts
+```typescript
 this.service = new aws.ecsService.EcsService(this, "service", {
   // ...
   dependsOn: [capacityProvider],  // MISSING database dependency
@@ -364,7 +364,7 @@ this.service = new aws.ecsService.EcsService(this, "service", {
 - Can cause application startup failures
 
 **Ideal Response:**
-```ts
+```typescript
 constructor(
   // ...
   database?: DatabaseModule  // Database parameter included
@@ -390,7 +390,7 @@ constructor(
 **Location:** `modules.ts` - NetworkingModule VPC Endpoints
 
 **Model Response Code:**
-```ts
+```typescript
 endpoints.forEach((endpoint) => {
   const endpointType = endpoint === "s3" ? "Gateway" : "Interface";
   
@@ -415,7 +415,7 @@ endpoints.forEach((endpoint) => {
 - No explicit network access control
 
 **Ideal Response:**
-```ts
+```typescript
 // Interface endpoints should have explicit security groups
 ...(endpointType === "Interface" ? {
   subnetIds: this.privateSubnets.map(s => s.id),
@@ -442,7 +442,7 @@ endpoints.forEach((endpoint) => {
 - Violates Terraform stack boundaries
 
 **Model Response Code:**
-```ts
+```typescript
 class EnvironmentStack extends TerraformStack {
   // Each environment is a separate stack
 }
@@ -465,7 +465,7 @@ const peeringConnection = new aws.vpcPeeringConnection.VpcPeeringConnection(
 - Overly complex for single deployment unit
 
 **Ideal Response:**
-```ts
+```typescript
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -501,7 +501,7 @@ export class TapStack extends TerraformStack {
 **Location:** `modules.ts` - LoadBalancerModule
 
 **Model Response Code:**
-```ts
+```typescript
 export class LoadBalancerModule extends Construct {
   public alb: aws.alb.Alb;
   // MISSING: public securityGroup property
@@ -522,7 +522,7 @@ export class LoadBalancerModule extends Construct {
 - Forces passing entire ALB object (architectural flaw #8)
 
 **Ideal Response:**
-```ts
+```typescript
 export class LoadBalancerModule extends Construct {
   public alb: aws.alb.Alb;
   public securityGroup: aws.securityGroup.SecurityGroup;  // EXPOSED
@@ -550,7 +550,7 @@ export class LoadBalancerModule extends Construct {
 **Location:** `tap-stack.ts` - ALB Listener setup
 
 **Model Response Code:**
-```ts
+```typescript
 const listener = new aws.albListener.AlbListener(this, "alb-listener", {
   loadBalancerArn: loadBalancer.alb.arn,
   port: 80,
@@ -584,7 +584,7 @@ new aws.albListenerRule.AlbListenerRule(this, "alb-rule", {
 - Fixed response message uses template syntax incorrectly
 
 **Ideal Response:**
-```ts
+```typescript
 export class LoadBalancerModule extends Construct {
   // ...
   public createListener(targetGroup: aws.albTargetGroup.AlbTargetGroup) {
@@ -617,7 +617,7 @@ loadBalancer.createListener(compute.targetGroup);
 **Location:** `modules.ts` - EnvironmentConfig interface
 
 **Model Response Code:**
-```ts
+```typescript
 export interface EnvironmentConfig {
   name: string;
   cidrBlock: string;
@@ -634,7 +634,7 @@ export interface EnvironmentConfig {
 - Cannot deploy same code to different regions
 
 **Ideal Response:**
-```ts
+```typescript
 export interface EnvironmentConfig {
   name: string;
   cidrBlock: string;
@@ -658,7 +658,7 @@ export interface EnvironmentConfig {
 **Location:** `tap-stack.ts` - Provider and backend setup
 
 **Model Response Code:**
-```ts
+```typescript
 class EnvironmentStack extends TerraformStack {
   constructor(scope: Construct, id: string, config: EnvironmentConfig) {
     super(scope, id);
@@ -688,7 +688,7 @@ class EnvironmentStack extends TerraformStack {
 - No flexibility for different deployment scenarios
 
 **Ideal Response:**
-```ts
+```typescript
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -721,7 +721,7 @@ export class TapStack extends TerraformStack {
 **Location:** `modules.ts` - DNSModule
 
 **Model Response Code:**
-```ts
+```typescript
 this.record = new aws.route53Record.Route53Record(this, "dns-record", {
   zoneId: hostedZoneId,
   name: `${config.name}.example.com`,  // HARDCODED DOMAIN
@@ -736,7 +736,7 @@ this.record = new aws.route53Record.Route53Record(this, "dns-record", {
 - May conflict with actual domain requirements
 
 **Ideal Response:**
-```ts
+```typescript
 this.record = new aws.route53Record.Route53Record(this, 'dns-record', {
   zoneId: hostedZoneId,
   name: `${config.name}.mytszone.com`,  // Uses configurable domain
@@ -758,7 +758,7 @@ this.record = new aws.route53Record.Route53Record(this, 'dns-record', {
 **Location:** `tap-stack.ts` - DNS setup
 
 **Model Response Code:**
-```ts
+```typescript
 const hostedZoneId = "Z1234567890ABC"; // Replace with your actual hosted zone ID
 new DNSModule(this, "dns", config, loadBalancer.alb, hostedZoneId);
 ```
@@ -769,7 +769,7 @@ new DNSModule(this, "dns", config, loadBalancer.alb, hostedZoneId);
 - No automation for Route53 zone creation
 
 **Ideal Response:**
-```ts
+```typescript
 const hostedZone = new aws.route53Zone.Route53Zone(this, 'hosted-zone', {
   name: 'mytszone.com',
   tags: {
@@ -798,7 +798,7 @@ const hostedZone = new aws.route53Zone.Route53Zone(this, 'hosted-zone', {
 - Cannot retrieve information after deployment
 
 **Ideal Response:**
-```ts
+```typescript
 new TerraformOutput(this, `${envConfig.name}-vpc-id`, {
   value: networking.vpc.id,
   description: `VPC ID for ${envConfig.name}`,
@@ -1040,7 +1040,7 @@ new TerraformOutput(this, `${envConfig.name}-alb-dns`, {
 These failures would completely prevent successful deployment:
 
 #### 1.1 Region Detection Syntax Error
-```ts
+```typescript
 // Model Response - Will not compile
 availabilityZone: `${aws.dataAwsRegion.DataAwsRegion.isSingleton() ? "us-east-1" : "us-east-1"}${az}`
 ```
@@ -1056,7 +1056,7 @@ Error: Cannot use DataAwsRegion as a value, it is a type
 **Blast Radius:** Entire infrastructure deployment blocked  
 
 #### 1.2 Random Password Parameter Error
-```ts
+```typescript
 // Model Response - Invalid parameters
 const password = new aws.dataAwsSecretsmanagerRandomPassword.DataAwsSecretsmanagerRandomPassword(
   this,
@@ -1081,7 +1081,7 @@ Error: Unsupported argument
 **Blast Radius:** All three environments (dev, staging, prod) blocked  
 
 #### 1.3 Route Table ID Error in VPC Peering
-```ts
+```typescript
 // Model Response - Using subnet ID instead of route table ID
 new aws.route.Route(stacks.staging, "staging-to-prod-route", {
   routeTableId: stacks.staging.network.privateSubnets[0].id,  // SUBNET ID, NOT ROUTE TABLE
@@ -1110,7 +1110,7 @@ These failures create security vulnerabilities and compliance violations:
 #### 2.1 Database Password in State File
 
 **Model Response Issue:**
-```ts
+```typescript
 this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
   masterPassword: password.randomPassword,  // Password stored in state
 });
@@ -1141,7 +1141,7 @@ this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
 ```
 
 **Ideal Response Prevention:**
-```ts
+```typescript
 this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
   manageMasterUserPassword: true,  // AWS manages password securely
 });
@@ -1157,7 +1157,7 @@ this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
 #### 2.2 Missing VPC Endpoint Security Groups
 
 **Model Response:**
-```ts
+```typescript
 // Interface endpoints without security groups
 ...(endpointType === "Interface" ? {
   subnetIds: this.privateSubnets.map(s => s.id),
@@ -1182,7 +1182,7 @@ this.cluster = new aws.rdsCluster.RdsCluster(this, "aurora-cluster", {
 - **Least Privilege Principle:** Resources should only access required endpoints
 
 **Ideal Response:**
-```ts
+```typescript
 // Create dedicated security group for VPC endpoints
 const vpcEndpointSg = new aws.securityGroup.SecurityGroup(this, 'vpc-endpoint-sg', {
   vpcId: this.vpc.id,
@@ -1206,7 +1206,7 @@ securityGroupIds: [vpcEndpointSg.id],
 #### 3.1 Missing ECS-to-RDS Dependency
 
 **Model Response:**
-```ts
+```typescript
 this.service = new aws.ecsService.EcsService(this, "service", {
   // ...
   dependsOn: [capacityProvider],  // Missing database dependency
@@ -1236,7 +1236,7 @@ Monitoring impact: False alerts for database connectivity
 ```
 
 **Ideal Response:**
-```ts
+```typescript
 this.service = new aws.ecsService.EcsService(this, "service", {
   // ...
   dependsOn: database ? [database.cluster] : [capacityProvider],
@@ -1295,7 +1295,7 @@ Risk: Production data migration delayed
 
 **Ideal Response Solution:**
 
-```ts
+```typescript
 // VPCPeeringModule with comprehensive routing
 const vpcPeering = new VPCPeeringModule(
   this,
@@ -1345,7 +1345,7 @@ prodNetwork.privateRouteTables.forEach(rt => {
 #### 4.1 Multi-Stack Architecture Problems
 
 **Model Response Approach:**
-```ts
+```typescript
 class EnvironmentStack extends TerraformStack {
   // Separate stack per environment
 }
@@ -1409,7 +1409,7 @@ Impact: Unclear ownership and responsibility
 ```
 
 **Ideal Response Approach:**
-```ts
+```typescript
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -1449,7 +1449,7 @@ All resources in one state:
 ```
 
 **3. Direct Resource References**
-```ts
+```typescript
 // No remote state needed - direct references
 const vpcPeering = new VPCPeeringModule(
   this,
@@ -1464,7 +1464,7 @@ const vpcPeering = new VPCPeeringModule(
 
 **Model Response Coupling Example:**
 
-```ts
+```typescript
 // LoadBalancerModule doesn't expose security group
 export class LoadBalancerModule extends Construct {
   public alb: aws.alb.Alb;
@@ -1495,7 +1495,7 @@ ComputeModule ──depends on──> LoadBalancerModule (entire object)
 ```
 
 **2. Initialization Order Issues**
-```ts
+```typescript
 // Required order in Model Response:
 1. Create LoadBalancerModule (with ALB)
 2. Create ComputeModule (needs ALB object)
@@ -1507,7 +1507,7 @@ Reality: Listener needs target group, should be created after
 ```
 
 **3. Type Safety Violations**
-```ts
+```typescript
 // alb.securityGroups returns: string[]
 // ingress expects: string
 
@@ -1520,7 +1520,7 @@ ingress: [{
 
 **Ideal Response Decoupling:**
 
-```ts
+```typescript
 // LoadBalancerModule exposes security group
 export class LoadBalancerModule extends Construct {
   public alb: aws.alb.Alb;
@@ -1561,7 +1561,7 @@ export class ComputeModule extends Construct {
 
 **Model Response Hardcoding:**
 
-```ts
+```typescript
 // tap-stack.ts
 new aws.provider.AwsProvider(this, "aws", {
   region: "us-east-1",  // HARDCODED
@@ -1654,7 +1654,7 @@ const testProps = {
 #### 5.2 Missing AWS Region in EnvironmentConfig
 
 **Model Response Interface:**
-```ts
+```typescript
 export interface EnvironmentConfig {
   name: string;
   cidrBlock: string;
@@ -1667,7 +1667,7 @@ export interface EnvironmentConfig {
 
 **Multi-Region Deployment Attempt:**
 
-```ts
+```typescript
 // Trying to deploy prod in us-east-1, DR in us-west-2
 const environments: EnvironmentConfig[] = [
   {
@@ -1703,7 +1703,7 @@ Impact:
 ```
 
 **Ideal Response with Region Support:**
-```ts
+```typescript
 export interface EnvironmentConfig {
   name: string;
   cidrBlock: string;
@@ -1736,7 +1736,7 @@ const environments: EnvironmentConfig[] = [
 #### 6.1 No Route53 Hosted Zone Creation
 
 **Model Response:**
-```ts
+```typescript
 const hostedZoneId = "Z1234567890ABC"; // Placeholder
 ```
 
@@ -1763,7 +1763,7 @@ const hostedZoneId = "Z1234567890ABC"; // Placeholder
 5. **CI/CD Incompatible:** Cannot fully automate deployment
 
 **Ideal Response:**
-```ts
+```typescript
 const hostedZone = new aws.route53Zone.Route53Zone(this, 'hosted-zone', {
   name: 'mytszone.com',
   tags: {...},
@@ -1791,7 +1791,7 @@ new TerraformOutput(this, 'route53-name-servers', {
 **Model Response:** Limited or no outputs
 
 **Ideal Response Outputs:**
-```ts
+```typescript
 // Per environment:
 new TerraformOutput(this, `${envConfig.name}-vpc-id`, {...});
 new TerraformOutput(this, `${envConfig.name}-alb-dns`, {...});

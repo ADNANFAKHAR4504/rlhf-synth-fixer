@@ -32,7 +32,7 @@ This document describes the infrastructure improvements made to transform the in
 ### 3. Missing Integration Tests
 
 **Issue**: The initial model response included placeholder integration tests that always failed:
-```ts
+```typescript
 test('Dont forget!', async () => {
   expect(false).toBe(true);
 });

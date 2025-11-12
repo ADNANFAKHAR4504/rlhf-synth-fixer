@@ -15,7 +15,7 @@ IoT Devices → IoT Core → Kinesis Stream → Lambda Processor → DynamoDB + 
 
 ### Main Stack (`lib/tap-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -658,7 +658,7 @@ def handler(event, context):
 
 ### App Entry Point (`bin/tap.ts`)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

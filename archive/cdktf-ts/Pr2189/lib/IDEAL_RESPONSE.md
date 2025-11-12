@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -551,7 +551,7 @@ echo "<h1>Error Page</h1>" > /var/www/html/error.html
 ```
 
 ## lib/tap-stack.ts
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

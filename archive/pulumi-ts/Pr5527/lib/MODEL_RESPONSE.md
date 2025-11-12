@@ -4,7 +4,7 @@ This is the initial implementation of the automated backup verification and reco
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -87,7 +87,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -190,7 +190,7 @@ export class VPCStack extends pulumi.ComponentResource {
 
 ## File: lib/rds-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -253,7 +253,7 @@ export class RDSStack extends pulumi.ComponentResource {
 
 ## File: lib/backup-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -397,7 +397,7 @@ def handler(event, context):
 
 ## File: lib/monitoring-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -463,7 +463,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 
 ## File: test/tap-stack.test.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 
 // Mock Pulumi runtime

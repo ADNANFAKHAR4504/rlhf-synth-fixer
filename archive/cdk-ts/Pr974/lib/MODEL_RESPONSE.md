@@ -122,7 +122,7 @@ multi-region-app/
 
 ### `lib/interfaces/stack-config.ts`
 
-```ts
+```typescript
 /**
  * Configuration interface for multi-region stack deployment
  * Defines the structure for region-specific and global configurations
@@ -220,7 +220,7 @@ export const REGION_CONFIGS: { [region: string]: StackConfig } = {
 
 ### `lib/constructs/vpc-construct.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as cdk from 'aws-cdk-lib';
@@ -311,7 +311,7 @@ export class VpcConstruct extends Construct {
 
 ### `lib/constructs/database-tier-construct.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -437,7 +437,7 @@ export class DatabaseTierConstruct extends Construct {
 
 ### `lib/constructs/application-tier-construct.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -745,7 +745,7 @@ export class ApplicationTierConstruct extends Construct {
 
 ### `lib/constructs/monitoring-construct.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as logs from 'aws-cdk-lib/aws-logs';

@@ -20,7 +20,7 @@ This document analyzes the failures and issues found in the initial MODEL_RESPON
 
 The original generated code configured each of the three Lambda functions with `reservedConcurrentExecutions: 100`:
 
-```ts
+```typescript
 const validatorFunction = new aws.lambda.Function(
   `validator-${environmentSuffix}`,
   {
@@ -35,7 +35,7 @@ This was applied to all three Lambda functions (validator, processor, notifier),
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 const validatorFunction = new aws.lambda.Function(
   `validator-${environmentSuffix}`,
   {
@@ -90,7 +90,7 @@ The model likely interpreted the requirement "Lambda functions must have reserve
 
 The code used deprecated S3 bucket properties that are inline with the bucket resource:
 
-```ts
+```typescript
 const auditBucket = new aws.s3.Bucket(
   `audit-bucket-${environmentSuffix}`,
   {
@@ -132,7 +132,7 @@ warning: server_side_encryption_configuration is deprecated. Use the aws_s3_buck
 
 While the current code works (deprecation warnings don't block deployment), the ideal implementation should use separate resources:
 
-```ts
+```typescript
 // Create bucket first
 const auditBucket = new aws.s3.Bucket(
   `audit-bucket-${environmentSuffix}`,
@@ -225,7 +225,7 @@ The model likely used older AWS/Pulumi documentation or examples that predated t
 
 The generated code included `apiKeyId` in the `registerOutputs()` call but did not export it as a public property of the TapStack class:
 
-```ts
+```typescript
 export class TapStack extends pulumi.ComponentResource {
   public readonly apiUrl: pulumi.Output<string>;
   public readonly tableName: pulumi.Output<string>;
@@ -251,7 +251,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 export class TapStack extends pulumi.ComponentResource {
   public readonly apiUrl: pulumi.Output<string>;
   public readonly tableName: pulumi.Output<string>;

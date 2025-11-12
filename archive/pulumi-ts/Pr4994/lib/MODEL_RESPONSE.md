@@ -34,7 +34,7 @@ I'll create a comprehensive Pulumi TypeScript solution for your zero-downtime VP
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as random from "@pulumi/random";
@@ -1027,7 +1027,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## tests/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { TapStack } from "../lib/tap-stack";
@@ -1344,7 +1344,7 @@ describe("TapStack Unit Tests", () => {
 
 ## tests/tap-stack.int.test.ts
 
-```ts
+```typescript
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { TapStack } from "../lib/tap-stack";

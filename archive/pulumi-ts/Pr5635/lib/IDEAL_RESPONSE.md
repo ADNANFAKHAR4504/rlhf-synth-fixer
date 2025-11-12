@@ -2,7 +2,7 @@ Here's the complete Pulumi TypeScript implementation for the AWS Compliance and 
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
@@ -53,7 +53,7 @@ export const dashboardName = stack.dashboardName;
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -100,7 +100,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/compliance-monitoring-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { VpcStack } from './vpc-stack';
@@ -570,7 +570,7 @@ export class ComplianceMonitoringStack extends pulumi.ComponentResource {
 
 ## File: lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -700,7 +700,7 @@ export class VpcStack extends pulumi.ComponentResource {
 
 ## File: lib/lambda/compliance-scanner.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as path from 'path';
@@ -869,7 +869,7 @@ export class ComplianceScannerLambda extends pulumi.ComponentResource {
 
 ## File: lib/lambda/remediation-lambda.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as path from 'path';
@@ -1008,7 +1008,7 @@ export class RemediationLambda extends pulumi.ComponentResource {
 
 ## File: lib/security-services-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 import { InspectorStack } from './inspector-stack';
@@ -1130,7 +1130,7 @@ export class SecurityServicesStack extends pulumi.ComponentResource {
 
 ## File: lib/security-hub-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -1184,7 +1184,7 @@ export class SecurityHubStack extends pulumi.ComponentResource {
 
 ## File: lib/inspector-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -1222,7 +1222,7 @@ export class InspectorStack extends pulumi.ComponentResource {
 
 ## File: lib/audit-manager-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -1253,7 +1253,7 @@ export class AuditManagerStack extends pulumi.ComponentResource {
 
 ## File: lib/detective-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 
@@ -1282,7 +1282,7 @@ export class DetectiveStack extends pulumi.ComponentResource {
 
 ## File: lib/devops-guru-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 
@@ -1312,7 +1312,7 @@ export class DevOpsGuruStack extends pulumi.ComponentResource {
 
 ## File: lib/compute-optimizer-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 
@@ -1341,7 +1341,7 @@ export class ComputeOptimizerStack extends pulumi.ComponentResource {
 
 ## File: lib/health-dashboard-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as path from 'path';
@@ -1503,7 +1503,7 @@ export class HealthDashboardStack extends pulumi.ComponentResource {
 
 ## File: lib/well-architected-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 // import * as aws from "..." - not needed in stub
 

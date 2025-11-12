@@ -4,7 +4,7 @@ This implementation provides a multi-environment CDK infrastructure for a data a
 
 ## File: lib/environment-config.ts
 
-```ts
+```typescript
 export interface EnvironmentConfig {
   vpcCidr: string;
   maxAzs: number;
@@ -68,7 +68,7 @@ export function getEnvironmentConfig(env: string): EnvironmentConfig {
 
 ## File: lib/vpc-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -142,7 +142,7 @@ export class VpcConstruct extends Construct {
 
 ## File: lib/database-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -201,7 +201,7 @@ export class DatabaseConstruct extends Construct {
 
 ## File: lib/lambda-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -285,7 +285,7 @@ def handler(event, context):
 
 ## File: lib/storage-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -336,7 +336,7 @@ export class StorageConstruct extends Construct {
 
 ## File: lib/parameter-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -382,7 +382,7 @@ export class ParameterConstruct extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcConstruct } from './vpc-construct';
@@ -456,7 +456,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

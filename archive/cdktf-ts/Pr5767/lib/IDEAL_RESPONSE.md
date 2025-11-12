@@ -79,7 +79,7 @@ This implementation provides a production-ready multi-environment data processin
 
 ### 1. S3 Lifecycle Configuration Array Format (High Priority)
 **Issue**: Model used object format for expiration
-```ts
+```typescript
 // INCORRECT (Model Response)
 expiration: {
   days: config.s3LifecycleDays,
@@ -109,7 +109,7 @@ expiration: [
 
 ### 3. Terminology Accuracy (Low Priority)
 **Issue**: Comments referred to "CloudFormation Outputs"
-```ts
+```typescript
 // INCORRECT (Model Response)
 // CloudFormation Outputs
 

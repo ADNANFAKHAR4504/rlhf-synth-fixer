@@ -7,7 +7,7 @@
 **Model Code**: No ALB, Target Group, or Listener implementation
 **Correct Code**:
 
-```ts
+```typescript
 this.applicationLoadBalancer = new aws.lb.LoadBalancer(
   `${this.environment}-alb`,
   {
@@ -49,7 +49,7 @@ this.applicationLoadBalancer = new aws.lb.LoadBalancer(
 **Model Code**: `Resource: ['*']` for S3 actions
 **Correct Code**: Specific resource ARNs with path restrictions:
 
-```ts
+```typescript
 Resource: [`${bucketArn}/app/*`, `${bucketArn}/logs/*`];
 ```
 
@@ -60,7 +60,7 @@ Resource: [`${bucketArn}/app/*`, `${bucketArn}/logs/*`];
 **Model Code**: Single NAT Gateway in one AZ
 **Correct Code**: NAT Gateway per AZ for high availability:
 
-```ts
+```typescript
 for (let i = 0; i < 2; i++) {
   natGateways.push(new aws.ec2.NatGateway(/*...*/));
 }
@@ -94,7 +94,7 @@ for (let i = 0; i < 2; i++) {
 **Model Code**: Simple scaling policies with CloudWatch alarms
 **Correct Code**: Target tracking scaling policy:
 
-```ts
+```typescript
 policyType: 'TargetTrackingScaling',
 targetTrackingConfiguration: {
   predefinedMetricSpecification: {

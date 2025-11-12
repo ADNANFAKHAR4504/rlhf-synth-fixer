@@ -15,7 +15,7 @@ The MODEL_RESPONSE provided comprehensive infrastructure code that was architect
 **MODEL_RESPONSE Issue**:
 The model used `replicationGroupDescription` as a field name in the ElasticacheReplicationGroup configuration:
 
-```ts
+```typescript
 const elasticacheCluster = new ElasticacheReplicationGroup(this, 'redis-cluster', {
   replicationGroupId: `trading-redis-${environmentSuffix}`,
   replicationGroupDescription: "Redis cluster for session management",  // ❌ WRONG
@@ -26,7 +26,7 @@ const elasticacheCluster = new ElasticacheReplicationGroup(this, 'redis-cluster'
 **IDEAL_RESPONSE Fix**:
 The correct field name in CDKTF provider for AWS is `description`:
 
-```ts
+```typescript
 const elasticacheCluster = new ElasticacheReplicationGroup(this, 'redis-cluster', {
   replicationGroupId: `trading-redis-${environmentSuffix}`,
   description: 'Redis cluster for session management',  // ✅ CORRECT
@@ -55,7 +55,7 @@ The model appears to have confused the AWS CloudFormation/Terraform native field
 **MODEL_RESPONSE Issue**:
 The model used a boolean type for `atRestEncryptionEnabled`:
 
-```ts
+```typescript
 const elasticacheCluster = new ElasticacheReplicationGroup(this, 'redis-cluster', {
   // ... other fields
   atRestEncryptionEnabled: true,  // ❌ Type Error: boolean not assignable to string
@@ -72,7 +72,7 @@ lib/main.ts(585,7): error TS2322: Type 'boolean' is not assignable to type 'stri
 **IDEAL_RESPONSE Fix**:
 The CDKTF AWS provider expects a string value for `atRestEncryptionEnabled`:
 
-```ts
+```typescript
 const elasticacheCluster = new ElasticacheReplicationGroup(this, 'redis-cluster', {
   // ... other fields
   atRestEncryptionEnabled: 'true',  // ✅ CORRECT: string type
@@ -106,7 +106,7 @@ This inconsistency is counterintuitive and reflects a quirk in how the CDKTF pro
 **MODEL_RESPONSE Issue**:
 The model included several unused imports and variables:
 
-```ts
+```typescript
 import { Apigatewayv2DomainName } from '@cdktf/provider-aws/lib/apigatewayv2-domain-name';  // ❌ UNUSED
 
 const { environmentSuffix, region, vpcCidr, dbUsername, enableMutualTls } = config;  // ❌ enableMutualTls unused
@@ -128,7 +128,7 @@ lib/main.ts(528,11): error  'rdsInstance1' is assigned a value but never used
 2. Remove unused destructured variables with a comment explaining why the interface field exists
 3. Remove unnecessary variable assignment when the reference isn't needed
 
-```ts
+```typescript
 // Commented out - not yet implemented
 // import { Apigatewayv2DomainName } from '@cdktf/provider-aws/lib/apigatewayv2-domain-name';
 
@@ -159,7 +159,7 @@ The model generated complete configuration including placeholders for future fea
 **MODEL_RESPONSE Issue**:
 The Lambda function for Secrets Manager rotation references a file that doesn't exist:
 
-```ts
+```typescript
 const rotationLambda = new LambdaFunction(this, 'rotation-lambda', {
   functionName: `db-rotation-lambda-${environmentSuffix}`,
   role: rotationLambdaRole.arn,
@@ -216,7 +216,7 @@ The model correctly identified the need for a Lambda function for credential rot
 **MODEL_RESPONSE Issue**:
 RDS instances reference a monitoring IAM role that doesn't exist:
 
-```ts
+```typescript
 new RdsClusterInstance(this, 'aurora-instance-1', {
   // ... other config
   monitoringInterval: 60,
@@ -234,7 +234,7 @@ new RdsClusterInstance(this, 'aurora-instance-1', {
 **IDEAL_RESPONSE Fix**:
 Create the RDS monitoring IAM role:
 
-```ts
+```typescript
 // Create IAM role for RDS enhanced monitoring
 const rdsMonitoringRole = new IamRole(this, 'rds-monitoring-role', {
   name: `rds-monitoring-role-${environmentSuffix}`,
@@ -281,7 +281,7 @@ The model assumed a pre-existing IAM role rather than creating it as part of the
 **Impact Level**: MEDIUM
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const apiStage = new Apigatewayv2Stage(this, 'api-stage', {
   apiId: api.id,
   name: 'production',  // ⚠️ Hardcoded environment name
@@ -296,7 +296,7 @@ While not a deployment blocker, hardcoding "production" creates confusion:
 - Can cause confusion in AWS Console when multiple environments exist
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const apiStage = new Apigatewayv2Stage(this, 'api-stage', {
   apiId: api.id,
   name: environmentSuffix,  // ✅ Use environment suffix

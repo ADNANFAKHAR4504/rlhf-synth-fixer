@@ -374,7 +374,7 @@ export class SecretsConstruct extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

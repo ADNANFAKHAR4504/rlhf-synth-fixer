@@ -18,7 +18,7 @@ The original MODEL_RESPONSE provided an excellent architectural foundation but r
 - CDK Lambda construct automatically creates the log group with proper configuration
 - Eliminated the naming conflict that caused deployment rollbacks
 
-```ts
+```typescript
 // BEFORE (Deployment Failure):
 new logs.LogGroup(this, 'TapLambdaLogGroup', {
   logGroupName: `/aws/lambda/${lambdaFunction.functionName}`,
@@ -41,7 +41,7 @@ new logs.LogGroup(this, 'TapLambdaLogGroup', {
 - Added proper TypeScript imports and constructs
 - Implemented complete infrastructure including KMS, S3, DynamoDB, Lambda, API Gateway, SQS, SNS, Parameter Store, IAM roles, and CloudWatch logging
 
-```ts
+```typescript
 // BEFORE (Original stub):
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -77,7 +77,7 @@ export class TapStack extends cdk.Stack {
 - Added proper error handling and response formatting
 - Integrated with all AWS services (DynamoDB, S3, SNS, SSM)
 
-```ts
+```typescript
 // Created from scratch:
 export const handler = async (
   event: APIGatewayProxyEvent
@@ -97,7 +97,7 @@ export const handler = async (
 - Maintained all functionality while enabling successful CDK synthesis
 - Preserved environment variables and configuration
 
-```ts
+```typescript
 // BEFORE (Failed synthesis):
 const lambdaFunction = new NodejsFunction(this, 'TapLambdaFunction', {
   entry: 'lambda/handler.ts', // Required Docker for bundling
@@ -119,7 +119,7 @@ const lambdaFunction = new lambda.Function(this, 'TapLambdaFunction', {
 - Maintained comprehensive testing while accommodating CDK's dynamic naming
 - Achieved 100% test coverage across all metrics
 
-```ts
+```typescript
 // BEFORE (Failed tests):
 template.hasResourceProperties('AWS::DynamoDB::Table', {
   TableName: `tap-table-${environmentSuffix}-us-east-1`, // Static expectation failed
@@ -141,7 +141,7 @@ template.hasResourceProperties('AWS::DynamoDB::Table', {
 - Added proper null checks and error handling
 - Fixed formatting and style issues
 
-```ts
+```typescript
 // BEFORE (Linting errors):
 data: any; // ESLint error: any type
 const tableName = tableNameParam.Parameter?.Value!; // Non-null assertion
@@ -176,7 +176,7 @@ if (!tableName) {
 - Removed explicit bucket naming to let CDK auto-generate valid names
 - Maintained functionality while ensuring successful testing and deployment
 
-```ts
+```typescript
 // BEFORE (Test failures):
 const bucket = new s3.Bucket(this, 'TapDataBucket', {
   bucketName:

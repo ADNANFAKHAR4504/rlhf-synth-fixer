@@ -32,7 +32,7 @@ Error: "kms_key_id" (665b6d11-3b39-44d4-9f84-68e51012bf76) is an invalid ARN: ar
 - Modified interface in DataStorageModule to accept both kmsKeyId and kmsKeyArn
 
 **Code Changes**:
-```ts
+```typescript
 // Before (INCORRECT)
 kmsKeyId: kmsKey.id  // Returns UUID only
 
@@ -53,7 +53,7 @@ Please enable encryption at rest to use Customer Managed CMK
 **Root Cause**: AWS ElastiCache requires atRestEncryptionEnabled to be explicitly set to use a custom KMS key.
 
 **Fix Applied**:
-```ts
+```typescript
 // Added missing property
 atRestEncryptionEnabled: 'yes',  // ElastiCache requires string 'yes' not boolean
 kmsKeyId: kmsKeyArn,
@@ -66,7 +66,7 @@ kmsKeyId: kmsKeyArn,
 **Root Cause**: CDKTF expects lifecycle filter as an array, not an object.
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (INCORRECT)
 filter: {
   prefix: '',

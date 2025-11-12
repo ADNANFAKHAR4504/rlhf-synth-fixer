@@ -382,7 +382,7 @@ class ServerlessBackendStack(Stack):
 ```
 
 ### `lambda/index.ts`
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult, Context } from 'aws-lambda';
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import { v4 as uuidv4 } from 'uuid';

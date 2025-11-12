@@ -2,7 +2,7 @@ I'll build a comprehensive high-availability infrastructure using AWS CDK TypeSc
 
 ## Complete Infrastructure Solution
 
-```ts
+```typescript
 // lib/infrastructure.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -721,7 +721,7 @@ export class Infrastructure extends cdk.Stack {
 
 ## Usage Example
 
-```ts
+```typescript
 // app.ts
 import * as cdk from 'aws-cdk-lib';
 import { Infrastructure } from './lib/infrastructure';

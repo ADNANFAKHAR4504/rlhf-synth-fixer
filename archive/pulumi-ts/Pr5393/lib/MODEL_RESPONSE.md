@@ -4,7 +4,7 @@ This implementation creates multi-environment data processing pipeline using Pul
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts - Multi-environment data processing infrastructure
  */
@@ -202,7 +202,7 @@ exports.handler = async (event) => {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi entry point for data processing infrastructure
  */

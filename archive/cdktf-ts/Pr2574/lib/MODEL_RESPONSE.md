@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformOutput } from "cdktf";
 import {
@@ -500,7 +500,7 @@ export class StorageModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

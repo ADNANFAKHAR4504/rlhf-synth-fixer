@@ -115,7 +115,7 @@ resource "aws_s3_bucket_policy" "secure_bucket" {
 ### Phase 3: Testing Framework
 
 #### 3.1 Unit Tests (test/terraform.unit.test.ts)
-```ts
+```typescript
 describe('Enterprise Terraform Compliance Tests', () => {
   describe('Region Compliance', () => {
     test('all resources must be in us-east-1', () => {

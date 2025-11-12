@@ -44,7 +44,7 @@ I'll focus on critical infrastructure components that require meticulous configu
 ### Answer 
 ---
 
-```ts
+```typescript
 // main.ts
 import { App, Stack, StackProps, Environment } from 'aws-cdk-lib';
 import { TransactionProcessingStack } from './tapstack';
@@ -84,7 +84,7 @@ secondaryStack.addDependency(primaryStack);
 app.synth();
 ```
 
-```ts
+```typescript
 // tapstack.ts
 import {
   Stack, StackProps, Duration, RemovalPolicy, CfnOutput, Tags, Fn

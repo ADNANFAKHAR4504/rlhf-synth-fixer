@@ -113,7 +113,7 @@ npm run cdktf:destroy
 - `TERRAFORM_STATE_BUCKET_REGION`: Region of state bucket
 
 ### Stack Properties
-```ts
+```typescript
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;

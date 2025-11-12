@@ -28,7 +28,7 @@ I'll help you update your existing `lib/tap-stack.ts` file with all the required
 
 ## Updated lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

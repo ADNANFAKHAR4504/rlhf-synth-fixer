@@ -1,6 +1,6 @@
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ServerlessStack } from './serverless-stack';
@@ -29,7 +29,7 @@ export class TapStack extends cdk.Stack {
 
 ## lib/serverless-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';

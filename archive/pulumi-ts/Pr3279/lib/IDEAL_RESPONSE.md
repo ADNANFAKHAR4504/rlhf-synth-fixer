@@ -15,7 +15,7 @@ This infrastructure code implements a scalable web application platform for an e
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -584,7 +584,7 @@ echo "<h1>Educational Platform - Instance $(hostname -f)</h1>" > /usr/share/ngin
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

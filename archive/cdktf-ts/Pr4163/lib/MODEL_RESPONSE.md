@@ -1,6 +1,6 @@
 **tap-stack.ts**
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput, Fn } from 'cdktf';
@@ -343,7 +343,7 @@ echo "<h1>Hello from \$(hostname -f)</h1>" > /var/www/html/index.html
 ```
 **modules.ts**
 
-```ts
+```typescript
 // lib/modules.ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';

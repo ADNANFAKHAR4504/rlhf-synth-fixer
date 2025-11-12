@@ -460,7 +460,7 @@ app.synth()
 
 ## 2. Lambda Function (lambda/index.ts)
 
-```ts
+```typescript
 import { DynamoDBStreamEvent, DynamoDBRecord, Context } from 'aws-lambda';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';

@@ -63,7 +63,7 @@ if environmentSuffix == "" {
 Created comprehensive test infrastructure including:
 
 **Unit Tests (test/infrastructure.unit.test.ts)**:
-```ts
+```typescript
 // Real infrastructure validation
 test("should validate HIPAA compliance requirements", () => {
   const goContent = fs.readFileSync(mainGoPath, 'utf-8');
@@ -84,7 +84,7 @@ test("should validate Go code compiles", () => {
 ```
 
 **Integration Tests (test/infrastructure.int.test.ts)**:
-```ts  
+```typescript  
 // Real AWS resource validation
 test("should validate Aurora cluster is deployed with HIPAA compliance", async () => {
   const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -126,7 +126,7 @@ test("should validate Aurora cluster is deployed with HIPAA compliance", async (
 **Fix Applied**:
 - Added proper Go module management with `go mod tidy`
 - Enhanced test error handling for dependency issues:
-```ts
+```typescript
 test("should run Go unit tests successfully", () => {
   try {
     execSync('go mod tidy', { timeout: 30000 });
@@ -171,7 +171,7 @@ test("should run Go unit tests successfully", () => {
 - Missing type annotations for filter functions
 
 **Fix Applied**:
-```ts
+```typescript
 // Fixed imports
 import { SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 
@@ -201,7 +201,7 @@ const healthcareSecrets = secretsResult.SecretList?.filter((secret: any) =>
 - Stack configuration validation expecting wrong format
 
 **Fix Applied**:
-```ts
+```typescript
 // Fixed Pulumi command
 const result = execSync('pulumi preview --non-interactive', { 
   env: { 
@@ -351,7 +351,7 @@ All fixes maintain HIPAA compliance requirements and high-availability architect
 **Comprehensive Fix Applied**:
 
 **Unit Test Suite** (8 comprehensive tests):
-```ts
+```typescript
 ✅ Project Structure Validation - Verifies all required files exist
 ✅ Go Module Configuration - Validates dependencies and compatibility  
 ✅ Metadata Validation - Confirms platform/language/services alignment
@@ -363,7 +363,7 @@ All fixes maintain HIPAA compliance requirements and high-availability architect
 ```
 
 **Integration Test Suite** (12 dynamic tests):
-```ts
+```typescript
 ✅ Pulumi Preview - Tests infrastructure planning (dry-run deployment)
 ✅ Stack Configuration - Validates Pulumi state and config files
 ✅ Environment Variables - Checks AWS credential availability
@@ -401,7 +401,7 @@ All fixes maintain HIPAA compliance requirements and high-availability architect
 **Fix Applied**:
 Added real AWS resource validation using AWS SDK v3:
 
-```ts
+```typescript
 // Real Aurora cluster validation
 test("should validate Aurora cluster is deployed with HIPAA compliance", async () => {
   const rdsClient = new RDSClient({ region: process.env.AWS_REGION || 'us-east-1' });
@@ -455,7 +455,7 @@ test("should validate deployed VPC exists and has correct configuration", async 
 **Fix Applied**:
 Implemented intelligent test behavior:
 
-```ts
+```typescript
 // Graceful credential handling
 if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
   console.log('AWS credentials not available - skipping resource validation');

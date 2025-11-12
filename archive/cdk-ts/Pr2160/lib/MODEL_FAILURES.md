@@ -7,7 +7,7 @@
 **Issue**: The original implementation created nested stacks within a single parent stack, which doesn't achieve true multi-region deployment.
 
 **Original Code (lib/tap-stack.ts)**:
-```ts
+```typescript
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     // Creating nested stacks in a forEach loop
@@ -29,7 +29,7 @@ export class TapStack extends cdk.Stack {
 - Makes independent region deployments impossible
 
 **Fix Applied**: Moved stack creation to bin/tap.ts to create independent stacks per region:
-```ts
+```typescript
 // bin/tap.ts
 regions.forEach((region) => {
   const vpcStack = new MultiRegionVpcStack(
@@ -48,7 +48,7 @@ regions.forEach((region) => {
 **Issue**: VPC resources lacked explicit removal policies, preventing clean stack destruction.
 
 **Fix Applied**:
-```ts
+```typescript
 // Added removal policy for clean teardown
 this.vpc.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 ```
@@ -58,13 +58,13 @@ this.vpc.applyRemovalPolicy(cdk.RemovalPolicy.DESTROY);
 **Issue**: IAM role names contained hyphens from region names (e.g., "us-east-1"), which violates IAM naming constraints.
 
 **Original**:
-```ts
+```typescript
 roleName: `ec2-role-${props.environmentSuffix}-${props.region}`
 // Results in: ec2-role-dev-us-east-1 (invalid)
 ```
 
 **Fix Applied**:
-```ts
+```typescript
 roleName: `ec2-role-${props.environmentSuffix}-${props.region.replace(/-/g, '')}`
 // Results in: ec2-role-dev-useast1 (valid)
 ```
@@ -74,7 +74,7 @@ roleName: `ec2-role-${props.environmentSuffix}-${props.region.replace(/-/g, '')}
 **Issue**: VPC resources lacked explicit names, making resource identification difficult in the AWS console.
 
 **Fix Applied**:
-```ts
+```typescript
 this.vpc = new ec2.Vpc(this, `Vpc${props.environmentSuffix}`, {
   vpcName: `vpc-${props.environmentSuffix}-${props.region}`,  // Added
   // ... other properties
@@ -95,7 +95,7 @@ this.vpc = new ec2.Vpc(this, `Vpc${props.environmentSuffix}`, {
 **Issue**: Unit tests were incomplete with placeholder assertions and incorrect mock imports.
 
 **Original**:
-```ts
+```typescript
 test('Dont forget!', async () => {
   expect(false).toBe(true);
 });

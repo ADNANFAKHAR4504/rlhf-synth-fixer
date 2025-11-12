@@ -10,7 +10,7 @@ This document analyzes the failures in the MODEL_RESPONSE.md that prevented succ
 
 **MODEL_RESPONSE Issue**:
 The code used `managePassword: true` property for RDS instance configuration:
-```ts
+```typescript
 const rdsInstance = new DbInstance(this, 'rds-instance', {
   ...
   username: 'dbadmin',
@@ -20,7 +20,7 @@ const rdsInstance = new DbInstance(this, 'rds-instance', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const rdsInstance = new DbInstance(this, 'rds-instance', {
   ...
   username: 'dbadmin',
@@ -46,7 +46,7 @@ const rdsInstance = new DbInstance(this, 'rds-instance', {
 
 **MODEL_RESPONSE Issue**:
 The `deregistrationDelay` property was set as a number instead of string:
-```ts
+```typescript
 const targetGroup = new LbTargetGroup(this, 'target-group', {
   ...
   deregistrationDelay: 30,  // ❌ Type error: number not assignable to string
@@ -55,7 +55,7 @@ const targetGroup = new LbTargetGroup(this, 'target-group', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const targetGroup = new LbTargetGroup(this, 'target-group', {
   ...
   deregistrationDelay: '30',  // ✅ Correct type: string
@@ -82,7 +82,7 @@ const targetGroup = new LbTargetGroup(this, 'target-group', {
 
 **MODEL_RESPONSE Issue**:
 Used invalid `use_lockfile` property override for S3 backend:
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -95,7 +95,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -122,7 +122,7 @@ new S3Backend(this, {
 
 **MODEL_RESPONSE Issue**:
 Database secret stored in Secrets Manager excluded the password field:
-```ts
+```typescript
 new SecretsmanagerSecretVersion(this, 'db-secret-version', {
   secretId: dbSecret.id,
   secretString: `{"host":"${rdsInstance.address}","port":"${rdsInstance.port}","dbname":"${rdsInstance.dbName}","username":"${rdsInstance.username}","engine":"postgres"}`,
@@ -131,7 +131,7 @@ new SecretsmanagerSecretVersion(this, 'db-secret-version', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 new SecretsmanagerSecretVersion(this, 'db-secret-version', {
   secretId: dbSecret.id,
   secretString: `{"host":"${rdsInstance.address}","port":"${rdsInstance.port}","dbname":"${rdsInstance.dbName}","username":"${rdsInstance.username}","password":"${rdsInstance.password}","engine":"postgres"}`,
@@ -159,7 +159,7 @@ new SecretsmanagerSecretVersion(this, 'db-secret-version', {
 
 **MODEL_RESPONSE Issue**:
 Five prettier/eslint formatting violations:
-```ts
+```typescript
 // Line 374: Replace `(s)` with `s`
 subnetIds: privateSubnets.map((s) => s.id),
 
@@ -178,7 +178,7 @@ value: privateSubnets.map((s) => s.id),
 
 **IDEAL_RESPONSE Fix**:
 All formatting issues automatically fixed with `npm run lint -- --fix`:
-```ts
+```typescript
 subnetIds: privateSubnets.map(s => s.id),
 subnets: publicSubnets.map(s => s.id),
 subnets: privateSubnets.map(s => s.id),

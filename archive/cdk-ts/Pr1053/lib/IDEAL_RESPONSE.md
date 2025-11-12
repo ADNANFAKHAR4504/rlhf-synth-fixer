@@ -17,7 +17,7 @@ lib/
 
 ### 1. VPC Stack (`lib/vpc-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -81,7 +81,7 @@ export class VpcStack extends cdk.Stack {
 
 ### 2. Compute Stack (`lib/compute-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -199,7 +199,7 @@ export class ComputeStack extends cdk.Stack {
 
 ### 3. Database Stack (`lib/database-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -314,7 +314,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ### 4. Main Stack (`lib/tap-stack.ts`)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcStack } from './vpc-stack';

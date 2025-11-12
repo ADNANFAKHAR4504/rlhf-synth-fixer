@@ -104,7 +104,7 @@ docker push ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com/customer-portal-api:lates
 ```
 
 2. Update `lib/tap-stack.ts` line 135:
-```ts
+```typescript
 image: ecs.ContainerImage.fromRegistry('ACCOUNT-ID.dkr.ecr.us-east-1.amazonaws.com/customer-portal-api:latest'),
 ```
 

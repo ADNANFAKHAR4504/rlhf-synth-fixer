@@ -2,7 +2,7 @@ I'll create a production-ready CDKTF project that meets all your requirements. H
 
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { KmsKey } from "@cdktf/provider-aws/lib/kms-key";
 import { KmsAlias } from "@cdktf/provider-aws/lib/kms-alias";
@@ -614,7 +614,7 @@ export class RdsModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -827,7 +827,7 @@ You'll also need these configuration files in your project root:
 ```
 
 ### main.ts
-```ts
+```typescript
 import { App } from "cdktf";
 import { TapStack } from "./lib/tap-stack";
 

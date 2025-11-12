@@ -150,7 +150,7 @@ I'll help you create a complete CDK TypeScript project for a secure web applicat
 
 ## **bin/app.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -172,7 +172,7 @@ cdk.Tags.of(app).add('iac-rlhf-amazon', 'true');
 
 ## **lib/secure-web-app-foundation-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

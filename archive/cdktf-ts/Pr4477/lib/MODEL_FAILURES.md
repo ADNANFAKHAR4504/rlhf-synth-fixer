@@ -4,7 +4,7 @@
 ### 1. RDS Parameter Group Family Mismatch
 
 **Model Response:**
-```ts
+```typescript
 // In RdsModule
 const parameterGroupFamily = config.parameterGroupFamily || "postgres15";
 
@@ -20,7 +20,7 @@ can't be used for this instance. Use a parameter group with DBParameterGroupFami
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 // In RdsModule - Consistent default
 const parameterGroupFamily = config.parameterGroupFamily || 'postgres15';
 
@@ -35,7 +35,7 @@ engine: 'postgres',
 ### 2. DB Parameter Group Apply Method Missing
 
 **Model Response:**
-```ts
+```typescript
 parameter: [
   {
     name: "shared_preload_libraries",
@@ -57,7 +57,7 @@ cannot use immediate apply method for static parameter
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 parameter: [
   {
     name: 'shared_preload_libraries',
@@ -80,7 +80,7 @@ lifecycle: {
 ### 3. RDS Password Generation with Invalid Characters
 
 **Model Response:**
-```ts
+```typescript
 private generatePassword(): string {
   const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*";
   // Includes forbidden characters: @, space could be generated
@@ -95,7 +95,7 @@ Only printable ASCII characters besides '/', '@', '"', ' ' may be used.
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 // Use AWS Secrets Manager Random Password
 const randomPassword = new DataAwsSecretsmanagerRandomPassword(
   this,
@@ -115,7 +115,7 @@ password: config.masterPassword || randomPassword.randomPassword,
 ### 4. Import Statement Architecture Failure
 
 **Model Response:**
-```ts
+```typescript
 // Grouped namespace imports - causes namespace pollution
 import { 
   vpc, ec2, iam, rds, autoscaling, elb, s3, 
@@ -128,7 +128,7 @@ new elb.LbAccessLogs(this, "alb-access-logs", {...}) // Non-existent in namespac
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 // Individual direct imports - cleaner, type-safe
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -144,7 +144,7 @@ new Vpc(this, 'vpc', {...})
 ### 5. ALB Access Logs Configuration Error
 
 **Model Response:**
-```ts
+```typescript
 // Attempted to use non-existent class
 new elb.LbAccessLogs(this, "alb-access-logs", {
   loadBalancerArn: this.alb.arn,
@@ -155,7 +155,7 @@ new elb.LbAccessLogs(this, "alb-access-logs", {
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 // Access logs should be configured directly on the ALB
 // The model attempted to use a non-existent resource type
 // Actual implementation omits this feature or implements differently
@@ -166,7 +166,7 @@ new elb.LbAccessLogs(this, "alb-access-logs", {
 ### 6. Missing Data Source for Availability Zones
 
 **Model Response:**
-```ts
+```typescript
 import { dataAwsAvailabilityZones } from "@cdktf/provider-aws";
 
 const azs = new dataAwsAvailabilityZones.DataAwsAvailabilityZones(this, "azs", {
@@ -176,7 +176,7 @@ const azs = new dataAwsAvailabilityZones.DataAwsAvailabilityZones(this, "azs", {
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 // Direct AZ specification in VPC module
 availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
 // More predictable and doesn't require data source
@@ -187,13 +187,13 @@ availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],
 ### 7. Terraform State Backend Configuration
 
 **Model Response:**
-```ts
+```typescript
 // Missing S3 backend configuration entirely
 // No state management setup
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 import { S3Backend } from 'cdktf';
 
 new S3Backend(this, {
@@ -212,12 +212,12 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 8. Target Group Deregistration Delay Type Error
 
 **Model Response:**
-```ts
+```typescript
 deregistrationDelay: 30, // Incorrect type - number instead of string
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 deregistrationDelay: '30', // Must be string type
 ```
 
@@ -226,12 +226,12 @@ deregistrationDelay: '30', // Must be string type
 ### 9. Missing AWS Account Identity Data
 
 **Model Response:**
-```ts
+```typescript
 // No account ID retrieval for outputs
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 
 const current = new DataAwsCallerIdentity(this, 'current', {});
@@ -248,7 +248,7 @@ new TerraformOutput(this, 'aws-account-id', {
 ### 10. Engine Version Specification Issue
 
 **Model Response:**
-```ts
+```typescript
 // In RdsModule
 engineVersion: engineVersion, // Hardcoded to "15.4"
 
@@ -256,7 +256,7 @@ engineVersion: engineVersion, // Hardcoded to "15.4"
 ```
 
 **Actual Implementation Fix:**
-```ts
+```typescript
 // Don't specify engineVersion, let AWS choose compatible version
 // Or ensure it matches parameter group family
 engine: engine,

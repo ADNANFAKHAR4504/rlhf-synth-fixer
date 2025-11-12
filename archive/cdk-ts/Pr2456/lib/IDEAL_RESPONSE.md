@@ -18,7 +18,7 @@ This document contains the ideal implementation that should be generated when gi
 ## Ideal Implementation
 
 **bin/tap.ts**
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -31,7 +31,7 @@ new TapStack(app, 'TapStack', {
 ```
 
 **lib/tap-stack.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

@@ -2,7 +2,7 @@ Here are the necessary code changes to fix the deprecation warning and add the r
 
 ### Updated lib/serverless-api-stack.ts (only the changed sections)
 
-```ts
+```typescript
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 // ... other imports remain the same
 

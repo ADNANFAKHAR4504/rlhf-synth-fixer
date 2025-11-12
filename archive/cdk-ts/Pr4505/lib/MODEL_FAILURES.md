@@ -14,7 +14,7 @@
 
 ### Change: Create LogGroup as separate resource with removal policy
 - Lines 480-487: Extract LogGroup creation
-```ts
+```typescript
 const flowLogGroup = new logs.LogGroup(this, 'FlowLogsGroup', {
   retention: logs.RetentionDays.ONE_MONTH,
   removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -37,7 +37,7 @@ new ec2.FlowLog(this, 'FlowLogs', {
 
 ### Change: Add dependencies to Transit Gateway attachment
 - After line 541, add:
-```ts
+```typescript
 tgwAttachment.addDependency(transitGateway);
 tgwAttachment.addDependency(vpcGatewayAttachment);
 ```
@@ -57,7 +57,7 @@ tgwAttachment.addDependency(vpcGatewayAttachment);
 
 ### Critical Change: Replace invalid resource type with Transit Gateway Attachment
 - Lines 551-558: Replace entire CfnResource definition:
-```ts
+```typescript
 const dxgwAssociation = new cdk.CfnResource(this, 'DXGWTransitGatewayAssociation', {
   type: 'AWS::EC2::TransitGatewayAttachment',
   properties: {
@@ -74,7 +74,7 @@ const dxgwAssociation = new cdk.CfnResource(this, 'DXGWTransitGatewayAssociation
 });
 ```
 - Add dependencies after creation:
-```ts
+```typescript
 dxgwAssociation.addDependency(directConnectGateway);
 dxgwAssociation.addDependency(transitGateway);
 dxgwAssociation.addDependency(tgwAttachment);
@@ -85,7 +85,7 @@ dxgwAssociation.addDependency(tgwAttachment);
 
 ### Change: Add dependencies to VPN connection
 - After line 571, add:
-```ts
+```typescript
 vpnConnection.addDependency(transitGateway);
 vpnConnection.addDependency(customerGateway);
 ```
@@ -104,7 +104,7 @@ vpnConnection.addDependency(customerGateway);
 - Lines 221-225 and 234-238: Use single security group for both resolver endpoints
 - Store reference: `const resolverSecurityGroup = new ec2.SecurityGroup(...)`
 - Add ingress rules for DNS traffic:
-```ts
+```typescript
 resolverSecurityGroup.addIngressRule(ec2.Peer.ipv4('10.0.0.0/8'), ec2.Port.tcp(53), 'Allow DNS TCP from on-premises');
 resolverSecurityGroup.addIngressRule(ec2.Peer.ipv4('10.0.0.0/8'), ec2.Port.udp(53), 'Allow DNS UDP from on-premises');
 ```
@@ -122,7 +122,7 @@ resolverSecurityGroup.addIngressRule(ec2.Peer.ipv4('10.0.0.0/8'), ec2.Port.udp(5
 
 ### Change: Add dependencies to route creation
 - Lines 664-671: For each CfnRoute, add:
-```ts
+```typescript
 const tgwRoute = new ec2.CfnRoute(this, `TGWRoute${index}`, {
   routeTableId: subnet.routeTable.routeTableId,
   destinationCidrBlock: '192.168.0.0/16',
@@ -137,7 +137,7 @@ tgwRoute.addDependency(vpcGatewayAttachment);
 
 ### Change: Add missing outputs
 - After line 695, add:
-```ts
+```typescript
 new cdk.CfnOutput(this, 'SAMLProviderArn', {
   value: samlProvider.ref,
   description: 'SAML Provider ARN',

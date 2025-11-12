@@ -11,7 +11,7 @@ This document outlines the infrastructure code issues identified and resolved du
 **Issue:** The CDK stack constructor was missing required properties, causing TypeScript compilation errors.
 
 **Original Problem:**
-```ts
+```typescript
 // bin/tap.ts - Missing required stack properties
 new TapStack(app, stackName, {
   stackName: stackName,
@@ -21,7 +21,7 @@ new TapStack(app, stackName, {
 ```
 
 **Fixed Implementation:**
-```ts
+```typescript
 // bin/tap.ts - Complete configuration
 new TapStack(app, stackName, {
   stackName: stackName,
@@ -38,7 +38,7 @@ new TapStack(app, stackName, {
 **Issue:** The ECS Fargate service included an invalid `enableLogging` property that doesn't exist in the CDK API.
 
 **Original Problem:**
-```ts
+```typescript
 const service = new ecs.FargateService(this, 'SecureAppService', {
   // ... other properties
   enableLogging: true, // ❌ Invalid property
@@ -46,7 +46,7 @@ const service = new ecs.FargateService(this, 'SecureAppService', {
 ```
 
 **Fixed Implementation:**
-```ts
+```typescript
 const service = new ecs.FargateService(this, `SecureAppService${environmentSuffix}`, {
   serviceName: `SecureApp-Service-${environmentSuffix}`,
   cluster,
@@ -69,7 +69,7 @@ const service = new ecs.FargateService(this, `SecureAppService${environmentSuffi
 **Issue:** Resources used `RemovalPolicy.RETAIN` which prevents proper cleanup in QA environments.
 
 **Original Problem:**
-```ts
+```typescript
 const kmsKey = new kms.Key(this, 'SecureAppKMSKey', {
   // ... other properties
   removalPolicy: cdk.RemovalPolicy.RETAIN, // ❌ Prevents QA cleanup
@@ -82,7 +82,7 @@ const logGroup = new logs.LogGroup(this, 'AppLogs', {
 ```
 
 **Fixed Implementation:**
-```ts
+```typescript
 const kmsKey = new kms.Key(this, `SecureAppKMSKey${environmentSuffix}`, {
   alias: `SecureApp-encryption-key-${environmentSuffix}`,
   description: `KMS key for SecureApp encryption at rest - ${environmentSuffix}`,
@@ -104,7 +104,7 @@ const appLogGroup = new logs.LogGroup(this, `SecureAppApplicationLogs${environme
 **Issue:** Resources lacked environment suffix integration, causing potential naming conflicts in multi-environment deployments.
 
 **Original Problem:**
-```ts
+```typescript
 const vpc = new ec2.Vpc(this, 'SecureAppVPC', {
   vpcName: 'SecureApp-VPC', // ❌ No environment isolation
   // ...
@@ -117,7 +117,7 @@ const cluster = new ecs.Cluster(this, 'SecureAppCluster', {
 ```
 
 **Fixed Implementation:**
-```ts
+```typescript
 const environmentSuffix = props.environmentSuffix || 'dev';
 
 const vpc = new ec2.Vpc(this, `SecureAppVPC${environmentSuffix}`, {
@@ -155,7 +155,7 @@ const cluster = new ecs.Cluster(this, `SecureAppCluster${environmentSuffix}`, {
 **Issue:** Code included unused variables that failed ESLint checks.
 
 **Original Problem:**
-```ts
+```typescript
 const albAccessLogGroup = new logs.LogGroup(this, 'SecureAppALBAccessLogs', {
   // ... configuration
 }); // ❌ Variable defined but never used
@@ -166,7 +166,7 @@ const container = taskDefinition.addContainer('SecureAppContainer', {
 ```
 
 **Fixed Implementation:**
-```ts
+```typescript
 // ✅ Removed unused albAccessLogGroup - ALB logs go to S3, not CloudWatch
 
 // ✅ Direct method call without assignment
@@ -185,7 +185,7 @@ taskDefinition.addContainer(`SecureAppContainer${environmentSuffix}`, {
 **Issue:** Stack outputs were minimal and didn't support integration testing requirements.
 
 **Original Problem:**
-```ts
+```typescript
 // Minimal outputs
 new cdk.CfnOutput(this, 'SecureAppALBDNS', {
   value: alb.loadBalancerDnsName,
@@ -194,7 +194,7 @@ new cdk.CfnOutput(this, 'SecureAppALBDNS', {
 ```
 
 **Fixed Implementation:**
-```ts
+```typescript
 // ✅ Comprehensive outputs for integration tests
 new cdk.CfnOutput(this, `SecureAppALBDNS${environmentSuffix}`, {
   value: alb.loadBalancerDnsName,

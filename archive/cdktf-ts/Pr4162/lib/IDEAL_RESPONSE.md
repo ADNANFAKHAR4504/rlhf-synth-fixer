@@ -15,7 +15,7 @@ The solution implements a comprehensive AWS infrastructure using CDKTF (Cloud De
 
 ### lib/tap-stack.ts
 
-```ts
+```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
   AwsProvider,
@@ -155,7 +155,7 @@ export class TapStack extends TerraformStack {
 
 ### lib/modules.ts
 
-```ts
+```typescript
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsRegion } from '@cdktf/provider-aws/lib/data-aws-region';

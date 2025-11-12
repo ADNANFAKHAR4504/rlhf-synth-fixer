@@ -55,7 +55,7 @@ Let me create these files one by one, ensuring they meet all requirements:
 ### bin/tap.ts
 This is the entry point that will instantiate our stacks:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
@@ -148,7 +148,7 @@ This file will contain context values and CDK configuration:
 ### lib/tap-stack.ts
 This will be our main stack implementation:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -762,7 +762,7 @@ There are a few issues I need to fix:
 Let me revise these files to ensure they work correctly:
 
 ### bin/tap.ts (revised)
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
@@ -791,7 +791,7 @@ new TapStack(app, `TapStack-${deploymentRegion}`, {
 ### lib/tap-stack.ts (revised)
 For the full stack file, I need to fix the ordering of components and fix the Secret rotation that depends on the database cluster. Let me restructure the ordering:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1389,7 +1389,7 @@ Now let's finalize our three files:
 ### Answer 
 ---
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
@@ -1413,7 +1413,7 @@ new TapStack(app, `TapStack-${deploymentRegion}`, {
 });
 ```
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

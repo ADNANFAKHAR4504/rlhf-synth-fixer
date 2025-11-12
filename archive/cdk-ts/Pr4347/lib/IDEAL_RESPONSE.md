@@ -25,7 +25,7 @@ lib/
 
 This is the orchestration stack that instantiates all other stacks and manages dependencies.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DynamoDBStack } from './dynamodb-stack';
@@ -129,7 +129,7 @@ export class TapStack extends cdk.Stack {
 
 Implements EventBridge Global Endpoint with sophisticated health monitoring using CloudWatch alarms and Route53 health checks.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -367,7 +367,7 @@ export class GlobalEndpointStack extends cdk.Stack {
 
 Creates the primary EventBridge event bus with rules, retry policies, and DLQ configuration.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -500,7 +500,7 @@ export class EventBusStack extends cdk.Stack {
 
 Creates a secondary event bus in us-west-2 for failover support.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -556,7 +556,7 @@ export class SecondaryEventBusStack extends cdk.Stack {
 
 Creates the Lambda function with X-Ray tracing, least-privilege IAM permissions, and environment variables configured for Lambda Powertools.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -728,7 +728,7 @@ exports.handler = async (event) => {
 
 Creates a DynamoDB Global Table with point-in-time recovery and replication to us-west-2.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -820,7 +820,7 @@ export class DynamoDBStack extends cdk.Stack {
 
 Creates CloudWatch alarms and SNS topics for monitoring the DLQ.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

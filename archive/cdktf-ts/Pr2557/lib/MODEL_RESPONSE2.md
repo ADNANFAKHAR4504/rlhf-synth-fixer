@@ -2,7 +2,7 @@ I see the issue. The linting error is due to an unused import and a TypeScript v
 
 ## Updated main.ts
 
-```ts
+```typescript
 // main.ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";

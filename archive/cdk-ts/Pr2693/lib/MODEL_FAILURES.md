@@ -10,7 +10,7 @@ This document analyzes the infrastructure code issues found in the model respons
 
 **Problem**: The current implementation in `tap-stack.ts` uses an incorrect approach for specifying the PostgreSQL engine version:
 
-```ts
+```typescript
 // INCORRECT - Current implementation
 engine: rds.DatabaseInstanceEngine.postgres({
   version: rds.PostgresEngineVersion.of(dbEngineVersion, dbEngineVersion),
@@ -23,7 +23,7 @@ Where `dbEngineVersion` is passed as a string value ("15" from `bin/tap.ts`).
 
 **Fix**: Use the predefined PostgreSQL engine version enum directly:
 
-```ts
+```typescript
 // CORRECT - Fixed implementation
 engine: rds.DatabaseInstanceEngine.postgres({
   version: rds.PostgresEngineVersion.VER_15_4,
@@ -64,7 +64,7 @@ engine: rds.DatabaseInstanceEngine.postgres({
 ### Database Engine Version Handling
 The ideal solution uses the proper enum approach:
 
-```ts
+```typescript
 // Recommended available versions:
 rds.PostgresEngineVersion.VER_15_4  // PostgreSQL 15.4
 rds.PostgresEngineVersion.VER_15_3  // PostgreSQL 15.3  

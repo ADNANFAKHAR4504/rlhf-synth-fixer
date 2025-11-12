@@ -10,7 +10,7 @@ This document analyzes the deficiencies and issues in the MODEL_RESPONSE.md impl
 
 **MODEL_RESPONSE Issue**:
 The stack exports were incomplete, missing security group IDs and flow log group names for staging and production environments:
-```ts
+```typescript
 // Missing in MODEL_RESPONSE:
 export const stagingWebSgId = vpcs["staging"].webSecurityGroup.id;
 export const stagingAppSgId = vpcs["staging"].appSecurityGroup.id;
@@ -45,7 +45,7 @@ https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/outputs-section-s
 
 **MODEL_RESPONSE Issue**:
 Used AWS managed policy `CloudWatchLogsFullAccess` which grants excessive permissions:
-```ts
+```typescript
 new aws.iam.RolePolicyAttachment(`flow-logs-policy-${args.environmentSuffix}`, {
   role: flowLogsRole.name,
   policyArn: "arn:aws:iam::aws:policy/CloudWatchLogsFullAccess",
@@ -54,7 +54,7 @@ new aws.iam.RolePolicyAttachment(`flow-logs-policy-${args.environmentSuffix}`, {
 
 **IDEAL_RESPONSE Fix**:
 Implemented least-privilege inline policy with only required permissions:
-```ts
+```typescript
 new aws.iam.RolePolicy(`flow-logs-policy-${args.environmentName}-${args.environmentSuffix}`, {
   role: flowLogsRole.id,
   policy: JSON.stringify({
@@ -93,7 +93,7 @@ https://docs.aws.amazon.com/vpc/latest/userguide/flow-logs-iam.html
 
 **MODEL_RESPONSE Issue**:
 Resource names only included `environmentSuffix` without `environmentName`, making it difficult to identify resources by environment:
-```ts
+```typescript
 // MODEL_RESPONSE naming:
 this.vpc = new aws.ec2.Vpc(`vpc-${args.environmentSuffix}`, {
 this.internetGateway = new aws.ec2.InternetGateway(`igw-${args.environmentSuffix}`, {
@@ -102,7 +102,7 @@ const subnet = new aws.ec2.Subnet(`public-subnet-${az}-${args.environmentSuffix}
 
 **IDEAL_RESPONSE Fix**:
 Included both environment name and suffix for complete traceability:
-```ts
+```typescript
 // IDEAL_RESPONSE naming:
 this.vpc = new aws.ec2.Vpc(`vpc-${args.environmentName}-${args.environmentSuffix}`, {
 this.internetGateway = new aws.ec2.InternetGateway(`igw-${args.environmentName}-${args.environmentSuffix}`, {
@@ -128,7 +128,7 @@ https://docs.aws.amazon.com/general/latest/gr/aws-tagging-best-practices.html
 
 **MODEL_RESPONSE Issue**:
 CloudWatch Log Group created as local variable, not exposed as class property:
-```ts
+```typescript
 // MODEL_RESPONSE: logGroup not accessible
 const logGroup = new aws.cloudwatch.LogGroup(`flow-logs-${args.environmentSuffix}`, {
   name: `/aws/vpc/flow-logs-${args.environmentSuffix}`,
@@ -139,7 +139,7 @@ const logGroup = new aws.cloudwatch.LogGroup(`flow-logs-${args.environmentSuffix
 
 **IDEAL_RESPONSE Fix**:
 Exposed as public readonly property for testing and integration:
-```ts
+```typescript
 export class VpcComponent extends pulumi.ComponentResource {
   public readonly flowLogGroup: aws.cloudwatch.LogGroup; // Added property
 

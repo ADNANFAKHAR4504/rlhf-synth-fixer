@@ -8,7 +8,7 @@
 **Root Cause**: The S3 log bucket was configured with `BlockPublicAccess.BLOCK_ALL` which prevents CloudFront from writing logs using ACLs.
 
 **Fix Applied**:
-```ts
+```typescript
 // Before (incorrect):
 const logBucket = new s3.Bucket(this, 'LogBucket', {
   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -32,7 +32,7 @@ const logBucket = new s3.Bucket(this, 'LogBucket', {
 **Issue**: CloudFront service principal needs explicit write permissions to the log bucket.
 
 **Fix Applied**:
-```ts
+```typescript
 // Added CloudFront permission to write logs
 logBucket.grantWrite(new iam.ServicePrincipal('cloudfront.amazonaws.com'), 'cloudfront-logs/*');
 ```
@@ -41,7 +41,7 @@ logBucket.grantWrite(new iam.ServicePrincipal('cloudfront.amazonaws.com'), 'clou
 **Issue**: CloudWatch alarms were missing explicit comparison operators, defaulting to `GREATER_THAN_OR_EQUAL_TO_THRESHOLD` instead of the intended `GREATER_THAN_THRESHOLD`.
 
 **Fix Applied**:
-```ts
+```typescript
 // Added explicit comparison operators to all alarms
 comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 ```
@@ -50,7 +50,7 @@ comparisonOperator: cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
 **Issue**: The original code used incorrect import path for CloudFront origins.
 
 **Fix Applied**:
-```ts
+```typescript
 // Before:
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 // ...

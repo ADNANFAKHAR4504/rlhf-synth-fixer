@@ -26,7 +26,7 @@ The MODEL_RESPONSE.md provided a functional but incomplete implementation that r
 
 **MODEL_RESPONSE Issue**: 
 The Config Aggregator was configured with incorrect regions:
-```ts
+```typescript
 accountAggregationSource: {
   accountIds: [aws.getCallerIdentity().then(id => id.accountId)],
   regions: ["eu-west-1", "eu-west-1"],  // Duplicate regions!
@@ -34,7 +34,7 @@ accountAggregationSource: {
 ```
 
 **IDEAL_RESPONSE Fix**: 
-```ts
+```typescript
 accountAggregationSource: {
   accountIds: [aws.getCallerIdentity().then(id => id.accountId)],
   regions: ['eu-west-1'],  // Single region as specified
@@ -55,12 +55,12 @@ accountAggregationSource: {
 
 **MODEL_RESPONSE Issue**: 
 Used deprecated IAM policy ARN:
-```ts
+```typescript
 policyArn: "arn:aws:iam::aws:policy/service-role/ConfigRole"
 ```
 
 **IDEAL_RESPONSE Fix**: 
-```ts
+```typescript
 policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
 ```
 
@@ -78,7 +78,7 @@ policyArn: 'arn:aws:iam::aws:policy/service-role/AWS_ConfigRole'
 
 **MODEL_RESPONSE Issue**: 
 Used deprecated Config rule:
-```ts
+```typescript
 source: {
   owner: "AWS",
   sourceIdentifier: "DB_BACKUP_RETENTION_PERIOD",
@@ -89,7 +89,7 @@ inputParameters: JSON.stringify({
 ```
 
 **IDEAL_RESPONSE Fix**: 
-```ts
+```typescript
 source: {
   owner: 'AWS',
   sourceIdentifier: 'DB_INSTANCE_BACKUP_ENABLED',
@@ -114,7 +114,7 @@ No S3 bucket policy was implemented to allow AWS Config service access.
 
 **IDEAL_RESPONSE Fix**: 
 Added comprehensive S3 bucket public access blocking:
-```ts
+```typescript
 const _bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
   `compliance-reports-public-access-${args.environmentSuffix}`,
   {
@@ -141,13 +141,13 @@ const _bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 
 **MODEL_RESPONSE Issue**: 
 The EC2 instance type rule included `maximumExecutionFrequency` which is not supported:
-```ts
+```typescript
 maximumExecutionFrequency: "Six_Hours",
 ```
 
 **IDEAL_RESPONSE Fix**: 
 Removed the unsupported parameter since `DESIRED_INSTANCE_TYPE` is configuration-change-triggered:
-```ts
+```typescript
 // No maximumExecutionFrequency needed - rule is configuration-change-triggered
 ```
 
@@ -165,7 +165,7 @@ Removed the unsupported parameter since `DESIRED_INSTANCE_TYPE` is configuration
 
 **MODEL_RESPONSE Issue**: 
 Hardcoded region references instead of using dynamic configuration:
-```ts
+```typescript
 region: "eu-west-1",  // Hardcoded in dashboard
 ```
 
@@ -307,7 +307,7 @@ Could be enhanced with better default configurations and environment-specific se
 **Cost/Security/Performance Impact**: No direct impact, improves developer experience.
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Creating recorder status without explicit dependency
 const configRecorder = new aws.cfg.Recorder('config-recorder', {
     roleArn: configRole.arn,
@@ -332,7 +332,7 @@ const recorderStatus = new aws.cfg.RecorderStatus('recorder-status', {
 - AWS Config throws: "Delivery channel must be created before starting the configuration recorder"
 
 **Correct Implementation:**
-```ts
+```typescript
 const deliveryChannel = new aws.cfg.DeliveryChannel(
     'delivery-channel',
     {
@@ -361,7 +361,7 @@ const recorderStatus = new aws.cfg.RecorderStatus(
 ### Common Mistake: Lambda Functions Missing SNS Topic Dependency
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Lambda uses SNS_TOPIC_ARN but no dependency specified
 const complianceProcessor = new aws.lambda.Function('compliance-processor', {
     runtime: 'python3.11',
@@ -384,7 +384,7 @@ const complianceProcessor = new aws.lambda.Function('compliance-processor', {
 - Race condition causes intermittent deployment failures
 
 **Correct Implementation:**
-```ts
+```typescript
 const complianceProcessor = new aws.lambda.Function(
     `compliance-processor-${args.environmentSuffix}`,
     {
@@ -404,7 +404,7 @@ const complianceProcessor = new aws.lambda.Function(
 ### Common Mistake: Missing recordingGroup Configuration
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: No recording group specified
 const configRecorder = new aws.cfg.Recorder('config-recorder', {
     roleArn: configRole.arn
@@ -418,7 +418,7 @@ const configRecorder = new aws.cfg.Recorder('config-recorder', {
 - Compliance monitoring will have gaps
 
 **Correct Implementation:**
-```ts
+```typescript
 const configRecorder = new aws.cfg.Recorder(
     `config-recorder-${args.environmentSuffix}`,
     {
@@ -435,7 +435,7 @@ const configRecorder = new aws.cfg.Recorder(
 ### Common Mistake: Missing Snapshot Delivery Frequency
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: No snapshot delivery frequency
 const deliveryChannel = new aws.cfg.DeliveryChannel('delivery-channel', {
     s3BucketName: complianceBucket.bucket,
@@ -450,7 +450,7 @@ const deliveryChannel = new aws.cfg.DeliveryChannel('delivery-channel', {
 - Historical compliance data won't be available
 
 **Correct Implementation:**
-```ts
+```typescript
 const deliveryChannel = new aws.cfg.DeliveryChannel(
     'delivery-channel',
     {
@@ -471,7 +471,7 @@ const deliveryChannel = new aws.cfg.DeliveryChannel(
 ### Common Mistake: Missing Environment Variables
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Lambda code expects environment variables that aren't set
 const lambdaFunction = new aws.lambda.Function('processor', {
     runtime: 'python3.11',
@@ -497,7 +497,7 @@ def lambda_handler(event, context):
 - No way to configure the Lambda without redeploying
 
 **Correct Implementation:**
-```ts
+```typescript
 const complianceProcessor = new aws.lambda.Function(
     `compliance-processor-${args.environmentSuffix}`,
     {
@@ -522,7 +522,7 @@ const complianceProcessor = new aws.lambda.Function(
 ### Common Mistake: Incorrect EventBridge Schedule Expression
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Invalid cron expression
 const scheduleRule = new aws.cloudwatch.EventRule('schedule', {
     scheduleExpression: 'cron(0 */6 * * * *)'  // Too many fields!
@@ -535,7 +535,7 @@ const scheduleRule = new aws.cloudwatch.EventRule('schedule', {
 - Lambda never gets triggered
 
 **Correct Implementation:**
-```ts
+```typescript
 const complianceCheckSchedule = new aws.cloudwatch.EventRule(
     `compliance-check-schedule-${args.environmentSuffix}`,
     {
@@ -549,7 +549,7 @@ const complianceCheckSchedule = new aws.cloudwatch.EventRule(
 ### Common Mistake: Missing Lambda Permission for EventBridge
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: EventBridge target created without Lambda permission
 const scheduleTarget = new aws.cloudwatch.EventTarget('target', {
     rule: scheduleRule.name,
@@ -564,7 +564,7 @@ const scheduleTarget = new aws.cloudwatch.EventTarget('target', {
 - No error during deployment, but silent failure at runtime
 
 **Correct Implementation:**
-```ts
+```typescript
 const lambdaPermission = new aws.lambda.Permission(
     `compliance-processor-eventbridge-permission-${args.environmentSuffix}`,
     {
@@ -593,7 +593,7 @@ const complianceCheckTarget = new aws.cloudwatch.EventTarget(
 ### Common Mistake: Missing Service Principal Permissions
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: SNS topic without proper access policies
 const snsTopic = new aws.sns.Topic('compliance-alerts');
 // Missing topic policy!
@@ -606,7 +606,7 @@ const snsTopic = new aws.sns.Topic('compliance-alerts');
 - Topic policy must explicitly allow each service
 
 **Correct Implementation:**
-```ts
+```typescript
 const snsTopicPolicy = new aws.sns.TopicPolicy(
     `compliance-alerts-policy-${args.environmentSuffix}`,
     {
@@ -647,7 +647,7 @@ const snsTopicPolicy = new aws.sns.TopicPolicy(
 ### Common Mistake: Missing KMS Key Policy for Services
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: KMS key without service permissions
 const kmsKey = new aws.kms.Key('compliance-key', {
     description: 'Encryption key for compliance data',
@@ -663,7 +663,7 @@ const kmsKey = new aws.kms.Key('compliance-key', {
 - Access denied errors when writing to S3 or publishing to SNS
 
 **Correct Implementation:**
-```ts
+```typescript
 const kmsKey = new aws.kms.Key(
     `compliance-kms-${args.environmentSuffix}`,
     {
@@ -707,7 +707,7 @@ const kmsKey = new aws.kms.Key(
 ### Common Mistake: Incorrect Schedule Expression Syntax
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Mixing rate and cron syntax
 const scheduleRule = new aws.cloudwatch.EventRule('schedule', {
     scheduleExpression: 'every 6 hours'  // Invalid syntax!
@@ -720,7 +720,7 @@ const scheduleRule = new aws.cloudwatch.EventRule('schedule', {
 - No validation until deployment time
 
 **Correct Implementation:**
-```ts
+```typescript
 // Option 1: Rate expression
 const scheduleRule = new aws.cloudwatch.EventRule(
     'compliance-check-schedule',
@@ -743,7 +743,7 @@ const dailySchedule = new aws.cloudwatch.EventRule(
 ### Common Mistake: Missing Event Target Dependency
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Creating target before Lambda permission
 const target = new aws.cloudwatch.EventTarget('target', {
     rule: scheduleRule.name,
@@ -764,7 +764,7 @@ const permission = new aws.lambda.Permission('permission', {
 - Race condition during deployment
 
 **Correct Implementation:**
-```ts
+```typescript
 const lambdaPermission = new aws.lambda.Permission(
     'lambda-permission',
     {
@@ -793,7 +793,7 @@ const target = new aws.cloudwatch.EventTarget(
 ### Common Mistake: Invalid Dashboard Body JSON
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Template string without proper JSON escaping
 const dashboard = new aws.cloudwatch.Dashboard('compliance-dashboard', {
     dashboardName: 'Compliance-Monitoring',
@@ -818,7 +818,7 @@ const dashboard = new aws.cloudwatch.Dashboard('compliance-dashboard', {
 - Dashboard widgets show no data
 
 **Correct Implementation:**
-```ts
+```typescript
 const dashboard = new aws.cloudwatch.Dashboard(
     `compliance-dashboard-${args.environmentSuffix}`,
     {
@@ -859,7 +859,7 @@ const dashboard = new aws.cloudwatch.Dashboard(
 ### Common Mistake: Missing Bucket Policy for Config Service
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: S3 bucket without policy for Config
 const bucket = new aws.s3.Bucket('compliance-bucket', {
     bucket: `compliance-reports-${args.environmentSuffix}`,
@@ -882,7 +882,7 @@ const bucket = new aws.s3.Bucket('compliance-bucket', {
 - Config silently fails to deliver configuration data
 
 **Correct Implementation:**
-```ts
+```typescript
 const bucketPolicy = new aws.s3.BucketPolicy(
     `compliance-bucket-policy-${args.environmentSuffix}`,
     {
@@ -928,7 +928,7 @@ const bucketPolicy = new aws.s3.BucketPolicy(
 ### Common Mistake: Missing PublicAccessBlock Configuration
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: S3 bucket for compliance without blocking public access
 const bucket = new aws.s3.Bucket('compliance-bucket', {
     bucket: `compliance-reports-${args.environmentSuffix}`
@@ -942,7 +942,7 @@ const bucket = new aws.s3.Bucket('compliance-bucket', {
 - Violates compliance requirements for data protection
 
 **Correct Implementation:**
-```ts
+```typescript
 const complianceBucket = new aws.s3.Bucket(
     `compliance-reports-${args.environmentSuffix}`,
     {
@@ -981,7 +981,7 @@ const bucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock(
 ### Common Mistake: Using Non-Existent Managed Rule Names
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Invalid managed rule name
 const ec2Rule = new aws.cfg.Rule('ec2-compliance', {
     source: {
@@ -1000,7 +1000,7 @@ const ec2Rule = new aws.cfg.Rule('ec2-compliance', {
 - Correct name is `DESIRED_INSTANCE_TYPE` not `EC2_INSTANCE_TYPE_ALLOWED`
 
 **Correct Implementation:**
-```ts
+```typescript
 const ec2InstanceTypeRule = new aws.cfg.Rule(
     `ec2-instance-type-compliance-${args.environmentSuffix}`,
     {
@@ -1021,7 +1021,7 @@ const ec2InstanceTypeRule = new aws.cfg.Rule(
 ### Common Mistake: Missing Config Rule Dependencies
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Creating rules before recorder is active
 const s3Rule = new aws.cfg.Rule('s3-encryption', {
     source: {
@@ -1038,7 +1038,7 @@ const s3Rule = new aws.cfg.Rule('s3-encryption', {
 - Compliance data will be missing
 
 **Correct Implementation:**
-```ts
+```typescript
 const s3EncryptionRule = new aws.cfg.Rule(
     `s3-encryption-compliance-${args.environmentSuffix}`,
     {
@@ -1059,7 +1059,7 @@ const s3EncryptionRule = new aws.cfg.Rule(
 ### Common Mistake: Incorrect Remediation Configuration
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Remediation without proper permissions
 const remediation = new aws.cfg.RemediationConfiguration('s3-remediation', {
     configRuleName: s3Rule.name,
@@ -1077,7 +1077,7 @@ const remediation = new aws.cfg.RemediationConfiguration('s3-remediation', {
 - Remediation never executes
 
 **Correct Implementation:**
-```ts
+```typescript
 // For automatic remediation, use a Lambda function instead:
 const remediationFunction = new aws.lambda.Function(
     `compliance-remediation-${args.environmentSuffix}`,
@@ -1167,7 +1167,7 @@ const remediationRule = new aws.cloudwatch.EventRule(
 ### Common Mistake: Not Using ComponentResource Parent
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Creating resources without parent hierarchy
 export class TapStack {
     constructor(name: string, args: TapStackArgs) {
@@ -1185,7 +1185,7 @@ export class TapStack {
 - Missing Pulumi best practices
 
 **Correct Implementation:**
-```ts
+```typescript
 export class TapStack extends pulumi.ComponentResource {
     public readonly bucketName: pulumi.Output<string>;
     public readonly topicArn: pulumi.Output<string>;
@@ -1223,7 +1223,7 @@ export class TapStack extends pulumi.ComponentResource {
 ### Common Mistake: Missing Account/Region Configuration
 
 **What Models Do Wrong:**
-```ts
+```typescript
 // INCORRECT: Aggregator without source configuration
 const aggregator = new aws.cfg.ConfigurationAggregator('aggregator', {
     name: 'compliance-aggregator'
@@ -1237,7 +1237,7 @@ const aggregator = new aws.cfg.ConfigurationAggregator('aggregator', {
 - Deployment succeeds but aggregator is empty
 
 **Correct Implementation:**
-```ts
+```typescript
 const configAggregator = new aws.cfg.ConfigurationAggregator(
     `compliance-aggregator-${args.environmentSuffix}`,
     {

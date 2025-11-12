@@ -14,7 +14,7 @@ The MODEL_RESPONSE generated correct infrastructure code that successfully deplo
 
 **MODEL_RESPONSE Issue**:
 The code used `map()` method on line 82 of tap-stack.ts when the return value wasn't needed:
-```ts
+```typescript
 const tables = tableConfigs.map((config) => {
 ```
 
@@ -22,7 +22,7 @@ The `map()` method is intended for transforming arrays and returning new values,
 
 **IDEAL_RESPONSE Fix**:
 Changed to `forEach()` which is the appropriate method for iteration without transformation:
-```ts
+```typescript
 tableConfigs.forEach(config => {
 ```
 
@@ -46,7 +46,7 @@ Multiple Prettier formatting violations were present in the generated code:
 - Inconsistent spacing in conditional operators
 
 Examples:
-```ts
+```typescript
 // Line 53: Incorrect formatting
 { name: 'events', hashKey: 'eventId', enableStreams: true, enableInsights: true }
 
@@ -56,7 +56,7 @@ streamViewType: config.enableStreams ? 'NEW_AND_OLD_IMAGES' : undefined,
 
 **IDEAL_RESPONSE Fix**:
 Applied consistent formatting according to Prettier rules:
-```ts
+```typescript
 // Multi-line object formatting
 {
   name: 'events',
@@ -90,7 +90,7 @@ streamViewType: config.enableStreams
 **MODEL_RESPONSE Issue**:
 The generated unit test file (test/tap-stack.unit.test.ts) was a generic template that didn't match the actual TapStack implementation:
 
-```ts
+```typescript
 // MODEL_RESPONSE test expected non-existent parameters
 stack = new TapStack("TestTapStackWithProps", {
   environmentSuffix: "prod",
@@ -104,7 +104,7 @@ The TapStack interface only accepts `environmentSuffix` and `tags`, not these ad
 
 **IDEAL_RESPONSE Fix**:
 Rewrote unit tests to properly test the actual TapStack interface:
-```ts
+```typescript
 // Proper unit tests using Pulumi mocking
 pulumi.runtime.setMocks({
   newResource: function (args: pulumi.runtime.MockResourceArgs) {
@@ -139,7 +139,7 @@ Created 22 comprehensive unit tests achieving 100% code coverage.
 
 **MODEL_RESPONSE Issue**:
 The integration test file contained only a placeholder:
-```ts
+```typescript
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
@@ -161,7 +161,7 @@ Created comprehensive live integration tests that:
 - Validate encryption and streams configuration
 
 Example real-world test:
-```ts
+```typescript
 it('should successfully query sessions table using GSI', async () => {
   const userId = `test-user-${Date.now()}`;
   const sessionId = `test-session-${Date.now()}`;

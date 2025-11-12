@@ -12,7 +12,7 @@ Used wildcard imports (`import * as aws from "@cdktf/provider-aws"`) which impor
 
 **Ideal Implementation:**
 Uses explicit, granular imports from specific modules:
-```ts
+```typescript
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
@@ -29,7 +29,7 @@ This approach provides:
 
 **Model Response:**
 Uses traditional password parameters passed directly to RDS instance:
-```ts
+```typescript
 username: config.username,
 password: config.password,
 ```
@@ -37,7 +37,7 @@ This approach creates security vulnerabilities with passwords potentially expose
 
 **Ideal Implementation:**
 Implements AWS-native password management with Secrets Manager integration:
-```ts
+```typescript
 manageMasterUserPassword: true,
 masterUserSecretKmsKeyId: 'alias/aws/secretsmanager',
 username: 'admin',
@@ -57,7 +57,7 @@ Missing explicit dependencies for NAT Gateway creation, which could lead to race
 
 **Ideal Implementation:**
 Includes explicit dependency declaration:
-```ts
+```typescript
 dependsOn: [eip, publicSubnet],
 ```
 This ensures proper resource creation order and prevents deployment failures due to dependency race conditions.
@@ -71,13 +71,13 @@ Creates bucket policy inline after bucket creation, potentially causing ALB to f
 
 **Ideal Implementation:**
 Creates bucket policy as a separate resource and passes it to ALB module:
-```ts
+```typescript
 logBucketPolicy: s3Module.bucketPolicy, // Explicit dependency
 ...
 dependsOn: config.logBucketPolicy ? [config.logBucketPolicy] : [],
 ```
 Additionally includes proper conditional logic for access logs:
-```ts
+```typescript
 accessLogs: config.logBucketPolicy
   ? {
       bucket: config.logBucketName,
@@ -97,7 +97,7 @@ Forces IMDSv2 with `httpTokens: "required"`, which could break legacy applicatio
 
 **Ideal Implementation:**
 Uses more pragmatic approach with clear documentation:
-```ts
+```typescript
 httpTokens: 'optional', // Require IMDSv2 for security (comment indicates intent)
 ```
 While noting security implications, this prevents breaking changes for existing workloads during migration.
@@ -126,7 +126,7 @@ Uses outdated or incorrect CDKTF class names like `S3BucketVersioningV2` and `S3
 
 **Ideal Implementation:**
 Uses correct, current CDKTF classes:
-```ts
+```typescript
 S3BucketVersioningA
 S3BucketServerSideEncryptionConfigurationA
 ```
@@ -141,7 +141,7 @@ Missing state locking configuration, risking concurrent modification conflicts i
 
 **Ideal Implementation:**
 Implements native S3 state locking:
-```ts
+```typescript
 this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 This prevents state corruption from concurrent operations.
@@ -155,7 +155,7 @@ Uses longer health check grace period (300 seconds) and higher minimum healthy p
 
 **Ideal Implementation:**
 Optimized for faster deployments:
-```ts
+```typescript
 healthCheckGracePeriod: 180,
 instanceRefresh: {
   preferences: {
@@ -175,7 +175,7 @@ Relies on AWS data source `DataAwsSecretsmanagerRandomPassword` which requires a
 
 **Ideal Implementation:**
 Implements custom password generation method:
-```ts
+```typescript
 private generateRandomPassword(length: number): string {
   // Excludes invalid characters for RDS: @, /, ", and space
   // Ensures password meets AWS complexity requirements
@@ -197,7 +197,7 @@ Hardcoded configuration values and missing environment-specific settings.
 
 **Ideal Implementation:**
 Implements flexible configuration through props interface:
-```ts
+```typescript
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;

@@ -15,7 +15,7 @@ The solution includes:
 
 ## File: lib/eks-cluster-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { EksCluster } from '@cdktf/provider-aws/lib/eks-cluster';
@@ -421,7 +421,7 @@ export class EksClusterStack extends Construct {
 
 ## File: lib/vpc-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -598,7 +598,7 @@ export class VpcStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

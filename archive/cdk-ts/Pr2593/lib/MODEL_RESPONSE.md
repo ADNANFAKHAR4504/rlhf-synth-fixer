@@ -1,6 +1,6 @@
 Here's a comprehensive TypeScript CDK file that creates a secure, serverless e-commerce infrastructure:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

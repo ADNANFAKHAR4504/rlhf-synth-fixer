@@ -4,7 +4,7 @@ This implementation provides a complete serverless webhook processing system usi
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -690,7 +690,7 @@ exports.handler = async (event) => {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';

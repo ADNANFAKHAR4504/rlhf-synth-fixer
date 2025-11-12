@@ -4,7 +4,7 @@
 
 ### 1. **Correct Class Structure**
 
-```ts
+```typescript
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -20,7 +20,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. **Proper Import Statements**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -38,7 +38,7 @@ import { Construct } from 'constructs';
 
 ### 3. **Environment-Aware Resource Naming**
 
-```ts
+```typescript
 const encryptionKey = new kms.Key(this, `EncryptionKey-${environmentSuffix}`, {
   description: `KMS key for encrypting sensitive resources in SecurityDemo-${environmentSuffix}`,
   // ...
@@ -56,7 +56,7 @@ const secureBucket = new s3.Bucket(
 
 ### 4. **Proper Security Group Configuration**
 
-```ts
+```typescript
 // For testing (replace with specific IP ranges in production)
 albSG.addIngressRule(
   ec2.Peer.anyIpv4(),
@@ -74,7 +74,7 @@ const allowedCidrBlocks = [
 
 ### 5. **Working Load Balancer Configuration**
 
-```ts
+```typescript
 // Use HTTP listener for testing (no certificate required)
 alb.addListener('HTTPListener', {
   port: 80,
@@ -93,7 +93,7 @@ alb.addListener('HTTPListener', {
 
 ### 6. **Lambda Function Without Runtime Dependencies**
 
-```ts
+```typescript
 const databaseLambda = new lambda.Function(this, 'DatabaseLambda', {
   runtime: lambda.Runtime.PYTHON_3_11,
   handler: 'index.handler',
@@ -119,7 +119,7 @@ def handler(event, context):
 
 ### 7. **Proper Target Group Configuration**
 
-```ts
+```typescript
 const targetGroup = new elbv2.ApplicationTargetGroup(
   this,
   'WebServerTargetGroup',
@@ -141,7 +141,7 @@ const targetGroup = new elbv2.ApplicationTargetGroup(
 
 ### 8. **Comprehensive Security Checklist**
 
-```ts
+```typescript
 /**
  * SECURITY COMPLIANCE CHECKLIST:
  * ✅ Encryption at rest: S3, EBS, RDS all encrypted with KMS

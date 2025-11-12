@@ -23,7 +23,7 @@ The MODEL_RESPONSE contained 3 critical code errors that would prevent successfu
 **MODEL_RESPONSE Issue**:
 Deployed to ap-southeast-1/ap-southeast-2 instead of eu-west-2/eu-west-1 as specified in PROMPT.
 
-```ts
+```typescript
 const AWS_REGION_OVERRIDE = 'ap-southeast-1';
 const SECONDARY_REGION = 'ap-southeast-2';
 
@@ -47,7 +47,7 @@ system should be able to failover to Ireland relatively quickly.
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const SECONDARY_REGION = 'eu-west-1';
 
 export class TapStack extends TerraformStack {
@@ -101,7 +101,7 @@ This error invalidates the entire deployment for the user's use case. Even thoug
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // Configure replication
 new S3BucketReplicationConfiguration(this, 'replication-config', {
   provider: primaryProvider,
@@ -147,7 +147,7 @@ InvalidRequest: SseKmsEncryptedObjects must be specified if EncryptionConfigurat
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 new S3BucketReplicationConfigurationA(this, 'replication-config', {
   provider: primaryProvider,
   dependsOn: [primaryBucket],
@@ -216,7 +216,7 @@ The model should learn that:
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // Route53 Health Check for primary database
 const healthCheck = new Route53HealthCheck(this, 'primary-health-check', {
   provider: primaryProvider,
@@ -246,7 +246,7 @@ InvalidInput: The specified CloudWatch alarm doesn't exist: healthcare-db-health
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // CRITICAL FIX: Create alarm FIRST as a variable
 const replicationLagAlarm = new CloudwatchMetricAlarm(
   this,
@@ -327,7 +327,7 @@ VpcLimitExceeded: The maximum number of VPCs has been reached
 The infrastructure requires creating 2 VPCs (one in ap-southeast-1, one in ap-southeast-2), but the AWS account has reached its VPC quota limit. The default AWS quota is 5 VPCs per region, and this account has exhausted that limit.
 
 **MODEL_RESPONSE Code** (Correct):
-```ts
+```typescript
 // Primary VPC
 const primaryVpc = new Vpc(this, 'primary-vpc', {
   provider: primaryProvider,
@@ -381,7 +381,7 @@ The model should not be penalized for this failure, as the code is architectural
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 export class MonitoringStack extends Construct {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id);
@@ -416,14 +416,14 @@ The model included debug/logging statements that are appropriate for development
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 export const handler = async (event: any): Promise<any> => {
   // ... implementation
 };
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 interface AlarmEvent {
   AlarmName: string;
   NewStateValue: string;

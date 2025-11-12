@@ -1,6 +1,6 @@
 You're right! Let me fix those TypeScript errors. Here's the corrected `secure-infra-stack.ts` file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -456,7 +456,7 @@ def handler(event, context):
 
 ### 1. **S3 Bucket Encryption Fix**
 
-```ts
+```typescript
 // Before: BucketEncryption.AES256 (doesn't exist)
 // After: BucketEncryption.S3_MANAGED
 encryption: s3.BucketEncryption.S3_MANAGED,
@@ -464,7 +464,7 @@ encryption: s3.BucketEncryption.S3_MANAGED,
 
 ### 2. **RDS Credentials Fix**
 
-```ts
+```typescript
 // Before: Had 'description' property which doesn't exist
 credentials: rds.Credentials.fromGeneratedSecret('admin', {
   excludeCharacters: '"@/\\\'',
@@ -473,7 +473,7 @@ credentials: rds.Credentials.fromGeneratedSecret('admin', {
 
 ### 3. **Launch Template HTTP Endpoint Fix**
 
-```ts
+```typescript
 // Removed the non-existent httpEndpoint property
 // Kept only the valid properties:
 requireImdsv2: true,
@@ -483,7 +483,7 @@ httpPutResponseHopLimit: 2,
 
 ### 4. **EC2 Instance Launch Template Fix**
 
-```ts
+```typescript
 // Instead of using launchTemplate property (which doesn't exist),
 // Applied the properties directly to the Instance constructor:
 const ec2Instance1 = new ec2.Instance(this, 'SecureInstance1', {
@@ -506,7 +506,7 @@ const ec2Instance1 = new ec2.Instance(this, 'SecureInstance1', {
 
 ### 5. **CloudTrail Fix**
 
-```ts
+```typescript
 // Removed the non-existent eventRuleTargets property
 const cloudTrail = new cloudtrail.Trail(this, 'SecureCloudTrail', {
   bucket: logsBucket,

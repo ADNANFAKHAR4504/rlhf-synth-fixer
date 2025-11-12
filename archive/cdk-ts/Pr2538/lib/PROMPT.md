@@ -33,7 +33,7 @@ Additional technical requirements:
 
 I have an existing CDK TypeScript project structure with a file at `./lib/tap-stack.ts` that needs to be updated with this implementation. Here's the current content of the file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

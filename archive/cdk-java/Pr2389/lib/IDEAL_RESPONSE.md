@@ -1007,14 +1007,14 @@ public final class Main {
 
 ## ./test/tap-stack.int.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```

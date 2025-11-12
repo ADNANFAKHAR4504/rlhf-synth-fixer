@@ -1,6 +1,6 @@
 `lib/modules.ts`:
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -817,7 +817,7 @@ export class SsmModule extends Construct {
 
 `lib/tap-stack.ts`:
 
-```ts
+```typescript
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";

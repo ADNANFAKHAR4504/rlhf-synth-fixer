@@ -29,7 +29,7 @@ bin/
 
 ### File: `bin/tap.ts`
 
-```ts
+```typescript
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
@@ -73,7 +73,7 @@ app.synth();
 
 ### File: `lib/tap-stack.ts`
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -229,7 +229,7 @@ export class TapStack extends TerraformStack {
 
 ### File: `lib/modules.ts`
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -1040,7 +1040,7 @@ export class MonitoringModule extends Construct {
 
 ### File: `lib/lambda/rotation-handler.ts`
 
-```ts
+```typescript
 // Lambda function for Secrets Manager rotation
 // This would be used if automatic rotation is fully implemented
 

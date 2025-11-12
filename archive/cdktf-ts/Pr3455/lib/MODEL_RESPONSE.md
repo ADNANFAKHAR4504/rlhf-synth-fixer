@@ -4,7 +4,7 @@ I'll create a comprehensive price monitoring service infrastructure using CDKTF 
 
 ## Infrastructure Stack
 
-```ts
+```typescript
 // lib/price-monitor-stack.ts
 import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -856,7 +856,7 @@ def handler(event: Dict, context: Any) -> Dict:
 
 ## Updated Tap Stack
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import {
   AwsProvider,

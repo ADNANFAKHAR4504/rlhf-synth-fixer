@@ -26,7 +26,7 @@ This demonstrates lack of clarity on AWS CDK best practices and creates unnecess
 - No `environmentSuffix` parameter in any construct
 
 **Fix Applied**: Implemented comprehensive environment suffix support:
-```ts
+```typescript
 // All constructs accept environmentSuffix
 export interface VpcConstructProps {
   environmentSuffix: string;
@@ -47,14 +47,14 @@ exportName: `FoodDeliveryVpcId-${props.environmentSuffix}`
 ### 3. Incorrect ALB Security Group Reference
 
 **Original Problem**: Line 303 uses incorrect property to access ALB security groups:
-```ts
+```typescript
 ec2.Peer.securityGroupId(props.alb.loadBalancerSecurityGroups[0])
 ```
 
 This property doesn't exist on ApplicationLoadBalancer. The correct path is through the `connections` property.
 
 **Fix Applied**: Used correct property path:
-```ts
+```typescript
 ec2.Peer.securityGroupId(
   props.alb.connections.securityGroups[0].securityGroupId
 )
@@ -63,21 +63,21 @@ ec2.Peer.securityGroupId(
 ### 4. Deprecated Subnet Type
 
 **Original Problem**: Throughout the model response (lines 58, 349, 485), uses deprecated subnet type:
-```ts
+```typescript
 subnetType: ec2.SubnetType.PRIVATE_WITH_NAT
 ```
 
 This constant has been deprecated in favor of `PRIVATE_WITH_EGRESS`.
 
 **Fix Applied**: Updated to current CDK v2 API:
-```ts
+```typescript
 subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS
 ```
 
 ### 5. Incorrect Health Check Endpoint
 
 **Original Problem**: Lines 323 and 459 specify `/health` endpoint for health checks:
-```ts
+```typescript
 healthCheck: {
   command: ['CMD-SHELL', 'curl -f http://localhost/health || exit 1'],
 }
@@ -86,7 +86,7 @@ healthCheck: {
 The sample container image (`amazon/amazon-ecs-sample`) doesn't have a `/health` endpoint, causing health checks to fail.
 
 **Fix Applied**: Updated to use root path which exists in the sample container:
-```ts
+```typescript
 healthCheck: {
   command: ['CMD-SHELL', 'curl -f http://localhost/ || exit 1'],
 }
@@ -95,21 +95,21 @@ healthCheck: {
 ### 6. Incorrect Target Group Registration
 
 **Original Problem**: Line 382 uses wrong method to register ECS service with target group:
-```ts
+```typescript
 targetGroup.addTarget(this.service);
 ```
 
 For ECS Fargate services, the service must attach itself to the target group, not the other way around.
 
 **Fix Applied**: Used correct service method:
-```ts
+```typescript
 this.service.attachToApplicationTargetGroup(targetGroup);
 ```
 
 ### 7. Unnecessary hostPort Configuration
 
 **Original Problem**: Lines 331 and 467 include unnecessary `hostPort` in port mappings:
-```ts
+```typescript
 portMappings: [
   {
     containerPort: 80,
@@ -122,7 +122,7 @@ portMappings: [
 For Fargate launch type, `hostPort` should not be specified as tasks have their own ENIs.
 
 **Fix Applied**: Removed `hostPort` from port mappings:
-```ts
+```typescript
 portMappings: [
   {
     containerPort: 80,
@@ -136,7 +136,7 @@ portMappings: [
 ### 8. Missing Service Connect discoveryName
 
 **Original Problem**: Service Connect configuration (lines 356, 492) only includes `dnsName` but misses `discoveryName`:
-```ts
+```typescript
 serviceConnectConfiguration: {
   namespace: props.namespace.namespaceName,
   services: [
@@ -152,7 +152,7 @@ serviceConnectConfiguration: {
 The `discoveryName` field is required for proper service registration in Cloud Map.
 
 **Fix Applied**: Added `discoveryName` with environment suffix:
-```ts
+```typescript
 serviceConnectConfiguration: {
   namespace: props.namespace.namespaceName,
   services: [
@@ -175,7 +175,7 @@ serviceConnectConfiguration: {
 This is critical for production troubleshooting and was explicitly added in the actual implementation.
 
 **Fix Applied**: Added complete ECS Exec support:
-```ts
+```typescript
 // Enable ECS Exec on services
 this.service = new ecs.FargateService(
   this,
@@ -201,7 +201,7 @@ taskDefinition.taskRole.addManagedPolicy(
 This can cause deployment failures where services try to register with a non-existent namespace.
 
 **Fix Applied**: Added explicit dependencies:
-```ts
+```typescript
 // Ensure the namespace is created before the service
 this.service.node.addDependency(props.namespace);
 ```
@@ -223,7 +223,7 @@ this.service.node.addDependency(props.namespace);
 ### 12. Wrong ALB Health Check Path
 
 **Original Problem**: Line 374 specifies `/health` as the ALB target group health check path:
-```ts
+```typescript
 healthCheck: {
   path: '/health',
   interval: cdk.Duration.seconds(60),
@@ -233,7 +233,7 @@ healthCheck: {
 This doesn't match the container health check and the sample app doesn't have this endpoint.
 
 **Fix Applied**: Changed to root path matching container capabilities:
-```ts
+```typescript
 healthCheck: {
   path: '/',
   interval: cdk.Duration.seconds(60),

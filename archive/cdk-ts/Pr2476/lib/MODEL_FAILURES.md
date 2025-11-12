@@ -53,7 +53,7 @@
 ## Examples of Critical Failures
 
 ### Example 1: Security Group Misconfiguration
-```ts
+```typescript
 // FAILURE: Overly permissive security group
 const securityGroup = new ec2.SecurityGroup(this, 'WebServerSG', {
   vpc,
@@ -63,7 +63,7 @@ const securityGroup = new ec2.SecurityGroup(this, 'WebServerSG', {
 ```
 
 ### Example 2: Missing Error Handling
-```ts
+```typescript
 // FAILURE: No validation or error handling
 const database = new rds.DatabaseInstance(this, 'Database', {
   engine: rds.DatabaseInstanceEngine.postgres({
@@ -75,7 +75,7 @@ const database = new rds.DatabaseInstance(this, 'Database', {
 ```
 
 ### Example 3: Hardcoded Values
-```ts
+```typescript
 // FAILURE: Hardcoded sensitive information
 const notificationEmail = 'admin@example.com'; // Should be environment variable
 const databasePassword = 'mypassword123'; // Should be Secrets Manager

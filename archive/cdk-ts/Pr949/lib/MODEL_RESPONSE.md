@@ -3,7 +3,7 @@
 I'll help you create a comprehensive secure production environment on AWS using CDK TypeScript. This infrastructure includes EC2 instances (t3.medium), RDS databases, S3 storage buckets, Application Load Balancer, and all required security controls with AWS Application Signals monitoring, Lambda Powertools v2 for enhanced observability, Amazon VPC Lattice for service-to-service communication, and proper high availability across two availability zones.
 
 ## bin/tap.ts
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -25,7 +25,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 ```
 
 ## lib/tap-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

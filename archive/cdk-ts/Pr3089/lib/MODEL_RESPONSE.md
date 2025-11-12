@@ -62,7 +62,7 @@ serverless-app/
 
 ## Storage Construct (`lib/constructs/storage-construct.ts`)
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -168,7 +168,7 @@ export class StorageConstruct extends Construct {
 
 ## Lambda Construct (`lib/constructs/lambda-construct.ts`)
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -375,7 +375,7 @@ export class LambdaConstruct extends Construct {
 
 ## Lambda Function Handler (`lib/lambda/data-processor.ts`)
 
-```ts
+```typescript
 import { Context, S3Event } from 'aws-lambda';
 import {
   S3Client,
@@ -547,7 +547,7 @@ async function processData(bucket: string, key: string): Promise<void> {
 
 ## Main Stack (`lib/app-stack.ts`)
 
-```ts
+```typescript
 import { Stack, StackProps, Tags, CfnOutput } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
@@ -637,7 +637,7 @@ export class AppStack extends Stack {
 
 ## CDK App Entry Point (`bin/app.ts`)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

@@ -15,7 +15,7 @@ The model generated a well-structured Pulumi TypeScript implementation for multi
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // lib/content-hosting-stack.ts:177-179 (MODEL_RESPONSE)
 validationRecordFqdns: pulumi
   .all(certValidationRecords)
@@ -30,7 +30,7 @@ error TS2769: No overload matches this call.
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Correct approach: chain .apply() directly since it's already an Output
 validationRecordFqdns: certValidationRecords.apply(records =>
   records.map(r => r.fqdn)
@@ -54,7 +54,7 @@ validationRecordFqdns: certValidationRecords.apply(records =>
 **Impact Level**: Critical (for CI/CD pipelines with strict linting)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // lib/content-hosting-stack.ts:248
 const dnsRecord = new aws.route53.Record(
   `${projectName}-${environmentSuffix}-dns-record`,
@@ -74,7 +74,7 @@ error: 'dnsRecord' is assigned a value but never used  @typescript-eslint/no-unu
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Remove variable assignment since the resource is created for side effects only
 new aws.route53.Record(
   `${projectName}-${environmentSuffix}-dns-record`,
@@ -105,7 +105,7 @@ new aws.route53.Record(
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // lib/content-hosting-stack.ts:73-83
 const bucket = new aws.s3.Bucket(
   `${projectName}-${environmentSuffix}-content`,
@@ -127,7 +127,7 @@ verification warning: versioning is deprecated. Use the aws_s3_bucket_versioning
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Create bucket without inline versioning
 const bucket = new aws.s3.Bucket(
   `${projectName}-${environmentSuffix}-content`,
@@ -170,7 +170,7 @@ new aws.s3.BucketVersioning(
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // lib/content-hosting-stack.ts:133-135
 const hostedZone = aws.route53.getZone({
   name: domainName,
@@ -184,7 +184,7 @@ no matching Route 53 Hosted Zone found
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Add validation with helpful error message
 const hostedZone = aws.route53.getZone({
   name: domainName,
@@ -198,7 +198,7 @@ const hostedZone = aws.route53.getZone({
 ```
 
 Or better yet, make it configurable:
-```ts
+```typescript
 export interface ContentHostingStackArgs {
   // ... existing args
   /**
@@ -229,7 +229,7 @@ const hostedZone = args.hostedZoneId
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // lib/tap-stack.ts:370-373
 const contentHosting = new ContentHostingStack(
   'content-hosting',
@@ -246,7 +246,7 @@ const contentHosting = new ContentHostingStack(
 The `TapStack` hard-codes `projectName: 'myapp'` and `domainName: 'myapp.com'`, reducing reusability. While this matches the PROMPT requirements exactly, it makes the stack less flexible for other projects.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // lib/tap-stack.ts - Add to interface
 export interface TapStackArgs {
   environmentSuffix?: string;

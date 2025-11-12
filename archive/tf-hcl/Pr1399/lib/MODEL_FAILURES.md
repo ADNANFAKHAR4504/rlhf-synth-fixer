@@ -215,7 +215,7 @@ Fix Applied:
 - Made tests skip gracefully when resources are unavailable
 
 Code Changes:
-```ts
+```typescript
 // Fixed database endpoint test
 expect(endpoint).toMatch(/\.rds\.amazonaws\.com(:\d+)?$/); // Now handles ports
 

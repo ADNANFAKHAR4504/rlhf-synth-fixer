@@ -1,5 +1,5 @@
 **bin/tap.ts**
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -26,7 +26,7 @@ secondaryStack.addDependency(primaryStack);
 ```
 
 **lib/tap-stack.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';

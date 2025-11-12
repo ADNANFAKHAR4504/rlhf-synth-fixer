@@ -41,7 +41,7 @@ Here's everything that needs to be included:
 Here's my existing stack file that needs to be updated:
 
 **lib/tap-stack.ts:**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

@@ -51,7 +51,7 @@ I need to implement all of this directly in the TapStack class. Let me structure
 
 Let me write the code:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 
@@ -116,7 +116,7 @@ These infrastructure design considerations will enhance the overall system's rel
 
 I'll help you build a comprehensive production-grade AWS infrastructure using CDK with TypeScript. Here's the complete implementation for your `./lib/tap-stack.ts` file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

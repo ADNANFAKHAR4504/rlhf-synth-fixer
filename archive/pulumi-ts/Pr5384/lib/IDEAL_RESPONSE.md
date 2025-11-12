@@ -34,7 +34,7 @@ The infrastructure deploys across two availability zones in the ap-northeast-1 (
 
 ## Complete Implementation Code
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *

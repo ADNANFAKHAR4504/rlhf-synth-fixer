@@ -47,7 +47,7 @@ The complete implementation is in `lib/tap-stack.ts` with 1002 lines of code imp
 
 **Critical Production Fixes Applied:**
 
-```ts
+```typescript
 // Environment suffix logic with timestamp for PR environments
 const baseSuffix = props?.environmentSuffix || 'dev';
 const environmentSuffix = baseSuffix.startsWith('pr')
@@ -97,7 +97,7 @@ Comprehensive unit tests with 82 tests (100% coverage) covering:
 - API Gateway integration dependencies
 
 **Key Test Updates:**
-```ts
+```typescript
 // Updated region expectation test
 expect(synthesizedStack.resource.aws_provider.aws.region).toBe('us-east-1');
 

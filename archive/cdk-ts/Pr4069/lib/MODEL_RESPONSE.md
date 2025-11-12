@@ -1,4 +1,4 @@
-```ts
+```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -27,7 +27,7 @@ new TapStack(app, `TapStack-${environment}`, {
 });
 ```
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -103,7 +103,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-```ts
+```typescript
 // lib/config/environment-config.ts
 export interface IVpcConfig {
   enableVpcPeering: boolean;
@@ -365,7 +365,7 @@ export class EnvironmentConfig {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/vpc-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -423,7 +423,7 @@ export class VpcConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/cognito-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -482,7 +482,7 @@ export class CognitoConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/dynamodb-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -582,7 +582,7 @@ export class DynamoDBConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/lambda-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -701,7 +701,7 @@ export class LambdaConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/api-gateway-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -827,7 +827,7 @@ export class ApiGatewayConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/monitoring-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

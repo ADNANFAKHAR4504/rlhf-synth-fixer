@@ -4,7 +4,7 @@ I'll create a comprehensive cloud environment setup using AWS CDK TypeScript tha
 
 ## bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -137,7 +137,7 @@ new TapStack(app, 'TapStack-Secondary', {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

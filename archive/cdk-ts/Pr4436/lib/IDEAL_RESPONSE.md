@@ -1,6 +1,6 @@
 # lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -304,7 +304,7 @@ export class TapStack extends cdk.Stack {
 
 # lib/constructs/global-database.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -501,7 +501,7 @@ export class GlobalDatabase extends Construct {
 
 # lib/constructs/regional-api.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
@@ -760,7 +760,7 @@ export class RegionalApi extends Construct {
 
 # lib/constructs/health-check.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -920,7 +920,7 @@ export class HealthCheckSystem extends Construct {
 
 # lib/constructs/failover-orchestrator.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -1173,7 +1173,7 @@ export class FailoverOrchestrator extends Construct {
 
 # lib/constructs/chaos-testing.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
@@ -1314,7 +1314,7 @@ export class ChaosTestingSystem extends Construct {
 
 # lib/utils/constants.ts
 
-```ts
+```typescript
 export const PRIMARY_REGION = 'us-west-2';
 export const SECONDARY_REGIONS = ['us-east-2'];
 export const REGIONS = [PRIMARY_REGION, ...SECONDARY_REGIONS];

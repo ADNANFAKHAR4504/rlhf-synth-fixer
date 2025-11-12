@@ -27,7 +27,7 @@ Let me provide the corrected version.
 
 You're right! There are some API differences in the CDK version. Here's the corrected version of the stack with the proper property names and methods:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -760,7 +760,7 @@ def lambda_handler(event, context):
 
 ### 1. **KMS Key Policy**
 
-```ts
+```typescript
 // Fixed: Changed from keyPolicy to policy
 policy: new iam.PolicyDocument({
   statements: [
@@ -771,7 +771,7 @@ policy: new iam.PolicyDocument({
 
 ### 2. **Auto Scaling CPU Scaling**
 
-```ts
+```typescript
 // Fixed: Removed invalid scaleInCooldown and scaleOutCooldown
 autoScalingGroup.scaleOnCpuUtilization('ScaleUpPolicy', {
   targetUtilizationPercent: 70,
@@ -780,7 +780,7 @@ autoScalingGroup.scaleOnCpuUtilization('ScaleUpPolicy', {
 
 ### 3. **CloudTrail Configuration**
 
-```ts
+```typescript
 // Fixed: Removed invalid isLogging property
 const cloudTrail = new cloudtrail.Trail(this, 'WebAppCloudTrail', {
   bucket: cloudtrailBucket,
@@ -794,7 +794,7 @@ const cloudTrail = new cloudtrail.Trail(this, 'WebAppCloudTrail', {
 
 ### 4. **AutoScaling Group CPU Metrics**
 
-```ts
+```typescript
 // Fixed: Created manual CloudWatch metric instead of using non-existent method
 const cpuMetric = new cloudwatch.Metric({
   namespace: 'AWS/EC2',

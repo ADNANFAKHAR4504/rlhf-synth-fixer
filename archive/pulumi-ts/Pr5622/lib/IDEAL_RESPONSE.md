@@ -12,7 +12,7 @@ This document provides the ideal implementation for EC2 cost optimization with p
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -96,7 +96,7 @@ export class TapStack extends pulumi.ComponentResource {
 5. Retry logic with exponential backoff in Lambda functions
 6. Reserved concurrency and connection reuse optimization
 
-```ts
+```typescript
 /**
  * ec2-scheduler-stack.ts (Ideal Implementation)
  *

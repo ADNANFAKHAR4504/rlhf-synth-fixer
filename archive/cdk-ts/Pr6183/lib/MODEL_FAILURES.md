@@ -7,7 +7,7 @@
 **Issue**: Initial implementation attempted to use dynamic cluster name in tag keys, which CDK cannot resolve at synthesis time.
 
 **Original Code**:
-```ts
+```typescript
 tags: {
   'k8s.io/cluster-autoscaler/enabled': 'true',
   [`k8s.io/cluster-autoscaler/${this.cluster.clusterName}`]: 'owned',
@@ -24,14 +24,14 @@ so must resolve to a string, but it resolves to: {"Fn::Join":["",["k8s.io/cluste
 **Root Cause**: CDK requires all tag keys to be static strings at synthesis time. CloudFormation tokens cannot be used in tag keys.
 
 **Fixed Code**:
-```ts
+```typescript
 // Use cdk.Tags.of() but only with static tag keys
 cdk.Tags.of(criticalNodeGroup).add('k8s.io/cluster-autoscaler/enabled', 'true');
 cdk.Tags.of(criticalNodeGroup).add('k8s.io/cluster-autoscaler/node-template/label/workload-type', 'critical');
 ```
 
 **Cluster Autoscaler Discovery Update**:
-```ts
+```typescript
 // Updated auto-discovery command to use only the enabled tag
 '--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/enabled',
 ```
@@ -43,7 +43,7 @@ cdk.Tags.of(criticalNodeGroup).add('k8s.io/cluster-autoscaler/node-template/labe
 **Issue**: Cluster autoscaler container needs AWS_REGION environment variable for proper AWS API calls.
 
 **Added**:
-```ts
+```typescript
 env: [
   {
     name: 'AWS_REGION',

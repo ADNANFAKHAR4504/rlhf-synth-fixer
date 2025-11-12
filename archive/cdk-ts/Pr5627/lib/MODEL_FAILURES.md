@@ -10,7 +10,7 @@ This analysis compares the existing implementation in lib/tap-stack.ts with the 
 
 **MODEL_RESPONSE Issue**: The existing implementation uses a simple prefix filter for S3 replication without properly implementing the 1GB size exclusion requirement specified in the PROMPT.
 
-```ts
+```typescript
 // Existing implementation - incomplete size filtering
 filter: {
   prefix: 'transactions/',
@@ -19,7 +19,7 @@ filter: {
 
 **IDEAL_RESPONSE Fix**: Proper implementation with comprehensive size and prefix filtering:
 
-```ts
+```typescript
 filter: {
   and: {
     prefix: 'transactions/',
@@ -43,7 +43,7 @@ filter: {
 
 **MODEL_RESPONSE Issue**: Health check implementation lacks comprehensive data consistency validation and custom metrics emission for migration monitoring.
 
-```ts
+```typescript
 // Existing - basic health check without replication lag checking
 const healthCheckQuery = await dynamoClient.send(new GetItemCommand({
   TableName: process.env.TABLE_NAME,
@@ -56,7 +56,7 @@ const healthCheckQuery = await dynamoClient.send(new GetItemCommand({
 
 **IDEAL_RESPONSE Fix**: Enhanced health check with replication lag monitoring and custom metrics:
 
-```ts
+```typescript
 // Enhanced health check with GSI query and metrics emission
 const healthCheckQuery = await dynamoClient.send(new QueryCommand({
   TableName: process.env.TABLE_NAME,
@@ -87,7 +87,7 @@ await cloudwatchClient.send(new PutMetricDataCommand({
 
 **MODEL_RESPONSE Issue**: The DynamoDB table lacks a Global Secondary Index for efficient status-based queries, which is needed for health checks and migration monitoring.
 
-```ts
+```typescript
 // Existing - table without GSI for status queries
 const transactionTable = new dynamodb.TableV2(this, 'TransactionTable', {
   tableName: `${serviceName}-transactions-${region}-${environmentSuffix}`,
@@ -99,7 +99,7 @@ const transactionTable = new dynamodb.TableV2(this, 'TransactionTable', {
 
 **IDEAL_RESPONSE Fix**: Added GSI for efficient status-based queries:
 
-```ts
+```typescript
 globalSecondaryIndexes: [
   {
     indexName: 'status-timestamp-index',
@@ -124,7 +124,7 @@ globalSecondaryIndexes: [
 
 **MODEL_RESPONSE Issue**: EventBridge rule configuration lacks proper dead letter queue setup for failed event processing, which is crucial for migration reliability.
 
-```ts
+```typescript
 // Existing - basic retry configuration without DLQ
 transactionEventRule.addTarget(
   new targets.LambdaFunction(liveAlias, {
@@ -136,7 +136,7 @@ transactionEventRule.addTarget(
 
 **IDEAL_RESPONSE Fix**: Added comprehensive error handling with SQS dead letter queue:
 
-```ts
+```typescript
 transactionEventRule.addTarget(
   new targets.LambdaFunction(liveAlias, {
     retryAttempts: 3,
@@ -162,7 +162,7 @@ transactionEventRule.addTarget(
 
 **MODEL_RESPONSE Issue**: CloudFront distribution lacks security headers policy and modern protocol configurations required for production financial services.
 
-```ts
+```typescript
 // Existing - basic CloudFront configuration
 defaultBehavior: {
   origin: new origins.S3Origin(primaryBucket),
@@ -174,7 +174,7 @@ defaultBehavior: {
 
 **IDEAL_RESPONSE Fix**: Added comprehensive security configurations:
 
-```ts
+```typescript
 defaultBehavior: {
   origin: new origins.S3Origin(primaryBucket),
   viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -198,7 +198,7 @@ minimumProtocolVersion: cloudfront.SecurityPolicyProtocol.TLS_V1_2_2021,
 
 **MODEL_RESPONSE Issue**: Lambda function lacks reserved concurrency configuration, which is important for predictable performance during migration phases.
 
-```ts
+```typescript
 // Existing - basic Lambda configuration without concurrency controls
 const transactionProcessor = new lambda.Function(this, 'TransactionProcessor', {
   functionName: `${serviceName}-processor-${region}-${environmentSuffix}`,
@@ -210,7 +210,7 @@ const transactionProcessor = new lambda.Function(this, 'TransactionProcessor', {
 
 **IDEAL_RESPONSE Fix**: Added reserved concurrency for predictable performance:
 
-```ts
+```typescript
 const transactionProcessor = new lambda.Function(this, 'TransactionProcessor', {
   functionName: `${serviceName}-processor-${region}-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,

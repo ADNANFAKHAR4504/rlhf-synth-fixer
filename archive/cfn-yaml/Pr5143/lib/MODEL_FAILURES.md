@@ -19,7 +19,7 @@ This document analyzes the gaps between the initial MODEL_RESPONSE and the IDEAL
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // test/streamflix-dr-primary.unit.test.ts (original)
 import yaml from 'js-yaml';
 
@@ -41,7 +41,7 @@ YAMLException: unknown tag !<!Ref> (78:30)
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 import { yamlParse } from 'yaml-cfn';  // ✅ CloudFormation-aware parser
 
 beforeAll(() => {
@@ -130,7 +130,7 @@ Deploy primary region first, then DR region with cross-region replication config
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 // test/tap-stack.unit.test.ts (leftover from previous task)
 describe('TapStack CloudFormation Template', () => {
   beforeAll(() => {
@@ -153,7 +153,7 @@ FAIL test/tap-stack.unit.test.ts
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 describe.skip('TapStack CloudFormation Template', () => {  // ✅ Skip entire suite
   beforeAll(() => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
@@ -194,7 +194,7 @@ describe.skip('TapStack CloudFormation Template', () => {  // ✅ Skip entire su
 **Impact Level**: High (but handled well)
 
 **MODEL_RESPONSE Strength** (not a failure, but worth highlighting):
-```ts
+```typescript
 // test/streamflix-dr-primary.int.test.ts
 let outputs: any = {};
 try {

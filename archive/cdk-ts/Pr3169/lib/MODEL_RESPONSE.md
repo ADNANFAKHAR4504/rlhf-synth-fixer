@@ -116,7 +116,7 @@ Let me start by implementing each of these constructs:
 
 ## storage-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -289,7 +289,7 @@ export class StorageConstruct extends Construct {
 
 ## security-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -370,7 +370,7 @@ export class SecurityConstruct extends Construct {
 
 ## orchestration-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -466,7 +466,7 @@ export class OrchestrationConstruct extends Construct {
 
 ## monitoring-construct.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -606,7 +606,7 @@ export class MonitoringConstruct extends Construct {
 
 ## backup-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -684,7 +684,7 @@ export class BackupStack extends cdk.Stack {
 
 ## backup-app.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { BackupStack } from '../lib/backup-stack';
@@ -833,7 +833,7 @@ async function updateBackupMetadata(backupId, timestamp, status, additionalData 
 
 For a comprehensive testing strategy, I'll create both unit tests and integration tests. Here's an example of unit tests for the storage construct:
 
-```ts
+```typescript
 // storage-construct.test.ts
 import { Stack } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -955,7 +955,7 @@ describe('StorageConstruct', () => {
 
 I should create similar unit tests for each construct. For integration tests, I would test the stack as a whole:
 
-```ts
+```typescript
 // backup-stack.test.ts
 import { App } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -1400,7 +1400,7 @@ Let me implement each component with detailed CDK TypeScript code.
 
 First, let's create the core storage construct:
 
-```ts
+```typescript
 // lib/constructs/storage-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -1546,7 +1546,7 @@ export class StorageConstruct extends Construct {
 
 Next, let's implement the security construct with KMS keys and IAM roles:
 
-```ts
+```typescript
 // lib/constructs/security-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -1620,7 +1620,7 @@ export class SecurityConstruct extends Construct {
 
 Now, let's create the orchestration construct with Lambda and DynamoDB for metadata:
 
-```ts
+```typescript
 // lib/constructs/orchestration-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

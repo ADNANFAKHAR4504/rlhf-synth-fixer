@@ -34,7 +34,7 @@ This document analyzes the gaps between the initial MODEL_RESPONSE (which was a 
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: Original integration test file contained only a placeholder failing test:
-```ts
+```typescript
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
@@ -106,7 +106,7 @@ Unit tests were minimal with only 2 basic instantiation tests.
 **MODEL_RESPONSE Issue**: The initial implementation had basic environment suffix support but lacked comprehensive documentation and testing around multi-environment isolation.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // Robust environment suffix handling with defaults
 const environmentSuffix = props?.environmentSuffix || 'dev';
 

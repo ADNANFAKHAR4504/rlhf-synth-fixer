@@ -5,7 +5,7 @@ I need help implementing a complete CI/CD pipeline for my web application using 
 ## Current Setup
 I have a basic CDK stack file at `lib/tap-stack.ts` that currently looks like this:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

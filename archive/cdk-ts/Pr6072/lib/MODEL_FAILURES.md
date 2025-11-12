@@ -26,7 +26,7 @@ The initial implementation provided a solid foundation with:
 The iteration focused on adding production-ready monitoring and alerting capabilities that the operations team explicitly requested in the requirements:
 
 #### 1. SNS Topic for Centralized Alerting
-```ts
+```typescript
 const alertTopic = new sns.Topic(this, 'AlertTopic', {
   topicName: `order-processing-alerts-${environmentSuffix}`,
   displayName: 'Order Processing System Alerts',
@@ -38,7 +38,7 @@ const alertTopic = new sns.Topic(this, 'AlertTopic', {
 #### 2. Eight CloudWatch Alarms
 
 ##### ALB Health Monitoring
-```ts
+```typescript
 const albUnhealthyTargetAlarm = new cloudwatch.Alarm(
   this,
   'ALBUnhealthyTargetAlarm',
@@ -61,7 +61,7 @@ const albUnhealthyTargetAlarm = new cloudwatch.Alarm(
 **Impact**: Detects when API service targets fail health checks, indicating potential service degradation.
 
 ##### API Service Resource Monitoring
-```ts
+```typescript
 // CPU Utilization Alarm
 const apiCpuAlarm = new cloudwatch.Alarm(this, 'ApiServiceCPUAlarm', {
   alarmName: `api-service-cpu-high-${environmentSuffix}`,
@@ -98,7 +98,7 @@ const apiRunningTasksAlarm = new cloudwatch.Alarm(
 - 80% threshold provides early warning before critical failure
 
 ##### Worker Service Resource Monitoring
-```ts
+```typescript
 // CPU, Memory, and Running Tasks alarms for Worker service
 // (Similar structure to API service alarms)
 ```
@@ -106,7 +106,7 @@ const apiRunningTasksAlarm = new cloudwatch.Alarm(
 **Impact**: Ensures queue processing workers are healthy and operational. Critical for maintaining message processing SLAs.
 
 ##### Queue Processing Health
-```ts
+```typescript
 const dlqMessagesAlarm = new cloudwatch.Alarm(this, 'DLQMessagesAlarm', {
   alarmName: `dlq-messages-detected-${environmentSuffix}`,
   alarmDescription: 'Alert when messages land in dead letter queue',
@@ -125,7 +125,7 @@ const dlqMessagesAlarm = new cloudwatch.Alarm(this, 'DLQMessagesAlarm', {
 #### 3. Alarm Action Integration
 
 All 8 alarms were properly integrated with the SNS topic:
-```ts
+```typescript
 albUnhealthyTargetAlarm.addAlarmAction(
   new cloudwatch_actions.SnsAction(alertTopic)
 );
@@ -136,7 +136,7 @@ albUnhealthyTargetAlarm.addAlarmAction(
 
 #### 4. Stack Output for Operations
 
-```ts
+```typescript
 new cdk.CfnOutput(this, 'SNSTopicArn', {
   value: alertTopic.topicArn,
   description: 'SNS Topic ARN for alerts',

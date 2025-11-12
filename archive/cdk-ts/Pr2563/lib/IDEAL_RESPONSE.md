@@ -6,7 +6,7 @@ This document represents the ideal implementation of the AWS CloudFormation Type
 
 ### Main Stack Architecture
 
-```ts
+```typescript
 // lib/tap-stack.ts - Main stack orchestrator
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

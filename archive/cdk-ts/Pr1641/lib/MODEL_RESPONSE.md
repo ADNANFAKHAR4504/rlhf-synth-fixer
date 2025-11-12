@@ -147,7 +147,7 @@ my-multi-region-app/
 ## Main Application Entry Point
 
 **bin/my-app.ts**
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -182,7 +182,7 @@ cdk.Tags.of(app).add('ManagedBy', 'CDK');
 ## Stack Definition
 
 **lib/my-stack.ts**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

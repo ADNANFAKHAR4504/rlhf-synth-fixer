@@ -34,7 +34,7 @@ Let me create these files:
 **bin/tap.ts**:
 This file will be the entry point for the CDK application. It will define and create instances of our stack for both the source and target regions.
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -78,7 +78,7 @@ app.synth();
 **lib/tap-stack.ts**:
 This file will define the main stack with all the resources required for the migration.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -695,7 +695,7 @@ Let me now clean up and prepare the final answer with the three files as request
 ### Answer 
 ---
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -734,7 +734,7 @@ new TapStack(app, 'TapStack-Target', {
 app.synth();
 ```
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

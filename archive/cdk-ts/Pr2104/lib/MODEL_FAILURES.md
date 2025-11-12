@@ -26,7 +26,7 @@ In MODEL_RESPONSE3.md, the model attempted to address Auto Scaling Group deploym
 
 ### 2. Overly Complex VPC Endpoint Configuration
 **What was tried:**
-```ts
+```typescript
 // Multiple VPC endpoints for various services
 const ec2Endpoint = new ec2.VpcEndpoint(this, 'EC2Endpoint', {
   vpc,

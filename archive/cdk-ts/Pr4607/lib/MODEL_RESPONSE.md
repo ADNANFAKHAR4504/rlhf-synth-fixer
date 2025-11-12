@@ -39,7 +39,7 @@ I'll create a comprehensive CI/CD pipeline infrastructure using AWS CDK in TypeS
 
 ## File 1: main.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';
 
@@ -79,7 +79,7 @@ app.synth();
 
 ## File 2: tapstack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

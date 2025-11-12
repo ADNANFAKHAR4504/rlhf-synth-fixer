@@ -14,7 +14,7 @@ The MODEL_RESPONSE generated 98% correct infrastructure code. The following issu
 
 **MODEL_RESPONSE Issue**: The generated code contained 372 ESLint/Prettier formatting errors and 5 unused variable declarations that violated TypeScript strict mode:
 
-```ts
+```typescript
 // Unused variables in MODEL_RESPONSE
 const currentRegion = aws.getRegionOutput({});  // Never used
 const webInstance1 = new aws.ec2.Instance(...); // Stored but not referenced
@@ -26,13 +26,13 @@ const flowLog = new aws.ec2.FlowLog(...); // Stored but not referenced
 **IDEAL_RESPONSE Fix**:
 
 1. Commented out unused `currentRegion` variable:
-```ts
+```typescript
 // Get current AWS region (for potential future use)
 // const currentRegion = aws.getRegionOutput({});
 ```
 
 2. Added ESLint disable comments for resource variables that need to be declared for Pulumi resource creation:
-```ts
+```typescript
 // Create EC2 instance in public subnet 1 with IMDSv2
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const webInstance1 = new aws.ec2.Instance(...);
@@ -58,7 +58,7 @@ const webInstance1 = new aws.ec2.Instance(...);
 
 **MODEL_RESPONSE Issue**: The generated unit tests were using incorrect Jest mocking patterns for Pulumi:
 
-```ts
+```typescript
 // MODEL_RESPONSE - Incorrect Pulumi mocking
 jest.mock("@pulumi/pulumi");
 jest.mock("@pulumi/aws");
@@ -79,7 +79,7 @@ This resulted in:
 
 Implemented proper Pulumi runtime mocking:
 
-```ts
+```typescript
 // IDEAL_RESPONSE - Correct Pulumi mocking
 pulumi.runtime.setMocks({
   newResource: function (args: pulumi.runtime.MockResourceArgs) {
@@ -127,7 +127,7 @@ Results:
 
 **MODEL_RESPONSE Issue**: The integration tests were placeholder stubs:
 
-```ts
+```typescript
 // MODEL_RESPONSE - Placeholder test
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
@@ -142,7 +142,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
 Created comprehensive integration tests using real AWS SDK clients:
 
-```ts
+```typescript
 // IDEAL_RESPONSE - Real AWS integration tests
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 import { S3Client, GetBucketVersioningCommand } from '@aws-sdk/client-s3';

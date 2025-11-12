@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -41,7 +41,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/daily-auditor.ts
 
-```ts
+```typescript
 /**
  * Daily IAM Policy Auditor Lambda Function
  *
@@ -628,7 +628,7 @@ Next audit scheduled for tomorrow at the same time.
 
 ## ./lib/lambda/policy-analyzer.ts
 
-```ts
+```typescript
 /**
  * Real-time IAM Policy Analyzer Lambda Function
  *
@@ -1126,7 +1126,7 @@ Automated alert from IAM Security Monitoring System
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -1765,7 +1765,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 /**
  * Integration tests for TapStack
  * Tests live resources deployed in AWS
@@ -2163,7 +2163,7 @@ describe('TapStack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

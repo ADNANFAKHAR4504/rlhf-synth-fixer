@@ -26,7 +26,7 @@ The infrastructure implements a production-grade, multi-tier architecture:
 
 ### Stack Definition
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -96,7 +96,7 @@ export class TapStack extends TerraformStack {
 
 ### ECR Repository
 
-```ts
+```typescript
 const ecrRepository = new EcrRepository(this, 'ecr-repo', {
   name: `payment-app-${environmentSuffix}`,
   imageScanningConfiguration: {
@@ -108,7 +108,7 @@ const ecrRepository = new EcrRepository(this, 'ecr-repo', {
 
 ### RDS PostgreSQL Database
 
-```ts
+```typescript
 const rdsInstance = new DbInstance(this, 'rds-instance', {
   identifier: `payment-db-${environmentSuffix}`,
   engine: 'postgres',
@@ -133,7 +133,7 @@ const rdsInstance = new DbInstance(this, 'rds-instance', {
 
 ### Secrets Manager
 
-```ts
+```typescript
 const dbSecret = new SecretsmanagerSecret(this, 'db-secret', {
   name: `payment-db-connection-${environmentSuffix}`,
   description: 'Database connection string for payment application',
@@ -147,7 +147,7 @@ new SecretsmanagerSecretVersion(this, 'db-secret-version', {
 
 ### ECS Cluster and CloudWatch
 
-```ts
+```typescript
 const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
   name: `/ecs/payment-app-${environmentSuffix}`,
   retentionInDays: 7,
@@ -175,7 +175,7 @@ const ecsCluster = new EcsCluster(this, 'ecs-cluster', {
 
 ### Application Load Balancer
 
-```ts
+```typescript
 const targetGroup = new LbTargetGroup(this, 'target-group', {
   name: `payment-tg-${environmentSuffix}`,
   port: 8080,
@@ -206,7 +206,7 @@ const targetGroup = new LbTargetGroup(this, 'target-group', {
 
 ### ECS Service
 
-```ts
+```typescript
 const ecsService = new EcsService(this, 'ecs-service', {
   name: `payment-service-${environmentSuffix}`,
   cluster: ecsCluster.id,
@@ -241,7 +241,7 @@ const ecsService = new EcsService(this, 'ecs-service', {
 
 ### Auto Scaling
 
-```ts
+```typescript
 const autoScalingTarget = new AppautoscalingTarget(
   this,
   'ecs-autoscaling-target',

@@ -1,6 +1,6 @@
 I'll create a comprehensive CDK TypeScript stack for your CI/CD pipeline requirements. Here's the complete implementation:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';

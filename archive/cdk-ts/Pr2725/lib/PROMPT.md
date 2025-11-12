@@ -41,7 +41,7 @@ Technical constraints:
 - All S3 buckets must have server-side encryption enabled
 
 Current code file to update (./lib/tap-stack.ts):
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

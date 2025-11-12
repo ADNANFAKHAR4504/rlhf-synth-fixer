@@ -10,7 +10,7 @@ Analysis of issues found in MODEL_RESPONSE.md and fixes applied for IDEAL_RESPON
 
 **MODEL_RESPONSE Issue**:
 ECS services reference non-existent Docker images:
-```ts
+```typescript
 image: `${ecrUrl}:latest`
 ```
 
@@ -32,7 +32,7 @@ Document that Docker images must be built and pushed before deployment, or use p
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 region?: string;  // Accepted in interface but never used
 ```
 
@@ -151,7 +151,7 @@ Make configurable: `desiredCount: environmentSuffix === 'prod' ? 2 : 1`
 
 **MODEL_RESPONSE Issue**:
 Secrets use placeholders:
-```ts
+```typescript
 password: pulumi.secret('changeme123!')
 ```
 

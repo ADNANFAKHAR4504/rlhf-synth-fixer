@@ -1,6 +1,6 @@
 ### Main Stack (tap-stack.ts)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -285,7 +285,7 @@ export class TapStack extends cdk.Stack {
 ### Lambda Functions
 
 #### shadow-analyzer.ts
-```ts
+```typescript
 import { IoTClient, GetThingShadowCommand, ListThingsCommand } from '@aws-sdk/client-iot';
 import { IoTDataPlaneClient, GetThingShadowCommand as GetShadowCommand } from '@aws-sdk/client-iot-data-plane';
 
@@ -345,7 +345,7 @@ export const handler = async (event: any) => {
 ```
 
 #### kinesis-publisher.ts
-```ts
+```typescript
 import { KinesisClient, PutRecordsCommand } from '@aws-sdk/client-kinesis';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { Readable } from 'stream';
@@ -426,7 +426,7 @@ async function streamToBuffer(stream: Readable): Promise<Buffer> {
 ```
 
 #### validator.ts
-```ts
+```typescript
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
 import { unmarshall } from '@aws-sdk/util-dynamodb';
 
@@ -521,7 +521,7 @@ export const handler = async (event: any) => {
 ```
 
 #### event-router.ts
-```ts
+```typescript
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 
 const eventBridgeClient = new EventBridgeClient({});
@@ -568,7 +568,7 @@ export const handler = async (event: any) => {
 ```
 
 #### orchestrator.ts
-```ts
+```typescript
 import { LambdaClient, InvokeCommand } from '@aws-sdk/client-lambda';
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 

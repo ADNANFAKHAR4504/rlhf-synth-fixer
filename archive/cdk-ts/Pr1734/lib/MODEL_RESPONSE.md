@@ -1,6 +1,6 @@
 I'll create a comprehensive disaster recovery CDK stack that sets up automated failover between us-east-2 and us-west-2. This solution includes cross-region database replication, health monitoring, and automatic DNS failover.
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

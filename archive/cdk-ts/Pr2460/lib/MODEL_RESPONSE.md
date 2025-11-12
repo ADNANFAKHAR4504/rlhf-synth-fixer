@@ -2,7 +2,7 @@ I'll help you implement a comprehensive CI/CD pipeline using AWS CDK with TypeSc
 
 ## Updated `lib/tap-stack.ts`
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipelineActions from 'aws-cdk-lib/aws-codepipeline-actions';

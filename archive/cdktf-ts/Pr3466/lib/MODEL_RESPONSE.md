@@ -4,7 +4,7 @@ Here's the infrastructure code for the backup management system:
 
 ## lib/backup-infrastructure-stack.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';

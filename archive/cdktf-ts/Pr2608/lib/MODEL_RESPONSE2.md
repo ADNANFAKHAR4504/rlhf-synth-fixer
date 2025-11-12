@@ -2,7 +2,7 @@ I'll complete the output. Here's the continuation and completion of the CDKTF Ty
 
 ## main.ts (continued)
 
-```ts
+```typescript
         name: regionalResources["eu-west-1"].alb.dnsName,
         zoneId: regionalResources["eu-west-1"].alb.zoneId,
         evaluateTargetHealth: true
@@ -150,7 +150,7 @@ Create a `__tests__` directory with the following test files:
 
 ### **tests**/infrastructure.test.ts
 
-```ts
+```typescript
 import { Testing } from 'cdktf';
 import { MultiRegionStack } from '../main';
 
@@ -254,7 +254,7 @@ describe('Multi-Region Infrastructure', () => {
 
 ### **tests**/failover.test.ts
 
-```ts
+```typescript
 import { Testing } from 'cdktf';
 import { MultiRegionStack } from '../main';
 

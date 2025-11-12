@@ -4,7 +4,7 @@ I'll help you create the HIPAA-compliant database infrastructure. Here's the com
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -53,7 +53,7 @@ export class TapStack extends TerraformStack {
 ```
 ## File: lib/healthcare-infrastructure-stack.ts
 
-```ts
+```typescript
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';

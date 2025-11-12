@@ -1,6 +1,6 @@
 ## modules.ts
 
-```ts
+```typescript
 // modules.ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -533,7 +533,7 @@ export class SecurityGroupsModule extends Construct {
 
 
 ## tap-stack.ts
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

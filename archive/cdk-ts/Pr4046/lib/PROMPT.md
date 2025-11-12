@@ -44,7 +44,7 @@ I'm building a simple e-commerce app that needs:
 Here's my current CDK setup:
 
 **bin/tap.ts:**
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -74,7 +74,7 @@ new TapStack(app, stackName, {
 ```
 
 **lib/tap-stack.ts:**
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

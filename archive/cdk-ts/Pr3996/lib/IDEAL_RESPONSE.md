@@ -53,7 +53,7 @@ This project implements a global trading platform with an active-active deployme
 
 ### `bin/tap.ts` (Entry Point)
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -102,7 +102,7 @@ app.synth();
 
 ### `lib/tap-stack.ts` (Main Stack Orchestrator)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -216,7 +216,7 @@ export class TapStack extends cdk.Stack {
 
 ### `lib/stacks/networking-stack.ts` (VPCs & Transit Gateway)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -349,7 +349,7 @@ export class NetworkingStack extends Construct {
 
 ### `lib/stacks/database-stack.ts` (Aurora Global Database)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -460,7 +460,7 @@ export class DatabaseStack extends Construct {
 
 ### `lib/stacks/regional-stack.ts` (ECS Services & ALB)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -754,7 +754,7 @@ export class RegionalStack extends Construct {
 
 ### `lib/stacks/global-stack.ts` (Global Accelerator)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as globalaccelerator from 'aws-cdk-lib/aws-globalaccelerator';
@@ -831,7 +831,7 @@ export class GlobalStack extends Construct {
 
 ### `lib/stacks/tgw-peering-stack.ts` (Transit Gateway Peering)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -888,7 +888,7 @@ export class TgwPeeringStack extends Construct {
 
 ### `lib/aspects/encryption-aspect.ts` (Encryption Enforcement)
 
-```ts
+```typescript
 import { IConstruct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 

@@ -22,7 +22,7 @@ The model-generated response had **32 critical issues** across 8 major categorie
 **Location**: MODEL_RESPONSE.md lines 36-144
 
 **Model Generated**:
-```ts
+```typescript
 // Created entry point as lib/multi-region-app.ts
 const app = new cdk.App();
 // Stacks created directly on app with scope 'app'
@@ -36,7 +36,7 @@ const primarySecurity = new SecurityStack(app, 'SecurityStack-Primary', { env })
 4. Missing resource tagging at app level
 
 **Ideal Implementation**:
-```ts
+```typescript
 // Correct entry point: bin/tap.ts
 const app = new cdk.App();
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
@@ -62,7 +62,7 @@ new TapStack(app, stackName, {
 **Location**: MODEL_RESPONSE.md lines 62-141
 
 **Model Generated**:
-```ts
+```typescript
 // All stacks created as siblings
 const primaryVpc = new VpcStack(app, 'VpcStack-Primary', { env });
 const standbyVpc = new VpcStack(app, 'VpcStack-Standby', { env: standbyEnv });
@@ -75,7 +75,7 @@ const standbyVpc = new VpcStack(app, 'VpcStack-Standby', { env: standbyEnv });
 4. CloudFormation stack names don't follow CDK naming conventions
 
 **Ideal Implementation**:
-```ts
+```typescript
 // Parent TapStack orchestrates all child stacks
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -102,7 +102,7 @@ export class TapStack extends cdk.Stack {
 **Location**: MODEL_RESPONSE.md lines 160-163
 
 **Model Generated**:
-```ts
+```typescript
 cidr: props?.env?.region === 'eu-west-2' ? '10.0.0.0/16' : '10.1.0.0/16',
 ```
 
@@ -113,7 +113,7 @@ cidr: props?.env?.region === 'eu-west-2' ? '10.0.0.0/16' : '10.1.0.0/16',
 4. Unclear which VPC gets which CIDR
 
 **Ideal Implementation**:
-```ts
+```typescript
 interface VpcStackProps extends cdk.StackProps {
   cidr: string; // Explicit CIDR passed as prop
 }
@@ -137,7 +137,7 @@ const standbyVpcStack = new VpcStack(this, `VpcStack-Standby`, {
 **Location**: MODEL_RESPONSE.md lines 171-172
 
 **Model Generated**:
-```ts
+```typescript
 subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
 ```
 
@@ -147,7 +147,7 @@ subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
 3. Generates deprecation warnings during synthesis
 
 **Ideal Implementation**:
-```ts
+```typescript
 subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
 ```
 
@@ -160,7 +160,7 @@ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
 **Location**: MODEL_RESPONSE.md line 180
 
 **Model Generated**:
-```ts
+```typescript
 natGateways: 2, // For high availability
 ```
 
@@ -171,7 +171,7 @@ natGateways: 2, // For high availability
 4. Each NAT gateway costs ~$32/month + data transfer
 
 **Ideal Implementation**:
-```ts
+```typescript
 natGateways: 1, // Reduced to 1 to avoid EIP quota issues
 ```
 
@@ -192,7 +192,7 @@ natGateways: 1, // Reduced to 1 to avoid EIP quota issues
 3. Missing `routeTableIds` property in VpcStack
 
 **Ideal Implementation**:
-```ts
+```typescript
 export class VpcStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly routeTableIds: string[] = [];
@@ -219,7 +219,7 @@ export class VpcStack extends cdk.Stack {
 **Location**: MODEL_RESPONSE.md - All stack definitions
 
 **Model Generated**:
-```ts
+```typescript
 const primaryVpc = new VpcStack(app, 'VpcStack-Primary', { env });
 // No crossRegionReferences property
 ```
@@ -231,7 +231,7 @@ const primaryVpc = new VpcStack(app, 'VpcStack-Primary', { env });
 4. Stack deployment completely fails
 
 **Ideal Implementation**:
-```ts
+```typescript
 super(scope, id, {
   ...props,
   crossRegionReferences: true, // REQUIRED for multi-region
@@ -252,7 +252,7 @@ const primaryVpcStack = new VpcStack(this, `VpcStack-Primary`, {
 **Location**: MODEL_RESPONSE.md - RDS, ALB resources
 
 **Model Generated**:
-```ts
+```typescript
 // RDS instance without explicit identifier
 this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
   // No instanceIdentifier property
@@ -271,7 +271,7 @@ this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'AppLoadBalancer', {
 4. Deployment fails during cross-region setup
 
 **Ideal Implementation**:
-```ts
+```typescript
 const environmentSuffix = this.node.tryGetContext('environmentSuffix') || 'dev';
 
 this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
@@ -294,7 +294,7 @@ this.loadBalancer = new elbv2.ApplicationLoadBalancer(this, 'AppLoadBalancer', {
 **Location**: MODEL_RESPONSE.md lines 74-75
 
 **Model Generated**:
-```ts
+```typescript
 const vpcPeering = new cdk.Stack(app, 'VpcPeeringStack', { env });
 // VPC peering setup goes here (it's complex and will need to reference both VPCs)
 ```
@@ -306,7 +306,7 @@ const vpcPeering = new cdk.Stack(app, 'VpcPeeringStack', { env });
 4. Routes not configured between VPCs
 
 **Ideal Implementation**:
-```ts
+```typescript
 export class VpcPeeringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: VpcPeeringStackProps) {
     super(scope, id, props);
@@ -340,7 +340,7 @@ export class VpcPeeringStack extends cdk.Stack {
 **Location**: MODEL_RESPONSE.md lines 98-104
 
 **Model Generated**:
-```ts
+```typescript
 const standbyDatabase = new DatabaseStack(app, 'DatabaseStack-Standby', {
   env: standbyEnv,
   vpc: standbyVpc.vpc,
@@ -358,7 +358,7 @@ const standbyDatabase = new DatabaseStack(app, 'DatabaseStack-Standby', {
 4. Type incompatibility with DatabaseInstanceReadReplica constructor
 
 **Ideal Implementation**:
-```ts
+```typescript
 const standbyDatabaseStack = new DatabaseStack(this, `DatabaseStandby`, {
   env: standbyEnv,
   vpc: standbyVpcStack.vpc,
@@ -378,7 +378,7 @@ const standbyDatabaseStack = new DatabaseStack(this, `DatabaseStandby`, {
 **Location**: MODEL_RESPONSE.md DatabaseStack
 
 **Model Generated**:
-```ts
+```typescript
 export class DatabaseStack extends cdk.Stack {
   public readonly dbInstance: rds.DatabaseInstance; // Wrong type
 }
@@ -391,7 +391,7 @@ export class DatabaseStack extends cdk.Stack {
 4. Breaks type safety throughout codebase
 
 **Ideal Implementation**:
-```ts
+```typescript
 export class DatabaseStack extends cdk.Stack {
   public readonly dbInstance: rds.DatabaseInstance | rds.DatabaseInstanceReadReplica;
   // Union type handles both cases
@@ -407,7 +407,7 @@ export class DatabaseStack extends cdk.Stack {
 **Location**: MODEL_RESPONSE.md DatabaseStack
 
 **Model Generated**:
-```ts
+```typescript
 // Missing backupRetention property
 this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
   // ...
@@ -421,7 +421,7 @@ this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
 4. Risk of data loss
 
 **Ideal Implementation**:
-```ts
+```typescript
 this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
   backupRetention: cdk.Duration.days(7), // Explicit 7-day retention
   deleteAutomatedBackups: false,
@@ -440,7 +440,7 @@ this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
 **Location**: MODEL_RESPONSE.md ComputeStack
 
 **Model Generated**:
-```ts
+```typescript
 // Only basic CPU scaling, no step scaling
 this.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
   targetUtilizationPercent: 70,
@@ -454,7 +454,7 @@ this.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
 4. Slower response to varying load patterns
 
 **Ideal Implementation**:
-```ts
+```typescript
 // Target tracking
 this.autoScalingGroup.scaleOnCpuUtilization('CpuScaling', {
   targetUtilizationPercent: 70,
@@ -483,7 +483,7 @@ this.autoScalingGroup.scaleOnMetric('ScaleOutPolicy', {
 **Location**: MODEL_RESPONSE.md ComputeStack UserData
 
 **Model Generated**:
-```ts
+```typescript
 userData.addCommands(
   'yum update -y',
   'yum install -y amazon-efs-utils',
@@ -500,7 +500,7 @@ userData.addCommands(
 4. Silent failures in production
 
 **Ideal Implementation**:
-```ts
+```typescript
 userData.addCommands(
   '#!/bin/bash -xe',
   'yum update -y',
@@ -523,7 +523,7 @@ userData.addCommands(
 **Location**: MODEL_RESPONSE.md ComputeStack
 
 **Model Generated**:
-```ts
+```typescript
 healthCheck: {
   path: '/health',
   // ...
@@ -543,7 +543,7 @@ userData.addCommands(
 4. Auto Scaling group never becomes healthy
 
 **Ideal Implementation**:
-```ts
+```typescript
 userData.addCommands(
   'yum install -y httpd',
   'systemctl start httpd',
@@ -564,7 +564,7 @@ userData.addCommands(
 **Location**: MODEL_RESPONSE.md DnsStack
 
 **Model Generated**:
-```ts
+```typescript
 // Attempt to use high-level ARecord with failover
 new route53.ARecord(this, 'PrimaryRecord', {
   zone: hostedZone,
@@ -582,7 +582,7 @@ new route53.ARecord(this, 'PrimaryRecord', {
 4. No automatic failover capability
 
 **Ideal Implementation**:
-```ts
+```typescript
 // Use low-level CfnRecordSet for failover
 new route53.CfnRecordSet(this, 'PrimaryFailoverRecord', {
   hostedZoneId: hostedZone.hostedZoneId,
@@ -608,7 +608,7 @@ new route53.CfnRecordSet(this, 'PrimaryFailoverRecord', {
 **Location**: MODEL_RESPONSE.md DnsStack
 
 **Model Generated**:
-```ts
+```typescript
 // No health checks created for failover
 ```
 
@@ -619,7 +619,7 @@ new route53.CfnRecordSet(this, 'PrimaryFailoverRecord', {
 4. Manual intervention required for failover
 
 **Ideal Implementation**:
-```ts
+```typescript
 const primaryHealthCheck = new route53.CfnHealthCheck(this, 'PrimaryHealthCheck', {
   healthCheckConfig: {
     type: 'HTTP',
@@ -641,7 +641,7 @@ const primaryHealthCheck = new route53.CfnHealthCheck(this, 'PrimaryHealthCheck'
 **Location**: MODEL_RESPONSE.md DnsStack
 
 **Model Generated**:
-```ts
+```typescript
 // Assumes domain always provided
 const domainName = props.domainName;
 const hostedZone = new route53.PublicHostedZone(this, 'HostedZone', {
@@ -656,7 +656,7 @@ const hostedZone = new route53.PublicHostedZone(this, 'HostedZone', {
 4. Poor developer experience
 
 **Ideal Implementation**:
-```ts
+```typescript
 if (props.domainName && props.domainName !== 'example.com') {
   // Create Route 53 resources
 } else {
@@ -681,7 +681,7 @@ if (props.domainName && props.domainName !== 'example.com') {
 **Location**: MODEL_RESPONSE.md SecurityStack, ComputeStack
 
 **Model Generated**:
-```ts
+```typescript
 albSg: new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
   vpc: props.vpc,
   allowAllOutbound: true, // Too permissive
@@ -695,7 +695,7 @@ albSg: new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
 4. Should restrict to only VPC CIDR for EC2 targets
 
 **Ideal Implementation**:
-```ts
+```typescript
 const albSg = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
   vpc: props.vpc,
   allowAllOutbound: false, // Restrict outbound
@@ -717,7 +717,7 @@ albSg.addEgressRule(
 **Location**: MODEL_RESPONSE.md VpcPeeringStack
 
 **Model Generated**:
-```ts
+```typescript
 new iam.PolicyStatement({
   actions: [
     'ec2:CreateVpcPeeringConnection',
@@ -735,7 +735,7 @@ new iam.PolicyStatement({
 4. Security audit findings
 
 **Ideal Implementation**:
-```ts
+```typescript
 // While EC2 peering actions require '*', document why
 new iam.PolicyStatement({
   actions: [
@@ -755,7 +755,7 @@ new iam.PolicyStatement({
 **Location**: MODEL_RESPONSE.md SecurityStack
 
 **Model Generated**:
-```ts
+```typescript
 this.kmsKey = new kms.Key(this, 'DataEncryptionKey', {
   enableKeyRotation: true,
   // Missing key policy configuration
@@ -769,7 +769,7 @@ this.kmsKey = new kms.Key(this, 'DataEncryptionKey', {
 4. Poor control over key usage
 
 **Ideal Implementation**:
-```ts
+```typescript
 this.kmsKey = new kms.Key(this, 'DataEncryptionKey', {
   enableKeyRotation: true,
   description: 'KMS key for encrypting data at rest in EFS and RDS',
@@ -803,7 +803,7 @@ this.kmsKey.grantEncryptDecrypt(this.appRole);
 4. Manual testing only
 
 **Ideal Implementation**:
-```ts
+```typescript
 // test/tap-stack.int.test.ts with 34 comprehensive tests
 describe('Multi-Region Resilient Infrastructure Integration Tests', () => {
   describe('Primary Region Infrastructure', () => {
@@ -837,7 +837,7 @@ describe('Multi-Region Resilient Infrastructure Integration Tests', () => {
 4. Manual resource lookup required
 
 **Ideal Implementation**:
-```ts
+```typescript
 async function loadOutputs() {
   // Load primary region outputs from flat-outputs.json
   const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
@@ -871,7 +871,7 @@ async function loadOutputs() {
 4. Cross-region references not checked
 
 **Ideal Implementation**:
-```ts
+```typescript
 describe('Cross-Region Connectivity', () => {
   test('VPC peering connection should be active', async () => {
     const peeringConnectionId = outputs.VpcPeeringConnectionId;
@@ -907,7 +907,7 @@ describe('Cross-Region Connectivity', () => {
 4. Longer mean time to detection (MTTD)
 
 **Ideal Implementation**:
-```ts
+```typescript
 // Database CPU alarm
 new cloudwatch.Alarm(this, 'DatabaseCpuAlarm', {
   metric: this.dbInstance.metricCPUUtilization(),
@@ -945,7 +945,7 @@ new cloudwatch.Alarm(this, 'HighCpuAlarm', {
 **Location**: MODEL_RESPONSE.md DatabaseStack
 
 **Model Generated**:
-```ts
+```typescript
 this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
   // No enablePerformanceInsights
   // No monitoringInterval
@@ -959,7 +959,7 @@ this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
 4. Difficult to diagnose performance issues
 
 **Ideal Implementation**:
-```ts
+```typescript
 this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
   enablePerformanceInsights: true,
   monitoringInterval: cdk.Duration.minutes(1),
@@ -978,7 +978,7 @@ this.dbInstance = new rds.DatabaseInstance(this, 'DbInstance', {
 **Location**: MODEL_RESPONSE.md lines 51-52
 
 **Model Generated**:
-```ts
+```typescript
 const primaryRegion = 'eu-west-2';
 const standbyRegion = 'eu-west-3';
 // Hardcoded in app entry point
@@ -991,7 +991,7 @@ const standbyRegion = 'eu-west-3';
 4. Poor reusability
 
 **Ideal Implementation**:
-```ts
+```typescript
 // In TapStack - encapsulated within stack logic
 const primaryRegion = this.node.tryGetContext('primaryRegion') || 'eu-west-2';
 const standbyRegion = this.node.tryGetContext('standbyRegion') || 'eu-west-3';
@@ -1006,7 +1006,7 @@ const standbyRegion = this.node.tryGetContext('standbyRegion') || 'eu-west-3';
 **Location**: MODEL_RESPONSE.md - Throughout
 
 **Model Generated**:
-```ts
+```typescript
 export class VpcStack extends cdk.Stack {
   // No JSDoc comments
   public readonly vpc: ec2.Vpc;
@@ -1020,7 +1020,7 @@ export class VpcStack extends cdk.Stack {
 4. No inline documentation
 
 **Ideal Implementation**:
-```ts
+```typescript
 /**
  * VPC Stack for multi-region deployment
  * Creates VPC with public, private, and isolated subnets
@@ -1045,7 +1045,7 @@ export class VpcStack extends cdk.Stack {
 **Location**: MODEL_RESPONSE.md ResilienceStack
 
 **Model Generated**:
-```ts
+```typescript
 // Basic FIS template without stop conditions
 new fis.CfnExperimentTemplate(this, 'FailoverExperiment', {
   description: 'Test failover',
@@ -1061,7 +1061,7 @@ new fis.CfnExperimentTemplate(this, 'FailoverExperiment', {
 4. Safety mechanisms missing
 
 **Ideal Implementation**:
-```ts
+```typescript
 const stopConditionAlarm = new cloudwatch.Alarm(this, 'FisStopConditionAlarm', {
   metric: new cloudwatch.Metric({
     namespace: 'AWS/FIS',
@@ -1089,7 +1089,7 @@ new fis.CfnExperimentTemplate(this, 'AlbFailureExperiment', {
 **Location**: MODEL_RESPONSE.md ResilienceStack
 
 **Model Generated**:
-```ts
+```typescript
 // Minimal Resilience Hub configuration
 parameters: {
   name: 'MultiRegionWebApp',
@@ -1104,7 +1104,7 @@ parameters: {
 4. Incomplete disaster recovery assessment
 
 **Ideal Implementation**:
-```ts
+```typescript
 parameters: {
   name: 'MultiRegionWebApp',
   description: 'Multi-region web application with active-passive failover',

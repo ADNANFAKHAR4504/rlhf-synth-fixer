@@ -21,7 +21,7 @@ This document outlines the issues identified in the original MODEL_RESPONSE.md a
 **Issue**: Resources were tagged with generic values instead of the required Production environment and IT department tags.
 
 **Fix**: Updated tagging to match PROMPT requirements:
-```ts
+```typescript
 // Before
 Environment: environmentSuffix  // Would be 'dev', 'pr2759', etc.
 Department: 'Security'
@@ -64,7 +64,7 @@ Department: 'IT'
 **Issue**: Missing critical outputs for EC2 and RDS resources.
 
 **Fix**: Added comprehensive outputs:
-```ts
+```typescript
 new cdk.CfnOutput(this, 'EC2InstanceId', { value: ec2Instance.instanceId });
 new cdk.CfnOutput(this, 'RDSEndpoint', { value: rdsInstance.dbInstanceEndpointAddress });
 new cdk.CfnOutput(this, 'VPCId', { value: vpc.vpcId });

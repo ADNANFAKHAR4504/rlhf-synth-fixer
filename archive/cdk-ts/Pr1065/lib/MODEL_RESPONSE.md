@@ -16,7 +16,7 @@ The solution implements a serverless image processing pipeline with the followin
 
 ### lib/image-processing-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -371,7 +371,7 @@ def handler(event, context):
 
 ### lib/tap-stack.ts (Updated)
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ImageProcessingStack } from './image-processing-stack';

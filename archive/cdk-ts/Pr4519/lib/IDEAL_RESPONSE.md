@@ -44,7 +44,7 @@ I'll create a production-ready CI/CD pipeline with AWS CDK that meets all your r
 
 ## **bin/tap.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -98,7 +98,7 @@ new TapStack(app, `${stackName}-us-west-2`, {
 
 ## **lib/tap-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

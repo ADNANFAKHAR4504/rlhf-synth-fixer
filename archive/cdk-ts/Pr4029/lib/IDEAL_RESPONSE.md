@@ -9,7 +9,7 @@ This solution provides an enterprise-grade serverless notification system using 
 ### Core Infrastructure Stack (lib/tap-stack.ts)
 
 #### 1. DynamoDB Table - Enhanced Audit and Analytics
-```ts
+```typescript
 const notificationTable = new dynamodb.Table(this, 'NotificationTable', {
   tableName: `notification-logs-${environmentSuffix}`,
   partitionKey: { name: 'notificationId', type: dynamodb.AttributeType.STRING },
@@ -37,7 +37,7 @@ notificationTable.addGlobalSecondaryIndex({
 - Optimized partition/sort key design for query efficiency
 
 #### 2. SNS Topic - Enterprise Message Hub
-```ts
+```typescript
 const orderNotificationTopic = new sns.Topic(this, 'OrderNotificationTopic', {
   topicName: `order-notifications-${environmentSuffix}`,
   displayName: 'Order Notification Distribution Hub',
@@ -62,7 +62,7 @@ orderNotificationTopic.addSubscription(
 #### 3. Lambda Functions - Production-Hardened Processors
 
 **Email Formatter with Enhanced Error Handling:**
-```ts
+```typescript
 const emailFormatterFunction = new lambda.Function(this, 'EmailFormatterFunction', {
   functionName: `email-formatter-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -87,7 +87,7 @@ emailFormatterFunction.addEnvironment('VPC_ENABLED', 'true');
 ```
 
 **SMS Formatter with Reliability Enhancements:**
-```ts
+```typescript
 const smsFormatterFunction = new lambda.Function(this, 'SmsFormatterFunction', {
   functionName: `sms-formatter-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -106,7 +106,7 @@ const smsFormatterFunction = new lambda.Function(this, 'SmsFormatterFunction', {
 ```
 
 #### 4. Enhanced Security and IAM Model
-```ts
+```typescript
 // Custom IAM role with precise permissions
 const emailLambdaRole = new iam.Role(this, 'EmailLambdaRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -144,7 +144,7 @@ const kmsKey = new kms.Key(this, 'NotificationKey', {
 ```
 
 #### 5. Advanced CloudWatch Monitoring Stack
-```ts
+```typescript
 const dashboard = new cloudwatch.Dashboard(this, 'NotificationDashboard', {
   dashboardName: `notification-metrics-${environmentSuffix}`,
   widgets: [
@@ -259,7 +259,7 @@ const compositeAlarm = new cloudwatch.CompositeAlarm(this, 'SystemHealthAlarm', 
 
 ### Enhanced Configuration Parameters
 
-```ts
+```typescript
 interface EnhancedTapStackProps extends cdk.StackProps {
   environmentSuffix: string;           // Required for resource naming
   notificationEmail: string;           // Verified SES sender email
@@ -280,7 +280,7 @@ interface EnhancedTapStackProps extends cdk.StackProps {
 - **SNS**: Message filtering reduces unnecessary Lambda cold starts
 
 **Cost Monitoring:**
-```ts
+```typescript
 const costAlarm = new cloudwatch.Alarm(this, 'CostAlarm', {
   alarmName: `notification-cost-${environmentSuffix}`,
   metric: new cloudwatch.Metric({
@@ -306,7 +306,7 @@ const costAlarm = new cloudwatch.Alarm(this, 'CostAlarm', {
 
 ### Production-Grade Deployment Outputs
 
-```ts
+```typescript
 // Comprehensive CloudFormation outputs
 const outputs = {
   NotificationTopicArn: new cdk.CfnOutput(this, 'NotificationTopicArn', {

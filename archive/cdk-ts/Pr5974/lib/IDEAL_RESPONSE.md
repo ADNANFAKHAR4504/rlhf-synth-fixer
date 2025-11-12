@@ -4,7 +4,7 @@ This document contains the final, corrected implementation for the payment proce
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -244,7 +244,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: test/tap-stack.int.test.ts
 
-```ts
+```typescript
 import {
   CloudFormationClient,
   DescribeStacksCommand,

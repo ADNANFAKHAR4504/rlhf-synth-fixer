@@ -25,7 +25,7 @@ Let me create a comprehensive CDK stack with all these requirements.
 
 I'll help you update your existing `TapStack` class with all the serverless infrastructure components you need. Here's the complete updated file with all the AWS resources properly configured and connected:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

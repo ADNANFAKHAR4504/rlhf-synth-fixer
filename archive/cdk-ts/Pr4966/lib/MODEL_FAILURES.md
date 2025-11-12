@@ -40,7 +40,7 @@ This analysis compares the MODEL_RESPONSE implementation with the IDEAL_RESPONSE
 
 **IDEAL_RESPONSE Fix**: Single Lambda function with internal routing:
 
-```ts
+```typescript
 // Single handler with method-based routing
 switch (httpMethod) {
   case 'GET':
@@ -70,7 +70,7 @@ switch (httpMethod) {
 
 **IDEAL_RESPONSE Fix**: PAY_PER_REQUEST billing for automatic scaling:
 
-```ts
+```typescript
 const table = new dynamodb.Table(this, `ItemsTable${environmentSuffix}`, {
   tableName: `tap-api-items-${environmentSuffix}`,
   billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // ✅ Automatic scaling
@@ -94,7 +94,7 @@ const table = new dynamodb.Table(this, `ItemsTable${environmentSuffix}`, {
 
 **IDEAL_RESPONSE Fix**: Inline Lambda code with real DynamoDB operations:
 
-```ts
+```typescript
 const lambdaFunction = new lambda.Function(
   this,
   `ApiFunction${environmentSuffix}`,
@@ -139,7 +139,7 @@ exports.handler = async (event) => {
 
 **IDEAL_RESPONSE Fix**: Enterprise-grade testing with both unit and integration tests:
 
-```ts
+```typescript
 // Unit tests (CDK synthesis validation)
 test('should create DynamoDB table with correct configuration', () => {
   const app = new cdk.App();
@@ -176,7 +176,7 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
 
 **IDEAL_RESPONSE Fix**: Simple environment suffix pattern:
 
-```ts
+```typescript
 // Clean environment handling
 const environmentSuffix =
   props?.environmentSuffix ||
@@ -202,7 +202,7 @@ const table = new dynamodb.Table(this, `ItemsTable${environmentSuffix}`, {
 
 **IDEAL_RESPONSE Fix**: GSI that inherits PAY_PER_REQUEST scaling:
 
-```ts
+```typescript
 // GSI for createdAt-based queries (automatically scales with PAY_PER_REQUEST)
 table.addGlobalSecondaryIndex({
   indexName: 'createdAt-index',
@@ -229,7 +229,7 @@ table.addGlobalSecondaryIndex({
 
 **IDEAL_RESPONSE Fix**: Complete CORS and security configuration:
 
-```ts
+```typescript
 const api = new apigateway.RestApi(this, `ApiGateway${environmentSuffix}`, {
   defaultCorsPreflightOptions: {
     allowOrigins: apigateway.Cors.ALL_ORIGINS,

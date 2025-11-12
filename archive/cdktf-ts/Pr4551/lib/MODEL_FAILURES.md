@@ -5,14 +5,14 @@
 ### 1. Hardcoded Configuration Values
 
 **Issue Location**: VPC Module - Availability Zones
-```ts
+```typescript
 // Model Response - Hardcoded
 availabilityZone: "us-west-2a"
 availabilityZone: "us-west-2b"
 ```
 
 **Ideal Response Solution**:
-```ts
+```typescript
 // Configurable and dynamic
 availabilityZone: config.availabilityZones[index]
 // Passed as: [`${awsRegion}a`, `${awsRegion}b`]
@@ -30,7 +30,7 @@ availabilityZone: config.availabilityZones[index]
 
 **Model Failure**: No structured configuration interface for VPC module
 
-```ts
+```typescript
 // Model Response - No configuration interface
 constructor(scope: Construct, id: string) {
   super(scope, id);
@@ -39,7 +39,7 @@ constructor(scope: Construct, id: string) {
 ```
 
 **Ideal Response Pattern**:
-```ts
+```typescript
 export interface VpcModuleConfig extends BaseModuleConfig {
   vpcCidr: string;
   publicSubnetCidrs: string[];
@@ -66,13 +66,13 @@ constructor(scope: Construct, id: string, config: VpcModuleConfig) {
 
 **Critical Issue**: Hardcoded database password in plain text
 
-```ts
+```typescript
 // Model Response - CRITICAL SECURITY FLAW
 password: "ChangeMe123!Secure", // In production, use AWS Secrets Manager
 ```
 
 **Ideal Response**:
-```ts
+```typescript
 // Uses AWS managed password system
 manageMasterUserPassword: true
 ```
@@ -95,12 +95,12 @@ manageMasterUserPassword: true
 ### 4. Insufficient KMS Key Permissions
 
 **Model Response**: Uses generic KMS alias for CloudWatch logs
-```ts
+```typescript
 kmsKeyId: "alias/aws/logs"
 ```
 
 **Ideal Response**: Custom KMS key with proper rotation
-```ts
+```typescript
 // Creates dedicated KMS key
 this.key = new aws.kmsKey.KmsKey(this, 'master-key', {
   description: 'Master encryption key for production environment',
@@ -122,7 +122,7 @@ this.key = new aws.kmsKey.KmsKey(this, 'master-key', {
 ### 5. Single NAT Gateway Design Flaw
 
 **Model Response**: Single NAT Gateway for all private subnets
-```ts
+```typescript
 // Only one NAT Gateway created
 this.natGateway = new aws.natGateway.NatGateway(this, "nat-gateway", {
   allocationId: natEip.id,
@@ -135,7 +135,7 @@ natGatewayId: this.natGateway.id
 ```
 
 **Ideal Response**: NAT Gateway per availability zone
-```ts
+```typescript
 this.natGateways = [];
 this.publicSubnets.forEach((subnet, index) => {
   const eip = new aws.eip.Eip(this, `nat-eip-${index}`, {
@@ -177,7 +177,7 @@ natGatewayId: this.natGateways[index % this.natGateways.length].id
 ### 6. Missing S3 Bucket Name Uniqueness Strategy
 
 **Model Response**: Uses `Date.now()` for uniqueness
-```ts
+```typescript
 bucket: `production-logs-${Date.now()}`
 ```
 
@@ -190,7 +190,7 @@ bucket: `production-logs-${Date.now()}`
 - **No Organization Context**: Doesn't include account ID or region
 
 **Better Approach** (not in either response):
-```ts
+```typescript
 // Using data sources for true uniqueness
 const accountId = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
   this, 'current', {}
@@ -208,14 +208,14 @@ bucket: `production-logs-${accountId.accountId}-${awsRegion}`
 ### 7. Incomplete S3 Resource Configuration
 
 **Model Response**: Uses deprecated S3 resource types
-```ts
+```typescript
 new aws.s3BucketVersioningV2.S3BucketVersioningV2(/* ... */)
 new aws.s3BucketServerSideEncryptionConfigurationV2.S3BucketServerSideEncryptionConfigurationV2(/* ... */)
 new aws.s3BucketLoggingV2.S3BucketLoggingV2(/* ... */)
 ```
 
 **Ideal Response**: Uses proper resource types
-```ts
+```typescript
 new aws.s3BucketVersioning.S3BucketVersioningA(/* ... */)
 new aws.s3BucketServerSideEncryptionConfiguration.S3BucketServerSideEncryptionConfigurationA(/* ... */)
 new aws.s3BucketLogging.S3BucketLoggingA(/* ... */)
@@ -232,12 +232,12 @@ new aws.s3BucketLogging.S3BucketLoggingA(/* ... */)
 ### 8. IAM Role Naming Without Uniqueness
 
 **Model Response**: Fixed IAM role name
-```ts
+```typescript
 name: "production-ec2-role"
 ```
 
 **Ideal Response**: Includes uniqueness suffix
-```ts
+```typescript
 name: 'production-ec2-role-12345'
 ```
 
@@ -252,14 +252,14 @@ name: 'production-ec2-role-12345'
 ### 9. Missing RDS Security Configuration
 
 **Model Response**: Missing critical RDS feature
-```ts
+```typescript
 // Missing: manageMasterUserPassword: true
 username: "dbadmin",
 password: "ChangeMe123!Secure"
 ```
 
 **Ideal Response**: Uses AWS managed password
-```ts
+```typescript
 username: 'dbadmin',
 manageMasterUserPassword: true
 ```
@@ -275,7 +275,7 @@ manageMasterUserPassword: true
 ### 10. Incomplete Monitoring Configuration
 
 **Model Response**: Uses default AWS KMS key for logs
-```ts
+```typescript
 new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, "app-logs", {
   name: "/aws/ec2/production",
   retentionInDays: 30,
@@ -285,7 +285,7 @@ new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, "app-logs", {
 ```
 
 **Ideal Response**: Comment indicates custom KMS key option
-```ts
+```typescript
 new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'app-logs', {
   name: '/aws/ec2/productionts',  // Note: typo in ideal response
   retentionInDays: 30,
@@ -305,7 +305,7 @@ new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'app-logs', {
 
 **Model Response**: No backend configuration in main stack
 
-```ts
+```typescript
 class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -318,7 +318,7 @@ class TapStack extends TerraformStack {
 
 **Ideal Response**: Complete backend configuration with locking
 
-```ts
+```typescript
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -360,7 +360,7 @@ Two engineers deploy simultaneously:
 
 **Model Response**: No environment differentiation
 
-```ts
+```typescript
 class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     // No environment parameter
@@ -370,7 +370,7 @@ class TapStack extends TerraformStack {
 
 **Ideal Response**: Environment-aware configuration
 
-```ts
+```typescript
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -405,7 +405,7 @@ export class TapStack extends TerraformStack {
 
 **Model Response**: No shared configuration pattern
 
-```ts
+```typescript
 // Each module has its own constructor signature
 constructor(scope: Construct, id: string) {}
 constructor(scope: Construct, id: string, vpc: aws.vpc.Vpc, /* ... */) {}
@@ -413,7 +413,7 @@ constructor(scope: Construct, id: string, vpc: aws.vpc.Vpc, /* ... */) {}
 
 **Ideal Response**: Standardized base configuration
 
-```ts
+```typescript
 export interface BaseModuleConfig {
   environment: string;
   project: string;
@@ -442,7 +442,7 @@ export interface VpcModuleConfig extends BaseModuleConfig {
 
 **Model Response**: Uses common tags but inconsistently
 
-```ts
+```typescript
 const commonTags = {
   Environment: "Production",
   Owner: "DevOpsTeam",
@@ -462,7 +462,7 @@ tags: commonTags
 
 **Ideal Response**: Dynamic tagging with configuration
 
-```ts
+```typescript
 const commonTags = {
   Project: config.project,
   Environment: config.environment,
@@ -488,14 +488,14 @@ tags: {
 
 **Model Response**: Simple console logs in stack only
 
-```ts
+```typescript
 console.log("Deploying KMS encryption keys...");
 console.log("Deploying VPC and networking components...");
 ```
 
 **Ideal Response**: Descriptive logging with emojis (though you requested without emojis)
 
-```ts
+```typescript
 console.log('📦 Deploying KMS encryption keys...');
 console.log('🌐 Deploying VPC and networking components...');
 console.log('🪣 Deploying S3 bucket for logging...');
@@ -525,7 +525,7 @@ console.log('🪣 Deploying S3 bucket for logging...');
 - Configuration can be version-controlled separately
 
 **Example Impact**:
-```ts
+```typescript
 // Can deploy to eu-west-1 with single config change
 const vpcModule = new VpcModule(this, 'vpc', {
   awsRegion: 'eu-west-1',
@@ -556,7 +556,7 @@ const vpcModule = new VpcModule(this, 'vpc', {
 ### 3. High Availability Design
 
 **Ideal HA Implementation**:
-```ts
+```typescript
 // Multiple NAT Gateways
 this.natGateways = [];
 this.publicSubnets.forEach((subnet, index) => {
@@ -579,7 +579,7 @@ natGatewayId: this.natGateways[index % this.natGateways.length].id
 ### 4. Proper State Management
 
 **Ideal State Configuration**:
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,

@@ -76,7 +76,7 @@ The initial MODEL_RESPONSE.md file contained only a placeholder text "Insert her
 
 **Fix**: Added proper imports:
 
-```ts
+```typescript
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 ```

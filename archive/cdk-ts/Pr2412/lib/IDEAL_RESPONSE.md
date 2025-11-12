@@ -8,7 +8,7 @@ This solution provides a complete, production-ready AWS CDK infrastructure imple
 
 ### Application Entry Point
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -32,7 +32,7 @@ new TapStack(app, stackName, {
 
 ### Stack Implementation
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

@@ -5,7 +5,7 @@
 ### 1. Incorrect CDKTF Import Statements
 
 **Model Response:**
-```ts
+```typescript
 import {
   AwsProvider,
   vpc as awsVpc,
@@ -17,7 +17,7 @@ import {
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
@@ -31,7 +31,7 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 ### 2. KMS Key ID Invalid ARN Format
 
 **Model Response:**
-```ts
+```typescript
 this.rdsInstance = new db.DbInstance(this, "db-instance", {
   // ...
   storageEncrypted: true,
@@ -40,7 +40,7 @@ this.rdsInstance = new db.DbInstance(this, "db-instance", {
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 const dbInstance = new DbInstance(this, 'mysql-instance', {
   // ...
   storageEncrypted: true,
@@ -59,14 +59,14 @@ Error: "kms_key_id" (alias/aws/rds) is an invalid ARN: arn: invalid prefix
 ### 3. Non-Deterministic S3 Bucket Naming
 
 **Model Response:**
-```ts
+```typescript
 this.bucket = new s3Bucket.S3Bucket(this, "logs-bucket", {
   bucket: `${props.projectName}-logs-${props.environment}`,
   // This creates non-unique bucket names
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 // Use a fixed suffix for deterministic bucket names in test/CI
 const uniqueSuffix = '0001';
 const bucketName = `${config.projectName}-app-logs-${uniqueSuffix}`;
@@ -83,12 +83,12 @@ const bucket = new S3Bucket(this, 'app-logs-bucket', {
 ### 4. Missing S3 Backend State Locking Configuration
 
 **Model Response:**
-```ts
+```typescript
 // No S3 backend configuration shown
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -106,13 +106,13 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 5. Missing Required Terraform Output Values
 
 **Model Response:**
-```ts
+```typescript
 new TerraformOutput(this, "vpc_id", {
   value: vpc.vpc.id,  // vpc.vpc.id is incorrect reference
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 new TerraformOutput(this, 'vpc-id', {
   value: vpcModule.vpcId,  // Proper module property reference
   description: 'VPC ID',
@@ -130,7 +130,7 @@ The argument "value" is required, but no definition was found.
 ### 6. Incorrect Security Group Rule Ports
 
 **Model Response:**
-```ts
+```typescript
 new securityGroupRule.SecurityGroupRule(this, "public-instance-sg-egress-all", {
   fromPort: 0,
   toPort: 0,  // Should be 65535
@@ -138,7 +138,7 @@ new securityGroupRule.SecurityGroupRule(this, "public-instance-sg-egress-all", {
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 new SecurityGroupRule(this, 'public-sg-egress', {
   type: 'egress',
   fromPort: 0,
@@ -153,13 +153,13 @@ new SecurityGroupRule(this, 'public-sg-egress', {
 ### 7. Missing Database Master Password Management
 
 **Model Response:**
-```ts
+```typescript
 manageMasterUserPassword: true, // Missing proper implementation
 username: "admin",
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 username: 'admin',
 manageMasterUserPassword: true, // AWS-managed credentials
 // No password field - AWS Secrets Manager handles it
@@ -172,13 +172,13 @@ manageMasterUserPassword: true, // AWS-managed credentials
 ### 8. Hardcoded Availability Zones
 
 **Model Response:**
-```ts
+```typescript
 // Get Availability Zones
 const azs = ["us-east-1a", "us-east-1b"];  // Hardcoded!
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],  // Dynamic based on region
 ```
 
@@ -189,7 +189,7 @@ availabilityZones: [`${awsRegion}a`, `${awsRegion}b`],  // Dynamic based on regi
 ### 9. Missing NAT Gateway Route Dependency
 
 **Model Response:**
-```ts
+```typescript
 new route.Route(this, "private-route", {
   routeTableId: this.privateRouteTable.id,
   destinationCidrBlock: "0.0.0.0/0",
@@ -198,7 +198,7 @@ new route.Route(this, "private-route", {
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 const natGateway = new NatGateway(this, 'nat-gateway', {
   allocationId: natEip.id,
   subnetId: publicSubnets[0].id,
@@ -217,12 +217,12 @@ new Route(this, 'private-route', {
 ### 10. Missing S3 Bucket Encryption Configuration
 
 **Model Response:**
-```ts
+```typescript
 // No server-side encryption configuration
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 new S3BucketServerSideEncryptionConfigurationA(this, 'bucket-encryption', {
   bucket: bucket.id,
   rule: [
@@ -242,13 +242,13 @@ new S3BucketServerSideEncryptionConfigurationA(this, 'bucket-encryption', {
 ### 11. SSH CIDR Missing in Network ACL Rules
 
 **Model Response:**
-```ts
+```typescript
 new networkAclRule.NetworkAclRule(this, "public-nacl-inbound-ssh", {
   cidrBlock: props.sshAllowedCidr,  // props not available in VpcModule
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 {
   ruleNumber: 120,
   protocol: 'tcp',
@@ -266,14 +266,14 @@ new networkAclRule.NetworkAclRule(this, "public-nacl-inbound-ssh", {
 ### 12. Missing CloudWatch Log Group IAM Permissions
 
 **Model Response:**
-```ts
+```typescript
 policy: JSON.stringify({
   Statement: [{
     Resource: ["arn:aws:logs:*:*:*"],  // Too broad
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 Statement: [
   {
     Effect: 'Allow',
@@ -294,13 +294,13 @@ Statement: [
 ### 13. EC2 Instance Profile Lifecycle Management
 
 **Model Response:**
-```ts
+```typescript
 const ec2Instance = new instance.Instance(this, `ec2-instance-${index + 1}`, {
   // Missing lifecycle configuration
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```ts
+```typescript
 lifecycle: {
   createBeforeDestroy: true,
 },

@@ -13,7 +13,7 @@ The model-generated implementation contains 15 critical failures that would prev
 
 **Failure**: The model attempts to create a VPC Link using `InterfaceVpcEndpointService`, which is not a valid target for VPC Link.
 
-```ts
+```typescript
 // MODEL_RESPONSE (INCORRECT):
 const vpcLink = new apigateway.VpcLink(this, 'VpcLink', {
   targets: [new ec2.InterfaceVpcEndpointService(vpc, 'VpcEndpoint')],
@@ -23,7 +23,7 @@ const vpcLink = new apigateway.VpcLink(this, 'VpcLink', {
 **Root Cause**: Misunderstanding of VPC Link architecture. REST API Gateway's VPC Link only supports Network Load Balancers (NLB) as targets, not VPC endpoints.
 
 **IDEAL_RESPONSE (CORRECT)**:
-```ts
+```typescript
 // Create ALB (supports Lambda targets)
 const alb = new elbv2.ApplicationLoadBalancer(...);
 const targetGroup = new elbv2.ApplicationTargetGroup(..., {
@@ -52,7 +52,7 @@ const vpcLink = new apigateway.VpcLink(this, 'VpcLink', {
 **Failure**: Model doesn't specify API Gateway endpoint type, defaulting to EDGE, which creates CloudFront ’ CloudFront routing issues.
 
 **MODEL_RESPONSE**: Missing endpoint configuration
-```ts
+```typescript
 this.apiGateway = new apigateway.RestApi(this, 'PaymentsApi', {
   // No endpointConfiguration specified
 });
@@ -61,7 +61,7 @@ this.apiGateway = new apigateway.RestApi(this, 'PaymentsApi', {
 **Root Cause**: The model doesn't understand that EDGE endpoints already use CloudFront. When the Global Stack creates another CloudFront distribution with the EDGE API as origin, requests fail due to routing conflicts.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 this.apiGateway = new apigateway.RestApi(this, 'PaymentsApi', {
   endpointConfiguration: {
     types: [apigateway.EndpointType.REGIONAL], // CRITICAL
@@ -78,7 +78,7 @@ this.apiGateway = new apigateway.RestApi(this, 'PaymentsApi', {
 **Failure**: Model uses NAT Gateway instead of VPC endpoints, causing unnecessary costs ($32-45/month per NAT) and 5-10 minute deployment time.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 const vpc = new ec2.Vpc(this, 'PaymentsVpc', {
   maxAzs: 2,
   natGateways: 1, // EXPENSIVE AND SLOW
@@ -88,7 +88,7 @@ const vpc = new ec2.Vpc(this, 'PaymentsVpc', {
 **Root Cause**: Model defaults to NAT Gateway for private subnet internet access without considering VPC endpoints as an alternative for AWS services.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 const vpc = new ec2.Vpc(this, 'PaymentsVpc', {
   maxAzs: 2,
   natGateways: 0, // No NAT needed
@@ -123,7 +123,7 @@ vpc.addGatewayEndpoint('S3Endpoint', {
 **Root Cause**: Model doesn't recognize that CloudFront's `/api/*` path pattern needs to be rewritten to match API Gateway's `/prod/*` stage path.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 const apiRewriteFunction = new cloudfront.Function(
   this,
   'ApiRewriteFunction',
@@ -161,7 +161,7 @@ additionalBehaviors: {
 **Failure**: Model creates a single KMS key in the primary region. DynamoDB Global Tables require separate KMS keys in each replica region.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 // Only one KMS stack in primary region
 const databaseStack = new DatabaseStack(this, 'DatabaseStack', {
   kmsKeyArn: primaryKmsStack.kmsKeyArn, // Same key for both regions
@@ -171,7 +171,7 @@ const databaseStack = new DatabaseStack(this, 'DatabaseStack', {
 **Root Cause**: Misunderstanding of KMS key regional constraints. KMS keys cannot be shared across regions for DynamoDB Global Table encryption.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 // Create KMS keys in EACH region
 const primaryKmsStack = new KmsStack(this, 'PrimaryKmsStack', {
   region: primaryRegion,
@@ -202,7 +202,7 @@ const secondaryRegionalStack = new RegionalStack(..., {
 **Failure**: Model uses high-level `grantRead()` helper without enforcing SSL or properly configuring OAI access.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 props.primaryBucket.grantRead(primaryOai);
 props.secondaryBucket.grantRead(secondaryOai);
 ```
@@ -210,7 +210,7 @@ props.secondaryBucket.grantRead(secondaryOai);
 **Root Cause**: Using convenience methods doesn't provide fine-grained control over bucket policies required for security compliance.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 new s3.CfnBucketPolicy(this, 'PrimaryBucketPolicy', {
   bucket: props.primaryBucketName,
   policyDocument: {
@@ -253,7 +253,7 @@ new s3.CfnBucketPolicy(this, 'PrimaryBucketPolicy', {
 **Failure**: Model attempts to use high-level `route53.RecordSet` with `RestApi.fromRestApiId()` using incorrect API ID extraction.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 const apiRecord = new route53.RecordSet(this, 'ApiFailoverRecord', {
   target: route53.RecordTarget.fromAlias(
     new targets.ApiGateway(
@@ -268,7 +268,7 @@ const apiRecord = new route53.RecordSet(this, 'ApiFailoverRecord', {
 **Root Cause**: Incorrect parsing of API Gateway URL. The model tries to extract API ID from pathname instead of hostname.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 const primaryApiDomain = cdk.Fn.select(
   0,
   cdk.Fn.split(
@@ -298,7 +298,7 @@ new route53.CfnRecordSet(this, 'PrimaryApiFailoverRecord', {
 **Failure**: Model creates monolithic stacks (global-payments-gateway-stack.ts) that nest other stacks as children, violating CDK best practices.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 export class GlobalPaymentsGatewayStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props) {
     super(scope, id, props);
@@ -314,7 +314,7 @@ export class GlobalPaymentsGatewayStack extends cdk.Stack {
 **Root Cause**: Model doesn't understand that stacks should be siblings, not parent-child relationships, to avoid CloudFormation nested stack limitations.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?) {
     super(scope, id, props);
@@ -337,7 +337,7 @@ export class TapStack extends cdk.Stack {
 **Failure**: Model uses deprecated `Table` construct without proper composite key configuration.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 const globalTable = new dynamodb.Table(this, 'PaymentsTable', {
   partitionKey: { name: 'transactionId', type: dynamodb.AttributeType.STRING },
   sortKey: { name: 'timestamp', type: dynamodb.AttributeType.STRING },
@@ -350,7 +350,7 @@ const globalTable = new dynamodb.Table(this, 'PaymentsTable', {
 **Root Cause**: Using older Table construct with incorrect encryption configuration for Global Tables.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 this.table = new dynamodb.TableV2(this, 'PaymentsTable', {
   partitionKey: {
     name: 'transactionId',
@@ -380,7 +380,7 @@ this.table = new dynamodb.TableV2(this, 'PaymentsTable', {
 **Failure**: Model doesn't include account ID in S3 bucket names, causing conflicts when creating buckets in multiple regions.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
   // No bucketName specified or missing account ID
   removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -390,7 +390,7 @@ this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
 **Root Cause**: S3 bucket names must be globally unique. Without explicit naming with account ID, cross-region deployments fail.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
   bucketName: `payments-website-${props.region}-${props.environmentSuffix}-${this.account}`.toLowerCase(),
   removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -408,7 +408,7 @@ this.websiteBucket = new s3.Bucket(this, 'WebsiteBucket', {
 **Failure**: Model uses broad DynamoDB permissions without specifying regional table ARNs.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 transferLambdaRole.addToPolicy(
   new iam.PolicyStatement({
     actions: ['dynamodb:PutItem', 'dynamodb:GetItem', 'dynamodb:UpdateItem', 'dynamodb:Query'],
@@ -420,7 +420,7 @@ transferLambdaRole.addToPolicy(
 **Root Cause**: Global Table ARNs are region-specific. Lambda in secondary region can't access table with primary region ARN.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 const regionalTableArn = `arn:aws:dynamodb:${props.region}:${cdk.Aws.ACCOUNT_ID}:table/${props.tableName}`;
 
 transferLambdaRole.addToPolicy(
@@ -445,7 +445,7 @@ transferLambdaRole.addToPolicy(
 **Root Cause**: REGIONAL API Gateway endpoints require specific origin request policy to avoid Host header conflicts.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 const primaryApiDomain = cdk.Fn.select(
   0,
   cdk.Fn.split('/', cdk.Fn.select(2, cdk.Fn.split('/', props.primaryApiEndpoint)))
@@ -473,7 +473,7 @@ additionalBehaviors: {
 **Failure**: Model attempts to deploy website to buckets without proper source path configuration.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 new s3deploy.BucketDeployment(this, 'PrimaryWebsiteDeployment', {
   sources: [s3deploy.Source.asset(path.join(__dirname, '../website'))],
   // Path might be wrong relative to stack location
@@ -483,7 +483,7 @@ new s3deploy.BucketDeployment(this, 'PrimaryWebsiteDeployment', {
 **Root Cause**: Stack file location is in lib/, but model references '../website' which might not exist.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 new s3deploy.BucketDeployment(this, 'PrimaryWebsiteDeployment', {
   sources: [s3deploy.Source.asset(path.join(__dirname, './website'))],
   // Website folder is lib/website/
@@ -507,7 +507,7 @@ new s3deploy.BucketDeployment(this, 'PrimaryWebsiteDeployment', {
 **Root Cause**: Lack of systematic environment suffix handling pattern.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 const environmentSuffix =
   props?.environmentSuffix ||
   this.node.tryGetContext('environmentSuffix') ||
@@ -532,7 +532,7 @@ this.websiteBucket = new s3.Bucket(this, `WebsiteBucket-${environmentSuffix}`, {
 **Failure**: Model uses inline Lambda code without proper AWS SDK v3 configuration.
 
 **MODEL_RESPONSE**:
-```ts
+```typescript
 // lambda/transfer/index.ts
 const { DynamoDB } = require('aws-sdk'); // AWS SDK v2 (deprecated)
 ```
@@ -540,7 +540,7 @@ const { DynamoDB } = require('aws-sdk'); // AWS SDK v2 (deprecated)
 **Root Cause**: AWS SDK v2 is deprecated and not included by default in Node.js 18+ Lambda runtimes.
 
 **IDEAL_RESPONSE**:
-```ts
+```typescript
 // lambda/transfer/index.js
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
 const { DynamoDBDocumentClient, PutCommand } = require('@aws-sdk/lib-dynamodb');

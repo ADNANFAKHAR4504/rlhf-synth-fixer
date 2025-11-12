@@ -44,7 +44,7 @@ Let me create the CDK stack code first, then the initialization code, followed b
 
 ### 📁 **lib/iot-pipeline-stack.ts**
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as iot from 'aws-cdk-lib/aws-iot';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -640,7 +640,7 @@ def handler(event, context):
 
 ### 📁 **bin/main.ts**
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

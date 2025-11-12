@@ -6,7 +6,7 @@ This document outlines the issues found in the original MODEL_RESPONSE.md implem
 
 ### 1. RDS Database Configuration Error
 **Issue**: The database configuration specified IOPS (3000) with GP3 storage type and only 100GB allocated storage.
-```ts
+```typescript
 // Original problematic code
 allocatedStorage: 100,
 storageType: rds.StorageType.GP3,
@@ -16,7 +16,7 @@ iops: 3000,  // ❌ Cannot specify IOPS for storage < 400GB
 **Error**: AWS RDS requires at least 400GB of storage to specify IOPS with GP3 storage type.
 
 **Fix**: Removed IOPS specification for GP3 storage with 100GB allocation.
-```ts
+```typescript
 // Fixed code
 allocatedStorage: 100,
 storageType: rds.StorageType.GP3,
@@ -25,14 +25,14 @@ storageType: rds.StorageType.GP3,
 
 ### 2. Deletion Protection Issues
 **Issue**: Resources had deletion protection enabled, preventing clean stack deletion.
-```ts
+```typescript
 // Original code
 deletionProtection: true,
 removalPolicy: cdk.RemovalPolicy.SNAPSHOT,
 ```
 
 **Fix**: Disabled deletion protection for all resources to ensure clean teardown.
-```ts
+```typescript
 // Fixed code
 deletionProtection: false,
 removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -40,13 +40,13 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 
 ### 3. S3 Bucket Retention Policy
 **Issue**: S3 bucket had RETAIN policy, preventing deletion and leaving orphaned resources.
-```ts
+```typescript
 // Original code
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 ```
 
 **Fix**: Changed to DESTROY with auto-delete objects for clean removal.
-```ts
+```typescript
 // Fixed code
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true,
@@ -56,14 +56,14 @@ autoDeleteObjects: true,
 
 #### 4.1 Incorrect Metric Method Names
 **Issue**: Used deprecated/non-existent methods for Auto Scaling Group metrics.
-```ts
+```typescript
 // Original code
 props.autoScalingGroup.metricCpuUtilization();
 props.autoScalingGroup.metricGroupInServiceInstances();
 ```
 
 **Fix**: Used explicit CloudWatch metrics.
-```ts
+```typescript
 // Fixed code
 new cloudwatch.Metric({
   namespace: 'AWS/EC2',
@@ -78,7 +78,7 @@ new cloudwatch.Metric({
 
 #### 4.2 OpenSearch VPC Configuration
 **Issue**: Used incorrect property name `vpcOptions` instead of `vpcSubnets`.
-```ts
+```typescript
 // Original code
 vpcOptions: {
   subnets: props.vpc.selectSubnets(...),
@@ -87,7 +87,7 @@ vpcOptions: {
 ```
 
 **Fix**: Used correct CDK property names.
-```ts
+```typescript
 // Fixed code
 vpcSubnets: [props.vpc.selectSubnets(...)],
 securityGroups: [this.openSearchSecurityGroup],
@@ -95,13 +95,13 @@ securityGroups: [this.openSearchSecurityGroup],
 
 #### 4.3 Missing CloudWatch Actions Import
 **Issue**: Missing import for SNS alarm actions.
-```ts
+```typescript
 // Original code
 new cdk.aws_cloudwatch_actions.SnsAction(alertTopic)
 ```
 
 **Fix**: Added proper import.
-```ts
+```typescript
 // Fixed code
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 // ...
@@ -117,7 +117,7 @@ new cloudwatch_actions.SnsAction(alertTopic)
 
 #### 5.2 Incorrect Security Group Reference
 **Issue**: Attempted to import Redis security group using endpoint address.
-```ts
+```typescript
 // Original code
 const redisSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
   this, 'ImportedRedisSecurityGroup',
@@ -131,7 +131,7 @@ const redisSecurityGroup = ec2.SecurityGroup.fromSecurityGroupId(
 **Issue**: T3 instance types don't support Multi-AZ with standby feature.
 
 **Fix**: Explicitly disabled Multi-AZ with standby.
-```ts
+```typescript
 // Fixed code
 capacity: {
   dataNodeInstanceType: 't3.small.search',
@@ -142,13 +142,13 @@ capacity: {
 
 ### 7. Stack Naming Convention
 **Issue**: Child stack names included environment suffix redundantly.
-```ts
+```typescript
 // Original code
 new NetworkStack(this, `NetworkStack-${environmentSuffix}`, ...)
 ```
 
 **Fix**: Simplified to use CDK's automatic naming with parent stack prefix.
-```ts
+```typescript
 // Fixed code
 new NetworkStack(this, 'NetworkStack', ...)
 // Results in: TapStack{suffix}/NetworkStack
@@ -158,7 +158,7 @@ new NetworkStack(this, 'NetworkStack', ...)
 **Issue**: No stack outputs were defined for integration testing.
 
 **Fix**: Added comprehensive outputs for all key resources.
-```ts
+```typescript
 new cdk.CfnOutput(this, 'VPCId', {
   value: networkStack.vpc.vpcId,
   description: 'VPC ID',

@@ -4,7 +4,7 @@ Here is the complete CDK TypeScript infrastructure code for the community platfo
 
 ## Main Stack Implementation
 
-```ts
+```typescript
 // lib/web-server-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -266,7 +266,7 @@ export class WebServerStack extends cdk.Stack {
 
 ## Updated TapStack Integration
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

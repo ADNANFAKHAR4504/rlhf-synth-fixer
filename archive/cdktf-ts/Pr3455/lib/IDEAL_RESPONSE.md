@@ -7,7 +7,7 @@ A comprehensive price monitoring service infrastructure tracking 5,300 daily pro
 
 ### Infrastructure Stack Structure
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import {
   AwsProvider,
@@ -65,7 +65,7 @@ export class TapStack extends TerraformStack {
 
 ### Core Infrastructure Implementation
 
-```ts
+```typescript
 // lib/price-monitor-stack.ts
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';

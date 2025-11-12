@@ -1,6 +1,6 @@
 Here's the complete infrastructure code for the portfolio tracking platform in CDKTF TypeScript:
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import {
   AwsProvider,
@@ -85,7 +85,7 @@ export class TapStack extends TerraformStack {
 }
 ```
 
-```ts
+```typescript
 // lib/network-stack.ts
 import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -220,7 +220,7 @@ export class NetworkStack extends TerraformStack {
 }
 ```
 
-```ts
+```typescript
 // lib/database-stack.ts
 import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -393,7 +393,7 @@ export class DatabaseStack extends TerraformStack {
 }
 ```
 
-```ts
+```typescript
 // lib/compute-stack.ts
 import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -624,7 +624,7 @@ echo "Portfolio tracking app initialization complete"`;
 }
 ```
 
-```ts
+```typescript
 // lib/api-stack.ts
 import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -772,7 +772,7 @@ exports.handler = async (event) => {
 }
 ```
 
-```ts
+```typescript
 // lib/monitoring-stack.ts
 import { TerraformStack } from 'cdktf';
 import { Construct } from 'constructs';
@@ -865,7 +865,7 @@ export class MonitoringStack extends TerraformStack {
 }
 ```
 
-```ts
+```typescript
 // lib/lambda.zip
 // This is a placeholder for the Lambda deployment package
 // In production, create a proper deployment package with the handler code

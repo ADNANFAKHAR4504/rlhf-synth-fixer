@@ -15,7 +15,7 @@ This document analyzes the failures found in the MODEL_RESPONSE implementation a
 **Impact Level**: High (Build Blocker)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
   restApi: api.id,
   stageName: 'prod',  // ❌ Deprecated property
@@ -25,7 +25,7 @@ const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environme
 **Error**: `error TS2353: Object literal may only specify known properties, and 'stageName' does not exist in type 'DeploymentArgs'.`
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environmentSuffix}`, {
   restApi: api.id,
   // ✓ stageName removed
@@ -43,7 +43,7 @@ const deployment = new aws.apigateway.Deployment(`webhook-deployment-${environme
 **Impact Level**: High (Build Blocker + Requirement Violation)
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
   restApi: api.id,
   deployment: deployment.id,
@@ -59,7 +59,7 @@ const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
 **Error**: `error TS2353: Object literal may only specify known properties, and 'throttleSettings' does not exist in type 'StageArgs'.`
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const stage = new aws.apigateway.Stage(`webhook-stage-${environmentSuffix}`, {
   restApi: api.id,
   deployment: deployment.id,

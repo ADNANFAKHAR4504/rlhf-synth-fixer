@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/crud-handler.ts
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
@@ -355,7 +355,7 @@ export const handler = async (
 
 ## ./lib/lambda/file-processing-handler.ts
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import {
   S3Client,
@@ -715,7 +715,7 @@ export const handler = async (
 
 ## ./lib/lambda/main-handler.ts
 
-```ts
+```typescript
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
@@ -840,7 +840,7 @@ export const handler = async (
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -1278,7 +1278,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
@@ -2009,7 +2009,7 @@ describe(`TAP Stack Integration Tests - ${environmentSuffix}`, () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

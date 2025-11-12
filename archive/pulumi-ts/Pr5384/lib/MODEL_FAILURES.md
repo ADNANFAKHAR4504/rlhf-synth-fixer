@@ -33,7 +33,7 @@ Property 'environmentSuffix' is missing in type
 **Impact**: Build failure, but easily fixed
 
 **Fix**: Added environmentSuffix parameter to TapStack instantiation in bin/tap.ts
-```ts
+```typescript
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   region: config.get('aws:region') || 'ap-northeast-1',

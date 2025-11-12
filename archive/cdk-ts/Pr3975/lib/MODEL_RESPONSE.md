@@ -8,7 +8,7 @@ A comprehensive serverless monitoring system built with AWS CDK (TypeScript) to 
 
 ### Core Stack Structure
 
-```ts
+```typescript
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   notificationEmail?: string;
@@ -26,7 +26,7 @@ export class TapStack extends cdk.Stack {
 
 Complete error storage solution with GSI for function-based queries:
 
-```ts
+```typescript
 const errorLogsTable = new dynamodb.Table(this, 'ErrorLogsTable', {
   tableName: `error-logs-${envSuffix}`,
   partitionKey: {
@@ -61,7 +61,7 @@ errorLogsTable.addGlobalSecondaryIndex({
 
 Integrated notification system for all monitoring alerts:
 
-```ts
+```typescript
 const alertTopic = new sns.Topic(this, 'AlertTopic', {
   topicName: `monitoring-alerts-${envSuffix}`,
   displayName: `Monitoring Alerts - ${envSuffix.toUpperCase()}`,
@@ -74,7 +74,7 @@ alertTopic.addSubscription(new sns_subscriptions.EmailSubscription(email));
 
 Five production Lambda functions with comprehensive error handling and DynamoDB logging:
 
-```ts
+```typescript
 const functionNames = [
   'user-service', 'order-processor', 'payment-handler', 
   'notification-sender', 'data-aggregator'
@@ -152,7 +152,7 @@ exports.handler = async (event) => {
 
 Comprehensive monitoring with three alarm types per function:
 
-```ts
+```typescript
 // Error Rate Alarm (>5% threshold)
 const errorRateAlarm = new cloudwatch.Alarm(this, `${funcName}ErrorRateAlarm`, {
   alarmName: `${funcName}-error-rate-${envSuffix}`,
@@ -207,7 +207,7 @@ const throttleAlarm = new cloudwatch.Alarm(this, `${funcName}ThrottleAlarm`, {
 
 Comprehensive operational dashboard with summary and detailed widgets:
 
-```ts
+```typescript
 const dashboard = new cloudwatch.Dashboard(this, 'MonitoringDashboard', {
   dashboardName: `serverless-monitoring-${envSuffix}`,
 });
@@ -257,7 +257,7 @@ lambdaFunctions.forEach(func => {
 
 Least privilege access model with specific permissions:
 
-```ts
+```typescript
 const lambdaExecutionRole = new iam.Role(this, 'LambdaExecutionRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
   managedPolicies: [
@@ -282,7 +282,7 @@ lambdaExecutionRole.addToPolicy(new iam.PolicyStatement({
 
 Essential outputs for automated testing and integration:
 
-```ts
+```typescript
 new cdk.CfnOutput(this, 'ErrorLogsTableName', {
   value: errorLogsTable.tableName,
   description: 'DynamoDB table for error logs',

@@ -3,7 +3,7 @@
 I'll help you create a robust VPC network infrastructure with modern AWS features. Here's a production-ready CDK TypeScript implementation:
 
 ## bin/tap.ts
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -31,7 +31,7 @@ new TapStack(app, stackName, {
 ```
 
 ## lib/tap-stack.ts
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as vpclattice from 'aws-cdk-lib/aws-vpclattice';

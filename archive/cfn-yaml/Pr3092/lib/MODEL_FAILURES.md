@@ -73,7 +73,7 @@ The original MODEL_RESPONSE claimed security compliance but provided:
 - **Multi-Layer Security Validation**: Testing all three security layers (boundaries, policies, conditions)
 
 #### **Security Testing Framework Implemented**
-```ts
+```typescript
 // Example of critical security validation that was missing
 describe('Live IAM Policy Inspection Tests', () => {
   test('should have no wildcard actions in Allow statements', async () => {
@@ -174,7 +174,7 @@ No security testing
 ```
 
 #### **Implemented (IDEAL_RESPONSE)**
-```ts
+```typescript
 // 58 unit tests covering all aspects
 describe('TapStack CloudFormation Template', () => {
   // Template structure validation

@@ -1234,7 +1234,7 @@ Outputs:
 
 ## 2. Unit Tests
 
-```ts
+```typescript
 // tests/tap-stack.unit.test.ts
 import * as fs from 'fs';
 import * as yaml from 'js-yaml';

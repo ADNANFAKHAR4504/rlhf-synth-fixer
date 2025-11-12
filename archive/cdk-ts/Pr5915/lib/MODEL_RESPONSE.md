@@ -14,7 +14,7 @@ This implementation creates a production-grade VPC infrastructure for a financia
 
 ## File: lib/vpc-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -315,7 +315,7 @@ export class VpcStack extends cdk.Stack {
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcStack } from './vpc-stack';
@@ -442,7 +442,7 @@ After deployment, the stack exports the following outputs:
 ## Usage Examples
 
 ### Reference VPC in another stack
-```ts
+```typescript
 const vpcId = cdk.Fn.importValue(`VpcId-${environmentSuffix}`);
 const vpc = ec2.Vpc.fromLookup(this, 'ImportedVpc', {
   vpcId: vpcId,
@@ -450,7 +450,7 @@ const vpc = ec2.Vpc.fromLookup(this, 'ImportedVpc', {
 ```
 
 ### Use security groups in EC2 instances
-```ts
+```typescript
 const webSgId = cdk.Fn.importValue(`WebSecurityGroupId-${environmentSuffix}`);
 const webSg = ec2.SecurityGroup.fromSecurityGroupId(this, 'WebSG', webSgId);
 ```

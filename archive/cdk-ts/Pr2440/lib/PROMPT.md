@@ -11,7 +11,7 @@ We have an existing CDK TypeScript project initialized with the following file s
 
 Here's our current `tap-stack.ts` file that needs to be updated:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

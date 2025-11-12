@@ -11,14 +11,14 @@ This document analyzes the failures, issues, and gaps in the MODEL_RESPONSE.md c
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 bucket: `compliance-reports-${environmentSuffix}-${pulumi.getStack()}`,
 ```
 
 The model generated bucket names using `pulumi.getStack()` without lowercase conversion. S3 bucket names must be all lowercase, but Pulumi stack names can contain capital letters (e.g., "TapStacksynthf3sjmn").
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 bucket: currentAccount.accountId.apply(
   (accountId: string) =>
     `compliance-reports-${environmentSuffix}-${accountId}-${(pulumi.getStack() || 'dev').toLowerCase()}`
@@ -40,7 +40,7 @@ bucket: currentAccount.accountId.apply(
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const wellArchitectedWorkload = new aws.wellarchitected.Workload(
   `compliance-workload-${environmentSuffix}`,
   { /* configuration */ }
@@ -50,7 +50,7 @@ const wellArchitectedWorkload = new aws.wellarchitected.Workload(
 The model attempted to use `aws.wellarchitected.Workload` which does not exist in the Pulumi AWS provider (v7.x).
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // NOTE: AWS Well-Architected Tool is not available in Pulumi AWS provider
 // This feature would need to be managed separately via AWS CLI or Console
 // Keeping this as documentation for the intended architecture
@@ -70,7 +70,7 @@ const wellArchitectedWorkloadId = pulumi.interpolate`InfrastructureCompliance-${
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 controls: [
   {
     id: pulumi.interpolate`arn:aws:auditmanager:${primaryRegion}:${accountId}:control/aws-config-rule`,
@@ -81,7 +81,7 @@ controls: [
 The model used an ARN format for control IDs, but AWS Audit Manager requires UUID format matching pattern `^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$`.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // NOTE: AWS Audit Manager Framework creation is commented out
 // because it requires an existing control UUID, which must be created separately
 // through AWS Console or CLI. This is a platform limitation.
@@ -103,14 +103,14 @@ The model used an ARN format for control IDs, but AWS Audit Manager requires UUI
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 standardsArn: pulumi.interpolate`arn:aws:securityhub:${primaryRegion}::standards/cis-aws-foundations-benchmark/v/1.2.0`,
 ```
 
 The model generated invalid ARNs for Security Hub standards. The ARN format doesn't match AWS requirements for the us-east-1 region.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // NOTE: Security Hub Standards are commented out due to invalid ARN format
 // These need to be enabled via AWS Console or CLI after Security Hub is active
 // The standards available depend on the region and account settings
@@ -136,7 +136,7 @@ The model generated invalid ARNs for Security Hub standards. The ARN format does
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 destination: {
   bucket: replicaBucket.arn,
   replicationTime: {
@@ -153,7 +153,7 @@ destination: {
 The model included `replicationTime` configuration which is not compatible with the standard S3 replication configuration schema in Pulumi AWS provider v7.x.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 destination: {
   bucket: replicaBucket.arn,
   // NOTE: ReplicationTime removed due to schema incompatibility
@@ -179,7 +179,7 @@ destination: {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const inspector = new aws.inspector2.Enabler(/* ... */);
 const auditManagerFramework = new aws.auditmanager.Framework(/* ... */);
 ```
@@ -187,7 +187,7 @@ const auditManagerFramework = new aws.auditmanager.Framework(/* ... */);
 Variables declared but never referenced, causing ESLint errors.
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const inspector = new aws.inspector2.Enabler(
   `inspector-enabler-${environmentSuffix}`,
@@ -217,7 +217,7 @@ const inspector = new aws.inspector2.Enabler(
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 versioning: { enabled: true },
 serverSideEncryptionConfiguration: { /* ... */ },
 lifecycleRules: [ /* ... */ ],
@@ -243,14 +243,14 @@ Same as MODEL_RESPONSE (acceptable for now, but generates warnings).
 **MODEL_RESPONSE Issue**:
 The bin/tap.ts file didn't pass `environmentSuffix` to TapStack and didn't export stack outputs.
 
-```ts
+```typescript
 new TapStack('pulumi-infra', {
   tags: defaultTags,
 });
 ```
 
 **IDEAL_RESPONSE Fix**:
-```ts
+```typescript
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
@@ -277,7 +277,7 @@ Unit tests fail because the stack code uses `pulumi.all()` and `pulumi.getStack(
 
 **IDEAL_RESPONSE Fix**:
 Tests now include proper Pulumi mocking setup:
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 
 pulumi.runtime.setMocks({
@@ -334,7 +334,7 @@ jest.spyOn(pulumi, 'getStack').mockImplementation(() => mockStackName as string)
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**:
-```ts
+```typescript
 const notificationEmails = args.notificationEmails || ['compliance@example.com'];
 ```
 

@@ -9,7 +9,7 @@ The initial model response in `MODEL_RESPONSE.md` contained several critical iss
 
 ### 1. Lambda Reserved Concurrent Executions (Line 219)
 **Issue:**
-```ts
+```typescript
 reservedConcurrentExecutions: environmentSuffix === 'prod' ? 100 : 10,
 ```
 
@@ -25,7 +25,7 @@ Removed the `reservedConcurrentExecutions` property entirely from the Lambda fun
 
 ### 2. Deprecated DynamoDB Property (Line 88)
 **Issue:**
-```ts
+```typescript
 pointInTimeRecovery: environmentSuffix === 'prod',
 ```
 
@@ -34,7 +34,7 @@ pointInTimeRecovery: environmentSuffix === 'prod',
 - Using deprecated properties can cause warnings and potential future compatibility issues
 
 **Fix:**
-```ts
+```typescript
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: environmentSuffix === 'prod',
 },
@@ -60,7 +60,7 @@ Removed `AWS_REGION` from Lambda environment variables. The AWS_REGION is automa
 
 ### 4. Inline Lambda Code (Lines 151-206)
 **Issue:**
-```ts
+```typescript
 code: lambda.Code.fromInline(`
   const AWS = require('@aws-sdk/client-sns');
   const snsClient = new AWS.SNS();
@@ -77,7 +77,7 @@ code: lambda.Code.fromInline(`
 
 **Fix:**
 Created separate Lambda function file at `lib/lambda/index.js`:
-```ts
+```typescript
 code: lambda.Code.fromAsset(path.join(__dirname, 'lambda')),
 ```
 
@@ -112,7 +112,7 @@ Updated to use proper AWS SDK v3 patterns with command-based API.
 
 ### 6. Missing Region in Bucket Name (Line 61)
 **Issue:**
-```ts
+```typescript
 bucketName: `tap-data-bucket-${environmentSuffix}-${this.account}`.toLowerCase(),
 ```
 
@@ -122,7 +122,7 @@ bucketName: `tap-data-bucket-${environmentSuffix}-${this.account}`.toLowerCase()
 - Best practice is to include region in globally unique resource names
 
 **Fix:**
-```ts
+```typescript
 bucketName:
   `tap-data-bucket-${environmentSuffix}-${region}-${this.account}`.toLowerCase(),
 ```
@@ -139,7 +139,7 @@ The model response didn't import the `path` module needed for external Lambda co
 - Would cause a runtime error during CDK synthesis
 
 **Fix:**
-```ts
+```typescript
 import * as path from 'path';
 ```
 Added path import to enable external Lambda code reference.
@@ -155,7 +155,7 @@ The model only added Environment, Project, and ManagedBy tags.
 - Missing important metadata for resource organization
 
 **Fix:**
-```ts
+```typescript
 cdk.Tags.of(this).add('Region', region);
 ```
 Added Region tag to all resources for better tracking and organization.

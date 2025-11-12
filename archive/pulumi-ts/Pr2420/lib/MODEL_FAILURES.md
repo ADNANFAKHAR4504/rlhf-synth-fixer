@@ -7,7 +7,7 @@ This document analyzes the failures and improvements made to the model's infrast
 **Type of Issue**: Security vulnerability
 **Description**: Model included SSH access from a specific IP range which creates unnecessary attack surface
 **Model Code**:
-```ts
+```typescript
 ingress: [
   {
     description: 'SSH from specific IP',
@@ -19,7 +19,7 @@ ingress: [
 ],
 ```
 **Correct Code**:
-```ts
+```typescript
 // No SSH ingress rules - using Session Manager instead
 egress: [
   {
@@ -36,7 +36,7 @@ egress: [
 **Type of Issue**: IAM security issue - excessive permissions
 **Description**: Model granted broad S3 permissions including DeleteObject and ListBucket instead of minimal required permissions
 **Model Code**:
-```ts
+```typescript
 Action: [
   's3:GetObject',
   's3:PutObject',
@@ -46,7 +46,7 @@ Action: [
 Resource: [bucketArn, `${bucketArn}/*`],
 ```
 **Correct Code**:
-```ts
+```typescript
 Action: ['s3:PutObject'],
 Resource: `${bucketArn}/*`,
 ```
@@ -56,7 +56,7 @@ Resource: `${bucketArn}/*`,
 **Description**: Model did not implement S3 public access blocking, leaving bucket potentially exposed
 **Model Code**: Missing implementation
 **Correct Code**:
-```ts
+```typescript
 new aws.s3.BucketPublicAccessBlock(
   `${environment}-block-public-access`,
   {
@@ -74,11 +74,11 @@ new aws.s3.BucketPublicAccessBlock(
 **Type of Issue**: Security vulnerability - credentials in code
 **Description**: Model used hardcoded password instead of AWS managed password
 **Model Code**:
-```ts
+```typescript
 password: 'SecurePassword123!',
 ```
 **Correct Code**:
-```ts
+```typescript
 manageMasterUserPassword: true,
 ```
 
@@ -87,7 +87,7 @@ manageMasterUserPassword: true,
 **Description**: Model did not create IAM policy for CloudWatch Logs access
 **Model Code**: Missing implementation
 **Correct Code**:
-```ts
+```typescript
 const cloudWatchPolicy = new aws.iam.Policy(
   `${environment}-cloudwatch-policy`,
   {
@@ -117,7 +117,7 @@ const cloudWatchPolicy = new aws.iam.Policy(
 **Description**: Model did not attach Session Manager policy for secure EC2 access
 **Model Code**: Missing implementation
 **Correct Code**:
-```ts
+```typescript
 new aws.iam.RolePolicyAttachment(
   `${environment}-ssm-policy-attachment`,
   {
@@ -133,7 +133,7 @@ new aws.iam.RolePolicyAttachment(
 **Description**: Model did not configure CloudWatch agent on EC2 instance for log collection
 **Model Code**: Missing user data configuration
 **Correct Code**:
-```ts
+```typescript
 userData: pulumi
   .all([this.cloudWatchLogGroup.name])
   .apply(([logGroupName]) =>
@@ -167,7 +167,7 @@ echo '{
 **Description**: Model did not enable CloudWatch logs export for RDS instance
 **Model Code**: Missing configuration
 **Correct Code**:
-```ts
+```typescript
 enabledCloudwatchLogsExports: ['error', 'slowquery'],
 ```
 
@@ -175,11 +175,11 @@ enabledCloudwatchLogsExports: ['error', 'slowquery'],
 **Type of Issue**: Build/deployment failure
 **Description**: Model used hardcoded MySQL version instead of dynamic lookup which could fail in different regions
 **Model Code**:
-```ts
+```typescript
 engineVersion: '8.0.35', // Fixed: Use a specific version that exists in ap-south-1
 ```
 **Correct Code**:
-```ts
+```typescript
 const engineVersion = aws.rds.getEngineVersion(
   {
     engine: 'mysql',
@@ -194,14 +194,14 @@ const engineVersion = aws.rds.getEngineVersion(
 **Type of Issue**: Code quality issue
 **Description**: Model assigned resources to variables that were never used
 **Model Code**:
-```ts
+```typescript
 const s3BucketVersioning = new aws.s3.BucketVersioning(...)
 const s3BucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration(...)
 const rolePolicyAttachment = new aws.iam.RolePolicyAttachment(...)
 const cloudWatchLogStream = new aws.cloudwatch.LogStream(...)
 ```
 **Correct Code**:
-```ts
+```typescript
 new aws.s3.BucketVersioning(...)
 new aws.s3.BucketServerSideEncryptionConfiguration(...)
 new aws.iam.RolePolicyAttachment(...)
@@ -213,7 +213,7 @@ new aws.cloudwatch.LogStream(...)
 **Description**: Model's getExports() method was missing some important resource IDs
 **Model Code**: Missing internetGatewayId and natGatewayId exports
 **Correct Code**:
-```ts
+```typescript
 return {
   // ... other exports
   internetGatewayId: this.internetGateway.id,
@@ -225,7 +225,7 @@ return {
 **Type of Issue**: Runtime error risk
 **Description**: Model accessed availability zone array without bounds checking, potentially causing runtime errors if fewer than 3 AZs are available
 **Model Code**:
-```ts
+```typescript
 availabilityZone: availabilityZones.then(az => az.names[0]),
 // ...
 availabilityZone: availabilityZones.then(az => az.names[1]),
@@ -233,7 +233,7 @@ availabilityZone: availabilityZones.then(az => az.names[1]),
 availabilityZone: availabilityZones.then(az => az.names[2] || az.names[0]),
 ```
 **Correct Code**:
-```ts
+```typescript
 availabilityZone: availabilityZones.then(az => az.names[0] || 'ap-south-1a'),
 // ...
 availabilityZone: availabilityZones.then(az => az.names[1] || 'ap-south-1b'),
@@ -247,11 +247,11 @@ availabilityZone: availabilityZones.then(az =>
 **Type of Issue**: Resource management issue
 **Description**: Model used Date.now() in S3 bucket name causing unnecessary resource recreation on each deployment
 **Model Code**:
-```ts
+```typescript
 bucket: `${environment}-secure-bucket-${Date.now()}`,
 ```
 **Correct Code**:
-```ts
+```typescript
 bucket: `${environment}-secure-bucket-${pulumi.getStack()}`,
 // or use a deterministic suffix:
 bucket: `${environment}-secure-bucket-main`,
@@ -262,7 +262,7 @@ bucket: `${environment}-secure-bucket-main`,
 **Description**: Model implemented all infrastructure logic in a single 600+ line constructor, making code difficult to maintain and understand
 **Model Code**: Single large constructor with all resource creation
 **Correct Code**:
-```ts
+```typescript
 constructor(environment: string) {
   const provider = this.createProvider();
   const kmsKey = this.createKMSKey(environment, provider);

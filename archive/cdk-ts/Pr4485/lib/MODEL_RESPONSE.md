@@ -22,7 +22,7 @@ I'll need to import the necessary CDK constructs and add all the resources direc
 
 I'll update your `lib/tap-stack.ts` file to include all the requested AWS resources. Here's the complete updated code:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

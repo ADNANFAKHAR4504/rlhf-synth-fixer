@@ -37,7 +37,7 @@ I'll create a comprehensive AWS CDK security framework implementation that meets
 
 ### `lib/tap-stack.ts`
 
-```ts
+```typescript
 // ============================================================================
 // IMPORTS
 // ============================================================================
@@ -1594,7 +1594,7 @@ export class TapStack extends cdk.Stack {
 ## Supporting Files
 
 ### `bin/app.ts`
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

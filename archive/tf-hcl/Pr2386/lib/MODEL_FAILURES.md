@@ -97,7 +97,7 @@ output "region" {
 
 **Problem**: Improper error handling in async operations
 
-```ts
+```typescript
 try {
   await someAsyncOperation();
 } catch (error) {
@@ -107,7 +107,7 @@ try {
 
 **Solution**: Proper type guards
 
-```ts
+```typescript
 try {
   await someAsyncOperation();
 } catch (error) {
@@ -120,14 +120,14 @@ try {
 
 **Problem**: Incorrect property names in AWS SDK calls
 
-```ts
+```typescript
 const { Policies } = await autoscaling.describePolicies({...});
 // Policies doesn't exist, should be ScalingPolicies
 ```
 
 **Solution**: Use correct property names
 
-```ts
+```typescript
 const result = await autoscaling.describePolicies({...});
 const policies = result.ScalingPolicies;
 ```
@@ -136,7 +136,7 @@ const policies = result.ScalingPolicies;
 
 **Problem**: Using unsupported properties in fetch requests
 
-```ts
+```typescript
 const response = await fetch(url, {
   method: 'GET',
   timeout: 10000, // timeout not supported in RequestInit
@@ -151,14 +151,14 @@ const response = await fetch(url, {
 
 **Problem**: Wrong working directory assumptions
 
-```ts
+```typescript
 const filePath = path.resolve(__dirname, 'lib/tap_stack.tf');
 // __dirname points to test directory, not project root
 ```
 
 **Solution**: Use correct base path
 
-```ts
+```typescript
 const filePath = path.resolve(process.cwd(), 'lib/tap_stack.tf');
 ```
 
@@ -195,7 +195,7 @@ terraform init -backend=false
 
 **Problem**: Process directory changes causing path issues
 
-```ts
+```typescript
 process.chdir(libPath);
 execSync('terraform validate');
 process.chdir(process.cwd()); // Wrong!
@@ -203,7 +203,7 @@ process.chdir(process.cwd()); // Wrong!
 
 **Solution**: Use cwd option instead
 
-```ts
+```typescript
 execSync('terraform validate', { cwd: libPath });
 ```
 
@@ -219,7 +219,7 @@ Error: spawnSync C:\Windows\system32\cmd.exe ETIMEDOUT
 
 **Solution**: Increase timeouts and handle gracefully
 
-```ts
+```typescript
 execSync('terraform validate', {
   timeout: 60000, // 60 seconds
   cwd: libPath,
@@ -307,14 +307,14 @@ resource "aws_s3_bucket" "main" {
 
 **Problem**: Tests failing due to infrastructure not being deployed
 
-```ts
+```typescript
 expect(TEST_CONFIG.privateSubnetIds.length).toBeGreaterThanOrEqual(2);
 // Fails when infrastructure isn't deployed
 ```
 
 **Solution**: Add conditional checks
 
-```ts
+```typescript
 if (TEST_CONFIG.privateSubnetIds.length > 0) {
   expect(TEST_CONFIG.privateSubnetIds.length).toBeGreaterThanOrEqual(2);
 } else {
@@ -326,14 +326,14 @@ if (TEST_CONFIG.privateSubnetIds.length > 0) {
 
 **Problem**: Incorrect regex patterns for validation
 
-```ts
+```typescript
 expect(content).toMatch(/\${random_password\.db_password\.result}/);
 // Looking for interpolation syntax when it's a string match
 ```
 
 **Solution**: Use appropriate patterns
 
-```ts
+```typescript
 expect(content).toMatch(/random_password\.db_password\.result/);
 ```
 
@@ -343,7 +343,7 @@ expect(content).toMatch(/random_password\.db_password\.result/);
 
 **Problem**: Tests requiring AWS credentials to pass
 
-```ts
+```typescript
 const ec2 = new AWS.EC2();
 const { Vpcs } = await ec2.describeVpcs().promise();
 // Fails without credentials

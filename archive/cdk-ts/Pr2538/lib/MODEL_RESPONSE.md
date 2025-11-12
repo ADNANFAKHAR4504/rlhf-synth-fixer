@@ -1,6 +1,6 @@
 I'll help you implement a secure and highly available AWS infrastructure using AWS CDK in TypeScript. Here's the complete implementation that addresses all your requirements:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

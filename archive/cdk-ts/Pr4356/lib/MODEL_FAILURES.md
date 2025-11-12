@@ -28,7 +28,7 @@ The monitoring stack was attempting to use `metricConcurrentExecutions()` method
 ### Resolution
 Changed the metric method from `metricConcurrentExecutions()` to `metricInvocations()`, which is a valid method in the Lambda Function construct:
 
-```ts
+```typescript
 // Before (INCORRECT):
 new cloudwatch.SingleValueWidget({
   title: 'Lambda Concurrent Executions',
@@ -78,7 +78,7 @@ AWS accounts have a default concurrent execution limit (typically 1000), and res
 ### Resolution
 Removed the `reservedConcurrentExecutions` configuration from the Lambda function:
 
-```ts
+```typescript
 // Before (INCORRECT):
 this.dataProcessorFunction = new lambda.Function(
   this,
@@ -307,7 +307,7 @@ EndpointError: Invalid ARN: Unrecognized format: arn:aws:s3:::serverless-data-bu
 The S3 integration tests were searching the CloudFormation outputs for the bucket name, but the search logic was finding keys that contained S3 bucket ARNs instead of bucket names. When the test passed an ARN to the `HeadBucketCommand`, the S3 client rejected it because bucket commands require bucket names, not ARNs.
 
 Original test code:
-```ts
+```typescript
 const actualBucketName = Object.keys(outputs).find((key) =>
   outputs[key] && outputs[key].toString().includes(`serverless-data-bucket-${environmentSuffix}`)
 );
@@ -328,7 +328,7 @@ The search was finding the ARN key first.
 ### Resolution
 Updated the test to prioritize the `BucketName` key and explicitly filter out ARNs:
 
-```ts
+```typescript
 // Prefer BucketName key first
 let bucket = outputs['BucketName'] || outputs[`DataBucketName-${environmentSuffix}`];
 

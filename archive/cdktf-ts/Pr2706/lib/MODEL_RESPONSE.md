@@ -1,4 +1,4 @@
-```ts
+```typescript
 // lib/tap-stack.ts
 import { Construct } from "constructs";
 import { App, TerraformStack, S3Backend } from "cdktf";
@@ -87,7 +87,7 @@ new TapStack(app, "tap-ecommerce-prod");
 app.synth();
 ```
 
-```ts
+```typescript
 // lib/modules.ts
 import { Construct } from "constructs";
 import { TerraformOutput } from "cdktf";

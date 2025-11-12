@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.d.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 export {};
 
@@ -12,7 +12,7 @@ export {};
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -68,7 +68,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/tap-stack.d.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 interface TapStackProps extends cdk.StackProps {
@@ -83,7 +83,7 @@ export {};
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
@@ -934,14 +934,14 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 // Integration tests for CI/CD Pipeline Infrastructure
 import fs from 'fs';
 import {
@@ -1148,14 +1148,14 @@ describe('CI/CD Pipeline Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

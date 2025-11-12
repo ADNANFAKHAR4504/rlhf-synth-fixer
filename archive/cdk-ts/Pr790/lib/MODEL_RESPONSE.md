@@ -4,7 +4,7 @@ I'll create a comprehensive secure cloud infrastructure using CDK TypeScript tha
 
 ## File: lib/networking-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -53,7 +53,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ## File: lib/security-services-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as guardduty from 'aws-cdk-lib/aws-guardduty';
 import * as securityhub from 'aws-cdk-lib/aws-securityhub';
@@ -133,7 +133,7 @@ export class SecurityServicesStack extends cdk.Stack {
 
 ## File: lib/storage-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -266,7 +266,7 @@ export class StorageStack extends cdk.Stack {
 
 ## File: lib/compute-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -419,7 +419,7 @@ export class ComputeStack extends cdk.Stack {
 
 ## File: lib/monitoring-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -498,7 +498,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ## File: lib/security-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';

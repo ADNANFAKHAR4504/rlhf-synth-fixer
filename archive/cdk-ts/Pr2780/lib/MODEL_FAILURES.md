@@ -11,7 +11,7 @@ The model response in `MODEL_RESPONSE.md` provided a comprehensive multi-region 
 **Issue**: The original response created a standalone CDK app with hardcoded stack names (`MultiRegionWebApp-USEast1`, `MultiRegionWebApp-USWest2`) that would conflict in multi-deployment scenarios.
 
 **Fix**: Added `environmentSuffix` property to the `TapStackProps` interface with fallback logic:
-```ts
+```typescript
 const environmentSuffix =
   props?.environmentSuffix ||
   this.node.tryGetContext('environmentSuffix') ||
@@ -23,7 +23,7 @@ const environmentSuffix =
 **Issue**: The original VPC configuration used default settings that could cause hanging custom resources during deployment, particularly the `restrictDefaultSecurityGroup` property.
 
 **Fix**: Explicitly disabled problematic custom resource:
-```ts
+```typescript
 const vpc = new ec2.Vpc(this, 'MultiRegionVpc', {
   maxAzs: 2,
   natGateways: 2,
@@ -38,7 +38,7 @@ const vpc = new ec2.Vpc(this, 'MultiRegionVpc', {
 **Issue**: The original implementation only added the `Project=MultiRegionWebApp` tag but didn't include environment-specific tagging required for resource management and cost tracking.
 
 **Fix**: Added comprehensive tagging:
-```ts
+```typescript
 cdk.Tags.of(this).add('Project', 'MultiRegionWebApp');
 cdk.Tags.of(this).add('Environment', environmentSuffix);
 ```
@@ -48,7 +48,7 @@ cdk.Tags.of(this).add('Environment', environmentSuffix);
 **Issue**: The EC2 instances were configured with an IAM role but the instance profile wasn't explicitly retained for potential future reference.
 
 **Fix**: Created the instance profile as a named construct:
-```ts
+```typescript
 new iam.InstanceProfile(this, 'EC2InstanceProfile', {
   role: ec2Role,
 });

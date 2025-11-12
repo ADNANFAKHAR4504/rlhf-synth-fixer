@@ -13,7 +13,7 @@ The original MODEL_RESPONSE.md contained only documentation and examples without
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 // Original (lib/tap-stack.ts):
 // ? Add your stack instantiations here
 // ! Do NOT create resources directly in this stack.
@@ -64,7 +64,7 @@ No environment suffix was implemented, making the solution unsafe for multi-envi
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 // All resources now use environmentSuffix for isolation
 const environmentSuffix = props?.environmentSuffix ||
   this.node.tryGetContext('environmentSuffix') || 'dev';
@@ -121,7 +121,7 @@ No DynamoDB table was implemented for audit logging, missing a critical requirem
 
 **IDEAL_RESPONSE Fix**:
 
-```ts
+```typescript
 // Implemented DynamoDB audit table with proper configuration
 this.table = new dynamodb.Table(this, 'AuditTable', {
   tableName: `${cdk.Stack.of(this).stackName}-Audit-${props.environmentSuffix}`,

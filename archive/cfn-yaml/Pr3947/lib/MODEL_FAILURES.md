@@ -248,7 +248,7 @@ Parameters:
 
 1. **Type-Safe AWS Resource Testing**:
 
-```ts
+```typescript
 interface ALBResource {
   LoadBalancerArn: string;
   AvailabilityZones?: Array<{
@@ -286,7 +286,7 @@ const validateALB = async (alb: ALBResource): Promise<void> => {
 
 2. **Error Handling Implementation**:
 
-```ts
+```typescript
 interface APIError extends Error {
   code?: string;
   statusCode?: number;
@@ -307,7 +307,7 @@ const safeResourceFetch = async <T>(fetcher: () => Promise<T>): Promise<T> => {
 
 3. **Test Suite Organization**:
 
-```ts
+```typescript
 describe('Infrastructure Validation', () => {
   describe('Network Resources', () => {
     test('VPC Configuration', async () => {

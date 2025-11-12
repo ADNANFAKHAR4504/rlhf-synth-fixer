@@ -12,7 +12,7 @@ The MODEL_RESPONSE.md provided a near-complete solution but contained several in
 The MODEL_RESPONSE.md incorrectly used `crossRegionReferences: true` in the stack props, which is not a valid property for `cdk.StackProps`.
 
 **MODEL_RESPONSE.md (Incorrect):**
-```ts
+```typescript
 new TapStack(app, `TapStack-${deploymentRegion}`, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
@@ -27,7 +27,7 @@ new TapStack(app, `TapStack-${deploymentRegion}`, {
 ```
 
 **IDEAL_RESPONSE.md (Fixed):**
-```ts
+```typescript
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 new TapStack(app, stackName, {
@@ -54,13 +54,13 @@ new TapStack(app, stackName, {
 MODEL_RESPONSE.md did not include `environmentSuffix` in CloudWatch alarm names, making it difficult to distinguish alarms across environments.
 
 **MODEL_RESPONSE.md:**
-```ts
+```typescript
 alarmName: `${id}-5xx-error-rate`,
 alarmName: `${id}-transaction-latency`,
 ```
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 alarmName: `${id}-${environmentSuffix}-5xx-error-rate`,
 alarmName: `${id}-${environmentSuffix}-transaction-latency`,
 ```
@@ -76,7 +76,7 @@ alarmName: `${id}-${environmentSuffix}-transaction-latency`,
 The MODEL_RESPONSE.md referenced `databaseCluster` in the SecretRotation construct before it was declared, causing a runtime error.
 
 **MODEL_RESPONSE.md (Incorrect Order):**
-```ts
+```typescript
 // Secret rotation BEFORE database cluster declaration
 new secretsmanager.SecretRotation(this, 'DBCredentialRotation', {
   secret: dbCredentialsSecret,
@@ -94,7 +94,7 @@ this.databaseCluster = new rds.DatabaseCluster(this, 'PaymentDatabase', {
 ```
 
 **IDEAL_RESPONSE.md (Fixed Order):**
-```ts
+```typescript
 // Database cluster declared FIRST
 this.dbCluster = new rds.DatabaseCluster(this, 'PaymentDatabase', {
   engine: rds.DatabaseClusterEngine.auroraPostgres({
@@ -130,7 +130,7 @@ Used `databaseCluster` in some places and referenced as class property inconsist
 
 **IDEAL_RESPONSE.md:**
 Consistently uses `dbCluster` throughout:
-```ts
+```typescript
 public readonly dbCluster: rds.DatabaseCluster;
 ```
 
@@ -151,7 +151,7 @@ MODEL_RESPONSE.md did not consistently use `environmentSuffix` in resource names
 - Alarm names: `${id}-5xx-error-rate` (no environment suffix)
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 const environmentSuffix = props.environmentSuffix || this.node.tryGetContext('environmentSuffix') || 'dev';
 
 // Stack name includes suffix
@@ -206,7 +206,7 @@ The MODEL_RESPONSE.md didn't explicitly ensure all resources could be deleted ea
 The MODEL_RESPONSE.md had `isPrimary`, `primaryRegion`, and `drRegion` as required properties but didn't include `environmentSuffix`.
 
 **MODEL_RESPONSE.md:**
-```ts
+```typescript
 export interface TapStackProps extends StackProps {
   isPrimary: boolean;
   primaryRegion: string;
@@ -215,7 +215,7 @@ export interface TapStackProps extends StackProps {
 ```
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   isPrimary: boolean;
@@ -236,7 +236,7 @@ Inconsistent use of `readonly` and property names.
 
 **IDEAL_RESPONSE.md Improvements:**
 All major resources exposed as public readonly properties:
-```ts
+```typescript
 public readonly vpc: ec2.Vpc;
 public readonly cluster: ecs.Cluster;
 public readonly alb: elbv2.ApplicationLoadBalancer;
@@ -257,14 +257,14 @@ public readonly ecsService: ecs.FargateService;
 MODEL_RESPONSE.md didn't specify log retention periods consistently.
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 cloudwatchLogsRetention: logs.RetentionDays.TWO_WEEKS,
 ```
 
 Applied to:
 - RDS CloudWatch Logs
 
-```ts
+```typescript
 logRetention: logs.RetentionDays.TWO_WEEKS,
 ```
 
@@ -282,7 +282,7 @@ Applied to:
 MODEL_RESPONSE.md had auto scaling but didn't properly configure cooldown periods.
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 scaling.scaleOnCpuUtilization('CpuScaling', {
   targetUtilizationPercent: 70,
   scaleInCooldown: Duration.seconds(60),
@@ -307,7 +307,7 @@ scaling.scaleOnMemoryUtilization('MemoryScaling', {
 MODEL_RESPONSE.md didn't optimize health check parameters for quick recovery.
 
 **IDEAL_RESPONSE.md Improvements:**
-```ts
+```typescript
 healthCheck: {
   path: '/',
   interval: Duration.seconds(30),
@@ -330,7 +330,7 @@ deregistrationDelay: Duration.seconds(30),
 MODEL_RESPONSE.md created VPC endpoints without specifying security groups.
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 this.vpc.addInterfaceEndpoint('ECRDkrEndpoint', {
   service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
   securityGroups: [ecsSg], // Explicitly specified
@@ -349,7 +349,7 @@ MODEL_RESPONSE.md used Aurora PostgreSQL 13.7.
 
 **IDEAL_RESPONSE.md:**
 Updated to Aurora PostgreSQL 16.4:
-```ts
+```typescript
 engine: rds.DatabaseClusterEngine.auroraPostgres({
   version: rds.AuroraPostgresEngineVersion.VER_16_4,
 }),
@@ -366,7 +366,7 @@ engine: rds.DatabaseClusterEngine.auroraPostgres({
 MODEL_RESPONSE.md configured container port as 8080, but ALB health checks expect port 80.
 
 **IDEAL_RESPONSE.md:**
-```ts
+```typescript
 container.addPortMappings({
   containerPort: 80,
   protocol: ecs.Protocol.TCP,
@@ -392,7 +392,7 @@ MODEL_RESPONSE.md attempted to create ACM certificate with DNS validation, which
 
 **IDEAL_RESPONSE.md:**
 For test environments, HTTPS listener uses HTTP protocol:
-```ts
+```typescript
 const httpsListener = this.alb.addListener('HttpsListener', {
   port: 443,
   protocol: elbv2.ApplicationProtocol.HTTP,
@@ -415,7 +415,7 @@ MODEL_RESPONSE.md used simple division which could cause errors with zero reques
 
 **IDEAL_RESPONSE.md:**
 Added division by zero protection:
-```ts
+```typescript
 new cloudwatch.MathExpression({
   expression: 'IF(m2 > 0, (m1/m2)*100, 0)',
   usingMetrics: {

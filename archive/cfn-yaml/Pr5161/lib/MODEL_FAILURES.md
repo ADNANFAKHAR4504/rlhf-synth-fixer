@@ -140,7 +140,7 @@ ValidationError: [/Outputs/EnvironmentSuffix/Export] 'null' values are not allow
 **MODEL_RESPONSE Issue**:
 The generated test files (`test/tap-stack.unit.test.ts` and `test/tap-stack.int.test.ts`) are designed for a DynamoDB-based infrastructure (TurnAroundPromptTable) and do not match the actual StreamFlix infrastructure components:
 
-```ts
+```typescript
 // From test/tap-stack.unit.test.ts
 describe('Resources', () => {
   test('should have TurnAroundPromptTable resource', () => {
@@ -152,7 +152,7 @@ describe('Resources', () => {
 
 **IDEAL_RESPONSE Fix**:
 Tests should validate the actual StreamFlix infrastructure:
-```ts
+```typescript
 describe('Resources', () => {
   test('should have Aurora cluster resource', () => {
     expect(template.Resources.AuroraCluster).toBeDefined();

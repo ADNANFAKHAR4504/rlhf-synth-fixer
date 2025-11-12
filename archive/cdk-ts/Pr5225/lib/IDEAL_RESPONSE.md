@@ -8,7 +8,7 @@ This CDK TypeScript stack implements a comprehensive security baseline for finan
 
 ### 1. IAM & Permission Boundaries
 
-```ts
+```typescript
 // Permission Boundary Policy preventing privilege escalation
 const permissionBoundary = new iam.ManagedPolicy(this, 'PermissionBoundary', {
   statements: [
@@ -54,7 +54,7 @@ const developerRole = new iam.Role(this, 'DeveloperRole', {
 
 ### 2. KMS Encryption
 
-```ts
+```typescript
 // Customer-managed KMS key with key rotation
 const kmsKey = new kms.Key(this, 'SecurityKey', {
   description: 'Customer-managed key for PCI-DSS compliance',
@@ -88,7 +88,7 @@ const kmsKey = new kms.Key(this, 'SecurityKey', {
 
 ### 3. Secrets Management & Rotation
 
-```ts
+```typescript
 // Secrets Manager with rotation
 const rotationSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
   description: 'Database credentials with automatic rotation',
@@ -146,7 +146,7 @@ new secretsmanager.RotationSchedule(this, 'RotationSchedule', {
 
 ### 4. Network Security (VPC)
 
-```ts
+```typescript
 // Isolated VPC for security-sensitive workloads
 const auditVpc = new ec2.Vpc(this, 'AuditVPC', {
   maxAzs: 2,
@@ -173,7 +173,7 @@ if (enableVpcEndpoints) {
 
 ### 5. CloudWatch Logging & Retention
 
-```ts
+```typescript
 // Helper for consistent log group creation
 class SecureLogGroup extends logs.LogGroup {
   constructor(scope: Construct, id: string, kmsKey: kms.IKey) {
@@ -192,7 +192,7 @@ const rotationLogs = new SecureLogGroup(this, 'RotationLambdaLogs', kmsKey);
 
 ### 6. Audit & Monitoring
 
-```ts
+```typescript
 // S3 bucket for CloudTrail logs
 const auditBucket = new s3.Bucket(this, 'AuditLogsBucket', {
   bucketName: `tap-audit-logs-${environmentSuffix}-${this.account}`,
@@ -253,7 +253,7 @@ failedLoginsAlarm.addAlarmAction(
 
 ### 7. Comprehensive Tagging
 
-```ts
+```typescript
 // Mandatory tags for compliance
 const mandatoryTags = {
   Environment: environmentSuffix,
@@ -273,7 +273,7 @@ cdk.Tags.of(this).add('ManagedBy', 'CDK');
 
 ## Stack Outputs
 
-```ts
+```typescript
 // Export key resources for integration
 new cdk.CfnOutput(this, 'KmsKeyArn', {
   value: kmsKey.keyArn,

@@ -1,4 +1,4 @@
-```ts
+```typescript
 // bin/tap.ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 });
 ```
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -227,7 +227,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-```ts
+```typescript
 // lib/config/environment-config.ts
 export interface IVpcConfig {
   enableVpcPeering: boolean;
@@ -561,7 +561,7 @@ export class EnvironmentConfig {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/vpc-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -622,7 +622,7 @@ export class VpcConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/cognito-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cognito from 'aws-cdk-lib/aws-cognito';
@@ -682,7 +682,7 @@ export class CognitoConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/dynamodb-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as budgets from 'aws-cdk-lib/aws-budgets';
@@ -797,7 +797,7 @@ export class DynamoDBConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/lambda-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -926,7 +926,7 @@ export class LambdaConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/api-gateway-account-construct.ts
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -962,7 +962,7 @@ export class ApiGatewayAccountConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/api-gateway-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -1102,7 +1102,7 @@ export class ApiGatewayConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/constructs/monitoring-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -1214,7 +1214,7 @@ export class MonitoringConstruct extends Construct {
 }
 ```
 
-```ts
+```typescript
 // lib/lambda/user-handler.ts
 /**
  * Lambda Handler for TAP Stack - User Management

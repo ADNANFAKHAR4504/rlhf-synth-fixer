@@ -6,7 +6,7 @@ This solution uses **Pulumi with TypeScript** to provision AWS infrastructure fo
 
 The solution implements all required AWS services for secure payment processing migration using Pulumi TypeScript:
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -158,7 +158,7 @@ export const vpcId = pulumi.output(vpc.id);
 
 ## File Structure
 
-```ts
+```typescript
 // Project structure for Pulumi TypeScript infrastructure
 lib/
 ├── tap-stack.ts          # Main infrastructure stack (962 lines)
@@ -188,7 +188,7 @@ lib/
 
 The implementation includes comprehensive outputs for integration testing (lines 944-959):
 
-```ts
+```typescript
 {
   vpcId: this.vpc.id,
   rdsEndpoint: this.rdsInstance.endpoint,
@@ -210,26 +210,26 @@ The implementation includes comprehensive outputs for integration testing (lines
 ## Deployment Instructions
 
 1. Install dependencies:
-   ```ts
+   ```typescript
    // Install Pulumi TypeScript dependencies
    npm install
    ```
 
 2. Configure Pulumi:
-   ```ts
+   ```typescript
    // Configure Pulumi TypeScript project
    pulumi config set aws:region eu-west-2
    pulumi config set notificationEmail your-email@example.com
    ```
 
 3. Deploy:
-   ```ts
+   ```typescript
    // Deploy Pulumi TypeScript infrastructure
    pulumi up
    ```
 
 4. Verify outputs:
-   ```ts
+   ```typescript
    // Verify Pulumi TypeScript stack outputs
    pulumi stack output
    ```
@@ -293,7 +293,7 @@ The implementation includes comprehensive outputs for integration testing (lines
 
 ## Architecture Diagram (Pulumi TypeScript Infrastructure)
 
-```ts
+```typescript
 // AWS Architecture provisioned via Pulumi TypeScript
 /*
 ┌─────────────────────────────────────────────────────────────────┐

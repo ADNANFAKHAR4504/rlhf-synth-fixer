@@ -37,7 +37,7 @@ The system implements:
 
 ### File: bin/tap.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -71,7 +71,7 @@ export const confidentialBucketName = stack.confidentialBucketName;
 
 ### File: lib/tap-stack.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -180,7 +180,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ### File: lib/s3-buckets.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -531,7 +531,7 @@ export class S3Buckets extends pulumi.ComponentResource {
 
 ### File: lib/iam-roles.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -761,7 +761,7 @@ export class IamRoles extends pulumi.ComponentResource {
 
 ### File: lib/bucket-policies.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 

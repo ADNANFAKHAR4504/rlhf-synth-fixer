@@ -48,7 +48,7 @@ I'll help you build a secure and highly available AWS environment using CDKTF in
 
 ## File 1: `modules.ts`
 
-```ts
+```typescript
 // modules.ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
@@ -490,7 +490,7 @@ export class S3Module extends Construct {
 
 ## File 2: `tap-stack.ts`
 
-```ts
+```typescript
 // tap-stack.ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
@@ -667,7 +667,7 @@ export class TapStack extends TerraformStack {
 
 ## Main Application File: `main.ts`
 
-```ts
+```typescript
 // main.ts
 import { App } from 'cdktf';
 import { TapStack } from './tap-stack';

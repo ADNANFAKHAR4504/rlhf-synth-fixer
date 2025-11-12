@@ -15,7 +15,7 @@ The infrastructure consists of:
 
 ## File: lib/cicd-pipeline-stack.ts
 
-```ts
+```typescript
 /**
  * cicd-pipeline-stack.ts
  *
@@ -430,7 +430,7 @@ artifacts:
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -527,7 +527,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```ts
+```typescript
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

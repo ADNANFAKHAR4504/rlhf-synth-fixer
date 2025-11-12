@@ -1,6 +1,6 @@
 ## modules.ts
 
-```ts
+```typescript
 // modules.ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
@@ -1529,7 +1529,7 @@ export class MonitoringModule extends Construct {
 
 ## tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

@@ -127,7 +127,7 @@ For this implementation, use option 1 with a Kubernetes Job that fetches the SSM
 **Impact**: More verbose code, potential for AZ imbalance if one AZ is unhealthy.
 
 **Fix**: Use a single node group with automatic AZ distribution:
-```ts
+```typescript
 this.cluster.addNodegroupCapacity('NodeGroup', {
   nodegroupName: `eks-ng-${environmentSuffix}`,
   instanceTypes: [new ec2.InstanceType('m5.large')],
@@ -150,7 +150,7 @@ However, since the task explicitly says "three managed node groups spread across
 **Impact**: Integration tests that need just the cluster name must parse the kubectl command string.
 
 **Fix**: Add explicit cluster name output:
-```ts
+```typescript
 new cdk.CfnOutput(this, 'ClusterName', {
   value: this.cluster.clusterName,
   exportName: `EksClusterName${environmentSuffix}`,

@@ -31,7 +31,7 @@ Let me look up the correct CDK v2 syntax for these components.
 
 I'll fix these TypeScript errors by correcting the CDK v2 syntax and property names. Here's the corrected version:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -410,7 +410,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 
 1. **Certificate Validation (Line 152)**:
 
-   ```ts
+   ```typescript
    // Fixed: Changed from array to individual domain mappings
    validation: certificatemanager.CertificateValidation.fromEmail({
      'admin@example.com': 'example.com',
@@ -420,7 +420,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 
 2. **UserData (Line 179)**:
 
-   ```ts
+   ```typescript
    // Fixed: Created userData separately before using it
    const userData = ec2.UserData.forLinux();
    userData.addCommands(/* commands */);
@@ -428,7 +428,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 
 3. **Auto Scaling Health Check (Line 199)**:
 
-   ```ts
+   ```typescript
    // Fixed: Changed healthCheckType to healthCheck
    healthCheck: autoscaling.HealthCheck.elb({
      grace: cdk.Duration.seconds(300),
@@ -437,7 +437,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 
 4. **CPU Scaling Properties (Line 206)**:
 
-   ```ts
+   ```typescript
    // Fixed: Changed scaleInCooldown to cooldown
    autoScalingGroup.scaleOnCpuUtilization('CPUScaling', {
      targetUtilizationPercent: 70,
@@ -446,7 +446,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
    ```
 
 5. **Target Group Health Check (Line 230)**:
-   ```ts
+   ```typescript
    // Fixed: Used healthCheck object instead of individual properties
    healthCheck: {
      path: '/',
@@ -461,7 +461,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 
 If you encounter issues with email validation, you can use DNS validation instead:
 
-```ts
+```typescript
 const certificate = new certificatemanager.Certificate(this, 'SSLCertificate', {
   domainName: 'example.com',
   subjectAlternativeNames: ['*.example.com'],

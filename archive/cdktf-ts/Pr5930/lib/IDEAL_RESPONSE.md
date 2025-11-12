@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```ts
+```typescript
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 
@@ -1049,7 +1049,7 @@ export class MonitoringModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -1480,7 +1480,7 @@ systemctl enable nginx
 ```
 ## lib/security-lambda.ts
 
-```ts
+```typescript
 import boto3
 import json
 import os

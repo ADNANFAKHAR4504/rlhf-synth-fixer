@@ -4,7 +4,7 @@ This is the corrected implementation with all issues fixed and best practices ap
 
 ## File: lib/tap-stack.ts
 
-```ts
+```typescript
 /**
  * tap-stack.ts
  *
@@ -710,7 +710,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
 
 ## File: index.ts
 
-```ts
+```typescript
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from './lib/tap-stack';
 

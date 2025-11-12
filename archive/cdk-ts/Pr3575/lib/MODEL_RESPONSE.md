@@ -26,7 +26,7 @@ Let's draft the required files:
 
 Let's start with the CDK app entry point in `bin/tap.ts`:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -43,7 +43,7 @@ new TapStack(app, 'TapStack', {
 
 Next, let's define the main stack in `lib/tap-stack.ts`:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -432,7 +432,7 @@ Actually the stack looks quite comprehensive. Let me just simplify and streamlin
 Let's finalize all three files:
 
 bin/tap.ts:
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -448,7 +448,7 @@ new TapStack(app, 'TapStack', {
 ```
 
 lib/tap-stack.ts:
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -843,7 +843,7 @@ This solution now provides a complete, scalable, and secure video processing pip
 Let's clean up the code a bit for the final version to make it clearer and more concise:
 
 bin/tap.ts:
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -859,7 +859,7 @@ new TapStack(app, 'TapStack', {
 ```
 
 lib/tap-stack.ts:
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -1226,7 +1226,7 @@ Looking at the final solution:
 ### Answer 
 ---
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -1241,7 +1241,7 @@ new TapStack(app, 'TapStack', {
 });
 ```
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';

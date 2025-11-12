@@ -303,7 +303,7 @@ MANIFEST
 ### `bin/my-serverless-app.ts`
 
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -326,7 +326,7 @@ new MyServerlessAppStack(app, 'MyServerlessAppStack', {
 ### `lib/my-serverless-app-stack.ts`
 
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

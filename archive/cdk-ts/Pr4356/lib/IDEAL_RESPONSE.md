@@ -2,7 +2,7 @@
 
 ## ./bin/tap.d.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 export {};
 
@@ -10,7 +10,7 @@ export {};
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -42,7 +42,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/stacks/api-gateway-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -266,7 +266,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
 ## ./lib/stacks/lambda-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -456,7 +456,7 @@ export class LambdaStack extends cdk.Stack {
 
 ## ./lib/stacks/monitoring-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -758,7 +758,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ## ./lib/stacks/secrets-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
@@ -809,7 +809,7 @@ export class SecretsStack extends cdk.Stack {
 
 ## ./lib/stacks/security-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -990,7 +990,7 @@ export class SecurityStack extends cdk.Stack {
 
 ## ./lib/stacks/storage-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -1089,7 +1089,7 @@ export class StorageStack extends cdk.Stack {
 
 ## ./lib/stacks/vpc-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -1146,7 +1146,7 @@ export class VpcStack extends cdk.Stack {
 
 ## ./lib/tap-stack.d.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 interface TapStackProps extends cdk.StackProps {
@@ -1161,7 +1161,7 @@ export {};
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -1311,14 +1311,14 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import {
@@ -1673,14 +1673,14 @@ describe('Serverless Application Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```ts
+```typescript
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

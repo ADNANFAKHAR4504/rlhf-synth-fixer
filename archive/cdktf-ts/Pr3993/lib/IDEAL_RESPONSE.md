@@ -1,6 +1,6 @@
 **tap-stack.ts**
 
-```ts
+```typescript
 // lib/tap-stack.ts
 import {
   AwsProvider,
@@ -365,7 +365,7 @@ export class TapStack extends TerraformStack {
 
 **modules.ts**
 
-```ts
+```typescript
 // lib/modules.ts - Fixed version
 import { Construct } from 'constructs';
 

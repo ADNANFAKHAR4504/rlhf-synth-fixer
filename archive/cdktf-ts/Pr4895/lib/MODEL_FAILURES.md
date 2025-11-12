@@ -15,7 +15,7 @@ The original implementation had 8 critical issues that prevented successful depl
 
 **Issue**:
 The code included an invalid Terraform S3 backend option:
-```ts
+```typescript
 this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
@@ -26,7 +26,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 
 **Fix Applied**:
 Removed the invalid addOverride line entirely:
-```ts
+```typescript
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -48,7 +48,7 @@ new S3Backend(this, {
 
 **Issue**:
 The KMS key policy referenced `data.aws_caller_identity.current.account_id` without declaring the data source:
-```ts
+```typescript
 AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
 ```
 
@@ -59,12 +59,12 @@ AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
 
 **Fix Applied**:
 1. Added the import statement:
-```ts
+```typescript
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 ```
 
 2. Instantiated the data source:
-```ts
+```typescript
 // Get current AWS account ID
 new DataAwsCallerIdentity(this, 'current', {});
 ```
@@ -80,7 +80,7 @@ new DataAwsCallerIdentity(this, 'current', {});
 
 **Issue**:
 The code attempted to configure Secrets Manager rotation without providing a Lambda function ARN:
-```ts
+```typescript
 new SecretsmanagerSecretRotation(this, 'db-credentials-rotation', {
   secretId: dbSecret.id,
   rotationRules: {
@@ -100,7 +100,7 @@ new SecretsmanagerSecretRotation(this, 'db-credentials-rotation', {
 1. Removed the SecretsmanagerSecretRotation resource
 2. Removed the unused import
 3. Added documentation comment:
-```ts
+```typescript
 // Note: Secrets Manager Rotation requires a Lambda function ARN
 // For managed rotation with RDS, you would need to configure rotation_lambda_arn
 // This is commented out to allow deployment without Lambda setup
@@ -110,7 +110,7 @@ new SecretsmanagerSecretRotation(this, 'db-credentials-rotation', {
 
 **Production Recommendation**:
 Implement rotation using AWS-provided Lambda templates for RDS rotation:
-```ts
+```typescript
 const rotationLambda = new LambdaFunction(this, 'rotation-lambda', {
   // Use AWS Secrets Manager RDS rotation template
   // arn:aws:serverlessrepo:region:297356227924:applications/SecretsManagerRDSPostgreSQLRotationSingleUser
@@ -134,7 +134,7 @@ new SecretsmanagerSecretRotation(this, 'db-credentials-rotation', {
 
 **Issue**:
 The CloudWatch Log Group was configured with KMS encryption without proper permissions:
-```ts
+```typescript
 const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
   name: `/ecs/healthcare-app-${environmentSuffix}`,
   retentionInDays: 7,
@@ -151,7 +151,7 @@ const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
 
 **Fix Applied**:
 Removed KMS encryption from CloudWatch Log Group temporarily:
-```ts
+```typescript
 // CloudWatch Log Group for ECS
 // Note: KMS encryption for CloudWatch Logs requires additional IAM permissions
 // Removed kmsKeyId to allow deployment without complex key policy setup
@@ -184,7 +184,7 @@ Or use a separate KMS key specifically for CloudWatch Logs with appropriate perm
 
 **Issue**:
 Template literals used where single quotes were required:
-```ts
+```typescript
 AWS: `arn:aws:iam::\${data.aws_caller_identity.current.account_id}:root`,
 // and
 this.addOverride(
@@ -200,7 +200,7 @@ this.addOverride(
 
 **Fix Applied**:
 Changed template literals to single quotes where no interpolation exists:
-```ts
+```typescript
 AWS: 'arn:aws:iam::${data.aws_caller_identity.current.account_id}:root',
 // and
 this.addOverride(
@@ -220,7 +220,7 @@ this.addOverride(
 
 **Issue**:
 The ECS cluster was declared as a const but never used:
-```ts
+```typescript
 const ecsCluster = new EcsCluster(this, 'ecs-cluster', {
   // ...
 });
@@ -233,7 +233,7 @@ const ecsCluster = new EcsCluster(this, 'ecs-cluster', {
 
 **Fix Applied**:
 Removed the const declaration:
-```ts
+```typescript
 new EcsCluster(this, 'ecs-cluster', {
   // ...
 });
@@ -265,7 +265,7 @@ Original tests only had 2 test cases:
 
 **Fix Applied**:
 Added comprehensive test cases:
-```ts
+```typescript
 test('TapStack handles different prop combinations correctly', () => {
   // Test with minimal props
   const stack1 = new TapStack(app, 'TestMinimalProps', {
@@ -315,7 +315,7 @@ test('TapStack synthesizes valid Terraform configuration', () => {
 
 **Issue**:
 Integration test had placeholder implementation designed to fail:
-```ts
+```typescript
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {
@@ -333,7 +333,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 
 **Fix Applied**:
 Implemented comprehensive integration tests with real infrastructure validation:
-```ts
+```typescript
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 

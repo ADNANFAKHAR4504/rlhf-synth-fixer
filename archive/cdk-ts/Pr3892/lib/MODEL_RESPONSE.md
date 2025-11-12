@@ -37,7 +37,7 @@ Let's start with `cdk.json`:
 
 Next, let's create the `bin/tap.ts` file, which will be our entry point:
 
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -66,7 +66,7 @@ app.synth();
 
 Now, let's create the main `lib/tap-stack.ts` file:
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -338,7 +338,7 @@ Some issues I notice that need to be fixed:
 Let's fix these issues and refine the code:
 
 Revised `bin/tap.ts`:
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -411,7 +411,7 @@ For `cdk.json`:
 ```
 
 For `bin/tap.ts`:
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -447,7 +447,7 @@ app.synth();
 ```
 
 For `lib/tap-stack.ts`:
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -731,7 +731,7 @@ Wait, I realize there's still a problem with importing the Lambda@Edge functions
 Let me revise the files for the final solution:
 
 For `bin/tap.ts`:
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -798,7 +798,7 @@ For `cdk.json`:
 ```
 
 For `lib/tap-stack.ts`:
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -1159,7 +1159,7 @@ For `cdk.json`:
 ```
 
 For `bin/tap.ts`:
-```ts
+```typescript
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -1201,7 +1201,7 @@ app.synth();
 ```
 
 For `lib/tap-stack.ts`:
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

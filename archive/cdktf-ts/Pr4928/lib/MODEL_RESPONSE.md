@@ -4,7 +4,7 @@ I'll help you create a HIPAA-compliant disaster recovery solution using CDKTF wi
 
 ## lib/tap-stack.ts
 
-```ts
+```typescript
 import {
   AwsProvider,
   AwsProviderDefaultTags,

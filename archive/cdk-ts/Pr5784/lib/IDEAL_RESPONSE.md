@@ -4,7 +4,7 @@ Please find solution files below
 
 ## ./bin/tap.ts
 
-```ts
+```typescript
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/secret-rotation.ts
 
-```ts
+```typescript
 import {
   SecretsManagerClient,
   GetSecretValueCommand,
@@ -338,7 +338,7 @@ function generateSecureToken(length: number): string {
 
 ## ./lib/tap-stack.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import * as accessanalyzer from 'aws-cdk-lib/aws-accessanalyzer';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -1462,7 +1462,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```ts
+```typescript
 import fs from 'fs';
 import path from 'path';
 import {
@@ -1839,7 +1839,7 @@ describe('TapStack Integration Tests - Live Resources', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```ts
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
