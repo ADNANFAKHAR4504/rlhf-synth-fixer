@@ -24,5 +24,8 @@
     "S3 Replication Configuration",
     "S3 Object Lock Configuration",
     "S3 Lifecycle Configuration"
-  ]
+  ],
+  "training_quality": 9,
+  "background": "Deploy a secure multi-region S3 disaster recovery environment using a single CloudFormation template. The stack provisions KMS-encrypted S3 buckets with Object Lock (Compliance mode), versioning, lifecycle transitions to Glacier, and cross-region replication. It includes per-region KMS keys, IAM roles for replication, least-privilege policies, and optional CloudWatch monitoring (alarms, dashboards, SNS notifications). The template ensures data durability, compliance retention, VPC endpoint–restricted access, and automated replication metrics for operational resilience across us-east-1 and us-west-2."
 }
+

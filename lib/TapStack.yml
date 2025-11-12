@@ -308,8 +308,10 @@ Resources:
             Condition:
               StringNotEquals:
                 aws:SourceVpce: !Ref VpcEndpointIds
-              StringNotEqualsIfExists:
-                aws:PrincipalArn: !GetAtt ReplicationRole.Arn
+              StringNotLikeIfExists:
+                aws:PrincipalArn:
+                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/s3-replication-${EnvironmentSuffix}-*'
+
 
   ###########################################################
   # Monitoring (optional) — SNS + Alarms + Dashboard
