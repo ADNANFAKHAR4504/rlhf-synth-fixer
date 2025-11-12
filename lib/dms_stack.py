@@ -252,9 +252,10 @@ class DmsStack(pulumi.ComponentResource):
         # Try to get existing DMS VPC role, or create if it doesn't exist
         try:
             existing_vpc_role = aws.iam.get_role(name=vpc_role_name, opts=invoke_opts)
+            # Use Role.get() with the role name (not ARN) to import existing role
             dms_vpc_role = aws.iam.Role.get(
                 f"dms-vpc-role-{self.environment_suffix}",
-                existing_vpc_role.arn,
+                existing_vpc_role.name,  # Use name, not ARN
                 opts=ResourceOptions(parent=self)
             )
         except Exception:
@@ -292,9 +293,10 @@ class DmsStack(pulumi.ComponentResource):
         # Try to get existing DMS CloudWatch role, or create if it doesn't exist
         try:
             existing_cloudwatch_role = aws.iam.get_role(name=cloudwatch_role_name, opts=invoke_opts)
+            # Use Role.get() with the role name (not ARN) to import existing role
             dms_cloudwatch_role = aws.iam.Role.get(
                 f"dms-cloudwatch-role-{self.environment_suffix}",
-                existing_cloudwatch_role.arn,
+                existing_cloudwatch_role.name,  # Use name, not ARN
                 opts=ResourceOptions(parent=self)
             )
         except Exception:
