@@ -122,11 +122,51 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_kms_key(self):
         """Create KMS key for encrypting all data at rest"""
+        import json
+
+        # KMS key policy that allows CloudWatch Logs to use the key
+        kms_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Sid": "Enable IAM User Permissions",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::{aws.get_caller_identity().account_id}:root"
+                    },
+                    "Action": "kms:*",
+                    "Resource": "*"
+                },
+                {
+                    "Sid": "Allow CloudWatch Logs",
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": f"logs.us-east-2.amazonaws.com"
+                    },
+                    "Action": [
+                        "kms:Encrypt",
+                        "kms:Decrypt",
+                        "kms:ReEncrypt*",
+                        "kms:GenerateDataKey*",
+                        "kms:CreateGrant",
+                        "kms:DescribeKey"
+                    ],
+                    "Resource": "*",
+                    "Condition": {
+                        "ArnLike": {
+                            "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:us-east-2:{aws.get_caller_identity().account_id}:log-group:*"
+                        }
+                    }
+                }
+            ]
+        }
+
         key = aws.kms.Key(
             f"transaction-kms-key-{self.environment_suffix}",
             description="KMS key for transaction processing system encryption",
             deletion_window_in_days=10,
             enable_key_rotation=True,
+            policy=json.dumps(kms_policy),
             tags={**self.tags, 'Name': f'transaction-kms-key-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )
