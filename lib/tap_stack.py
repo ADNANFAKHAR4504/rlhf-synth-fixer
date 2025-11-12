@@ -1,9 +1,13 @@
 """tap_stack.py
+
 This module defines the TapStack class for EKS Payment Processing Platform.
+
 """
 
 from typing import Optional
+
 import aws_cdk as cdk
+
 from aws_cdk import (
     aws_ec2 as ec2,
     aws_eks as eks,
@@ -14,6 +18,7 @@ from aws_cdk import (
     CfnOutput,
     Tags,
 )
+
 from aws_cdk.lambda_layer_kubectl_v29 import KubectlV29Layer
 from constructs import Construct
 
@@ -42,7 +47,6 @@ class TapStack(cdk.Stack):
         environment_suffix = (
             props.environment_suffix if props else None
         ) or self.node.try_get_context("environmentSuffix") or "dev"
-
         self.environment_suffix = environment_suffix
 
         # Create KMS key for EKS secrets encryption
@@ -109,7 +113,7 @@ class TapStack(cdk.Stack):
             ],
         )
 
-        # Create EKS cluster with Kubernetes 1.28 and IPv6 support
+        # Create EKS cluster with Kubernetes 1.28 (IPv6 line removed)
         cluster = eks.Cluster(
             self,
             f"PaymentEKS-{environment_suffix}",
@@ -128,7 +132,7 @@ class TapStack(cdk.Stack):
             ],
             secrets_encryption_key=kms_key,
             masters_role=cluster_admin_role,
-            ip_family=eks.IpFamily.IP_V6,
+            # REMOVED: ip_family=eks.IpFamily.IP_V6,  # This line caused the error
             kubectl_layer=KubectlV29Layer(self, f"KubectlLayer-{environment_suffix}"),
         )
 
@@ -141,6 +145,7 @@ class TapStack(cdk.Stack):
             name="cluster-autoscaler",
             namespace="kube-system",
         )
+
         cluster_autoscaler_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
