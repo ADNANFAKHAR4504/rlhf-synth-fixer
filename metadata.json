@@ -1,0 +1,40 @@
+{
+  "task_id": "7th83a",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "ECS",
+    "ALB",
+    "ECR",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "Auto Scaling",
+    "ACM"
+  ],
+  "problem": "Create a Terraform configuration to deploy a containerized payment processing system on AWS ECS. The configuration must: 1. Set up an ECS cluster with Fargate capacity providers including both standard and spot instances. 2. Define task definitions for three microservices: payment-api, fraud-detection, and notification-service with 2GB memory and 1 vCPU each. 3. Create ECS services for each microservice with desired count of 3 tasks distributed across availability zones. 4. Configure an Application Load Balancer with path-based routing to the payment-api service. 5. Implement service auto-scaling policies that scale between 3-10 tasks based on CPU > 70% or memory > 80%. 6. Set up CloudWatch log groups for each service with encryption enabled using AWS-managed keys. 7. Create IAM task execution and task roles with permissions for ECR image pulling and CloudWatch logging only. 8. Configure security groups allowing ALB to communicate with ECS tasks on port 8080, and inter-service communication on specific ports. 9. Enable Container Insights on the ECS cluster for detailed monitoring. 10. Tag all resources with Environment=production, Team=payments, and CostCenter=engineering. Expected output: A complete Terraform configuration with modules for networking, ECS cluster, task definitions, services, load balancer, auto-scaling, and monitoring components that creates a production-ready container orchestration platform.",
+  "background": "A financial services company needs to deploy their microservices architecture on AWS ECS with strict security requirements and automatic scaling capabilities. The system processes sensitive transaction data and must maintain high availability across multiple availability zones while ensuring containers can only communicate through specific ports.",
+  "context": "Production environment in us-east-1 region utilizing ECS Fargate for container orchestration, Application Load Balancer for traffic distribution, ECR for container registry, and CloudWatch for monitoring. Infrastructure spans 3 availability zones with private subnets isolated from internet. VPC includes NAT gateways for outbound connectivity from containers. Requires Terraform 1.5+ with AWS provider 5.x. Task definitions use Fargate platform version 1.4.0.",
+  "constraints": [
+    "ECS cluster must use Fargate Spot instances for at least 50% of capacity",
+    "ECS tasks must run in private subnets only with no direct internet access",
+    "ALB must use HTTPS listeners only with SSL/TLS certificates from ACM",
+    "Service auto-scaling must be based on both CPU and memory metrics",
+    "Security groups must explicitly define allowed ports between services",
+    "Container logs must be sent to CloudWatch Logs with 30-day retention",
+    "Container health checks must fail after 3 consecutive failures with 30-second intervals",
+    "Container images must be stored in private ECR repositories with image scanning enabled",
+    "Task IAM roles must follow least privilege with explicit resource ARNs",
+    "Each microservice must have its own ECS service with dedicated task definition"
+  ],
+  "turn_type": "single",
+  "po_id": "7th83a",
+  "team": "synth",
+  "startedAt": "2025-11-13T00:52:03.481978",
+  "training_quality": 9
+}
