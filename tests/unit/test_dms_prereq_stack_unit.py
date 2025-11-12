@@ -64,7 +64,7 @@ class TestDmsVpcRole:
                         "Action": "sts:AssumeRole",
                         "Effect": "Allow",
                         "Principal": {
-                            "Service": "dms.amazonaws.com"
+                            "Service": "dms.us-east-1.amazonaws.com"
                         }
                     }
                 ]
@@ -105,7 +105,7 @@ class TestDmsCloudWatchLogsRole:
                         "Action": "sts:AssumeRole",
                         "Effect": "Allow",
                         "Principal": {
-                            "Service": "dms.amazonaws.com"
+                            "Service": "dms.us-east-1.amazonaws.com"
                         }
                     }
                 ]
