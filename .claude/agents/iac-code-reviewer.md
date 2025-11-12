@@ -56,6 +56,8 @@ bash .claude/scripts/verify-worktree.sh || exit 1
 
 ### Phase 1.5: Metadata Enhancement & Deep Compliance Validation
 
+**⚠️ CRITICAL**: This phase MUST update `metadata.json` with `training_quality` field. The CI/CD pipeline uses this as the primary source for quality scoring. Failure to update metadata.json will cause the quality gate to fail even if your review is positive.
+
 #### Step 1: Identify Latest Files
 
 ```bash
@@ -265,6 +267,15 @@ fi
 jq --arg tq "$TRAINING_QUALITY" \
   '.training_quality = ($tq | tonumber)' \
   metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+
+# MANDATORY: Verify the update was successful
+cat metadata.json | jq '.training_quality'
+if [ $? -eq 0 ]; then
+  echo "✅ Successfully updated metadata.json with training_quality"
+else
+  echo "❌ ERROR: Failed to update metadata.json - quality gate will fail!"
+  exit 1
+fi
 ```
 
 Report: "✅ metadata.json enhanced with training_quality: {SCORE}/10 (CI/CD Pipeline task - aws_services not required)"
@@ -289,6 +300,15 @@ AWS_SERVICES_ARRAY='["service1", "service2", "service3"]'  # Replace with actual
 jq --arg tq "$TRAINING_QUALITY" --argjson services "$AWS_SERVICES_ARRAY" \
   '.training_quality = ($tq | tonumber) | .aws_services = $services' \
   metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json
+
+# MANDATORY: Verify the update was successful
+cat metadata.json | jq '.training_quality, .aws_services'
+if [ $? -eq 0 ]; then
+  echo "✅ Successfully updated metadata.json with training_quality and aws_services"
+else
+  echo "❌ ERROR: Failed to update metadata.json - quality gate will fail!"
+  exit 1
+fi
 ```
 
 **Validation**: Verify `aws_services` is an array:
@@ -388,6 +408,16 @@ If ANY unchecked:
 ### Status: {✅ READY / ❌ NOT READY}
 
 {Next steps or blocking issues}
+
+---
+
+**CRITICAL**: End your review comment with this exact format on its own line:
+```
+SCORE:{SCORE}
+```
+Example: `SCORE:10` or `SCORE:8`
+
+This SCORE line is mandatory and must be the last line of your GitHub comment for automated score extraction.
 ```
 
 ### Phase 2: Compliance Analysis

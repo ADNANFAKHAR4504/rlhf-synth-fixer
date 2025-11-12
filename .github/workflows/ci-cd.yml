@@ -879,17 +879,36 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          echo "🔍 Checking metadata.json first (primary source)..."
+          # Try metadata.json first - this is the authoritative source
+          if [ -f "metadata.json" ]; then
+            SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+            if [ -n "$SCORE" ] && [ "$SCORE" != "null" ]; then
+              echo "✅ Found training_quality in metadata.json: $SCORE"
+              echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+              exit 0
+            else
+              echo "⚠️ training_quality not found in metadata.json, falling back to comment parsing..."
+            fi
+          else
+            echo "⚠️ metadata.json not found, falling back to comment parsing..."
+          fi
+
           echo "🔍 Fetching latest Claude review comment..."
           gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
 
           echo "🍀 Searching for quality score pattern..."
-          # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
-          SCORE=$(grep -Poi '(training|final)\s+(quality|score)[^0-9]{0,20}([0-9]+(?:\.[0-9]+)?)\s*/\s*10|training_quality["\s:]+([0-9]+(?:\.[0-9]+)?)' all_comments.txt \
-            | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+          # Search for multiple score patterns:
+          # 1. SCORE:<number> (as instructed in system prompt line 792-794)
+          # 2. Training Quality: <number>/10
+          # 3. Final Score: <number>/10
+          # 4. training_quality: <number>
+          SCORE=$(grep -Poi 'SCORE:\s*([0-9]+(?:\.[0-9]+)?)|(?:training|final)\s+(?:quality|score)[^0-9]{0,20}([0-9]+(?:\.[0-9]+)?)\s*/\s*10|training_quality["\s:]+([0-9]+(?:\.[0-9]+)?)' all_comments.txt \
+            | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
 
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
+            echo "⚠️ Could not find any quality score in PR comments or metadata.json. Defaulting to 0."
             SCORE=0
           fi
 
