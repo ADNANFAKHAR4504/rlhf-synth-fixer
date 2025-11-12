@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-11T13:31:28+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "po_id": "1t7ty3",
   "aws_services": [
     "VPC",
@@ -27,6 +29,6 @@
     "NAT Gateway",
     "Auto Scaling"
   ],
-  "region": "ap-southeast-1",
+  "region": "us-west-2",
   "training_quality": 10
 }
