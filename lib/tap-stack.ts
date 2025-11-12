@@ -17,285 +17,96 @@ interface TapStackProps extends cdk.StackProps {
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id, props);
 
     // Get environment suffix
     const environmentSuffix =
-      props?.environmentSuffix ||
-      this.node.tryGetContext('environmentSuffix') ||
-      'dev';
+      props?.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-    // Define regions
-    const primaryRegion = 'us-east-1';
-    const secondaryRegion = 'us-east-2';
+    // Use us-east-1 as the single region
+    const region = 'us-east-1';
 
     // ===========================
-    // PRIMARY REGION (us-east-1)
+    // SINGLE REGION (us-east-1)
     // ===========================
 
-    // Network Stack - Primary
-    const networkPrimaryStack = new NetworkStack(this, 'NetworkPrimary', {
+    // Network Stack
+    const networkStack = new NetworkStack(this, 'Network', {
       environmentSuffix,
-      region: primaryRegion,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
+      region,
     });
 
-    // Database Stack - Primary
-    const databasePrimaryStack = new DatabaseStack(this, 'DatabasePrimary', {
+    // Database Stack
+    new DatabaseStack(this, 'Database', {
       environmentSuffix,
-      region: primaryRegion,
-      vpc: networkPrimaryStack.vpc,
-      databaseSecurityGroup: networkPrimaryStack.databaseSecurityGroup,
+      region,
+      vpc: networkStack.vpc,
+      databaseSecurityGroup: networkStack.databaseSecurityGroup,
       isPrimary: true,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
     });
 
-    databasePrimaryStack.addDependency(networkPrimaryStack);
-
-    // Compute Stack - Primary
-    const computePrimaryStack = new ComputeStack(this, 'ComputePrimary', {
+    // Compute Stack
+    const computeStack = new ComputeStack(this, 'Compute', {
       environmentSuffix,
-      region: primaryRegion,
-      vpc: networkPrimaryStack.vpc,
-      albSecurityGroup: networkPrimaryStack.albSecurityGroup,
-      ecsSecurityGroup: networkPrimaryStack.ecsSecurityGroup,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
+      region,
+      vpc: networkStack.vpc,
+      albSecurityGroup: networkStack.albSecurityGroup,
+      ecsSecurityGroup: networkStack.ecsSecurityGroup,
     });
 
-    computePrimaryStack.addDependency(networkPrimaryStack);
-
-    // Backup Stack - Primary
-    new BackupStack(this, 'BackupPrimary', {
+    // Storage Stack
+    new StorageStack(this, 'Storage', {
       environmentSuffix,
-      region: primaryRegion,
+      region,
       isPrimary: true,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
     });
 
-    // ===========================
-    // SECONDARY REGION (us-east-2)
-    // ===========================
-
-    // Network Stack - Secondary
-    const networkSecondaryStack = new NetworkStack(this, 'NetworkSecondary', {
+    // Backup Stack
+    new BackupStack(this, 'Backup', {
       environmentSuffix,
-      region: secondaryRegion,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: secondaryRegion,
-      },
+      region,
+      isPrimary: true,
     });
 
-    // Storage Stack - Secondary (for S3 CRR destination)
-    const storageSecondaryStack = new StorageStack(this, 'StorageSecondary', {
+    // Monitoring Stack
+    new MonitoringStack(this, 'Monitoring', {
       environmentSuffix,
-      region: secondaryRegion,
-      isPrimary: false,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: secondaryRegion,
-      },
+      region,
+      endpointUrl: `http://${computeStack.loadBalancer.loadBalancerDnsName}`,
     });
 
-    // CRITICAL: Configure S3 CRR after both buckets exist
-    // This is done by updating the primary bucket's replication configuration
-    // after the secondary bucket is created
-    const storagePrimaryStackWithCRR = new StorageStack(
-      this,
-      'StoragePrimaryWithCRR',
-      {
-        environmentSuffix,
-        region: primaryRegion,
-        isPrimary: true,
-        destinationBucket: storageSecondaryStack.bucket,
-        env: {
-          account: process.env.CDK_DEFAULT_ACCOUNT,
-          region: primaryRegion,
-        },
-      }
-    );
-
-    storagePrimaryStackWithCRR.addDependency(storageSecondaryStack);
-
-    // Database Stack - Secondary
-    const databaseSecondaryStack = new DatabaseStack(
-      this,
-      'DatabaseSecondary',
-      {
-        environmentSuffix,
-        region: secondaryRegion,
-        vpc: networkSecondaryStack.vpc,
-        databaseSecurityGroup: networkSecondaryStack.databaseSecurityGroup,
-        isPrimary: false,
-        globalClusterIdentifier: databasePrimaryStack.globalClusterIdentifier,
-        env: {
-          account: process.env.CDK_DEFAULT_ACCOUNT,
-          region: secondaryRegion,
-        },
-      }
-    );
-
-    databaseSecondaryStack.addDependency(networkSecondaryStack);
-    databaseSecondaryStack.addDependency(databasePrimaryStack);
-
-    // Compute Stack - Secondary
-    const computeSecondaryStack = new ComputeStack(this, 'ComputeSecondary', {
+    // Route 53 Stack (Simple DNS without failover)
+    new Route53Stack(this, 'Route53', {
       environmentSuffix,
-      region: secondaryRegion,
-      vpc: networkSecondaryStack.vpc,
-      albSecurityGroup: networkSecondaryStack.albSecurityGroup,
-      ecsSecurityGroup: networkSecondaryStack.ecsSecurityGroup,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: secondaryRegion,
-      },
+      primaryLoadBalancer: computeStack.loadBalancer,
+      primaryRegion: region,
     });
 
-    computeSecondaryStack.addDependency(networkSecondaryStack);
-
-    // Backup Stack - Secondary
-    new BackupStack(this, 'BackupSecondary', {
-      environmentSuffix,
-      region: secondaryRegion,
-      isPrimary: false,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: secondaryRegion,
-      },
-    });
-
-    // ===========================
-    // MONITORING (Both Regions)
-    // ===========================
-
-    // Monitoring Stack - Primary
-    const monitoringPrimaryStack = new MonitoringStack(
-      this,
-      'MonitoringPrimary',
-      {
-        environmentSuffix,
-        region: primaryRegion,
-        endpointUrl: `http://${computePrimaryStack.loadBalancer.loadBalancerDnsName}`,
-        env: {
-          account: process.env.CDK_DEFAULT_ACCOUNT,
-          region: primaryRegion,
-        },
-      }
-    );
-
-    monitoringPrimaryStack.addDependency(computePrimaryStack);
-
-    // Monitoring Stack - Secondary
-    const monitoringSecondaryStack = new MonitoringStack(
-      this,
-      'MonitoringSecondary',
-      {
-        environmentSuffix,
-        region: secondaryRegion,
-        endpointUrl: `http://${computeSecondaryStack.loadBalancer.loadBalancerDnsName}`,
-        env: {
-          account: process.env.CDK_DEFAULT_ACCOUNT,
-          region: secondaryRegion,
-        },
-      }
-    );
-
-    monitoringSecondaryStack.addDependency(computeSecondaryStack);
-
-    // ===========================
-    // GLOBAL SERVICES
-    // ===========================
-
-    // Route 53 Stack (Global)
-    const route53Stack = new Route53Stack(this, 'Route53', {
-      environmentSuffix,
-      primaryLoadBalancer: computePrimaryStack.loadBalancer,
-      secondaryLoadBalancer: computeSecondaryStack.loadBalancer,
-      primaryRegion,
-      secondaryRegion,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion, // Route 53 is global but created in primary region
-      },
-    });
-
-    route53Stack.addDependency(computePrimaryStack);
-    route53Stack.addDependency(computeSecondaryStack);
-
-    // Failover Stack (Primary Region)
+    // Failover Stack
     new FailoverStack(this, 'Failover', {
       environmentSuffix,
-      region: primaryRegion,
+      region,
       isPrimary: true,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
     });
 
-    // Parameter Store Stack (Both Regions)
-    new ParameterStoreStack(this, 'ParameterStorePrimary', {
+    // Parameter Store Stack
+    new ParameterStoreStack(this, 'ParameterStore', {
       environmentSuffix,
-      region: primaryRegion,
+      region,
       isPrimary: true,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
     });
 
-    new ParameterStoreStack(this, 'ParameterStoreSecondary', {
+    // EventBridge Stack
+    new EventBridgeStack(this, 'EventBridge', {
       environmentSuffix,
-      region: secondaryRegion,
-      isPrimary: false,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: secondaryRegion,
-      },
-    });
-
-    // EventBridge Stack (Both Regions)
-    new EventBridgeStack(this, 'EventBridgePrimary', {
-      environmentSuffix,
-      region: primaryRegion,
+      region,
       isPrimary: true,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: primaryRegion,
-      },
-    });
-
-    new EventBridgeStack(this, 'EventBridgeSecondary', {
-      environmentSuffix,
-      region: secondaryRegion,
-      isPrimary: false,
-      env: {
-        account: process.env.CDK_DEFAULT_ACCOUNT,
-        region: secondaryRegion,
-      },
     });
 
     // Root stack outputs
-    new cdk.CfnOutput(this, 'PrimaryRegion', {
-      value: primaryRegion,
-      description: 'Primary AWS Region',
-    });
-
-    new cdk.CfnOutput(this, 'SecondaryRegion', {
-      value: secondaryRegion,
-      description: 'Secondary AWS Region',
+    new cdk.CfnOutput(this, 'Region', {
+      value: region,
+      description: 'AWS Region',
     });
 
     new cdk.CfnOutput(this, 'EnvironmentSuffix', {

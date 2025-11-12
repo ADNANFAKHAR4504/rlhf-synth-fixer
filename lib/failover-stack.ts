@@ -7,24 +7,19 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
-export interface FailoverStackProps extends cdk.StackProps {
+export interface FailoverStackProps {
   environmentSuffix: string;
   region: string;
   isPrimary: boolean;
 }
 
-export class FailoverStack extends cdk.Stack {
+export class FailoverStack extends Construct {
   public readonly stateMachine: stepfunctions.StateMachine;
 
   constructor(scope: Construct, id: string, props: FailoverStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
-    const { environmentSuffix, isPrimary } = props;
-
-    // Only create failover orchestration in primary region
-    if (!isPrimary) {
-      return;
-    }
+    const { environmentSuffix } = props;
 
     // SNS Topic for notifications
     const notificationTopic = new sns.Topic(this, 'FailoverNotificationTopic', {
@@ -266,13 +261,11 @@ exports.handler = async (event) => {
     new cdk.CfnOutput(this, 'StateMachineArn', {
       value: this.stateMachine.stateMachineArn,
       description: 'Failover State Machine ARN',
-      exportName: `TapStack${environmentSuffix}StateMachineArn`,
     });
 
     new cdk.CfnOutput(this, 'StateMachineName', {
       value: this.stateMachine.stateMachineName,
       description: 'Failover State Machine Name',
-      exportName: `TapStack${environmentSuffix}StateMachineName`,
     });
   }
 }

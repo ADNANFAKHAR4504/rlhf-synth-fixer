@@ -3,19 +3,19 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
-export interface NetworkStackProps extends cdk.StackProps {
+export interface NetworkStackProps {
   environmentSuffix: string;
   region: string;
 }
 
-export class NetworkStack extends cdk.Stack {
+export class NetworkStack extends Construct {
   public readonly vpc: ec2.Vpc;
   public readonly albSecurityGroup: ec2.SecurityGroup;
   public readonly ecsSecurityGroup: ec2.SecurityGroup;
   public readonly databaseSecurityGroup: ec2.SecurityGroup;
 
   constructor(scope: Construct, id: string, props: NetworkStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
     const { environmentSuffix, region } = props;
 
@@ -108,18 +108,5 @@ export class NetworkStack extends cdk.Stack {
       ec2.Port.tcp(5432),
       'Allow PostgreSQL traffic from ECS tasks'
     );
-
-    // Outputs
-    new cdk.CfnOutput(this, 'VPCId', {
-      value: this.vpc.vpcId,
-      description: 'VPC ID',
-      exportName: `TapStack${environmentSuffix}VPCId${region}`,
-    });
-
-    new cdk.CfnOutput(this, 'ALBSecurityGroupId', {
-      value: this.albSecurityGroup.securityGroupId,
-      description: 'ALB Security Group ID',
-      exportName: `TapStack${environmentSuffix}ALBSecurityGroupId${region}`,
-    });
   }
 }

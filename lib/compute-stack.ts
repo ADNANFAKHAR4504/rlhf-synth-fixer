@@ -6,7 +6,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import { Construct } from 'constructs';
 
-export interface ComputeStackProps extends cdk.StackProps {
+export interface ComputeStackProps {
   environmentSuffix: string;
   region: string;
   vpc: ec2.IVpc;
@@ -14,13 +14,13 @@ export interface ComputeStackProps extends cdk.StackProps {
   ecsSecurityGroup: ec2.ISecurityGroup;
 }
 
-export class ComputeStack extends cdk.Stack {
+export class ComputeStack extends Construct {
   public readonly cluster: ecs.Cluster;
   public readonly service: ecs.FargateService;
   public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
 
   constructor(scope: Construct, id: string, props: ComputeStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
     const {
       environmentSuffix,

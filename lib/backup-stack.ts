@@ -3,17 +3,17 @@ import * as backup from 'aws-cdk-lib/aws-backup';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
-export interface BackupStackProps extends cdk.StackProps {
+export interface BackupStackProps {
   environmentSuffix: string;
   region: string;
   isPrimary: boolean;
 }
 
-export class BackupStack extends cdk.Stack {
+export class BackupStack extends Construct {
   public readonly backupVault: backup.BackupVault;
 
   constructor(scope: Construct, id: string, props: BackupStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
     const { environmentSuffix, region, isPrimary } = props;
 
@@ -54,7 +54,6 @@ export class BackupStack extends cdk.Stack {
       new cdk.CfnOutput(this, 'BackupPlanId', {
         value: plan.backupPlanId,
         description: 'Backup Plan ID',
-        exportName: `TapStack${environmentSuffix}BackupPlanId`,
       });
     }
 
@@ -62,13 +61,11 @@ export class BackupStack extends cdk.Stack {
     new cdk.CfnOutput(this, 'BackupVaultName', {
       value: this.backupVault.backupVaultName,
       description: 'Backup Vault Name',
-      exportName: `TapStack${environmentSuffix}BackupVaultName${region}`,
     });
 
     new cdk.CfnOutput(this, 'BackupVaultArn', {
       value: this.backupVault.backupVaultArn,
       description: 'Backup Vault ARN',
-      exportName: `TapStack${environmentSuffix}BackupVaultArn${region}`,
     });
   }
 }

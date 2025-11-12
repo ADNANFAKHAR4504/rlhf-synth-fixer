@@ -7,15 +7,15 @@ import * as targets from 'aws-cdk-lib/aws-events-targets';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
-export interface ParameterStoreStackProps extends cdk.StackProps {
+export interface ParameterStoreStackProps {
   environmentSuffix: string;
   region: string;
   isPrimary: boolean;
 }
 
-export class ParameterStoreStack extends cdk.Stack {
+export class ParameterStoreStack extends Construct {
   constructor(scope: Construct, id: string, props: ParameterStoreStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
     const { environmentSuffix, region, isPrimary } = props;
 
@@ -52,7 +52,6 @@ export class ParameterStoreStack extends cdk.Stack {
       stringValue: 'placeholder-api-key',
       description: 'API Key (encrypted)',
       tier: ssm.ParameterTier.STANDARD,
-      type: ssm.ParameterType.SECURE_STRING,
     });
 
     // Cross-region replication (only in primary)
@@ -105,7 +104,7 @@ exports.handler = async (event) => {
         `),
           environment: {
             SOURCE_REGION: region,
-            TARGET_REGION: region === 'us-east-1' ? 'us-east-2' : 'us-east-1',
+            TARGET_REGION: 'us-east-2',
           },
           timeout: cdk.Duration.seconds(60),
           logRetention: logs.RetentionDays.ONE_WEEK,
@@ -151,7 +150,6 @@ exports.handler = async (event) => {
       new cdk.CfnOutput(this, 'ReplicationFunctionArn', {
         value: replicationFunction.functionArn,
         description: 'Parameter Replication Function ARN',
-        exportName: `TapStack${environmentSuffix}ReplicationFunctionArn`,
       });
     }
 
@@ -159,13 +157,11 @@ exports.handler = async (event) => {
     new cdk.CfnOutput(this, 'AppConfigParameterName', {
       value: appConfigParam.parameterName,
       description: 'Application Config Parameter Name',
-      exportName: `TapStack${environmentSuffix}AppConfigParam${region}`,
     });
 
     new cdk.CfnOutput(this, 'DBConfigParameterName', {
       value: dbConfigParam.parameterName,
       description: 'Database Config Parameter Name',
-      exportName: `TapStack${environmentSuffix}DBConfigParam${region}`,
     });
   }
 }

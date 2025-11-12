@@ -7,17 +7,17 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 
-export interface MonitoringStackProps extends cdk.StackProps {
+export interface MonitoringStackProps {
   environmentSuffix: string;
   region: string;
   endpointUrl: string;
 }
 
-export class MonitoringStack extends cdk.Stack {
+export class MonitoringStack extends Construct {
   public readonly canary: synthetics.Canary;
 
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
     const { environmentSuffix, region, endpointUrl } = props;
 
@@ -146,19 +146,16 @@ exports.handler = async () => {
     new cdk.CfnOutput(this, 'CanaryName', {
       value: this.canary.canaryName,
       description: 'CloudWatch Synthetics Canary Name',
-      exportName: `TapStack${environmentSuffix}CanaryName${region}`,
     });
 
     new cdk.CfnOutput(this, 'CanaryId', {
       value: this.canary.canaryId,
       description: 'CloudWatch Synthetics Canary ID',
-      exportName: `TapStack${environmentSuffix}CanaryId${region}`,
     });
 
     new cdk.CfnOutput(this, 'ArtifactsBucketName', {
       value: artifactsBucket.bucketName,
       description: 'Canary Artifacts Bucket Name',
-      exportName: `TapStack${environmentSuffix}CanaryArtifactsBucket${region}`,
     });
   }
 }

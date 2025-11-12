@@ -6,7 +6,7 @@ import * as sns from 'aws-cdk-lib/aws-sns';
 import * as actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import { Construct } from 'constructs';
 
-export interface DatabaseStackProps extends cdk.StackProps {
+export interface DatabaseStackProps {
   environmentSuffix: string;
   region: string;
   vpc: ec2.IVpc;
@@ -15,21 +15,14 @@ export interface DatabaseStackProps extends cdk.StackProps {
   globalClusterIdentifier?: string;
 }
 
-export class DatabaseStack extends cdk.Stack {
+export class DatabaseStack extends Construct {
   public readonly cluster: rds.DatabaseCluster;
   public readonly globalClusterIdentifier: string;
 
   constructor(scope: Construct, id: string, props: DatabaseStackProps) {
-    super(scope, id, { ...props, crossRegionReferences: true });
+    super(scope, id);
 
-    const {
-      environmentSuffix,
-      region,
-      vpc,
-      databaseSecurityGroup,
-      isPrimary,
-      globalClusterIdentifier,
-    } = props;
+    const { environmentSuffix, region, vpc, databaseSecurityGroup } = props;
 
     // SNS Topic for alarms
     const alarmTopic = new sns.Topic(this, 'DatabaseAlarmTopic', {
@@ -37,93 +30,47 @@ export class DatabaseStack extends cdk.Stack {
       displayName: 'Aurora Database Alarms',
     });
 
-    if (isPrimary) {
-      // Create Global Database Cluster
-      const globalCluster = new rds.CfnGlobalCluster(this, 'GlobalCluster', {
-        globalClusterIdentifier: `tapstack${environmentSuffix.toLowerCase()}globaldb`,
-        engine: 'aurora-postgresql',
-        engineVersion: '14.9',
-        deletionProtection: false,
-        storageEncrypted: true,
-      });
-
-      this.globalClusterIdentifier = globalCluster.ref;
-
-      // Primary cluster with backtrack
-      this.cluster = new rds.DatabaseCluster(this, 'PrimaryCluster', {
-        clusterIdentifier: `tapstack${environmentSuffix.toLowerCase()}primary${region}`,
-        engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_14_9,
-        }),
-        writer: rds.ClusterInstance.provisioned('writer', {
-          instanceType: ec2.InstanceType.of(
-            ec2.InstanceClass.T3,
-            ec2.InstanceSize.MEDIUM
-          ),
-          enablePerformanceInsights: true,
-          performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
-        }),
-        readers: [
-          rds.ClusterInstance.provisioned('reader', {
-            instanceType: ec2.InstanceType.of(
-              ec2.InstanceClass.T3,
-              ec2.InstanceSize.MEDIUM
-            ),
-            enablePerformanceInsights: true,
-          }),
-        ],
-        vpc,
-        securityGroups: [databaseSecurityGroup],
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-        storageEncrypted: true,
-        backup: {
-          retention: cdk.Duration.days(7),
-          preferredWindow: '03:00-04:00',
-        },
-        cloudwatchLogsExports: ['postgresql'],
-        cloudwatchLogsRetention: 7,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-        defaultDatabaseName: 'tapdb',
-      });
-
-      // Associate cluster with global cluster
-      const cfnCluster = this.cluster.node.defaultChild as rds.CfnDBCluster;
-      cfnCluster.globalClusterIdentifier = globalCluster.ref;
-      cfnCluster.addDependency(globalCluster);
-
-      // Note: Backtrack is configured at the cluster level
-      cfnCluster.backtrackWindow = 86400; // 24 hours in seconds
-    } else {
-      // Secondary (read-only) cluster
-      this.cluster = new rds.DatabaseCluster(this, 'SecondaryCluster', {
-        clusterIdentifier: `tapstack${environmentSuffix.toLowerCase()}secondary${region}`,
-        engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_14_9,
-        }),
-        writer: rds.ClusterInstance.provisioned('writer', {
+    // Create standalone Aurora cluster (single region)
+    this.cluster = new rds.DatabaseCluster(this, 'Cluster', {
+      clusterIdentifier: `tapstack${environmentSuffix.toLowerCase()}${region.replace(/-/g, '')}`,
+      engine: rds.DatabaseClusterEngine.auroraPostgres({
+        version: rds.AuroraPostgresEngineVersion.VER_14_11,
+      }),
+      writer: rds.ClusterInstance.provisioned('writer', {
+        instanceType: ec2.InstanceType.of(
+          ec2.InstanceClass.T3,
+          ec2.InstanceSize.MEDIUM
+        ),
+        enablePerformanceInsights: true,
+        performanceInsightRetention: rds.PerformanceInsightRetention.DEFAULT,
+      }),
+      readers: [
+        rds.ClusterInstance.provisioned('reader', {
           instanceType: ec2.InstanceType.of(
             ec2.InstanceClass.T3,
             ec2.InstanceSize.MEDIUM
           ),
           enablePerformanceInsights: true,
         }),
-        vpc,
-        securityGroups: [databaseSecurityGroup],
-        vpcSubnets: {
-          subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
-        },
-        storageEncrypted: true,
-        cloudwatchLogsExports: ['postgresql'],
-        cloudwatchLogsRetention: 7,
-        removalPolicy: cdk.RemovalPolicy.DESTROY,
-      });
+      ],
+      vpc,
+      securityGroups: [databaseSecurityGroup],
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_ISOLATED,
+      },
+      storageEncrypted: true,
+      backup: {
+        retention: cdk.Duration.days(7),
+        preferredWindow: '03:00-04:00',
+      },
+      cloudwatchLogsExports: ['postgresql'],
+      cloudwatchLogsRetention: 7,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      defaultDatabaseName: 'tapdb',
+    });
 
-      // Associate with global cluster
-      const cfnCluster = this.cluster.node.defaultChild as rds.CfnDBCluster;
-      cfnCluster.globalClusterIdentifier = globalClusterIdentifier;
-    }
+    // Set globalClusterIdentifier for consistency (though not used in single region)
+    this.globalClusterIdentifier = `tapstack${environmentSuffix.toLowerCase()}cluster`;
 
     // CloudWatch Alarms
     const cpuAlarm = new cloudwatch.Alarm(this, 'DatabaseCPUAlarm', {
@@ -154,26 +101,5 @@ export class DatabaseStack extends cdk.Stack {
     );
 
     connectionsAlarm.addAlarmAction(new actions.SnsAction(alarmTopic));
-
-    // Outputs
-    new cdk.CfnOutput(this, 'ClusterEndpoint', {
-      value: this.cluster.clusterEndpoint.hostname,
-      description: 'Aurora Cluster Endpoint',
-      exportName: `TapStack${environmentSuffix}ClusterEndpoint${region}`,
-    });
-
-    new cdk.CfnOutput(this, 'ClusterReadEndpoint', {
-      value: this.cluster.clusterReadEndpoint.hostname,
-      description: 'Aurora Cluster Read Endpoint',
-      exportName: `TapStack${environmentSuffix}ClusterReadEndpoint${region}`,
-    });
-
-    if (isPrimary) {
-      new cdk.CfnOutput(this, 'GlobalClusterIdentifier', {
-        value: this.globalClusterIdentifier,
-        description: 'Aurora Global Cluster Identifier',
-        exportName: `TapStack${environmentSuffix}GlobalClusterIdentifier`,
-      });
-    }
   }
 }
