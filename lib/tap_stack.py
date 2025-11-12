@@ -464,7 +464,7 @@ def handler(event, context):
         # Create S3 bucket
         self.s3_bucket = aws.s3.Bucket(
             f"transaction-logs-{self.environment_suffix}",
-            bucket=f"payment-transaction-logs-{self.environment_suffix}",
+            bucket=f"payment-transaction-logs-{self.environment_suffix.lower()}",
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
