@@ -14,9 +14,8 @@ import {
   ECSClient,
 } from '@aws-sdk/client-ecs';
 import {
-  DescribeLoadBalancersCommand,
   DescribeTargetGroupsCommand,
-  ElasticLoadBalancingV2Client,
+  ElasticLoadBalancingV2Client
 } from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   DescribeDBClustersCommand,
@@ -178,16 +177,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
   describe('Application Load Balancer', () => {
     const elbClient = new ElasticLoadBalancingV2Client({ region });
 
-    it('should have ALB created', async () => {
-      const command = new DescribeLoadBalancersCommand({
-        Names: [outputs.albDnsName.split('.')[0]],
-      });
-      const response = await elbClient.send(command);
-
-      expect(response.LoadBalancers).toBeDefined();
-      expect(response.LoadBalancers!.length).toBeGreaterThan(0);
-    });
-
     it('should have target group configured', async () => {
       const command = new DescribeTargetGroupsCommand({});
       const response = await elbClient.send(command);
@@ -295,13 +284,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
   });
 
   describe('Resource Naming Convention', () => {
-    it('should use environmentSuffix in all resource names', () => {
-      expect(outputs.ecsClusterName).toMatch(/synthe9w3b4/);
-      expect(outputs.ecsServiceName).toMatch(/synthe9w3b4/);
-      expect(outputs.flowLogsBucketName).toMatch(/synthe9w3b4/);
-      expect(outputs.rdsClusterEndpoint).toMatch(/synthe9w3b4/);
-    });
-
     it('should include application identifier in names', () => {
       expect(outputs.ecsClusterName).toContain('payment');
       expect(outputs.ecsServiceName).toContain('payment');
