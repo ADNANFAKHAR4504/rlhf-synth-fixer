@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T13:24:17+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Security & Compliance"
+  ],
+  "po_id": "x61li1",
+  "aws_services": [
+    "VPC",
+    "ALB",
+    "WAF",
+    "ECS",
+    "RDS",
+    "API Gateway",
+    "Lambda",
+    "SQS",
+    "S3",
+    "Secrets Manager",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "SNS",
+    "ECR",
+    "NAT"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
