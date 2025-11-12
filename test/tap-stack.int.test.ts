@@ -1,4 +1,3 @@
-// test/tap-stack.int.test.ts
 import fs from "fs";
 import path from "path";
 import { setTimeout as wait } from "timers/promises";
