@@ -1,3 +1,4 @@
+import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -24,16 +25,18 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
 
-    // Get operations account ID from environment variable
-    // Use a default for local testing, but require it for prod deployments
-    const operationsAccountId = process.env.OPERATIONS_ACCOUNT_ID ||
-      (environmentSuffix.includes('prod') ? '' : '000000000000');
-
     // Configure AWS Provider
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,
     });
+
+    // Get current AWS account ID
+    const currentAccount = new DataAwsCallerIdentity(this, 'current', {});
+
+    // Get operations account ID from environment variable or use current account
+    const operationsAccountId =
+      process.env.OPERATIONS_ACCOUNT_ID || currentAccount.accountId;
 
     // Configure S3 Backend with state locking
     new S3Backend(this, {

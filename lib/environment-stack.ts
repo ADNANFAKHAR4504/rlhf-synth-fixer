@@ -1,10 +1,10 @@
-import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
-import { NetworkingStack } from './networking-stack';
-import { DatabaseConstruct } from './database-construct';
+import { Construct } from 'constructs';
 import { AlbConstruct } from './alb-construct';
-import { EcsConstruct } from './ecs-construct';
 import { CrossAccountRole } from './cross-account-role';
+import { DatabaseConstruct } from './database-construct';
+import { EcsConstruct } from './ecs-construct';
+import { NetworkingStack } from './networking-stack';
 import { S3AssetsConstruct } from './s3-assets-construct';
 
 export interface EnvironmentStackProps {
@@ -19,8 +19,13 @@ export class EnvironmentStack extends Construct {
   constructor(scope: Construct, id: string, props: EnvironmentStackProps) {
     super(scope, id);
 
-    const { environment, environmentSuffix, cidrBlock, operationsAccountId, awsRegion } =
-      props;
+    const {
+      environment,
+      environmentSuffix,
+      cidrBlock,
+      operationsAccountId,
+      awsRegion,
+    } = props;
 
     // Create networking infrastructure
     const networking = new NetworkingStack(this, 'networking', {
