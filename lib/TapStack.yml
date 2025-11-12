@@ -1089,8 +1089,14 @@ Resources:
           logger = logging.getLogger()
           logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
           
-          # Initialize AWS clients
-          s3_client = boto3.client('s3')
+          # Initialize AWS clients with timeout configuration
+          from botocore.config import Config
+          s3_config = Config(
+              connect_timeout=10,
+              read_timeout=30,
+              retries={'max_attempts': 2}
+          )
+          s3_client = boto3.client('s3', config=s3_config)
           
           # Environment variables
           bucket_name = os.environ['BUCKET_NAME']
