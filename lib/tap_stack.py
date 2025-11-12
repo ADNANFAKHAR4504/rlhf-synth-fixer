@@ -318,10 +318,10 @@ class TapStack(TerraformStack):
             attribute=[
                 {"name": "transactionId", "type": "S"},
             ],
-            ttl=[{
+            ttl={
                 "attribute_name": "expirationTime",
                 "enabled": True
-            }],
+            },
             tags={'Name': f"transactions-table-{environment_suffix}"}
         )
 
