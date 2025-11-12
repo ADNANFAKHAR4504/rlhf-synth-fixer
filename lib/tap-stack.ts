@@ -281,7 +281,7 @@ export class TapStack extends cdk.Stack {
         role: lambdaRole,
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
-        description: 'Processes trade data and manages sessions'
+        description: 'Processes trade data and manages sessions',
       }
     );
 
