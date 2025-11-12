@@ -25,7 +25,12 @@
     "IAM",
     "CloudWatchLogs"
   ],
-  "author": "aj-turing",
+  "author": "mayanksethi-turing",
   "region": "ap-southeast-2",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
