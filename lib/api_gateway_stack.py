@@ -75,12 +75,16 @@ class ApiGatewayStack(pulumi.ComponentResource):
         )
 
         # Create authorizer
+        # Get region name with fallback to avoid NoneType errors
+        region_result = aws.get_region()
+        region_name_output = Output.from_input(region_result.name if region_result.name else "us-east-1")
+        
         self.authorizer = aws.apigateway.Authorizer(
             f"api-authorizer-{self.environment_suffix}",
             name=f"custom-authorizer-{self.environment_suffix}",
             rest_api=self.rest_api.id,
             authorizer_uri=Output.all(
-                aws.get_region().name.apply(lambda name: name if name else "us-east-1"),
+                region_name_output,
                 args.authorizer_lambda_arn
             ).apply(
                 lambda args: f"arn:aws:apigateway:{args[0]}:lambda:path/2015-03-31/functions/{args[1]}/invocations"
@@ -247,7 +251,8 @@ class ApiGatewayStack(pulumi.ComponentResource):
 
         # API Gateway endpoint
         # Get region with fallback to avoid NoneType errors in tests
-        region_name = aws.get_region().name.apply(lambda name: name if name else "us-east-1")
+        region_result = aws.get_region()
+        region_name = Output.from_input(region_result.name if region_result.name else "us-east-1")
         self.api_endpoint = Output.all(
             self.rest_api.id,
             region_name,
