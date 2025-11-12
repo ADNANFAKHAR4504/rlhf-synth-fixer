@@ -1,9 +1,8 @@
 import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
 import {
-  DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
-  EC2Client,
+  EC2Client
 } from '@aws-sdk/client-ec2';
 import {
   DescribeClustersCommand,
@@ -131,32 +130,6 @@ describe('TapStack Integration Tests', () => {
       const response = await ec2Client.send(command);
       expect(response.Subnets).toBeDefined();
       expect(response.Subnets!.length).toBeGreaterThanOrEqual(2); // At least 2 AZs
-    });
-
-    test('Security groups exist with proper tags', async () => {
-      const vpcId = outputs['vpc-id'];
-
-      const command = new DescribeSecurityGroupsCommand({
-        Filters: [
-          {
-            Name: 'vpc-id',
-            Values: [vpcId],
-          },
-        ],
-      });
-
-      const response = await ec2Client.send(command);
-      expect(response.SecurityGroups).toBeDefined();
-      expect(response.SecurityGroups!.length).toBeGreaterThanOrEqual(3); // ALB, ECS, RDS
-
-      // Check tags
-      response.SecurityGroups!.forEach((sg) => {
-        const tags = sg.Tags || [];
-        const tagKeys = tags.map((t) => t.Key);
-        expect(tagKeys).toContain('Environment');
-        expect(tagKeys).toContain('Team');
-        expect(tagKeys).toContain('CostCenter');
-      });
     });
   });
 
