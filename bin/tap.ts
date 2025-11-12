@@ -35,10 +35,16 @@ const defaultTags = {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack('pulumi-infra', {
+const stack = new TapStack('pulumi-infra', {
   tags: defaultTags,
 });
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export stack outputs for integration tests and external consumption
+export const albDnsName = stack.albDnsName;
+export const vpcId = stack.vpcId;
+export const ecsClusterName = stack.ecsClusterName;
+export const ecsServiceName = stack.ecsServiceName;
+export const rdsClusterEndpoint = stack.rdsClusterEndpoint;
+export const rdsClusterReadEndpoint = stack.rdsClusterReadEndpoint;
+export const flowLogsBucketName = stack.flowLogsBucketName;
+export const rdsPasswordSecret = stack.rdsPasswordSecret;
