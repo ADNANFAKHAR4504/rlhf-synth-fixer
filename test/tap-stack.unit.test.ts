@@ -124,6 +124,16 @@ class MyMocks implements pulumi.runtime.Mocks {
   }
 
   call(args: pulumi.runtime.MockCallArgs) {
+    if (args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones') {
+      return {
+        names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+        zoneIds: ['use1-az1', 'use1-az2', 'use1-az3'],
+      };
+    }
+    if (args.token === 'aws:index/getRegion:getRegion') {
+      // Return a region for most tests
+      return { name: 'us-west-2' };
+    }
     return args.inputs;
   }
 }
@@ -1184,31 +1194,85 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
   });
 });
 
-// Second test suite to cover different branch - load without AWS_REGION
-describe('Payment Processing Infrastructure - Without AWS_REGION env var', () => {
+// Second test suite to cover aws.config.region branch
+describe('Payment Processing Infrastructure - With aws.config.region', () => {
   let indexModule2: any;
 
   beforeAll(() => {
     // Clear module cache to force re-import
     jest.resetModules();
 
-    // Ensure AWS_REGION is NOT set to test fallback branches
+    // Delete AWS_REGION to test aws.config.region branch
     delete process.env.AWS_REGION;
 
-    // Re-mock Pulumi runtime for this suite
-    pulumi.runtime.setMocks(new MyMocks());
+    // Mock with defined region
+    pulumi.runtime.setMocks({
+      newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string, state: any } {
+        const state = { ...args.inputs };
+        state.arn = `arn:aws:${args.type}:${args.name}`;
+        state.id = args.name + '_id';
+        return { id: state.id, state };
+      },
+      call: function (args: pulumi.runtime.MockCallArgs) {
+        if (args.token === 'aws:index/getRegion:getRegion') {
+          return { name: 'us-west-2' }; // Return a region to test second branch
+        }
+        return args.inputs;
+      },
+    });
 
-    // Import again - this will test aws.config.region || 'us-west-2' branches
+    // Import again - this will test aws.config.region branch
     indexModule2 = require('../index');
   });
 
-  it('should successfully create infrastructure without AWS_REGION env var', () => {
+  it('should successfully create infrastructure with aws.config.region', () => {
     expect(indexModule2).toBeDefined();
   });
 
   it('should have valid exports', () => {
     expect(indexModule2.vpcId).toBeDefined();
     expect(indexModule2.albDnsName).toBeDefined();
+  });
+});
+
+// Third test suite to cover default fallback branch
+describe('Payment Processing Infrastructure - Default region fallback', () => {
+  let indexModule3: any;
+
+  beforeAll(() => {
+    // Clear module cache to force re-import
+    jest.resetModules();
+
+    // Delete AWS_REGION to skip first branch
+    delete process.env.AWS_REGION;
+
+    // Mock with undefined region to test default fallback
+    pulumi.runtime.setMocks({
+      newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string, state: any } {
+        const state = { ...args.inputs };
+        state.arn = `arn:aws:${args.type}:${args.name}`;
+        state.id = args.name + '_id';
+        return { id: state.id, state };
+      },
+      call: function (args: pulumi.runtime.MockCallArgs) {
+        if (args.token === 'aws:index/getRegion:getRegion') {
+          return { name: undefined }; // Return undefined to test default fallback
+        }
+        return args.inputs;
+      },
+    });
+
+    // Import again - this will test default 'us-west-2' branch
+    indexModule3 = require('../index');
+  });
+
+  it('should successfully create infrastructure with default region', () => {
+    expect(indexModule3).toBeDefined();
+  });
+
+  it('should have valid exports with default region', () => {
+    expect(indexModule3.vpcId).toBeDefined();
+    expect(indexModule3.albDnsName).toBeDefined();
   });
 });
 
