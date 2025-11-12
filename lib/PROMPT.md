@@ -53,12 +53,8 @@ Create a containerized microservices platform using **AWS CDK with TypeScript** 
    - Access to S3 buckets for data processing
    - Access to SQS queues for worker tasks
 
-9. **Deployment Circuit Breaker**
-   - Automatic rollback on 50% task failure rate
-   - ECS service deployment circuit breaker enabled
-   - Proper health check configuration
 
-10. **CloudWatch Dashboards**
+9. **CloudWatch Dashboards**
     - Task count metrics for each service
     - CPU and memory utilization graphs
     - Error rate tracking and alarms
@@ -73,12 +69,15 @@ Create a containerized microservices platform using **AWS CDK with TypeScript** 
 - Use **CloudWatch** for logs and metrics
 - Use **X-Ray** for distributed tracing
 - Use **RDS Aurora PostgreSQL** in private subnets for database
+- No backup retention is required for the database.
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment-suffix}`
-- Deploy to **us-east-1** region
+- Deploy to **eu-central-1** region
 - VPC spans **3 availability zones** with private subnets for ECS tasks
 - Public subnets for Application Load Balancer
-- NAT gateways for outbound internet access
+- For Load balancing HTTPS/TLS is not required.
+- NAT gateways for outbound internet access and only 1 NAT gateway is required.
+- As per the requirement no VPC flow logs is required.
 
 ### Constraints
 
@@ -87,7 +86,6 @@ Create a containerized microservices platform using **AWS CDK with TypeScript** 
 - Configure auto-scaling based on both CPU and memory utilization metrics
 - Use AWS Secrets Manager for database credentials and API keys (fetch existing secrets, do not create)
 - Enable Container Insights and X-Ray tracing for all services
-- Implement circuit breaker pattern using ECS deployment configuration with 50% failure threshold
 - Deploy services across exactly 3 availability zones for high availability
 - All resources must be destroyable (no Retain deletion policies)
 - Include proper error handling and validation
@@ -105,10 +103,10 @@ Create a containerized microservices platform using **AWS CDK with TypeScript** 
 
 - Functionality: All three service types deploy successfully with proper task counts
 - Performance: Auto-scaling responds correctly to CPU and memory thresholds
-- Reliability: Circuit breaker prevents bad deployments, services span 3 AZs
 - Security: Task IAM roles follow least-privilege, secrets fetched from Secrets Manager
 - Resource Naming: All resources include environmentSuffix for unique identification
 - Monitoring: CloudWatch dashboards show metrics for all services
+- CloudWatch Alarms are not required as per the task requirement.
 - Service Discovery: Services can communicate via Cloud Map DNS names
 - Code Quality: TypeScript code with types, unit tested, well documented
 
@@ -123,7 +121,6 @@ Create a containerized microservices platform using **AWS CDK with TypeScript** 
 - CloudWatch log groups with 7-day retention
 - X-Ray sidecar configuration for distributed tracing
 - Task IAM roles with access to Secrets Manager, S3, and SQS
-- Deployment circuit breaker configuration
 - CloudWatch dashboards for monitoring
 - RDS Aurora PostgreSQL cluster in private subnets
 - VPC with 3 AZs, public and private subnets
@@ -200,5 +197,4 @@ The infrastructure is configured to deploy with ECS services at `desiredCount: 0
 ### Notes
 
 - The scheduled job service will run automatically via EventBridge without manual scaling
-- Circuit breaker is disabled to prevent automatic CloudFormation rollbacks during initial deployments
 - Auto-scaling will work once services are scaled up and container images are available
