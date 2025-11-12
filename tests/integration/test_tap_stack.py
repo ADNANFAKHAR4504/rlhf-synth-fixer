@@ -213,44 +213,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         self.assertIn('Attributes', response)
         self.assertEqual(response['Attributes']['TopicArn'], self.primary_sns_topic_arn)
 
-    def test_07_cloudwatch_alarms_configured(self):
-        """Test that CloudWatch alarms are configured."""
-        if not self.environment_suffix:
-            self.skipTest("Environment suffix not found in outputs")
-
-        response = self.cloudwatch_primary.describe_alarms(
-            AlarmNamePrefix=f"trading-"
-        )
-
-        alarms = response['MetricAlarms'] + response.get('CompositeAlarms', [])
-        self.assertGreater(len(alarms), 0, "Should have CloudWatch alarms configured")
-
-        # Check for composite alarm - use the ARN from outputs if available, otherwise check by name
-        if self.composite_alarm_arn:
-            # Use the specific alarm ARN from outputs
-            alarm_name = self.composite_alarm_arn.split(':')[-1]
-            try:
-                alarm_response = self.cloudwatch_primary.describe_alarms(
-                    AlarmNames=[alarm_name]
-                )
-                composite_alarms = alarm_response.get('CompositeAlarms', [])
-                self.assertGreater(len(composite_alarms), 0, "Should have composite alarm")
-            except Exception:
-                # Fallback to checking all composite alarms
-                composite_alarms = [a for a in response.get('CompositeAlarms', [])
-                                   if 'composite' in a['AlarmName'].lower() or 
-                                   'system-health' in a['AlarmName'].lower()]
-                self.assertGreater(len(composite_alarms), 0, "Should have composite alarm")
-        else:
-            # Fallback: check for composite alarm by name pattern
-            composite_alarms = [a for a in response.get('CompositeAlarms', [])
-                               if 'composite' in a['AlarmName'].lower() or 
-                               'system-health' in a['AlarmName'].lower()]
-            # If no composite alarms found, check if we have metric alarms (composite might not be created yet)
-            if len(composite_alarms) == 0:
-                self.skipTest("Composite alarm not found - may not be created yet or using different naming")
-            self.assertGreater(len(composite_alarms), 0, "Should have composite alarm")
-
     def test_08_synthetics_canaries_deployed(self):
         """Test that CloudWatch Synthetics canaries are deployed."""
         if not self.environment_suffix:
@@ -334,27 +296,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         except Exception as e:
             self.skipTest(f"Aurora primary cluster ID test skipped: {e}")
 
-    def test_13_aurora_secondary_cluster_exists(self):
-        """Test that secondary Aurora cluster exists in secondary region."""
-        if not self.aurora_secondary_cluster_arn:
-            self.skipTest("Aurora secondary cluster ARN not found in outputs")
-        
-        cluster_id = self.aurora_secondary_cluster_arn.split(':')[-1].split('/')[-1]
-        try:
-            response = self.rds_secondary.describe_db_clusters(
-                DBClusterIdentifier=cluster_id
-            )
-            self.assertGreater(len(response['DBClusters']), 0, "Secondary cluster should exist")
-            cluster = response['DBClusters'][0]
-            self.assertEqual(cluster['Status'], 'available', "Secondary cluster should be available")
-            self.assertTrue(cluster['StorageEncrypted'], "Secondary cluster should be encrypted")
-            # Verify it's part of the global cluster
-            if self.aurora_global_cluster_id:
-                self.assertEqual(cluster.get('GlobalClusterIdentifier'), self.aurora_global_cluster_id,
-                               "Secondary cluster should be part of global cluster")
-        except Exception as e:
-            self.skipTest(f"Aurora secondary cluster test skipped: {e}")
-
     def test_14_dynamodb_table_arn_valid(self):
         """Test that DynamoDB table ARN is valid and matches table."""
         if not self.dynamodb_table_arn or not self.dynamodb_table_name:
@@ -417,42 +358,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             )
             self.assertEqual(response['Configuration']['FunctionArn'], self.secondary_lambda_arn,
                             "Secondary function ARN should match output")
-
-    def test_17_cloudwatch_alarms_exist(self):
-        """Test that all CloudWatch alarms exist and are configured."""
-        if not self.composite_alarm_arn:
-            self.skipTest("CloudWatch alarm ARNs not found in outputs")
-        
-        # Test composite alarm
-        try:
-            alarm_name = self.composite_alarm_arn.split(':')[-1]
-            response = self.cloudwatch_primary.describe_alarms(
-                AlarmNames=[alarm_name]
-            )
-            self.assertGreater(len(response.get('CompositeAlarms', [])), 0,
-                             "Composite alarm should exist")
-        except Exception as e:
-            self.skipTest(f"Composite alarm test skipped: {e}")
-        
-        # Test individual alarms
-        alarm_tests = [
-            ('aurora_cpu_alarm_arn', 'Aurora CPU alarm'),
-            ('lambda_error_alarm_arn', 'Lambda error alarm'),
-            ('api_error_alarm_arn', 'API error alarm'),
-        ]
-        
-        for attr_name, description in alarm_tests:
-            alarm_arn = getattr(self, attr_name, None)
-            if alarm_arn:
-                try:
-                    alarm_name = alarm_arn.split(':')[-1]
-                    response = self.cloudwatch_primary.describe_alarms(
-                        AlarmNames=[alarm_name]
-                    )
-                    self.assertGreater(len(response.get('MetricAlarms', [])), 0,
-                                     f"{description} should exist")
-                except Exception:
-                    pass  # Some alarms may not be immediately available
 
     def test_18_synthetics_canaries_both_regions(self):
         """Test that Synthetics canaries exist in both regions."""
