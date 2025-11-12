@@ -144,6 +144,10 @@ def handler(event, context):
             tags={**tags, 'Name': f"failover-orchestrator-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=primary_provider)
         )
+        
+        # Initialize attributes immediately after function creation
+        self.failover_function_arn = self.failover_function.arn
+        self.failover_function_name = self.failover_function.name
 
         # EventBridge rule to trigger failover on composite alarm
         self.failover_rule = aws.cloudwatch.EventRule(
@@ -180,8 +184,6 @@ def handler(event, context):
             source_arn=self.failover_rule.arn,
             opts=ResourceOptions(parent=self, provider=primary_provider)
         )
-
-        self.failover_function_arn = self.failover_function.arn
 
         self.register_outputs({
             'failover_function_arn': self.failover_function.arn,
