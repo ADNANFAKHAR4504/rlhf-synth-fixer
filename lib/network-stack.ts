@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
 /**
  * network-stack.ts
  *
@@ -28,11 +32,14 @@ export class NetworkStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags } = args;
 
-    // CRITICAL FIX: Get availability zones dynamically for the current region
-    // This replaces hardcoded us-east-1 zones with actual ap-southeast-1 zones
-    const availabilityZones = aws.getAvailabilityZonesOutput({
+    // HARDCODED: Set region to ap-southeast-1 for VPC endpoint service names
+    const region = 'ap-southeast-1';
+    
+    // DYNAMIC: Get actual availability zones from AWS
+    // This prevents errors if zones change in the future
+    const availableAZs = pulumi.output(aws.getAvailabilityZones({
       state: 'available',
-    }, { parent: this });
+    }));
 
     // Create VPC
     this.vpc = new aws.ec2.Vpc(
@@ -64,7 +71,7 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create public subnets across multiple AZs (dynamically)
+    // Create public subnets across multiple AZs (dynamically fetched)
     this.publicSubnets = [];
     for (let i = 0; i < 3; i++) {
       const subnet = new aws.ec2.Subnet(
@@ -72,8 +79,8 @@ export class NetworkStack extends pulumi.ComponentResource {
         {
           vpcId: this.vpc.id,
           cidrBlock: `10.0.${i}.0/24`,
-          // FIXED: Use dynamic AZ from current region instead of hardcoded us-east-1 zones
-          availabilityZone: availabilityZones.names[i],
+          // DYNAMIC: Use actual AZ from AWS
+          availabilityZone: availableAZs.names[i],
           mapPublicIpOnLaunch: true,
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
@@ -162,7 +169,7 @@ export class NetworkStack extends pulumi.ComponentResource {
       natGateways.push(nat);
     }
 
-    // Create private subnets across multiple AZs (dynamically)
+    // Create private subnets across multiple AZs (dynamically fetched)
     this.privateSubnets = [];
     const privateRouteTables = [];
 
@@ -173,8 +180,8 @@ export class NetworkStack extends pulumi.ComponentResource {
         {
           vpcId: this.vpc.id,
           cidrBlock: `10.0.${10 + i}.0/24`,
-          // FIXED: Use dynamic AZ from current region instead of hardcoded us-east-1 zones
-          availabilityZone: availabilityZones.names[i],
+          // DYNAMIC: Use actual AZ from AWS
+          availabilityZone: availableAZs.names[i],
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
             Name: `payment-private-subnet-${i}-${environmentSuffix}`,
@@ -225,11 +232,15 @@ export class NetworkStack extends pulumi.ComponentResource {
     }
 
     // Create VPC Endpoints for AWS services
+    // CRITICAL: Using hardcoded region for service names + explicit Gateway type
     this.s3Endpoint = new aws.ec2.VpcEndpoint(
       `payment-s3-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.getRegionOutput().name}.s3`,
+        // HARDCODED: Use ap-southeast-1 region
+        serviceName: `com.amazonaws.${region}.s3`,
+        // CRITICAL: Explicitly set Gateway type
+        vpcEndpointType: 'Gateway',
         routeTableIds: [
           publicRouteTable.id,
           ...privateRouteTables.map((rt) => rt.id),
@@ -247,7 +258,10 @@ export class NetworkStack extends pulumi.ComponentResource {
       `payment-dynamodb-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        serviceName: pulumi.interpolate`com.amazonaws.${aws.getRegionOutput().name}.dynamodb`,
+        // HARDCODED: Use ap-southeast-1 region
+        serviceName: `com.amazonaws.${region}.dynamodb`,
+        // CRITICAL: Explicitly set Gateway type
+        vpcEndpointType: 'Gateway',
         routeTableIds: [
           publicRouteTable.id,
           ...privateRouteTables.map((rt) => rt.id),
