@@ -1,0 +1,22 @@
+{
+  "po_id": "r7u57r",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "category": "disaster-recovery",
+  "subcategory": "multi-region-dr",
+  "description": "Disaster Recovery Infrastructure with Aurora, DynamoDB, Lambda, API Gateway, and monitoring",
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "DynamoDB",
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ]
+}

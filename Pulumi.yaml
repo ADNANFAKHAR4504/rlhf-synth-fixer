@@ -1,0 +1,3 @@
+name: TapStack
+runtime: python
+description: Disaster Recovery Infrastructure with Aurora, DynamoDB, Lambda, and API Gateway
