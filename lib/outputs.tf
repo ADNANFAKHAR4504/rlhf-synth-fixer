@@ -166,17 +166,17 @@ output "config_rule_arns" {
 output "infrastructure_summary" {
   description = "Summary of the zero-trust security infrastructure"
   value = {
-    vpc_id                     = aws_vpc.main.id
-    kms_key_arn               = aws_kms_key.main.arn
-    vpc_endpoint_count        = 4
-    private_subnet_count      = length(aws_subnet.private)
-    s3_buckets_count          = 3
-    s3_bucket_policies_count  = 3
-    iam_roles_count           = 2
-    config_rules_count        = 3
-    log_groups_count          = 2
-    deployment_region         = var.aws_region
-    environment               = var.environment
+    vpc_id                   = aws_vpc.main.id
+    kms_key_arn              = aws_kms_key.main.arn
+    vpc_endpoint_count       = 4
+    private_subnet_count     = length(aws_subnet.private)
+    s3_buckets_count         = 3
+    s3_bucket_policies_count = 3
+    iam_roles_count          = 2
+    config_rules_count       = 3
+    log_groups_count         = 2
+    deployment_region        = var.aws_region
+    environment              = var.environment
   }
 }
 
@@ -190,11 +190,11 @@ output "config_recorder_status" {
 output "security_enhancements" {
   description = "Summary of security enhancements implemented"
   value = {
-    config_bucket_encrypted     = true
-    config_bucket_versioned    = true
-    config_recorder_enabled    = aws_config_configuration_recorder_status.main.is_enabled
-    s3_buckets_enforce_ssl     = true
-    vpc_endpoints_restricted   = true
-    kms_policy_restrictive     = true
+    config_bucket_encrypted  = true
+    config_bucket_versioned  = true
+    config_recorder_enabled  = aws_config_configuration_recorder_status.main.is_enabled
+    s3_buckets_enforce_ssl   = true
+    vpc_endpoints_restricted = true
+    kms_policy_restrictive   = true
   }
 }

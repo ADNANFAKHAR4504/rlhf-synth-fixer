@@ -492,10 +492,10 @@ resource "aws_s3_bucket_policy" "application_data" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.application_data.arn,
           "${aws_s3_bucket.application_data.arn}/*"
@@ -507,11 +507,11 @@ resource "aws_s3_bucket_policy" "application_data" {
         }
       },
       {
-        Sid    = "DenyUnencryptedObjectUploads"
-        Effect = "Deny"
+        Sid       = "DenyUnencryptedObjectUploads"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.application_data.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.application_data.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -530,10 +530,10 @@ resource "aws_s3_bucket_policy" "audit_logs" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.audit_logs.arn,
           "${aws_s3_bucket.audit_logs.arn}/*"
@@ -545,11 +545,11 @@ resource "aws_s3_bucket_policy" "audit_logs" {
         }
       },
       {
-        Sid    = "DenyUnencryptedObjectUploads"
-        Effect = "Deny"
+        Sid       = "DenyUnencryptedObjectUploads"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:PutObject"
-        Resource = "${aws_s3_bucket.audit_logs.arn}/*"
+        Action    = "s3:PutObject"
+        Resource  = "${aws_s3_bucket.audit_logs.arn}/*"
         Condition = {
           StringNotEquals = {
             "s3:x-amz-server-side-encryption" = "aws:kms"
@@ -773,9 +773,6 @@ resource "aws_s3_bucket_policy" "config" {
       }
     ]
   })
-}
-
-  ])
 }
 
 # Config bucket encryption configuration
