@@ -170,9 +170,9 @@ class TestTapStack(unittest.TestCase):
             self.assertEqual(outputs["subnet_1_cidr"], "10.0.1.0/24")
             self.assertEqual(outputs["subnet_2_cidr"], "10.0.2.0/24")
             self.assertEqual(outputs["subnet_3_cidr"], "10.0.3.0/24")
-            self.assertEqual(outputs["subnet_1_az"], "us-east-2a")
-            self.assertEqual(outputs["subnet_2_az"], "us-east-2b")
-            self.assertEqual(outputs["subnet_3_az"], "us-east-2c")
+            self.assertEqual(outputs["subnet_1_az"], "us-east-1a")
+            self.assertEqual(outputs["subnet_2_az"], "us-east-1b")
+            self.assertEqual(outputs["subnet_3_az"], "us-east-1c")
 
         return result.apply(validate)
 
@@ -362,8 +362,8 @@ class TestTapStack(unittest.TestCase):
         return result.apply(validate)
 
     @pulumi.runtime.test
-    def test_region_is_us_east_2(self):
-        """Test region is correctly set to us-east-2 as required by task"""
+    def test_region_is_us_east_1(self):
+        """Test region is correctly set to us-east-1 for deployment"""
 
         def check_region(args):
             stack = TapStack(
@@ -374,7 +374,7 @@ class TestTapStack(unittest.TestCase):
         result = pulumi.Output.all().apply(check_region)
 
         def validate(outputs):
-            self.assertEqual(outputs["region"], "us-east-2")
+            self.assertEqual(outputs["region"], "us-east-1")
 
         return result.apply(validate)
 
