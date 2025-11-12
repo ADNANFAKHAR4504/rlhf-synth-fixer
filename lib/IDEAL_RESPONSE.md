@@ -10,6 +10,30 @@ Every non-Markdown file under `lib/` (excluding Terraform provider binaries/stat
 # Authentication: AWS OIDC (no static keys)
 # Platform: EKS, RDS Aurora, ElastiCache, Cognito
 
+# ==================== OIDC CONTEXT REQUIREMENTS ====================
+
+# Required CircleCI Contexts and Environment Variables:
+#
+# aws-dev (Development Environment):
+#   - OIDC_ROLE_ARN_DEV: AWS IAM Role ARN for OIDC authentication in dev environment
+#   - AWS_DEFAULT_REGION: AWS region for all deployments
+#   - CLUSTER_NAME: EKS cluster name prefix (e.g., 'saas-platform')
+#   - ECR_REGISTRY: ECR registry URL for container images
+#   - PRIVATE_REGISTRY: Private Docker registry URL for base images
+#   - TENANT_ID: Default tenant identifier for dev deployments
+#   - HOSTED_ZONE_ID: Route53 hosted zone ID for DNS management
+#   - DATADOG_API_KEY: Datadog API key for monitoring
+#   - SENTRY_DSN: Sentry DSN for error tracking
+#
+# aws-staging (Staging Environment):
+#   - OIDC_ROLE_ARN_STAGING: AWS IAM Role ARN for staging environment
+#   - (Same variables as dev, with environment-specific values)
+#
+# aws-prod (Production Environment):
+#   - OIDC_ROLE_ARN_PROD: AWS IAM Role ARN for production environment
+#   - (Same variables as dev, with environment-specific values)
+#
+
 version: 2.1
 
 # ==================== ORBS ====================
@@ -232,6 +256,8 @@ jobs:
         type: string
     steps:
       - checkout
+      # Environment-specific OIDC role ARN selection for secure authentication
+      # Each environment uses a dedicated IAM role with principle of least privilege
       - when:
           condition:
             equal: [dev, << parameters.environment >>]
@@ -424,6 +450,12 @@ jobs:
               --set image.tag=${CIRCLE_SHA1} \
               --wait --timeout 10m
       - run:
+          name: Health check after deployment
+          command: ./scripts/health-check.sh dev
+          timeout: 300
+          on_fail:
+            run: ./scripts/rollback-dev.sh
+      - run:
           name: Configure tenant isolation
           command: |
             ./scripts/configure-tenant-isolation.sh dev ${TENANT_ID}
@@ -442,6 +474,12 @@ jobs:
           name: Deploy blue-green to staging
           command: |
             ./scripts/deploy-blue-green.sh staging ${CIRCLE_SHA1}
+      - run:
+          name: Health check after deployment
+          command: ./scripts/health-check.sh staging
+          timeout: 300
+          on_fail:
+            run: ./scripts/rollback-staging.sh
       - run:
           name: Validate deployment
           command: |
@@ -468,6 +506,9 @@ jobs:
       - setup-tenant-context:
           tenant-id: "${TENANT_ID}"
           environment: "production"
+      # Deployment strategy selection: rolling update vs canary deployment
+      # Rolling: Immediate full deployment with zero-downtime rolling update
+      # Canary: Gradual traffic shifting with health checks and monitoring
       - when:
           condition:
             equal: [rolling, << parameters.deployment-type >>]
@@ -479,10 +520,18 @@ jobs:
                     api-gateway=${ECR_REGISTRY}/api-gateway:${CIRCLE_SHA1} \
                     --record
                   kubectl rollout status deployment/api-gateway
+            - run:
+                name: Health check after rolling update
+                command: ./scripts/health-check.sh production
+                timeout: 300
+                on_fail:
+                  run: ./scripts/rollback-production.sh application
       - when:
           condition:
             equal: [canary, << parameters.deployment-type >>]
           steps:
+            # Canary deployment process: Gradual traffic increase with monitoring
+            # 10% -> 50% -> 100% traffic shift with health checks and audits at each stage
             - run:
                 name: Canary deployment 10%
                 command: |
@@ -491,6 +540,8 @@ jobs:
                 name: Health check after 10%
                 command: |
                   ./scripts/health-check.sh production
+                on_fail:
+                  run: ./scripts/rollback-production.sh application
             - run:
                 name: Audit after 10%
                 command: |
@@ -506,6 +557,8 @@ jobs:
                 name: Health check after 50%
                 command: |
                   ./scripts/health-check.sh production
+                on_fail:
+                  run: ./scripts/rollback-production.sh application
             - run:
                 name: Audit after 50%
                 command: |
@@ -521,6 +574,8 @@ jobs:
                 name: Final health check
                 command: |
                   ./scripts/health-check.sh production
+                on_fail:
+                  run: ./scripts/rollback-production.sh application
             - run:
                 name: Final audit
                 command: |
@@ -546,6 +601,8 @@ jobs:
           name: API validation
           command: |
             npm run test:api:<< parameters.environment >>
+          on_fail:
+            run: ./scripts/rollback-validation-failure.sh << parameters.environment >>
       - run:
           name: Tenant isolation check
           command: |
@@ -563,6 +620,8 @@ jobs:
         type: string
     steps:
       - checkout
+      # Environment-specific OIDC role ARN selection for secure authentication
+      # Each environment uses a dedicated IAM role with principle of least privilege
       - when:
           condition:
             equal: [dev, << parameters.environment >>]
@@ -615,6 +674,8 @@ jobs:
           name: Run smoke tests
           command: |
             npm run test:smoke:<< parameters.environment >>
+          on_fail:
+            run: ./scripts/rollback-smoke-failure.sh << parameters.environment >>
       - store_test_results:
           path: reports/smoke
       - store_artifacts:
@@ -629,6 +690,8 @@ jobs:
         type: string
     steps:
       - checkout
+      # Environment-specific OIDC role ARN selection for secure authentication
+      # Each environment uses a dedicated IAM role with principle of least privilege
       - when:
           condition:
             equal: [dev, << parameters.environment >>]
@@ -681,6 +744,8 @@ jobs:
         enum: ["application", "infrastructure", "full"]
     steps:
       - checkout
+      # Environment-specific OIDC role ARN selection for secure authentication
+      # Each environment uses a dedicated IAM role with principle of least privilege
       - when:
           condition:
             equal: [dev, << parameters.environment >>]
@@ -700,6 +765,10 @@ jobs:
             - assume-aws-role:
                 role-arn: ${OIDC_ROLE_ARN_PROD}
       - install-kubectl
+      # Rollback scope selection based on rollback-type parameter
+      # application: Rollback only application deployments
+      # infrastructure: Rollback only infrastructure changes
+      # full: Complete rollback of both application and infrastructure
       - when:
           condition:
             or:
@@ -995,4 +1064,5 @@ workflows:
           context: aws-prod
           requires:
             - hold-rollback
+
 ```
