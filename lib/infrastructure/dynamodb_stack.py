@@ -32,7 +32,7 @@ class DynamoDBStack(pulumi.ComponentResource):
         # DynamoDB Global Table
         self.table = aws.dynamodb.Table(
             f"trading-sessions-{environment_suffix}",
-            name=f"trading-sessions-{environment_suffix}",
+            name=f"trading-sessions-{environment_suffix}-new",
             billing_mode="PAY_PER_REQUEST",
             hash_key="sessionId",
             range_key="timestamp",

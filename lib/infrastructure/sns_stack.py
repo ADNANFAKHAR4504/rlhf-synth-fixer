@@ -38,7 +38,7 @@ class SnsStack(pulumi.ComponentResource):
         # Primary SNS topic
         self.primary_topic = aws.sns.Topic(
             f"trading-alerts-primary-{environment_suffix}",
-            name=f"trading-alerts-primary-{environment_suffix}",
+            name=f"trading-alerts-primary-{environment_suffix}-new",
             display_name="Trading Platform Alerts - Primary",
             tags={**tags, 'Name': f"trading-alerts-primary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=primary_provider)
@@ -47,7 +47,7 @@ class SnsStack(pulumi.ComponentResource):
         # Secondary SNS topic
         self.secondary_topic = aws.sns.Topic(
             f"trading-alerts-secondary-{environment_suffix}",
-            name=f"trading-alerts-secondary-{environment_suffix}",
+            name=f"trading-alerts-secondary-{environment_suffix}-new",
             display_name="Trading Platform Alerts - Secondary",
             tags={**tags, 'Name': f"trading-alerts-secondary-{environment_suffix}"},
             opts=ResourceOptions(parent=self, provider=secondary_provider)

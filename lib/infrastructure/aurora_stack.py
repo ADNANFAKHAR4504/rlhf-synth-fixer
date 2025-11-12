@@ -97,7 +97,7 @@ class AuroraStack(pulumi.ComponentResource):
         # BUG #9: Hardcoded password instead of Secrets Manager
         self.primary_cluster = aws.rds.Cluster(
             f"trading-cluster-primary-{environment_suffix}",
-            cluster_identifier=f"trading-cluster-primary-{environment_suffix}",
+            cluster_identifier=f"trading-cluster-primary-{environment_suffix}-new",
             engine="aurora-postgresql",
             engine_version="14.6",  # Must match global cluster
             database_name="trading",
@@ -177,7 +177,7 @@ class AuroraStack(pulumi.ComponentResource):
         # If the cluster already exists with skip_final_snapshot=False, it must be updated first
         self.secondary_cluster = aws.rds.Cluster(
             f"trading-cluster-secondary-{environment_suffix}",
-            cluster_identifier=f"trading-cluster-secondary-{environment_suffix}",
+            cluster_identifier=f"trading-cluster-secondary-{environment_suffix}-new",
             engine="aurora-postgresql",
             engine_version="14.6",
             db_subnet_group_name=self.secondary_subnet_group.name,
