@@ -1,0 +1,8 @@
+name: TapStack
+runtime: nodejs
+description: Secure payment processing infrastructure with PCI DSS compliance
+config:
+  environmentSuffix:
+    type: string
+    description: Unique suffix for resource naming to avoid conflicts
+    default: dev
