@@ -313,7 +313,7 @@ class TapStack(TerraformStack):
             self,
             f"transactions_table_{environment_suffix}",
             name=f"transactions-{environment_suffix}",
-            billing_mode="ON_DEMAND",
+            billing_mode="PAY_PER_REQUEST",
             hash_key="transactionId",
             attribute=[
                 {"name": "transactionId", "type": "S"},
