@@ -44,6 +44,18 @@ export class TapStack extends cdk.Stack {
       ],
     });
 
+    // VPC Flow Logs
+    const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
+      logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    vpc.addFlowLog('VpcFlowLogs', {
+      destination: ec2.FlowLogDestination.toCloudWatchLogs(flowLogGroup),
+      trafficType: ec2.FlowLogTrafficType.ALL,
+    });
+
     // KMS Keys (fixed: removed hardcoded alias parameter)
     const dbEncryptionKey = new kms.Key(this, 'DbEncryptionKey', {
       enableKeyRotation: true,
@@ -128,7 +140,30 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // S3 Buckets (fixed: added autoDeleteObjects, removalPolicy, and enforceSSL)
+    // S3 Logging Bucket for access logs
+    const loggingBucket = new s3.Bucket(this, 'LoggingBucket', {
+      bucketName: `logs-${environmentSuffix}-${this.account}`,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: s3EncryptionKey,
+      enforceSSL: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      lifecycleRules: [
+        {
+          enabled: true,
+          transitions: [
+            {
+              storageClass: s3.StorageClass.GLACIER,
+              transitionAfter: cdk.Duration.days(30),
+            },
+          ],
+          expiration: cdk.Duration.days(365),
+        },
+      ],
+    });
+
+    // S3 Buckets (fixed: added autoDeleteObjects, removalPolicy, enforceSSL, and access logging)
     const ingestionBucket = new s3.Bucket(this, 'IngestionBucket', {
       bucketName: `trading-ingestion-${environmentSuffix}-${this.account}`,
       encryption: s3.BucketEncryption.KMS,
@@ -136,6 +171,8 @@ export class TapStack extends cdk.Stack {
       versioned: true,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      serverAccessLogsBucket: loggingBucket,
+      serverAccessLogsPrefix: 'ingestion/',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       lifecycleRules: [
@@ -158,6 +195,8 @@ export class TapStack extends cdk.Stack {
       versioned: true,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      serverAccessLogsBucket: loggingBucket,
+      serverAccessLogsPrefix: 'analytics/',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       lifecycleRules: [
@@ -180,6 +219,8 @@ export class TapStack extends cdk.Stack {
       versioned: true,
       enforceSSL: true,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      serverAccessLogsBucket: loggingBucket,
+      serverAccessLogsPrefix: 'archival/',
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
       lifecycleRules: [
@@ -228,12 +269,7 @@ export class TapStack extends cdk.Stack {
         functionName: `data-processor-${environmentSuffix}`,
         runtime: lambda.Runtime.NODEJS_18_X,
         handler: 'index.handler',
-        code: lambda.Code.fromInline(`
-        exports.handler = async (event) => {
-          console.log('Processing data:', JSON.stringify(event));
-          return { statusCode: 200, body: 'Data processed successfully' };
-        };
-      `),
+        code: lambda.Code.fromAsset('lib/lambda/data-processor'),
         architecture: lambda.Architecture.ARM_64,
         environment: {
           ENVIRONMENT: environmentSuffix,
@@ -243,6 +279,9 @@ export class TapStack extends cdk.Stack {
         environmentEncryption: lambdaEncryptionKey,
         logRetention: logs.RetentionDays.ONE_MONTH,
         role: lambdaRole,
+        timeout: cdk.Duration.seconds(30),
+        memorySize: 512,
+        description: 'Processes trade data and manages sessions'
       }
     );
 
