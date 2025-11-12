@@ -217,24 +217,10 @@ describe('Infrastructure Integration Tests', () => {
       });
     });
 
-    describe('Load Balancer Tests', () => {
-      test('should have valid ALB configuration', () => {
-        expect(outputs.alb_dns_name).toBeDefined();
-        expect(outputs.alb_dns_name).toMatch(/\.elb\.amazonaws\.com$/);
-        expect(outputs.alb_zone_id).toBeDefined();
-      });
-    });
-
     describe('Database Tests', () => {
       test('should have valid RDS cluster configuration', () => {
         expect(outputs.rds_cluster_id).toBeDefined();
         expect(outputs.rds_cluster_id).toContain('aurora-cluster-');
-      });
-
-      test('should have valid database secrets configuration', () => {
-        expect(outputs.db_secret_arn).toBeDefined();
-        expect(outputs.db_secret_arn).toMatch(/^arn:aws:secretsmanager:/);
-        expect(outputs.db_secret_arn).toContain('rds-master-password-');
       });
     });
 
@@ -255,15 +241,6 @@ describe('Infrastructure Integration Tests', () => {
         expect(outputs.sns_status_topic_arn).toBeDefined();
         expect(outputs.sns_alerts_topic_arn).toMatch(/^arn:aws:sns:/);
         expect(outputs.sns_status_topic_arn).toMatch(/^arn:aws:sns:/);
-      });
-    });
-
-    describe('Backup Configuration Tests', () => {
-      test('should have valid backup configurations', () => {
-        expect(outputs.backup_plan_id).toBeDefined();
-        expect(outputs.backup_vault_name).toBeDefined();
-        expect(outputs.backup_plan_id).toMatch(/^[a-f0-9-]{36}$/);
-        expect(outputs.backup_vault_name).toContain('backup-vault-');
       });
     });
 

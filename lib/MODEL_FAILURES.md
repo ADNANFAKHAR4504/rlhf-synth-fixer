@@ -4,13 +4,10 @@
 
 Task 101000886 required creating a production-ready migration infrastructure using Terraform HCL for a financial services trading application moving from on-premises to AWS. This analysis compares MODEL_RESPONSE.md (initial generation) with IDEAL_RESPONSE.md (corrected version) to identify training opportunities.
 
-## Critical Failures
-
 ### 1. Hardcoded Environment Values in Default Tags
 
-**Impact Level**: Critical
-
 **MODEL_RESPONSE Issue**:
+
 ```hcl
 provider "aws" {
   region = var.aws_region
@@ -28,6 +25,7 @@ provider "aws" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 provider "aws" {
   region = var.aws_region
@@ -47,12 +45,6 @@ provider "aws" {
 
 **AWS Documentation Reference**: [Terraform AWS Provider Default Tags](https://registry.terraform.io/providers/hashicorp/aws/latest/docs#default_tags)
 
-**Cost/Security/Performance Impact**:
-- **Destroyability**: CRITICAL - Resources tagged with "production" might be protected from deletion in some AWS accounts
-- **Multi-Environment**: CRITICAL - Cannot deploy to multiple environments (dev, staging, prod) simultaneously
-- **Resource Tracking**: HIGH - Incorrect tagging makes resource filtering and cost allocation inaccurate
-- **Compliance**: MEDIUM - May violate organizational tagging policies
-
 ---
 
 ### 2. Hardcoded Environment Values in AWS Backup Tags
@@ -60,6 +52,7 @@ provider "aws" {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
+
 ```hcl
 resource "aws_backup_plan" "main" {
   name = "backup-plan-${var.environment_suffix}"
@@ -79,6 +72,7 @@ resource "aws_backup_plan" "main" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 resource "aws_backup_plan" "main" {
   name = "backup-plan-${var.environment_suffix}"
@@ -100,6 +94,7 @@ resource "aws_backup_plan" "main" {
 **Root Cause**: The model hardcoded "production" in backup recovery point tags, which would incorrectly label all backup snapshots as production regardless of the actual environment being backed up.
 
 **Cost/Security/Performance Impact**:
+
 - **Backup Identification**: HIGH - Recovery points tagged incorrectly could lead to restoring wrong environment's data
 - **Compliance**: HIGH - Backup retention policies may differ by environment; incorrect tags could violate compliance
 - **Cost Tracking**: MEDIUM - Backup costs cannot be properly attributed to correct environment
@@ -111,6 +106,7 @@ resource "aws_backup_plan" "main" {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
+
 ```hcl
 resource "aws_backup_selection" "rds" {
   name         = "backup-selection-rds-${var.environment_suffix}"
@@ -130,6 +126,7 @@ resource "aws_backup_selection" "rds" {
 ```
 
 **IDEAL_RESPONSE Fix**:
+
 ```hcl
 resource "aws_backup_selection" "rds" {
   name         = "backup-selection-rds-${var.environment_suffix}"
@@ -152,17 +149,12 @@ resource "aws_backup_selection" "rds" {
 
 **AWS Documentation Reference**: [AWS Backup Selection](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/backup_selection)
 
-**Cost/Security/Performance Impact**:
-- **Backup Failure**: CRITICAL - Backup selection would not match any resources, leaving RDS cluster unprotected
-- **Data Loss Risk**: CRITICAL - No backups being created for RDS cluster due to tag mismatch
-- **Compliance**: CRITICAL - Required backup policies would not be enforced
-
 ---
 
 ## Summary
 
 ### Total Failures by Severity:
-- **Critical**: 1 (hardcoded environment in provider default_tags)
+
 - **High**: 2 (hardcoded environment in backup configuration)
 - **Medium**: 0
 - **Low**: 0
@@ -182,6 +174,7 @@ resource "aws_backup_selection" "rds" {
 While the overall infrastructure code quality is excellent (correct services, proper architecture, security best practices), these hardcoded environment values represent a critical pattern that must be corrected:
 
 **What the model did well:**
+
 - ✅ All 17 AWS services implemented correctly
 - ✅ Complex migration architecture (DMS, weighted routing, rollback automation)
 - ✅ Security best practices (encryption, Secrets Manager, least privilege IAM)
@@ -191,14 +184,10 @@ While the overall infrastructure code quality is excellent (correct services, pr
 - ✅ Comprehensive monitoring and alerting
 - ✅ Proper VPC architecture with 3 AZs
 
-**Critical training need:**
-- ❌ Inconsistent use of environment_suffix vs. hardcoded "production"
-- ❌ Provider default_tags using static value instead of variable
-- ❌ Backup configuration using hardcoded tags instead of dynamic values
-
 ### Architectural Complexity: **Category A (Major/Architectural)**
 
 This task demonstrates mastery of:
+
 - Multi-service AWS integration (17 services)
 - Production migration patterns (blue-green, DMS, weighted routing)
 - Operational excellence (monitoring, backup, automated rollback)

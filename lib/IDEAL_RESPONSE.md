@@ -4,8 +4,7 @@ This Terraform configuration orchestrates a production-ready migration from on-p
 
 ## File: variables.tf
 
-```hcl
-variable "environment_suffix" {
+```hclvariable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid conflicts"
   type        = string
 }
@@ -147,11 +146,10 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment    = "production"
+      Environment    = var.environment_suffix
       Project        = var.project_name
       MigrationPhase = var.migration_phase
       ManagedBy      = "Terraform"
-      Suffix         = var.environment_suffix
     }
   }
 }
@@ -595,7 +593,7 @@ resource "aws_rds_cluster" "main" {
   backup_retention_period      = 30
   preferred_backup_window      = "03:00-04:00"
   preferred_maintenance_window = "mon:04:00-mon:05:00"
-  
+
   storage_encrypted = true
   kms_key_id        = aws_kms_key.rds.arn
 
@@ -711,15 +709,15 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 ```hcl
 # DMS Replication Instance
 resource "aws_dms_replication_instance" "main" {
-  replication_instance_id   = "dms-replication-${var.environment_suffix}"
+  replication_instance_id    = "dms-replication-${var.environment_suffix}"
   replication_instance_class = "dms.t3.medium"
   allocated_storage          = 100
-  
-  engine_version               = "3.5.2"
-  multi_az                     = true
-  publicly_accessible          = false
-  replication_subnet_group_id  = aws_dms_replication_subnet_group.main.id
-  vpc_security_group_ids       = [aws_security_group.dms.id]
+
+  engine_version              = "3.5.2"
+  multi_az                    = true
+  publicly_accessible         = false
+  replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
+  vpc_security_group_ids      = [aws_security_group.dms.id]
 
   auto_minor_version_upgrade = true
   apply_immediately          = false
@@ -735,11 +733,11 @@ resource "aws_dms_endpoint" "source" {
   endpoint_type = "source"
   engine_name   = "postgres"
 
-  server_name = var.dms_source_endpoint
-  port        = 5432
+  server_name   = var.dms_source_endpoint
+  port          = 5432
   database_name = var.dms_source_db_name
-  username    = jsondecode(aws_secretsmanager_secret_version.dms_source_credentials.secret_string)["username"]
-  password    = jsondecode(aws_secretsmanager_secret_version.dms_source_credentials.secret_string)["password"]
+  username      = jsondecode(aws_secretsmanager_secret_version.dms_source_credentials.secret_string)["username"]
+  password      = jsondecode(aws_secretsmanager_secret_version.dms_source_credentials.secret_string)["password"]
 
   ssl_mode = "require"
 
@@ -754,11 +752,11 @@ resource "aws_dms_endpoint" "target" {
   endpoint_type = "target"
   engine_name   = "aurora-postgresql"
 
-  server_name = aws_rds_cluster.main.endpoint
-  port        = 5432
+  server_name   = aws_rds_cluster.main.endpoint
+  port          = 5432
   database_name = aws_rds_cluster.main.database_name
-  username    = var.db_master_username
-  password    = random_password.db_password.result
+  username      = var.db_master_username
+  password      = random_password.db_password.result
 
   ssl_mode = "require"
 
@@ -771,7 +769,7 @@ resource "aws_dms_endpoint" "target" {
 resource "aws_dms_replication_task" "main" {
   replication_task_id = "dms-task-${var.environment_suffix}"
   migration_type      = "full-load-and-cdc"
-  
+
   replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
   source_endpoint_arn      = aws_dms_endpoint.source.endpoint_arn
   target_endpoint_arn      = aws_dms_endpoint.target.endpoint_arn
@@ -793,12 +791,12 @@ resource "aws_dms_replication_task" "main" {
 
   replication_task_settings = jsonencode({
     TargetMetadata = {
-      TargetSchema          = ""
-      SupportLobs           = true
-      FullLobMode           = false
-      LobChunkSize          = 64
-      LimitedSizeLobMode    = true
-      LobMaxSize            = 32
+      TargetSchema       = ""
+      SupportLobs        = true
+      FullLobMode        = false
+      LobChunkSize       = 64
+      LimitedSizeLobMode = true
+      LobMaxSize         = 32
     }
     FullLoadSettings = {
       TargetTablePrepMode = "DROP_AND_CREATE"
@@ -986,13 +984,12 @@ resource "aws_ecs_service" "app" {
 
   health_check_grace_period_seconds = 60
 
-  deployment_configuration {
-    maximum_percent         = 200
-    minimum_healthy_percent = 100
-    deployment_circuit_breaker {
-      enable   = true
-      rollback = true
-    }
+  deployment_maximum_percent         = 200
+  deployment_minimum_healthy_percent = 100
+
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
   }
 
   enable_execute_command = true
@@ -1719,12 +1716,12 @@ resource "aws_lambda_function" "rollback" {
 
   environment {
     variables = {
-      ROUTE53_ZONE_ID     = aws_route53_zone.main.zone_id
-      RECORD_NAME         = "app.${var.route53_zone_name}"
-      AWS_SET_IDENTIFIER  = "aws-${var.environment_suffix}"
-      ONPREM_ENDPOINT     = var.onpremises_endpoint
-      SNS_TOPIC_ARN       = aws_sns_topic.migration_alerts.arn
-      ENVIRONMENT_SUFFIX  = var.environment_suffix
+      ROUTE53_ZONE_ID    = aws_route53_zone.main.zone_id
+      RECORD_NAME        = "app.${var.route53_zone_name}"
+      AWS_SET_IDENTIFIER = "aws-${var.environment_suffix}"
+      ONPREM_ENDPOINT    = var.onpremises_endpoint
+      SNS_TOPIC_ARN      = aws_sns_topic.migration_alerts.arn
+      ENVIRONMENT_SUFFIX = var.environment_suffix
     }
   }
 
@@ -1962,7 +1959,7 @@ resource "aws_backup_plan" "main" {
     }
 
     recovery_point_tags = {
-      Environment = "production"
+      Environment = var.environment_suffix
       Project     = var.project_name
       BackupType  = "daily"
     }
@@ -2018,7 +2015,7 @@ resource "aws_backup_selection" "rds" {
   selection_tag {
     type  = "STRINGEQUALS"
     key   = "Environment"
-    value = "production"
+    value = var.environment_suffix
   }
 }
 

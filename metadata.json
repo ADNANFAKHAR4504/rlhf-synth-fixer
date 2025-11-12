@@ -2,7 +2,6 @@
   "platform": "tf",
   "language": "hcl",
   "complexity": "hard",
-  "turn_type": "single",
   "po_id": "101000886",
   "team": "synth",
   "startedAt": "2025-11-10T08:52:19+00:00",
