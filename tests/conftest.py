@@ -14,6 +14,21 @@ def mock_aws_region():
 
 
 @pytest.fixture
+def mock_backend_setup():
+    """Mock the setup_backend_infrastructure method to avoid real AWS calls during tests"""
+    with patch('lib.tap_stack.TapStack.setup_backend_infrastructure', return_value=None):
+        yield
+
+
+@pytest.fixture
+def mock_lambda_bundle():
+    """Mock the bundle_lambda_code method to avoid creating actual zip files during tests"""
+    # Return tuple: (zip_path, source_hash)
+    with patch('lib.tap_stack.TapStack.bundle_lambda_code', return_value=('lambda_function.zip', 'mockhash123')):
+        yield
+
+
+@pytest.fixture
 def mock_boto3():
     """Mock boto3 clients for Lambda tests"""
     with patch('boto3.client') as mock_client, \

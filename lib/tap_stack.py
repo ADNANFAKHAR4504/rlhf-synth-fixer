@@ -9,6 +9,8 @@ from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociati
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.s3_bucket_public_access_block import S3BucketPublicAccessBlock
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
@@ -26,6 +28,7 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.apigatewayv2_api import Apigatewayv2Api
 from cdktf_cdktf_provider_aws.apigatewayv2_stage import Apigatewayv2Stage
 from cdktf_cdktf_provider_aws.apigatewayv2_integration import Apigatewayv2Integration
@@ -34,9 +37,108 @@ from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAla
 from cdktf_cdktf_provider_aws.data_aws_acm_certificate import DataAwsAcmCertificate
 from cdktf_cdktf_provider_aws.data_aws_route53_zone import DataAwsRoute53Zone
 import json
+import boto3
+import os
+import zipfile
+import shutil
+import hashlib
+import base64
+from pathlib import Path
 
 
 class TapStack(TerraformStack):
+    @staticmethod
+    def setup_backend_infrastructure(region: str, environment_suffix: str):
+        """Create S3 bucket and DynamoDB table for Terraform backend if they don't exist"""
+        aws_profile = os.getenv("AWS_PROFILE", "default")
+        
+        # Create boto3 session with profile
+        session = boto3.Session(profile_name=aws_profile, region_name=region)
+        s3_client = session.client('s3')
+        dynamodb_client = session.client('dynamodb')
+        
+        bucket_name = f"terraform-state-{environment_suffix}-{region}"
+        table_name = f"terraform-locks-{environment_suffix}-{region}"
+        
+        # Create S3 bucket
+        try:
+            s3_client.head_bucket(Bucket=bucket_name)
+            print(f"✅ S3 bucket {bucket_name} already exists")
+        except:
+            try:
+                print(f"📦 Creating S3 bucket: {bucket_name}")
+                if region == 'us-east-1':
+                    s3_client.create_bucket(Bucket=bucket_name)
+                else:
+                    s3_client.create_bucket(
+                        Bucket=bucket_name,
+                        CreateBucketConfiguration={'LocationConstraint': region}
+                    )
+                
+                # Enable versioning
+                s3_client.put_bucket_versioning(
+                    Bucket=bucket_name,
+                    VersioningConfiguration={'Status': 'Enabled'}
+                )
+                
+                # Enable encryption
+                s3_client.put_bucket_encryption(
+                    Bucket=bucket_name,
+                    ServerSideEncryptionConfiguration={
+                        'Rules': [{
+                            'ApplyServerSideEncryptionByDefault': {
+                                'SSEAlgorithm': 'AES256'
+                            },
+                            'BucketKeyEnabled': True
+                        }]
+                    }
+                )
+                
+                # Block public access
+                s3_client.put_public_access_block(
+                    Bucket=bucket_name,
+                    PublicAccessBlockConfiguration={
+                        'BlockPublicAcls': True,
+                        'IgnorePublicAcls': True,
+                        'BlockPublicPolicy': True,
+                        'RestrictPublicBuckets': True
+                    }
+                )
+                print(f"✅ Created S3 bucket: {bucket_name}")
+            except Exception as e:
+                print(f"⚠️ Error creating S3 bucket: {e}")
+        
+        # Create DynamoDB table
+        try:
+            dynamodb_client.describe_table(TableName=table_name)
+            print(f"✅ DynamoDB table {table_name} already exists")
+        except dynamodb_client.exceptions.ResourceNotFoundException:
+            try:
+                print(f"🗄️  Creating DynamoDB table: {table_name}")
+                dynamodb_client.create_table(
+                    TableName=table_name,
+                    AttributeDefinitions=[
+                        {'AttributeName': 'LockID', 'AttributeType': 'S'}
+                    ],
+                    KeySchema=[
+                        {'AttributeName': 'LockID', 'KeyType': 'HASH'}
+                    ],
+                    BillingMode='PAY_PER_REQUEST',
+                    Tags=[
+                        {'Key': 'Purpose', 'Value': 'TerraformStateLocking'},
+                        {'Key': 'Environment', 'Value': environment_suffix}
+                    ]
+                )
+                
+                # Wait for table to be active
+                waiter = dynamodb_client.get_waiter('table_exists')
+                waiter.wait(TableName=table_name)
+                print(f"✅ Created DynamoDB table: {table_name}")
+            except Exception as e:
+                print(f"⚠️ Error creating DynamoDB table: {e}")
+        except Exception as e:
+            print(f"⚠️ Error checking DynamoDB table: {e}")
+    
     def __init__(
         self,
         scope: Construct,
@@ -45,6 +147,9 @@ class TapStack(TerraformStack):
         cidr_block: str,
         environment_suffix: str
     ):
+        # Setup backend infrastructure before initializing the stack
+        TapStack.setup_backend_infrastructure(region, environment_suffix)
+        
         super().__init__(scope, id)
 
         self.region = region
@@ -57,10 +162,10 @@ class TapStack(TerraformStack):
         # Configure S3 Backend for remote state
         S3Backend(
             self,
-            bucket=f"terraform-state-{environment_suffix}",
+            bucket=f"terraform-state-{environment_suffix}-{region}",
             key=f"infrastructure/{region}/terraform.tfstate",
             region=region,
-            dynamodb_table=f"terraform-locks-{environment_suffix}",
+            dynamodb_table=f"terraform-locks-{environment_suffix}-{region}",
             encrypt=True
         )
 
@@ -276,7 +381,7 @@ class TapStack(TerraformStack):
             ]
         )
 
-        # Configure lifecycle policy
+        # Configure lifecycle policy  
         S3BucketLifecycleConfiguration(
             self,
             f"s3-lifecycle-{self.environment_suffix}",
@@ -360,17 +465,61 @@ class TapStack(TerraformStack):
 
         return role
 
+    def bundle_lambda_code(self) -> tuple[str, str]:
+        """
+        Bundle Lambda code from lib/lambda directory
+        
+        Returns:
+            tuple: (zip_path, base64_sha256_hash)
+        """
+        # Define paths
+        lambda_dir = Path(__file__).parent / "lambda"
+        zip_path = Path(__file__).parent.parent / "lambda_function.zip"
+        
+        # Remove old zip if exists
+        if zip_path.exists():
+            zip_path.unlink()
+        
+        # Create zip file from lib/lambda directory
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            for file in lambda_dir.rglob('*.py'):
+                # Add file to zip with relative path
+                arcname = file.relative_to(lambda_dir)
+                zipf.write(file, arcname)
+        
+        # Calculate SHA256 hash for source_code_hash
+        sha256_hash = hashlib.sha256()
+        with open(zip_path, 'rb') as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(chunk)
+        
+        # Base64 encode the hash (required by AWS)
+        source_hash = base64.b64encode(sha256_hash.digest()).decode('utf-8')
+        
+        print(f"✅ Created Lambda bundle: {zip_path}")
+        print(f"   Source hash: {source_hash[:16]}...")
+        
+        return str(zip_path), source_hash
+
     def create_lambda_function(self) -> LambdaFunction:
-        """Create Lambda function for data processing"""
+        """
+        Create Lambda function for data processing
+        
+        Automatically bundles code from lib/lambda directory into a zip file
+        and calculates source_code_hash to ensure Lambda updates on code changes
+        """
+        # Bundle the Lambda code from lib/lambda directory
+        lambda_zip, source_hash = self.bundle_lambda_code()
+        
         lambda_function = LambdaFunction(
             self,
             f"lambda-processor-{self.environment_suffix}",
             function_name=f"data-processor-{self.environment_suffix}",
             runtime="python3.11",
-            handler="index.handler",
+            handler="processor.handler",
             role=self.lambda_role.arn,
-            filename="lambda_function.zip",
-            source_code_hash="placeholder",
+            filename=lambda_zip,
+            source_code_hash=source_hash,  # Ensures Lambda updates when code changes
             timeout=30,
             memory_size=256,
             environment={
@@ -387,6 +536,15 @@ class TapStack(TerraformStack):
 
     def create_rds_cluster(self) -> RdsCluster:
         """Create RDS Aurora MySQL cluster"""
+        # Create DB subnet group for RDS
+        db_subnet_group = DbSubnetGroup(
+            self,
+            f"rds-subnet-group-{self.environment_suffix}",
+            name=f"rds-subnet-group-{self.environment_suffix}",
+            subnet_ids=[subnet.id for subnet in self.subnets["private"]],
+            tags=self.common_tags
+        )
+        
         cluster = RdsCluster(
             self,
             f"rds-cluster-{self.environment_suffix}",
@@ -401,6 +559,7 @@ class TapStack(TerraformStack):
             storage_encrypted=True,
             kms_key_id=self.kms_key.arn,
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
+            db_subnet_group_name=db_subnet_group.name,
             tags=self.common_tags,
             skip_final_snapshot=True
         )
