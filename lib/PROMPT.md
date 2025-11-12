@@ -4,7 +4,7 @@ Hey team,
 
 We need to build infrastructure to migrate our development RDS MySQL database to a production Aurora MySQL cluster with minimal downtime. This is for our multi-tenant SaaS platform that needs to scale better in production while maintaining data integrity throughout the migration. I've been asked to create this using TypeScript with AWS CDK. The business wants a smooth transition with continuous data replication and built-in validation.
 
-Our current development environment runs on a standard RDS MySQL 8.0.35 instance, but production needs the scalability and performance of Aurora MySQL. We already have VPC peering configured between development and production environments, with private subnets set up in three availability zones. The migration needs to happen without taking the application offline, so we'll use DMS for full load plus CDC to keep everything in sync.
+Our current development environment runs on a standard RDS MySQL 8.0.35 instance, but production needs the scalability and performance of Aurora MySQL. We already have VPC peering configured between development and production environments, with private subnets set up in two availability zones. The migration needs to happen without taking the application offline, so we'll use DMS for full load plus CDC to keep everything in sync.
 
 The tricky part is making sure we don't lose any data during the transition and that we can roll back if something goes wrong. We also need comprehensive monitoring to catch any issues early, especially replication lag or migration failures.
 
@@ -17,8 +17,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 1. **Aurora MySQL Cluster Setup**
    - Create Aurora MySQL 8.0 cluster in production VPC
    - Configure one writer instance and one reader instance
-   - Span across three availability zones for high availability
-   - Enable Aurora backtrack capability for up to 72 hours
+   - Span across two availability zones for high availability
    - Configure automated backups with 7-day retention period
 
 2. **DMS Replication Infrastructure**
@@ -58,7 +57,7 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 - Use **AWS Lambda** for validation functions
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment}-{suffix}`
-- Deploy to **us-east-1** region
+- Deploy to **eu-west-2** region
 - CDK version 2.x with TypeScript
 - Node.js 18 or higher
 
@@ -85,11 +84,10 @@ Create a database migration infrastructure using **AWS CDK with TypeScript** tha
 ## Success Criteria
 
 - **Migration Capability**: DMS successfully replicates full database load and CDC changes
-- **High Availability**: Aurora cluster spans three AZs with writer and reader instances
+- **High Availability**: Aurora cluster spans two AZs with writer and reader instances
 - **Security**: All credentials managed by Secrets Manager with rotation enabled
 - **Encryption**: Data encrypted at rest using KMS and in transit using SSL/TLS
 - **Monitoring**: CloudWatch alarms configured for failures and replication lag over 30 seconds
-- **Recoverability**: Aurora backtrack enabled for 72 hours and automated backups for 7 days
 - **Validation**: Lambda function can verify data consistency between source and target
 - **Resource Naming**: All resources include environmentSuffix for unique identification
 - **Code Quality**: TypeScript implementation, well-structured, follows CDK best practices
