@@ -313,17 +313,14 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
       });
     });
 
-    it('should create KMS alias', () => {
+    it('should create KMS key without alias to avoid conflicts', () => {
       const kmsKey = new aws.kms.Key('test-kms', {
         deletionWindowInDays: 10,
       });
 
-      const alias = new aws.kms.Alias('test-alias', {
-        name: 'alias/test-rds',
-        targetKeyId: kmsKey.keyId,
-      });
-
-      expect(alias).toBeDefined();
+      expect(kmsKey).toBeDefined();
+      // Note: KMS alias creation is skipped to avoid conflicts with existing aliases
+      // The KMS key can be referenced directly via ARN or key ID
     });
   });
 
@@ -524,17 +521,17 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
   });
 
   describe('Application Load Balancer', () => {
-    it('should create ALB security group allowing HTTPS', () => {
+    it('should create ALB security group allowing HTTP', () => {
       const sg = new aws.ec2.SecurityGroup('alb-sg-test', {
         vpcId: 'vpc-test',
         description: 'Security group for ALB',
         ingress: [
           {
             protocol: 'tcp',
-            fromPort: 443,
-            toPort: 443,
+            fromPort: 80,
+            toPort: 80,
             cidrBlocks: ['0.0.0.0/0'],
-            description: 'HTTPS from internet',
+            description: 'HTTP from internet',
           },
         ],
         egress: [

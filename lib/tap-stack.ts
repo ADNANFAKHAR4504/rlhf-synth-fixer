@@ -790,7 +790,8 @@ export const unhealthyHostAlarm = new aws.cloudwatch.MetricAlarm(
   }
 );
 
-// Exports
+// Stack Outputs
+// These exports become Pulumi stack outputs when re-exported from index.ts
 export const vpcId = vpc.vpcId;
 export const publicSubnetIds = vpc.publicSubnetIds;
 export const privateSubnetIds = vpc.privateSubnetIds;
