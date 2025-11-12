@@ -306,7 +306,7 @@ describe('TapStack CloudFormation Template - Comprehensive Unit Tests', () => {
       expect(serviceStatement).toBeDefined();
       expect(serviceStatement.Effect).toBe('Allow');
       expect(serviceStatement.Action).toContain('ec2:DescribeSecurityGroups');
-      expect(serviceStatement.Action).toContain('s3:GetBucketEncryption');
+      expect(serviceStatement.Action).toContain('s3:GetEncryptionConfiguration');
       expect(serviceStatement.Action).toContain('s3:GetBucketVersioning');
       expect(serviceStatement.Action).toContain('iam:GetRole');
       expect(serviceStatement.Action).toContain('rds:DescribeDBInstances');
