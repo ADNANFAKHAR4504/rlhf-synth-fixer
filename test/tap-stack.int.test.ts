@@ -193,7 +193,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const command = new GetRestApisCommand({});
       const response = await apiClient.send(command);
 
-      const apis = response.items?.filter(api =>
+      const apis = response.items?.filter((api: any) =>
         api.name === `trading-api-${environmentSuffix}`
       );
 
@@ -232,7 +232,7 @@ describe('TapStack Infrastructure Integration Tests', () => {
       const command = new ListAliasesCommand({});
       const response = await kmsClient.send(command);
 
-      const aliases = response.Aliases?.filter(alias =>
+      const aliases = response.Aliases?.filter((alias: any) =>
         alias.AliasName?.includes(environmentSuffix)
       );
 
