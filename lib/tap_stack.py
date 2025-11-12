@@ -411,10 +411,11 @@ class TapStack(Stack):
         endpoint_type = "source" if environment == "source" else "target"
 
         # Create IAM role for DMS to access Secrets Manager
+        # Note: DMS endpoints require regional service principal
         dms_secrets_role = iam.Role(
             self,
             f"dms-secrets-role-{environment}-{self.environment_suffix}",
-            assumed_by=iam.ServicePrincipal("dms.amazonaws.com"),
+            assumed_by=iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
             description=f"Role for DMS to access Secrets Manager for {environment} endpoint",
         )
 
