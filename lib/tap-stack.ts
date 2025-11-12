@@ -1,23 +1,27 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
-import * as codebuild from 'aws-cdk-lib/aws-codebuild';
-import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
-import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
-import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
-import * as ecs from 'aws-cdk-lib/aws-ecs';
-import * as ecr from 'aws-cdk-lib/aws-ecr';
-import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as iam from 'aws-cdk-lib/aws-iam';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as kms from 'aws-cdk-lib/aws-kms';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
+import * as codebuild from 'aws-cdk-lib/aws-codebuild';
+import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
+import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
+import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ecs from 'aws-cdk-lib/aws-ecs';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
+import * as iam from 'aws-cdk-lib/aws-iam';
+import * as kms from 'aws-cdk-lib/aws-kms';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import { Construct } from 'constructs';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
+
+// Constants for port configuration
+const CONTAINER_PORT = 80;
+const ALB_PORT = 80;
 
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -43,6 +47,10 @@ export class TapStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Note: Using S3 as source instead of CodeCommit for test environment compatibility.
+    // CodeCommit requires at least one existing repository in the AWS account before
+    // CloudFormation can create new repositories, which fails in fresh test accounts.
+    // S3 source is more suitable for test environments and allows immediate deployment.
     const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
       bucketName: `microservice-source-${this.account}-${environmentSuffix}`,
       versioned: true,
@@ -196,6 +204,7 @@ export class TapStack extends cdk.Stack {
     const testOutput = new codepipeline.Artifact('TestOutput');
     const testProject = new codebuild.PipelineProject(this, 'TestProject', {
       projectName: `microservice-test-${environmentSuffix}`,
+      timeout: cdk.Duration.hours(2),
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
         computeType: codebuild.ComputeType.LARGE,
@@ -257,7 +266,6 @@ export class TapStack extends cdk.Stack {
           },
         },
       }),
-      timeout: cdk.Duration.minutes(30),
     });
 
     ecrRepository.grantPull(testProject.role!);
@@ -374,6 +382,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Note: Using nginx:latest as placeholder image. This allows ECS services to start
+    // successfully before the first pipeline deployment. The pipeline will create new
+    // task definition revisions with the actual ECR image during deployment.
     stagingTaskDefinition.addContainer('MicroserviceContainer', {
       image: ecs.ContainerImage.fromRegistry('nginx:latest'),
       logging: ecs.LogDrivers.awsLogs({
@@ -381,7 +392,7 @@ export class TapStack extends cdk.Stack {
       }),
       portMappings: [
         {
-          containerPort: 80,
+          containerPort: CONTAINER_PORT,
           protocol: ecs.Protocol.TCP,
         },
       ],
@@ -436,12 +447,17 @@ export class TapStack extends cdk.Stack {
 
     const prodVpc = new ec2.Vpc(this, 'ProdVpc', {
       maxAzs: 2,
-      natGateways: 0,
+      natGateways: 1,
       subnetConfiguration: [
         {
           cidrMask: 24,
           name: 'public',
           subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
         },
       ],
     });
@@ -451,6 +467,18 @@ export class TapStack extends cdk.Stack {
       vpc: prodVpc,
     });
 
+    const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
+      vpc: prodVpc,
+      description: 'Security group for production ALB',
+      allowAllOutbound: true,
+    });
+
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(ALB_PORT),
+      'Allow HTTP traffic from internet'
+    );
+
     const prodLoadBalancer = new elbv2.ApplicationLoadBalancer(
       this,
       'ProdLoadBalancer',
@@ -458,11 +486,15 @@ export class TapStack extends cdk.Stack {
         vpc: prodVpc,
         internetFacing: true,
         loadBalancerName: `prod-alb-${environmentSuffix}`,
+        securityGroup: albSecurityGroup,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
       }
     );
 
     const prodListener = prodLoadBalancer.addListener('ProdListener', {
-      port: 80,
+      port: ALB_PORT,
       protocol: elbv2.ApplicationProtocol.HTTP,
     });
 
@@ -471,7 +503,7 @@ export class TapStack extends cdk.Stack {
       'BlueTargetGroup',
       {
         vpc: prodVpc,
-        port: 80,
+        port: CONTAINER_PORT,
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
@@ -489,7 +521,7 @@ export class TapStack extends cdk.Stack {
       'GreenTargetGroup',
       {
         vpc: prodVpc,
-        port: 80,
+        port: CONTAINER_PORT,
         protocol: elbv2.ApplicationProtocol.HTTP,
         targetType: elbv2.TargetType.IP,
         healthCheck: {
@@ -523,6 +555,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Note: Using nginx:latest as placeholder image. This allows ECS services to start
+    // successfully before the first pipeline deployment. The pipeline will create new
+    // task definition revisions with the actual ECR image during deployment.
     prodTaskDefinition.addContainer('MicroserviceContainer', {
       image: ecs.ContainerImage.fromRegistry('nginx:latest'),
       logging: ecs.LogDrivers.awsLogs({
@@ -530,7 +565,7 @@ export class TapStack extends cdk.Stack {
       }),
       portMappings: [
         {
-          containerPort: 80,
+          containerPort: CONTAINER_PORT,
           protocol: ecs.Protocol.TCP,
         },
       ],
@@ -543,8 +578,8 @@ export class TapStack extends cdk.Stack {
     });
 
     prodSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
-      ec2.Port.tcp(80),
+      ec2.Peer.securityGroupId(albSecurityGroup.securityGroupId),
+      ec2.Port.tcp(CONTAINER_PORT),
       'Allow HTTP traffic from ALB'
     );
 
@@ -552,9 +587,12 @@ export class TapStack extends cdk.Stack {
       cluster: prodCluster,
       taskDefinition: prodTaskDefinition,
       desiredCount: 1,
-      assignPublicIp: true,
+      assignPublicIp: false,
       serviceName: `microservice-prod-${environmentSuffix}`,
       securityGroups: [prodSecurityGroup],
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
       deploymentController: {
         type: ecs.DeploymentControllerType.CODE_DEPLOY,
       },

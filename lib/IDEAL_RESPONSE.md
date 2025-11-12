@@ -6,9 +6,11 @@ The solution implements a complete three-stage CI/CD pipeline for containerized 
 1. **Environment Suffix Support**: All resources include environment suffix for multi-environment deployments, following the existing tap.ts pattern
 2. **Stack Deletability**: All resources use DESTROY removal policy with auto-delete for S3 to ensure easy cleanup in test environments
 3. **Least Privilege IAM**: Cross-account roles only created when accounts differ, with specific permissions for ECS, CodeDeploy, and CloudFormation operations
-4. **Pipeline Stages**: Source (CodeCommit), Build (unit tests + Docker), Test (integration + security), DeployToStaging, Approve, DeployToProduction
+4. **Pipeline Stages**: Source (S3), Build (unit tests + Docker), Test (integration + security), DeployToStaging, Approve, DeployToProduction
 5. **Monitoring**: CloudWatch dashboard and alarms for pipeline, build, and test failures with SNS notifications
 6. **Artifact Management**: S3 bucket with versioning, KMS encryption, 30-day lifecycle, and auto-delete for test environments
+7. **Security Best Practices**: Production VPC with private subnets and NAT gateways, security groups restricted to ALB only, port constants for maintainability
+8. **Test Environment Compatibility**: S3 source instead of CodeCommit (avoids first-repository limitation), placeholder images for initial ECS deployment
 
 ---
 
@@ -24,18 +26,20 @@ import { TapStack } from '../lib/tap-stack';
 
 const app = new cdk.App();
 
+// Get environment suffix from context (set by CI/CD pipeline) or use 'dev' as default
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
 
+// Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
 
 new TapStack(app, stackName, {
-  stackName: stackName,
-  environmentSuffix: environmentSuffix,
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
+  environmentSuffix: environmentSuffix, // Pass the suffix to the stack
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'us-east-1',
@@ -48,13 +52,14 @@ new TapStack(app, stackName, {
 ```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
-import * as codecommit from 'aws-cdk-lib/aws-codecommit';
 import * as codebuild from 'aws-cdk-lib/aws-codebuild';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ecr from 'aws-cdk-lib/aws-ecr';
+import * as ec2 from 'aws-cdk-lib/aws-ec2';
+import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -66,6 +71,10 @@ interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
 
+// Constants for port configuration
+const CONTAINER_PORT = 80;
+const ALB_PORT = 80;
+
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, props);
@@ -75,10 +84,6 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    const devAccountId =
-      this.node.tryGetContext('devAccountId') ||
-      process.env.DEV_ACCOUNT_ID ||
-      this.account;
     const stagingAccountId =
       this.node.tryGetContext('stagingAccountId') ||
       process.env.STAGING_ACCOUNT_ID ||
@@ -88,9 +93,24 @@ export class TapStack extends cdk.Stack {
       process.env.PROD_ACCOUNT_ID ||
       this.account;
 
-    const repository = new codecommit.Repository(this, 'MicroserviceRepo', {
-      repositoryName: `microservice-repository-${environmentSuffix}`,
-      description: 'Repository for our containerized microservice',
+    const artifactKey = new kms.Key(this, 'ArtifactKey', {
+      enableKeyRotation: true,
+      description: 'KMS key for encrypting the artifacts stored in S3',
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
+    // Note: Using S3 as source instead of CodeCommit for test environment compatibility.
+    // CodeCommit requires at least one existing repository in the AWS account before
+    // CloudFormation can create new repositories, which fails in fresh test accounts.
+    // S3 source is more suitable for test environments and allows immediate deployment.
+    const sourceBucket = new s3.Bucket(this, 'SourceBucket', {
+      bucketName: `microservice-source-${this.account}-${environmentSuffix}`,
+      versioned: true,
+      encryption: s3.BucketEncryption.KMS,
+      encryptionKey: artifactKey,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
     });
 
     const ecrRepository = new ecr.Repository(this, 'MicroserviceECR', {
@@ -102,12 +122,6 @@ export class TapStack extends cdk.Stack {
           description: 'Keep only the last 10 images',
         },
       ],
-    });
-
-    const artifactKey = new kms.Key(this, 'ArtifactKey', {
-      enableKeyRotation: true,
-      description: 'KMS key for encrypting the artifacts stored in S3',
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
     const artifactBucket = new s3.Bucket(this, 'ArtifactBucket', {
@@ -141,12 +155,12 @@ export class TapStack extends cdk.Stack {
     });
 
     const sourceOutput = new codepipeline.Artifact('SourceCode');
-    const sourceAction = new codepipeline_actions.CodeCommitSourceAction({
-      actionName: 'CodeCommit',
-      repository: repository,
-      branch: 'main',
+    const sourceAction = new codepipeline_actions.S3SourceAction({
+      actionName: 'S3Source',
+      bucket: sourceBucket,
+      bucketKey: 'source.zip',
       output: sourceOutput,
-      trigger: codepipeline_actions.CodeCommitTrigger.EVENTS,
+      trigger: codepipeline_actions.S3Trigger.EVENTS,
     });
 
     pipeline.addStage({
@@ -242,6 +256,7 @@ export class TapStack extends cdk.Stack {
     const testOutput = new codepipeline.Artifact('TestOutput');
     const testProject = new codebuild.PipelineProject(this, 'TestProject', {
       projectName: `microservice-test-${environmentSuffix}`,
+      timeout: cdk.Duration.hours(2),
       environment: {
         buildImage: codebuild.LinuxBuildImage.STANDARD_5_0,
         computeType: codebuild.ComputeType.LARGE,
@@ -303,7 +318,6 @@ export class TapStack extends cdk.Stack {
           },
         },
       }),
-      timeout: cdk.Duration.minutes(30),
     });
 
     ecrRepository.grantPull(testProject.role!);
@@ -394,23 +408,72 @@ export class TapStack extends cdk.Stack {
       );
     }
 
+    const stagingVpc = new ec2.Vpc(this, 'StagingVpc', {
+      maxAzs: 2,
+      natGateways: 0,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      ],
+    });
+
+    const stagingCluster = new ecs.Cluster(this, 'StagingCluster', {
+      clusterName: `StagingCluster-${environmentSuffix}`,
+      vpc: stagingVpc,
+    });
+
+    const stagingTaskDefinition = new ecs.FargateTaskDefinition(
+      this,
+      'StagingTaskDefinition',
+      {
+        memoryLimitMiB: 512,
+        cpu: 256,
+      }
+    );
+
+    // Note: Using nginx:latest as placeholder image. This allows ECS services to start
+    // successfully before the first pipeline deployment. The pipeline will create new
+    // task definition revisions with the actual ECR image during deployment.
+    stagingTaskDefinition.addContainer('MicroserviceContainer', {
+      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'microservice',
+      }),
+      portMappings: [
+        {
+          containerPort: CONTAINER_PORT,
+          protocol: ecs.Protocol.TCP,
+        },
+      ],
+    });
+
+    const stagingSecurityGroup = new ec2.SecurityGroup(
+      this,
+      'StagingSecurityGroup',
+      {
+        vpc: stagingVpc,
+        description: 'Security group for staging ECS service',
+        allowAllOutbound: true,
+      }
+    );
+
+    const stagingService = new ecs.FargateService(this, 'StagingService', {
+      cluster: stagingCluster,
+      taskDefinition: stagingTaskDefinition,
+      desiredCount: 1,
+      assignPublicIp: true,
+      serviceName: `microservice-${environmentSuffix}`,
+      securityGroups: [stagingSecurityGroup],
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+    });
+
     const deployToStagingAction = new codepipeline_actions.EcsDeployAction({
       actionName: 'DeployToStaging',
-      service: ecs.FargateService.fromFargateServiceAttributes(
-        this,
-        'StagingService',
-        {
-          serviceArn: `arn:aws:ecs:${this.region}:${stagingAccountId}:service/StagingCluster/microservice-${environmentSuffix}`,
-          cluster: ecs.Cluster.fromClusterAttributes(this, 'StagingCluster', {
-            clusterName: 'StagingCluster',
-            securityGroups: [],
-            vpc: cdk.aws_ec2.Vpc.fromLookup(this, 'StagingVpc', {
-              isDefault: true,
-            }),
-            clusterArn: `arn:aws:ecs:${this.region}:${stagingAccountId}:cluster/StagingCluster`,
-          }),
-        }
-      ),
+      service: stagingService,
       imageFile: buildOutput.atPath('imageDefinition.json'),
       deploymentTimeout: cdk.Duration.minutes(60),
       role: stagingDeployRole,
@@ -421,36 +484,197 @@ export class TapStack extends cdk.Stack {
       actions: [deployToStagingAction],
     });
 
-    const manualApprovalAction =
-      new codepipeline_actions.ManualApprovalAction({
-        actionName: 'ApproveDeployment',
-        notificationTopic: approvalTopic,
-        additionalInformation:
-          'Please review the staging deployment before approving deployment to production',
-        externalEntityLink: `https://${this.region}.console.aws.amazon.com/ecs/home?region=${this.region}#/clusters/StagingCluster/services/microservice-${environmentSuffix}/details`,
-      });
+    const manualApprovalAction = new codepipeline_actions.ManualApprovalAction({
+      actionName: 'ApproveDeployment',
+      notificationTopic: approvalTopic,
+      additionalInformation:
+        'Please review the staging deployment before approving deployment to production',
+      externalEntityLink: `https://${this.region}.console.aws.amazon.com/ecs/home?region=${this.region}#/clusters/${stagingCluster.clusterName}/services/${stagingService.serviceName}/details`,
+    });
 
     pipeline.addStage({
       stageName: 'Approve',
       actions: [manualApprovalAction],
     });
 
+    const prodVpc = new ec2.Vpc(this, 'ProdVpc', {
+      maxAzs: 2,
+      natGateways: 1,
+      subnetConfiguration: [
+        {
+          cidrMask: 24,
+          name: 'public',
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+        {
+          cidrMask: 24,
+          name: 'private',
+          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+        },
+      ],
+    });
+
+    const prodCluster = new ecs.Cluster(this, 'ProdCluster', {
+      clusterName: `ProdCluster-${environmentSuffix}`,
+      vpc: prodVpc,
+    });
+
+    const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
+      vpc: prodVpc,
+      description: 'Security group for production ALB',
+      allowAllOutbound: true,
+    });
+
+    albSecurityGroup.addIngressRule(
+      ec2.Peer.anyIpv4(),
+      ec2.Port.tcp(ALB_PORT),
+      'Allow HTTP traffic from internet'
+    );
+
+    const prodLoadBalancer = new elbv2.ApplicationLoadBalancer(
+      this,
+      'ProdLoadBalancer',
+      {
+        vpc: prodVpc,
+        internetFacing: true,
+        loadBalancerName: `prod-alb-${environmentSuffix}`,
+        securityGroup: albSecurityGroup,
+        vpcSubnets: {
+          subnetType: ec2.SubnetType.PUBLIC,
+        },
+      }
+    );
+
+    const prodListener = prodLoadBalancer.addListener('ProdListener', {
+      port: ALB_PORT,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+    });
+
+    const blueTargetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'BlueTargetGroup',
+      {
+        vpc: prodVpc,
+        port: CONTAINER_PORT,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.IP,
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+      }
+    );
+
+    const greenTargetGroup = new elbv2.ApplicationTargetGroup(
+      this,
+      'GreenTargetGroup',
+      {
+        vpc: prodVpc,
+        port: CONTAINER_PORT,
+        protocol: elbv2.ApplicationProtocol.HTTP,
+        targetType: elbv2.TargetType.IP,
+        healthCheck: {
+          path: '/',
+          interval: cdk.Duration.seconds(30),
+          timeout: cdk.Duration.seconds(5),
+          healthyThresholdCount: 2,
+          unhealthyThresholdCount: 3,
+        },
+      }
+    );
+
+    prodListener.addTargetGroups('DefaultTargetGroup', {
+      targetGroups: [blueTargetGroup],
+    });
+
+    const codedeployApplication = new codedeploy.EcsApplication(
+      this,
+      'ProdCodeDeployApplication',
+      {
+        applicationName: `ProdMicroserviceApplication-${environmentSuffix}`,
+      }
+    );
+
+    const prodTaskDefinition = new ecs.FargateTaskDefinition(
+      this,
+      'ProdTaskDefinition',
+      {
+        memoryLimitMiB: 512,
+        cpu: 256,
+      }
+    );
+
+    // Note: Using nginx:latest as placeholder image. This allows ECS services to start
+    // successfully before the first pipeline deployment. The pipeline will create new
+    // task definition revisions with the actual ECR image during deployment.
+    prodTaskDefinition.addContainer('MicroserviceContainer', {
+      image: ecs.ContainerImage.fromRegistry('nginx:latest'),
+      logging: ecs.LogDrivers.awsLogs({
+        streamPrefix: 'microservice',
+      }),
+      portMappings: [
+        {
+          containerPort: CONTAINER_PORT,
+          protocol: ecs.Protocol.TCP,
+        },
+      ],
+    });
+
+    const prodSecurityGroup = new ec2.SecurityGroup(this, 'ProdSecurityGroup', {
+      vpc: prodVpc,
+      description: 'Security group for production ECS service',
+      allowAllOutbound: true,
+    });
+
+    prodSecurityGroup.addIngressRule(
+      ec2.Peer.securityGroupId(albSecurityGroup.securityGroupId),
+      ec2.Port.tcp(CONTAINER_PORT),
+      'Allow HTTP traffic from ALB'
+    );
+
+    const prodService = new ecs.FargateService(this, 'ProdService', {
+      cluster: prodCluster,
+      taskDefinition: prodTaskDefinition,
+      desiredCount: 1,
+      assignPublicIp: false,
+      serviceName: `microservice-prod-${environmentSuffix}`,
+      securityGroups: [prodSecurityGroup],
+      vpcSubnets: {
+        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
+      },
+      deploymentController: {
+        type: ecs.DeploymentControllerType.CODE_DEPLOY,
+      },
+      minHealthyPercent: 100,
+      maxHealthyPercent: 200,
+    });
+
+    prodService.attachToApplicationTargetGroup(blueTargetGroup);
+
+    const prodDeploymentGroup = new codedeploy.EcsDeploymentGroup(
+      this,
+      'ProdDeploymentGroup',
+      {
+        application: codedeployApplication,
+        service: prodService,
+        deploymentGroupName: `ProdMicroserviceDeploymentGroup-${environmentSuffix}`,
+        deploymentConfig:
+          codedeploy.EcsDeploymentConfig.CANARY_10PERCENT_5MINUTES,
+        blueGreenDeploymentConfig: {
+          blueTargetGroup: blueTargetGroup,
+          greenTargetGroup: greenTargetGroup,
+          listener: prodListener,
+        },
+      }
+    );
+
     const deployToProdAction =
       new codepipeline_actions.CodeDeployEcsDeployAction({
         actionName: 'DeployToProduction',
-        deploymentGroup:
-          codedeploy.EcsDeploymentGroup.fromEcsDeploymentGroupAttributes(
-            this,
-            'ProdDeploymentGroup',
-            {
-              deploymentGroupName: `ProdMicroserviceDeploymentGroup-${environmentSuffix}`,
-              application: codedeploy.EcsApplication.fromEcsApplicationName(
-                this,
-                'ProdApplication',
-                `ProdMicroserviceApplication-${environmentSuffix}`
-              ),
-            }
-          ),
+        deploymentGroup: prodDeploymentGroup,
         taskDefinitionTemplateFile: buildOutput.atPath('taskdef.json'),
         appSpecTemplateFile: buildOutput.atPath('appspec.yaml'),
         containerImageInputs: [
@@ -616,9 +840,9 @@ export class TapStack extends cdk.Stack {
       new cloudwatch_actions.SnsAction(alarmTopic)
     );
 
-    new cdk.CfnOutput(this, 'RepositoryCloneUrlHttp', {
-      value: repository.repositoryCloneUrlHttp,
-      description: 'CodeCommit repository clone URL (HTTP)',
+    new cdk.CfnOutput(this, 'SourceBucketName', {
+      value: sourceBucket.bucketName,
+      description: 'S3 bucket name for source code',
     });
 
     new cdk.CfnOutput(this, 'EcrRepositoryUri', {
