@@ -1,8 +1,8 @@
 /**
  * network-stack.ts
  *
- * This module defines the NetworkStack component for VPC, subnets, NAT gateways,
- * and VPC endpoints for the payment processing environment.
+ * This module defines the VPC and networking infrastructure for the payment
+ * processing environment.
  */
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
@@ -18,7 +18,6 @@ export class NetworkStack extends pulumi.ComponentResource {
   public readonly privateSubnets: aws.ec2.Subnet[];
   public readonly s3Endpoint: aws.ec2.VpcEndpoint;
   public readonly dynamodbEndpoint: aws.ec2.VpcEndpoint;
-  public readonly vpcFlowLogGroup: aws.cloudwatch.LogGroup;
 
   constructor(
     name: string,
@@ -29,7 +28,13 @@ export class NetworkStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags } = args;
 
-    // Create VPC with CIDR 10.0.0.0/16
+    // CRITICAL FIX: Get availability zones dynamically for the current region
+    // This replaces hardcoded us-east-1 zones with actual ap-southeast-1 zones
+    const availabilityZones = aws.getAvailabilityZonesOutput({
+      state: 'available',
+    }, { parent: this });
+
+    // Create VPC
     this.vpc = new aws.ec2.Vpc(
       `payment-vpc-${environmentSuffix}`,
       {
@@ -45,10 +50,6 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Get availability zones
-    const azs = aws.getAvailabilityZonesOutput({ state: 'available' });
-    const azNames = azs.apply(zones => zones.names.slice(0, 3));
-
     // Create Internet Gateway
     const igw = new aws.ec2.InternetGateway(
       `payment-igw-${environmentSuffix}`,
@@ -63,7 +64,7 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create public subnets (one per AZ)
+    // Create public subnets across multiple AZs (dynamically)
     this.publicSubnets = [];
     for (let i = 0; i < 3; i++) {
       const subnet = new aws.ec2.Subnet(
@@ -71,7 +72,8 @@ export class NetworkStack extends pulumi.ComponentResource {
         {
           vpcId: this.vpc.id,
           cidrBlock: `10.0.${i}.0/24`,
-          availabilityZone: azNames.apply(names => names[i]),
+          // FIXED: Use dynamic AZ from current region instead of hardcoded us-east-1 zones
+          availabilityZone: availabilityZones.names[i],
           mapPublicIpOnLaunch: true,
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
@@ -85,28 +87,6 @@ export class NetworkStack extends pulumi.ComponentResource {
       this.publicSubnets.push(subnet);
     }
 
-    // Create private subnets (one per AZ)
-    this.privateSubnets = [];
-    for (let i = 0; i < 3; i++) {
-      const subnet = new aws.ec2.Subnet(
-        `payment-private-subnet-${i}-${environmentSuffix}`,
-        {
-          vpcId: this.vpc.id,
-          cidrBlock: `10.0.${10 + i}.0/24`,
-          availabilityZone: azNames.apply(names => names[i]),
-          mapPublicIpOnLaunch: false,
-          tags: pulumi.all([tags]).apply(([t]) => ({
-            ...t,
-            Name: `payment-private-subnet-${i}-${environmentSuffix}`,
-            Type: 'Private',
-            EnvironmentSuffix: environmentSuffix,
-          })),
-        },
-        { parent: this }
-      );
-      this.privateSubnets.push(subnet);
-    }
-
     // Create public route table
     const publicRouteTable = new aws.ec2.RouteTable(
       `payment-public-rt-${environmentSuffix}`,
@@ -115,6 +95,7 @@ export class NetworkStack extends pulumi.ComponentResource {
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `payment-public-rt-${environmentSuffix}`,
+          Type: 'Public',
           EnvironmentSuffix: environmentSuffix,
         })),
       },
@@ -144,9 +125,9 @@ export class NetworkStack extends pulumi.ComponentResource {
       );
     });
 
-    // Create Elastic IPs and NAT Gateways for each public subnet
-    const natGateways: aws.ec2.NatGateway[] = [];
-    this.publicSubnets.forEach((subnet, i) => {
+    // Create Elastic IPs for NAT Gateways
+    const natEips = [];
+    for (let i = 0; i < 3; i++) {
       const eip = new aws.ec2.Eip(
         `payment-nat-eip-${i}-${environmentSuffix}`,
         {
@@ -159,12 +140,17 @@ export class NetworkStack extends pulumi.ComponentResource {
         },
         { parent: this }
       );
+      natEips.push(eip);
+    }
 
-      const natGateway = new aws.ec2.NatGateway(
+    // Create NAT Gateways in each public subnet
+    const natGateways = [];
+    for (let i = 0; i < 3; i++) {
+      const nat = new aws.ec2.NatGateway(
         `payment-nat-${i}-${environmentSuffix}`,
         {
-          subnetId: subnet.id,
-          allocationId: eip.id,
+          allocationId: natEips[i].id,
+          subnetId: this.publicSubnets[i].id,
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
             Name: `payment-nat-${i}-${environmentSuffix}`,
@@ -173,52 +159,81 @@ export class NetworkStack extends pulumi.ComponentResource {
         },
         { parent: this }
       );
-      natGateways.push(natGateway);
-    });
+      natGateways.push(nat);
+    }
 
-    // Create private route tables (one per AZ) and associate with NAT Gateways
-    this.privateSubnets.forEach((subnet, i) => {
-      const privateRouteTable = new aws.ec2.RouteTable(
+    // Create private subnets across multiple AZs (dynamically)
+    this.privateSubnets = [];
+    const privateRouteTables = [];
+
+    for (let i = 0; i < 3; i++) {
+      // Create private subnet
+      const subnet = new aws.ec2.Subnet(
+        `payment-private-subnet-${i}-${environmentSuffix}`,
+        {
+          vpcId: this.vpc.id,
+          cidrBlock: `10.0.${10 + i}.0/24`,
+          // FIXED: Use dynamic AZ from current region instead of hardcoded us-east-1 zones
+          availabilityZone: availabilityZones.names[i],
+          tags: pulumi.all([tags]).apply(([t]) => ({
+            ...t,
+            Name: `payment-private-subnet-${i}-${environmentSuffix}`,
+            Type: 'Private',
+            EnvironmentSuffix: environmentSuffix,
+          })),
+        },
+        { parent: this }
+      );
+      this.privateSubnets.push(subnet);
+
+      // Create private route table for this subnet
+      const routeTable = new aws.ec2.RouteTable(
         `payment-private-rt-${i}-${environmentSuffix}`,
         {
           vpcId: this.vpc.id,
           tags: pulumi.all([tags]).apply(([t]) => ({
             ...t,
             Name: `payment-private-rt-${i}-${environmentSuffix}`,
+            Type: 'Private',
             EnvironmentSuffix: environmentSuffix,
           })),
         },
         { parent: this }
       );
+      privateRouteTables.push(routeTable);
 
+      // Add route to NAT Gateway
       new aws.ec2.Route(
         `payment-private-route-${i}-${environmentSuffix}`,
         {
-          routeTableId: privateRouteTable.id,
+          routeTableId: routeTable.id,
           destinationCidrBlock: '0.0.0.0/0',
           natGatewayId: natGateways[i].id,
         },
         { parent: this }
       );
 
+      // Associate private subnet with its route table
       new aws.ec2.RouteTableAssociation(
         `payment-private-rta-${i}-${environmentSuffix}`,
         {
           subnetId: subnet.id,
-          routeTableId: privateRouteTable.id,
+          routeTableId: routeTable.id,
         },
         { parent: this }
       );
-    });
+    }
 
-    // Create VPC Endpoint for S3
+    // Create VPC Endpoints for AWS services
     this.s3Endpoint = new aws.ec2.VpcEndpoint(
       `payment-s3-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        serviceName: 'com.amazonaws.ap-southeast-1.s3',
-        vpcEndpointType: 'Gateway',
-        routeTableIds: [publicRouteTable.id],
+        serviceName: pulumi.interpolate`com.amazonaws.${aws.getRegionOutput().name}.s3`,
+        routeTableIds: [
+          publicRouteTable.id,
+          ...privateRouteTables.map((rt) => rt.id),
+        ],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `payment-s3-endpoint-${environmentSuffix}`,
@@ -228,14 +243,15 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create VPC Endpoint for DynamoDB
     this.dynamodbEndpoint = new aws.ec2.VpcEndpoint(
       `payment-dynamodb-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        serviceName: 'com.amazonaws.ap-southeast-1.dynamodb',
-        vpcEndpointType: 'Gateway',
-        routeTableIds: [publicRouteTable.id],
+        serviceName: pulumi.interpolate`com.amazonaws.${aws.getRegionOutput().name}.dynamodb`,
+        routeTableIds: [
+          publicRouteTable.id,
+          ...privateRouteTables.map((rt) => rt.id),
+        ],
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `payment-dynamodb-endpoint-${environmentSuffix}`,
@@ -245,21 +261,7 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Create CloudWatch Log Group for VPC Flow Logs
-    this.vpcFlowLogGroup = new aws.cloudwatch.LogGroup(
-      `payment-vpc-flow-logs-${environmentSuffix}`,
-      {
-        retentionInDays: 7,
-        tags: pulumi.all([tags]).apply(([t]) => ({
-          ...t,
-          Name: `payment-vpc-flow-logs-${environmentSuffix}`,
-          EnvironmentSuffix: environmentSuffix,
-        })),
-      },
-      { parent: this }
-    );
-
-    // Create IAM role for VPC Flow Logs
+    // Enable VPC Flow Logs
     const flowLogRole = new aws.iam.Role(
       `payment-flow-log-role-${environmentSuffix}`,
       {
@@ -284,38 +286,50 @@ export class NetworkStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Attach policy to Flow Log role
     new aws.iam.RolePolicy(
       `payment-flow-log-policy-${environmentSuffix}`,
       {
         role: flowLogRole.id,
-        policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [{
-          "Action": [
-            "logs:CreateLogGroup",
-            "logs:CreateLogStream",
-            "logs:PutLogEvents",
-            "logs:DescribeLogGroups",
-            "logs:DescribeLogStreams"
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogGroup',
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:DescribeLogGroups',
+                'logs:DescribeLogStreams',
+              ],
+              Resource: '*',
+            },
           ],
-          "Effect": "Allow",
-          "Resource": "${this.vpcFlowLogGroup.arn}"
-        }]
-      }`,
+        }),
       },
       { parent: this }
     );
 
-    // Enable VPC Flow Logs
+    const flowLogGroup = new aws.cloudwatch.LogGroup(
+      `payment-vpc-flow-logs-${environmentSuffix}`,
+      {
+        retentionInDays: 7,
+        tags: pulumi.all([tags]).apply(([t]) => ({
+          ...t,
+          Name: `payment-vpc-flow-logs-${environmentSuffix}`,
+          EnvironmentSuffix: environmentSuffix,
+        })),
+      },
+      { parent: this }
+    );
+
     new aws.ec2.FlowLog(
       `payment-vpc-flow-log-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        trafficType: 'ALL',
-        logDestinationType: 'cloud-watch-logs',
-        logDestination: this.vpcFlowLogGroup.arn,
         iamRoleArn: flowLogRole.arn,
+        logDestination: flowLogGroup.arn,
+        trafficType: 'ALL',
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `payment-vpc-flow-log-${environmentSuffix}`,
@@ -327,8 +341,10 @@ export class NetworkStack extends pulumi.ComponentResource {
 
     this.registerOutputs({
       vpcId: this.vpc.id,
-      publicSubnetIds: pulumi.all(this.publicSubnets.map(s => s.id)),
-      privateSubnetIds: pulumi.all(this.privateSubnets.map(s => s.id)),
+      publicSubnetIds: this.publicSubnets.map((s) => s.id),
+      privateSubnetIds: this.privateSubnets.map((s) => s.id),
+      s3EndpointId: this.s3Endpoint.id,
+      dynamodbEndpointId: this.dynamodbEndpoint.id,
     });
   }
 }
