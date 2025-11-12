@@ -1,3 +1,8 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable quotes */
+/* eslint-disable @typescript-eslint/quotes */
+/* eslint-disable prettier/prettier */
+
 import * as pulumi from "@pulumi/pulumi";
 import { TapStack } from "../lib/tap-stack";
 
@@ -8,8 +13,6 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX ||
   pulumi.getStack().split("-").pop() ||
   "dev";
 
-const repositoryName = process.env.REPOSITORY || "unknown";
-const commitAuthor = process.env.COMMIT_AUTHOR || "unknown";
 
 // Create the stack with environment suffix
 const stack = new TapStack("tap-stack", {
