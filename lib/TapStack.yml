@@ -379,7 +379,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
   
-  # Allow Lambda to communicate with VPC Endpoints
+  # Allow Lambda to communicate with VPC Endpoints (Interface endpoints)
   LambdaSecurityGroupEgressHTTPS:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
@@ -388,7 +388,18 @@ Resources:
       FromPort: 443
       ToPort: 443
       DestinationSecurityGroupId: !Ref VPCEndpointSecurityGroup
-      Description: HTTPS to VPC endpoints
+      Description: HTTPS to VPC Interface endpoints (Lambda, CloudWatch Logs, KMS, SQS)
+  
+  # Allow Lambda to send HTTPS traffic (will be routed through S3 Gateway endpoint by route table)
+  LambdaSecurityGroupEgressVPCCIDR:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      CidrIp: !Ref VPCCidr
+      Description: HTTPS within VPC (for S3 Gateway endpoint routing)
   
   # Security Group for VPC Endpoints
   VPCEndpointSecurityGroup:

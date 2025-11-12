@@ -667,7 +667,22 @@
                 "DestinationSecurityGroupId": {
                     "Ref": "VPCEndpointSecurityGroup"
                 },
-                "Description": "HTTPS to VPC endpoints"
+                "Description": "HTTPS to VPC Interface endpoints (Lambda, CloudWatch Logs, KMS, SQS)"
+            }
+        },
+        "LambdaSecurityGroupEgressVPCCIDR": {
+            "Type": "AWS::EC2::SecurityGroupEgress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "LambdaSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "CidrIp": {
+                    "Ref": "VPCCidr"
+                },
+                "Description": "HTTPS within VPC (for S3 Gateway endpoint routing)"
             }
         },
         "VPCEndpointSecurityGroup": {
