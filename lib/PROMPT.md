@@ -2,7 +2,7 @@
 
 Hey team,
 
-We're expanding into the US East market and need to build a robust payment processing environment in AWS Ohio (us-east-2). Our fintech startup is handling real money transactions, so we need infrastructure that meets PCI DSS compliance requirements while delivering sub-second transaction processing at high throughput. The business wants this built using **Pulumi with TypeScript** to leverage our team's existing Node.js expertise.
+We're expanding into the US East market and need to build a robust payment processing environment in AWS Ohio (eu-south-2). Our fintech startup is handling real money transactions, so we need infrastructure that meets PCI DSS compliance requirements while delivering sub-second transaction processing at high throughput. The business wants this built using **Pulumi with TypeScript** to leverage our team's existing Node.js expertise.
 
 The architecture needs to be production-grade from day one. We're talking about a distributed system that processes payments through API endpoints, validates transactions, processes them asynchronously, and notifies stakeholders. Everything needs proper monitoring, logging, and audit trails because we're dealing with financial data. The compliance folks are very particular about encryption, network isolation, and access controls.
 
@@ -10,7 +10,7 @@ We've got some specific technical debt to avoid here. Past payment systems suffe
 
 ## What we need to build
 
-Create a complete payment processing infrastructure using **Pulumi with TypeScript** for the AWS Ohio region (us-east-2). The system should handle payment validation, processing, and notification workflows with full audit capabilities and comprehensive monitoring.
+Create a complete payment processing infrastructure using **Pulumi with TypeScript** for the AWS Ohio region (eu-south-2). The system should handle payment validation, processing, and notification workflows with full audit capabilities and comprehensive monitoring.
 
 ### Core Requirements
 
@@ -77,7 +77,7 @@ Create a complete payment processing infrastructure using **Pulumi with TypeScri
 ### Technical Requirements
 
 - All infrastructure defined using **Pulumi with TypeScript**
-- Deploy to **us-east-2 (Ohio)** region
+- Deploy to **eu-south-2 (Ohio)** region
 - Use Pulumi Component Resource pattern to organize related resources
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environmentSuffix}`

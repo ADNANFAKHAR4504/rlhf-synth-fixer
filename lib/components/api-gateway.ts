@@ -1,8 +1,8 @@
 /**
  * ApiGatewayStack - API Gateway with Lambda integration
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface ApiGatewayStackArgs {
   environmentSuffix: string;
@@ -74,7 +74,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
         type: 'AWS_PROXY',
         uri: validatorLambdaArn.apply(
           arn =>
-            `arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${arn}/invocations`
+            `arn:aws:apigateway:eu-south-2:lambda:path/2015-03-31/functions/${arn}/invocations`
         ),
       },
       { parent: this }
@@ -137,7 +137,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.us-east-2.amazonaws.com/${stage.stageName}/payments`;
+    this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.eu-south-2.amazonaws.com/${stage.stageName}/payments`;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,

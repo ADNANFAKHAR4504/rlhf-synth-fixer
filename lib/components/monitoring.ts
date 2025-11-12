@@ -1,8 +1,8 @@
 /**
  * MonitoringStack - CloudWatch logs, dashboard, alarms, SNS
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface MonitoringStackArgs {
   environmentSuffix: string;
@@ -178,7 +178,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                   type: 'metric',
                   properties: {
                     title: 'Lambda Invocations',
-                    region: 'us-east-2',
+                    region: 'eu-south-2',
                     metrics: [
                       [
                         'AWS/Lambda',
@@ -212,7 +212,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                   type: 'metric',
                   properties: {
                     title: 'Lambda Error Rates',
-                    region: 'us-east-2',
+                    region: 'eu-south-2',
                     metrics: [
                       [
                         'AWS/Lambda',
@@ -246,7 +246,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                   type: 'metric',
                   properties: {
                     title: 'DynamoDB Read/Write Capacity',
-                    region: 'us-east-2',
+                    region: 'eu-south-2',
                     metrics: [
                       [
                         'AWS/DynamoDB',
@@ -273,7 +273,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
                   type: 'metric',
                   properties: {
                     title: 'API Gateway Requests',
-                    region: 'us-east-2',
+                    region: 'eu-south-2',
                     metrics: [
                       [
                         'AWS/ApiGateway',
@@ -316,7 +316,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-2#dashboards:name=${dashboard.dashboardName}`;
+    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=eu-south-2#dashboards:name=${dashboard.dashboardName}`;
 
     this.registerOutputs({
       snsTopicArn: this.snsTopicArn,

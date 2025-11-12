@@ -8,7 +8,7 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Set up Pulumi mocks before importing any stack code
 pulumi.runtime.setMocks({
-  newResource: function(args: pulumi.runtime.MockResourceArgs): {id: string, state: any} {
+  newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string, state: any } {
     const outputs: any = {
       ...args.inputs,
       id: `${args.name}-id`,
@@ -25,7 +25,7 @@ pulumi.runtime.setMocks({
         break;
       case 'aws:ec2/subnet:Subnet':
         outputs.cidrBlock = args.inputs.cidrBlock;
-        outputs.availabilityZone = args.inputs.availabilityZone || 'us-east-2a';
+        outputs.availabilityZone = args.inputs.availabilityZone || 'eu-south-2a';
         outputs.vpcId = args.inputs.vpcId;
         break;
       case 'aws:ec2/internetGateway:InternetGateway':
@@ -93,7 +93,7 @@ pulumi.runtime.setMocks({
         outputs.name = args.inputs.name;
         outputs.description = args.inputs.description;
         outputs.rootResourceId = `${args.name}-root-id`;
-        outputs.executionArn = `arn:aws:execute-api:us-east-2:123456789012:${args.name}-id`;
+        outputs.executionArn = `arn:aws:execute-api:eu-south-2:123456789012:${args.name}-id`;
         break;
       case 'aws:apigateway/resource:Resource':
         outputs.restApi = args.inputs.restApi;
@@ -114,7 +114,7 @@ pulumi.runtime.setMocks({
         break;
       case 'aws:apigateway/deployment:Deployment':
         outputs.restApi = args.inputs.restApi;
-        outputs.invokeUrl = `https://${args.name}-id.execute-api.us-east-2.amazonaws.com`;
+        outputs.invokeUrl = `https://${args.name}-id.execute-api.eu-south-2.amazonaws.com`;
         break;
       case 'aws:apigateway/stage:Stage':
         outputs.restApi = args.inputs.restApi;
@@ -149,12 +149,12 @@ pulumi.runtime.setMocks({
       state: outputs,
     };
   },
-  call: function(args: pulumi.runtime.MockCallArgs) {
+  call: function (args: pulumi.runtime.MockCallArgs) {
     // Mock AWS SDK calls
     switch (args.token) {
       case 'aws:index/getAvailabilityZones:getAvailabilityZones':
         return {
-          names: ['us-east-2a', 'us-east-2b', 'us-east-2c'],
+          names: ['eu-south-2a', 'eu-south-2b', 'eu-south-2c'],
           state: 'available',
         };
       default:
@@ -164,13 +164,13 @@ pulumi.runtime.setMocks({
 });
 
 // Now import stack components after mocks are set up
-import { TapStack } from '../lib/tap-stack';
-import { NetworkingStack } from '../lib/components/networking';
-import { DataStack } from '../lib/components/data';
-import { ComputeStack } from '../lib/components/compute';
-import { ApiGatewayStack } from '../lib/components/api-gateway';
-import { MonitoringStack } from '../lib/components/monitoring';
 import * as aws from '@pulumi/aws';
+import { ApiGatewayStack } from '../lib/components/api-gateway';
+import { ComputeStack } from '../lib/components/compute';
+import { DataStack } from '../lib/components/data';
+import { MonitoringStack } from '../lib/components/monitoring';
+import { NetworkingStack } from '../lib/components/networking';
+import { TapStack } from '../lib/tap-stack';
 
 /**
  * Helper function to convert Pulumi Output to Promise for testing
@@ -423,7 +423,7 @@ describe('ComputeStack - Lambda Functions', () => {
   });
 
   it('allows setting SNS topic ARN', () => {
-    const newSnsArn = pulumi.output('arn:aws:sns:us-east-2:123456789012:test-topic');
+    const newSnsArn = pulumi.output('arn:aws:sns:eu-south-2:123456789012:test-topic');
     computeStack.setSnsTopicArn(newSnsArn);
     // No error should be thrown
     expect(true).toBe(true);
@@ -436,7 +436,7 @@ describe('ApiGatewayStack - REST API', () => {
   beforeAll(() => {
     apiStack = new ApiGatewayStack('test-api', {
       environmentSuffix: 'api-test',
-      validatorLambdaArn: pulumi.output('arn:aws:lambda:us-east-2:123456789012:function:validator'),
+      validatorLambdaArn: pulumi.output('arn:aws:lambda:eu-south-2:123456789012:function:validator'),
       tags: pulumi.output({ Environment: 'test' }),
     });
   });

@@ -5,36 +5,32 @@
  * All assertions use dynamic values from cfn-outputs/flat-outputs.json.
  */
 import {
-  DynamoDBClient,
-  DescribeTableCommand,
-} from '@aws-sdk/client-dynamodb';
+  APIGatewayClient
+} from '@aws-sdk/client-api-gateway';
 import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketVersioningCommand,
-  GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
-import {
-  CloudWatchClient,
-  ListDashboardsCommand,
+  CloudWatchClient
 } from '@aws-sdk/client-cloudwatch';
 import {
-  APIGatewayClient,
-  GetRestApiCommand,
-  GetStageCommand,
-  GetResourcesCommand,
-} from '@aws-sdk/client-api-gateway';
+  DescribeTableCommand,
+  DynamoDBClient,
+} from '@aws-sdk/client-dynamodb';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
-import axios from 'axios';
 
 // Load stack outputs
 const outputsPath = path.join(__dirname, '../cfn-outputs/flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
 
-const REGION = 'us-east-2';
+const REGION = 'eu-south-2';
 
 // AWS SDK Clients
 const dynamodbClient = new DynamoDBClient({ region: REGION });

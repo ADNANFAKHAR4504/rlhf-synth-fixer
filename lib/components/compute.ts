@@ -1,8 +1,8 @@
 /**
  * ComputeStack - Lambda functions for payment processing
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface ComputeStackArgs {
   environmentSuffix: string;
@@ -94,7 +94,7 @@ export class ComputeStack extends pulumi.ComponentResource {
                     'dynamodb:Query',
                     'dynamodb:Scan',
                   ],
-                  Resource: `arn:aws:dynamodb:us-east-2:*:table/${table}`,
+                  Resource: `arn:aws:dynamodb:eu-south-2:*:table/${table}`,
                 },
                 {
                   Effect: 'Allow',
@@ -141,7 +141,7 @@ export class ComputeStack extends pulumi.ComponentResource {
           variables: {
             TABLE_NAME: tableName,
             BUCKET_NAME: bucketName,
-            REGION: 'us-east-2',
+            REGION: 'eu-south-2',
           },
         },
         code: new pulumi.asset.AssetArchive({
@@ -214,7 +214,7 @@ exports.handler = async (event) => {
           variables: {
             TABLE_NAME: tableName,
             BUCKET_NAME: bucketName,
-            REGION: 'us-east-2',
+            REGION: 'eu-south-2',
           },
         },
         code: new pulumi.asset.AssetArchive({
@@ -307,7 +307,7 @@ exports.handler = async (event) => {
         environment: {
           variables: {
             SNS_TOPIC_ARN: this.snsTopicArnInput,
-            REGION: 'us-east-2',
+            REGION: 'eu-south-2',
           },
         },
         code: new pulumi.asset.AssetArchive({

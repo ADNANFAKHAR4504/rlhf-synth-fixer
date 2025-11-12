@@ -1,6 +1,6 @@
 # Payment Processing Infrastructure - Pulumi TypeScript Implementation
 
-This implementation provides a complete, production-ready payment processing infrastructure using Pulumi with TypeScript, deployed to AWS Ohio (us-east-2). The architecture follows the Component Resource pattern and implements all PCI DSS compliance requirements.
+This implementation provides a complete, production-ready payment processing infrastructure using Pulumi with TypeScript, deployed to AWS Ohio (eu-south-2). The architecture follows the Component Resource pattern and implements all PCI DSS compliance requirements.
 
 ## File: lib/tap-stack.ts
 
@@ -257,7 +257,7 @@ export class NetworkingStack extends pulumi.ComponentResource {
     // VPC Endpoints for S3 and DynamoDB
     const s3Endpoint = new aws.ec2.VpcEndpoint(`payment-s3-endpoint-${environmentSuffix}`, {
       vpcId: this.vpc.id,
-      serviceName: `com.amazonaws.us-east-2.s3`,
+      serviceName: `com.amazonaws.eu-south-2.s3`,
       vpcEndpointType: 'Gateway',
       routeTableIds: [publicRouteTable.id],
       tags: pulumi.all([tags]).apply(([t]) => ({
@@ -268,7 +268,7 @@ export class NetworkingStack extends pulumi.ComponentResource {
 
     const dynamoEndpoint = new aws.ec2.VpcEndpoint(`payment-dynamodb-endpoint-${environmentSuffix}`, {
       vpcId: this.vpc.id,
-      serviceName: `com.amazonaws.us-east-2.dynamodb`,
+      serviceName: `com.amazonaws.eu-south-2.dynamodb`,
       vpcEndpointType: 'Gateway',
       routeTableIds: [publicRouteTable.id],
       tags: pulumi.all([tags]).apply(([t]) => ({
@@ -561,7 +561,7 @@ export class ComputeStack extends pulumi.ComponentResource {
               'dynamodb:Query',
               'dynamodb:Scan',
             ],
-            Resource: `arn:aws:dynamodb:us-east-2:*:table/${table}`,
+            Resource: `arn:aws:dynamodb:eu-south-2:*:table/${table}`,
           },
           {
             Effect: 'Allow',
@@ -608,7 +608,7 @@ export class ComputeStack extends pulumi.ComponentResource {
         variables: {
           TABLE_NAME: tableName,
           BUCKET_NAME: bucketName,
-          REGION: 'us-east-2',
+          REGION: 'eu-south-2',
         },
       },
       code: new pulumi.asset.AssetArchive({
@@ -677,7 +677,7 @@ exports.handler = async (event) => {
         variables: {
           TABLE_NAME: tableName,
           BUCKET_NAME: bucketName,
-          REGION: 'us-east-2',
+          REGION: 'eu-south-2',
         },
       },
       code: new pulumi.asset.AssetArchive({
@@ -766,7 +766,7 @@ exports.handler = async (event) => {
       environment: {
         variables: {
           SNS_TOPIC_ARN: this.snsTopicArnInput,
-          REGION: 'us-east-2',
+          REGION: 'eu-south-2',
         },
       },
       code: new pulumi.asset.AssetArchive({
@@ -898,7 +898,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
       integrationHttpMethod: 'POST',
       type: 'AWS_PROXY',
       uri: validatorLambdaArn.apply(arn =>
-        `arn:aws:apigateway:us-east-2:lambda:path/2015-03-31/functions/${arn}/invocations`
+        `arn:aws:apigateway:eu-south-2:lambda:path/2015-03-31/functions/${arn}/invocations`
       ),
     }, { parent: this });
 
@@ -940,7 +940,7 @@ export class ApiGatewayStack extends pulumi.ComponentResource {
       },
     }, { parent: this });
 
-    this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.us-east-2.amazonaws.com/${stage.stageName}/payments`;
+    this.apiUrl = pulumi.interpolate`https://${api.id}.execute-api.eu-south-2.amazonaws.com/${stage.stageName}/payments`;
 
     this.registerOutputs({
       apiUrl: this.apiUrl,
@@ -1081,7 +1081,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
               type: 'metric',
               properties: {
                 title: 'Lambda Invocations',
-                region: 'us-east-2',
+                region: 'eu-south-2',
                 metrics: [
                   ['AWS/Lambda', 'Invocations', { stat: 'Sum', label: 'Validator' }, { FunctionName: validator }],
                   ['.', '.', { stat: 'Sum', label: 'Processor' }, { FunctionName: processor }],
@@ -1097,7 +1097,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
               type: 'metric',
               properties: {
                 title: 'Lambda Error Rates',
-                region: 'us-east-2',
+                region: 'eu-south-2',
                 metrics: [
                   ['AWS/Lambda', 'Errors', { stat: 'Average', label: 'Validator' }, { FunctionName: validator }],
                   ['.', '.', { stat: 'Average', label: 'Processor' }, { FunctionName: processor }],
@@ -1113,7 +1113,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
               type: 'metric',
               properties: {
                 title: 'DynamoDB Read/Write Capacity',
-                region: 'us-east-2',
+                region: 'eu-south-2',
                 metrics: [
                   ['AWS/DynamoDB', 'ConsumedReadCapacityUnits', { stat: 'Sum', label: 'Read' }, { TableName: table }],
                   ['.', 'ConsumedWriteCapacityUnits', { stat: 'Sum', label: 'Write' }, { TableName: table }],
@@ -1128,7 +1128,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
               type: 'metric',
               properties: {
                 title: 'API Gateway Requests',
-                region: 'us-east-2',
+                region: 'eu-south-2',
                 metrics: [
                   ['AWS/ApiGateway', 'Count', { stat: 'Sum', label: 'Requests' }, { ApiName: apiId, Stage: stage }],
                   ['.', '4XXError', { stat: 'Sum', label: '4XX Errors' }, { ApiName: apiId, Stage: stage }],
@@ -1144,7 +1144,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
         })),
     }, { parent: this });
 
-    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=us-east-2#dashboards:name=${dashboard.dashboardName}`;
+    this.dashboardUrl = pulumi.interpolate`https://console.aws.amazon.com/cloudwatch/home?region=eu-south-2#dashboards:name=${dashboard.dashboardName}`;
 
     this.registerOutputs({
       snsTopicArn: this.snsTopicArn,
@@ -1159,7 +1159,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 ```markdown
 # Payment Processing Infrastructure
 
-Complete Pulumi TypeScript implementation for payment processing infrastructure in AWS Ohio (us-east-2).
+Complete Pulumi TypeScript implementation for payment processing infrastructure in AWS Ohio (eu-south-2).
 
 ## Architecture Overview
 
@@ -1220,7 +1220,7 @@ npm install
 pulumi stack init dev
 
 # Set AWS region
-pulumi config set aws:region us-east-2
+pulumi config set aws:region eu-south-2
 
 # Set environment suffix
 pulumi config set env dev

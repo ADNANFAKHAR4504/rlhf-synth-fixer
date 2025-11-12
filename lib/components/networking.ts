@@ -1,8 +1,8 @@
 /**
  * NetworkingStack - VPC, subnets, NAT gateways, VPC endpoints, flow logs
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface NetworkingStackArgs {
   environmentSuffix: string;
@@ -202,7 +202,7 @@ export class NetworkingStack extends pulumi.ComponentResource {
       `payment-s3-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        serviceName: 'com.amazonaws.us-east-2.s3',
+        serviceName: 'com.amazonaws.eu-south-2.s3',
         vpcEndpointType: 'Gateway',
         routeTableIds: [publicRouteTable.id],
         tags: pulumi.all([tags]).apply(([t]) => ({
@@ -217,7 +217,7 @@ export class NetworkingStack extends pulumi.ComponentResource {
       `payment-dynamodb-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        serviceName: 'com.amazonaws.us-east-2.dynamodb',
+        serviceName: 'com.amazonaws.eu-south-2.dynamodb',
         vpcEndpointType: 'Gateway',
         routeTableIds: [publicRouteTable.id],
         tags: pulumi.all([tags]).apply(([t]) => ({
