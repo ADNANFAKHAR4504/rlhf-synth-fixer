@@ -48,8 +48,8 @@ env:
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-  IAC_ANALYSIS_SUBJECT_LABEL: "Infrastructure Analysis/Monitoring"
-  CICD_PIPELINE_SUBJECT_LABEL: "CI/CD Pipeline"
+  IAC_ANALYSIS_SUBJECT_LABEL: 'Infrastructure Analysis/Monitoring'
+  CICD_PIPELINE_SUBJECT_LABEL: 'CI/CD Pipeline'
 
 jobs:
   detect-metadata:
@@ -107,7 +107,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -277,8 +277,8 @@ jobs:
   analysis:
     name: Analysis
     runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    needs: [detect-metadata, lint, unit-tests]
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
     environment: dev
     env:
       AWS_ENDPOINT_URL: http://127.0.0.1:5001
@@ -300,8 +300,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          is-analysis: "true"
+          download-artifacts: 'false'
+          is-analysis: 'true'
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -433,7 +433,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "true"
+          download-artifacts: 'true'
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -460,7 +460,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: qa
     outputs:
       platform: ${{ needs.detect-metadata.outputs.platform }}
@@ -487,7 +487,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: qa
 
     steps:
@@ -854,24 +854,46 @@ jobs:
 
             ---
 
-            # Final Output Format (Both Review Types)
+            # ⚠️ CRITICAL: Final Output Format (Both Review Types)
 
-            SCORE:<numeric_value>
-            Example: SCORE:8
+            **MANDATORY**: Your GitHub comment MUST end with this exact line:
 
-            - This must always appear on its own line at the very end of your output.
-            - Do not include extra text, markdown, or emojis on that line.
-            - The numeric value (0–10) represents the final quality score.
-            - Continue to post your detailed GitHub comment as usual.
+            SCORE:X
 
-            **MANDATORY FINAL STEP**: Once your review is complete, you MUST post a comprehensive GitHub comment on this pull request summarizing your findings, scores, and any recommendations. The comment should include:
-            - Summary of the review
-            - Training quality score
-            - Any issues found
-            - Recommendations for improvement
-            - The final SCORE line at the end
+            Where X is a number from 0 to 10 (your training quality score).
 
-            After posting the comment, finish execution successfully.
+            **Format Requirements:**
+            - Must be on its own line (no other text on that line)
+            - Must be the LAST line of your GitHub comment
+            - Must use exact format: SCORE:8 (no spaces between SCORE: and number)
+            - Score must be 0-10 (scores > 10 will be rejected as false matches)
+            - Do NOT use compliance scores (like 12/17) or other metrics
+
+            **Examples of VALID formats:**
+            ```
+            SCORE:10
+            SCORE:8
+            SCORE:6
+            ```
+
+            **Examples of INVALID formats:**
+            ```
+            SCORE: 8 (extra space)
+            Training Quality Score: 8/10 (wrong format, but acceptable as fallback)
+            Compliance Score: 12/17 (will be rejected - exceeds maximum)
+            ```
+
+            **MANDATORY FINAL STEPS**:
+            1. Update metadata.json with training_quality field (primary source)
+            2. Post comprehensive GitHub comment with review findings
+            3. End comment with SCORE:X line where X is 0-10
+
+            **What happens if you don't follow this:**
+            - Without SCORE line: Score defaults to 0, build FAILS
+            - Score > 10: Rejected as false match, score set to 0, build FAILS
+            - Without metadata.json update: Fallback to comment parsing, less reliable
+
+            After posting the comment with the SCORE line, finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow."
 
       - name: Extract Claude Quality Score from PR Comment
@@ -883,18 +905,60 @@ jobs:
           gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
 
-          echo "🍀 Searching for quality score pattern..."
-          # Case-insensitive search for multiple variants (Final Score, Training Quality, etc.)
-          SCORE=$(grep -Eoi '(final[[:space:]]*(score|quality):?|training[_[:space:]]*quality:?|quality[[:space:]]*score:?|score:)[[:space:]]*[0-9]+(\.[0-9]+)?' all_comments.txt \
-            | tail -1 | grep -Eo '[0-9]+(\.[0-9]+)?' | head -1)
+          echo "🍀 Searching for Claude quality score patterns..."
 
+          # 1️⃣ Try to find most flexible Claude score pattern
+          # Matches things like:
+          # SCORE:9, Score: 9, Training Quality: **9.2/10**, Final Score ⭐️: 8.5/10, etc.
+          SCORE=$(grep -Poi \
+            '(?i)(score|training\s*quality|training\s*score|final\s*score|estimated\s*score)[^0-9]{0,15}([0-9]+(\.[0-9]+)?)' \
+            all_comments.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+
+          # 2️⃣ If not found, try clean "SCORE:" line (in case of strict format)
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score in PR comments. Defaulting to 0."
+            SCORE=$(grep -Poi '^\s*\*?\**\s*SCORE\s*[:=-]?\s*\**\*?\s*([0-9]+(\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
+          fi
+
+          # 3️⃣ If still not found, check for any “X/10” patterns (sometimes Claude just ends with 9/10)
+          if [ -z "$SCORE" ]; then
+            SCORE=$(grep -Poi '\b([0-9]+(\.[0-9]+)?)/10\b' all_comments.txt | grep -Po '^[0-9]+(\.[0-9]+)?' | tail -1)
+          fi
+
+          # 4️⃣ If comment parsing failed, fallback to metadata.json
+          if [ -z "$SCORE" ]; then
+            echo "⚠️ Could not find score in Claude comment. Falling back to metadata.json..."
+            if [ -f "metadata.json" ]; then
+              SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+              if [ -n "$SCORE" ] && [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                echo "✅ Found fallback metadata training_quality: $SCORE"
+              else
+                echo "⚠️ metadata.json missing valid numeric score"
+                SCORE=""
+              fi
+            else
+              echo "⚠️ metadata.json not found"
+            fi
+          fi
+
+          # 5️⃣ Validate range and clean
+          if [ -z "$SCORE" ]; then
+            echo "⚠️ Could not find any quality score. Defaulting to 0."
             SCORE=0
           fi
 
-          echo "Claude quality score: $SCORE"
+          SCORE_INT=$(echo "$SCORE" | awk '{print int($1)}')
+
+          if (( $(echo "$SCORE_INT > 10" | bc -l) )); then
+            echo "⚠️ Invalid high score ($SCORE) → set to 0"
+            SCORE=0
+          elif (( $(echo "$SCORE_INT < 0" | bc -l) )); then
+            echo "⚠️ Invalid negative score ($SCORE) → set to 0"
+            SCORE=0
+          fi
+
+          echo "✅ Final Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
 
       - name: Enforce Quality Threshold
         id: quality_gate

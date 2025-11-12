@@ -1,0 +1,3485 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Hub-and-Spoke Network Architecture with Transit Gateway for Department Migration",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix",
+                        "Environment"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (e.g., dev, staging, prod)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "Environment": {
+            "Type": "String",
+            "Default": "migration",
+            "Description": "Environment name for tagging",
+            "AllowedValues": [
+                "development",
+                "staging",
+                "production",
+                "migration"
+            ]
+        }
+    },
+    "Resources": {
+        "HubVPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/hub-vpc-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "FinanceVPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/finance-vpc-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "EngineeringVPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/engineering-vpc-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "MarketingVPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/vpc/marketing-vpc-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "VPCFlowLogsRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "vpc-flow-logs-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.0.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubIGWAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "HubInternetGateway"
+                }
+            }
+        },
+        "HubPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "CidrBlock": "10.0.100.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "CidrBlock": "10.0.101.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "CidrBlock": "10.0.102.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "CidrBlock": "10.0.0.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "CidrBlock": "10.0.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "CidrBlock": "10.0.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "HubIGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "HubInternetGateway"
+                }
+            }
+        },
+        "HubPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                }
+            }
+        },
+        "HubPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                }
+            }
+        },
+        "HubPublicSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPublicRouteTable"
+                }
+            }
+        },
+        "HubPrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-private-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPrivateRouteTable"
+                }
+            }
+        },
+        "HubPrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPrivateRouteTable"
+                }
+            }
+        },
+        "HubPrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "HubPrivateRouteTable"
+                }
+            }
+        },
+        "HubVPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "HubVPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "HubVPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogsRole",
+                        "Arn"
+                    ]
+                },
+                "MaxAggregationInterval": 60,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.1.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceIGWAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "FinanceInternetGateway"
+                }
+            }
+        },
+        "FinancePublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "CidrBlock": "10.1.100.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "CidrBlock": "10.1.101.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "CidrBlock": "10.1.102.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-public-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "CidrBlock": "10.1.0.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "CidrBlock": "10.1.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "CidrBlock": "10.1.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceNATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "FinanceIGWAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-nat-eip-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceNATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "FinanceNATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "FinancePublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-nat-gateway-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "FinanceIGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "FinancePublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "FinanceInternetGateway"
+                }
+            }
+        },
+        "FinancePublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "FinancePublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "FinancePublicRouteTable"
+                }
+            }
+        },
+        "FinancePublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "FinancePublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "FinancePublicRouteTable"
+                }
+            }
+        },
+        "FinancePublicSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "FinancePublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "FinancePublicRouteTable"
+                }
+            }
+        },
+        "FinancePrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-private-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinancePrivateRouteToNAT": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "FinancePrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "FinanceNATGateway"
+                }
+            }
+        },
+        "FinancePrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "FinancePrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "FinancePrivateRouteTable"
+                }
+            }
+        },
+        "FinancePrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "FinancePrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "FinancePrivateRouteTable"
+                }
+            }
+        },
+        "FinancePrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "FinancePrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "FinancePrivateRouteTable"
+                }
+            }
+        },
+        "FinanceVPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "FinanceVPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "FinanceVPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogsRole",
+                        "Arn"
+                    ]
+                },
+                "MaxAggregationInterval": 60,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.2.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringIGWAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "EngineeringInternetGateway"
+                }
+            }
+        },
+        "EngineeringPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "CidrBlock": "10.2.100.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "CidrBlock": "10.2.101.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "CidrBlock": "10.2.102.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-public-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "CidrBlock": "10.2.0.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "CidrBlock": "10.2.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "CidrBlock": "10.2.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringNATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "EngineeringIGWAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-nat-eip-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringNATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "EngineeringNATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "EngineeringPublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-nat-gateway-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "EngineeringIGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "EngineeringPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "EngineeringInternetGateway"
+                }
+            }
+        },
+        "EngineeringPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "EngineeringPublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "EngineeringPublicRouteTable"
+                }
+            }
+        },
+        "EngineeringPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "EngineeringPublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "EngineeringPublicRouteTable"
+                }
+            }
+        },
+        "EngineeringPublicSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "EngineeringPublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "EngineeringPublicRouteTable"
+                }
+            }
+        },
+        "EngineeringPrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-private-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringPrivateRouteToNAT": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "EngineeringPrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "EngineeringNATGateway"
+                }
+            }
+        },
+        "EngineeringPrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "EngineeringPrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "EngineeringPrivateRouteTable"
+                }
+            }
+        },
+        "EngineeringPrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "EngineeringPrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "EngineeringPrivateRouteTable"
+                }
+            }
+        },
+        "EngineeringPrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "EngineeringPrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "EngineeringPrivateRouteTable"
+                }
+            }
+        },
+        "EngineeringVPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "EngineeringVPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogsRole",
+                        "Arn"
+                    ]
+                },
+                "MaxAggregationInterval": 60,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingVPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": "10.3.0.0/16",
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-vpc-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingInternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-igw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingIGWAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "MarketingInternetGateway"
+                }
+            }
+        },
+        "MarketingPublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "CidrBlock": "10.3.100.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-public-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "CidrBlock": "10.3.101.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-public-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "CidrBlock": "10.3.102.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-public-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "CidrBlock": "10.3.0.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-private-subnet-1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "CidrBlock": "10.3.1.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-private-subnet-2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "CidrBlock": "10.3.2.0/24",
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-private-subnet-3-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingNATGatewayEIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "MarketingIGWAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-nat-eip-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingNATGateway": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "MarketingNATGatewayEIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "MarketingPublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-nat-gateway-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-public-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "MarketingIGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "MarketingPublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "MarketingInternetGateway"
+                }
+            }
+        },
+        "MarketingPublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "MarketingPublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "MarketingPublicRouteTable"
+                }
+            }
+        },
+        "MarketingPublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "MarketingPublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "MarketingPublicRouteTable"
+                }
+            }
+        },
+        "MarketingPublicSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "MarketingPublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "MarketingPublicRouteTable"
+                }
+            }
+        },
+        "MarketingPrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-private-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingPrivateRouteToNAT": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "MarketingPrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "MarketingNATGateway"
+                }
+            }
+        },
+        "MarketingPrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "MarketingPrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "MarketingPrivateRouteTable"
+                }
+            }
+        },
+        "MarketingPrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "MarketingPrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "MarketingPrivateRouteTable"
+                }
+            }
+        },
+        "MarketingPrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "MarketingPrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "MarketingPrivateRouteTable"
+                }
+            }
+        },
+        "MarketingVPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "MarketingVPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "MarketingVPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogsRole",
+                        "Arn"
+                    ]
+                },
+                "MaxAggregationInterval": 60,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-vpc-flow-log-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "TransitGateway": {
+            "Type": "AWS::EC2::TransitGateway",
+            "Properties": {
+                "Description": "Hub-and-Spoke Transit Gateway for department migration",
+                "DefaultRouteTableAssociation": "disable",
+                "DefaultRouteTablePropagation": "disable",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-spoke-tgw-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubTGWAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "HubPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "HubPrivateSubnet2"
+                    },
+                    {
+                        "Ref": "HubPrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceTGWAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "FinancePrivateSubnet1"
+                    },
+                    {
+                        "Ref": "FinancePrivateSubnet2"
+                    },
+                    {
+                        "Ref": "FinancePrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "finance-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Finance"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "EngineeringTGWAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "EngineeringPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "EngineeringPrivateSubnet2"
+                    },
+                    {
+                        "Ref": "EngineeringPrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "engineering-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Engineering"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "MarketingTGWAttachment": {
+            "Type": "AWS::EC2::TransitGatewayAttachment",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "VpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "MarketingPrivateSubnet1"
+                    },
+                    {
+                        "Ref": "MarketingPrivateSubnet2"
+                    },
+                    {
+                        "Ref": "MarketingPrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "marketing-tgw-attachment-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Marketing"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubTGWRouteTable": {
+            "Type": "AWS::EC2::TransitGatewayRouteTable",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-tgw-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubTGWRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "HubTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTGWRouteTable"
+                }
+            }
+        },
+        "FinanceTGWRouteTablePropagation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "FinanceTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTGWRouteTable"
+                }
+            }
+        },
+        "EngineeringTGWRouteTablePropagation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "EngineeringTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTGWRouteTable"
+                }
+            }
+        },
+        "MarketingTGWRouteTablePropagation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "MarketingTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "HubTGWRouteTable"
+                }
+            }
+        },
+        "SpokeTGWRouteTable": {
+            "Type": "AWS::EC2::TransitGatewayRouteTable",
+            "Properties": {
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "spoke-tgw-rt-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Spoke"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "FinanceTGWRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "FinanceTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTGWRouteTable"
+                }
+            }
+        },
+        "EngineeringTGWRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "EngineeringTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTGWRouteTable"
+                }
+            }
+        },
+        "MarketingTGWRouteTableAssociation": {
+            "Type": "AWS::EC2::TransitGatewayRouteTableAssociation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "MarketingTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTGWRouteTable"
+                }
+            }
+        },
+        "HubTGWRouteTablePropagationToSpoke": {
+            "Type": "AWS::EC2::TransitGatewayRouteTablePropagation",
+            "Properties": {
+                "TransitGatewayAttachmentId": {
+                    "Ref": "HubTGWAttachment"
+                },
+                "TransitGatewayRouteTableId": {
+                    "Ref": "SpokeTGWRouteTable"
+                }
+            }
+        },
+        "HubPrivateRouteToTGW": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "HubTGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "HubPrivateRouteTable"
+                },
+                "DestinationCidrBlock": "10.0.0.0/8",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "FinancePrivateRouteToTGW": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "FinanceTGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "FinancePrivateRouteTable"
+                },
+                "DestinationCidrBlock": "10.0.0.0/16",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "EngineeringPrivateRouteToTGW": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "EngineeringTGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "EngineeringPrivateRouteTable"
+                },
+                "DestinationCidrBlock": "10.0.0.0/16",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "MarketingPrivateRouteToTGW": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "MarketingTGWAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "MarketingPrivateRouteTable"
+                },
+                "DestinationCidrBlock": "10.0.0.0/16",
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        },
+        "WebTierSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "web-tier-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for web tier - allows HTTP/HTTPS from internet",
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from internet"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from internet"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "web-tier-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "AppTierSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "app-tier-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for app tier - allows traffic from web tier only",
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebTierSecurityGroup"
+                        },
+                        "Description": "Allow custom port 8080 from web tier"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3000,
+                        "ToPort": 3000,
+                        "SourceSecurityGroupId": {
+                            "Ref": "WebTierSecurityGroup"
+                        },
+                        "Description": "Allow custom port 3000 from web tier"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "app-tier-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPublicNetworkAcl": {
+            "Type": "AWS::EC2::NetworkAcl",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "HubVPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "hub-public-nacl-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "HubPublicNaclInboundHTTP": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                },
+                "RuleNumber": 100,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "CidrBlock": "0.0.0.0/0",
+                "PortRange": {
+                    "From": 80,
+                    "To": 80
+                }
+            }
+        },
+        "HubPublicNaclInboundHTTPS": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                },
+                "RuleNumber": 110,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "CidrBlock": "0.0.0.0/0",
+                "PortRange": {
+                    "From": 443,
+                    "To": 443
+                }
+            }
+        },
+        "HubPublicNaclInboundEphemeral": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                },
+                "RuleNumber": 120,
+                "Protocol": 6,
+                "RuleAction": "allow",
+                "CidrBlock": "0.0.0.0/0",
+                "PortRange": {
+                    "From": 1024,
+                    "To": 65535
+                }
+            }
+        },
+        "HubPublicNaclInboundTGW": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                },
+                "RuleNumber": 130,
+                "Protocol": -1,
+                "RuleAction": "allow",
+                "CidrBlock": "10.0.0.0/8"
+            }
+        },
+        "HubPublicNaclOutbound": {
+            "Type": "AWS::EC2::NetworkAclEntry",
+            "Properties": {
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                },
+                "RuleNumber": 100,
+                "Protocol": -1,
+                "Egress": true,
+                "RuleAction": "allow",
+                "CidrBlock": "0.0.0.0/0"
+            }
+        },
+        "HubPublicSubnet1NaclAssociation": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet1"
+                },
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                }
+            }
+        },
+        "HubPublicSubnet2NaclAssociation": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet2"
+                },
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                }
+            }
+        },
+        "HubPublicSubnet3NaclAssociation": {
+            "Type": "AWS::EC2::SubnetNetworkAclAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "HubPublicSubnet3"
+                },
+                "NetworkAclId": {
+                    "Ref": "HubPublicNetworkAcl"
+                }
+            }
+        },
+        "ConnectivityTestLambdaRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "connectivity-test-lambda-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole",
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "EC2DescribePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DescribeVpcs",
+                                        "ec2:DescribeSubnets",
+                                        "ec2:DescribeNetworkInterfaces"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "ConnectivityTestLambda": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "connectivity-test-${EnvironmentSuffix}"
+                },
+                "Runtime": "python3.11",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "ConnectivityTestLambdaRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 60,
+                "Code": {
+                    "ZipFile": "import json\nimport urllib3\nimport cfnresponse\n\ndef lambda_handler(event, context):\n    print(f\"Event: {json.dumps(event)}\")\n\n    response_data = {}\n\n    try:\n        if event['RequestType'] == 'Delete':\n            cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)\n            return\n\n        # Test connectivity\n        hub_vpc_id = event['ResourceProperties']['HubVpcId']\n        finance_vpc_id = event['ResourceProperties']['FinanceVpcId']\n        engineering_vpc_id = event['ResourceProperties']['EngineeringVpcId']\n        marketing_vpc_id = event['ResourceProperties']['MarketingVpcId']\n        tgw_id = event['ResourceProperties']['TransitGatewayId']\n\n        response_data['Message'] = 'Connectivity test completed'\n        response_data['HubVpcId'] = hub_vpc_id\n        response_data['SpokeVpcs'] = [finance_vpc_id, engineering_vpc_id, marketing_vpc_id]\n        response_data['TransitGatewayId'] = tgw_id\n        response_data['Status'] = 'VPCs created and attached to Transit Gateway'\n\n        cfnresponse.send(event, context, cfnresponse.SUCCESS, response_data)\n\n    except Exception as e:\n        print(f\"Error: {str(e)}\")\n        response_data['Error'] = str(e)\n        cfnresponse.send(event, context, cfnresponse.FAILED, response_data)\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Department",
+                        "Value": "Hub"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "MigrationPhase",
+                        "Value": "phase-1"
+                    }
+                ]
+            }
+        },
+        "ConnectivityTestCustomResource": {
+            "Type": "Custom::ConnectivityTest",
+            "DependsOn": [
+                "HubTGWAttachment",
+                "FinanceTGWAttachment",
+                "EngineeringTGWAttachment",
+                "MarketingTGWAttachment"
+            ],
+            "Properties": {
+                "ServiceToken": {
+                    "Fn::GetAtt": [
+                        "ConnectivityTestLambda",
+                        "Arn"
+                    ]
+                },
+                "HubVpcId": {
+                    "Ref": "HubVPC"
+                },
+                "FinanceVpcId": {
+                    "Ref": "FinanceVPC"
+                },
+                "EngineeringVpcId": {
+                    "Ref": "EngineeringVPC"
+                },
+                "MarketingVpcId": {
+                    "Ref": "MarketingVPC"
+                },
+                "TransitGatewayId": {
+                    "Ref": "TransitGateway"
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "TransitGatewayId": {
+            "Description": "ID of the Transit Gateway",
+            "Value": {
+                "Ref": "TransitGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TransitGatewayId"
+                }
+            }
+        },
+        "HubVpcId": {
+            "Description": "ID of the Hub VPC",
+            "Value": {
+                "Ref": "HubVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubVpcId"
+                }
+            }
+        },
+        "FinanceVpcId": {
+            "Description": "ID of the Finance VPC",
+            "Value": {
+                "Ref": "FinanceVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinanceVpcId"
+                }
+            }
+        },
+        "EngineeringVpcId": {
+            "Description": "ID of the Engineering VPC",
+            "Value": {
+                "Ref": "EngineeringVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringVpcId"
+                }
+            }
+        },
+        "MarketingVpcId": {
+            "Description": "ID of the Marketing VPC",
+            "Value": {
+                "Ref": "MarketingVPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingVpcId"
+                }
+            }
+        },
+        "HubPublicSubnet1Id": {
+            "Description": "ID of Hub Public Subnet 1",
+            "Value": {
+                "Ref": "HubPublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicSubnet1Id"
+                }
+            }
+        },
+        "HubPublicSubnet2Id": {
+            "Description": "ID of Hub Public Subnet 2",
+            "Value": {
+                "Ref": "HubPublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicSubnet2Id"
+                }
+            }
+        },
+        "HubPublicSubnet3Id": {
+            "Description": "ID of Hub Public Subnet 3",
+            "Value": {
+                "Ref": "HubPublicSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPublicSubnet3Id"
+                }
+            }
+        },
+        "HubPrivateSubnet1Id": {
+            "Description": "ID of Hub Private Subnet 1",
+            "Value": {
+                "Ref": "HubPrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPrivateSubnet1Id"
+                }
+            }
+        },
+        "HubPrivateSubnet2Id": {
+            "Description": "ID of Hub Private Subnet 2",
+            "Value": {
+                "Ref": "HubPrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPrivateSubnet2Id"
+                }
+            }
+        },
+        "HubPrivateSubnet3Id": {
+            "Description": "ID of Hub Private Subnet 3",
+            "Value": {
+                "Ref": "HubPrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-HubPrivateSubnet3Id"
+                }
+            }
+        },
+        "FinancePublicSubnet1Id": {
+            "Description": "ID of Finance Public Subnet 1",
+            "Value": {
+                "Ref": "FinancePublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinancePublicSubnet1Id"
+                }
+            }
+        },
+        "FinancePublicSubnet2Id": {
+            "Description": "ID of Finance Public Subnet 2",
+            "Value": {
+                "Ref": "FinancePublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinancePublicSubnet2Id"
+                }
+            }
+        },
+        "FinancePublicSubnet3Id": {
+            "Description": "ID of Finance Public Subnet 3",
+            "Value": {
+                "Ref": "FinancePublicSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinancePublicSubnet3Id"
+                }
+            }
+        },
+        "FinancePrivateSubnet1Id": {
+            "Description": "ID of Finance Private Subnet 1",
+            "Value": {
+                "Ref": "FinancePrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinancePrivateSubnet1Id"
+                }
+            }
+        },
+        "FinancePrivateSubnet2Id": {
+            "Description": "ID of Finance Private Subnet 2",
+            "Value": {
+                "Ref": "FinancePrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinancePrivateSubnet2Id"
+                }
+            }
+        },
+        "FinancePrivateSubnet3Id": {
+            "Description": "ID of Finance Private Subnet 3",
+            "Value": {
+                "Ref": "FinancePrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinancePrivateSubnet3Id"
+                }
+            }
+        },
+        "EngineeringPublicSubnet1Id": {
+            "Description": "ID of Engineering Public Subnet 1",
+            "Value": {
+                "Ref": "EngineeringPublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringPublicSubnet1Id"
+                }
+            }
+        },
+        "EngineeringPublicSubnet2Id": {
+            "Description": "ID of Engineering Public Subnet 2",
+            "Value": {
+                "Ref": "EngineeringPublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringPublicSubnet2Id"
+                }
+            }
+        },
+        "EngineeringPublicSubnet3Id": {
+            "Description": "ID of Engineering Public Subnet 3",
+            "Value": {
+                "Ref": "EngineeringPublicSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringPublicSubnet3Id"
+                }
+            }
+        },
+        "EngineeringPrivateSubnet1Id": {
+            "Description": "ID of Engineering Private Subnet 1",
+            "Value": {
+                "Ref": "EngineeringPrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringPrivateSubnet1Id"
+                }
+            }
+        },
+        "EngineeringPrivateSubnet2Id": {
+            "Description": "ID of Engineering Private Subnet 2",
+            "Value": {
+                "Ref": "EngineeringPrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringPrivateSubnet2Id"
+                }
+            }
+        },
+        "EngineeringPrivateSubnet3Id": {
+            "Description": "ID of Engineering Private Subnet 3",
+            "Value": {
+                "Ref": "EngineeringPrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringPrivateSubnet3Id"
+                }
+            }
+        },
+        "MarketingPublicSubnet1Id": {
+            "Description": "ID of Marketing Public Subnet 1",
+            "Value": {
+                "Ref": "MarketingPublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingPublicSubnet1Id"
+                }
+            }
+        },
+        "MarketingPublicSubnet2Id": {
+            "Description": "ID of Marketing Public Subnet 2",
+            "Value": {
+                "Ref": "MarketingPublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingPublicSubnet2Id"
+                }
+            }
+        },
+        "MarketingPublicSubnet3Id": {
+            "Description": "ID of Marketing Public Subnet 3",
+            "Value": {
+                "Ref": "MarketingPublicSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingPublicSubnet3Id"
+                }
+            }
+        },
+        "MarketingPrivateSubnet1Id": {
+            "Description": "ID of Marketing Private Subnet 1",
+            "Value": {
+                "Ref": "MarketingPrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingPrivateSubnet1Id"
+                }
+            }
+        },
+        "MarketingPrivateSubnet2Id": {
+            "Description": "ID of Marketing Private Subnet 2",
+            "Value": {
+                "Ref": "MarketingPrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingPrivateSubnet2Id"
+                }
+            }
+        },
+        "MarketingPrivateSubnet3Id": {
+            "Description": "ID of Marketing Private Subnet 3",
+            "Value": {
+                "Ref": "MarketingPrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingPrivateSubnet3Id"
+                }
+            }
+        },
+        "WebTierSecurityGroupId": {
+            "Description": "ID of the Web Tier Security Group",
+            "Value": {
+                "Ref": "WebTierSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-WebTierSecurityGroupId"
+                }
+            }
+        },
+        "AppTierSecurityGroupId": {
+            "Description": "ID of the App Tier Security Group",
+            "Value": {
+                "Ref": "AppTierSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-AppTierSecurityGroupId"
+                }
+            }
+        },
+        "FinanceNATGatewayId": {
+            "Description": "ID of the Finance NAT Gateway",
+            "Value": {
+                "Ref": "FinanceNATGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-FinanceNATGatewayId"
+                }
+            }
+        },
+        "EngineeringNATGatewayId": {
+            "Description": "ID of the Engineering NAT Gateway",
+            "Value": {
+                "Ref": "EngineeringNATGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EngineeringNATGatewayId"
+                }
+            }
+        },
+        "MarketingNATGatewayId": {
+            "Description": "ID of the Marketing NAT Gateway",
+            "Value": {
+                "Ref": "MarketingNATGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-MarketingNATGatewayId"
+                }
+            }
+        },
+        "ConnectivityTestResult": {
+            "Description": "Result of connectivity test",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ConnectivityTestCustomResource",
+                    "Status"
+                ]
+            }
+        }
+    }
+}
