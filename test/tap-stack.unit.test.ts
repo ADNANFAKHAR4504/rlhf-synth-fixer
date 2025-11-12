@@ -153,9 +153,17 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
   let indexModule: any;
 
   beforeAll(() => {
+    // Set AWS_REGION env var BEFORE importing to test first branch
+    process.env.AWS_REGION = 'us-east-1';
+
     // Import index.ts to trigger resource creation and get coverage
     // Using require instead of import for Jest compatibility
     indexModule = require('../index');
+  });
+
+  afterAll(() => {
+    // Clean up
+    delete process.env.AWS_REGION;
   });
 
   describe('Main Infrastructure Stack - Coverage Tests', () => {
@@ -1173,6 +1181,34 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
       expect(imageTag).not.toContain(':latest');
       expect(imageTag).toContain(':v1.0.0');
     });
+  });
+});
+
+// Second test suite to cover different branch - load without AWS_REGION
+describe('Payment Processing Infrastructure - Without AWS_REGION env var', () => {
+  let indexModule2: any;
+
+  beforeAll(() => {
+    // Clear module cache to force re-import
+    jest.resetModules();
+
+    // Ensure AWS_REGION is NOT set to test fallback branches
+    delete process.env.AWS_REGION;
+
+    // Re-mock Pulumi runtime for this suite
+    pulumi.runtime.setMocks(new MyMocks());
+
+    // Import again - this will test aws.config.region || 'us-west-2' branches
+    indexModule2 = require('../index');
+  });
+
+  it('should successfully create infrastructure without AWS_REGION env var', () => {
+    expect(indexModule2).toBeDefined();
+  });
+
+  it('should have valid exports', () => {
+    expect(indexModule2.vpcId).toBeDefined();
+    expect(indexModule2.albDnsName).toBeDefined();
   });
 });
 
