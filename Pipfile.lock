@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "055f1421aeb5756fdc73e007bbe1a61867e939acca16450ebfde2c1ce7fa6f40"
+            "sha256": "9adb35e3202967859c9049e3a4677be25f02d747357b3c10246595c80810a761"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -51,12 +51,12 @@
         },
         "aws-cdk-lib": {
             "hashes": [
-                "sha256:29ac25f0e0aba377beff611ee1d4a087e6fce48476c1409ca7c6e6682ffbeab3",
-                "sha256:f6df71cd13d677cfcd6ed397d7cf838fdfebe85a020c10b72768f6bfb296aeb2"
+                "sha256:8d2ea3c2754d1022db19f59e0558a9b23b26317a95b1327c502ca8afd94c5830",
+                "sha256:c6070a9449b2ce48987855ce273e65b9b18a134d98110ac86f23a393e1bf0b84"
             ],
             "index": "pypi",
             "markers": "python_version ~= '3.9'",
-            "version": "==2.222.0"
+            "version": "==2.223.0"
         },
         "aws-cdk.asset-awscli-v1": {
             "hashes": [
@@ -76,11 +76,19 @@
         },
         "aws-cdk.cloud-assembly-schema": {
             "hashes": [
-                "sha256:06bb2eef3db71288517ad308159174143612b22989258c80a7023808c72152fb",
-                "sha256:566211e080139aa2790a94fcbc00e6ef758bc2f95d130ff604e9bc61e786027c"
+                "sha256:12b193fde580828d8c4909cfa62e1f83977fe20d0aa448c7e7e353f8e21e1b68",
+                "sha256:dc8d1bbe09bca45d675fa7d5c59fd7c073ed86865fc97dc985c6a4caf1016b42"
             ],
             "markers": "python_version ~= '3.9'",
-            "version": "==48.17.0"
+            "version": "==48.18.0"
+        },
+        "aws-cdk.lambda-layer-kubectl-v29": {
+            "hashes": [
+                "sha256:6a3dee8036ea04e26f5f56242c1b91a099b00babb6ab0810b2e46deff59f7355",
+                "sha256:b6496fc9bc7e3e1d56e45328e4fc878c010a1e340a1039c639aacbd7395fe2e0"
+            ],
+            "markers": "python_version ~= '3.8'",
+            "version": "==2.1.1"
         },
         "aws-lambda-powertools": {
             "hashes": [
@@ -395,12 +403,12 @@
         },
         "constructs": {
             "hashes": [
-                "sha256:1f0f59b004edebfde0f826340698b8c34611f57848139b7954904c61645f13c1",
-                "sha256:ce54724360fffe10bab27d8a081844eb81f5ace7d7c62c84b719c49f164d5307"
+                "sha256:43bbefa1ac1c044577d0b1a30648fe5b49557b8b95de2648186f6b909febf7f9",
+                "sha256:bfe3657b0acb62af7aa1fda9a7e338ae5cae84ddf8f84f71125a2a3800d52ea0"
             ],
             "index": "pypi",
-            "markers": "python_version ~= '3.8'",
-            "version": "==10.4.2"
+            "markers": "python_version ~= '3.9'",
+            "version": "==10.4.3"
         },
         "cryptography": {
             "hashes": [
@@ -615,11 +623,11 @@
         },
         "jsii": {
             "hashes": [
-                "sha256:2f772d423ccf107193ba39a7ade7e43e6b5a063cad734009d1b4b0f80c5e7456",
-                "sha256:711131f84a9e968e12b8a09449c734907ca53faa51bf5b85685976dff9faf554"
+                "sha256:9203200ed5289ecc6198783513cbd7abef53d4f6eac0046181d647fa56eda6ab",
+                "sha256:9f87508908bfa51dd9aac59fdbbeff347ae76377758ea5e5f83f149052211514"
             ],
             "markers": "python_version ~= '3.9'",
-            "version": "==1.118.0"
+            "version": "==1.119.0"
         },
         "jsonpatch": {
             "hashes": [
@@ -1386,11 +1394,11 @@
         },
         "typeguard": {
             "hashes": [
-                "sha256:00edaa8da3a133674796cf5ea87d9f4b4c367d77476e185e80251cc13dfbb8c4",
-                "sha256:5e3e3be01e887e7eafae5af63d1f36c849aaa94e3a0112097312aabfa16284f1"
+                "sha256:7da3bd46e61f03e0852f8d251dcbdc2a336aa495d7daff01e092b55327796eb8",
+                "sha256:c556a1b95948230510070ca53fa0341fb0964611bd05d598d87fb52115d65fee"
             ],
-            "markers": "python_full_version >= '3.5.3'",
-            "version": "==2.13.3"
+            "markers": "python_version >= '3.8'",
+            "version": "==4.2.1"
         },
         "typing-extensions": {
             "hashes": [

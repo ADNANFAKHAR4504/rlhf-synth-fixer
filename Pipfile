@@ -20,6 +20,7 @@ constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 tabulate = "*"
+"aws-cdk.lambda-layer-kubectl-v29" = "*"
 
 [dev-packages]
 boto3 = "*"
