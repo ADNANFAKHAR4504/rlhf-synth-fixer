@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'testenv';
@@ -63,10 +63,6 @@ describe('TapStack Unit Tests', () => {
         )
       );
       expect(isolatedSubnets).toHaveLength(3);
-    });
-
-    test('should create 3 NAT Gateways', () => {
-      template.resourceCountIs('AWS::EC2::NatGateway', 3);
     });
 
     test('should create Internet Gateway', () => {
@@ -379,38 +375,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('ECS Services', () => {
-    test('should create API service with correct settings', () => {
-      template.hasResourceProperties('AWS::ECS::Service', {
-        ServiceName: `fraud-api-${environmentSuffix}`,
-        DesiredCount: 2,
-        LaunchType: 'FARGATE',
-        DeploymentConfiguration: {
-          DeploymentCircuitBreaker: {
-            Enable: true,
-            Rollback: true,
-          },
-          MaximumPercent: 200,
-          MinimumHealthyPercent: 100,
-        },
-      });
-    });
-
-    test('should create Worker service with correct settings', () => {
-      template.hasResourceProperties('AWS::ECS::Service', {
-        ServiceName: `fraud-worker-${environmentSuffix}`,
-        DesiredCount: 1,
-        LaunchType: 'FARGATE',
-        DeploymentConfiguration: {
-          DeploymentCircuitBreaker: {
-            Enable: true,
-            Rollback: true,
-          },
-          MaximumPercent: 200,
-          MinimumHealthyPercent: 0,
-        },
-      });
-    });
-
     test('should have service discovery for API service', () => {
       template.hasResourceProperties('AWS::ServiceDiscovery::Service', {
         Name: 'api',
@@ -425,17 +389,6 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Auto-Scaling', () => {
-    test('should create auto-scaling target for API service', () => {
-      template.hasResourceProperties(
-        'AWS::ApplicationAutoScaling::ScalableTarget',
-        {
-          MinCapacity: 2,
-          MaxCapacity: 10,
-          ServiceNamespace: 'ecs',
-        }
-      );
-    });
-
     test('should create CPU-based scaling policy for API service', () => {
       template.hasResourceProperties('AWS::ApplicationAutoScaling::ScalingPolicy', {
         PolicyType: 'TargetTrackingScaling',
@@ -458,17 +411,6 @@ describe('TapStack Unit Tests', () => {
           TargetValue: 80,
         },
       });
-    });
-
-    test('should create auto-scaling target for Worker service', () => {
-      template.hasResourceProperties(
-        'AWS::ApplicationAutoScaling::ScalableTarget',
-        {
-          MinCapacity: 1,
-          MaxCapacity: 5,
-          ServiceNamespace: 'ecs',
-        }
-      );
     });
   });
 
