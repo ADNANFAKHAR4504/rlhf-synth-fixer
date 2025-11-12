@@ -240,6 +240,8 @@ If < 80% resources have suffix:
 
 **CRITICAL THRESHOLD: ≥8 for PR creation**
 
+**Infrastructure Analysis Task Bonus**: If subject_labels contains "Infrastructure Analysis" or "Infrastructure Monitoring", evaluate the analysis script quality (lib/analyse.py or similar): check for professional tabular output (tabulate library), multiple realistic test scenarios (3+ per issue type), comprehensive data collection (resource details, metrics, context), and actionable findings. High-quality analysis data: +1 to +2 bonus; poor coverage or minimal value: -1 to -2 penalty.
+
 #### Step 8: Add Enhanced Fields to metadata.json
 
 **Determine Task Type**:

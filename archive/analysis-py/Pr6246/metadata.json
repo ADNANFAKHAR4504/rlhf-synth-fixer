@@ -1,0 +1,24 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "349063",
+  "team": "2",
+  "startedAt": "2025-11-10T17:07:30.310Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "Lambda",
+    "EC2"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}
