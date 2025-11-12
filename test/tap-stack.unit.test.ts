@@ -33,12 +33,12 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentName parameter with correct properties', () => {
-      const param = template.Parameters.EnvironmentName;
+    test('should have EnvironmentSuffix parameter with correct properties', () => {
+      const param = template.Parameters.EnvironmentSuffix;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.Default).toBe('staging');
-      expect(param.AllowedPattern).toBe('^[a-z][a-z0-9-]*$');
+      expect(param.Default).toBe('dev');
+      expect(param.AllowedPattern).toBe('^[a-z0-9][a-z0-9-]*$');
     });
 
     test('should have TeamName parameter with correct properties', () => {
@@ -881,7 +881,7 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
 
     test('should export stack metadata', () => {
       expect(template.Outputs.StackName).toBeDefined();
-      expect(template.Outputs.EnvironmentName).toBeDefined();
+      expect(template.Outputs.EnvironmentSuffix).toBeDefined();
     });
 
     test('should have export names for cross-stack references', () => {

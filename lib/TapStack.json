@@ -1,0 +1,2209 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "CI/CD Pipeline for Containerized Payment Service with Security Controls",
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for tagging and resource naming (e.g., pr6296, dev, staging)",
+            "AllowedPattern": "^[a-z0-9][a-z0-9-]*$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "TeamName": {
+            "Type": "String",
+            "Default": "payment-team",
+            "Description": "Team responsible for this service",
+            "AllowedPattern": "^[a-z][a-z0-9-]*$",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Default": "finance-123",
+            "Description": "Cost center for billing purposes"
+        },
+        "VpcCidr": {
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "Description": "CIDR block for VPC",
+            "AllowedPattern": "^(\\d{1,3}\\.){3}\\d{1,3}/\\d{1,2}$"
+        },
+        "CreateVpcEndpoints": {
+            "Type": "String",
+            "Default": "true",
+            "Description": "Create VPC endpoints for ECR, S3, CloudWatch (required for private subnet connectivity)",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "EcsClusterName": {
+            "Type": "String",
+            "Description": "Target ECS Cluster for deployment",
+            "Default": "default"
+        },
+        "EcsServiceName": {
+            "Type": "String",
+            "Description": "Target ECS Service for deployment",
+            "Default": "payment-service"
+        },
+        "SlackWebhookUrl": {
+            "Type": "String",
+            "Description": "Webhook URL for Slack notifications (leave empty to disable notifications)",
+            "Default": "",
+            "NoEcho": true
+        }
+    },
+    "Conditions": {
+        "HasSlackWebhook": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "SlackWebhookUrl"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "ShouldCreateVpcEndpoints": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateVpcEndpoints"
+                },
+                "true"
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VpcCidr"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-payment-service-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-payment-service-private-subnet-1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::Cidr": [
+                                {
+                                    "Ref": "VpcCidr"
+                                },
+                                4,
+                                8
+                            ]
+                        }
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-payment-service-private-subnet-2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-payment-service-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentSuffix}-payment-service-private-rt"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "DefaultRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable"
+                }
+            }
+        },
+        "ArtifactsKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": "KMS key for encrypting pipeline artifacts",
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Id": "key-policy-1",
+                    "Statement": [
+                        {
+                            "Sid": "Allow administration of the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:*"
+                            ],
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow use of the key by pipeline services",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "codebuild.amazonaws.com",
+                                    "codepipeline.amazonaws.com",
+                                    "codedeploy.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Encrypt",
+                                "kms:Decrypt",
+                                "kms:ReEncrypt*",
+                                "kms:GenerateDataKey*",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "ArtifactsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/payment-service-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "ArtifactsKey"
+                }
+            }
+        },
+        "ArtifactsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "payment-service-artifacts-${EnvironmentSuffix}-${AWS::AccountId}-${AWS::Region}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Fn::GetAtt": [
+                                        "ArtifactsKey",
+                                        "Arn"
+                                    ]
+                                }
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldArtifacts",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        },
+                        {
+                            "Id": "TransitionToGlacier",
+                            "Status": "Enabled",
+                            "Transitions": [
+                                {
+                                    "TransitionInDays": 30,
+                                    "StorageClass": "GLACIER"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "ArtifactsBucketPolicy": {
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "ArtifactsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "DenyUnencryptedObjectUploads",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:PutObject",
+                            "Resource": {
+                                "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "StringNotEquals": {
+                                    "s3:x-amz-server-side-encryption": "aws:kms"
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "DenyInsecureConnections",
+                            "Effect": "Deny",
+                            "Principal": "*",
+                            "Action": "s3:*",
+                            "Resource": {
+                                "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                            },
+                            "Condition": {
+                                "Bool": {
+                                    "aws:SecureTransport": "false"
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "CodeBuildSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupDescription": "Security group for CodeBuild projects and ECS tasks",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS for AWS services, public ECR, and package downloads"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP for package repositories and mirrors"
+                    },
+                    {
+                        "IpProtocol": "udp",
+                        "FromPort": 53,
+                        "ToPort": 53,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "DNS resolution"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 53,
+                        "ToPort": 53,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "DNS resolution over TCP"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "S3VpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Properties": {
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": "*",
+                            "Action": [
+                                "s3:GetObject",
+                                "s3:PutObject",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": [
+                                {
+                                    "Fn::GetAtt": [
+                                        "ArtifactsBucket",
+                                        "Arn"
+                                    ]
+                                },
+                                {
+                                    "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                                },
+                                "arn:aws:s3:::codebuild-*",
+                                "arn:aws:s3:::aws-codedeploy-*"
+                            ]
+                        }
+                    ]
+                },
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable"
+                    }
+                ],
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "EcrApiVpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Properties": {
+                "PrivateDnsEnabled": true,
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "CodeBuildSecurityGroup"
+                    }
+                ],
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.api"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "VpcEndpointType": "Interface",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "EcrDkrVpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Properties": {
+                "PrivateDnsEnabled": true,
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "CodeBuildSecurityGroup"
+                    }
+                ],
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.ecr.dkr"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "VpcEndpointType": "Interface",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "LogsVpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Properties": {
+                "PrivateDnsEnabled": true,
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "CodeBuildSecurityGroup"
+                    }
+                ],
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.logs"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "VpcEndpointType": "Interface",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "CodeBuildVpcEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Properties": {
+                "PrivateDnsEnabled": true,
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "CodeBuildSecurityGroup"
+                    }
+                ],
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.codebuild"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "VpcEndpointType": "Interface",
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "CodeBuildServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codebuild.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodeBuildServiceRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "AllowS3Operations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "AllowKMSOperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey*",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ArtifactsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowLogging",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "AllowECROperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecr:GetAuthorizationToken",
+                                        "ecr:BatchCheckLayerAvailability",
+                                        "ecr:GetDownloadUrlForLayer",
+                                        "ecr:BatchGetImage",
+                                        "ecr:PutImage",
+                                        "ecr:InitiateLayerUpload",
+                                        "ecr:UploadLayerPart",
+                                        "ecr:CompleteLayerUpload"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "AllowVPCOperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:CreateNetworkInterface",
+                                        "ec2:DescribeDhcpOptions",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "ec2:DeleteNetworkInterface",
+                                        "ec2:DescribeSubnets",
+                                        "ec2:DescribeSecurityGroups",
+                                        "ec2:DescribeVpcs"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "DenyProductionAccess",
+                                    "Effect": "Deny",
+                                    "Action": [
+                                        "rds:*",
+                                        "dynamodb:*",
+                                        "s3:*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:prod-*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prod-*"
+                                        },
+                                        "arn:aws:s3:::prod-*"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "CodePipelineServiceRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "codepipeline.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CodePipelineServiceRolePolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Sid": "AllowS3Operations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:GetObjectVersion",
+                                        "s3:PutObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "ArtifactsBucket",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::Sub": "${ArtifactsBucket.Arn}/*"
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "AllowCodeCommitOperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codecommit:GetBranch",
+                                        "codecommit:GetCommit",
+                                        "codecommit:UploadArchive",
+                                        "codecommit:GetUploadArchiveStatus",
+                                        "codecommit:CancelUploadArchive"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:codecommit:${AWS::Region}:${AWS::AccountId}:payment-service"
+                                    }
+                                },
+                                {
+                                    "Sid": "AllowCodeBuildOperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "codebuild:BatchGetBuilds",
+                                        "codebuild:StartBuild"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::GetAtt": [
+                                                "BuildProject",
+                                                "Arn"
+                                            ]
+                                        },
+                                        {
+                                            "Fn::GetAtt": [
+                                                "TestProject",
+                                                "Arn"
+                                            ]
+                                        }
+                                    ]
+                                },
+                                {
+                                    "Sid": "AllowECSOperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ecs:DescribeServices",
+                                        "ecs:DescribeTaskDefinition",
+                                        "ecs:DescribeTasks",
+                                        "ecs:ListTasks",
+                                        "ecs:RegisterTaskDefinition",
+                                        "ecs:UpdateService"
+                                    ],
+                                    "Resource": "*"
+                                },
+                                {
+                                    "Sid": "AllowKMSOperations",
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:DescribeKey",
+                                        "kms:Encrypt",
+                                        "kms:GenerateDataKey*",
+                                        "kms:ReEncrypt*"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ArtifactsKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Sid": "DenyProductionAccess",
+                                    "Effect": "Deny",
+                                    "Action": [
+                                        "rds:*",
+                                        "dynamodb:*",
+                                        "s3:*"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:prod-*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/prod-*"
+                                        },
+                                        "arn:aws:s3:::prod-*"
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "BuildLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/payment-service-build-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "TestLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/codebuild/payment-service-test-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "BuildProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "DependsOn": "BuildLogGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-service-build-${EnvironmentSuffix}"
+                },
+                "Description": "Build and security scan for payment service",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:3.0",
+                    "PrivilegedMode": true
+                },
+                "VpcConfig": {
+                    "VpcId": {
+                        "Ref": "VPC"
+                    },
+                    "Subnets": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ],
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "CodeBuildSecurityGroup"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "buildspec.yml"
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "GroupName": {
+                            "Fn::Sub": "/aws/codebuild/payment-service-build-${EnvironmentSuffix}"
+                        },
+                        "Status": "ENABLED"
+                    }
+                },
+                "TimeoutInMinutes": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "TestProject": {
+            "Type": "AWS::CodeBuild::Project",
+            "DependsOn": "TestLogGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-service-test-${EnvironmentSuffix}"
+                },
+                "Description": "Integration tests for payment service",
+                "ServiceRole": {
+                    "Fn::GetAtt": [
+                        "CodeBuildServiceRole",
+                        "Arn"
+                    ]
+                },
+                "Artifacts": {
+                    "Type": "CODEPIPELINE"
+                },
+                "Environment": {
+                    "Type": "LINUX_CONTAINER",
+                    "ComputeType": "BUILD_GENERAL1_SMALL",
+                    "Image": "aws/codebuild/amazonlinux2-x86_64-standard:3.0",
+                    "PrivilegedMode": true
+                },
+                "VpcConfig": {
+                    "VpcId": {
+                        "Ref": "VPC"
+                    },
+                    "Subnets": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        }
+                    ],
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "CodeBuildSecurityGroup"
+                        }
+                    ]
+                },
+                "Source": {
+                    "Type": "CODEPIPELINE",
+                    "BuildSpec": "testspec.yml"
+                },
+                "LogsConfig": {
+                    "CloudWatchLogs": {
+                        "GroupName": {
+                            "Fn::Sub": "/aws/codebuild/payment-service-test-${EnvironmentSuffix}"
+                        },
+                        "Status": "ENABLED"
+                    }
+                },
+                "TimeoutInMinutes": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EcsCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Ref": "EcsClusterName"
+                },
+                "CapacityProviders": [
+                    "FARGATE",
+                    "FARGATE_SPOT"
+                ],
+                "DefaultCapacityProviderStrategy": [
+                    {
+                        "CapacityProvider": "FARGATE",
+                        "Weight": 1,
+                        "Base": 1
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EcsTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    }
+                ]
+            }
+        },
+        "EcsLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/${EcsServiceName}"
+                },
+                "RetentionInDays": 30
+            }
+        },
+        "EcsTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "${EcsServiceName}-family"
+                },
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": "256",
+                "Memory": "512",
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "EcsTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": {
+                            "Fn::Sub": "${EcsServiceName}-container"
+                        },
+                        "Image": "public.ecr.aws/docker/library/nginx:latest",
+                        "Essential": true,
+                        "PortMappings": [
+                            {
+                                "ContainerPort": 80,
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "EcsLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "ecs"
+                            }
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "EcsService": {
+            "Type": "AWS::ECS::Service",
+            "Properties": {
+                "ServiceName": {
+                    "Ref": "EcsServiceName"
+                },
+                "Cluster": {
+                    "Ref": "EcsCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "EcsTaskDefinition"
+                },
+                "DesiredCount": 1,
+                "LaunchType": "FARGATE",
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet2"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "CodeBuildSecurityGroup"
+                            }
+                        ],
+                        "AssignPublicIp": "ENABLED"
+                    }
+                },
+                "DeploymentConfiguration": {
+                    "MaximumPercent": 200,
+                    "MinimumHealthyPercent": 100,
+                    "DeploymentCircuitBreaker": {
+                        "Enable": true,
+                        "Rollback": true
+                    }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "Pipeline": {
+            "Type": "AWS::CodePipeline::Pipeline",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-service-${EnvironmentSuffix}-pipeline"
+                },
+                "RoleArn": {
+                    "Fn::GetAtt": [
+                        "CodePipelineServiceRole",
+                        "Arn"
+                    ]
+                },
+                "ArtifactStore": {
+                    "Type": "S3",
+                    "Location": {
+                        "Ref": "ArtifactsBucket"
+                    },
+                    "EncryptionKey": {
+                        "Id": {
+                            "Fn::GetAtt": [
+                                "ArtifactsKey",
+                                "Arn"
+                            ]
+                        },
+                        "Type": "KMS"
+                    }
+                },
+                "Stages": [
+                    {
+                        "Name": "Source",
+                        "Actions": [
+                            {
+                                "Name": "Source",
+                                "ActionTypeId": {
+                                    "Category": "Source",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeCommit",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "RepositoryName": "payment-service",
+                                    "BranchName": "main"
+                                },
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "SourceCode"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Build",
+                        "Actions": [
+                            {
+                                "Name": "Build",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "BuildProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "SourceCode"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Test",
+                        "Actions": [
+                            {
+                                "Name": "IntegrationTest",
+                                "ActionTypeId": {
+                                    "Category": "Build",
+                                    "Owner": "AWS",
+                                    "Provider": "CodeBuild",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ProjectName": {
+                                        "Ref": "TestProject"
+                                    }
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ],
+                                "OutputArtifacts": [
+                                    {
+                                        "Name": "TestOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    {
+                        "Name": "Deploy",
+                        "Actions": [
+                            {
+                                "Name": "Deploy",
+                                "ActionTypeId": {
+                                    "Category": "Deploy",
+                                    "Owner": "AWS",
+                                    "Provider": "ECS",
+                                    "Version": "1"
+                                },
+                                "Configuration": {
+                                    "ClusterName": {
+                                        "Ref": "EcsCluster"
+                                    },
+                                    "ServiceName": {
+                                        "Ref": "EcsService"
+                                    },
+                                    "FileName": "imagedefinitions.json"
+                                },
+                                "InputArtifacts": [
+                                    {
+                                        "Name": "BuildOutput"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "PipelineStateChangeRule": {
+            "Type": "AWS::Events::Rule",
+            "Condition": "HasSlackWebhook",
+            "Properties": {
+                "Description": "Rule for monitoring CodePipeline state changes",
+                "EventPattern": {
+                    "source": [
+                        "aws.codepipeline"
+                    ],
+                    "detail-type": [
+                        "CodePipeline Pipeline Execution State Change"
+                    ],
+                    "detail": {
+                        "state": [
+                            "FAILED",
+                            "SUCCEEDED"
+                        ],
+                        "pipeline": [
+                            {
+                                "Ref": "Pipeline"
+                            }
+                        ]
+                    }
+                },
+                "State": "ENABLED",
+                "Targets": [
+                    {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "SlackNotificationFunction",
+                                "Arn"
+                            ]
+                        },
+                        "Id": "SlackNotificationTarget",
+                        "InputTransformer": {
+                            "InputPathsMap": {
+                                "pipeline": "$.detail.pipeline",
+                                "state": "$.detail.state",
+                                "executionId": "$.detail.execution-id",
+                                "time": "$.time"
+                            },
+                            "InputTemplate": {
+                                "Fn::Sub": "{\n  \"pipeline\": <pipeline>,\n  \"state\": <state>,\n  \"executionId\": <executionId>,\n  \"time\": <time>,\n  \"webhookUrl\": \"${SlackWebhookUrl}\"\n}\n"
+                            }
+                        }
+                    }
+                ]
+            }
+        },
+        "SlackNotificationFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Condition": "HasSlackWebhook",
+            "Properties": {
+                "Handler": "index.handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "SlackNotificationFunctionRole",
+                        "Arn"
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "const https = require('https');\nconst url = require('url');\n\nexports.handler = async (event) => {\n    console.log('Event:', JSON.stringify(event, null, 2));\n\n    const pipeline = event.pipeline;\n    const state = event.state;\n    const executionId = event.executionId;\n    const time = event.time;\n    const webhookUrl = event.webhookUrl;\n\n    const emoji = state === 'FAILED' ? ':x:' : ':white_check_mark:';\n    const color = state === 'FAILED' ? '#FF0000' : '#00FF00';\n\n    const message = {\n        attachments: [\n            {\n                fallback: `Pipeline ${pipeline} ${state}`,\n                color: color,\n                title: `Pipeline State Change: ${pipeline}`,\n                fields: [\n                    {\n                        title: 'Status',\n                        value: `${emoji} ${state}`,\n                        short: true\n                    },\n                    {\n                        title: 'Execution ID',\n                        value: executionId,\n                        short: true\n                    },\n                    {\n                        title: 'Time',\n                        value: time,\n                        short: false\n                    }\n                ],\n                footer: 'AWS CodePipeline',\n                ts: Math.floor(Date.now() / 1000)\n            }\n        ]\n    };\n\n    try {\n        const parsedUrl = url.parse(webhookUrl);\n        const options = {\n            hostname: parsedUrl.host,\n            path: parsedUrl.path,\n            method: 'POST',\n            headers: {\n                'Content-Type': 'application/json',\n            }\n        };\n\n        await new Promise((resolve, reject) => {\n            const req = https.request(options, (res) => {\n                let data = '';\n                res.on('data', (chunk) => {\n                    data += chunk;\n                });\n                res.on('end', () => {\n                    resolve(data);\n                });\n            });\n\n            req.on('error', (e) => {\n                reject(e);\n            });\n\n            req.write(JSON.stringify(message));\n            req.end();\n        });\n\n        return { statusCode: 200, body: 'Notification sent' };\n    } catch (error) {\n        console.error('Error:', error);\n        return { statusCode: 500, body: 'Error sending notification' };\n    }\n};\n"
+                },
+                "Runtime": "nodejs20.x",
+                "Timeout": 30,
+                "MemorySize": 128,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "SlackNotificationFunctionRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "HasSlackWebhook",
+            "Properties": {
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Team",
+                        "Value": {
+                            "Ref": "TeamName"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "SlackNotificationPermission": {
+            "Type": "AWS::Lambda::Permission",
+            "Condition": "HasSlackWebhook",
+            "Properties": {
+                "Action": "lambda:InvokeFunction",
+                "FunctionName": {
+                    "Ref": "SlackNotificationFunction"
+                },
+                "Principal": "events.amazonaws.com",
+                "SourceArn": {
+                    "Fn::GetAtt": [
+                        "PipelineStateChangeRule",
+                        "Arn"
+                    ]
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "PipelineUrl": {
+            "Description": "URL to the CodePipeline console",
+            "Value": {
+                "Fn::Sub": "https://console.aws.amazon.com/codepipeline/home?region=${AWS::Region}#/view/${Pipeline}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineUrl"
+                }
+            }
+        },
+        "PipelineName": {
+            "Description": "CodePipeline name",
+            "Value": {
+                "Ref": "Pipeline"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineName"
+                }
+            }
+        },
+        "PipelineArn": {
+            "Description": "CodePipeline ARN",
+            "Value": {
+                "Fn::Sub": "arn:aws:codepipeline:${AWS::Region}:${AWS::AccountId}:${Pipeline}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineArn"
+                }
+            }
+        },
+        "ArtifactsBucketName": {
+            "Description": "S3 Bucket for pipeline artifacts",
+            "Value": {
+                "Ref": "ArtifactsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactsBucketName"
+                }
+            }
+        },
+        "ArtifactsBucketArn": {
+            "Description": "ARN of the S3 Bucket for pipeline artifacts",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ArtifactsBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ArtifactsBucketArn"
+                }
+            }
+        },
+        "KmsKeyId": {
+            "Description": "KMS Key for artifact encryption",
+            "Value": {
+                "Ref": "ArtifactsKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyId"
+                }
+            }
+        },
+        "KmsKeyArn": {
+            "Description": "KMS Key ARN for artifact encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ArtifactsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyArn"
+                }
+            }
+        },
+        "KmsKeyAliasName": {
+            "Description": "KMS Key Alias Name",
+            "Value": {
+                "Ref": "ArtifactsKeyAlias"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-KmsKeyAliasName"
+                }
+            }
+        },
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCId"
+                }
+            }
+        },
+        "VPCCidr": {
+            "Description": "VPC CIDR block",
+            "Value": {
+                "Fn::GetAtt": [
+                    "VPC",
+                    "CidrBlock"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-VPCCidr"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet1Id"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateSubnet2Id"
+                }
+            }
+        },
+        "InternetGatewayId": {
+            "Description": "Internet Gateway ID",
+            "Value": {
+                "Ref": "InternetGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-InternetGatewayId"
+                }
+            }
+        },
+        "PrivateRouteTableId": {
+            "Description": "Private Route Table ID",
+            "Value": {
+                "Ref": "PrivateRouteTable"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PrivateRouteTableId"
+                }
+            }
+        },
+        "CodeBuildSecurityGroupId": {
+            "Description": "Security Group for CodeBuild and ECS",
+            "Value": {
+                "Ref": "CodeBuildSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeBuildSecurityGroupId"
+                }
+            }
+        },
+        "BuildProjectName": {
+            "Description": "CodeBuild Build Project Name",
+            "Value": {
+                "Ref": "BuildProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BuildProjectName"
+                }
+            }
+        },
+        "BuildProjectArn": {
+            "Description": "CodeBuild Build Project ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BuildProject",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BuildProjectArn"
+                }
+            }
+        },
+        "TestProjectName": {
+            "Description": "CodeBuild Test Project Name",
+            "Value": {
+                "Ref": "TestProject"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestProjectName"
+                }
+            }
+        },
+        "TestProjectArn": {
+            "Description": "CodeBuild Test Project ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "TestProject",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestProjectArn"
+                }
+            }
+        },
+        "CodeBuildServiceRoleArn": {
+            "Description": "CodeBuild Service Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CodeBuildServiceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeBuildServiceRoleArn"
+                }
+            }
+        },
+        "CodePipelineServiceRoleArn": {
+            "Description": "CodePipeline Service Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "CodePipelineServiceRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodePipelineServiceRoleArn"
+                }
+            }
+        },
+        "EcsTaskExecutionRoleArn": {
+            "Description": "ECS Task Execution Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EcsTaskExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsTaskExecutionRoleArn"
+                }
+            }
+        },
+        "EcsClusterName": {
+            "Description": "ECS Cluster name",
+            "Value": {
+                "Ref": "EcsCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsClusterName"
+                }
+            }
+        },
+        "EcsClusterArn": {
+            "Description": "ECS Cluster ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EcsCluster",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsClusterArn"
+                }
+            }
+        },
+        "EcsServiceName": {
+            "Description": "ECS Service name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "EcsService",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsServiceName"
+                }
+            }
+        },
+        "EcsServiceArn": {
+            "Description": "ECS Service ARN",
+            "Value": {
+                "Ref": "EcsService"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsServiceArn"
+                }
+            }
+        },
+        "EcsTaskDefinitionArn": {
+            "Description": "ECS Task Definition ARN",
+            "Value": {
+                "Ref": "EcsTaskDefinition"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsTaskDefinitionArn"
+                }
+            }
+        },
+        "EcsLogGroupName": {
+            "Description": "ECS Log Group Name",
+            "Value": {
+                "Ref": "EcsLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcsLogGroupName"
+                }
+            }
+        },
+        "BuildLogGroupName": {
+            "Description": "CodeBuild Build Log Group Name",
+            "Value": {
+                "Ref": "BuildLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-BuildLogGroupName"
+                }
+            }
+        },
+        "TestLogGroupName": {
+            "Description": "CodeBuild Test Log Group Name",
+            "Value": {
+                "Ref": "TestLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-TestLogGroupName"
+                }
+            }
+        },
+        "SlackNotificationFunctionArn": {
+            "Condition": "HasSlackWebhook",
+            "Description": "Slack Notification Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SlackNotificationFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SlackNotificationFunctionArn"
+                }
+            }
+        },
+        "SlackNotificationFunctionName": {
+            "Condition": "HasSlackWebhook",
+            "Description": "Slack Notification Lambda Function Name",
+            "Value": {
+                "Ref": "SlackNotificationFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SlackNotificationFunctionName"
+                }
+            }
+        },
+        "PipelineStateChangeRuleArn": {
+            "Condition": "HasSlackWebhook",
+            "Description": "EventBridge Rule ARN for Pipeline State Changes",
+            "Value": {
+                "Fn::GetAtt": [
+                    "PipelineStateChangeRule",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-PipelineStateChangeRuleArn"
+                }
+            }
+        },
+        "S3VpcEndpointId": {
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Description": "S3 VPC Endpoint ID",
+            "Value": {
+                "Ref": "S3VpcEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-S3VpcEndpointId"
+                }
+            }
+        },
+        "EcrApiVpcEndpointId": {
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Description": "ECR API VPC Endpoint ID",
+            "Value": {
+                "Ref": "EcrApiVpcEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcrApiVpcEndpointId"
+                }
+            }
+        },
+        "EcrDkrVpcEndpointId": {
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Description": "ECR DKR VPC Endpoint ID",
+            "Value": {
+                "Ref": "EcrDkrVpcEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EcrDkrVpcEndpointId"
+                }
+            }
+        },
+        "LogsVpcEndpointId": {
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Description": "CloudWatch Logs VPC Endpoint ID",
+            "Value": {
+                "Ref": "LogsVpcEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LogsVpcEndpointId"
+                }
+            }
+        },
+        "CodeBuildVpcEndpointId": {
+            "Condition": "ShouldCreateVpcEndpoints",
+            "Description": "CodeBuild VPC Endpoint ID",
+            "Value": {
+                "Ref": "CodeBuildVpcEndpoint"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-CodeBuildVpcEndpointId"
+                }
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment name used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}
