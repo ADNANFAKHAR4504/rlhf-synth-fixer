@@ -6,7 +6,10 @@ import * as random from '@pulumi/random';
 // Configuration
 const config = new pulumi.Config();
 const environmentSuffix = config.get('environmentSuffix') || 'dev';
-const region = aws.config.region || 'eu-central-2';
+
+// Get region dynamically
+const currentRegion = aws.getRegionOutput();
+const region = currentRegion.name;
 
 // Common tags for all resources
 const commonTags = {
@@ -53,7 +56,7 @@ const vpc = new awsx.ec2.Vpc(`payment-vpc-${environmentSuffix}`, {
 const flowLogsBucket = new aws.s3.Bucket(
   `payment-flowlogs-${environmentSuffix}`,
   {
-    bucket: `payment-flowlogs-${environmentSuffix}-${region}`,
+    bucket: region.apply(r => `payment-flowlogs-${environmentSuffix}-${r}`),
     tags: commonTags,
   }
 );
@@ -297,16 +300,16 @@ void new aws.iam.RolePolicy(
   `payment-ecs-exec-custom-policy-${environmentSuffix}`,
   {
     role: ecsTaskExecutionRole.id,
-    policy: JSON.stringify({
+    policy: region.apply(r => JSON.stringify({
       Version: '2012-10-17',
       Statement: [
         {
           Effect: 'Allow',
           Action: ['secretsmanager:GetSecretValue'],
-          Resource: `arn:aws:secretsmanager:${region}:*:secret:payment/*`,
+          Resource: `arn:aws:secretsmanager:${r}:*:secret:payment/*`,
         },
       ],
-    }),
+    })),
   }
 );
 
@@ -332,7 +335,7 @@ const ecsTaskRole = new aws.iam.Role(
 
 void new aws.iam.RolePolicy(`payment-ecs-task-policy-${environmentSuffix}`, {
   role: ecsTaskRole.id,
-  policy: pulumi.all([flowLogsBucket.arn]).apply(([bucketArn]) =>
+  policy: pulumi.all([flowLogsBucket.arn, region]).apply(([bucketArn, r]) =>
     JSON.stringify({
       Version: '2012-10-17',
       Statement: [
@@ -344,7 +347,7 @@ void new aws.iam.RolePolicy(`payment-ecs-task-policy-${environmentSuffix}`, {
         {
           Effect: 'Allow',
           Action: ['secretsmanager:GetSecretValue'],
-          Resource: `arn:aws:secretsmanager:${region}:*:secret:payment/*`,
+          Resource: `arn:aws:secretsmanager:${r}:*:secret:payment/*`,
         },
       ],
     })
@@ -506,8 +509,8 @@ const taskDefinition = new aws.ecs.TaskDefinition(
     executionRoleArn: ecsTaskExecutionRole.arn,
     taskRoleArn: ecsTaskRole.arn,
     containerDefinitions: pulumi
-      .all([ecsLogGroup.name, rdsCluster.endpoint])
-      .apply(([logGroupName, dbEndpoint]) =>
+      .all([ecsLogGroup.name, rdsCluster.endpoint, region])
+      .apply(([logGroupName, dbEndpoint, r]) =>
         JSON.stringify([
           {
             name: 'payment-service',
@@ -538,14 +541,14 @@ const taskDefinition = new aws.ecs.TaskDefinition(
             secrets: [
               {
                 name: 'DB_PASSWORD',
-                valueFrom: `arn:aws:secretsmanager:${region}:*:secret:payment/db-password`,
+                valueFrom: `arn:aws:secretsmanager:${r}:*:secret:payment/db-password`,
               },
             ],
             logConfiguration: {
               logDriver: 'awslogs',
               options: {
                 'awslogs-group': logGroupName,
-                'awslogs-region': region,
+                'awslogs-region': r,
                 'awslogs-stream-prefix': 'payment-service',
               },
             },
