@@ -2,7 +2,6 @@
   "platform": "tf",
   "language": "hcl",
   "complexity": "hard",
-  "turn_type": "single",
   "po_id": "101000888",
   "team": "synth",
   "startedAt": "2025-11-10T00:00:00",
@@ -21,5 +20,7 @@
     "IAM",
     "EBS"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
