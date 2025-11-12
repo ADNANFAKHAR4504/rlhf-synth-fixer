@@ -426,7 +426,9 @@ class TapStack(TerraformStack):
                         "Action": [
                             "states:StartExecution",
                             "states:DescribeExecution",
-                            "states:StopExecution"
+                            "states:StopExecution",
+                            "states:SendTaskSuccess",
+                            "states:SendTaskFailure"
                         ],
                         "Resource": "*"
                     },
@@ -472,8 +474,7 @@ class TapStack(TerraformStack):
                 environment={
                     "variables": {
                         "DYNAMODB_TABLE": dynamodb_table.name,
-                        "PRIORITY": priority,
-                        "STEP_FUNCTION_ARN": "${aws_sfn_state_machine.transaction_validation_" + environment_suffix + ".arn}"
+                        "PRIORITY": priority
                     }
                 },
                 tracing_config={"mode": "Active"},

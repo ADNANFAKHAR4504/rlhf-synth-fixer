@@ -59,7 +59,9 @@ def handle_sqs_messages(records):
             )
             
             # Start Step Functions execution for complex validation
-            if STEP_FUNCTION_ARN:
+            # Note: STEP_FUNCTION_ARN will be set via deployment scripts or environment
+            step_function_arn = os.environ.get('STEP_FUNCTION_ARN')
+            if step_function_arn:
                 step_input = {
                     'transactionId': transaction_id,
                     'amount': float(amount),
@@ -70,7 +72,7 @@ def handle_sqs_messages(records):
                 }
                 
                 sf_response = stepfunctions.start_execution(
-                    stateMachineArn=STEP_FUNCTION_ARN,
+                    stateMachineArn=step_function_arn,
                     name=f"{transaction_id}-{int(time.time())}",
                     input=json.dumps(step_input)
                 )
