@@ -129,7 +129,7 @@ class PaymentEnvironment(ComponentResource):
             # Elastic IP for NAT Gateway
             eip = aws.ec2.Eip(
                 f"nat-eip-{i}-{self.environment_suffix}",
-                vpc=True,
+                domain="vpc",
                 tags={**self.tags, "Name": f"nat-eip-{i}-{self.environment_suffix}"},
                 opts=ResourceOptions(parent=self)
             )
@@ -537,7 +537,7 @@ class TapStack:
         # Environment-specific configuration
         environment_configs = {
             "dev": {
-                "region": "eu-west-1",
+                "region": "eu-west-2",
                 "cidr_block": "10.0.0.0/16",
                 "instance_type": "db.t3.medium",
                 "backup_retention": 7,
