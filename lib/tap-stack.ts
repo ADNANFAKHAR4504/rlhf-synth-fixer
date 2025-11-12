@@ -688,7 +688,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         restApi: api.id,
         stageName: stage.stageName,
-        methodPath: '*/POST',
+        methodPath: '*/*',
         settings: {
           throttlingBurstLimit: 5000,
           throttlingRateLimit: 2000,
