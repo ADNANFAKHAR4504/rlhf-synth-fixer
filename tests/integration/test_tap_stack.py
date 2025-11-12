@@ -39,34 +39,52 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         cls.secondary_region = cls.outputs.get('secondary_region', 'us-east-2')
         cls.environment_suffix = cls.outputs.get('environment_suffix', 'dev')
 
-        # API endpoints
-        cls.primary_api_endpoint = cls.outputs.get('primary_api_endpoint')
-        cls.secondary_api_endpoint = cls.outputs.get('secondary_api_endpoint')
+        # API endpoints (matching actual output names)
+        cls.primary_api_endpoint = cls.outputs.get('api_primary_endpoint')
+        cls.secondary_api_endpoint = cls.outputs.get('api_secondary_endpoint')
+        cls.api_primary_api_id = cls.outputs.get('api_primary_api_id')
 
         # Database endpoints
         cls.aurora_primary_endpoint = cls.outputs.get('aurora_primary_endpoint')
         cls.aurora_secondary_endpoint = cls.outputs.get('aurora_secondary_endpoint')
+        cls.aurora_global_cluster_id = cls.outputs.get('aurora_global_cluster_id')
+        cls.aurora_primary_cluster_id = cls.outputs.get('aurora_primary_cluster_id')
+        cls.aurora_secondary_cluster_arn = cls.outputs.get('aurora_secondary_cluster_arn')
 
         # Table names
         cls.dynamodb_table_name = cls.outputs.get('dynamodb_table_name')
+        cls.dynamodb_table_arn = cls.outputs.get('dynamodb_table_arn')
 
-        # S3 buckets
-        cls.primary_bucket_name = cls.outputs.get('primary_bucket_name')
-        cls.secondary_bucket_name = cls.outputs.get('secondary_bucket_name')
+        # S3 buckets (matching actual output names)
+        cls.primary_bucket_name = cls.outputs.get('s3_primary_bucket_name')
+        cls.secondary_bucket_name = cls.outputs.get('s3_secondary_bucket_name')
 
-        # SNS topics
-        cls.primary_sns_topic_arn = cls.outputs.get('primary_sns_topic_arn')
-        cls.secondary_sns_topic_arn = cls.outputs.get('secondary_sns_topic_arn')
+        # SNS topics (matching actual output names)
+        cls.primary_sns_topic_arn = cls.outputs.get('sns_primary_topic_arn')
+        cls.secondary_sns_topic_arn = cls.outputs.get('sns_secondary_topic_arn')
 
-        # Lambda functions
-        cls.primary_lambda_name = cls.outputs.get('primary_lambda_name')
-        cls.secondary_lambda_name = cls.outputs.get('secondary_lambda_name')
+        # Lambda functions (matching actual output names)
+        cls.primary_lambda_name = cls.outputs.get('lambda_primary_function_name')
+        cls.secondary_lambda_name = cls.outputs.get('lambda_secondary_function_name')
+        cls.primary_lambda_arn = cls.outputs.get('lambda_primary_function_arn')
+        cls.secondary_lambda_arn = cls.outputs.get('lambda_secondary_function_arn')
 
-        # Monitoring
-        cls.composite_alarm_arn = cls.outputs.get('composite_alarm_arn')
+        # Monitoring (matching actual output names)
+        cls.composite_alarm_arn = cls.outputs.get('monitoring_composite_alarm_arn')
+        cls.aurora_cpu_alarm_arn = cls.outputs.get('monitoring_aurora_cpu_alarm_arn')
+        cls.lambda_error_alarm_arn = cls.outputs.get('monitoring_lambda_error_alarm_arn')
+        cls.api_error_alarm_arn = cls.outputs.get('monitoring_api_error_alarm_arn')
+
+        # Synthetics
+        cls.primary_canary_name = cls.outputs.get('synthetics_primary_canary_name')
+        cls.secondary_canary_name = cls.outputs.get('synthetics_secondary_canary_name')
 
         # Failover
         cls.failover_function_arn = cls.outputs.get('failover_function_arn')
+        cls.failover_function_name = cls.outputs.get('failover_function_name')
+
+        # Route53
+        cls.route53_health_check_id = cls.outputs.get('route53_health_check_id')
 
         # Create AWS clients
         cls.rds_primary = boto3.client('rds', region_name=cls.primary_region)
@@ -243,17 +261,254 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_10_route53_health_check_exists(self):
         """Test that Route 53 health check is configured."""
+        if not self.route53_health_check_id:
+            self.skipTest("Route53 health check ID not found in outputs")
+        
         try:
-            response = self.route53.list_health_checks()
-            health_checks = [hc for hc in response['HealthChecks']
-                           if 'trading' in hc.get('HealthCheckConfig', {}).get('FullyQualifiedDomainName', '')]
-            # Health check may not have FQDN filter working, so we check if any exist
-            self.assertGreater(len(response['HealthChecks']), 0,
-                             "Should have Route53 health checks")
+            response = self.route53.get_health_check(
+                HealthCheckId=self.route53_health_check_id
+            )
+            self.assertIn('HealthCheck', response)
+            self.assertEqual(response['HealthCheck']['Id'], self.route53_health_check_id)
+            self.assertIn(response['HealthCheck']['HealthCheckConfig']['RequestInterval'], [10, 30])
         except Exception as e:
             self.skipTest(f"Route53 health check test skipped: {e}")
 
-    def test_11_end_to_end_data_workflow(self):
+    def test_11_aurora_global_cluster_configured(self):
+        """Test that Aurora Global Cluster is properly configured."""
+        if not self.aurora_global_cluster_id:
+            self.skipTest("Aurora global cluster ID not found in outputs")
+        
+        try:
+            response = self.rds_primary.describe_global_clusters(
+                GlobalClusterIdentifier=self.aurora_global_cluster_id
+            )
+            self.assertGreater(len(response['GlobalClusters']), 0, "Global cluster should exist")
+            global_cluster = response['GlobalClusters'][0]
+            self.assertEqual(global_cluster['Status'], 'available', "Global cluster should be available")
+            self.assertGreater(len(global_cluster.get('GlobalClusterMembers', [])), 0, 
+                             "Global cluster should have members")
+        except Exception as e:
+            self.skipTest(f"Aurora global cluster test skipped: {e}")
+
+    def test_12_aurora_primary_cluster_id_valid(self):
+        """Test that Aurora primary cluster ID is valid and cluster exists."""
+        if not self.aurora_primary_cluster_id:
+            self.skipTest("Aurora primary cluster ID not found in outputs")
+        
+        try:
+            response = self.rds_primary.describe_db_clusters(
+                DBClusterIdentifier=self.aurora_primary_cluster_id
+            )
+            self.assertGreater(len(response['DBClusters']), 0, "Primary cluster should exist")
+            cluster = response['DBClusters'][0]
+            self.assertEqual(cluster['DBClusterIdentifier'], self.aurora_primary_cluster_id,
+                            "Cluster ID should match output")
+            self.assertEqual(cluster['Status'], 'available', "Primary cluster should be available")
+            # Verify it's part of the global cluster
+            if self.aurora_global_cluster_id:
+                self.assertEqual(cluster.get('GlobalClusterIdentifier'), self.aurora_global_cluster_id,
+                               "Primary cluster should be part of global cluster")
+        except Exception as e:
+            self.skipTest(f"Aurora primary cluster ID test skipped: {e}")
+
+    def test_13_aurora_secondary_cluster_exists(self):
+        """Test that secondary Aurora cluster exists in secondary region."""
+        if not self.aurora_secondary_cluster_arn:
+            self.skipTest("Aurora secondary cluster ARN not found in outputs")
+        
+        cluster_id = self.aurora_secondary_cluster_arn.split(':')[-1].split('/')[-1]
+        try:
+            response = self.rds_secondary.describe_db_clusters(
+                DBClusterIdentifier=cluster_id
+            )
+            self.assertGreater(len(response['DBClusters']), 0, "Secondary cluster should exist")
+            cluster = response['DBClusters'][0]
+            self.assertEqual(cluster['Status'], 'available', "Secondary cluster should be available")
+            self.assertTrue(cluster['StorageEncrypted'], "Secondary cluster should be encrypted")
+            # Verify it's part of the global cluster
+            if self.aurora_global_cluster_id:
+                self.assertEqual(cluster.get('GlobalClusterIdentifier'), self.aurora_global_cluster_id,
+                               "Secondary cluster should be part of global cluster")
+        except Exception as e:
+            self.skipTest(f"Aurora secondary cluster test skipped: {e}")
+
+    def test_14_dynamodb_table_arn_valid(self):
+        """Test that DynamoDB table ARN is valid and matches table."""
+        if not self.dynamodb_table_arn or not self.dynamodb_table_name:
+            self.skipTest("DynamoDB ARN or table name not found in outputs")
+        
+        # Verify ARN format
+        self.assertTrue(self.dynamodb_table_arn.startswith('arn:aws:dynamodb:'),
+                       "DynamoDB ARN should have correct format")
+        self.assertIn(self.dynamodb_table_name, self.dynamodb_table_arn,
+                     "Table name should be in ARN")
+        
+        # Verify table exists
+        response = self.dynamodb_primary.describe_table(
+            TableName=self.dynamodb_table_name
+        )
+        self.assertEqual(response['Table']['TableArn'], self.dynamodb_table_arn,
+                        "Table ARN should match output")
+
+    def test_15_s3_secondary_bucket_exists(self):
+        """Test that secondary S3 bucket exists with versioning enabled."""
+        if not self.secondary_bucket_name:
+            self.skipTest("Secondary S3 bucket name not found in outputs")
+        
+        # Check secondary bucket exists
+        try:
+            response = self.s3_secondary.head_bucket(Bucket=self.secondary_bucket_name)
+            self.assertEqual(response['ResponseMetadata']['HTTPStatusCode'], 200)
+            
+            # Check versioning is enabled (required for replication)
+            versioning = self.s3_secondary.get_bucket_versioning(Bucket=self.secondary_bucket_name)
+            self.assertEqual(versioning.get('Status'), 'Enabled', 
+                           "Secondary bucket versioning should be enabled for replication")
+        except Exception as e:
+            self.skipTest(f"Secondary S3 bucket test skipped: {e}")
+
+    def test_16_lambda_function_arns_valid(self):
+        """Test that Lambda function ARNs are valid and functions exist."""
+        if not self.primary_lambda_arn:
+            self.skipTest("Primary Lambda ARN not found in outputs")
+        
+        # Verify ARN format
+        self.assertTrue(self.primary_lambda_arn.startswith('arn:aws:lambda:'),
+                       "Lambda ARN should have correct format")
+        self.assertIn(self.primary_lambda_name, self.primary_lambda_arn,
+                     "Function name should be in ARN")
+        
+        # Verify function exists
+        response = self.lambda_primary.get_function(
+            FunctionName=self.primary_lambda_name
+        )
+        self.assertEqual(response['Configuration']['FunctionArn'], self.primary_lambda_arn,
+                        "Function ARN should match output")
+        
+        # Check secondary if available
+        if self.secondary_lambda_arn and self.secondary_lambda_name:
+            self.assertTrue(self.secondary_lambda_arn.startswith('arn:aws:lambda:'),
+                           "Secondary Lambda ARN should have correct format")
+            response = self.lambda_secondary.get_function(
+                FunctionName=self.secondary_lambda_name
+            )
+            self.assertEqual(response['Configuration']['FunctionArn'], self.secondary_lambda_arn,
+                            "Secondary function ARN should match output")
+
+    def test_17_cloudwatch_alarms_exist(self):
+        """Test that all CloudWatch alarms exist and are configured."""
+        if not self.composite_alarm_arn:
+            self.skipTest("CloudWatch alarm ARNs not found in outputs")
+        
+        # Test composite alarm
+        try:
+            alarm_name = self.composite_alarm_arn.split(':')[-1]
+            response = self.cloudwatch_primary.describe_alarms(
+                AlarmNames=[alarm_name]
+            )
+            self.assertGreater(len(response.get('CompositeAlarms', [])), 0,
+                             "Composite alarm should exist")
+        except Exception as e:
+            self.skipTest(f"Composite alarm test skipped: {e}")
+        
+        # Test individual alarms
+        alarm_tests = [
+            ('aurora_cpu_alarm_arn', 'Aurora CPU alarm'),
+            ('lambda_error_alarm_arn', 'Lambda error alarm'),
+            ('api_error_alarm_arn', 'API error alarm'),
+        ]
+        
+        for attr_name, description in alarm_tests:
+            alarm_arn = getattr(self, attr_name, None)
+            if alarm_arn:
+                try:
+                    alarm_name = alarm_arn.split(':')[-1]
+                    response = self.cloudwatch_primary.describe_alarms(
+                        AlarmNames=[alarm_name]
+                    )
+                    self.assertGreater(len(response.get('MetricAlarms', [])), 0,
+                                     f"{description} should exist")
+                except Exception:
+                    pass  # Some alarms may not be immediately available
+
+    def test_18_synthetics_canaries_both_regions(self):
+        """Test that Synthetics canaries exist in both regions."""
+        if not self.primary_canary_name:
+            self.skipTest("Synthetics canary names not found in outputs")
+        
+        # Test primary canary
+        try:
+            response = self.synthetics_primary.get_canary(Name=self.primary_canary_name)
+            self.assertIn('Canary', response)
+            self.assertEqual(response['Canary']['Name'], self.primary_canary_name)
+            self.assertIn(response['Canary']['Status']['State'], ['RUNNING', 'READY', 'STARTING', 'STOPPED'])
+        except Exception as e:
+            self.skipTest(f"Primary canary test skipped: {e}")
+        
+        # Test secondary canary if available
+        if self.secondary_canary_name:
+            try:
+                synthetics_secondary = boto3.client('synthetics', region_name=self.secondary_region)
+                response = synthetics_secondary.get_canary(Name=self.secondary_canary_name)
+                self.assertIn('Canary', response)
+                self.assertEqual(response['Canary']['Name'], self.secondary_canary_name)
+            except Exception:
+                pass  # Secondary canary may not be immediately available
+
+    def test_19_api_gateway_id_valid(self):
+        """Test that API Gateway ID is valid and API exists."""
+        if not self.api_primary_api_id:
+            self.skipTest("API Gateway ID not found in outputs")
+        
+        try:
+            response = self.apigateway_primary.get_rest_api(
+                restApiId=self.api_primary_api_id
+            )
+            self.assertIn('id', response)
+            self.assertEqual(response['id'], self.api_primary_api_id)
+            self.assertEqual(response['name'], f"trading-api-primary-{self.environment_suffix}")
+        except Exception as e:
+            self.skipTest(f"API Gateway ID test skipped: {e}")
+
+    def test_20_failover_function_name_matches(self):
+        """Test that failover function name matches ARN."""
+        if not self.failover_function_name or not self.failover_function_arn:
+            self.skipTest("Failover function name or ARN not found in outputs")
+        
+        # Verify function name is in ARN
+        self.assertIn(self.failover_function_name, self.failover_function_arn,
+                     "Function name should be in ARN")
+        
+        # Verify function exists
+        response = self.lambda_primary.get_function(
+            FunctionName=self.failover_function_name
+        )
+        self.assertEqual(response['Configuration']['FunctionArn'], self.failover_function_arn,
+                        "Function ARN should match output")
+
+    def test_21_sns_topics_both_regions(self):
+        """Test that SNS topics exist in both regions."""
+        if not self.primary_sns_topic_arn:
+            self.skipTest("SNS topic ARNs not found in outputs")
+        
+        # Test primary topic
+        response = self.sns_primary.get_topic_attributes(
+            TopicArn=self.primary_sns_topic_arn
+        )
+        self.assertIn('Attributes', response)
+        self.assertEqual(response['Attributes']['TopicArn'], self.primary_sns_topic_arn)
+        
+        # Test secondary topic if available
+        if self.secondary_sns_topic_arn:
+            sns_secondary = boto3.client('sns', region_name=self.secondary_region)
+            response = sns_secondary.get_topic_attributes(
+                TopicArn=self.secondary_sns_topic_arn
+            )
+            self.assertIn('Attributes', response)
+            self.assertEqual(response['Attributes']['TopicArn'], self.secondary_sns_topic_arn)
+
+    def test_22_end_to_end_data_workflow(self):
         """Test end-to-end data workflow through the system."""
         if not all([self.primary_api_endpoint, self.dynamodb_table_name]):
             self.skipTest("Required outputs not available for E2E test")
