@@ -125,7 +125,7 @@ ALBListenerHTTP:
 ```yaml
 Mappings:
   RegionMap:
-    us-west-1:
+    us-east-1:
       AMI: 'ami-0d2692b6acea72ee6' # Hardcoded Amazon Linux 2 AMI
 
 Resources:

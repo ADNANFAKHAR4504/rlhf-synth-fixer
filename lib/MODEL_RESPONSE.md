@@ -5,8 +5,8 @@
 This is a comprehensive request for an AWS CloudFormation template with very specific requirements. Let me break down what needs to be included:
 
 1. **VPC and Networking**
-   - VPC in us-west-1
-   - Public and private subnets across 3 AZs (us-west-1a, us-west-1b, us-west-1c)
+   - VPC in us-east-1
+   - Public and private subnets across 3 AZs (us-east-1a, us-east-1b, us-east-1c)
    - Internet Gateway
    - NAT Gateways in public subnets
    - Route tables and associations
@@ -164,9 +164,9 @@ Parameters:
 # MAPPINGS SECTION
 # ====================================
 Mappings:
-  # Amazon Linux 2 AMI IDs for us-west-1
+  # Amazon Linux 2 AMI IDs for us-east-1
   RegionMap:
-    us-west-1:
+    us-east-1:
       AMI: 'ami-0d2692b6acea72ee6' # Amazon Linux 2 AMI
 
 # ====================================
@@ -995,7 +995,7 @@ This CloudFormation template creates a highly available load balancing architect
 
 ### 1. **VPC and Networking**
 
-- VPC with custom CIDR block in us-west-1 region
+- VPC with custom CIDR block in us-east-1 region
 - 3 public and 3 private subnets across all availability zones
 - Internet Gateway for public subnet internet access
 - NAT Gateways in each AZ for high availability
@@ -1054,7 +1054,7 @@ aws cloudformation create-stack \
   --template-body file://payment-api-infrastructure.yaml \
   --parameters ParameterKey=KeyPairName,ParameterValue=your-keypair-name \
   --capabilities CAPABILITY_IAM \
-  --region us-west-1
+  --region us-east-1
 ```
 
 3. Monitor the stack creation in the AWS Console or CLI

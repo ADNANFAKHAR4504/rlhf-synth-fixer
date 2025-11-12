@@ -717,7 +717,7 @@ Resources:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmName: !Sub '${AWS::StackName}-UnhealthyHostCount-${EnvironmentSuffix}'
-      AlarmDescription: 'Alarm when unhealthy host count exceeds 50% of registered targets'
+      AlarmDescription: 'Alarm when 2 or more instances are unhealthy (indicates widespread failure requiring immediate investigation)'
       Namespace: 'AWS/ApplicationELB'
       MetricName: UnHealthyHostCount
       Dimensions:
