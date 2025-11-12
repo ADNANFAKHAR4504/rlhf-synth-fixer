@@ -1049,6 +1049,7 @@ Resources:
     Type: AWS::Lambda::Function
     DependsOn: 
       - ProcessingLambdaLogGroup
+      - S3VPCEndpoint  # Ensure S3 Gateway endpoint is ready
       - LambdaVPCEndpoint
       - CloudWatchLogsVPCEndpoint
       - KMSVPCEndpoint
@@ -1171,6 +1172,9 @@ Resources:
               
               # Store to S3 with encryption - wrapped in try-except for better error handling
               try:
+                  logger.info(f"Attempting to store object to S3: s3://{bucket_name}/{key}")
+                  logger.info(f"S3 client endpoint: {s3_client.meta.endpoint_url if hasattr(s3_client.meta, 'endpoint_url') else 'default'}")
+                  
                   s3_client.put_object(
                       Bucket=bucket_name,
                       Key=key,
@@ -1185,6 +1189,7 @@ Resources:
                           'version': '2.0'
                       }
                   )
+                  logger.info(f"Successfully stored object to S3: s3://{bucket_name}/{key}")
                   return key
               except Exception as s3_error:
                   error_msg = f"S3 storage failed: {str(s3_error)}"

@@ -501,7 +501,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       if (responseBody.location) {
         testS3Keys.push(responseBody.location);
       }
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Processing Lambda generates unique transaction IDs for each request', async () => {
       // Arrange
@@ -539,7 +539,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       // Track for cleanup
       if (body1.location) testS3Keys.push(body1.location);
       if (body2.location) testS3Keys.push(body2.location);
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Processing Lambda calculates checksum for transaction data', async () => {
       // Arrange
@@ -584,7 +584,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       
       // Track for cleanup
       testS3Keys.push(responseBody.location);
-    }, 60000); // Increase timeout to 60 seconds
+    });
   });
 
   describe('Processing Lambda Execution → Encrypted S3 Storage', () => {
@@ -632,7 +632,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.ServerSideEncryption).toBe('aws:kms');
       expect(s3Response.SSEKMSKeyId).toBeTruthy();
       expect(s3Response.ContentType).toBe('application/json');
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('S3 objects are stored with date partitioning and tags', async () => {
       // Arrange
@@ -677,7 +677,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.Metadata!['transaction-id']).toBeTruthy();
       expect(s3Response.Metadata!['processed-by']).toBe('lambda-processor');
       expect(s3Response.Metadata!['version']).toBe('2.0');
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Stored data includes checksum for integrity verification', async () => {
       // Arrange
@@ -727,7 +727,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData).toHaveProperty('processedAt');
       expect(storedData).toHaveProperty('originalTimestamp');
       expect(storedData).toHaveProperty('processingVersion', '2.0');
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Stored data preserves original transaction data', async () => {
       // Arrange
@@ -779,7 +779,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData.transactionData).toEqual(originalTransactionData);
       expect(storedData.transactionData.amount).toBe(1500.00);
       expect(storedData.transactionData.merchantId).toBe('merchant-preserve-test');
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Multiple transactions stored in correct date partitions', async () => {
       // Arrange
@@ -821,7 +821,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       for (const key of s3Keys) {
         expect(key).toMatch(new RegExp(`^processed/${TEST_CUSTOMER_ID}/${year}/${month}/${day}/.+\.json$`));
       }
-    }, 90000); // Increase timeout to 90 seconds
+    });
   });
 
   describe('Encrypted S3 Storage → Response Generation', () => {
@@ -865,7 +865,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       if (body.location) {
         testS3Keys.push(body.location);
       }
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Error responses include request ID for traceability', async () => {
       // Arrange - Invalid input
@@ -931,7 +931,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       expect(s3Response).toBeDefined();
       expect(s3Response.ServerSideEncryption).toBe('aws:kms');
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Response timestamp is valid ISO format', async () => {
       // Arrange
@@ -964,7 +964,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       if (body.location) {
         testS3Keys.push(body.location);
       }
-    }, 60000); // Increase timeout to 60 seconds
+    });
   });
 
   describe('Response Generation → Monitoring and Alerting', () => {
@@ -1023,7 +1023,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       expect(logStreams.logStreams).toBeDefined();
       expect(logStreams.logStreams!.length).toBeGreaterThan(0);
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('API Gateway logs are captured with encryption', async () => {
       // Arrange & Act - Verify API Gateway log group exists
@@ -1085,7 +1085,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
 
       expect(logStreams.logStreams).toBeDefined();
       expect(logStreams.logStreams!.length).toBeGreaterThan(0);
-    }, 60000); // Increase timeout to 60 seconds
+    });
   });
 
   describe('Monitoring and Alerting → Dead Letter Queue Processing', () => {
@@ -1188,7 +1188,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData).toHaveProperty('dataClassification', 'HIGHLY_CONFIDENTIAL');
       expect(storedData).toHaveProperty('processedAt');
       expect(storedData).toHaveProperty('originalTimestamp');
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Multiple transactions are processed and stored separately', async () => {
       // Arrange
@@ -1241,7 +1241,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         expect(headResponse).toBeDefined();
         expect(headResponse.ServerSideEncryption).toBe('aws:kms');
       }
-    }, 90000); // Increase timeout to 90 seconds
+    });
 
     test('Checksum validation ensures data integrity', async () => {
       // Arrange
@@ -1290,7 +1290,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       const transactionDataJson = JSON.stringify(storedData.transactionData, Object.keys(storedData.transactionData).sort());
       const expectedChecksum = crypto.createHash('sha256').update(transactionDataJson).digest('hex');
       expect(storedData.checksum).toBe(expectedChecksum);
-    }, 60000); // Increase timeout to 60 seconds
+    });
 
     test('Error handling flows to DLQ when processing fails', async () => {
       // Arrange - Get initial DLQ state
