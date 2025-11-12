@@ -77,10 +77,6 @@ variables:
   - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2"
   - az account set --subscription "$AZURE_SUBSCRIPTION_ID"
 
-.acr_docker_login: &acr_docker_login
-  - TOKEN="$(az acr login -n "$ACR_REGISTRY" --expose-token -o tsv --query accessToken)"
-  - docker login "$ACR_REGISTRY.azurecr.io" -u 00000000-0000-0000-0000-000000000000 -p "$TOKEN"
-
 .helm_kube_ctx: &helm_kube_ctx
   - az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing
   - helm version && kubectl version --client
@@ -143,10 +139,9 @@ docker_build_push_game:
   needs: [build_bundles_and_package]
   variables: { DOCKER_DRIVER: overlay2 }
   script:
-    - *wif_login_az
-    - *acr_docker_login
-    - docker build -f docker/game-server.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA" .
-    - docker push "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA"
+    - *wif_login_az                                 # 2 lines
+    - TOKEN="$(az acr login -n "$ACR_REGISTRY" --expose-token -o tsv --query accessToken)" && docker login "$ACR_REGISTRY.azurecr.io" -u 00000000-0000-0000-0000-000000000000 -p "$TOKEN"
+    - docker build -f docker/game-server.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA" . && docker push "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA"
     - echo "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA" > dist/game-server.image
   artifacts:
     paths: [dist/game-server.image]
@@ -158,10 +153,9 @@ docker_build_push_lobby:
   needs: [build_bundles_and_package]
   variables: { DOCKER_DRIVER: overlay2 }
   script:
-    - *wif_login_az
-    - *acr_docker_login
-    - docker build -f docker/lobby.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA" .
-    - docker push "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA"
+    - *wif_login_az                                 # 2 lines
+    - TOKEN="$(az acr login -n "$ACR_REGISTRY" --expose-token -o tsv --query accessToken)" && docker login "$ACR_REGISTRY.azurecr.io" -u 00000000-0000-0000-0000-000000000000 -p "$TOKEN"
+    - docker build -f docker/lobby.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA" . && docker push "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA"
     - echo "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA" > dist/lobby.image
   artifacts:
     paths: [dist/lobby.image]
@@ -180,9 +174,9 @@ unit_tests:
   artifacts:
     reports:
       junit: $REPORT_DIR/junit.xml
-    coverage_report:
-      coverage_format: cobertura
-      path: "$COVERAGE_DIR/cobertura-coverage.xml"
+      coverage_report:
+        coverage_format: cobertura
+        path: "$COVERAGE_DIR/cobertura-coverage.xml"
     paths: [$COVERAGE_DIR]
 
 load_tests_artillery:
@@ -245,10 +239,11 @@ policy_checkov:
 net_guardrails:
   stage: security
   image: mcr.microsoft.com/azure-cli:2.63.0
-  before_script: []   # override any global before_script so it doesn't add lines
-  after_script: []    # safe guard in case a global after_script is present
   script:
-    - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2" && az account set --subscription "$AZURE_SUBSCRIPTION_ID" && mkdir -p "$SECURITY_DIR" && printf "Validate NSG/DDOS posture (assumed pre-provisioned)\n" > "$SECURITY_DIR/network.txt" && cat "$SECURITY_DIR/network.txt"
+    - *wif_login_az
+    - mkdir -p "$SECURITY_DIR"
+    - echo "Validate NSG/DDOS posture (assumed pre-provisioned)" > "$SECURITY_DIR/network.txt"
+    - cat "$SECURITY_DIR/network.txt"
   artifacts:
     paths: [$SECURITY_DIR/network.txt]
 
@@ -356,11 +351,10 @@ deploy_staging_blue_green:
     deployment_tier: staging
   when: manual
   script:
-  - *wif_login_az
-  - IMG_REG="$ACR_REGISTRY.azurecr.io" TAG="$CI_COMMIT_SHA"
-  - RG="$RG_STG_EASTUS" AKS="$AKS_STG_EASTUS"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"
-  - RG="$RG_STG_WESTEU" AKS="$AKS_STG_WESTEU"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"
-  - RG="$RG_STG_SEASIA" AKS="$AKS_STG_SEASIA"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG" && echo "staging bg OK" | tee "$HELM_OUT_DIR/release-notes-staging.txt"
+    - *wif_login_az
+    - IMG_REG="$ACR_REGISTRY.azurecr.io" TAG="$CI_COMMIT_SHA"
+    - for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU" "$RG_STG_SEASIA:$AKS_STG_SEASIA"; do RG=${R%%:*}; AKS=${R##*:}; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"; done
+    - echo "staging bg OK" | tee "$HELM_OUT_DIR/release-notes-staging.txt"
   artifacts:
     paths: ["$HELM_OUT_DIR/release-notes-staging.txt"]
 
