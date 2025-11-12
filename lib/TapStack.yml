@@ -1077,6 +1077,7 @@ Resources:
           KMS_KEY_ARN: !GetAtt DataEncryptionKey.Arn  # Changed to use ARN
           ENVIRONMENT: !Ref EnvironmentName
           LOG_LEVEL: !If [IsProduction, 'WARNING', 'INFO']
+          # Note: AWS_REGION is automatically provided by Lambda runtime, no need to set it explicitly
       Code:
         ZipFile: |
           import json
@@ -1093,9 +1094,13 @@ Resources:
           
           # Initialize AWS clients with timeout configuration
           # Force path-style addressing for VPC Gateway endpoint compatibility
+          # Gateway endpoints require path-style URLs (s3.region.amazonaws.com/bucket/key)
+          # instead of virtual-hosted style (bucket.s3.region.amazonaws.com/key)
           from botocore.config import Config
+          # Get region from Lambda environment (AWS_REGION is automatically provided by Lambda runtime)
+          aws_region = os.environ.get('AWS_REGION') or boto3.Session().region_name or 'us-east-1'
           s3_config = Config(
-              region_name=os.environ.get('AWS_REGION'),
+              region_name=aws_region,
               connect_timeout=10,
               read_timeout=30,
               retries={'max_attempts': 2},
@@ -1103,7 +1108,11 @@ Resources:
                   'addressing_style': 'path'  # Force path-style for VPC Gateway endpoint
               }
           )
-          s3_client = boto3.client('s3', config=s3_config)
+          # Explicitly set endpoint URL to force path-style addressing
+          # This ensures traffic routes through the VPC Gateway endpoint
+          # Using path-style endpoint format: s3.region.amazonaws.com
+          s3_endpoint_url = f'https://s3.{aws_region}.amazonaws.com'
+          s3_client = boto3.client('s3', config=s3_config, endpoint_url=s3_endpoint_url, use_ssl=True)
           
           # Environment variables
           bucket_name = os.environ['BUCKET_NAME']
@@ -1179,6 +1188,8 @@ Resources:
               # Store to S3 with encryption
               try:
                   logger.info(f"Attempting to store object to S3: s3://{bucket_name}/{key}")
+                  logger.info(f"S3 endpoint URL: {s3_endpoint_url}, Region: {aws_region}")
+                  logger.info(f"S3 client config addressing_style: {s3_config.s3.get('addressing_style', 'default')}")
                   
                   s3_client.put_object(
                       Bucket=bucket_name,
