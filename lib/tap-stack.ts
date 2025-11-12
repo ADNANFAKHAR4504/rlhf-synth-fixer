@@ -1,7 +1,7 @@
 /* eslint-disable prettier/prettier */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
+import * as pulumi from '@pulumi/pulumi';
 
 const config = new pulumi.Config();
 const environmentSuffix = config.require('environmentSuffix');
@@ -386,7 +386,7 @@ const ecsLogGroup = new aws.cloudwatch.LogGroup(
   `ecs-log-group-${environmentSuffix}`,
   {
     name: `/ecs/payment-app-${environmentSuffix}`,
-    retentionInDays: 2555, // 7 years
+    retentionInDays: 2557, // 7 years (AWS valid value)
     tags: tags,
   }
 );
