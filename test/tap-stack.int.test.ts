@@ -116,10 +116,33 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     }
     
     // Destroy AWS SDK clients to prevent Jest from hanging
-    lambdaClient.destroy();
-    s3Client.destroy();
-    sqsClient.destroy();
-    logsClient.destroy();
+    // Use try-catch for each destroy to ensure all clients are closed even if one fails
+    try {
+      lambdaClient.destroy();
+    } catch (error) {
+      console.warn('Error destroying Lambda client:', error);
+    }
+    
+    try {
+      s3Client.destroy();
+    } catch (error) {
+      console.warn('Error destroying S3 client:', error);
+    }
+    
+    try {
+      sqsClient.destroy();
+    } catch (error) {
+      console.warn('Error destroying SQS client:', error);
+    }
+    
+    try {
+      logsClient.destroy();
+    } catch (error) {
+      console.warn('Error destroying CloudWatch Logs client:', error);
+    }
+    
+    // Give connections time to close before Jest exits
+    await wait(100);
   });
 
   describe('External Partner Request → API Gateway Reception', () => {

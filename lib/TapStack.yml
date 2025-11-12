@@ -1169,23 +1169,27 @@ Resources:
               # Convert tags to URL-encoded string
               tag_string = '&'.join([f"{k}={v}" for k, v in tags.items()])
               
-              # Store to S3 with encryption
-              s3_client.put_object(
-                  Bucket=bucket_name,
-                  Key=key,
-                  Body=json.dumps(processed_data, indent=2),
-                  ServerSideEncryption='aws:kms',
-                  SSEKMSKeyId=kms_key_id,
-                  ContentType='application/json',
-                  Tagging=tag_string,
-                  Metadata={
-                      'transaction-id': transaction_id,
-                      'processed-by': 'lambda-processor',
-                      'version': '2.0'
-                  }
-              )
-              
-              return key
+              # Store to S3 with encryption - wrapped in try-except for better error handling
+              try:
+                  s3_client.put_object(
+                      Bucket=bucket_name,
+                      Key=key,
+                      Body=json.dumps(processed_data, indent=2),
+                      ServerSideEncryption='aws:kms',
+                      SSEKMSKeyId=kms_key_id,
+                      ContentType='application/json',
+                      Tagging=tag_string,
+                      Metadata={
+                          'transaction-id': transaction_id,
+                          'processed-by': 'lambda-processor',
+                          'version': '2.0'
+                      }
+                  )
+                  return key
+              except Exception as s3_error:
+                  error_msg = f"S3 storage failed: {str(s3_error)}"
+                  logger.error(error_msg, exc_info=True)
+                  raise Exception(error_msg) from s3_error
           
           def handler(event, context):
               """Main Lambda handler for processing financial data"""
@@ -1236,13 +1240,16 @@ Resources:
                   }
                   
               except Exception as e:
-                  logger.error(f"Processing error: {str(e)}", exc_info=True)
+                  error_type = type(e).__name__
+                  error_message = str(e)
+                  logger.error(f"Processing error [{error_type}]: {error_message}", exc_info=True)
                   return {
                       'statusCode': 500,
                       'headers': {'Content-Type': 'application/json'},
                       'body': json.dumps({
                           'error': 'Processing failed',
-                          'message': 'An internal error occurred',
+                          'message': error_message,
+                          'errorType': error_type,
                           'requestId': request_id
                       })
                   }
