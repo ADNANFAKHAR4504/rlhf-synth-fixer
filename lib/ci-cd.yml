@@ -247,10 +247,10 @@ net_guardrails:
   image: mcr.microsoft.com/azure-cli:2.63.0
   script:
     - *wif_login_az
-    - mkdir -p "$SECURITY_DIR" && echo "Validate NSG/DDOS posture (assumed pre-provisioned)" > "$SECURITY_DIR/network.txt"
-    - cat "$SECURITY_DIR/network.txt"
+    - mkdir -p "$SECURITY_DIR" && printf "Validate NSG/DDOS posture (assumed pre-provisioned)\n" > "$SECURITY_DIR/network.txt" && cat "$SECURITY_DIR/network.txt"
   artifacts:
     paths: [$SECURITY_DIR/network.txt]
+
 
 
 # ---------- Integration ----------
@@ -359,10 +359,10 @@ deploy_staging_blue_green:
   script:
     - *wif_login_az
     - IMG_REG="$ACR_REGISTRY.azurecr.io" TAG="$CI_COMMIT_SHA"
-    - for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU" "$RG_STG_SEASIA:$AKS_STG_SEASIA"; do IFS=: read -r RG AKS<<<"$R"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"; done
-    - echo "staging bg OK" | tee "$HELM_OUT_DIR/release-notes-staging.txt"
+    - for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU" "$RG_STG_SEASIA:$AKS_STG_SEASIA"; do IFS=: read -r RG AKS<<<"$R"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$IMG_REG" --set image.tag="$TAG"; done && echo "staging bg OK" | tee "$HELM_OUT_DIR/release-notes-staging.txt"
   artifacts:
     paths: ["$HELM_OUT_DIR/release-notes-staging.txt"]
+
 
 
 # ---------- Acceptance (K6 synthetic players) ----------
