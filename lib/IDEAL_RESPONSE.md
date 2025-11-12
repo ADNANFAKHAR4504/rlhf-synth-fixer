@@ -133,7 +133,8 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
     S3BucketLifecycleConfigurationRule,
-    S3BucketLifecycleConfigurationRuleExpiration
+    S3BucketLifecycleConfigurationRuleExpiration,
+    S3BucketLifecycleConfigurationRuleFilter
 )
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
@@ -504,6 +505,7 @@ class TapStack(TerraformStack):
                 S3BucketLifecycleConfigurationRule(
                     id="expire-old-objects",
                     status="Enabled",
+                    filter=[S3BucketLifecycleConfigurationRuleFilter(prefix="")],
                     expiration=[S3BucketLifecycleConfigurationRuleExpiration(days=90)]
                 )
             ]

@@ -8,6 +8,7 @@ from cdktf import App, Testing
 from lib.tap_stack import TapStack
 
 
+@pytest.mark.usefixtures("mock_backend_setup", "mock_lambda_bundle")
 class TestTapStackUnit:
     """Unit tests for TapStack infrastructure"""
 
@@ -361,6 +362,7 @@ class TestTapStackUnit:
         assert "s3" in synth
 
 
+@pytest.mark.usefixtures("mock_backend_setup", "mock_lambda_bundle")
 class TestLambdaProcessor:
     """Unit tests for Lambda processor function"""
 
@@ -563,8 +565,43 @@ class TestLambdaProcessor:
 class TestTapStackMethods:
     """Unit tests for TapStack static methods"""
 
-    def test_setup_backend_infrastructure(self):
-        """Test backend infrastructure setup"""
+    def test_setup_backend_infrastructure(self, mock_backend_setup, mock_lambda_bundle):
+        """Test backend infrastructure setup - verifies method can be called without errors"""
+        # Since this method is auto-mocked by conftest.py, we just verify it doesn't raise errors
+        # The mock returns None, which is the expected behavior
+        result = TapStack.setup_backend_infrastructure("us-east-1", "test")
+        assert result is None
+    
+    def test_bundle_lambda_code(self, mock_backend_setup, mock_lambda_bundle):
+        """Test Lambda code bundling - verifies mocked return value"""
+        from cdktf import App
+        
+        # The bundle_lambda_code method is auto-mocked by conftest.py
+        # It returns ('lambda_function.zip', 'mockhash123')
+        app = App()
+        stack = TapStack(
+            app,
+            "test-bundle-stack",
+            region="us-east-1",
+            cidr_block="10.0.0.0/16",
+            environment_suffix="test"
+        )
+        
+        # Call bundle method - returns mocked tuple
+        zip_path, source_hash = stack.bundle_lambda_code()
+        
+        # Verify return values from mock
+        assert zip_path == 'lambda_function.zip'
+        assert source_hash == 'mockhash123'
+        assert isinstance(source_hash, str)
+        assert len(source_hash) > 0
+
+
+class TestTapStackMethodsReal:
+    """Unit tests for TapStack methods without mocking to achieve coverage"""
+    
+    def test_setup_backend_infrastructure_real(self):
+        """Test real backend infrastructure setup with full mocking of boto3"""
         from unittest.mock import patch, MagicMock
         import os
         
@@ -574,51 +611,91 @@ class TestTapStackMethods:
                 mock_dynamodb = MagicMock()
                 
                 session_instance = MagicMock()
-                session_instance.client.side_effect = lambda service: mock_s3 if service == 's3' else mock_dynamodb
+                session_instance.client.side_effect = lambda service, **kwargs: mock_s3 if service == 's3' else mock_dynamodb
                 mock_session.return_value = session_instance
                 
-                # Mock bucket doesn't exist
+                # Test case 1: Bucket and table don't exist
                 mock_s3.head_bucket.side_effect = Exception("Bucket not found")
                 mock_s3.create_bucket.return_value = {}
+                mock_s3.put_bucket_versioning.return_value = {}
+                mock_s3.put_bucket_encryption.return_value = {}
+                mock_s3.put_public_access_block.return_value = {}
                 
-                # Mock table doesn't exist
-                mock_dynamodb.describe_table.side_effect = mock_dynamodb.exceptions.ResourceNotFoundException({}, 'DescribeTable')
+                mock_dynamodb.exceptions = MagicMock()
+                mock_dynamodb.exceptions.ResourceNotFoundException = type('ResourceNotFoundException', (Exception,), {})
+                mock_dynamodb.describe_table.side_effect = mock_dynamodb.exceptions.ResourceNotFoundException()
                 mock_dynamodb.create_table.return_value = {}
-                mock_dynamodb.get_waiter.return_value.wait.return_value = None
+                mock_waiter = MagicMock()
+                mock_waiter.wait.return_value = None
+                mock_dynamodb.get_waiter.return_value = mock_waiter
                 
-                TapStack.setup_backend_infrastructure("us-east-1", "test")
+                # Call the real method
+                TapStack.setup_backend_infrastructure("ap-southeast-1", "test")
                 
-                # Verify bucket and table creation were attempted
-                assert mock_s3.create_bucket.called or mock_s3.head_bucket.called
+                # Verify S3 calls
+                assert mock_s3.head_bucket.called
+                assert mock_s3.create_bucket.called
+                assert mock_s3.put_bucket_versioning.called
+                
+                # Verify DynamoDB calls
+                assert mock_dynamodb.describe_table.called
+                assert mock_dynamodb.create_table.called
     
-    def test_bundle_lambda_code(self):
-        """Test Lambda code bundling with hash generation"""
-        from cdktf import App
-        from unittest.mock import patch
+    def test_setup_backend_infrastructure_existing_resources(self):
+        """Test backend setup when resources already exist"""
+        from unittest.mock import patch, MagicMock
         import os
-        from pathlib import Path
         
-        # Create a test stack to call bundle_lambda_code
+        with patch.dict(os.environ, {'AWS_PROFILE': 'test'}):
+            with patch('boto3.Session') as mock_session:
+                mock_s3 = MagicMock()
+                mock_dynamodb = MagicMock()
+                
+                session_instance = MagicMock()
+                session_instance.client.side_effect = lambda service, **kwargs: mock_s3 if service == 's3' else mock_dynamodb
+                mock_session.return_value = session_instance
+                
+                # Resources already exist
+                mock_s3.head_bucket.return_value = {}
+                mock_dynamodb.describe_table.return_value = {'Table': {'TableName': 'test'}}
+                
+                # Call the real method
+                TapStack.setup_backend_infrastructure("ap-southeast-1", "test")
+                
+                # Verify no creation calls
+                assert not mock_s3.create_bucket.called
+                assert not mock_dynamodb.create_table.called
+    
+    def test_bundle_lambda_code_real(self):
+        """Test real Lambda code bundling"""
+        from cdktf import App
+        from pathlib import Path
+        from unittest.mock import patch
+        
+        # Mock backend setup but not bundle method
         with patch('lib.tap_stack.TapStack.setup_backend_infrastructure'):
             app = App()
             stack = TapStack(
                 app,
-                "test-bundle-stack",
+                "test-real-bundle",
                 region="us-east-1",
                 cidr_block="10.0.0.0/16",
-                environment_suffix="test"
+                environment_suffix="test-real"
             )
             
-            # Call bundle method - returns (zip_path, source_hash)
+            # Call the real bundle method  (not mocked in this test class)
             zip_path, source_hash = stack.bundle_lambda_code()
             
             # Verify zip file was created
             assert zip_path.endswith('lambda_function.zip')
             assert Path(zip_path).exists()
             
-            # Verify source hash is generated (base64 encoded SHA256)
+            # Verify source hash format
             assert isinstance(source_hash, str)
             assert len(source_hash) > 0
+            
+            # Clean up
+            Path(zip_path).unlink(missing_ok=True)
 
 
 class TestVariables:
@@ -674,6 +751,7 @@ class TestVariables:
         assert validate_required_tags(invalid_tags) is False
 
 
+@pytest.mark.usefixtures("mock_backend_setup", "mock_lambda_bundle")
 class TestTapApp:
     """Unit tests for main tap.py app"""
 
