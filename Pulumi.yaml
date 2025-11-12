@@ -1,0 +1,11 @@
+name: TapStack
+runtime:
+  name: python
+  options:
+    virtualenv: /Users/mayanksethi/.local/share/virtualenvs/synth-e96t4h-yaWuwkQ9
+description: Serverless Transaction Processing System with Pulumi Python
+main: lib/__main__.py
+config:
+  environmentSuffix:
+    description: Environment suffix for resource naming
+    default: dev
