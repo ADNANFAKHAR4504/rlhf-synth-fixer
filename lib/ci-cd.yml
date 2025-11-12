@@ -252,8 +252,6 @@ net_guardrails:
   artifacts:
     paths: [$SECURITY_DIR/network.txt]
 
-
-
 # ---------- Integration ----------
 e2e_playwright:
   stage: integration
