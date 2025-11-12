@@ -531,11 +531,26 @@ describe('TapStack CloudFormation Template', () => {
 
       const s3Policy = policies.find((p: any) => p.PolicyName['Fn::Sub'].includes('S3MinimalAccess'));
       expect(s3Policy).toBeDefined();
-      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
-      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:PutObject');
-
-      const explicitDeny = policies.find((p: any) => p.PolicyName['Fn::Sub'].includes('ExplicitDeny'));
-      expect(explicitDeny.PolicyDocument.Statement[0].Effect).toBe('Deny');
+      
+      // Check that S3 actions are split across multiple statements with Sids
+      const statements = s3Policy.PolicyDocument.Statement;
+      const readStatement = statements.find((s: any) => s.Sid === 'S3ReadAccess');
+      const writeStatement = statements.find((s: any) => s.Sid === 'S3WriteAccessWithEncryption');
+      const taggingStatement = statements.find((s: any) => s.Sid === 'S3TaggingAccess');
+      const listStatement = statements.find((s: any) => s.Sid === 'S3ListAccess');
+      
+      expect(readStatement).toBeDefined();
+      expect(readStatement.Action).toContain('s3:GetObject');
+      expect(readStatement.Action).toContain('s3:GetObjectVersion');
+      
+      expect(writeStatement).toBeDefined();
+      expect(writeStatement.Action).toContain('s3:PutObject');
+      
+      expect(taggingStatement).toBeDefined();
+      expect(taggingStatement.Action).toContain('s3:PutObjectTagging');
+      
+      expect(listStatement).toBeDefined();
+      expect(listStatement.Action).toContain('s3:ListBucket');
     });
 
     test('restricts processing Lambda to specific S3 bucket only', () => {
@@ -545,9 +560,22 @@ describe('TapStack CloudFormation Template', () => {
         p.PolicyName['Fn::Sub'].includes('S3MinimalAccess')
       );
 
-      // Assert
-      expect(s3Policy.PolicyDocument.Statement[0].Resource['Fn::Sub']).toContain('${DataBucket.Arn}');
-      expect(s3Policy.PolicyDocument.Statement[0].Condition.StringEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
+      // Assert - Check that all statements reference the DataBucket
+      const statements = s3Policy.PolicyDocument.Statement;
+      
+      // Read statement should reference bucket objects
+      const readStatement = statements.find((s: any) => s.Sid === 'S3ReadAccess');
+      expect(readStatement.Resource['Fn::Sub']).toContain('${DataBucket.Arn}');
+      
+      // Write statement should have encryption condition
+      const writeStatement = statements.find((s: any) => s.Sid === 'S3WriteAccessWithEncryption');
+      expect(writeStatement.Resource['Fn::Sub']).toContain('${DataBucket.Arn}');
+      expect(writeStatement.Condition.StringEquals['s3:x-amz-server-side-encryption']).toBe('aws:kms');
+      expect(writeStatement.Condition.StringEquals['s3:x-amz-server-side-encryption-aws-kms-key-id']).toBeDefined();
+      
+      // List statement should reference bucket (not objects)
+      const listStatement = statements.find((s: any) => s.Sid === 'S3ListAccess');
+      expect(listStatement.Resource['Fn::GetAtt']).toEqual(['DataBucket', 'Arn']);
     });
 
     test('creates authorizer Lambda role with trust store access', () => {
@@ -622,7 +650,7 @@ describe('TapStack CloudFormation Template', () => {
 
       // Assert
       expect(envVars.BUCKET_NAME).toEqual({ Ref: 'DataBucket' });
-      expect(envVars.KMS_KEY_ID).toEqual({ Ref: 'DataEncryptionKey' });
+      expect(envVars.KMS_KEY_ARN).toEqual({ 'Fn::GetAtt': ['DataEncryptionKey', 'Arn'] });
       expect(envVars.ENVIRONMENT).toEqual({ Ref: 'EnvironmentName' });
       expect(envVars.LOG_LEVEL['Fn::If']).toBeDefined();
     });

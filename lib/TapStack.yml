@@ -433,7 +433,7 @@ Resources:
       SourceSecurityGroupId: !Ref LambdaSecurityGroup
       Description: HTTPS from Lambda functions
   
-  # VPC Endpoint for S3
+  # VPC Endpoint for S3 - UPDATED with PutObjectTagging permission
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -449,6 +449,8 @@ Resources:
             Action:
               - 's3:GetObject'
               - 's3:PutObject'
+              - 's3:PutObjectTagging'
+              - 's3:GetObjectTagging'
               - 's3:ListBucket'
               - 's3:GetBucketLocation'
               - 's3:GetObjectVersion'
@@ -501,7 +503,7 @@ Resources:
       SecurityGroupIds:
         - !Ref VPCEndpointSecurityGroup
   
-  # VPC Endpoint for SQS (CRITICAL FIX - Was missing)
+  # VPC Endpoint for SQS
   SQSVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -648,7 +650,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  # ===== IAM ROLES WITH LEAST PRIVILEGE =====
+  # ===== IAM ROLES WITH LEAST PRIVILEGE - UPDATED =====
   
   ProcessingLambdaRole:
     Type: AWS::IAM::Role
@@ -667,18 +669,29 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Sid: S3ReadAccess
+                Effect: Allow
                 Action:
                   - 's3:GetObject'
                   - 's3:GetObjectVersion'
+                Resource: !Sub '${DataBucket.Arn}/*'
+              - Sid: S3WriteAccessWithEncryption
+                Effect: Allow
+                Action:
                   - 's3:PutObject'
-                  - 's3:PutObjectTagging'
                 Resource: !Sub '${DataBucket.Arn}/*'
                 Condition:
                   StringEquals:
                     's3:x-amz-server-side-encryption': 'aws:kms'
                     's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt DataEncryptionKey.Arn
-              - Effect: Allow
+              - Sid: S3TaggingAccess
+                Effect: Allow
+                Action:
+                  - 's3:PutObjectTagging'
+                  - 's3:GetObjectTagging'
+                Resource: !Sub '${DataBucket.Arn}/*'
+              - Sid: S3ListAccess
+                Effect: Allow
                 Action:
                   - 's3:ListBucket'
                   - 's3:GetBucketLocation'
@@ -691,6 +704,7 @@ Resources:
                 Action:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
+                  - 'kms:DescribeKey'
                 Resource: !GetAtt DataEncryptionKey.Arn
                 Condition:
                   StringEquals:
@@ -707,31 +721,6 @@ Resources:
                   - 'sqs:SendMessage'
                   - 'sqs:GetQueueAttributes'
                 Resource: !GetAtt ProcessingDLQ.Arn
-        - PolicyName: !Sub '${ProjectName}-ExplicitDenyUnnecessaryActions-${EnvironmentName}'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Deny
-                NotAction:
-                  - 's3:GetObject'
-                  - 's3:GetObjectVersion'
-                  - 's3:PutObject'
-                  - 's3:PutObjectTagging'
-                  - 's3:ListBucket'
-                  - 's3:GetBucketLocation'
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
-                  - 'sqs:SendMessage'
-                  - 'sqs:GetQueueAttributes'
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'ec2:CreateNetworkInterface'
-                  - 'ec2:DescribeNetworkInterfaces'
-                  - 'ec2:DeleteNetworkInterface'
-                  - 'ec2:AssignPrivateIpAddresses'
-                  - 'ec2:UnassignPrivateIpAddresses'
-                Resource: '*'
       Tags:
         - Key: CostCenter
           Value: !Ref CostCenter
@@ -1056,15 +1045,16 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
   
+  # UPDATED ProcessingLambdaFunction
   ProcessingLambdaFunction:
     Type: AWS::Lambda::Function
     DependsOn: 
       - ProcessingLambdaLogGroup
-      - S3VPCEndpoint  # Ensure S3 Gateway endpoint is ready
+      - S3VPCEndpoint
       - LambdaVPCEndpoint
       - CloudWatchLogsVPCEndpoint
       - KMSVPCEndpoint
-      - SQSVPCEndpoint  # Added SQS VPC Endpoint dependency
+      - SQSVPCEndpoint
     Properties:
       FunctionName: !Sub '${ProjectName}-processing-${EnvironmentName}'
       Runtime: python3.11
@@ -1072,7 +1062,7 @@ Resources:
       Role: !GetAtt ProcessingLambdaRole.Arn
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemorySize
-      ReservedConcurrentExecutions: 50  # Prevent cold starts and manage concurrency
+      ReservedConcurrentExecutions: 50
       DeadLetterConfig:
         TargetArn: !GetAtt ProcessingDLQ.Arn
       VpcConfig:
@@ -1084,7 +1074,7 @@ Resources:
       Environment:
         Variables:
           BUCKET_NAME: !Ref DataBucket
-          KMS_KEY_ID: !Ref DataEncryptionKey
+          KMS_KEY_ARN: !GetAtt DataEncryptionKey.Arn  # Changed to use ARN
           ENVIRONMENT: !Ref EnvironmentName
           LOG_LEVEL: !If [IsProduction, 'WARNING', 'INFO']
       Code:
@@ -1104,6 +1094,7 @@ Resources:
           # Initialize AWS clients with timeout configuration
           from botocore.config import Config
           s3_config = Config(
+              region_name=os.environ.get('AWS_REGION'),
               connect_timeout=10,
               read_timeout=30,
               retries={'max_attempts': 2}
@@ -1112,7 +1103,7 @@ Resources:
           
           # Environment variables
           bucket_name = os.environ['BUCKET_NAME']
-          kms_key_id = os.environ['KMS_KEY_ID']
+          kms_key_arn = os.environ['KMS_KEY_ARN']  # Changed to use ARN
           environment = os.environ['ENVIRONMENT']
           
           def validate_input(body):
@@ -1181,17 +1172,16 @@ Resources:
               # Convert tags to URL-encoded string
               tag_string = '&'.join([f"{k}={v}" for k, v in tags.items()])
               
-              # Store to S3 with encryption - wrapped in try-except for better error handling
+              # Store to S3 with encryption
               try:
                   logger.info(f"Attempting to store object to S3: s3://{bucket_name}/{key}")
-                  logger.info(f"S3 client endpoint: {s3_client.meta.endpoint_url if hasattr(s3_client.meta, 'endpoint_url') else 'default'}")
                   
                   s3_client.put_object(
                       Bucket=bucket_name,
                       Key=key,
                       Body=json.dumps(processed_data, indent=2),
                       ServerSideEncryption='aws:kms',
-                      SSEKMSKeyId=kms_key_id,
+                      SSEKMSKeyId=kms_key_arn,  # Using ARN now
                       ContentType='application/json',
                       Tagging=tag_string,
                       Metadata={
