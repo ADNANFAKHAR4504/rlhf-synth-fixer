@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912266",
+  "team": "3",
+  "startedAt": "2025-11-12T12:50:34.397Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "KMS Key",
+    "IAM Role",
+    "IAM Policy",
+    "SNS Topic",
+    "SNS Subscription",
+    "CloudWatch Alarm",
+    "CloudWatch Dashboard",
+    "CloudWatch Log Group",
+    "S3 Bucket Policy",
+    "S3 Replication Configuration",
+    "S3 Object Lock Configuration",
+    "S3 Lifecycle Configuration"
+  ]
+}
