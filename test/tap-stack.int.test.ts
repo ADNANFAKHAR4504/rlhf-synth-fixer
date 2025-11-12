@@ -45,6 +45,18 @@ const TEST_API_KEY = 'A'.repeat(32); // 32-character API key
 // Helper function to wait
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+// Helper function to check for Lambda errors and parse response
+const parseLambdaResponse = (response: any, functionName: string = 'Lambda'): any => {
+  if (response.FunctionError) {
+    const errorPayload = JSON.parse(Buffer.from(response.Payload!).toString());
+    throw new Error(`${functionName} error: ${errorPayload.errorMessage || errorPayload.errorType || 'Unknown error'}`);
+  }
+  if (!response.Payload) {
+    throw new Error(`${functionName} returned empty payload`);
+  }
+  return JSON.parse(Buffer.from(response.Payload!).toString());
+};
+
 describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow Focus)', () => {
   // Stack outputs
   let apiEndpoint: string;
@@ -99,8 +111,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     }
   });
 
-  describe('A → B: External Partner Initiates Request → API Gateway Receives Request', () => {
-    test('A→B: API Gateway receives and validates request format', async () => {
+  describe('External Partner Request → API Gateway Reception', () => {
+    test('API Gateway receives and validates request format', async () => {
       // Arrange - Partner prepares request
       const requestBody = {
         customerId: TEST_CUSTOMER_ID,
@@ -132,7 +144,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(response.status).not.toBe(404);
     });
 
-    test('A→B: API Gateway rejects requests without proper headers', async () => {
+    test('API Gateway rejects requests without proper headers', async () => {
       // Arrange - Request missing required headers
       const requestBody = {
         customerId: TEST_CUSTOMER_ID,
@@ -154,7 +166,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect([400, 401, 403]).toContain(response.status);
     });
 
-    test('A→B: API Gateway validates request body structure', async () => {
+    test('API Gateway validates request body structure', async () => {
       // Arrange - Invalid request body (not JSON)
       const invalidBody = 'not valid json';
 
@@ -173,8 +185,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('B → C: API Gateway Receives Request → Custom Authorizer Validates Request', () => {
-    test('B→C: Authorizer validates certificate, API key, and request signature', async () => {
+  describe('API Gateway Reception → Custom Authorizer Validation', () => {
+    test('Authorizer validates certificate, API key, and request signature', async () => {
       // Arrange - Simulate API Gateway invoking authorizer
       const requestId = crypto.randomUUID();
       const testEvent = {
@@ -205,15 +217,14 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Authorizer returns policy (Allow or Deny)
-      expect(response.Payload).toBeDefined();
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Authorizer Lambda');
       expect(result).toHaveProperty('policyDocument');
       expect(result.policyDocument).toHaveProperty('Statement');
       expect(result.policyDocument.Statement[0]).toHaveProperty('Effect');
       expect(result.policyDocument.Statement[0]).toHaveProperty('Action', 'execute-api:Invoke');
     });
 
-    test('B→C: Authorizer rejects invalid API key format', async () => {
+    test('Authorizer rejects invalid API key format', async () => {
       // Arrange
       const testEvent = {
         methodArn: `arn:aws:execute-api:${AWS_REGION}:${awsAccountId}:${apiEndpoint.split('/')[2]}/prod/POST/process`,
@@ -240,11 +251,11 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Should deny invalid API key
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Authorizer Lambda');
       expect(result.policyDocument.Statement[0].Effect).toBe('Deny');
     });
 
-    test('B→C: Authorizer rejects missing client certificate', async () => {
+    test('Authorizer rejects missing client certificate', async () => {
       // Arrange
       const testEvent = {
         methodArn: `arn:aws:execute-api:${AWS_REGION}:${awsAccountId}:${apiEndpoint.split('/')[2]}/prod/POST/process`,
@@ -269,11 +280,11 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Should deny missing certificate
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Authorizer Lambda');
       expect(result.policyDocument.Statement[0].Effect).toBe('Deny');
     });
 
-    test('B→C: Authorizer rejects invalid request signature', async () => {
+    test('Authorizer rejects invalid request signature', async () => {
       // Arrange
       const requestId = crypto.randomUUID();
       const testEvent = {
@@ -301,11 +312,11 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Should deny invalid signature
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Authorizer Lambda');
       expect(result.policyDocument.Statement[0].Effect).toBe('Deny');
     });
 
-    test('B→C: Authorizer includes context in Allow policy', async () => {
+    test('Authorizer includes context in Allow policy', async () => {
       // Arrange
       const requestId = crypto.randomUUID();
       const testEvent = {
@@ -336,7 +347,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Policy should include context if Allow
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Authorizer Lambda');
       if (result.policyDocument.Statement[0].Effect === 'Allow') {
         expect(result).toHaveProperty('context');
         expect(result.context).toHaveProperty('requestId');
@@ -344,8 +355,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('C → D: Custom Authorizer Validates Request → Processing Lambda Receives and Processes Data', () => {
-    test('C→D: Processing Lambda validates input data format', async () => {
+  describe('Custom Authorizer Validation → Processing Lambda Execution', () => {
+    test('Processing Lambda validates input data format', async () => {
       // Arrange - Invalid input (missing required fields)
       const invalidEvent = {
         body: JSON.stringify({
@@ -363,7 +374,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Returns validation error
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       expect(result.statusCode).toBe(400);
       const body = JSON.parse(result.body);
       expect(body).toHaveProperty('error', 'Validation failed');
@@ -371,7 +382,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(body).toHaveProperty('message');
     });
 
-    test('C→D: Processing Lambda rejects invalid customerId format', async () => {
+    test('Processing Lambda rejects invalid customerId format', async () => {
       // Arrange - Invalid customerId (too short)
       const invalidEvent = {
         body: JSON.stringify({
@@ -390,13 +401,13 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Returns validation error
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       expect(result.statusCode).toBe(400);
       const body = JSON.parse(result.body);
       expect(body).toHaveProperty('error', 'Validation failed');
     });
 
-    test('C→D: Processing Lambda rejects invalid timestamp format', async () => {
+    test('Processing Lambda rejects invalid timestamp format', async () => {
       // Arrange - Invalid timestamp
       const invalidEvent = {
         body: JSON.stringify({
@@ -415,13 +426,13 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Returns validation error
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       expect(result.statusCode).toBe(400);
       const body = JSON.parse(result.body);
       expect(body).toHaveProperty('error', 'Validation failed');
     });
 
-    test('C→D: Processing Lambda processes valid transaction and generates transaction ID', async () => {
+    test('Processing Lambda processes valid transaction and generates transaction ID', async () => {
       // Arrange - Valid transaction data
       const validEvent = {
         body: JSON.stringify({
@@ -444,7 +455,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Returns success with transaction ID
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       expect(result.statusCode).toBe(200);
       const responseBody = JSON.parse(result.body);
       expect(responseBody).toHaveProperty('transactionId');
@@ -453,7 +464,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(responseBody.transactionId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/); // UUID format
     });
 
-    test('C→D: Processing Lambda generates unique transaction IDs for each request', async () => {
+    test('Processing Lambda generates unique transaction IDs for each request', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -479,15 +490,15 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Each transaction has unique ID
-      const result1 = JSON.parse(Buffer.from(response1.Payload!).toString());
-      const result2 = JSON.parse(Buffer.from(response2.Payload!).toString());
+      const result1 = parseLambdaResponse(response1, 'Processing Lambda');
+      const result2 = parseLambdaResponse(response2, 'Processing Lambda');
       const body1 = JSON.parse(result1.body);
       const body2 = JSON.parse(result2.body);
       expect(body1.transactionId).not.toBe(body2.transactionId);
       expect(body1.location).not.toBe(body2.location);
     });
 
-    test('C→D: Processing Lambda calculates checksum for transaction data', async () => {
+    test('Processing Lambda calculates checksum for transaction data', async () => {
       // Arrange
       const transactionData = {
         amount: 500.00,
@@ -533,8 +544,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('D → E: Processing Lambda Receives and Processes Data → Encrypted Storage to S3', () => {
-    test('D→E: Processed data is stored in S3 with KMS encryption', async () => {
+  describe('Processing Lambda Execution → Encrypted S3 Storage', () => {
+    test('Processed data is stored in S3 with KMS encryption', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -556,7 +567,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(lambdaResponse.Payload!).toString());
+      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
       const s3Key = responseBody.location;
 
@@ -580,7 +591,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.ContentType).toBe('application/json');
     });
 
-    test('D→E: S3 objects are stored with date partitioning and tags', async () => {
+    test('S3 objects are stored with date partitioning and tags', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -598,7 +609,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(lambdaResponse.Payload!).toString());
+      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
       const s3Key = responseBody.location;
 
@@ -625,7 +636,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.Metadata!['version']).toBe('2.0');
     });
 
-    test('D→E: Stored data includes checksum for integrity verification', async () => {
+    test('Stored data includes checksum for integrity verification', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -646,7 +657,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(lambdaResponse.Payload!).toString());
+      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
       const s3Key = responseBody.location;
 
@@ -675,7 +686,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData).toHaveProperty('processingVersion', '2.0');
     });
 
-    test('D→E: Stored data preserves original transaction data', async () => {
+    test('Stored data preserves original transaction data', async () => {
       // Arrange
       const originalTransactionData = {
         amount: 1500.00,
@@ -703,7 +714,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(lambdaResponse.Payload!).toString());
+      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
       const s3Key = responseBody.location;
 
@@ -727,7 +738,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData.transactionData.merchantId).toBe('merchant-preserve-test');
     });
 
-    test('D→E: Multiple transactions stored in correct date partitions', async () => {
+    test('Multiple transactions stored in correct date partitions', async () => {
       // Arrange
       const transactions = [
         {
@@ -751,7 +762,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
             Payload: JSON.stringify({ body: JSON.stringify(tx) }),
           })
         );
-        const result = JSON.parse(Buffer.from(response.Payload!).toString());
+        const result = parseLambdaResponse(response, 'Processing Lambda');
         const body = JSON.parse(result.body);
         s3Keys.push(body.location);
         testS3Keys.push(body.location);
@@ -770,8 +781,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('E → F: Encrypted Storage to S3 → Response Returned to Partner', () => {
-    test('E→F: Processing Lambda returns success response with transaction details', async () => {
+  describe('Encrypted S3 Storage → Response Generation', () => {
+    test('Processing Lambda returns success response with transaction details', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -790,7 +801,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Response includes all required fields
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       expect(result.statusCode).toBe(200);
       expect(result.headers).toBeDefined();
       expect(result.headers['X-Transaction-Id']).toBeTruthy();
@@ -808,7 +819,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(result.headers['X-Transaction-Id']).toBe(body.transactionId);
     });
 
-    test('E→F: Error responses include request ID for traceability', async () => {
+    test('Error responses include request ID for traceability', async () => {
       // Arrange - Invalid input
       const invalidEvent = {
         body: JSON.stringify({
@@ -827,7 +838,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Error response includes request ID
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       expect(result.statusCode).toBe(400);
       const body = JSON.parse(result.body);
       expect(body).toHaveProperty('error');
@@ -835,7 +846,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(body).toHaveProperty('message');
     });
 
-    test('E→F: Response location matches actual S3 object key', async () => {
+    test('Response location matches actual S3 object key', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -853,7 +864,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
       const s3Key = responseBody.location;
 
@@ -874,7 +885,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(s3Response.ServerSideEncryption).toBe('aws:kms');
     });
 
-    test('E→F: Response timestamp is valid ISO format', async () => {
+    test('Response timestamp is valid ISO format', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -893,7 +904,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       // Assert - Verify timestamp format
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       const body = JSON.parse(result.body);
       expect(body).toHaveProperty('timestamp');
       
@@ -903,8 +914,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('F → G: Response Returned to Partner → Monitoring and Alerting', () => {
-    test('F→G: CloudWatch Logs capture Lambda execution with KMS encryption', async () => {
+  describe('Response Generation → Monitoring and Alerting', () => {
+    test('CloudWatch Logs capture Lambda execution with KMS encryption', async () => {
       // Arrange
       const event = {
         body: JSON.stringify({
@@ -954,7 +965,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(logStreams.logStreams!.length).toBeGreaterThan(0);
     });
 
-    test('F→G: API Gateway logs are captured with encryption', async () => {
+    test('API Gateway logs are captured with encryption', async () => {
       // Arrange & Act - Verify API Gateway log group exists
       const logGroupsResponse = await logsClient.send(
         new DescribeLogGroupsCommand({
@@ -972,7 +983,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(apiLogGroup!.retentionInDays).toBe(2557); // 7-year retention
     });
 
-    test('F→G: Logs contain transaction processing information', async () => {
+    test('Logs contain transaction processing information', async () => {
       // Arrange
       const transactionId = crypto.randomUUID();
       const event = {
@@ -991,7 +1002,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(response.Payload!).toString());
+      const result = parseLambdaResponse(response, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
 
       // Wait for logs
@@ -1012,8 +1023,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('G → H: Monitoring and Alerting → Dead Letter Queue (DLQ) Processing', () => {
-    test('G→H: DLQ is accessible and configured for failed invocations', async () => {
+  describe('Monitoring and Alerting → Dead Letter Queue Processing', () => {
+    test('DLQ is accessible and configured for failed invocations', async () => {
       // Arrange & Act - Verify DLQ exists and is accessible
       const dlqAttrs = await sqsClient.send(
         new GetQueueAttributesCommand({
@@ -1040,7 +1051,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(dlqResponse).toBeDefined();
     });
 
-    test('G→H: DLQ messages are encrypted with KMS', async () => {
+    test('DLQ messages are encrypted with KMS', async () => {
       // Arrange & Act - Verify DLQ encryption configuration
       const dlqAttrs = await sqsClient.send(
         new GetQueueAttributesCommand({
@@ -1057,8 +1068,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
     });
   });
 
-  describe('A → B → C → D → E → F → G → H: Complete End-to-End Workflow', () => {
-    test('A→B→C→D→E→F→G→H: Complete data flow from processing to storage to verification', async () => {
+  describe('Complete End-to-End Data Flow', () => {
+    test('Complete data flow from processing to storage to verification', async () => {
       // Arrange - Partner transaction data
       const transactionData = {
         customerId: TEST_CUSTOMER_ID,
@@ -1114,7 +1125,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData).toHaveProperty('originalTimestamp');
     });
 
-    test('A→B→C→D→E→F→G→H: Multiple transactions are processed and stored separately', async () => {
+    test('Multiple transactions are processed and stored separately', async () => {
       // Arrange
       const transactions = [
         {
@@ -1143,7 +1154,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
             Payload: JSON.stringify({ body: JSON.stringify(tx) }),
           })
         );
-        const result = JSON.parse(Buffer.from(response.Payload!).toString());
+        const result = parseLambdaResponse(response, 'Processing Lambda');
         const body = JSON.parse(result.body);
         s3Keys.push(body.location);
         testS3Keys.push(body.location);
@@ -1167,7 +1178,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       }
     });
 
-    test('A→B→C→D→E→F→G→H: Checksum validation ensures data integrity', async () => {
+    test('Checksum validation ensures data integrity', async () => {
       // Arrange
       const transactionData = {
         customerId: TEST_CUSTOMER_ID,
@@ -1187,7 +1198,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
         })
       );
 
-      const result = JSON.parse(Buffer.from(lambdaResponse.Payload!).toString());
+      const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
       const responseBody = JSON.parse(result.body);
       const s3Key = responseBody.location;
 
@@ -1216,7 +1227,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData.checksum).toBe(expectedChecksum);
     });
 
-    test('A→B→C→D→E→F→G→H: Error handling flows to DLQ when processing fails', async () => {
+    test('Error handling flows to DLQ when processing fails', async () => {
       // Arrange - Get initial DLQ state
       const initialAttrs = await sqsClient.send(
         new GetQueueAttributesCommand({
