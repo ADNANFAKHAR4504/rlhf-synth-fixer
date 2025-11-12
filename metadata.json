@@ -1,0 +1,25 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T23:53:51+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [],
+  "po_id": "9jt64c",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "ECR",
+    "ALB",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM",
+    "Cloud Map",
+    "Auto Scaling"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}

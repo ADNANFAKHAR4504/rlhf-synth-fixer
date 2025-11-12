@@ -1,0 +1,4 @@
+config:
+  aws:region: us-east-1
+  tap:environmentSuffix: synth9jt64c
+encryptionsalt: v1:HJv+ElrFT4Y=:v1:OoVaS8Vv2cNcYJsG:TA3B9r6ZfRS6Tc+cEE4QPpPoVnZd9g==
