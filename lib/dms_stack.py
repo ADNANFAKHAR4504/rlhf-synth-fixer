@@ -246,10 +246,10 @@ class DmsStack(pulumi.ComponentResource):
         invoke_opts = pulumi.InvokeOptions(parent=self)
         dependencies = []
 
-        # Create or get DMS VPC role
+        # Create DMS VPC role with unique name including environment suffix
         dms_vpc_role = aws.iam.Role(
             f"dms-vpc-role-{self.environment_suffix}",
-            name="dms-vpc-role",
+            name=f"dms-vpc-role-{self.environment_suffix}",
             path="/service-role/",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
@@ -265,7 +265,7 @@ class DmsStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"dms-vpc-role-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self, ignore_changes=["name", "path"])
+            opts=ResourceOptions(parent=self)
         )
         dependencies.append(dms_vpc_role)
 
@@ -277,10 +277,10 @@ class DmsStack(pulumi.ComponentResource):
         )
         dependencies.append(vpc_attachment)
 
-        # Create or get DMS CloudWatch role
+        # Create DMS CloudWatch role with unique name including environment suffix
         dms_cloudwatch_role = aws.iam.Role(
             f"dms-cloudwatch-role-{self.environment_suffix}",
-            name="dms-cloudwatch-logs-role",
+            name=f"dms-cloudwatch-logs-role-{self.environment_suffix}",
             path="/service-role/",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
@@ -296,7 +296,7 @@ class DmsStack(pulumi.ComponentResource):
                 **self.tags,
                 'Name': f"dms-cloudwatch-role-{self.environment_suffix}"
             },
-            opts=ResourceOptions(parent=self, ignore_changes=["name", "path"])
+            opts=ResourceOptions(parent=self)
         )
         dependencies.append(dms_cloudwatch_role)
 
