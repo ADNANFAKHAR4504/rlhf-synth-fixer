@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 export interface BackupStackArgs {
-  environmentSuffix: string;
+  environmentSuffix: pulumi.Input<string>;
   tags: pulumi.Input<{ [key: string]: string }>;
   primaryDbClusterArn: pulumi.Output<string>;
   primaryProvider: aws.Provider;

@@ -3,7 +3,7 @@ import * as aws from '@pulumi/aws';
 import * as random from '@pulumi/random';
 
 export interface DatabaseStackArgs {
-  environmentSuffix: string;
+  environmentSuffix: pulumi.Input<string>;
   tags: pulumi.Input<{ [key: string]: string }>;
   primaryVpcId: pulumi.Output<string>;
   drVpcId: pulumi.Output<string>;

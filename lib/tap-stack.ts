@@ -5,11 +5,12 @@
  * for the payment processing system.
  */
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { NetworkStack } from './network-stack';
 import { DatabaseStack } from './database-stack';
 import { ComputeStack } from './compute-stack';
-import { DnsStack } from './dns-stack';
+import { DnsStack} from './dns-stack';
 import { MonitoringStack } from './monitoring-stack';
 import { BackupStack } from './backup-stack';
 
@@ -30,6 +31,20 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+
+    // Generate a random suffix to avoid resource naming conflicts
+    const randomSuffix = new random.RandomString(
+      `random-suffix-${environmentSuffix}`,
+      {
+        length: 6,
+        special: false,
+        upper: false,
+      },
+      { parent: this }
+    );
+
+    const fullSuffix = pulumi.interpolate`${environmentSuffix}-${randomSuffix.result}`;
+
     const tags = pulumi.output(args.tags || {}).apply(t => ({
       ...t,
       Environment: environmentSuffix,
@@ -41,7 +56,7 @@ export class TapStack extends pulumi.ComponentResource {
     const networkStack = new NetworkStack(
       'network',
       {
-        environmentSuffix,
+        environmentSuffix: fullSuffix,
         tags,
       },
       { parent: this }
@@ -52,7 +67,7 @@ export class TapStack extends pulumi.ComponentResource {
     const computeStack = new ComputeStack(
       'compute',
       {
-        environmentSuffix,
+        environmentSuffix: fullSuffix,
         tags,
         primaryVpcId: networkStack.primaryVpcId,
         drVpcId: networkStack.drVpcId,
@@ -71,7 +86,7 @@ export class TapStack extends pulumi.ComponentResource {
     const databaseStack = new DatabaseStack(
       'database',
       {
-        environmentSuffix,
+        environmentSuffix: fullSuffix,
         tags,
         primaryVpcId: networkStack.primaryVpcId,
         drVpcId: networkStack.drVpcId,
@@ -90,7 +105,7 @@ export class TapStack extends pulumi.ComponentResource {
     const dnsStack = new DnsStack(
       'dns',
       {
-        environmentSuffix,
+        environmentSuffix: fullSuffix,
         tags,
         primaryAlbDnsName: computeStack.primaryAlbDnsName,
         drAlbDnsName: computeStack.drAlbDnsName,
@@ -105,7 +120,7 @@ export class TapStack extends pulumi.ComponentResource {
     const monitoringStack = new MonitoringStack(
       'monitoring',
       {
-        environmentSuffix,
+        environmentSuffix: fullSuffix,
         tags,
         primaryDbClusterId: databaseStack.primaryClusterId,
         drDbClusterId: databaseStack.drClusterId,
@@ -122,7 +137,7 @@ export class TapStack extends pulumi.ComponentResource {
     const backupStack = new BackupStack(
       'backup',
       {
-        environmentSuffix,
+        environmentSuffix: fullSuffix,
         tags,
         primaryDbClusterArn: databaseStack.primaryClusterArn,
         primaryProvider: networkStack.primaryProvider,

@@ -9,11 +9,17 @@ The solution implements:
 - RDS Aurora Global Database with PostgreSQL 14.6
 - DynamoDB global tables for session management
 - Auto Scaling groups with Application Load Balancers
-- Route53 health-check based failover routing
+- Route53 health-check based failover routing (.internal domain)
 - CloudWatch Metric Streams for cross-region monitoring
-- AWS Backup with cross-region copying
+- AWS Backup with cross-region copying (without cold storage to meet 90-day AWS requirement)
 - Lambda-based failover orchestration
 - SNS alerting in both regions
+- **Random suffix generation** to avoid resource naming conflicts
+
+## Key Features
+
+### Random Suffix for Unique Resource Names
+To prevent conflicts with orphaned resources from failed deployments, all resources include a randomly generated 6-character suffix appended to the environment suffix. This ensures each deployment creates uniquely named resources (e.g., `primary-alb-pr6318-abc123` instead of `primary-alb-pr6318`).
 
 ---
 
@@ -27,6 +33,7 @@ The solution implements:
  * for the payment processing system.
  */
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { NetworkStack } from './network-stack';
 import { DatabaseStack } from './database-stack';
@@ -52,6 +59,20 @@ export class TapStack extends pulumi.ComponentResource {
     super('tap:stack:TapStack', name, args, opts);
 
     const environmentSuffix = args.environmentSuffix || 'dev';
+
+    // Generate a random suffix to avoid resource naming conflicts
+    const randomSuffix = new random.RandomString(
+      `random-suffix-${environmentSuffix}`,
+      {
+        length: 6,
+        special: false,
+        upper: false,
+      },
+      { parent: this }
+    );
+
+    const fullSuffix = pulumi.interpolate`${environmentSuffix}-${randomSuffix.result}`;
+
     const tags = pulumi.output(args.tags || {}).apply(t => ({
       ...t,
       Environment: environmentSuffix,
@@ -61,13 +82,13 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Network infrastructure in both regions with VPC peering
     const networkStack = new NetworkStack('network', {
-      environmentSuffix,
+      environmentSuffix: fullSuffix,
       tags,
     }, { parent: this });
 
     // Database layer with Aurora Global Database and DynamoDB global tables
     const databaseStack = new DatabaseStack('database', {
-      environmentSuffix,
+      environmentSuffix: fullSuffix,
       tags,
       primaryVpcId: networkStack.primaryVpcId,
       drVpcId: networkStack.drVpcId,
@@ -79,7 +100,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Compute resources with Auto Scaling and ALBs in both regions
     const computeStack = new ComputeStack('compute', {
-      environmentSuffix,
+      environmentSuffix: fullSuffix,
       tags,
       primaryVpcId: networkStack.primaryVpcId,
       drVpcId: networkStack.drVpcId,
@@ -93,7 +114,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // DNS and health-check based failover routing
     const dnsStack = new DnsStack('dns', {
-      environmentSuffix,
+      environmentSuffix: fullSuffix,
       tags,
       primaryAlbDnsName: computeStack.primaryAlbDnsName,
       drAlbDnsName: computeStack.drAlbDnsName,
@@ -104,7 +125,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Monitoring with CloudWatch Metric Streams, alarms, and Lambda failover
     const monitoringStack = new MonitoringStack('monitoring', {
-      environmentSuffix,
+      environmentSuffix: fullSuffix,
       tags,
       primaryDbClusterId: databaseStack.primaryClusterId,
       drDbClusterId: databaseStack.drClusterId,
@@ -117,7 +138,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Backup configuration with cross-region copying
     const backupStack = new BackupStack('backup', {
-      environmentSuffix,
+      environmentSuffix: fullSuffix,
       tags,
       primaryDbClusterArn: databaseStack.primaryClusterArn,
       primaryProvider: networkStack.primaryProvider,

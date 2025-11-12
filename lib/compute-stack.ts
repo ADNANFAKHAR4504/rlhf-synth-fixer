@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 export interface ComputeStackArgs {
-  environmentSuffix: string;
+  environmentSuffix: pulumi.Input<string>;
   tags: pulumi.Input<{ [key: string]: string }>;
   primaryVpcId: pulumi.Output<string>;
   drVpcId: pulumi.Output<string>;
