@@ -1,10 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 Description: >
   TapStack - Optimized single-file CloudFormation for a production e-commerce baseline in us-east-1.
-  Core services: (1) ALB + Auto Scaling across 3 AZs; (2) Aurora MySQL.
-  Optional async handlers (Lambda+SQS+SNS) are conditionally created with a consolidated IAM role; Lambda code comes from S3.
+  Focuses on two core services: (1) ALB + Auto Scaling across 3 AZs; (2) Aurora MySQL.
+  Optional async handlers (Lambda+SQS+SNS) are conditionally created to demonstrate IAM role consolidation.
   Consolidates security groups, parameterizes ASGs via mappings, centralizes tags, removes hardcoded networks/AZs,
-  protects stateful resources with DeletionPolicy/UpdateReplacePolicy, enables ALB access logging, and uses multi-AZ NAT.
+  and protects stateful resources with DeletionPolicy/UpdateReplacePolicy. Pure YAML, no nested stacks.
 
 # =====================================================================================
 # PARAMETERS
@@ -99,16 +99,16 @@ Parameters:
     Default: 'tapstack-assets'
     Description: "Prefix for static assets bucket. Final name will be <prefix>-<environment-suffix>-<8charSuffix>. Ensure global uniqueness."
 
-  # NEW: use S3 for Lambda code instead of inline ZipFile
+  # ----- New: Lambda code locations for production deployment (no inline code) -----
   LambdaCodeBucket:
     Type: String
     Default: ''
-    Description: "S3 bucket containing Lambda deployment package (required if EnableAsyncHandlers=true)."
+    Description: "S3 bucket containing Lambda deployment package (required when EnableAsyncHandlers=true)."
 
   LambdaCodeKey:
     Type: String
     Default: ''
-    Description: "S3 key (object path) for Lambda deployment package (required if EnableAsyncHandlers=true)."
+    Description: "S3 key for Lambda deployment package zip (required when EnableAsyncHandlers=true)."
 
 # =====================================================================================
 # MAPPINGS
@@ -139,18 +139,30 @@ Conditions:
   UseKeyPair: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   EnableAsync: !Equals [ !Ref EnableAsyncHandlers, 'true' ]
   CreateLogsBucket: !Equals [ !Ref CreateAccessLogsBucket, 'true' ]
-  HasLambdaCodeBucket: !Not [ !Equals [ !Ref LambdaCodeBucket, '' ] ]
-  HasLambdaCodeKey: !Not [ !Equals [ !Ref LambdaCodeKey, '' ] ]
-  HasLambdaCode: !And [ !Condition HasLambdaCodeBucket, !Condition HasLambdaCodeKey ]
+  HasLambdaCode: !And
+    - !Not [ !Equals [ !Ref LambdaCodeBucket, '' ] ]
+    - !Not [ !Equals [ !Ref LambdaCodeKey, '' ] ]
+  HasAsyncLambda: !And [ !Condition EnableAsync, !Condition HasLambdaCode ]
+
+# (Optional) Early validation to guide operators
+Rules:
+  RequireLambdaCodeWhenAsync:
+    Assertions:
+      - Assert: !Or
+          - !Equals [ !Ref EnableAsyncHandlers, 'false' ]
+          - !And
+            - !Not [ !Equals [ !Ref LambdaCodeBucket, '' ] ]
+            - !Not [ !Equals [ !Ref LambdaCodeKey, '' ] ]
+        AssertDescription: "When EnableAsyncHandlers=true, provide LambdaCodeBucket and LambdaCodeKey."
 
 # =====================================================================================
 # RESOURCES
 # =====================================================================================
-
-# --------------------------
-# Networking: VPC & Subnets
-# --------------------------
 Resources:
+
+  # --------------------------
+  # Networking: VPC & Subnets
+  # --------------------------
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -212,6 +224,62 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteDefault:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway
 
   # Public subnets (3)
   PublicSubnetA:
@@ -329,7 +397,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # Route table associations (public)
+  # Route table associations
   PublicSubnetARouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -348,178 +416,6 @@ Resources:
       SubnetId: !Ref PublicSubnetC
       RouteTableId: !Ref PublicRouteTable
 
-  # --------------------------
-  # HA NAT per AZ (A,B,C) + Private route tables per AZ
-  # --------------------------
-  NatEip:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip-a'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  NatGateway:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEip.AllocationId
-      SubnetId: !Ref PublicSubnetA
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-a'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  NatEipB:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip-b'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  NatGatewayB:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEipB.AllocationId
-      SubnetId: !Ref PublicSubnetB
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-b'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  NatEipC:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip-c'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  NatGatewayC:
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEipC.AllocationId
-      SubnetId: !Ref PublicSubnetC
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-c'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrivateRouteTable:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt-a'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrivateRouteDefault:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTable
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NatGateway
-
-  PrivateRouteTableB:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt-b'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrivateRouteDefaultB:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableB
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NatGatewayB
-
-  PrivateRouteTableC:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref VPC
-      Tags:
-        - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt-c'
-        - Key: Project
-          Value: !Ref ProjectTag
-        - Key: Owner
-          Value: !Ref OwnerTag
-        - Key: CostCenter
-          Value: !Ref CostCenterTag
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  PrivateRouteDefaultC:
-    Type: AWS::EC2::Route
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableC
-      DestinationCidrBlock: '0.0.0.0/0'
-      NatGatewayId: !Ref NatGatewayC
-
-  # Route table associations (private -> per-AZ RTs)
   PrivateSubnetARouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -530,13 +426,13 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnetB
-      RouteTableId: !Ref PrivateRouteTableB
+      RouteTableId: !Ref PrivateRouteTable
 
   PrivateSubnetCRouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnetC
-      RouteTableId: !Ref PrivateRouteTableC
+      RouteTableId: !Ref PrivateRouteTable
 
   # --------------------------
   # Consolidated Security Groups
@@ -612,7 +508,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   # --------------------------
-  # ALB + Target Group + Listeners (with access logging)
+  # ALB + Target Group + Listeners
   # --------------------------
   Alb:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -624,22 +520,26 @@ Resources:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
         - !Ref PublicSubnetC
-      SecurityGroups: [ !Ref AlbSecurityGroup ]
+      SecurityGroups:
+        - !Ref AlbSecurityGroup
       LoadBalancerAttributes:
         - Key: idle_timeout.timeout_seconds
           Value: '60'
         - !If
           - CreateLogsBucket
-          - { Key: access_logs.s3.enabled, Value: 'true' }
-          - !Ref 'AWS::NoValue'
+          - Key: access_logs.s3.enabled
+            Value: 'true'
+          - Ref: AWS::NoValue
         - !If
           - CreateLogsBucket
-          - { Key: access_logs.s3.bucket, Value: !Ref AccessLogsBucket }
-          - !Ref 'AWS::NoValue'
+          - Key: access_logs.s3.bucket
+            Value: !Ref AccessLogsBucket
+          - Ref: AWS::NoValue
         - !If
           - CreateLogsBucket
-          - { Key: access_logs.s3.prefix, Value: !Sub 'alb-logs/${EnvironmentSuffix}/' }
-          - !Ref 'AWS::NoValue'
+          - Key: access_logs.s3.prefix
+            Value: !Sub 'alb-logs-${EnvironmentSuffix}'
+          - Ref: AWS::NoValue
       Tags:
         - Key: Name
           Value: !Sub 'tapstack-${EnvironmentSuffix}-alb'
@@ -651,6 +551,9 @@ Resources:
           Value: !Ref CostCenterTag
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+
+
+
 
   AlbTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
@@ -736,7 +639,7 @@ Resources:
                 Value: !Ref EnvironmentSuffix
 
   # --------------------------
-  # ASG pattern (standardized to web-standard profile across AZs)
+  # ASG pattern (3 exemplars using mappings)
   # --------------------------
   WebAsgA:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -775,9 +678,9 @@ Resources:
     Properties:
       AutoScalingGroupName: !Sub 'tapstack-${EnvironmentSuffix}-web-b'
       VPCZoneIdentifier: [ !Ref PrivateSubnetB ]
-      MinSize: !FindInMap [ AsgProfiles, web-standard, Min ]
-      MaxSize: !FindInMap [ AsgProfiles, web-standard, Max ]
-      DesiredCapacity: !FindInMap [ AsgProfiles, web-standard, Desired ]
+      MinSize: !FindInMap [ AsgProfiles, web-small, Min ]
+      MaxSize: !FindInMap [ AsgProfiles, web-small, Max ]
+      DesiredCapacity: !FindInMap [ AsgProfiles, web-small, Desired ]
       HealthCheckType: ELB
       TargetGroupARNs: [ !Ref AlbTargetGroup ]
       LaunchTemplate:
@@ -807,9 +710,9 @@ Resources:
     Properties:
       AutoScalingGroupName: !Sub 'tapstack-${EnvironmentSuffix}-web-c'
       VPCZoneIdentifier: [ !Ref PrivateSubnetC ]
-      MinSize: !FindInMap [ AsgProfiles, web-standard, Min ]
-      MaxSize: !FindInMap [ AsgProfiles, web-standard, Max ]
-      DesiredCapacity: !FindInMap [ AsgProfiles, web-standard, Desired ]
+      MinSize: !FindInMap [ AsgProfiles, web-large, Min ]
+      MaxSize: !FindInMap [ AsgProfiles, web-large, Max ]
+      DesiredCapacity: !FindInMap [ AsgProfiles, web-large, Desired ]
       HealthCheckType: ELB
       TargetGroupARNs: [ !Ref AlbTargetGroup ]
       LaunchTemplate:
@@ -860,7 +763,7 @@ Resources:
                     - !Ref "AWS::StackId"
       OwnershipControls:
         Rules:
-          - ObjectOwnership: BucketOwnerEnforced
+          - ObjectOwnership: BucketOwnerPreferred
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -917,7 +820,7 @@ Resources:
       LoggingConfiguration:
         Fn::If:
           - CreateLogsBucket
-          - { DestinationBucketName: !Ref AccessLogsBucket, LogFilePrefix: !Sub 's3-logs/${EnvironmentSuffix}/' }
+          - { DestinationBucketName: !Ref AccessLogsBucket, LogFilePrefix: !Sub 's3-logs-${EnvironmentSuffix}' } # no trailing slash
           - !Ref 'AWS::NoValue'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -953,6 +856,35 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
+  AccessLogsBucketPolicy:
+    Condition: CreateLogsBucket
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryCheck
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${AccessLogsBucket}'
+
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+
+
 
   # --------------------------
   # Aurora MySQL Cluster (stateful; protected)
@@ -964,7 +896,7 @@ Resources:
       SubnetIds:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
-        - !Ref PrivateSubnetC   # include all 3 for 3-AZ Aurora capability
+        - !Ref PrivateSubnetC
       Tags:
         - Key: Name
           Value: !Sub 'tapstack-${EnvironmentSuffix}-db-subnets'
@@ -998,6 +930,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # Enhanced Monitoring Role with correct trust principal
   RdsMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
@@ -1201,7 +1134,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   OrdersFunctionLogGroup:
-    Condition: EnableAsync
+    Condition: HasAsyncLambda
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/tapstack-${EnvironmentSuffix}-orders'
@@ -1210,7 +1143,7 @@ Resources:
     UpdateReplacePolicy: Retain
 
   OrdersFunction:
-    Condition: HasLambdaCode   # create Lambda only when S3 bucket+key provided (and tests/stack won’t break)
+    Condition: HasAsyncLambda
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'tapstack-${EnvironmentSuffix}-orders'
@@ -1222,8 +1155,8 @@ Resources:
         Mode: Active
       Environment:
         Variables:
-          QUEUE_URL: !If [ EnableAsync, !Ref OrdersQueue, !Ref 'AWS::NoValue' ]
-          TOPIC_ARN: !If [ EnableAsync, !Ref OrdersTopic, !Ref 'AWS::NoValue' ]
+          QUEUE_URL: !Ref OrdersQueue
+          TOPIC_ARN: !Ref OrdersTopic
           ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
       Code:
         S3Bucket: !Ref LambdaCodeBucket
@@ -1285,13 +1218,3 @@ Outputs:
   AssetsBucketName:
     Description: "Name of the S3 bucket for static assets"
     Value: !Ref AssetsBucket
-
-  OrdersQueueUrl:
-    Condition: EnableAsync
-    Description: "URL for the orders SQS queue (optional async handlers)"
-    Value: !Ref OrdersQueue
-
-  OrdersTopicArn:
-    Condition: EnableAsync
-    Description: "ARN for the orders SNS topic (optional async handlers)"
-    Value: !Ref OrdersTopic

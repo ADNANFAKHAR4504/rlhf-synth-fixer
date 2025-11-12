@@ -96,6 +96,16 @@
             "Type": "String",
             "Default": "tapstack-assets",
             "Description": "Prefix for static assets bucket. Final name will be <prefix>-<environment-suffix>-<8charSuffix>. Ensure global uniqueness."
+        },
+        "LambdaCodeBucket": {
+            "Type": "String",
+            "Default": "",
+            "Description": "S3 bucket containing Lambda deployment package (required when EnableAsyncHandlers=true)."
+        },
+        "LambdaCodeKey": {
+            "Type": "String",
+            "Default": "",
+            "Description": "S3 key for Lambda deployment package zip (required when EnableAsyncHandlers=true)."
         }
     },
     "Mappings": {
@@ -159,6 +169,93 @@
                     "Ref": "CreateAccessLogsBucket"
                 },
                 "true"
+            ]
+        },
+        "HasLambdaCode": {
+            "Fn::And": [
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "LambdaCodeBucket"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "Fn::Not": [
+                        {
+                            "Fn::Equals": [
+                                {
+                                    "Ref": "LambdaCodeKey"
+                                },
+                                ""
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        "HasAsyncLambda": {
+            "Fn::And": [
+                {
+                    "Condition": "EnableAsync"
+                },
+                {
+                    "Condition": "HasLambdaCode"
+                }
+            ]
+        }
+    },
+    "Rules": {
+        "RequireLambdaCodeWhenAsync": {
+            "Assertions": [
+                {
+                    "Assert": {
+                        "Fn::Or": [
+                            {
+                                "Fn::Equals": [
+                                    {
+                                        "Ref": "EnableAsyncHandlers"
+                                    },
+                                    "false"
+                                ]
+                            },
+                            {
+                                "Fn::And": [
+                                    {
+                                        "Fn::Not": [
+                                            {
+                                                "Fn::Equals": [
+                                                    {
+                                                        "Ref": "LambdaCodeBucket"
+                                                    },
+                                                    ""
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    {
+                                        "Fn::Not": [
+                                            {
+                                                "Fn::Equals": [
+                                                    {
+                                                        "Ref": "LambdaCodeKey"
+                                                    },
+                                                    ""
+                                                ]
+                                            }
+                                        ]
+                                    }
+                                ]
+                            }
+                        ]
+                    },
+                    "AssertDescription": "When EnableAsyncHandlers=true, provide LambdaCodeBucket and LambdaCodeKey."
+                }
             ]
         }
     },
@@ -1038,6 +1135,46 @@
                     {
                         "Key": "idle_timeout.timeout_seconds",
                         "Value": "60"
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateLogsBucket",
+                            {
+                                "Key": "access_logs.s3.enabled",
+                                "Value": "true"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateLogsBucket",
+                            {
+                                "Key": "access_logs.s3.bucket",
+                                "Value": {
+                                    "Ref": "AccessLogsBucket"
+                                }
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    {
+                        "Fn::If": [
+                            "CreateLogsBucket",
+                            {
+                                "Key": "access_logs.s3.prefix",
+                                "Value": {
+                                    "Fn::Sub": "alb-logs-${EnvironmentSuffix}"
+                                }
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
                     }
                 ],
                 "Tags": [
@@ -1575,7 +1712,7 @@
                 "OwnershipControls": {
                     "Rules": [
                         {
-                            "ObjectOwnership": "BucketOwnerEnforced"
+                            "ObjectOwnership": "BucketOwnerPreferred"
                         }
                     ]
                 },
@@ -1698,7 +1835,7 @@
                                 "Ref": "AccessLogsBucket"
                             },
                             "LogFilePrefix": {
-                                "Fn::Sub": "s3-logs/${EnvironmentSuffix}/"
+                                "Fn::Sub": "s3-logs-${EnvironmentSuffix}"
                             }
                         },
                         {
@@ -1781,6 +1918,54 @@
                 }
             }
         },
+        "AccessLogsBucketPolicy": {
+            "Condition": "CreateLogsBucket",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "AccessLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSLogDeliveryCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketAcl",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}"
+                            }
+                        },
+                        {
+                            "Sid": "AWSLogDeliveryWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
         "DbSubnetGroup": {
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
@@ -1793,6 +1978,9 @@
                     },
                     {
                         "Ref": "PrivateSubnetB"
+                    },
+                    {
+                        "Ref": "PrivateSubnetC"
                     }
                 ],
                 "Tags": [
@@ -2309,7 +2497,7 @@
             }
         },
         "OrdersFunctionLogGroup": {
-            "Condition": "EnableAsync",
+            "Condition": "HasAsyncLambda",
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -2321,7 +2509,7 @@
             "UpdateReplacePolicy": "Retain"
         },
         "OrdersFunction": {
-            "Condition": "EnableAsync",
+            "Condition": "HasAsyncLambda",
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
@@ -2353,7 +2541,12 @@
                     }
                 },
                 "Code": {
-                    "ZipFile": "import os, json, boto3\nsqs = boto3.client('sqs')\nsns = boto3.client('sns')\ndef handler(event, context):\n    msg = json.dumps({\"ok\": True, \"env\": os.environ.get(\"ENVIRONMENT_SUFFIX\")})\n    if os.environ.get(\"QUEUE_URL\"):\n        sqs.send_message(QueueUrl=os.environ[\"QUEUE_URL\"], MessageBody=msg)\n    if os.environ.get(\"TOPIC_ARN\"):\n        sns.publish(TopicArn=os.environ[\"TOPIC_ARN\"], Message=msg, Subject=\"order\")\n    return {\"statusCode\": 200, \"body\": msg}\n"
+                    "S3Bucket": {
+                        "Ref": "LambdaCodeBucket"
+                    },
+                    "S3Key": {
+                        "Ref": "LambdaCodeKey"
+                    }
                 },
                 "Tags": [
                     {
@@ -2463,20 +2656,6 @@
             "Description": "Name of the S3 bucket for static assets",
             "Value": {
                 "Ref": "AssetsBucket"
-            }
-        },
-        "OrdersQueueUrl": {
-            "Condition": "EnableAsync",
-            "Description": "URL for the orders SQS queue (optional async handlers)",
-            "Value": {
-                "Ref": "OrdersQueue"
-            }
-        },
-        "OrdersTopicArn": {
-            "Condition": "EnableAsync",
-            "Description": "ARN for the orders SNS topic (optional async handlers)",
-            "Value": {
-                "Ref": "OrdersTopic"
             }
         }
     }
