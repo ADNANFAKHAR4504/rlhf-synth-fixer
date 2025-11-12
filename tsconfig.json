@@ -30,6 +30,7 @@
     "cdk.out",
     "templates",
     "archive",
+    "subcategory-references",
     "worktree",
     "test",
     "tests",
