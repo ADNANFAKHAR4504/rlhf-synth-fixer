@@ -10,6 +10,7 @@ import * as aws from '@cdktf/provider-aws';
 import {
   S3Module,
   LambdaModule,
+  KMSModule,
   StepFunctionsModule,
   DynamoDBModule,
   SNSModule,
@@ -23,6 +24,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags[];
+  lambdaDeploymentBucket?: string;
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
@@ -69,8 +71,17 @@ export class TapStack extends TerraformStack {
     // Create SNS Topic
     const snsModule = new SNSModule(this, 'sns');
 
+    const kmsModule = new KMSModule(this, 'kms');
+
     // Create DynamoDB Table
-    const dynamoModule = new DynamoDBModule(this, 'dynamodb');
+    const dynamoModule = new DynamoDBModule(
+      this,
+      'dynamodb',
+      kmsModule.key.arn
+    );
+
+    // Create a temporary S3 bucket reference for initial Lambda creation
+    const tempBucketName = `etl-pipeline-bucket-${environmentSuffix}-${awsRegion}`;
 
     // Create Validation Lambda
     const validationLambda = new LambdaModule(this, 'validation-lambda', {
@@ -79,29 +90,16 @@ export class TapStack extends TerraformStack {
       runtime: 'nodejs18.x',
       timeout: 300,
       memorySize: 512,
-      s3Bucket: 'my-etl-lambda-deployments-123', // Your bucket name
+      s3Bucket:
+        props?.lambdaDeploymentBucket || 'my-etl-lambda-deployments-123', // Your bucket name
       s3Key: 'validation-lambda.zip',
       environmentVariables: {
         SNS_TOPIC_ARN: snsModule.topic.arn,
-        BUCKET_NAME: 'placeholder', // Will be updated after S3 creation
+        BUCKET_NAME: tempBucketName,
+        STATE_MACHINE_ARN: 'PLACEHOLDER', // Will be updated
       },
       iamStatements: [
-        {
-          actions: ['s3:GetObject'],
-          resources: ['arn:aws:s3:::*/*'],
-        },
-        {
-          actions: ['s3:PutObject'],
-          resources: ['arn:aws:s3:::*/failed/*'],
-        },
-        {
-          actions: ['sns:Publish'],
-          resources: [snsModule.topic.arn],
-        },
-        {
-          actions: ['states:StartExecution'],
-          resources: ['*'],
-        },
+        // These will be updated after S3 creation
       ],
     });
 
@@ -115,24 +113,14 @@ export class TapStack extends TerraformStack {
         runtime: 'nodejs18.x',
         timeout: 300,
         memorySize: 512,
-        s3Bucket: 'my-etl-lambda-deployments-123', // Your bucket name
+        s3Bucket:
+          props?.lambdaDeploymentBucket || 'my-etl-lambda-deployments-123', // Your bucket name
         s3Key: 'transformation-lambda.zip',
         environmentVariables: {
           BUCKET_NAME: 'placeholder', // Will be updated after S3 creation
         },
         iamStatements: [
-          {
-            actions: ['s3:GetObject'],
-            resources: ['arn:aws:s3:::*/*'],
-          },
-          {
-            actions: ['s3:PutObject'],
-            resources: ['arn:aws:s3:::*/processed/*'],
-          },
-          {
-            actions: ['s3:DeleteObject'],
-            resources: ['arn:aws:s3:::*/raw/*'],
-          },
+          // These will be updated after S3 creation
         ],
       }
     );
@@ -159,19 +147,19 @@ export class TapStack extends TerraformStack {
       sourceArn: s3Module.bucket.arn,
     });
 
-    // Update Lambda environment variables with actual bucket name
-    validationLambda.function.addOverride('environment', {
-      variables: {
-        SNS_TOPIC_ARN: snsModule.topic.arn,
-        BUCKET_NAME: s3Module.bucket.id,
-      },
-    });
-
-    transformationLambda.function.addOverride('environment', {
-      variables: {
-        BUCKET_NAME: s3Module.bucket.id,
-      },
-    });
+    // After creating resources, update environment variables properly
+    validationLambda.function.addOverride(
+      'environment.variables.BUCKET_NAME',
+      s3Module.bucket.id
+    );
+    validationLambda.function.addOverride(
+      'environment.variables.STATE_MACHINE_ARN',
+      stepFunctions.stateMachine.arn
+    );
+    transformationLambda.function.addOverride(
+      'environment.variables.BUCKET_NAME',
+      s3Module.bucket.id
+    );
 
     // Create CloudWatch Alarms
     new CloudWatchModule(
@@ -179,6 +167,88 @@ export class TapStack extends TerraformStack {
       'cloudwatch',
       [validationLambda.function, transformationLambda.function],
       snsModule.topic.arn
+    );
+
+    const validationPolicyDoc =
+      new aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+        this,
+        'validation-lambda-updated-policy',
+        {
+          statement: [
+            {
+              actions: ['s3:GetObject'],
+              resources: [
+                `${s3Module.bucket.arn}/*`,
+                `${s3Module.bucket.arn}/raw/*`,
+              ],
+            },
+            {
+              actions: ['s3:PutObject'],
+              resources: [`${s3Module.bucket.arn}/failed/*`],
+            },
+            {
+              actions: ['sns:Publish'],
+              resources: [snsModule.topic.arn],
+            },
+            {
+              actions: ['states:StartExecution'],
+              resources: [stepFunctions.stateMachine.arn],
+            },
+            {
+              actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
+              resources: [validationLambda.dlq.arn],
+            },
+          ],
+        }
+      );
+
+    new aws.iamRolePolicy.IamRolePolicy(
+      this,
+      'validation-lambda-updated-policy-attachment',
+      {
+        name: 'etl-validation-updated-policy',
+        role: validationLambda.role.id,
+        policy: validationPolicyDoc.json,
+      }
+    );
+
+    const transformationPolicyDoc =
+      new aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+        this,
+        'transformation-lambda-updated-policy',
+        {
+          statement: [
+            {
+              actions: ['s3:GetObject'],
+              resources: [
+                `${s3Module.bucket.arn}/*`,
+                `${s3Module.bucket.arn}/raw/*`,
+              ],
+            },
+            {
+              actions: ['s3:PutObject'],
+              resources: [`${s3Module.bucket.arn}/processed/*`],
+            },
+            {
+              actions: ['s3:DeleteObject'],
+              resources: [`${s3Module.bucket.arn}/raw/*`],
+            },
+            {
+              actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
+              resources: [transformationLambda.dlq.arn],
+            },
+          ],
+        }
+      );
+
+    new aws.iamRolePolicy.IamRolePolicy(
+      this,
+      'transformation-lambda-updated-policy-attachment',
+      {
+        name: 'etl-transformation-updated-policy',
+        role: transformationLambda.role.id,
+        policy: transformationPolicyDoc.json,
+      }
     );
 
     // Outputs

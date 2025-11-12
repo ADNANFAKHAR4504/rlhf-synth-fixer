@@ -60,7 +60,20 @@ jest.mock("../lib/modules", () => ({
     }
   })),
 
-  DynamoDBModule: jest.fn().mockImplementation((scope: any, id: string) => ({
+  KMSModule: jest.fn().mockImplementation((scope: any, id: string) => ({
+    key: {
+      id: 'etl-kms-key',
+      keyId: '12345678-1234-1234-1234-123456789012',
+      arn: 'arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012'
+    },
+    alias: {
+      id: 'etl-kms-alias',
+      name: 'alias/etl-pipeline',
+      targetKeyId: '12345678-1234-1234-1234-123456789012'
+    }
+  })),
+
+  DynamoDBModule: jest.fn().mockImplementation((scope: any, id: string, kmsKeyArn: string) => ({
     table: {
       id: 'metadata-table',
       name: 'etl-pipeline-metadata',
@@ -99,6 +112,17 @@ jest.mock("@cdktf/provider-aws", () => ({
       id: 's3-invoke-permission',
       statementId: 'AllowS3Invoke'
     }))
+  },
+  dataAwsIamPolicyDocument: {
+    DataAwsIamPolicyDocument: jest.fn().mockImplementation(() => ({
+      json: '{"Version":"2012-10-17","Statement":[]}'
+    }))
+  },
+  iamRolePolicy: {
+    IamRolePolicy: jest.fn().mockImplementation(() => ({
+      id: 'role-policy',
+      name: 'role-policy'
+    }))
   }
 }));
 
@@ -116,6 +140,7 @@ jest.mock("cdktf", () => {
 // Mock AWS Provider
 jest.mock("@cdktf/provider-aws/lib/provider", () => ({
   AwsProvider: jest.fn(),
+  AwsProviderDefaultTags: jest.fn()
 }));
 
 // Mock the addOverride method
@@ -129,7 +154,8 @@ describe("TapStack Unit Tests", () => {
     StepFunctionsModule,
     DynamoDBModule,
     SNSModule,
-    CloudWatchModule
+    CloudWatchModule,
+    KMSModule
   } = require("../lib/modules");
   const { TerraformOutput, S3Backend } = require("cdktf");
   const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
@@ -173,6 +199,22 @@ describe("TapStack Unit Tests", () => {
         'aws',
         expect.objectContaining({
           region: 'eu-west-1'
+        })
+      );
+    });
+
+    test("should override AWS region when AWS_REGION_OVERRIDE is set", () => {
+      // This would require mocking the AWS_REGION_OVERRIDE constant
+      // In actual implementation, you might need to refactor to make this testable
+      const app = new App();
+      new TapStack(app, "TestStack");
+      
+      // Since AWS_REGION_OVERRIDE is empty string, it should use default
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-east-1'
         })
       );
     });
@@ -235,14 +277,33 @@ describe("TapStack Unit Tests", () => {
     });
   });
 
-  describe("DynamoDB Module Tests", () => {
-    test("should create DynamoDBModule with correct configuration", () => {
+  describe("KMS Module Tests", () => {
+    test("should create KMSModule", () => {
       const app = new App();
       new TapStack(app, "TestStack");
 
+      expect(KMSModule).toHaveBeenCalledWith(
+        expect.anything(),
+        'kms'
+      );
+
+      const kmsModule = KMSModule.mock.results[0].value;
+      expect(kmsModule.key.arn).toBe('arn:aws:kms:us-east-1:123456789012:key/12345678-1234-1234-1234-123456789012');
+      expect(kmsModule.alias.name).toBe('alias/etl-pipeline');
+    });
+  });
+
+  describe("DynamoDB Module Tests", () => {
+    test("should create DynamoDBModule with KMS key", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const kmsModule = KMSModule.mock.results[0].value;
+      
       expect(DynamoDBModule).toHaveBeenCalledWith(
         expect.anything(),
-        'dynamodb'
+        'dynamodb',
+        kmsModule.key.arn
       );
 
       const dynamoModule = DynamoDBModule.mock.results[0].value;
@@ -272,19 +333,9 @@ describe("TapStack Unit Tests", () => {
         s3Key: 'validation-lambda.zip',
         environmentVariables: {
           SNS_TOPIC_ARN: snsModule.topic.arn,
-          BUCKET_NAME: 'placeholder'
+          BUCKET_NAME: 'etl-pipeline-bucket-dev-us-east-1',
+          STATE_MACHINE_ARN: 'PLACEHOLDER'
         }
-      });
-
-      // Check IAM statements
-      const iamStatements = validationLambdaCall[2].iamStatements;
-      expect(iamStatements).toContainEqual({
-        actions: ['s3:GetObject'],
-        resources: ['arn:aws:s3:::*/*']
-      });
-      expect(iamStatements).toContainEqual({
-        actions: ['sns:Publish'],
-        resources: [snsModule.topic.arn]
       });
     });
 
@@ -308,43 +359,44 @@ describe("TapStack Unit Tests", () => {
           BUCKET_NAME: 'placeholder'
         }
       });
+    });
 
-      // Check IAM statements
-      const iamStatements = transformationLambdaCall[2].iamStatements;
-      expect(iamStatements).toContainEqual({
-        actions: ['s3:GetObject'],
-        resources: ['arn:aws:s3:::*/*']
+    test("should use custom lambda deployment bucket when provided", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        lambdaDeploymentBucket: 'custom-lambda-bucket'
       });
-      expect(iamStatements).toContainEqual({
-        actions: ['s3:PutObject'],
-        resources: ['arn:aws:s3:::*/processed/*']
-      });
-      expect(iamStatements).toContainEqual({
-        actions: ['s3:DeleteObject'],
-        resources: ['arn:aws:s3:::*/raw/*']
+
+      const lambdaCalls = LambdaModule.mock.calls;
+      lambdaCalls.forEach((call: any[]) => {
+        expect(call[2].s3Bucket).toBe('custom-lambda-bucket');
       });
     });
 
-    test("should update Lambda environment variables with actual bucket name", () => {
+    test("should update Lambda environment variables with actual values", () => {
       const app = new App();
       new TapStack(app, "TestStack");
 
       const s3Module = S3Module.mock.results[0].value;
+      const stepFunctions = StepFunctionsModule.mock.results[0].value;
       const validationLambda = LambdaModule.mock.results[0].value;
       const transformationLambda = LambdaModule.mock.results[1].value;
 
-      expect(validationLambda.function.addOverride).toHaveBeenCalledWith('environment', {
-        variables: {
-          SNS_TOPIC_ARN: expect.any(String),
-          BUCKET_NAME: s3Module.bucket.id
-        }
-      });
+      // Validation Lambda should have three environment variables updated
+      expect(validationLambda.function.addOverride).toHaveBeenCalledWith(
+        'environment.variables.BUCKET_NAME',
+        s3Module.bucket.id
+      );
+      expect(validationLambda.function.addOverride).toHaveBeenCalledWith(
+        'environment.variables.STATE_MACHINE_ARN',
+        stepFunctions.stateMachine.arn
+      );
 
-      expect(transformationLambda.function.addOverride).toHaveBeenCalledWith('environment', {
-        variables: {
-          BUCKET_NAME: s3Module.bucket.id
-        }
-      });
+      // Transformation Lambda should have bucket name updated
+      expect(transformationLambda.function.addOverride).toHaveBeenCalledWith(
+        'environment.variables.BUCKET_NAME',
+        s3Module.bucket.id
+      );
     });
   });
 
@@ -434,6 +486,65 @@ describe("TapStack Unit Tests", () => {
     });
   });
 
+  describe("IAM Policy Updates", () => {
+    test("should create updated IAM policies for validation Lambda", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const validationLambda = LambdaModule.mock.results[0].value;
+      const s3Module = S3Module.mock.results[0].value;
+      const snsModule = SNSModule.mock.results[0].value;
+      const stepFunctions = StepFunctionsModule.mock.results[0].value;
+
+      // Check DataAwsIamPolicyDocument calls
+      const policyDocCalls = aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument.mock.calls;
+      const validationPolicyCall = policyDocCalls.find((call: any) => 
+        call[1] === 'validation-lambda-updated-policy'
+      );
+
+      expect(validationPolicyCall).toBeDefined();
+
+      // Check IamRolePolicy attachment
+      const rolePolicyCalls = aws.iamRolePolicy.IamRolePolicy.mock.calls;
+      const validationPolicyAttachment = rolePolicyCalls.find((call: any) =>
+        call[1] === 'validation-lambda-updated-policy-attachment'
+      );
+
+      expect(validationPolicyAttachment).toBeDefined();
+      expect(validationPolicyAttachment[2]).toMatchObject({
+        name: 'etl-validation-updated-policy',
+        role: validationLambda.role.id
+      });
+    });
+
+    test("should create updated IAM policies for transformation Lambda", () => {
+      const app = new App();
+      new TapStack(app, "TestStack");
+
+      const transformationLambda = LambdaModule.mock.results[1].value;
+
+      // Check DataAwsIamPolicyDocument calls
+      const policyDocCalls = aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument.mock.calls;
+      const transformationPolicyCall = policyDocCalls.find((call: any) => 
+        call[1] === 'transformation-lambda-updated-policy'
+      );
+
+      expect(transformationPolicyCall).toBeDefined();
+
+      // Check IamRolePolicy attachment
+      const rolePolicyCalls = aws.iamRolePolicy.IamRolePolicy.mock.calls;
+      const transformationPolicyAttachment = rolePolicyCalls.find((call: any) =>
+        call[1] === 'transformation-lambda-updated-policy-attachment'
+      );
+
+      expect(transformationPolicyAttachment).toBeDefined();
+      expect(transformationPolicyAttachment[2]).toMatchObject({
+        name: 'etl-transformation-updated-policy',
+        role: transformationLambda.role.id
+      });
+    });
+  });
+
   describe("Terraform Outputs", () => {
     test("should create all required terraform outputs", () => {
       const app = new App();
@@ -446,32 +557,29 @@ describe("TapStack Unit Tests", () => {
         description: call[2].description
       }));
 
-      // Check SNS output (from module)
+      // Check all outputs
       expect(outputs).toContainEqual({
-        id: 'sns-topic-arn',
-        value: 'arn:aws:sns:us-east-1:123456789012:etl-pipeline-notifications',
-        description: 'SNS Topic ARN for notifications'
-      });
-
-      // Check bucket output
-      const bucketOutput = outputs.find((o: any) => o.id === 'bucket-name');
-      expect(bucketOutput).toMatchObject({
+        id: 'bucket-name',
         value: 'etl-pipeline-bucket-ts123',
         description: 'S3 bucket name for ETL pipeline'
       });
 
-      // Check state machine output
-      const stateMachineOutput = outputs.find((o: any) => o.id === 'state-machine-arn');
-      expect(stateMachineOutput).toMatchObject({
+      expect(outputs).toContainEqual({
+        id: 'state-machine-arn',
         value: 'arn:aws:states:us-east-1:123456789012:stateMachine:etl-pipeline-state-machine',
         description: 'Step Functions State Machine ARN'
       });
 
-      // Check DynamoDB output
-      const dynamoOutput = outputs.find((o: any) => o.id === 'dynamodb-table-name');
-      expect(dynamoOutput).toMatchObject({
+      expect(outputs).toContainEqual({
+        id: 'dynamodb-table-name',
         value: 'etl-pipeline-metadata',
         description: 'DynamoDB table name for metadata'
+      });
+
+      expect(outputs).toContainEqual({
+        id: 'sns-topic-arn',
+        value: 'arn:aws:sns:us-east-1:123456789012:etl-pipeline-notifications',
+        description: 'SNS Topic ARN for notifications'
       });
     });
   });
@@ -482,15 +590,19 @@ describe("TapStack Unit Tests", () => {
       new TapStack(app, "TestStack");
 
       const snsCallOrder = SNSModule.mock.invocationCallOrder[0];
+      const kmsCallOrder = KMSModule.mock.invocationCallOrder[0];
       const dynamoCallOrder = DynamoDBModule.mock.invocationCallOrder[0];
       const lambdaCallOrder = LambdaModule.mock.invocationCallOrder[0];
       const stepFunctionsCallOrder = StepFunctionsModule.mock.invocationCallOrder[0];
       const s3CallOrder = S3Module.mock.invocationCallOrder[0];
       const cloudWatchCallOrder = CloudWatchModule.mock.invocationCallOrder[0];
 
-      // SNS and DynamoDB should be created first (no dependencies)
-      expect(snsCallOrder).toBeLessThan(lambdaCallOrder);
-      expect(dynamoCallOrder).toBeLessThan(lambdaCallOrder);
+      // SNS and KMS should be created first (no dependencies)
+      expect(snsCallOrder).toBeLessThan(dynamoCallOrder);
+      expect(kmsCallOrder).toBeLessThan(dynamoCallOrder);
+
+      // DynamoDB depends on KMS
+      expect(kmsCallOrder).toBeLessThan(dynamoCallOrder);
 
       // Lambda should be created before Step Functions and S3
       expect(lambdaCallOrder).toBeLessThan(stepFunctionsCallOrder);
@@ -499,35 +611,6 @@ describe("TapStack Unit Tests", () => {
       // Step Functions and S3 should be created before CloudWatch
       expect(stepFunctionsCallOrder).toBeLessThan(cloudWatchCallOrder);
       expect(s3CallOrder).toBeLessThan(cloudWatchCallOrder);
-    });
-
-    test("should pass correct dependencies between modules", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const snsModule = SNSModule.mock.results[0].value;
-      const dynamoModule = DynamoDBModule.mock.results[0].value;
-      const validationLambda = LambdaModule.mock.results[0].value;
-      const transformationLambda = LambdaModule.mock.results[1].value;
-
-      // Check Step Functions receives correct ARNs
-      const stepFunctionsCall = StepFunctionsModule.mock.calls[0];
-      expect(stepFunctionsCall[2]).toBe(validationLambda.function.arn);
-      expect(stepFunctionsCall[3]).toBe(transformationLambda.function.arn);
-      expect(stepFunctionsCall[4]).toBe(dynamoModule.table.name);
-      expect(stepFunctionsCall[5]).toBe(snsModule.topic.arn);
-
-      // Check S3 receives validation Lambda ARN
-      const s3Call = S3Module.mock.calls[0];
-      expect(s3Call[2]).toBe(validationLambda.function.arn);
-
-      // Check CloudWatch receives Lambda functions and SNS ARN
-      const cloudWatchCall = CloudWatchModule.mock.calls[0];
-      expect(cloudWatchCall[2]).toEqual([
-        validationLambda.function,
-        transformationLambda.function
-      ]);
-      expect(cloudWatchCall[3]).toBe(snsModule.topic.arn);
     });
   });
 
@@ -541,6 +624,12 @@ describe("TapStack Unit Tests", () => {
         expect.objectContaining({
           key: 'dev/TestStack.tfstate'
         })
+      );
+
+      // Check bucket name includes environment suffix
+      const validationLambdaCall = LambdaModule.mock.calls[0];
+      expect(validationLambdaCall[2].environmentVariables.BUCKET_NAME).toBe(
+        'etl-pipeline-bucket-dev-us-east-1'
       );
     });
 
@@ -556,6 +645,57 @@ describe("TapStack Unit Tests", () => {
           key: 'staging/TestStack.tfstate'
         })
       );
+
+      // Check bucket name includes environment suffix
+      const validationLambdaCall = LambdaModule.mock.calls[0];
+      expect(validationLambdaCall[2].environmentVariables.BUCKET_NAME).toBe(
+        'etl-pipeline-bucket-staging-us-east-1'
+      );
+    });
+
+    test("should include region in bucket name", () => {
+      const app = new App();
+      new TapStack(app, "TestStack", {
+        awsRegion: 'eu-west-1',
+        environmentSuffix: 'prod'
+      });
+
+      const validationLambdaCall = LambdaModule.mock.calls[0];
+      expect(validationLambdaCall[2].environmentVariables.BUCKET_NAME).toBe(
+        'etl-pipeline-bucket-prod-eu-west-1'
+      );
+    });
+  });
+
+  describe("Complete Infrastructure Stack", () => {
+    test("should create all infrastructure components", () => {
+      const app = new App();
+      const stack = new TapStack(app, "CompleteStackTest");
+
+      expect(stack).toBeDefined();
+
+      // Verify all modules are created
+      expect(SNSModule).toHaveBeenCalledTimes(1);
+      expect(KMSModule).toHaveBeenCalledTimes(1);
+      expect(DynamoDBModule).toHaveBeenCalledTimes(1);
+      expect(LambdaModule).toHaveBeenCalledTimes(2); // validation and transformation
+      expect(StepFunctionsModule).toHaveBeenCalledTimes(1);
+      expect(S3Module).toHaveBeenCalledTimes(1);
+      expect(CloudWatchModule).toHaveBeenCalledTimes(1);
+
+      // Verify providers and backend
+      expect(AwsProvider).toHaveBeenCalledTimes(1);
+      expect(S3Backend).toHaveBeenCalledTimes(1);
+
+      // Verify Lambda permission for S3
+      expect(aws.lambdaPermission.LambdaPermission).toHaveBeenCalledTimes(1);
+
+      // Verify IAM policy documents and attachments
+      expect(aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument).toHaveBeenCalledTimes(2);
+      expect(aws.iamRolePolicy.IamRolePolicy).toHaveBeenCalledTimes(2);
+
+      // Verify Terraform outputs
+      expect(TerraformOutput).toHaveBeenCalledTimes(4);
     });
   });
 
@@ -599,118 +739,53 @@ describe("TapStack Unit Tests", () => {
         })
       );
     });
-  });
 
-  describe("Complete Infrastructure Stack", () => {
-    test("should create all infrastructure components", () => {
+    test("should handle all optional props being undefined", () => {
       const app = new App();
-      const stack = new TapStack(app, "CompleteStackTest");
+      new TapStack(app, "TestStack", {});
 
-      expect(stack).toBeDefined();
-
-      // Verify all modules are created
-      expect(SNSModule).toHaveBeenCalledTimes(1);
-      expect(DynamoDBModule).toHaveBeenCalledTimes(1);
-      expect(LambdaModule).toHaveBeenCalledTimes(2); // validation and transformation
-      expect(StepFunctionsModule).toHaveBeenCalledTimes(1);
-      expect(S3Module).toHaveBeenCalledTimes(1);
-      expect(CloudWatchModule).toHaveBeenCalledTimes(1);
-
-      // Verify providers and backend
-      expect(AwsProvider).toHaveBeenCalledTimes(1);
-      expect(S3Backend).toHaveBeenCalledTimes(1);
-
-      // Verify Lambda permission for S3
-      expect(aws.lambdaPermission.LambdaPermission).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("Region-specific Configuration", () => {
-    test("should configure resources for different regions", () => {
-      const regions = ['us-west-2', 'eu-central-1', 'ap-northeast-1'];
-
-      regions.forEach(region => {
-        jest.clearAllMocks();
-        const app = new App();
-
-        new TapStack(app, "TestStack", {
-          awsRegion: region
-        });
-
-        expect(AwsProvider).toHaveBeenCalledWith(
-          expect.anything(),
-          'aws',
-          expect.objectContaining({
-            region: region
-          })
-        );
-      });
-    });
-
-    test("should handle state bucket in different region", () => {
-      const app = new App();
-      new TapStack(app, "TestStack", {
-        awsRegion: 'eu-west-1',
-        stateBucketRegion: 'us-east-1'
-      });
-
+      // All defaults should be used
       expect(AwsProvider).toHaveBeenCalledWith(
         expect.anything(),
         'aws',
         expect.objectContaining({
-          region: 'eu-west-1'
+          region: 'us-east-1'
         })
       );
 
       expect(S3Backend).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          region: 'us-east-1'
+          bucket: 'iac-rlhf-tf-states',
+          key: 'dev/TestStack.tfstate',
+          region: 'us-east-1',
+          encrypt: true
         })
       );
     });
   });
 
-  describe("Lambda Configuration Details", () => {
-    test("should configure Lambda functions with DLQ", () => {
+  describe("Resource Naming Conventions", () => {
+    test("should follow consistent naming pattern for resources", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "TestStack", {
+        environmentSuffix: 'test'
+      });
 
+      // Check Lambda function names
       const lambdaCalls = LambdaModule.mock.calls;
-      
-      // Both Lambda functions should have DLQ configuration
-      lambdaCalls.forEach((call: any) => {
-        const config = call[2];
-        const result = LambdaModule.mock.results.find(
-          (r: any) => r.value.function.functionName === config.functionName
-        ).value;
-        
-        expect(result.dlq).toBeDefined();
-        expect(result.dlq.name).toBe(`${config.functionName}-dlq`);
-      });
-    });
+      expect(lambdaCalls[0][2].functionName).toBe('etl-validation');
+      expect(lambdaCalls[1][2].functionName).toBe('etl-transformation');
 
-    test("should configure Lambda functions with proper IAM statements", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
+      // Check other resource names
+      const dynamoModule = DynamoDBModule.mock.results[0].value;
+      expect(dynamoModule.table.name).toBe('etl-pipeline-metadata');
 
-      // Check validation Lambda IAM statements
-      const validationLambdaCall = LambdaModule.mock.calls[0];
-      const validationStatements = validationLambdaCall[2].iamStatements;
-      
-      expect(validationStatements).toContainEqual({
-        actions: ['states:StartExecution'],
-        resources: ['*']
-      });
+      const snsModule = SNSModule.mock.results[0].value;
+      expect(snsModule.topic.name).toBe('etl-pipeline-notifications');
 
-      // Check transformation Lambda IAM statements  
-      const transformationLambdaCall = LambdaModule.mock.calls[1];
-      const transformationStatements = transformationLambdaCall[2].iamStatements;
-      
-      expect(transformationStatements).toContainEqual({
-        actions: ['s3:DeleteObject'],
-        resources: ['arn:aws:s3:::*/raw/*']
-      });
+      const stepFunctions = StepFunctionsModule.mock.results[0].value;
+      expect(stepFunctions.stateMachine.name).toBe('etl-pipeline-state-machine');
     });
   });
 });

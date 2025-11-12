@@ -282,7 +282,7 @@ export class StepFunctionsModule extends Construct {
       policy: sfnPolicy.json,
     });
 
-    // Step Functions State Machine Definition
+    // In StepFunctionsModule, update the state machine definition
     const definition = {
       Comment: 'ETL Pipeline State Machine',
       StartAt: 'ValidateFile',
@@ -352,11 +352,21 @@ export class StepFunctionsModule extends Construct {
           Parameters: {
             TableName: dynamoTableName,
             Item: {
-              file_name: { S: '$.fileName' },
-              process_start_time: { S: '$.startTime' },
-              process_end_time: { S: '$$.State.EnteredTime' },
-              status: { S: 'SUCCESS' },
-              error_message: { S: '' },
+              file_name: {
+                'S.$': '$.fileName', // Correct JSONPath reference
+              },
+              process_start_time: {
+                'S.$': '$.startTime',
+              },
+              process_end_time: {
+                'S.$': '$$.State.EnteredTime',
+              },
+              status: {
+                S: 'SUCCESS', // Static value
+              },
+              error_message: {
+                S: '', // Static value
+              },
             },
           },
           End: true,
@@ -366,7 +376,7 @@ export class StepFunctionsModule extends Construct {
           Resource: 'arn:aws:states:::sns:publish',
           Parameters: {
             TopicArn: snsTopicArn,
-            Message: 'ETL Pipeline Error: $.error',
+            'Message.$': "States.Format('ETL Pipeline Error: {}', $.error)", // Correct JSONPath
             Subject: 'ETL Pipeline Processing Failed',
           },
           Next: 'RecordFailure',
@@ -377,11 +387,21 @@ export class StepFunctionsModule extends Construct {
           Parameters: {
             TableName: dynamoTableName,
             Item: {
-              file_name: { S: '$.fileName' },
-              process_start_time: { S: '$.startTime' },
-              process_end_time: { S: '$$.State.EnteredTime' },
-              status: { S: 'FAILED' },
-              error_message: { S: '$.error' },
+              file_name: {
+                'S.$': '$.fileName',
+              },
+              process_start_time: {
+                'S.$': '$.startTime',
+              },
+              process_end_time: {
+                'S.$': '$$.State.EnteredTime',
+              },
+              status: {
+                S: 'FAILED',
+              },
+              error_message: {
+                'S.$': '$.error',
+              },
             },
           },
           End: true,
@@ -405,11 +425,31 @@ export class StepFunctionsModule extends Construct {
   }
 }
 
+export class KMSModule extends Construct {
+  public key: aws.kmsKey.KmsKey;
+  public alias: aws.kmsAlias.KmsAlias;
+
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
+
+    this.key = new aws.kmsKey.KmsKey(this, 'etl-kms-key', {
+      description: 'KMS key for ETL Pipeline encryption',
+      enableKeyRotation: true,
+      tags: commonTags,
+    });
+
+    this.alias = new aws.kmsAlias.KmsAlias(this, 'etl-kms-alias', {
+      name: 'alias/etl-pipeline',
+      targetKeyId: this.key.keyId,
+    });
+  }
+}
+
 // DynamoDB Module
 export class DynamoDBModule extends Construct {
   public table: aws.dynamodbTable.DynamodbTable;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, kmsKeyArn: string) {
     super(scope, id);
 
     this.table = new aws.dynamodbTable.DynamodbTable(this, 'metadata-table', {
@@ -424,6 +464,7 @@ export class DynamoDBModule extends Construct {
       ],
       serverSideEncryption: {
         enabled: true,
+        kmsKeyArn: kmsKeyArn, // Use customer-managed KMS key
       },
       tags: commonTags,
     });
