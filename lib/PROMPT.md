@@ -1,10 +1,10 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with py**
+> ** CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with py**
 > 
 > Platform: **pulumi**  
 > Language: **py**  
-> Region: **ap-southeast-1**
+> Region: **eu-central-1**
 >
 > **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
 
@@ -47,4 +47,4 @@ Production-ready infrastructure deployed across us-east-1 and us-east-2 for the 
 - Enable appropriate logging and monitoring
 
 ## Target Region
-All resources should be deployed to: **ap-southeast-1**
+All resources should be deployed to: **eu-central-1**
