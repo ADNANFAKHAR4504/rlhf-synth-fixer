@@ -6,52 +6,60 @@
  * to work across different environments (dev, staging, prod, pr branches).
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeRouteTablesCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeVpcAttributeCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBSubnetGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  DescribeTaskDefinitionCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  ECRClient,
-  DescribeRepositoriesCommand,
-  GetLifecyclePolicyCommand,
-} from '@aws-sdk/client-ecr';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
+  ApiGatewayV2Client
+} from '@aws-sdk/client-apigatewayv2';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
-import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import {
+  DynamoDBClient
+} from '@aws-sdk/client-dynamodb';
+import {
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeRepositoriesCommand,
+  ECRClient,
+  GetLifecyclePolicyCommand,
+} from '@aws-sdk/client-ecr';
+import {
+  DescribeClustersCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import { GetRoleCommand, IAMClient } from '@aws-sdk/client-iam';
+import {
+  LambdaClient
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBClustersCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  GetPublicAccessBlockCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Read outputs from flat-outputs.json
 const outputsPath = path.join(
@@ -85,6 +93,9 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
   let cloudwatchClient: CloudWatchClient;
   let iamClient: IAMClient;
   let ssmClient: SSMClient;
+  let lambdaClient: LambdaClient;
+  let dynamodbClient: DynamoDBClient;
+  let apiGatewayClient: ApiGatewayV2Client;
 
   beforeAll(() => {
     if (!fs.existsSync(outputsPath)) {
@@ -107,6 +118,9 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     cloudwatchClient = new CloudWatchClient({ region });
     iamClient = new IAMClient({ region });
     ssmClient = new SSMClient({ region });
+    lambdaClient = new LambdaClient({ region });
+    dynamodbClient = new DynamoDBClient({ region });
+    apiGatewayClient = new ApiGatewayV2Client({ region });
   });
 
   afterAll(async () => {
@@ -121,6 +135,9 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
       if (cloudwatchClient) await cloudwatchClient.destroy();
       if (iamClient) await iamClient.destroy();
       if (ssmClient) await ssmClient.destroy();
+      if (lambdaClient) await lambdaClient.destroy();
+      if (dynamodbClient) await dynamodbClient.destroy();
+      if (apiGatewayClient) await apiGatewayClient.destroy();
     } catch (error) {
       // Ignore cleanup errors
     }
@@ -128,11 +145,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('VPC Resources', () => {
     test('should verify VPC exists with correct configuration', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const vpcId = outputs.vpc_id;
       expect(vpcId).toBeDefined();
       expect(vpcId).toMatch(/^vpc-[a-f0-9]+$/);
@@ -182,11 +194,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify subnets exist and are correctly configured', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const vpcId = outputs.vpc_id;
 
       const response = await ec2Client.send(
@@ -231,11 +238,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify Internet Gateway exists and is attached', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const vpcId = outputs.vpc_id;
 
       const response = await ec2Client.send(
@@ -252,11 +254,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify NAT Gateways exist in public subnets', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const vpcId = outputs.vpc_id;
 
       const response = await ec2Client.send(
@@ -283,11 +280,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify route tables are correctly configured', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const vpcId = outputs.vpc_id;
 
       const response = await ec2Client.send(
@@ -325,11 +317,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('Aurora RDS Resources', () => {
     test('should verify Aurora cluster exists and is available', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const clusterArn = outputs.aurora_cluster_arn;
       const clusterEndpoint = outputs.aurora_cluster_endpoint;
       expect(clusterArn).toBeDefined();
@@ -365,11 +352,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify Aurora DB subnet group configuration', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       const envName = outputs.environment_name;
       const subnetGroupName = `aurora-subnet-${envName}-${envSuffix}`;
@@ -393,11 +375,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify Aurora security group allows VPC access on port 5432', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       const envName = outputs.environment_name;
       const vpcId = outputs.vpc_id;
@@ -457,11 +434,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('ECS Resources', () => {
     test('should verify ECS cluster exists and is active', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const clusterName = outputs.ecs_cluster_name;
       const clusterArn = outputs.ecs_cluster_arn;
       expect(clusterName).toBeDefined();
@@ -481,11 +453,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify ECS task definition is configured correctly', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       const envName = outputs.environment_name;
       const taskFamily = `app-task-${envName}-${envSuffix}`;
@@ -520,11 +487,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify IAM roles for ECS tasks exist', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       const envName = outputs.environment_name;
 
@@ -552,11 +514,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('Application Load Balancer Resources', () => {
     test('should verify ALB exists and is active', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const albArn = outputs.alb_arn;
       const albDnsName = outputs.alb_dns_name;
       expect(albArn).toBeDefined();
@@ -581,11 +538,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify ALB target group is configured correctly', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const albArn = outputs.alb_arn;
 
       const response = await elbClient.send(
@@ -610,11 +562,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify ALB listener is configured for HTTP', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const albArn = outputs.alb_arn;
 
       const response = await elbClient.send(
@@ -633,11 +580,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify ALB security group allows HTTP/HTTPS', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       const envName = outputs.environment_name;
       const vpcId = outputs.vpc_id;
@@ -671,11 +613,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('ECR Resources', () => {
     test('should verify ECR repository exists', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const repositoryUrl = outputs.ecr_repository_url;
       expect(repositoryUrl).toBeDefined();
 
@@ -695,11 +632,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify ECR lifecycle policy exists', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const repositoryUrl = outputs.ecr_repository_url;
       const repositoryName = repositoryUrl.split('/').pop();
 
@@ -718,11 +650,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('S3 Resources', () => {
     test('should verify S3 bucket exists with encryption', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const bucketName = outputs.s3_bucket_name;
       const bucketArn = outputs.s3_bucket_arn;
       expect(bucketName).toBeDefined();
@@ -746,11 +673,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify S3 bucket has public access blocked', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const bucketName = outputs.s3_bucket_name;
 
       const response = await s3Client.send(
@@ -768,11 +690,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify S3 bucket has lifecycle policies configured', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const bucketName = outputs.s3_bucket_name;
 
       const response = await s3Client.send(
@@ -800,11 +717,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('CloudWatch Monitoring Resources', () => {
     test('should verify CloudWatch alarms exist for ECS and RDS', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       const envName = outputs.environment_name;
 
@@ -844,11 +756,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
 
   describe('Resource Tagging and Naming', () => {
     test('should verify all resources include environment suffix in names', () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       const envSuffix = outputs.environment_suffix;
       expect(envSuffix).toBeDefined();
 
@@ -860,11 +767,6 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
     });
 
     test('should verify environment name and suffix are exported', () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
-
       expect(outputs.environment_name).toBeDefined();
       expect(outputs.environment_suffix).toBeDefined();
       expect(['dev', 'staging', 'prod']).toContain(outputs.environment_name);
