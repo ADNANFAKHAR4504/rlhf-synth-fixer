@@ -308,7 +308,7 @@ class PaymentEnvironment(ComponentResource):
         """Create RDS Aurora PostgreSQL cluster."""
         # Create DB subnet group
         self.db_subnet_group = aws.rds.SubnetGroup(
-            f"db-subnet-group-{self.environment_suffix}",
+            f"db-subnet-group-{self.environment_suffix.lower()}",
             subnet_ids=[subnet.id for subnet in self.private_subnets],
             tags={**self.tags, "Name": f"db-subnet-group-{self.environment_suffix}"},
             opts=ResourceOptions(parent=self)
@@ -317,7 +317,7 @@ class PaymentEnvironment(ComponentResource):
         # Create RDS Aurora cluster
         self.rds_cluster = aws.rds.Cluster(
             f"aurora-cluster-{self.environment_suffix}",
-            cluster_identifier=f"payment-cluster-{self.environment_suffix}",
+            cluster_identifier=f"payment-cluster-{self.environment_suffix.lower()}",
             engine=aws.rds.EngineType.AURORA_POSTGRESQL,
             engine_version="15.3",
             database_name="paymentdb",
@@ -339,7 +339,7 @@ class PaymentEnvironment(ComponentResource):
         for i in range(2):  # Create 2 instances for HA
             aws.rds.ClusterInstance(
                 f"aurora-instance-{i}-{self.environment_suffix}",
-                identifier=f"payment-instance-{i}-{self.environment_suffix}",
+                identifier=f"payment-instance-{i}-{self.environment_suffix.lower()}",
                 cluster_identifier=self.rds_cluster.id,
                 instance_class=self.instance_type,
                 engine=aws.rds.EngineType.AURORA_POSTGRESQL,
