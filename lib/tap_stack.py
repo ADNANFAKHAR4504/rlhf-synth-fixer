@@ -275,7 +275,6 @@ class TapStack(TerraformStack):
             name=f"transaction-queue-high-{environment_suffix}",
             message_retention_seconds=86400,  # 1 day
             visibility_timeout_seconds=30,
-            max_receive_count=3,
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_high.arn,
                 "maxReceiveCount": 3
@@ -289,7 +288,6 @@ class TapStack(TerraformStack):
             name=f"transaction-queue-medium-{environment_suffix}",
             message_retention_seconds=259200,  # 3 days
             visibility_timeout_seconds=60,
-            max_receive_count=3,
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_medium.arn,
                 "maxReceiveCount": 3
@@ -303,7 +301,6 @@ class TapStack(TerraformStack):
             name=f"transaction-queue-low-{environment_suffix}",
             message_retention_seconds=604800,  # 7 days
             visibility_timeout_seconds=120,
-            max_receive_count=3,
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_low.arn,
                 "maxReceiveCount": 3
