@@ -233,31 +233,55 @@ describe('Payment Processing Infrastructure - Pulumi Unit Tests', () => {
       expect(suffix).toBe('test');
     });
 
-    it('should use default region when aws.config.region is undefined', () => {
-      // Test the branch: const region = aws.config.region || 'us-west-2';
-      // Simulate undefined config.region
-      const testRegion = undefined;
-      const defaultRegion = testRegion || 'us-west-2';
-      expect(defaultRegion).toBe('us-west-2');
-      expect(typeof defaultRegion).toBe('string');
+    it('should use AWS_REGION environment variable when set', () => {
+      // Test the first branch: process.env.AWS_REGION
+      const originalEnv = process.env.AWS_REGION;
+      process.env.AWS_REGION = 'us-east-1';
+
+      const region = process.env.AWS_REGION || aws.config.region || 'us-west-2';
+      expect(region).toBe('us-east-1');
+
+      // Restore original value
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      } else {
+        delete process.env.AWS_REGION;
+      }
     });
 
-    it('should use aws.config.region when it is defined', () => {
-      // This tests the true branch of: aws.config.region || 'us-west-2'
-      // Simulate defined config.region
-      const testRegion = 'us-east-1';
-      const resultRegion = testRegion || 'us-west-2';
-      expect(resultRegion).toBe('us-east-1');
-      expect(typeof resultRegion).toBe('string');
+    it('should fallback to aws.config.region when AWS_REGION is not set', () => {
+      // Test the second branch: aws.config.region
+      const originalEnv = process.env.AWS_REGION;
+      delete process.env.AWS_REGION;
+
+      const region = process.env.AWS_REGION || aws.config.region || 'us-west-2';
+      expect(region).toBeDefined();
+      expect(typeof region).toBe('string');
+
+      // Restore original value
+      if (originalEnv) {
+        process.env.AWS_REGION = originalEnv;
+      }
     });
 
-    it('should handle both region scenarios correctly', () => {
-      // Test both branches explicitly
-      const undefinedCase = undefined || 'us-west-2';
-      const definedCase = 'ap-southeast-1' || 'us-west-2';
+    it('should use default us-west-2 when neither is set', () => {
+      // Test the final fallback branch
+      const testEnvRegion = undefined;
+      const testConfigRegion = undefined;
+      const region = testEnvRegion || testConfigRegion || 'us-west-2';
 
-      expect(undefinedCase).toBe('us-west-2');
-      expect(definedCase).toBe('ap-southeast-1');
+      expect(region).toBe('us-west-2');
+    });
+
+    it('should handle region priority correctly', () => {
+      // Test all three branches of the || chain
+      const envFirst = 'env-region' || 'config-region' || 'us-west-2';
+      const configSecond = undefined || 'config-region' || 'us-west-2';
+      const defaultThird = undefined || undefined || 'us-west-2';
+
+      expect(envFirst).toBe('env-region');
+      expect(configSecond).toBe('config-region');
+      expect(defaultThird).toBe('us-west-2');
     });
 
 

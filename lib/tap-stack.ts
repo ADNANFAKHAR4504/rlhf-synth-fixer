@@ -5,7 +5,7 @@ import * as pulumi from '@pulumi/pulumi';
 
 const config = new pulumi.Config();
 const environmentSuffix = config.require('environmentSuffix');
-const region = aws.config.region || 'us-west-2';
+const region = process.env.AWS_REGION || aws.config.region || 'us-west-2';
 
 // Tags for all resources
 const tags = {
