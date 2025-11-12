@@ -476,8 +476,8 @@ const alb = new aws.lb.LoadBalancer(`payment-alb-${environmentSuffix}`, {
 });
 
 // Target Group
+// Note: name omitted to allow AWS to generate unique name and avoid conflicts
 const targetGroup = new aws.lb.TargetGroup(`payment-tg-${environmentSuffix}`, {
-  name: `payment-tg-${environmentSuffix}`,
   port: 8080,
   protocol: 'HTTP',
   vpcId: vpc.vpcId,
