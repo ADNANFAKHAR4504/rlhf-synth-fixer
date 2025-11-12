@@ -115,17 +115,26 @@ def handle_get_transaction(event, context):
 
     try:
         # Extract transaction ID from path parameters
-        path_parameters = event.get('pathParameters', {})
-        transaction_id = path_parameters.get('id')
-
+        # API Gateway passes path parameters in different formats, try both
+        path_parameters = event.get('pathParameters') or {}
+        transaction_id = path_parameters.get('id') or path_parameters.get('transactionId')
+        
+        # Also check path directly if pathParameters is None or empty
         if not transaction_id:
+            path = event.get('path', '')
+            # Extract ID from path like /transactions/{id}
+            if '/transactions/' in path:
+                transaction_id = path.split('/transactions/')[-1].split('/')[0]
+        
+        if not transaction_id:
+            print(f"DEBUG: event structure: {json.dumps(event)}")
             return {
                 'statusCode': 400,
                 'headers': {
                     'Content-Type': 'application/json',
                     'Access-Control-Allow-Origin': '*'
                 },
-                'body': json.dumps({'error': 'Transaction ID is required'})
+                'body': json.dumps({'error': 'Transaction ID is required', 'debug': str(event.get('pathParameters'))})
             }
 
         # Query DynamoDB
@@ -152,8 +161,26 @@ def handle_get_transaction(event, context):
 
         # Convert Decimal to float for JSON serialization
         transaction = items[0]
-        transaction['amount'] = float(transaction['amount'])
-        transaction['fraudScore'] = float(transaction['fraudScore'])
+        
+        # Convert all Decimal fields to float for JSON serialization
+        def convert_decimals(obj):
+            """Recursively convert Decimal objects to float"""
+            if isinstance(obj, Decimal):
+                return float(obj)
+            elif isinstance(obj, dict):
+                return {k: convert_decimals(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [convert_decimals(item) for item in obj]
+            return obj
+        
+        # Convert all Decimal fields
+        transaction = convert_decimals(transaction)
+        
+        # Ensure required fields exist with defaults
+        if 'fraudScore' not in transaction:
+            transaction['fraudScore'] = 0.0
+        if 'status' not in transaction:
+            transaction['status'] = 'pending'
 
         return {
             'statusCode': 200,
@@ -166,11 +193,13 @@ def handle_get_transaction(event, context):
 
     except Exception as e:
         print(f"Error retrieving transaction: {str(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
         return {
             'statusCode': 500,
             'headers': {
                 'Content-Type': 'application/json',
                 'Access-Control-Allow-Origin': '*'
             },
-            'body': json.dumps({'error': 'Failed to retrieve transaction'})
+            'body': json.dumps({'error': 'Failed to retrieve transaction', 'details': str(e)})
         }
