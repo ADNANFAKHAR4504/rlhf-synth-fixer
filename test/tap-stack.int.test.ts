@@ -7,6 +7,13 @@ import * as https from 'https';
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
+// Extract environment suffix from bucket name dynamically
+const extractSuffix = (bucketName: string): string => {
+  const match = bucketName.match(/market-data-bucket-(.+)-[a-f0-9]+$/);
+  return match ? match[1] : 'dev';
+};
+const environmentSuffix = extractSuffix(outputs.bucketName);
+
 // AWS SDK configuration
 const region = 'us-east-1';
 AWS.config.update({ region });
@@ -60,15 +67,15 @@ describe('TapStack Integration Tests', () => {
     it('should have server-side encryption configured', async () => {
       const result = await s3.getBucketEncryption({ Bucket: outputs.bucketName }).promise();
       expect(result.ServerSideEncryptionConfiguration).toBeDefined();
-      expect(result.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
-      expect(result.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
+      expect(result.ServerSideEncryptionConfiguration?.Rules).toHaveLength(1);
+      expect(result.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
     });
 
     it('should have lifecycle policy configured', async () => {
       const result = await s3.getBucketLifecycleConfiguration({ Bucket: outputs.bucketName }).promise();
       expect(result.Rules).toBeDefined();
-      expect(result.Rules.length).toBeGreaterThan(0);
-      const expirationRule = result.Rules.find(r => r.Expiration?.Days === 30);
+      expect(result.Rules?.length).toBeGreaterThan(0);
+      const expirationRule = result.Rules?.find(r => r.Expiration?.Days === 30);
       expect(expirationRule).toBeDefined();
       expect(expirationRule?.Status).toBe('Enabled');
     });
@@ -123,46 +130,44 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Lambda Functions', () => {
-    const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-
     it('should have DataIngestion function deployed', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataIngestion-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       expect(result.Configuration).toBeDefined();
       expect(result.Configuration?.Runtime).toBe('nodejs18.x');
       expect(result.Configuration?.MemorySize).toBe(3072);
     });
 
     it('should have DataProcessor function deployed', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataProcessor-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataProcessor-${environmentSuffix}` }).promise();
       expect(result.Configuration).toBeDefined();
       expect(result.Configuration?.Runtime).toBe('nodejs18.x');
       expect(result.Configuration?.MemorySize).toBe(3072);
     });
 
     it('should have DataAggregator function deployed', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataAggregator-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataAggregator-${environmentSuffix}` }).promise();
       expect(result.Configuration).toBeDefined();
       expect(result.Configuration?.Runtime).toBe('nodejs18.x');
       expect(result.Configuration?.MemorySize).toBe(3072);
     });
 
     it('should have X-Ray tracing enabled on DataIngestion', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataIngestion-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       expect(result.Configuration?.TracingConfig?.Mode).toBe('Active');
     });
 
     it('should have X-Ray tracing enabled on DataProcessor', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataProcessor-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataProcessor-${environmentSuffix}` }).promise();
       expect(result.Configuration?.TracingConfig?.Mode).toBe('Active');
     });
 
     it('should have X-Ray tracing enabled on DataAggregator', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataAggregator-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataAggregator-${environmentSuffix}` }).promise();
       expect(result.Configuration?.TracingConfig?.Mode).toBe('Active');
     });
 
     it('should have appropriate timeout configured', async () => {
-      const result = await lambda.getFunction({ FunctionName: `DataIngestion-${functionPrefix}` }).promise();
+      const result = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       expect(result.Configuration?.Timeout).toBeDefined();
       expect(result.Configuration?.Timeout).toBeGreaterThan(0);
     });
@@ -223,40 +228,35 @@ describe('TapStack Integration Tests', () => {
 
   describe('CloudWatch Log Groups', () => {
     it('should have log group for DataIngestion Lambda', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const logGroupName = `/aws/lambda/DataIngestion-${functionPrefix}`;
+      const logGroupName = `/aws/lambda/DataIngestion-${environmentSuffix}`;
       const result = await cloudwatch.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise();
       expect(result.logGroups).toBeDefined();
       expect(result.logGroups?.length).toBeGreaterThan(0);
     });
 
     it('should have 7-day retention on DataIngestion logs', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const logGroupName = `/aws/lambda/DataIngestion-${functionPrefix}`;
+      const logGroupName = `/aws/lambda/DataIngestion-${environmentSuffix}`;
       const result = await cloudwatch.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise();
       const logGroup = result.logGroups?.find(lg => lg.logGroupName === logGroupName);
       expect(logGroup?.retentionInDays).toBe(7);
     });
 
     it('should have log group for DataProcessor Lambda', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const logGroupName = `/aws/lambda/DataProcessor-${functionPrefix}`;
+      const logGroupName = `/aws/lambda/DataProcessor-${environmentSuffix}`;
       const result = await cloudwatch.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise();
       expect(result.logGroups).toBeDefined();
       expect(result.logGroups?.length).toBeGreaterThan(0);
     });
 
     it('should have log group for DataAggregator Lambda', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const logGroupName = `/aws/lambda/DataAggregator-${functionPrefix}`;
+      const logGroupName = `/aws/lambda/DataAggregator-${environmentSuffix}`;
       const result = await cloudwatch.describeLogGroups({ logGroupNamePrefix: logGroupName }).promise();
       expect(result.logGroups).toBeDefined();
       expect(result.logGroups?.length).toBeGreaterThan(0);
     });
 
     it('should have metric filters configured', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const logGroupName = `/aws/lambda/DataIngestion-${functionPrefix}`;
+      const logGroupName = `/aws/lambda/DataIngestion-${environmentSuffix}`;
       const result = await cloudwatch.describeMetricFilters({ logGroupName }).promise();
       expect(result.metricFilters).toBeDefined();
       expect(result.metricFilters?.length).toBeGreaterThan(0);
@@ -288,8 +288,7 @@ describe('TapStack Integration Tests', () => {
 
   describe('IAM Roles and Policies', () => {
     it('should have role for DataIngestion Lambda', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const funcResult = await lambda.getFunction({ FunctionName: `DataIngestion-${functionPrefix}` }).promise();
+      const funcResult = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       const roleArn = funcResult.Configuration?.Role;
       expect(roleArn).toBeDefined();
       const roleName = roleArn?.split('/')[1];
@@ -299,8 +298,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have role for DataProcessor Lambda', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const funcResult = await lambda.getFunction({ FunctionName: `DataProcessor-${functionPrefix}` }).promise();
+      const funcResult = await lambda.getFunction({ FunctionName: `DataProcessor-${environmentSuffix}` }).promise();
       const roleArn = funcResult.Configuration?.Role;
       expect(roleArn).toBeDefined();
       const roleName = roleArn?.split('/')[1];
@@ -309,8 +307,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have role for DataAggregator Lambda', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const funcResult = await lambda.getFunction({ FunctionName: `DataAggregator-${functionPrefix}` }).promise();
+      const funcResult = await lambda.getFunction({ FunctionName: `DataAggregator-${environmentSuffix}` }).promise();
       const roleArn = funcResult.Configuration?.Role;
       expect(roleArn).toBeDefined();
       const roleName = roleArn?.split('/')[1];
@@ -319,8 +316,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have inline policies attached to DataIngestion role', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const funcResult = await lambda.getFunction({ FunctionName: `DataIngestion-${functionPrefix}` }).promise();
+      const funcResult = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       const roleArn = funcResult.Configuration?.Role;
       const roleName = roleArn?.split('/')[1];
       const result = await iam.listRolePolicies({ RoleName: roleName! }).promise();
@@ -329,8 +325,7 @@ describe('TapStack Integration Tests', () => {
     });
 
     it('should have managed policies attached', async () => {
-      const functionPrefix = outputs.bucketName.includes('synth6zn07n') ? 'synth6zn07n' : 'synth6zn07n';
-      const funcResult = await lambda.getFunction({ FunctionName: `DataIngestion-${functionPrefix}` }).promise();
+      const funcResult = await lambda.getFunction({ FunctionName: `DataIngestion-${environmentSuffix}` }).promise();
       const roleArn = funcResult.Configuration?.Role;
       const roleName = roleArn?.split('/')[1];
       const result = await iam.listAttachedRolePolicies({ RoleName: roleName! }).promise();
@@ -342,11 +337,11 @@ describe('TapStack Integration Tests', () => {
 
   describe('Resource Naming Convention', () => {
     it('should use environmentSuffix in bucket name', () => {
-      expect(outputs.bucketName).toContain('synth6zn07n');
+      expect(outputs.bucketName).toContain(environmentSuffix);
     });
 
     it('should use environmentSuffix in table name', () => {
-      expect(outputs.tableArn).toContain('synth6zn07n');
+      expect(outputs.tableArn).toContain(environmentSuffix);
     });
 
     it('should have consistent suffix across resources', () => {

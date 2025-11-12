@@ -123,10 +123,12 @@ describe('TapStack Unit Tests', () => {
       expect(stack).toBeInstanceOf(pulumi.ComponentResource);
     });
 
-    it('should have the correct URN type', async () => {
+    it('should have the correct URN type', (done) => {
       const stack = new TapStack('test-stack-urn', {});
-      const urn = await stack.urn.promise();
-      expect(urn).toContain('tap:stack:TapStack');
+      stack.urn.apply(urn => {
+        expect(urn).toContain('tap:stack:TapStack');
+        done();
+      });
     });
   });
 
