@@ -1311,6 +1311,55 @@
         ]
       }
     },
+    "LoggingS3BucketPolicy": {
+      "Type": "AWS::S3::BucketPolicy",
+      "Properties": {
+        "Bucket": {
+          "Ref": "LoggingS3Bucket"
+        },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "AWSLogDeliveryWrite",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${LoggingS3Bucket.Arn}/*"
+              }
+            },
+            {
+              "Sid": "AWSLogDeliveryAclCheck",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "logging.s3.amazonaws.com"
+              },
+              "Action": "s3:GetBucketAcl",
+              "Resource": {
+                "Fn::GetAtt": [
+                  "LoggingS3Bucket",
+                  "Arn"
+                ]
+              }
+            },
+            {
+              "Sid": "AWSELBLogDelivery",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "arn:aws:iam::027434742980:root"
+              },
+              "Action": "s3:PutObject",
+              "Resource": {
+                "Fn::Sub": "${LoggingS3Bucket.Arn}/*"
+              }
+            }
+          ]
+        }
+      }
+    },
     "ApplicationS3BucketPolicy": {
       "Type": "AWS::S3::BucketPolicy",
       "Properties": {
