@@ -243,7 +243,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       expect(outputs['aws-account-id']).toBeTruthy();
 
       if (isMockData) {
-        expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{8}$/);
+        expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{17}$/);
         expect(outputs['eks-cluster-name']).toMatch(/^[a-z0-9-]+-eks-cluster$/);
         expect(outputs['eks-cluster-endpoint']).toMatch(/^https:\/\/[a-z0-9]+\.gr[0-9]\.[a-z0-9-]+\.eks\.amazonaws\.com$/);
       }
@@ -251,7 +251,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
 
     test('should have VPC configured with proper CIDR blocks and DNS settings', async () => {
       if (isMockData) {
-        expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{8}$/);
+        expect(outputs['vpc-id']).toMatch(/^vpc-[a-f0-9]{17}$/);
         return;
       }
 

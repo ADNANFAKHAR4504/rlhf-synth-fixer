@@ -178,7 +178,6 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'eks-cluster-certificate-authority-data', {
       value: eksCluster.certificateAuthority.get(0).data,
       description: 'EKS cluster certificate authority data',
-      sensitive: true,
     });
 
     new TerraformOutput(this, 'eks-oidc-provider-arn', {
