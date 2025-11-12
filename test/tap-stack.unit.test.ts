@@ -47,10 +47,10 @@ describe('TapStack CloudFormation Template', () => {
 
   describe('Parameters', () => {
     describe('Environment Parameters', () => {
-      test('enforces environment selection boundaries', () => {
+    test('enforces environment selection boundaries', () => {
         // Arrange
         const environmentParam = template.Parameters.EnvironmentName;
-        const allowed = environmentParam.AllowedValues;
+      const allowed = environmentParam.AllowedValues;
 
         // Assert
         expect(allowed).toContain('dev');
@@ -400,22 +400,36 @@ describe('TapStack CloudFormation Template', () => {
     test('restricts Lambda security group egress to controlled endpoints', () => {
       // Arrange
       const sg = resources.LambdaSecurityGroup;
-      const vpcEgress = resources.LambdaSecurityGroupEgressVPC;
+      const httpsEgress = resources.LambdaSecurityGroupEgressHTTPS;
+      const vpcEndpointSG = resources.VPCEndpointSecurityGroup;
+      const vpcEndpointIngress = resources.VPCEndpointSecurityGroupIngressFromLambda;
 
       // Assert - security group itself should not declare inline egress
       expect(sg.Type).toBe('AWS::EC2::SecurityGroup');
       expect(sg.Properties.SecurityGroupEgress).toBeUndefined();
 
       // Assert - S3 Gateway endpoints don't require security group rules (they work at route table level)
-      // Only Interface endpoints (Lambda, CloudWatch Logs, KMS) need security group egress rules
+      // Only Interface endpoints (Lambda, CloudWatch Logs, KMS, SQS) need security group egress rules
 
-      // Assert - interface endpoint egress rule scoped to VPC CIDR
-      expect(vpcEgress.Type).toBe('AWS::EC2::SecurityGroupEgress');
-      expect(vpcEgress.Properties.GroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
-      expect(vpcEgress.Properties.IpProtocol).toBe('tcp');
-      expect(vpcEgress.Properties.FromPort).toBe(443);
-      expect(vpcEgress.Properties.ToPort).toBe(443);
-      expect(vpcEgress.Properties.CidrIp).toEqual({ Ref: 'VPCCidr' });
+      // Assert - Lambda egress rule to VPC endpoint security group
+      expect(httpsEgress.Type).toBe('AWS::EC2::SecurityGroupEgress');
+      expect(httpsEgress.Properties.GroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
+      expect(httpsEgress.Properties.IpProtocol).toBe('tcp');
+      expect(httpsEgress.Properties.FromPort).toBe(443);
+      expect(httpsEgress.Properties.ToPort).toBe(443);
+      expect(httpsEgress.Properties.DestinationSecurityGroupId).toEqual({ Ref: 'VPCEndpointSecurityGroup' });
+
+      // Assert - VPC endpoint security group exists
+      expect(vpcEndpointSG.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(vpcEndpointSG.Properties.VpcId).toEqual({ Ref: 'VPC' });
+
+      // Assert - VPC endpoint security group allows ingress from Lambda
+      expect(vpcEndpointIngress.Type).toBe('AWS::EC2::SecurityGroupIngress');
+      expect(vpcEndpointIngress.Properties.GroupId).toEqual({ Ref: 'VPCEndpointSecurityGroup' });
+      expect(vpcEndpointIngress.Properties.SourceSecurityGroupId).toEqual({ Ref: 'LambdaSecurityGroup' });
+      expect(vpcEndpointIngress.Properties.IpProtocol).toBe('tcp');
+      expect(vpcEndpointIngress.Properties.FromPort).toBe(443);
+      expect(vpcEndpointIngress.Properties.ToPort).toBe(443);
     });
   });
 

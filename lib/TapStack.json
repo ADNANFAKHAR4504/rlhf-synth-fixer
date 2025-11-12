@@ -655,7 +655,7 @@
                 ]
             }
         },
-        "LambdaSecurityGroupEgressVPC": {
+        "LambdaSecurityGroupEgressHTTPS": {
             "Type": "AWS::EC2::SecurityGroupEgress",
             "Properties": {
                 "GroupId": {
@@ -664,10 +664,73 @@
                 "IpProtocol": "tcp",
                 "FromPort": 443,
                 "ToPort": 443,
-                "CidrIp": {
-                    "Ref": "VPCCidr"
+                "DestinationSecurityGroupId": {
+                    "Ref": "VPCEndpointSecurityGroup"
                 },
                 "Description": "HTTPS to VPC endpoints"
+            }
+        },
+        "VPCEndpointSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-vpc-endpoint-sg-${EnvironmentName}"
+                },
+                "GroupDescription": "Security group for VPC endpoints",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-vpc-endpoint-sg-${EnvironmentName}"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    },
+                    {
+                        "Key": "DataClassification",
+                        "Value": {
+                            "Ref": "DataClassification"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "Owner"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    }
+                ]
+            }
+        },
+        "VPCEndpointSecurityGroupIngressFromLambda": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "VPCEndpointSecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 443,
+                "ToPort": 443,
+                "SourceSecurityGroupId": {
+                    "Ref": "LambdaSecurityGroup"
+                },
+                "Description": "HTTPS from Lambda functions"
             }
         },
         "S3VPCEndpoint": {
@@ -741,7 +804,7 @@
                 ],
                 "SecurityGroupIds": [
                     {
-                        "Ref": "LambdaSecurityGroup"
+                        "Ref": "VPCEndpointSecurityGroup"
                     }
                 ]
             }
@@ -767,7 +830,7 @@
                 ],
                 "SecurityGroupIds": [
                     {
-                        "Ref": "LambdaSecurityGroup"
+                        "Ref": "VPCEndpointSecurityGroup"
                     }
                 ]
             }
@@ -793,7 +856,33 @@
                 ],
                 "SecurityGroupIds": [
                     {
-                        "Ref": "LambdaSecurityGroup"
+                        "Ref": "VPCEndpointSecurityGroup"
+                    }
+                ]
+            }
+        },
+        "SQSVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcEndpointType": "Interface",
+                "PrivateDnsEnabled": true,
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.sqs"
+                },
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "SecurityGroupIds": [
+                    {
+                        "Ref": "VPCEndpointSecurityGroup"
                     }
                 ]
             }
@@ -1063,9 +1152,6 @@
         "ProcessingLambdaRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "${ProjectName}-processing-lambda-role-${EnvironmentName}"
-                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -1532,6 +1618,7 @@
                 },
                 "Timeout": 10,
                 "MemorySize": 256,
+                "ReservedConcurrentExecutions": 10,
                 "Code": {
                     "ZipFile": "import json\nimport os\nimport hashlib\nimport boto3\nimport datetime\n\ns3 = boto3.client('s3')\n\n# Cache trust store in memory\nTRUST_STORE = None\nTRUST_STORE_BUCKET = os.environ.get('TRUST_STORE_BUCKET', '')\nTRUST_STORE_KEY = os.environ.get('TRUST_STORE_KEY', 'certificates/truststore.pem')\n\ndef load_trust_store():\n    \"\"\"Load trust store from S3 and cache it\"\"\"\n    global TRUST_STORE\n    if TRUST_STORE is None:\n        try:\n            response = s3.get_object(Bucket=TRUST_STORE_BUCKET, Key=TRUST_STORE_KEY)\n            TRUST_STORE = response['Body'].read()\n        except Exception as e:\n            print(f\"Failed to load trust store: {str(e)}\")\n            TRUST_STORE = b\"\"\n    return TRUST_STORE\n\ndef validate_client_certificate(cert_pem):\n    \"\"\"Validate client certificate format and basic structure\"\"\"\n    try:\n        # Basic certificate format validation (PEM format)\n        if not cert_pem or not isinstance(cert_pem, str):\n            return False, \"Certificate is empty or invalid type\"\n        \n        # Check for PEM markers\n        if '-----BEGIN CERTIFICATE-----' not in cert_pem:\n            return False, \"Certificate is not in PEM format\"\n        \n        if '-----END CERTIFICATE-----' not in cert_pem:\n            return False, \"Certificate is not properly formatted\"\n        \n        # Basic length check (certificates are typically at least 500 characters)\n        if len(cert_pem) < 500:\n            return False, \"Certificate appears to be too short\"\n        \n        # Verify against trust store (basic check)\n        trust_store = load_trust_store()\n        if not trust_store:\n            # In test environments, allow if trust store is not available\n            print(\"Trust store not available, allowing certificate with basic validation\")\n        \n        # Extract CN from certificate (basic parsing without cryptography library)\n        # This is a simplified validation - in production, use proper certificate parsing\n        cn = 'user'\n        if 'CN=' in cert_pem or 'commonName=' in cert_pem.lower():\n            # Try to extract CN (simplified)\n            parts = cert_pem.split('CN=')\n            if len(parts) > 1:\n                cn_part = parts[1].split(',')[0].split('/')[0].strip()\n                if cn_part:\n                    cn = cn_part\n        \n        return True, \"Certificate validated successfully\"\n        \n    except Exception as e:\n        return False, f\"Certificate validation error: {str(e)}\"\n\ndef handler(event, context):\n    \"\"\"Custom authorizer with mTLS certificate validation\"\"\"\n    try:\n        print(f\"Authorizer invoked with requestId: {context.aws_request_id}\")\n        \n        # Extract method ARN for policy generation\n        method_arn = event['methodArn']\n        \n        # Get client certificate from request context\n        request_context = event.get('requestContext', {})\n        client_cert_pem = request_context.get('identity', {}).get('clientCert', {}).get('clientCertPem', '')\n        \n        if not client_cert_pem:\n            print(\"No client certificate provided\")\n            return generate_policy('user', 'Deny', method_arn, context)\n        \n        # Validate the client certificate\n        is_valid, message = validate_client_certificate(client_cert_pem)\n        \n        if not is_valid:\n            print(f\"Certificate validation failed: {message}\")\n            return generate_policy('user', 'Deny', method_arn, context)\n        \n        # Additional authorization checks\n        headers = event.get('headers', {})\n        api_key = headers.get('X-API-Key', '')\n        request_signature = headers.get('X-Request-Signature', '')\n        \n        # Verify API key format\n        if not api_key or len(api_key) != 32:\n            print(\"Invalid API key format\")\n            return generate_policy('user', 'Deny', method_arn, context)\n        \n        # Verify request signature\n        request_id = request_context.get('requestId', '')\n        expected_signature = hashlib.sha256(\n            f\"{api_key}{request_id}\".encode()\n        ).hexdigest()\n        \n        if request_signature != expected_signature:\n            print(\"Request signature validation failed\")\n            return generate_policy('user', 'Deny', method_arn, context)\n        \n        # Extract principal ID from certificate or use default\n        # In production, extract CN properly from certificate\n        principal_id = 'authorized-user'\n        if 'CN=' in client_cert_pem:\n            try:\n                parts = client_cert_pem.split('CN=')\n                if len(parts) > 1:\n                    cn_part = parts[1].split(',')[0].split('/')[0].strip()\n                    if cn_part:\n                        principal_id = cn_part\n            except:\n                pass\n        \n        print(f\"Authorization successful for principal: {principal_id}\")\n        return generate_policy(principal_id, 'Allow', method_arn, context)\n        \n    except Exception as e:\n        print(f\"Authorization error: {str(e)}\")\n        # Return a policy with the method ARN from the event\n        if 'methodArn' in event:\n            return generate_policy('user', 'Deny', event['methodArn'], None)\n        else:\n            # If method ARN is not available, return a generic deny\n            return {\n                'principalId': 'user',\n                'policyDocument': {\n                    'Version': '2012-10-17',\n                    'Statement': [{\n                        'Action': 'execute-api:Invoke',\n                        'Effect': 'Deny',\n                        'Resource': '*'\n                    }]\n                }\n            }\n\ndef generate_policy(principal_id, effect, resource, context=None):\n    \"\"\"Generate IAM policy for API Gateway\"\"\"\n    auth_response = {\n        'principalId': principal_id,\n        'policyDocument': {\n            'Version': '2012-10-17',\n            'Statement': [{\n                'Action': 'execute-api:Invoke',\n                'Effect': effect,\n                'Resource': resource\n            }]\n        }\n    }\n    \n    # Add context for successful authorizations\n    if effect == 'Allow' and context is not None:\n        auth_response['context'] = {\n            'requestId': context.aws_request_id,\n            'principalId': principal_id,\n            'authorizedAt': datetime.datetime.utcnow().isoformat()\n        }\n    \n    return auth_response\n"
                 },
@@ -1584,7 +1671,8 @@
                 "ProcessingLambdaLogGroup",
                 "LambdaVPCEndpoint",
                 "CloudWatchLogsVPCEndpoint",
-                "KMSVPCEndpoint"
+                "KMSVPCEndpoint",
+                "SQSVPCEndpoint"
             ],
             "Properties": {
                 "FunctionName": {
@@ -1604,6 +1692,7 @@
                 "MemorySize": {
                     "Ref": "LambdaMemorySize"
                 },
+                "ReservedConcurrentExecutions": 50,
                 "DeadLetterConfig": {
                     "TargetArn": {
                         "Fn::GetAtt": [

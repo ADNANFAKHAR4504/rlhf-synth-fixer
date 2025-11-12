@@ -379,15 +379,48 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
   
-  LambdaSecurityGroupEgressVPC:
+  # Allow Lambda to communicate with VPC Endpoints
+  LambdaSecurityGroupEgressHTTPS:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       GroupId: !Ref LambdaSecurityGroup
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-      CidrIp: !Ref VPCCidr
+      DestinationSecurityGroupId: !Ref VPCEndpointSecurityGroup
       Description: HTTPS to VPC endpoints
+  
+  # Security Group for VPC Endpoints
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-vpc-endpoint-sg-${EnvironmentName}'
+      GroupDescription: Security group for VPC endpoints
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-endpoint-sg-${EnvironmentName}'
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: DataClassification
+          Value: !Ref DataClassification
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  
+  # Allow VPC Endpoints to receive traffic from Lambda
+  VPCEndpointSecurityGroupIngressFromLambda:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCEndpointSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: HTTPS from Lambda functions
   
   # VPC Endpoint for S3
   S3VPCEndpoint:
@@ -427,7 +460,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref VPCEndpointSecurityGroup
   
   # VPC Endpoint for CloudWatch Logs
   CloudWatchLogsVPCEndpoint:
@@ -441,7 +474,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref VPCEndpointSecurityGroup
   
   # VPC Endpoint for KMS
   KMSVPCEndpoint:
@@ -455,7 +488,21 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref VPCEndpointSecurityGroup
+  
+  # VPC Endpoint for SQS (CRITICAL FIX - Was missing)
+  SQSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sqs'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
 
   # ===== S3 BUCKET WITH ENCRYPTION =====
   
@@ -812,6 +859,7 @@ Resources:
       Role: !GetAtt AuthorizerLambdaRole.Arn
       Timeout: 10
       MemorySize: 256
+      ReservedConcurrentExecutions: 10  # Prevent cold starts
       Code:
         ZipFile: |
           import json
@@ -1004,6 +1052,7 @@ Resources:
       - LambdaVPCEndpoint
       - CloudWatchLogsVPCEndpoint
       - KMSVPCEndpoint
+      - SQSVPCEndpoint  # Added SQS VPC Endpoint dependency
     Properties:
       FunctionName: !Sub '${ProjectName}-processing-${EnvironmentName}'
       Runtime: python3.11
@@ -1011,6 +1060,7 @@ Resources:
       Role: !GetAtt ProcessingLambdaRole.Arn
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemorySize
+      ReservedConcurrentExecutions: 50  # Prevent cold starts and manage concurrency
       DeadLetterConfig:
         TargetArn: !GetAtt ProcessingDLQ.Arn
       VpcConfig:
