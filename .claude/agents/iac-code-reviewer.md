@@ -411,13 +411,38 @@ If ANY unchecked:
 
 ---
 
-**CRITICAL**: End your review comment with this exact format on its own line:
-```
-SCORE:{SCORE}
-```
-Example: `SCORE:10` or `SCORE:8`
+## ⚠️ MANDATORY OUTPUT FORMAT ⚠️
 
-This SCORE line is mandatory and must be the last line of your GitHub comment for automated score extraction.
+**CRITICAL REQUIREMENT**: You MUST end your GitHub review comment with this exact format on its own line:
+
+```
+SCORE:X
+```
+
+Where X is your training quality score (0-10).
+
+**Examples:**
+- `SCORE:10` (for perfect implementation)
+- `SCORE:8` (for good implementation meeting threshold)
+- `SCORE:6` (for implementation needing improvement)
+
+**Rules:**
+1. ✅ Must be on its own line
+2. ✅ Must be the LAST line of your comment
+3. ✅ Score must be 0-10 (not 12/17 or other compliance scores)
+4. ✅ Use format exactly as shown: `SCORE:X` (no spaces, no extra text)
+5. ❌ Do NOT include other scores like "Compliance: 12/17" without the SCORE line
+
+**Why This Matters:**
+- The CI/CD pipeline extracts this score for the quality gate
+- Without this line, the score defaults to 0 and the build FAILS
+- Scores > 10 are rejected as false matches
+- This is in addition to updating metadata.json
+
+**Verification:**
+Before posting your comment, verify:
+1. metadata.json has been updated with training_quality field
+2. Your comment ends with `SCORE:X` line where X is 0-10
 ```
 
 ### Phase 2: Compliance Analysis

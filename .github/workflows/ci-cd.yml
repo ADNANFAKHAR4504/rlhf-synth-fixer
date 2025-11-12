@@ -854,24 +854,46 @@ jobs:
 
             ---
 
-            # Final Output Format (Both Review Types)
+            # ⚠️ CRITICAL: Final Output Format (Both Review Types)
 
-            SCORE:<numeric_value>
-            Example: SCORE:8
+            **MANDATORY**: Your GitHub comment MUST end with this exact line:
 
-            - This must always appear on its own line at the very end of your output.
-            - Do not include extra text, markdown, or emojis on that line.
-            - The numeric value (0–10) represents the final quality score.
-            - Continue to post your detailed GitHub comment as usual.
+            SCORE:X
 
-            **MANDATORY FINAL STEP**: Once your review is complete, you MUST post a comprehensive GitHub comment on this pull request summarizing your findings, scores, and any recommendations. The comment should include:
-            - Summary of the review
-            - Training quality score
-            - Any issues found
-            - Recommendations for improvement
-            - The final SCORE line at the end
+            Where X is a number from 0 to 10 (your training quality score).
 
-            After posting the comment, finish execution successfully.
+            **Format Requirements:**
+            - Must be on its own line (no other text on that line)
+            - Must be the LAST line of your GitHub comment
+            - Must use exact format: SCORE:8 (no spaces between SCORE: and number)
+            - Score must be 0-10 (scores > 10 will be rejected as false matches)
+            - Do NOT use compliance scores (like 12/17) or other metrics
+
+            **Examples of VALID formats:**
+            ```
+            SCORE:10
+            SCORE:8
+            SCORE:6
+            ```
+
+            **Examples of INVALID formats:**
+            ```
+            SCORE: 8 (extra space)
+            Training Quality Score: 8/10 (wrong format, but acceptable as fallback)
+            Compliance Score: 12/17 (will be rejected - exceeds maximum)
+            ```
+
+            **MANDATORY FINAL STEPS**:
+            1. Update metadata.json with training_quality field (primary source)
+            2. Post comprehensive GitHub comment with review findings
+            3. End comment with SCORE:X line where X is 0-10
+
+            **What happens if you don't follow this:**
+            - Without SCORE line: Score defaults to 0, build FAILS
+            - Score > 10: Rejected as false match, score set to 0, build FAILS
+            - Without metadata.json update: Fallback to comment parsing, less reliable
+
+            After posting the comment with the SCORE line, finish execution successfully.
             Do not exit with a non-zero code unless explicitly instructed by the workflow."
 
       - name: Extract Claude Quality Score from PR Comment
@@ -899,17 +921,43 @@ jobs:
             | jq -r '.comments[].body' > all_comments.txt
 
           echo "🍀 Searching for quality score pattern..."
-          # Search for multiple score patterns:
-          # 1. SCORE:<number> (as instructed in system prompt line 792-794)
-          # 2. Training Quality: <number>/10
-          # 3. Final Score: <number>/10
-          # 4. training_quality: <number>
-          SCORE=$(grep -Poi 'SCORE:\s*([0-9]+(?:\.[0-9]+)?)|(?:training|final)\s+(?:quality|score)[^0-9]{0,20}([0-9]+(?:\.[0-9]+)?)\s*/\s*10|training_quality["\s:]+([0-9]+(?:\.[0-9]+)?)' all_comments.txt \
-            | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+          # Search for multiple score patterns with priority order:
+          # 1. SCORE:<number> (highest priority - explicit score line)
+          # 2. Training Quality: <number>/10 or Final Score: <number>/10
+          # 3. training_quality: <number> (JSON format)
+
+          # First try to find explicit SCORE: line
+          SCORE=$(grep -Poi '^\s*SCORE:\s*([0-9]+(?:\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+
+          # If not found, try "Training Quality: X/10" or "Final Score: X/10" patterns
+          if [ -z "$SCORE" ]; then
+            SCORE=$(grep -Poi '(?:training\s+quality|final\s+score):\s*\*?\*?([0-9]+(?:\.[0-9]+)?)\s*/\s*10' all_comments.txt | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+          fi
+
+          # If still not found, try training_quality field (JSON format)
+          if [ -z "$SCORE" ]; then
+            SCORE=$(grep -Poi 'training_quality["\s:]+([0-9]+(?:\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+          fi
 
           if [ -z "$SCORE" ]; then
             echo "⚠️ Could not find any quality score in PR comments or metadata.json. Defaulting to 0."
             SCORE=0
+          fi
+
+          # CRITICAL: Validate and cap score to 0-10 range
+          # Convert to integer for comparison (handle decimals)
+          SCORE_INT=$(echo "$SCORE" | awk '{print int($1)}')
+
+          if [ "$SCORE_INT" -gt 10 ]; then
+            echo "⚠️ WARNING: Extracted score ($SCORE) exceeds maximum of 10. This likely indicates a false match (e.g., compliance score '12/17')."
+            echo "❌ Score validation FAILED. Setting score to 0."
+            echo "💡 Claude must output 'SCORE:X' where X is 0-10 at the end of the review comment."
+            SCORE=0
+          elif [ "$SCORE_INT" -lt 0 ]; then
+            echo "⚠️ WARNING: Extracted score ($SCORE) is negative. Setting to 0."
+            SCORE=0
+          else
+            echo "✅ Valid score extracted: $SCORE"
           fi
 
           echo "Claude quality score: $SCORE"
