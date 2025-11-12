@@ -6,7 +6,7 @@ describe('TapStack integration', () => {
     environmentSuffix: 'integration',
     env: {
       account: '123456789012',
-      region: 'us-east-1',
+      region: 'eu-central-2',
     },
   };
 

@@ -8,7 +8,7 @@ Our security team has already reviewed the architecture and approved the approac
 
 ## What we need to build
 
-Create a secure VPC infrastructure using **CDK with TypeScript** for a PCI DSS compliant payment processing application in the us-east-1 region.
+Create a secure VPC infrastructure using **CDK with TypeScript** for a PCI DSS compliant payment processing application in the eu-central-2 region.
 
 ### Core Requirements
 
@@ -18,13 +18,13 @@ Create a secure VPC infrastructure using **CDK with TypeScript** for a PCI DSS c
    - Enable DNS hostnames and DNS support
 
 2. **Public Subnet Layer**
-   - Create 3 public subnets (10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24)
+   - Create 3 public subnets with /24 CIDR masks (CDK will automatically allocate from VPC CIDR)
    - Distribute across 3 different AZs
    - Configure Internet Gateway for inbound/outbound internet access
    - Route tables configured for internet connectivity
 
 3. **Private Subnet Layer**
-   - Create 3 private subnets (10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24)
+   - Create 3 private subnets with /24 CIDR masks (CDK will automatically allocate from VPC CIDR)
    - Distribute across same 3 AZs as public subnets
    - No direct internet access
    - Each subnet sized for at least 250 hosts
@@ -74,11 +74,11 @@ Create a secure VPC infrastructure using **CDK with TypeScript** for a PCI DSS c
 - Use **S3 VPC Endpoint** for private S3 access
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment-suffix}`
-- Deploy to **us-east-1** region
+- Deploy to **eu-central-2** region
 
 ### Constraints
 
-- VPC CIDR must be exactly 10.0.0.0/16 with specified subnet addressing
+- VPC CIDR must be exactly 10.0.0.0/16 with automatic subnet allocation by CDK
 - Private subnets must not have direct internet access except through NAT gateways
 - All inter-subnet traffic must be logged to CloudWatch for compliance audits
 - Network ACLs must explicitly deny all traffic except ports 443, 3306, and 6379
