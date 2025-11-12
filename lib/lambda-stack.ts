@@ -67,6 +67,10 @@ export class LambdaStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // ============================================================
+    // PAYMENT VALIDATOR
+    // ============================================================
+
     // Create IAM role for payment-validator Lambda
     const validatorRole = new aws.iam.Role(
       `payment-validator-role-${environmentSuffix}`,
@@ -110,27 +114,27 @@ export class LambdaStack extends pulumi.ComponentResource {
       {
         role: validatorRole.id,
         policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": [
-              "dynamodb:GetItem",
-              "dynamodb:Query"
-            ],
-            "Resource": "${dynamoTableArn}"
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": "arn:aws:logs:*:*:*"
-          }
-        ]
-      }`,
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:GetItem",
+                "dynamodb:Query"
+              ],
+              "Resource": "${dynamoTableArn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:*:*:*"
+            }
+          ]
+        }`,
       },
       { parent: this }
     );
@@ -149,6 +153,119 @@ export class LambdaStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Payment Validator Lambda Code
+    const validatorCode = `/**
+ * payment-validator Lambda function
+ *
+ * Validates payment requests before processing.
+ */
+const { DynamoDBClient, GetItemCommand, QueryCommand } = require('@aws-sdk/client-dynamodb');
+const dynamoClient = new DynamoDBClient({ region: 'ap-southeast-1' });
+const dynamoTableName = process.env.DYNAMO_TABLE_NAME;
+
+/**
+ * Validate payment amount
+ */
+function validateAmount(amount) {
+  if (!amount || amount <= 0) {
+    return { valid: false, error: 'Invalid payment amount' };
+  }
+  if (amount > 1000000) {
+    return { valid: false, error: 'Payment amount exceeds maximum limit' };
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate customer information
+ */
+function validateCustomer(customer) {
+  if (!customer || !customer.customerId) {
+    return { valid: false, error: 'Customer ID is required' };
+  }
+  if (!customer.customerEmail) {
+    return { valid: false, error: 'Customer email is required' };
+  }
+  const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;
+  if (!emailRegex.test(customer.customerEmail)) {
+    return { valid: false, error: 'Invalid customer email format' };
+  }
+  return { valid: true };
+}
+
+/**
+ * Check for duplicate transactions
+ */
+async function checkDuplicateTransaction(transactionId) {
+  try {
+    const getItemCommand = new GetItemCommand({
+      TableName: dynamoTableName,
+      Key: {
+        transactionId: { S: transactionId },
+      },
+    });
+    const result = await dynamoClient.send(getItemCommand);
+    return result.Item ? true : false;
+  } catch (error) {
+    console.error('Error checking duplicate transaction:', error);
+    throw error;
+  }
+}
+
+/**
+ * Lambda handler
+ */
+exports.handler = async (event) => {
+  console.log('Received validation request:', JSON.stringify(event, null, 2));
+
+  try {
+    // Parse payment data
+    const payment = typeof event === 'string' ? JSON.parse(event) : event;
+
+    // Validate required fields
+    if (!payment.transactionId) {
+      return {
+        valid: false,
+        error: 'Transaction ID is required',
+      };
+    }
+
+    // Validate amount
+    const amountValidation = validateAmount(payment.amount);
+    if (!amountValidation.valid) {
+      return amountValidation;
+    }
+
+    // Validate customer
+    const customerValidation = validateCustomer(payment.customer || {});
+    if (!customerValidation.valid) {
+      return customerValidation;
+    }
+
+    // Check for duplicate transaction
+    const isDuplicate = await checkDuplicateTransaction(payment.transactionId);
+    if (isDuplicate) {
+      return {
+        valid: false,
+        error: 'Duplicate transaction detected',
+      };
+    }
+
+    console.log('Payment validation successful');
+    return {
+      valid: true,
+      message: 'Payment validation successful',
+      transactionId: payment.transactionId,
+    };
+  } catch (error) {
+    console.error('Validation error:', error);
+    return {
+      valid: false,
+      error: error.message,
+    };
+  }
+};`;
+
     // Create payment-validator Lambda function
     this.validatorFunction = new aws.lambda.Function(
       `payment-validator-${environmentSuffix}`,
@@ -161,9 +278,7 @@ export class LambdaStack extends pulumi.ComponentResource {
         timeout: 30,
         reservedConcurrentExecutions: 10,
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.FileAsset(
-            '../lambda-packages/payment-validator/index.js'
-          ),
+          'index.js': new pulumi.asset.StringAsset(validatorCode),
         }),
         environment: {
           variables: {
@@ -183,6 +298,10 @@ export class LambdaStack extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [validatorLogGroup] }
     );
+
+    // ============================================================
+    // PAYMENT PROCESSOR
+    // ============================================================
 
     // Create IAM role for payment-processor Lambda
     const processorRole = new aws.iam.Role(
@@ -227,34 +346,34 @@ export class LambdaStack extends pulumi.ComponentResource {
       {
         role: processorRole.id,
         policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": [
-              "dynamodb:PutItem",
-              "dynamodb:UpdateItem"
-            ],
-            "Resource": "${dynamoTableArn}"
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "s3:PutObject"
-            ],
-            "Resource": "${auditBucketArn}/*"
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": "arn:aws:logs:*:*:*"
-          }
-        ]
-      }`,
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "dynamodb:PutItem",
+                "dynamodb:UpdateItem"
+              ],
+              "Resource": "${dynamoTableArn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:PutObject"
+              ],
+              "Resource": "${auditBucketArn}/*"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:*:*:*"
+            }
+          ]
+        }`,
       },
       { parent: this }
     );
@@ -273,6 +392,155 @@ export class LambdaStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Payment Processor Lambda Code
+    const processorCode = `/**
+ * payment-processor Lambda function
+ *
+ * Processes validated payments and stores transaction records.
+ */
+const { DynamoDBClient, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
+const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+
+const dynamoClient = new DynamoDBClient({ region: 'ap-southeast-1' });
+const s3Client = new S3Client({ region: 'ap-southeast-1' });
+
+const dynamoTableName = process.env.DYNAMO_TABLE_NAME;
+const auditBucketName = process.env.AUDIT_BUCKET_NAME;
+
+/**
+ * Process payment transaction
+ */
+async function processPayment(payment) {
+  const timestamp = new Date().toISOString();
+  const transactionRecord = {
+    transactionId: { S: payment.transactionId },
+    amount: { N: payment.amount.toString() },
+    currency: { S: payment.currency || 'USD' },
+    customerId: { S: payment.customer.customerId },
+    customerEmail: { S: payment.customer.customerEmail },
+    status: { S: 'PROCESSING' },
+    timestamp: { S: timestamp },
+    ttl: { N: Math.floor(Date.now() / 1000 + 7 * 24 * 60 * 60).toString() }, // 7 days TTL
+  };
+
+  // Store transaction in DynamoDB
+  const putItemCommand = new PutItemCommand({
+    TableName: dynamoTableName,
+    Item: transactionRecord,
+  });
+
+  await dynamoClient.send(putItemCommand);
+  return transactionRecord;
+}
+
+/**
+ * Update transaction status
+ */
+async function updateTransactionStatus(transactionId, status, details) {
+  const updateCommand = new UpdateItemCommand({
+    TableName: dynamoTableName,
+    Key: {
+      transactionId: { S: transactionId },
+    },
+    UpdateExpression: 'SET #status = :status, #details = :details, #updatedAt = :updatedAt',
+    ExpressionAttributeNames: {
+      '#status': 'status',
+      '#details': 'processingDetails',
+      '#updatedAt': 'updatedAt',
+    },
+    ExpressionAttributeValues: {
+      ':status': { S: status },
+      ':details': { S: JSON.stringify(details) },
+      ':updatedAt': { S: new Date().toISOString() },
+    },
+  });
+
+  await dynamoClient.send(updateCommand);
+}
+
+/**
+ * Store audit log in S3
+ */
+async function storeAuditLog(payment, transactionRecord, status) {
+  const auditLog = {
+    transactionId: payment.transactionId,
+    timestamp: new Date().toISOString(),
+    payment: payment,
+    transactionRecord: transactionRecord,
+    status: status,
+  };
+
+  const key = \`audit-logs/\${new Date().toISOString().split('T')[0]}/\${payment.transactionId}.json\`;
+
+  const putObjectCommand = new PutObjectCommand({
+    Bucket: auditBucketName,
+    Key: key,
+    Body: JSON.stringify(auditLog, null, 2),
+    ContentType: 'application/json',
+  });
+
+  await s3Client.send(putObjectCommand);
+  return key;
+}
+
+/**
+ * Lambda handler
+ */
+exports.handler = async (event) => {
+  console.log('Received payment processing request:', JSON.stringify(event, null, 2));
+
+  try {
+    // Parse payment data
+    const payment = typeof event === 'string' ? JSON.parse(event) : event;
+
+    // Process payment
+    const transactionRecord = await processPayment(payment);
+    console.log('Payment processed successfully');
+
+    // Simulate payment processing (in real scenario, this would call payment gateway)
+    const processingSuccess = Math.random() > 0.1; // 90% success rate
+
+    let finalStatus, processingDetails;
+    if (processingSuccess) {
+      finalStatus = 'SUCCESS';
+      processingDetails = {
+        processedAt: new Date().toISOString(),
+        paymentGateway: 'mock-gateway',
+        confirmationCode: \`CONF-\${Date.now()}\`,
+      };
+    } else {
+      finalStatus = 'FAILED';
+      processingDetails = {
+        processedAt: new Date().toISOString(),
+        paymentGateway: 'mock-gateway',
+        failureReason: 'Insufficient funds',
+      };
+    }
+
+    // Update transaction status
+    await updateTransactionStatus(payment.transactionId, finalStatus, processingDetails);
+
+    // Store audit log
+    const auditLogKey = await storeAuditLog(payment, transactionRecord, finalStatus);
+
+    console.log('Transaction completed:', finalStatus);
+
+    return {
+      success: finalStatus === 'SUCCESS',
+      transactionId: payment.transactionId,
+      status: finalStatus,
+      processingDetails: processingDetails,
+      auditLogKey: auditLogKey,
+    };
+  } catch (error) {
+    console.error('Payment processing error:', error);
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};`;
+
     // Create payment-processor Lambda function
     this.processorFunction = new aws.lambda.Function(
       `payment-processor-${environmentSuffix}`,
@@ -285,9 +553,7 @@ export class LambdaStack extends pulumi.ComponentResource {
         timeout: 30,
         reservedConcurrentExecutions: 10,
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.FileAsset(
-            '../lambda-packages/payment-processor/index.js'
-          ),
+          'index.js': new pulumi.asset.StringAsset(processorCode),
         }),
         environment: {
           variables: {
@@ -308,6 +574,10 @@ export class LambdaStack extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [processorLogGroup] }
     );
+
+    // ============================================================
+    // PAYMENT NOTIFIER
+    // ============================================================
 
     // Create IAM role for payment-notifier Lambda
     const notifierRole = new aws.iam.Role(
@@ -352,26 +622,26 @@ export class LambdaStack extends pulumi.ComponentResource {
       {
         role: notifierRole.id,
         policy: pulumi.interpolate`{
-        "Version": "2012-10-17",
-        "Statement": [
-          {
-            "Effect": "Allow",
-            "Action": [
-              "sns:Publish"
-            ],
-            "Resource": "${snsTopicArn}"
-          },
-          {
-            "Effect": "Allow",
-            "Action": [
-              "logs:CreateLogGroup",
-              "logs:CreateLogStream",
-              "logs:PutLogEvents"
-            ],
-            "Resource": "arn:aws:logs:*:*:*"
-          }
-        ]
-      }`,
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "sns:Publish"
+              ],
+              "Resource": "${snsTopicArn}"
+            },
+            {
+              "Effect": "Allow",
+              "Action": [
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents"
+              ],
+              "Resource": "arn:aws:logs:*:*:*"
+            }
+          ]
+        }`,
       },
       { parent: this }
     );
@@ -390,6 +660,92 @@ export class LambdaStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // Payment Notifier Lambda Code
+    const notifierCode = `/**
+ * payment-notifier Lambda function
+ *
+ * Sends payment notifications via SNS for successful or failed transactions.
+ */
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
+const snsClient = new SNSClient({ region: 'ap-southeast-1' });
+const snsTopicArn = process.env.SNS_TOPIC_ARN;
+
+/**
+ * Send notification via SNS
+ */
+async function sendNotification(notification) {
+  const message = {
+    default: JSON.stringify(notification, null, 2),
+    email: formatEmailMessage(notification),
+  };
+
+  const publishCommand = new PublishCommand({
+    TopicArn: snsTopicArn,
+    Subject: \`Payment Notification: \${notification.status}\`,
+    Message: JSON.stringify(message),
+    MessageStructure: 'json',
+  });
+
+  const result = await snsClient.send(publishCommand);
+  return result.MessageId;
+}
+
+/**
+ * Format email message
+ */
+function formatEmailMessage(notification) {
+  let message = \`Payment Notification\\n\\n\`;
+  message += \`Transaction ID: \${notification.transactionId}\\n\`;
+  message += \`Status: \${notification.status}\\n\`;
+  message += \`Amount: \${notification.amount} \${notification.currency}\\n\`;
+  message += \`Customer Email: \${notification.customerEmail}\\n\`;
+  message += \`Timestamp: \${notification.timestamp}\\n\\n\`;
+
+  if (notification.status === 'SUCCESS') {
+    message += \`The payment has been processed successfully.\\n\`;
+  } else if (notification.status === 'FAILED') {
+    message += \`The payment processing has failed.\\n\`;
+    message += \`Reason: \${notification.failureReason || 'Unknown'}\\n\`;
+  }
+
+  return message;
+}
+
+/**
+ * Lambda handler
+ */
+exports.handler = async (event) => {
+  console.log('Received payment notification request:', JSON.stringify(event, null, 2));
+
+  try {
+    // Parse notification data
+    const notification = typeof event === 'string' ? JSON.parse(event) : event;
+
+    // Validate required fields
+    if (!notification.transactionId || !notification.status) {
+      throw new Error('Missing required fields: transactionId or status');
+    }
+
+    // Send notification
+    const messageId = await sendNotification(notification);
+    console.log('Notification sent successfully:', messageId);
+
+    return {
+      success: true,
+      message: 'Notification sent successfully',
+      messageId,
+      transactionId: notification.transactionId,
+    };
+  } catch (error) {
+    console.error('Error sending notification:', error);
+    return {
+      success: false,
+      message: 'Failed to send notification',
+      error: error.message,
+    };
+  }
+};`;
+
     // Create payment-notifier Lambda function
     this.notifierFunction = new aws.lambda.Function(
       `payment-notifier-${environmentSuffix}`,
@@ -402,9 +758,7 @@ export class LambdaStack extends pulumi.ComponentResource {
         timeout: 30,
         reservedConcurrentExecutions: 10,
         code: new pulumi.asset.AssetArchive({
-          'index.js': new pulumi.asset.FileAsset(
-            '../lambda-packages/payment-notifier/index.js'
-          ),
+          'index.js': new pulumi.asset.StringAsset(notifierCode),
         }),
         environment: {
           variables: {
@@ -424,6 +778,10 @@ export class LambdaStack extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [notifierLogGroup] }
     );
+
+    // ============================================================
+    // CLOUDWATCH ALARMS
+    // ============================================================
 
     // Create CloudWatch alarms for Lambda errors
     [

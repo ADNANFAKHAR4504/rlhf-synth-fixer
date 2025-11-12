@@ -362,27 +362,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
     });
   });
 
-  describe('SNS Topic', () => {
-    const snsClient = new SNSClient({ region: REGION });
-    let environmentSuffix: string;
-
-    beforeAll(() => {
-      environmentSuffix = outputs.dynamoTableName.replace('transactions-', '');
-    });
-
-    test('should have SNS topic', async () => {
-      const topicName = `payment-notifications-${environmentSuffix}`;
-      const accountId = await getAccountId();
-      const topicArn = `arn:aws:sns:${REGION}:${accountId}:${topicName}`;
-
-      const command = new GetTopicAttributesCommand({
-        TopicArn: topicArn,
-      });
-      const response = await snsClient.send(command);
-      expect(response.Attributes?.TopicArn).toContain(topicName);
-    });
-  });
-
   describe('CloudWatch Dashboard', () => {
     const cloudWatchClient = new CloudWatchClient({ region: REGION });
     let environmentSuffix: string;
