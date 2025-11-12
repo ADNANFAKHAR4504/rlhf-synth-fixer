@@ -1,11 +1,11 @@
-import { Construct } from 'constructs';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
-import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { EcsService } from '@cdktf/provider-aws/lib/ecs-service';
+import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { IamRolePolicyAttachment } from '@cdktf/provider-aws/lib/iam-role-policy-attachment';
-import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { Construct } from 'constructs';
 
 export interface EcsConstructProps {
   environment: string;
@@ -13,7 +13,7 @@ export interface EcsConstructProps {
   securityGroupIds: string[];
   targetGroupArn: string;
   awsRegion: string;
-  operationsAccountId?: string;
+  operationsAccountId: string;
   containerImage?: string;
   containerPort?: number;
 }
@@ -31,7 +31,7 @@ export class EcsConstruct extends Construct {
       securityGroupIds,
       targetGroupArn,
       awsRegion,
-      operationsAccountId = '123456789012',
+      operationsAccountId,
       containerImage = 'nginx:latest',
       containerPort = 80,
     } = props;

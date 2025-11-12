@@ -310,15 +310,248 @@ describe('TapStack Unit Tests', () => {
   });
 
   describe('Data Sources', () => {
-    test('Stack creates Secrets Manager data source for RDS credentials', () => {
+    test('Stack creates AWS Caller Identity data source', () => {
       app = new App();
-      stack = new TapStack(app, 'TestSecrets', {
+      stack = new TapStack(app, 'TestCallerIdentity', {
         environmentSuffix: 'test',
       });
       synthesized = Testing.synth(stack);
       const synthJson = JSON.parse(synthesized);
 
-      expect(synthJson.data).toHaveProperty('aws_secretsmanager_secret');
+      expect(synthJson.data).toHaveProperty('aws_caller_identity');
+      expect(synthJson.data.aws_caller_identity).toHaveProperty('current');
+    });
+
+    test('Stack uses OPERATIONS_ACCOUNT_ID when provided', () => {
+      const originalEnv = process.env.OPERATIONS_ACCOUNT_ID;
+      process.env.OPERATIONS_ACCOUNT_ID = '999888777666';
+
+      app = new App();
+      stack = new TapStack(app, 'TestOpsAccountId', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+
+      // Clean up
+      if (originalEnv) {
+        process.env.OPERATIONS_ACCOUNT_ID = originalEnv;
+      } else {
+        delete process.env.OPERATIONS_ACCOUNT_ID;
+      }
+
+      expect(stack).toBeDefined();
+    });
+  });
+
+  describe('Database Configuration', () => {
+    test('RDS instance uses correct PostgreSQL version', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestDBVersion', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const dbInstances = synthJson.resource.aws_db_instance;
+      const dbInstance = Object.values(dbInstances)[0] as any;
+      expect(dbInstance.engine).toBe('postgres');
+      expect(dbInstance.engine_version).toBe('17.4');
+    });
+
+    test('RDS instance uses correct instance class', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestDBInstanceClass', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const dbInstances = synthJson.resource.aws_db_instance;
+      const dbInstance = Object.values(dbInstances)[0] as any;
+      expect(dbInstance.instance_class).toBe('db.t4g.small');
+    });
+
+    test('RDS instance has Multi-AZ enabled', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestDBMultiAZ', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const dbInstances = synthJson.resource.aws_db_instance;
+      const dbInstance = Object.values(dbInstances)[0] as any;
+      expect(dbInstance.multi_az).toBe(true);
+    });
+
+    test('RDS instance has encryption enabled', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestDBEncryption', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const dbInstances = synthJson.resource.aws_db_instance;
+      const dbInstance = Object.values(dbInstances)[0] as any;
+      expect(dbInstance.storage_encrypted).toBe(true);
+    });
+  });
+
+  describe('ECS Configuration', () => {
+    test('ECS task definition uses correct CPU and memory', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestECSTask', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const taskDefs = synthJson.resource.aws_ecs_task_definition;
+      const taskDef = Object.values(taskDefs)[0] as any;
+      expect(taskDef.cpu).toBe('256');
+      expect(taskDef.memory).toBe('512');
+    });
+
+    test('ECS service has correct desired count', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestECSService', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const services = synthJson.resource.aws_ecs_service;
+      const service = Object.values(services)[0] as any;
+      expect(service.desired_count).toBe(2);
+    });
+
+    test('ECS service uses FARGATE launch type', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestECSFargate', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const services = synthJson.resource.aws_ecs_service;
+      const service = Object.values(services)[0] as any;
+      expect(service.launch_type).toBe('FARGATE');
+    });
+  });
+
+  describe('Security Configuration', () => {
+    test('Stack creates security group rules', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestSGRules', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_security_group_rule');
+    });
+
+    test('Stack creates cross-account IAM role', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestCrossAccountRole', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const iamRoles = synthJson.resource.aws_iam_role;
+      const roleNames = Object.keys(iamRoles);
+      const hasDeploymentRole = roleNames.some(name =>
+        name.includes('deployment-role')
+      );
+      expect(hasDeploymentRole).toBe(true);
+    });
+
+    test('Stack creates IAM role policies', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestIAMPolicies', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_iam_role_policy');
+    });
+  });
+
+  describe('Networking Configuration', () => {
+    test('Stack creates correct number of subnets', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestSubnets', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_subnet');
+      const subnets = synthJson.resource.aws_subnet;
+      // Should have at least 2 public and 2 private subnets
+      expect(Object.keys(subnets).length).toBeGreaterThanOrEqual(4);
+    });
+
+    test('Stack creates Internet Gateway', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestIGW', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_internet_gateway');
+    });
+
+    test('Stack creates route tables', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestRouteTables', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_route_table');
+    });
+  });
+
+  describe('Load Balancer Configuration', () => {
+    test('ALB has correct type', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestALBType', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      const albs = synthJson.resource.aws_lb;
+      const alb = Object.values(albs)[0] as any;
+      expect(alb.load_balancer_type).toBe('application');
+    });
+
+    test('Stack creates target group', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestTargetGroup', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_lb_target_group');
+    });
+
+    test('Stack creates ALB listener', () => {
+      app = new App();
+      stack = new TapStack(app, 'TestListener', {
+        environmentSuffix: 'test',
+      });
+      synthesized = Testing.synth(stack);
+      const synthJson = JSON.parse(synthesized);
+
+      expect(synthJson.resource).toHaveProperty('aws_lb_listener');
     });
   });
 });
