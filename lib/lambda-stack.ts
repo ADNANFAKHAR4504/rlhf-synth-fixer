@@ -1,9 +1,10 @@
 /**
  * lambda-stack.ts
- *
+ * 
  * This module defines Lambda functions for payment processing with proper
  * IAM roles, security groups, and CloudWatch logging.
  */
+
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -114,27 +115,27 @@ export class LambdaStack extends pulumi.ComponentResource {
       {
         role: validatorRole.id,
         policy: pulumi.interpolate`{
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Action": [
-                "dynamodb:GetItem",
-                "dynamodb:Query"
-              ],
-              "Resource": "${dynamoTableArn}"
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-              ],
-              "Resource": "arn:aws:logs:*:*:*"
-            }
-          ]
-        }`,
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:GetItem",
+        "dynamodb:Query"
+      ],
+      "Resource": "${dynamoTableArn}"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    }
+  ]
+}`,
       },
       { parent: this }
     );
@@ -156,11 +157,13 @@ export class LambdaStack extends pulumi.ComponentResource {
     // Payment Validator Lambda Code
     const validatorCode = `/**
  * payment-validator Lambda function
- *
+ * 
  * Validates payment requests before processing.
  */
 const { DynamoDBClient, GetItemCommand, QueryCommand } = require('@aws-sdk/client-dynamodb');
-const dynamoClient = new DynamoDBClient({ region: 'ap-southeast-1' });
+
+// CHANGE: Use AWS_REGION environment variable instead of hardcoded region
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
 const dynamoTableName = process.env.DYNAMO_TABLE_NAME;
 
 /**
@@ -217,7 +220,6 @@ async function checkDuplicateTransaction(transactionId) {
  */
 exports.handler = async (event) => {
   console.log('Received validation request:', JSON.stringify(event, null, 2));
-
   try {
     // Parse payment data
     const payment = typeof event === 'string' ? JSON.parse(event) : event;
@@ -346,34 +348,34 @@ exports.handler = async (event) => {
       {
         role: processorRole.id,
         policy: pulumi.interpolate`{
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Action": [
-                "dynamodb:PutItem",
-                "dynamodb:UpdateItem"
-              ],
-              "Resource": "${dynamoTableArn}"
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "s3:PutObject"
-              ],
-              "Resource": "${auditBucketArn}/*"
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-              ],
-              "Resource": "arn:aws:logs:*:*:*"
-            }
-          ]
-        }`,
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "dynamodb:PutItem",
+        "dynamodb:UpdateItem"
+      ],
+      "Resource": "${dynamoTableArn}"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject"
+      ],
+      "Resource": "${auditBucketArn}/*"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    }
+  ]
+}`,
       },
       { parent: this }
     );
@@ -395,15 +397,15 @@ exports.handler = async (event) => {
     // Payment Processor Lambda Code
     const processorCode = `/**
  * payment-processor Lambda function
- *
+ * 
  * Processes validated payments and stores transaction records.
  */
 const { DynamoDBClient, PutItemCommand, UpdateItemCommand } = require('@aws-sdk/client-dynamodb');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 
-const dynamoClient = new DynamoDBClient({ region: 'ap-southeast-1' });
-const s3Client = new S3Client({ region: 'ap-southeast-1' });
-
+// CHANGE: Use AWS_REGION environment variable instead of hardcoded region
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION });
+const s3Client = new S3Client({ region: process.env.AWS_REGION });
 const dynamoTableName = process.env.DYNAMO_TABLE_NAME;
 const auditBucketName = process.env.AUDIT_BUCKET_NAME;
 
@@ -428,8 +430,8 @@ async function processPayment(payment) {
     TableName: dynamoTableName,
     Item: transactionRecord,
   });
-
   await dynamoClient.send(putItemCommand);
+
   return transactionRecord;
 }
 
@@ -454,7 +456,6 @@ async function updateTransactionStatus(transactionId, status, details) {
       ':updatedAt': { S: new Date().toISOString() },
     },
   });
-
   await dynamoClient.send(updateCommand);
 }
 
@@ -471,15 +472,14 @@ async function storeAuditLog(payment, transactionRecord, status) {
   };
 
   const key = \`audit-logs/\${new Date().toISOString().split('T')[0]}/\${payment.transactionId}.json\`;
-
   const putObjectCommand = new PutObjectCommand({
     Bucket: auditBucketName,
     Key: key,
     Body: JSON.stringify(auditLog, null, 2),
     ContentType: 'application/json',
   });
-
   await s3Client.send(putObjectCommand);
+
   return key;
 }
 
@@ -488,7 +488,6 @@ async function storeAuditLog(payment, transactionRecord, status) {
  */
 exports.handler = async (event) => {
   console.log('Received payment processing request:', JSON.stringify(event, null, 2));
-
   try {
     // Parse payment data
     const payment = typeof event === 'string' ? JSON.parse(event) : event;
@@ -524,7 +523,6 @@ exports.handler = async (event) => {
     const auditLogKey = await storeAuditLog(payment, transactionRecord, finalStatus);
 
     console.log('Transaction completed:', finalStatus);
-
     return {
       success: finalStatus === 'SUCCESS',
       transactionId: payment.transactionId,
@@ -622,26 +620,26 @@ exports.handler = async (event) => {
       {
         role: notifierRole.id,
         policy: pulumi.interpolate`{
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Action": [
-                "sns:Publish"
-              ],
-              "Resource": "${snsTopicArn}"
-            },
-            {
-              "Effect": "Allow",
-              "Action": [
-                "logs:CreateLogGroup",
-                "logs:CreateLogStream",
-                "logs:PutLogEvents"
-              ],
-              "Resource": "arn:aws:logs:*:*:*"
-            }
-          ]
-        }`,
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Action": [
+        "sns:Publish"
+      ],
+      "Resource": "${snsTopicArn}"
+    },
+    {
+      "Effect": "Allow",
+      "Action": [
+        "logs:CreateLogGroup",
+        "logs:CreateLogStream",
+        "logs:PutLogEvents"
+      ],
+      "Resource": "arn:aws:logs:*:*:*"
+    }
+  ]
+}`,
       },
       { parent: this }
     );
@@ -663,11 +661,13 @@ exports.handler = async (event) => {
     // Payment Notifier Lambda Code
     const notifierCode = `/**
  * payment-notifier Lambda function
- *
+ * 
  * Sends payment notifications via SNS for successful or failed transactions.
  */
 const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
-const snsClient = new SNSClient({ region: 'ap-southeast-1' });
+
+// CHANGE: Use AWS_REGION environment variable instead of hardcoded region
+const snsClient = new SNSClient({ region: process.env.AWS_REGION });
 const snsTopicArn = process.env.SNS_TOPIC_ARN;
 
 /**
@@ -716,7 +716,6 @@ function formatEmailMessage(notification) {
  */
 exports.handler = async (event) => {
   console.log('Received payment notification request:', JSON.stringify(event, null, 2));
-
   try {
     // Parse notification data
     const notification = typeof event === 'string' ? JSON.parse(event) : event;

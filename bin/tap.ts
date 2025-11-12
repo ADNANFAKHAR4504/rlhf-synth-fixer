@@ -1,10 +1,10 @@
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
- *
+ * 
  * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
  * configuration based on the deployment environment. It handles environment-specific settings,
  * tagging, and deployment configuration for AWS resources.
- *
+ * 
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
@@ -25,8 +25,8 @@ const environmentSuffix =
 const repository = config.get('repository') || 'unknown';
 const commitAuthor = config.get('commitAuthor') || 'unknown';
 
-// Get AWS region from config, defaulting to ap-southeast-1
-const awsRegion = config.get('awsRegion') || 'ap-southeast-1';
+// CHANGE: Get AWS region from config, defaulting to us-east-1
+const awsRegion = config.get('awsRegion') || 'us-east-1';
 
 // Define a set of default tags to apply to all resources.
 const defaultTags = {
@@ -36,8 +36,8 @@ const defaultTags = {
   ManagedBy: 'Pulumi',
 };
 
-// CRITICAL FIX: Create AWS provider with explicit region configuration
-// This ensures ALL AWS resources (including S3 buckets) are created in ap-southeast-1
+// Create AWS provider with explicit region configuration
+// This ensures ALL AWS resources are created in us-east-1
 const awsProvider = new aws.Provider('aws-provider', {
   region: awsRegion,
   defaultTags: {
