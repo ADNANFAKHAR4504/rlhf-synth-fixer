@@ -4,10 +4,23 @@ BUG #25: Missing canary alarm configuration
 """
 
 import json
+import tempfile
+import zipfile
+from pathlib import Path
+
 import pulumi
 import pulumi_aws as aws
 from pulumi import Output, ResourceOptions
 from typing import Optional
+
+
+def _create_canary_zip(script: str) -> str:
+    """Write the inline canary script to a temporary zip file and return its path."""
+    temp_dir = Path(tempfile.mkdtemp(prefix="pulumi-canary-"))
+    zip_path = temp_dir / "canary.zip"
+    with zipfile.ZipFile(zip_path, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("handler.py", script)
+    return str(zip_path)
 
 
 class SyntheticsStack(pulumi.ComponentResource):
@@ -130,16 +143,16 @@ def handler(event, context):
     }
 """
 
+        canary_zip_path = _create_canary_zip(python_canary_script)
+
         # Primary region canary
         self.primary_canary = aws.synthetics.Canary(
             f"trading-api-canary-primary-{environment_suffix}",
             name=f"trading-canary-primary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-primary"),
             execution_role_arn=self.canary_role.arn,
-            code={
-                "handler": "handler.handler",
-                "script": python_canary_script
-            },
+            handler="handler.handler",
+            zip_file=canary_zip_path,
             runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
@@ -160,10 +173,8 @@ def handler(event, context):
             name=f"trading-canary-secondary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-secondary"),
             execution_role_arn=self.canary_role.arn,
-            code={
-                "handler": "handler.handler",
-                "script": python_canary_script
-            },
+            handler="handler.handler",
+            zip_file=canary_zip_path,
             runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
