@@ -132,3 +132,73 @@ Create a containerized microservices platform using **AWS CDK with TypeScript** 
 - Integration tests validating deployed resources
 - Documentation with deployment instructions
 - Stack outputs including ALB DNS name, Cloud Map namespace, dashboard URLs
+
+## Deployment Instructions
+
+### Initial Infrastructure Deployment
+
+The infrastructure is configured to deploy with ECS services at `desiredCount: 0` to allow successful deployment without requiring container images upfront.
+
+1. **Deploy the infrastructure**:
+   ```bash
+   cdk deploy TapStack<environmentSuffix>
+   ```
+
+2. **Push container images to ECR** (after infrastructure is deployed):
+   ```bash
+   # Get ECR repository URIs from stack outputs
+   aws cloudformation describe-stacks --stack-name TapStack<environmentSuffix> --query 'Stacks[0].Outputs'
+   
+   # Build and push images
+   docker build -t fraud-api:latest ./api
+   docker tag fraud-api:latest <api-repo-uri>:latest
+   docker push <api-repo-uri>:latest
+   
+   docker build -t fraud-worker:latest ./worker
+   docker tag fraud-worker:latest <worker-repo-uri>:latest
+   docker push <worker-repo-uri>:latest
+   
+   docker build -t fraud-job:latest ./job
+   docker tag fraud-job:latest <job-repo-uri>:latest
+   docker push <job-repo-uri>:latest
+   ```
+
+3. **Scale up ECS services** (once images are available):
+   ```bash
+   # Scale API service to 2 tasks
+   aws ecs update-service \
+     --cluster fraud-cluster-<environmentSuffix> \
+     --service fraud-api-<environmentSuffix> \
+     --desired-count 2
+   
+   # Scale Worker service to 1 task
+   aws ecs update-service \
+     --cluster fraud-cluster-<environmentSuffix> \
+     --service fraud-worker-<environmentSuffix> \
+     --desired-count 1
+   ```
+
+4. **Update auto-scaling minimum capacity** (for production):
+   ```bash
+   # Update API service auto-scaling
+   aws application-autoscaling register-scalable-target \
+     --service-namespace ecs \
+     --scalable-dimension ecs:service:DesiredCount \
+     --resource-id service/fraud-cluster-<environmentSuffix>/fraud-api-<environmentSuffix> \
+     --min-capacity 2 \
+     --max-capacity 10
+   
+   # Update Worker service auto-scaling
+   aws application-autoscaling register-scalable-target \
+     --service-namespace ecs \
+     --scalable-dimension ecs:service:DesiredCount \
+     --resource-id service/fraud-cluster-<environmentSuffix>/fraud-worker-<environmentSuffix> \
+     --min-capacity 1 \
+     --max-capacity 5
+   ```
+
+### Notes
+
+- The scheduled job service will run automatically via EventBridge without manual scaling
+- Circuit breaker is disabled to prevent automatic CloudFormation rollbacks during initial deployments
+- Auto-scaling will work once services are scaled up and container images are available

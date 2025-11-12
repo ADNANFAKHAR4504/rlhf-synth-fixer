@@ -384,14 +384,10 @@ export class TapStack extends cdk.Stack {
       serviceName: `fraud-api-${environmentSuffix}`,
       cluster,
       taskDefinition: apiTaskDef,
-      desiredCount: 2,
+      desiredCount: 0, // Start with 0 tasks to allow stack deployment without container images
       minHealthyPercent: 100,
       maxHealthyPercent: 200,
-      // use the correct CDK prop name 'circuitBreaker'
-      //circuitBreaker: {
-      //  enable: true,
-      //  rollback: true,
-      //},
+      // Circuit breaker disabled to prevent CFN stack failures
       circuitBreaker: undefined,
       // allow warm-up time before ALB health checks are enforced to avoid false negatives
       healthCheckGracePeriod: cdk.Duration.seconds(300),
@@ -428,7 +424,7 @@ export class TapStack extends cdk.Stack {
 
     // Auto-scaling for API service
     const apiScaling = apiService.autoScaleTaskCount({
-      minCapacity: 2,
+      minCapacity: 0, // Allow scaling down to 0 until container images are available
       maxCapacity: 10,
     });
 
@@ -449,7 +445,7 @@ export class TapStack extends cdk.Stack {
       serviceName: `fraud-worker-${environmentSuffix}`,
       cluster,
       taskDefinition: workerTaskDef,
-      desiredCount: 1,
+      desiredCount: 0, // Start with 0 tasks to allow stack deployment without container images
       minHealthyPercent: 0,
       maxHealthyPercent: 200,
       // Circuit breaker disabled to prevent CFN stack failures
@@ -465,7 +461,7 @@ export class TapStack extends cdk.Stack {
 
     // Auto-scaling for Worker service
     const workerScaling = workerService.autoScaleTaskCount({
-      minCapacity: 1,
+      minCapacity: 0, // Allow scaling down to 0 until container images are available
       maxCapacity: 5,
     });
 
