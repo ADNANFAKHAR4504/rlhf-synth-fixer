@@ -357,16 +357,24 @@ Use `secrets` module for cryptographically secure generation:
 ```python
 import secrets
 import string
-db_password = ''.join(
-    secrets.choice(string.ascii_letters + string.digits + string.punctuation)
-    for _ in range(32)
-)
+# RDS doesn't allow: /, @, ", or space characters
+allowed_chars = string.ascii_letters + string.digits + '!#$%&()*+,-./:;<=>?[]^_{|}~'
+allowed_chars = allowed_chars.replace('/', '').replace('@', '').replace('"', '').replace(' ', '')
+db_password = ''.join(secrets.choice(allowed_chars) for _ in range(32))
 ```
 
 **Root Cause**:
-The model chose convenience over security. The `secrets` module is specifically designed for generating cryptographically strong random values suitable for passwords.
+The model chose convenience over security AND didn't validate password requirements. The `secrets` module is specifically designed for generating cryptographically strong random values, but RDS Aurora has specific character restrictions.
 
-**Training Value**: High - Security-critical operations like password generation must use cryptographically secure methods.
+**RDS Password Requirements**:
+- Must be 8-41 characters
+- Only printable ASCII characters allowed
+- **Cannot contain**: `/`, `@`, `"`, or space characters
+- Initial fix used `string.punctuation` which includes forbidden characters
+
+**Training Value**: High - Security-critical operations like password generation must:
+1. Use cryptographically secure methods (`secrets` not `random`)
+2. Validate against service-specific requirements (RDS character restrictions)
 
 ---
 

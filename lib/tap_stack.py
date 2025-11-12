@@ -296,12 +296,14 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Generate and store a random password
+        # RDS doesn't allow: /, @, ", or space characters
         import secrets
         import string
-        db_password = ''.join(
-            secrets.choice(string.ascii_letters + string.digits + string.punctuation)
-            for _ in range(32)
-        )
+        # Use alphanumeric plus safe special characters
+        allowed_chars = string.ascii_letters + string.digits + '!#$%&()*+,-./:;<=>?[]^_{|}~'
+        # Remove the forbidden characters: /, @, ", space
+        allowed_chars = allowed_chars.replace('/', '').replace('@', '').replace('"', '').replace(' ', '')
+        db_password = ''.join(secrets.choice(allowed_chars) for _ in range(32))
 
         db_password_version = aws.secretsmanager.SecretVersion(
             f"flask-api-db-password-version-{self.environment_suffix}",
