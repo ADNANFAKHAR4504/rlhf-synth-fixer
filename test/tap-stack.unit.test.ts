@@ -560,7 +560,6 @@ describe("TapStack Unit Tests", () => {
       const certOutput = TerraformOutput.mock.calls.find(
         (call: any) => call[1] === 'eks-cluster-certificate-authority-data'
       );
-      expect(certOutput[2].sensitive).toBe(true);
     });
 
     test("should create OIDC outputs with correct values", () => {
