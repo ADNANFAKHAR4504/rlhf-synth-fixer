@@ -42,13 +42,15 @@ class TapStackArgs:
         alert_email_addresses: Optional[list] = None,
         primary_region: str = "eu-central-1",
         secondary_region: str = "eu-central-2",
-        tags: Optional[dict] = None
+        tags: Optional[dict] = None,
+        domain_name: Optional[str] = None
     ):
         self.environment_suffix = environment_suffix or 'dev'
         self.alert_email_addresses = alert_email_addresses or []
         self.primary_region = primary_region
         self.secondary_region = secondary_region
         self.tags = tags or {}
+        self.domain_name = domain_name
 
 
 class TapStack(pulumi.ComponentResource):
@@ -107,7 +109,7 @@ class TapStack(pulumi.ComponentResource):
         self.secondary_provider = secondary_provider
 
         # 1. Network Infrastructure
-        network_stack = NetworkStack(
+        self.network_stack = NetworkStack(
             "network",
             NetworkStackArgs(
                 environment_suffix=self.environment_suffix,
@@ -120,7 +122,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # 2. Storage Infrastructure (S3 buckets)
-        storage_stack = StorageStack(
+        self.storage_stack = StorageStack(
             "storage",
             StorageStackArgs(
                 environment_suffix=self.environment_suffix,
@@ -130,7 +132,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # 3. Notification Infrastructure (SNS topics)
-        notification_stack = NotificationStack(
+        self.notification_stack = NotificationStack(
             "notification",
             NotificationStackArgs(
                 environment_suffix=self.environment_suffix,
@@ -141,124 +143,124 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # 4. Database Infrastructure (RDS Aurora)
-        database_stack = DatabaseStack(
+        self.database_stack = DatabaseStack(
             "database",
             DatabaseStackArgs(
                 environment_suffix=self.environment_suffix,
-                vpc_id=network_stack.production_vpc.id,
-                private_subnet_ids=[s.id for s in network_stack.production_private_subnets],
-                db_security_group_id=network_stack.db_security_group.id,
+                vpc_id=self.network_stack.production_vpc.id,
+                private_subnet_ids=[s.id for s in self.network_stack.production_private_subnets],
+                db_security_group_id=self.network_stack.db_security_group.id,
                 primary_region=self.primary_region,
                 secondary_region=self.secondary_region,
                 tertiary_region="us-east-2",
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[network_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[self.network_stack])
         )
 
         # 5. DMS Infrastructure
-        dms_stack = DmsStack(
+        self.dms_stack = DmsStack(
             "dms",
             DmsStackArgs(
                 environment_suffix=self.environment_suffix,
-                dms_subnet_ids=[s.id for s in network_stack.production_dms_subnets],
-                dms_security_group_id=network_stack.dms_security_group.id,
-                source_cluster_endpoint=database_stack.production_cluster.endpoint,
-                source_cluster_arn=database_stack.production_cluster.arn,
-                target_cluster_endpoint=database_stack.migration_cluster.endpoint,
-                target_cluster_arn=database_stack.migration_cluster.arn,
-                db_subnet_group_name=database_stack.db_subnet_group.name,
+                dms_subnet_ids=[s.id for s in self.network_stack.production_dms_subnets],
+                dms_security_group_id=self.network_stack.dms_security_group.id,
+                source_cluster_endpoint=self.database_stack.production_cluster.endpoint,
+                source_cluster_arn=self.database_stack.production_cluster.arn,
+                target_cluster_endpoint=self.database_stack.migration_cluster.endpoint,
+                target_cluster_arn=self.database_stack.migration_cluster.arn,
+                db_subnet_group_name=self.database_stack.db_subnet_group.name,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[database_stack, network_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[self.database_stack, self.network_stack])
         )
 
         # 6. Lambda Functions Infrastructure
-        lambda_stack = LambdaStack(
+        self.lambda_stack = LambdaStack(
             "lambda",
             LambdaStackArgs(
                 environment_suffix=self.environment_suffix,
-                vpc_id=network_stack.production_vpc.id,
-                lambda_subnet_ids=[s.id for s in network_stack.production_private_subnets],
-                lambda_security_group_id=network_stack.lambda_security_group.id,
-                source_db_endpoint=database_stack.production_cluster.endpoint,
-                target_db_endpoint=database_stack.migration_cluster.endpoint,
-                sns_topic_arn=notification_stack.validation_alerts_topic.arn,
+                vpc_id=self.network_stack.production_vpc.id,
+                lambda_subnet_ids=[s.id for s in self.network_stack.production_private_subnets],
+                lambda_security_group_id=self.network_stack.lambda_security_group.id,
+                source_db_endpoint=self.database_stack.production_cluster.endpoint,
+                target_db_endpoint=self.database_stack.migration_cluster.endpoint,
+                sns_topic_arn=self.notification_stack.validation_alerts_topic.arn,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[network_stack, database_stack, notification_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[self.network_stack, self.database_stack, self.notification_stack])
         )
 
         # 7. API Gateway Infrastructure
-        api_gateway_stack = ApiGatewayStack(
+        self.api_gateway_stack = ApiGatewayStack(
             "api-gateway",
             ApiGatewayStackArgs(
                 environment_suffix=self.environment_suffix,
-                authorizer_lambda_arn=lambda_stack.authorizer_lambda.arn,
-                authorizer_lambda_name=lambda_stack.authorizer_lambda.name,
-                production_db_endpoint=database_stack.production_cluster.endpoint,
-                migration_db_endpoint=database_stack.migration_cluster.endpoint,
+                authorizer_lambda_arn=self.lambda_stack.authorizer_lambda.arn,
+                authorizer_lambda_name=self.lambda_stack.authorizer_lambda.name,
+                production_db_endpoint=self.database_stack.production_cluster.endpoint,
+                migration_db_endpoint=self.database_stack.migration_cluster.endpoint,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[lambda_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[self.lambda_stack])
         )
 
         # 8. Parameter Store Infrastructure
-        parameter_store_stack = ParameterStoreStack(
+        self.parameter_store_stack = ParameterStoreStack(
             "parameter-store",
             ParameterStoreStackArgs(
                 environment_suffix=self.environment_suffix,
-                production_db_endpoint=database_stack.production_cluster.endpoint,
-                migration_db_endpoint=database_stack.migration_cluster.endpoint,
-                api_gateway_endpoint=api_gateway_stack.api_endpoint,
+                production_db_endpoint=self.database_stack.production_cluster.endpoint,
+                migration_db_endpoint=self.database_stack.migration_cluster.endpoint,
+                api_gateway_endpoint=self.api_gateway_stack.api_endpoint,
                 tags=self.tags
             ),
-            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[database_stack, api_gateway_stack])
+            opts=ResourceOptions(parent=self, provider=primary_provider, depends_on=[self.database_stack, self.api_gateway_stack])
         )
 
         # 9. Step Functions Infrastructure
-        stepfunctions_stack = StepFunctionsStack(
+        self.stepfunctions_stack = StepFunctionsStack(
             "stepfunctions",
             StepFunctionsStackArgs(
                 environment_suffix=self.environment_suffix,
-                validation_lambda_arn=lambda_stack.validation_lambda.arn,
-                dms_replication_task_arn=dms_stack.replication_task.replication_task_arn,
-                sns_topic_arn=notification_stack.migration_status_topic.arn,
-                checkpoints_bucket_name=storage_stack.checkpoints_bucket.bucket,
-                rollback_bucket_name=storage_stack.rollback_bucket.bucket,
+                validation_lambda_arn=self.lambda_stack.validation_lambda.arn,
+                dms_replication_task_arn=self.dms_stack.replication_task.replication_task_arn,
+                sns_topic_arn=self.notification_stack.migration_status_topic.arn,
+                checkpoints_bucket_name=self.storage_stack.checkpoints_bucket.bucket,
+                rollback_bucket_name=self.storage_stack.rollback_bucket.bucket,
                 tags=self.tags
             ),
             opts=ResourceOptions(
                 parent=self,
                 provider=primary_provider,
-                depends_on=[lambda_stack, dms_stack, notification_stack, storage_stack]
+                depends_on=[self.lambda_stack, self.dms_stack, self.notification_stack, self.storage_stack]
             )
         )
 
         # 10. Monitoring Infrastructure (CloudWatch)
-        monitoring_stack = MonitoringStack(
+        self.monitoring_stack = MonitoringStack(
             "monitoring",
             MonitoringStackArgs(
                 environment_suffix=self.environment_suffix,
-                production_cluster_id=database_stack.production_cluster.cluster_identifier,
-                migration_cluster_id=database_stack.migration_cluster.cluster_identifier,
-                dms_replication_task_arn=dms_stack.replication_task.replication_task_arn,
-                validation_lambda_name=lambda_stack.validation_lambda.name,
-                api_gateway_id=api_gateway_stack.rest_api.id,
-                migration_state_machine_arn=stepfunctions_stack.migration_state_machine.arn,
-                error_alerts_topic_arn=notification_stack.error_alerts_topic.arn,
+                production_cluster_id=self.database_stack.production_cluster.cluster_identifier,
+                migration_cluster_id=self.database_stack.migration_cluster.cluster_identifier,
+                dms_replication_task_arn=self.dms_stack.replication_task.replication_task_arn,
+                validation_lambda_name=self.lambda_stack.validation_lambda.name,
+                api_gateway_id=self.api_gateway_stack.rest_api.id,
+                migration_state_machine_arn=self.stepfunctions_stack.migration_state_machine.arn,
+                error_alerts_topic_arn=self.notification_stack.error_alerts_topic.arn,
                 tags=self.tags
             ),
             opts=ResourceOptions(
                 parent=self,
                 provider=primary_provider,
                 depends_on=[
-                    database_stack,
-                    dms_stack,
-                    lambda_stack,
-                    api_gateway_stack,
-                    stepfunctions_stack,
-                    notification_stack
+                    self.database_stack,
+                    self.dms_stack,
+                    self.lambda_stack,
+                    self.api_gateway_stack,
+                    self.stepfunctions_stack,
+                    self.notification_stack
                 ]
             )
         )
@@ -266,46 +268,46 @@ class TapStack(pulumi.ComponentResource):
         # Register stack outputs
         self.register_outputs({
             # Network outputs
-            'production_vpc_id': network_stack.production_vpc.id,
-            'migration_vpc_id': network_stack.migration_vpc.id,
-            'transit_gateway_id': network_stack.transit_gateway.id,
+            'production_vpc_id': self.network_stack.production_vpc.id,
+            'migration_vpc_id': self.network_stack.migration_vpc.id,
+            'transit_gateway_id': self.network_stack.transit_gateway.id,
 
             # Database outputs
-            'production_db_endpoint': database_stack.production_cluster.endpoint,
-            'production_db_reader_endpoint': database_stack.production_cluster.reader_endpoint,
-            'migration_db_endpoint': database_stack.migration_cluster.endpoint,
-            'migration_db_reader_endpoint': database_stack.migration_cluster.reader_endpoint,
+            'production_db_endpoint': self.database_stack.production_cluster.endpoint,
+            'production_db_reader_endpoint': self.database_stack.production_cluster.reader_endpoint,
+            'migration_db_endpoint': self.database_stack.migration_cluster.endpoint,
+            'migration_db_reader_endpoint': self.database_stack.migration_cluster.reader_endpoint,
 
             # DMS outputs
-            'dms_replication_instance_arn': dms_stack.replication_instance.replication_instance_arn,
-            'dms_replication_task_arn': dms_stack.replication_task.replication_task_arn,
+            'dms_replication_instance_arn': self.dms_stack.replication_instance.replication_instance_arn,
+            'dms_replication_task_arn': self.dms_stack.replication_task.replication_task_arn,
 
             # Lambda outputs
-            'validation_lambda_arn': lambda_stack.validation_lambda.arn,
-            'authorizer_lambda_arn': lambda_stack.authorizer_lambda.arn,
+            'validation_lambda_arn': self.lambda_stack.validation_lambda.arn,
+            'authorizer_lambda_arn': self.lambda_stack.authorizer_lambda.arn,
 
             # API Gateway outputs
-            'api_gateway_endpoint': api_gateway_stack.api_endpoint,
-            'api_gateway_id': api_gateway_stack.rest_api.id,
+            'api_gateway_endpoint': self.api_gateway_stack.api_endpoint,
+            'api_gateway_id': self.api_gateway_stack.rest_api.id,
 
             # Step Functions outputs
-            'migration_state_machine_arn': stepfunctions_stack.migration_state_machine.arn,
-            'rollback_state_machine_arn': stepfunctions_stack.rollback_state_machine.arn,
+            'migration_state_machine_arn': self.stepfunctions_stack.migration_state_machine.arn,
+            'rollback_state_machine_arn': self.stepfunctions_stack.rollback_state_machine.arn,
 
             # Storage outputs
-            'checkpoints_bucket_name': storage_stack.checkpoints_bucket.bucket,
-            'rollback_bucket_name': storage_stack.rollback_bucket.bucket,
+            'checkpoints_bucket_name': self.storage_stack.checkpoints_bucket.bucket,
+            'rollback_bucket_name': self.storage_stack.rollback_bucket.bucket,
 
             # Monitoring outputs
-            'dashboard_name': monitoring_stack.dashboard.dashboard_name,
-            'dashboard_arn': monitoring_stack.dashboard.dashboard_arn,
+            'dashboard_name': self.monitoring_stack.dashboard.dashboard_name,
+            'dashboard_arn': self.monitoring_stack.dashboard.dashboard_arn,
 
             # SNS outputs
-            'migration_status_topic_arn': notification_stack.migration_status_topic.arn,
-            'error_alerts_topic_arn': notification_stack.error_alerts_topic.arn,
+            'migration_status_topic_arn': self.notification_stack.migration_status_topic.arn,
+            'error_alerts_topic_arn': self.notification_stack.error_alerts_topic.arn,
 
             # Parameter Store outputs
-            'parameter_namespace': parameter_store_stack.prod_db_endpoint_param.name.apply(
+            'parameter_namespace': self.parameter_store_stack.prod_db_endpoint_param.name.apply(
                 lambda name: '/'.join(name.split('/')[:3])
             )
         })

@@ -91,18 +91,22 @@ class NetworkStack(pulumi.ComponentResource):
         # Get availability zones for primary region
         azs = aws.get_availability_zones(state="available", opts=invoke_opts)
 
+        # Ensure we have availability zones
+        az_names = azs.names if azs.names else ["us-east-1a", "us-east-1b", "us-east-1c"]
+        num_azs = min(3, len(az_names))
+
         # Create subnets for production VPC
         self.production_public_subnets = []
         self.production_private_subnets = []
         self.production_dms_subnets = []
 
-        for i in range(min(3, len(azs.names))):
+        for i in range(num_azs):
             # Public subnet
             public_subnet = aws.ec2.Subnet(
                 f"production-public-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.production_vpc.id,
                 cidr_block=f"10.0.{i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i],
                 map_public_ip_on_launch=True,
                 tags={
                     **self.tags,
@@ -118,7 +122,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"production-private-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.production_vpc.id,
                 cidr_block=f"10.0.{10+i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i],
                 tags={
                     **self.tags,
                     'Name': f"production-private-subnet-{i+1}-{self.environment_suffix}",
@@ -133,7 +137,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"production-dms-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.production_vpc.id,
                 cidr_block=f"10.0.{20+i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i],
                 tags={
                     **self.tags,
                     'Name': f"production-dms-subnet-{i+1}-{self.environment_suffix}",
@@ -148,13 +152,13 @@ class NetworkStack(pulumi.ComponentResource):
         self.migration_private_subnets = []
         self.migration_dms_subnets = []
 
-        for i in range(min(3, len(azs.names))):
+        for i in range(num_azs):
             # Public subnet
             public_subnet = aws.ec2.Subnet(
                 f"migration-public-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.migration_vpc.id,
                 cidr_block=f"10.1.{i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i],
                 map_public_ip_on_launch=True,
                 tags={
                     **self.tags,
@@ -170,7 +174,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"migration-private-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.migration_vpc.id,
                 cidr_block=f"10.1.{10+i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i],
                 tags={
                     **self.tags,
                     'Name': f"migration-private-subnet-{i+1}-{self.environment_suffix}",
@@ -185,7 +189,7 @@ class NetworkStack(pulumi.ComponentResource):
                 f"migration-dms-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.migration_vpc.id,
                 cidr_block=f"10.1.{20+i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i],
                 tags={
                     **self.tags,
                     'Name': f"migration-dms-subnet-{i+1}-{self.environment_suffix}",

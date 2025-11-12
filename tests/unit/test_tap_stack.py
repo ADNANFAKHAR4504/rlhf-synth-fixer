@@ -152,15 +152,15 @@ def test_tap_stack_has_all_components():
     def check(_):
         stack = _build_stack("components")
         assert hasattr(stack, "network_stack")
-        assert hasattr(stack, "aurora_stack")
-        assert hasattr(stack, "dynamodb_stack")
+        assert hasattr(stack, "database_stack")
         assert hasattr(stack, "storage_stack")
+        assert hasattr(stack, "notification_stack")
+        assert hasattr(stack, "dms_stack")
         assert hasattr(stack, "lambda_stack")
         assert hasattr(stack, "api_gateway_stack")
-        assert hasattr(stack, "route53_stack")
+        assert hasattr(stack, "parameter_store_stack")
+        assert hasattr(stack, "stepfunctions_stack")
         assert hasattr(stack, "monitoring_stack")
-        assert hasattr(stack, "synthetics_stack")
-        assert hasattr(stack, "failover_stack")
         return {"status": "all_components_present"}
 
     return pulumi.Output.all().apply(lambda _: check(None))
@@ -209,11 +209,11 @@ class TestTapStackOutputs(unittest.TestCase):
     def test_stack_has_required_outputs(self):
         def check(_):
             stack = _build_stack("outputs")
-            assert hasattr(stack.api_gateway_stack, "primary_api_endpoint")
-            assert hasattr(stack.api_gateway_stack, "secondary_api_endpoint")
-            assert hasattr(stack.aurora_stack, "primary_endpoint")
-            assert hasattr(stack.dynamodb_stack, "table_name")
-            assert hasattr(stack.s3_stack, "primary_bucket_name")
+            assert hasattr(stack.api_gateway_stack, "api_endpoint")
+            assert hasattr(stack.database_stack, "production_cluster")
+            assert hasattr(stack.database_stack, "migration_cluster")
+            assert hasattr(stack.storage_stack, "checkpoints_bucket")
+            assert hasattr(stack.storage_stack, "rollback_bucket")
             return {"status": "outputs_present"}
 
         return pulumi.Output.all().apply(lambda _: check(None))
