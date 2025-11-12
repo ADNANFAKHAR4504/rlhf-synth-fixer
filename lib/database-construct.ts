@@ -1,9 +1,7 @@
 import { Construct } from 'constructs';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
 import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
-import { DataAwsSecretsmanagerSecret } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret';
-import { DataAwsSecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/data-aws-secretsmanager-secret-version';
-import { Fn } from 'cdktf';
+import { TerraformVariable } from 'cdktf';
 
 export interface DatabaseConstructProps {
   environment: string;
@@ -41,21 +39,18 @@ export class DatabaseConstruct extends Construct {
       },
     });
 
-    // Fetch database credentials from Secrets Manager (existing secret)
-    const dbSecret = new DataAwsSecretsmanagerSecret(this, 'db-secret', {
-      name: `rds-credentials-${environment}`,
+    // Use Terraform variables for database credentials (set via TF_VAR_* environment variables)
+    const dbUsername = new TerraformVariable(this, 'db-username', {
+      type: 'string',
+      description: 'Database master username',
+      default: 'postgres',
     });
 
-    const dbSecretVersion = new DataAwsSecretsmanagerSecretVersion(
-      this,
-      'db-secret-version',
-      {
-        secretId: dbSecret.id,
-      }
-    );
-
-    // Parse credentials from secret using Terraform jsondecode function
-    const credentials = Fn.jsondecode(dbSecretVersion.secretString);
+    const dbPassword = new TerraformVariable(this, 'db-password', {
+      type: 'string',
+      description: 'Database master password',
+      sensitive: true,
+    });
 
     // Create RDS Instance
     this.instance = new DbInstance(this, 'instance', {
@@ -65,8 +60,8 @@ export class DatabaseConstruct extends Construct {
       instanceClass: instanceClass,
       allocatedStorage: allocatedStorage,
       dbName: 'myapp',
-      username: Fn.lookup(credentials, 'username', ''),
-      password: Fn.lookup(credentials, 'password', ''),
+      username: dbUsername.stringValue,
+      password: dbPassword.stringValue,
       dbSubnetGroupName: subnetGroup.name,
       vpcSecurityGroupIds: securityGroupIds,
       multiAz: true,
