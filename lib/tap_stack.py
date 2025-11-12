@@ -320,7 +320,7 @@ class PaymentEnvironment(ComponentResource):
             f"aurora-cluster-{self.environment_suffix}",
             cluster_identifier=f"payment-cluster-{self.environment_suffix.lower()}",
             engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-            engine_version="15.5",
+            engine_version="15.6",
             database_name="paymentdb",
             master_username="paymentadmin",
             master_password=self.db_secret_version.secret_string.apply(
@@ -344,7 +344,7 @@ class PaymentEnvironment(ComponentResource):
                 cluster_identifier=self.rds_cluster.id,
                 instance_class=self.instance_type,
                 engine=aws.rds.EngineType.AURORA_POSTGRESQL,
-                engine_version="15.5",
+                engine_version="15.6",
                 publicly_accessible=False,
                 tags=self.tags,
                 opts=ResourceOptions(parent=self)
@@ -462,10 +462,14 @@ def handler(event, context):
 
     def _create_s3_bucket(self):
         """Create S3 bucket with lifecycle policies for transaction logs."""
+        import random
+        import string
+        # Generate a random suffix to ensure bucket name uniqueness
+        random_suffix = ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
         # Create S3 bucket
         self.s3_bucket = aws.s3.Bucket(
             f"transaction-logs-{self.environment_suffix}",
-            bucket=f"payment-transaction-logs-{self.environment_suffix.lower()}",
+            bucket=f"payment-transaction-logs-{self.environment_suffix.lower()}-{random_suffix}",
             tags=self.tags,
             opts=ResourceOptions(parent=self)
         )
