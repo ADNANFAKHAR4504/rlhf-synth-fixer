@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
 export interface ComputeStackArgs {
-  environmentSuffix: pulumi.Input<string>;
+  environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   primaryVpcId: pulumi.Output<string>;
   drVpcId: pulumi.Output<string>;
@@ -45,9 +45,9 @@ export class ComputeStack extends pulumi.ComponentResource {
     } = args;
 
     // Skip HTTPS for test/PR environments to avoid ACM certificate validation timeouts
-    const enableHttps = pulumi.output(environmentSuffix).apply(suffix =>
-      !suffix.toLowerCase().startsWith('pr')
-    );
+    const enableHttps = pulumi
+      .output(environmentSuffix)
+      .apply(suffix => !suffix.toLowerCase().startsWith('pr'));
 
     // Get latest Amazon Linux 2 AMI for primary region
     const primaryAmi = aws.ec2.getAmi(
