@@ -300,7 +300,7 @@ void new aws.iam.RolePolicy(
   `payment-ecs-exec-custom-policy-${environmentSuffix}`,
   {
     role: ecsTaskExecutionRole.id,
-    policy: region.apply((r) =>
+    policy: region.apply(r =>
       JSON.stringify({
         Version: '2012-10-17',
         Statement: [
