@@ -317,13 +317,13 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // VPC Endpoints for S3
+    // VPC Endpoints for S3 - FIXED
     new aws.ec2.VpcEndpoint(
       `blue-s3-endpoint-${environmentSuffix}`,
       {
         vpcId: blueVpc.id,
         serviceName: `com.amazonaws.${region}.s3`,
-        vpcEndpointType: 'Gateway',
+        routeTableIds: [bluePublicRouteTable.id],
         tags: {
           Name: `blue-s3-endpoint-${environmentSuffix}`,
           Environment: 'blue',
@@ -337,7 +337,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: greenVpc.id,
         serviceName: `com.amazonaws.${region}.s3`,
-        vpcEndpointType: 'Gateway',
+        routeTableIds: [greenPublicRouteTable.id],
         tags: {
           Name: `green-s3-endpoint-${environmentSuffix}`,
           Environment: 'green',
@@ -346,13 +346,13 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // VPC Endpoints for DynamoDB
+    // VPC Endpoints for DynamoDB - FIXED
     new aws.ec2.VpcEndpoint(
       `blue-dynamodb-endpoint-${environmentSuffix}`,
       {
         vpcId: blueVpc.id,
         serviceName: `com.amazonaws.${region}.dynamodb`,
-        vpcEndpointType: 'Gateway',
+        routeTableIds: [bluePublicRouteTable.id],
         tags: {
           Name: `blue-dynamodb-endpoint-${environmentSuffix}`,
           Environment: 'blue',
@@ -366,7 +366,7 @@ export class TapStack extends pulumi.ComponentResource {
       {
         vpcId: greenVpc.id,
         serviceName: `com.amazonaws.${region}.dynamodb`,
-        vpcEndpointType: 'Gateway',
+        routeTableIds: [greenPublicRouteTable.id],
         tags: {
           Name: `green-dynamodb-endpoint-${environmentSuffix}`,
           Environment: 'green',
@@ -2111,23 +2111,22 @@ export class TapStack extends pulumi.ComponentResource {
 exports.handler = async (event) => {
   console.log('Starting data migration from blue to green');
   console.log('Event:', JSON.stringify(event, null, 2));
-
+  
   // Implement incremental data sync logic here
   // This is a placeholder implementation
-
   try {
     // Connect to blue database
     console.log('Connecting to blue database...');
-
+    
     // Fetch incremental changes
     console.log('Fetching incremental changes...');
-
+    
     // Transform and sync to green database
     console.log('Syncing data to green database...');
-
+    
     // Log migration status to CloudWatch
     console.log('Migration batch completed successfully');
-
+    
     return {
       statusCode: 200,
       body: JSON.stringify({
