@@ -91,14 +91,18 @@ describe('TapStack Structure', () => {
       expect(stack.vpcId).toBeInstanceOf(pulumi.Output);
     });
 
-    it('ECS cluster name includes environment suffix pattern', async () => {
-      const value = await pulumi.output(stack.ecsClusterName).apply((v: string) => v);
-      expect(value).toMatch(/payment-cluster/);
+    it('ECS cluster name includes environment suffix pattern', (done) => {
+      stack.ecsClusterName.apply((v: string) => {
+        expect(v).toMatch(/payment-cluster/);
+        done();
+      });
     });
 
-    it('ECS service name includes environment suffix pattern', async () => {
-      const value = await pulumi.output(stack.ecsServiceName).apply((v: string) => v);
-      expect(value).toMatch(/payment-service/);
+    it('ECS service name includes environment suffix pattern', (done) => {
+      stack.ecsServiceName.apply((v: string) => {
+        expect(v).toMatch(/payment-service/);
+        done();
+      });
     });
 
     it('RDS cluster endpoint is defined', async () => {
@@ -113,12 +117,14 @@ describe('TapStack Structure', () => {
       expect(stack.rdsClusterReadEndpoint).toBeInstanceOf(pulumi.Output);
     });
 
-    it('flow logs bucket name includes flowlogs', async () => {
-      const value = await pulumi.output(stack.flowLogsBucketName).apply((v: string) => v);
-      expect(value).toBeTruthy();
-      if (value) {
-        expect(value).toContain('flowlogs');
-      }
+    it('flow logs bucket name includes flowlogs', (done) => {
+      stack.flowLogsBucketName.apply((v: string) => {
+        expect(v).toBeTruthy();
+        if (v) {
+          expect(v).toContain('flowlogs');
+        }
+        done();
+      });
     });
 
     it('RDS password secret is defined', async () => {
@@ -132,19 +138,21 @@ describe('TapStack Structure', () => {
       stack = new TapStack('TestTapStackNaming');
     });
 
-    it('uses consistent payment prefix for resources', async () => {
-      const clusterName = await pulumi.output(stack.ecsClusterName).apply((v: string) => v);
-      const serviceName = await pulumi.output(stack.ecsServiceName).apply((v: string) => v);
-      const bucketName = await pulumi.output(stack.flowLogsBucketName).apply((v: string) => v);
-
-      expect(clusterName).toContain('payment');
-      expect(serviceName).toContain('payment');
-      expect(bucketName).toContain('payment');
+    it('uses consistent payment prefix for resources', (done) => {
+      pulumi.all([stack.ecsClusterName, stack.ecsServiceName, stack.flowLogsBucketName])
+        .apply(([clusterName, serviceName, bucketName]) => {
+          expect(clusterName).toContain('payment');
+          expect(serviceName).toContain('payment');
+          expect(bucketName).toContain('payment');
+          done();
+        });
     });
 
-    it('includes region in bucket names', async () => {
-      const bucketName = await pulumi.output(stack.flowLogsBucketName).apply((v: string) => v);
-      expect(bucketName).toContain('ap-southeast-1');
+    it('includes region in bucket names', (done) => {
+      stack.flowLogsBucketName.apply((bucketName: string) => {
+        expect(bucketName).toContain('ap-southeast-1');
+        done();
+      });
     });
   });
 
