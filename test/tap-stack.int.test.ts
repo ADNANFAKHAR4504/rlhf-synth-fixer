@@ -42,32 +42,51 @@ import {
 
 /* ---------------------------- Outputs loader ---------------------------- */
 
-const p = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
-if (!fs.existsSync(p)) {
-  throw new Error(`Expected outputs file at ${p} — create it before running integration tests.`);
+type OutputItem = { OutputKey: string; OutputValue: string };
+type OutputsFileShape = Record<string, OutputItem[]> | OutputItem[];
+
+const outputsPath = path.resolve(process.cwd(), "cfn-outputs/all-outputs.json");
+if (!fs.existsSync(outputsPath)) {
+  throw new Error(`Expected outputs file at ${outputsPath} — create it before running integration tests.`);
 }
-const raw = JSON.parse(fs.readFileSync(p, "utf8"));
-// Support common CI shapes: { "<StackName>": [{OutputKey,OutputValue}...] } OR flat array.
-const firstKey = Array.isArray(raw) ? null : Object.keys(raw)[0];
-const outputsArr: { OutputKey: string; OutputValue: string }[] = Array.isArray(raw)
-  ? raw
-  : raw[firstKey];
+
+const rawJson = fs.readFileSync(outputsPath, "utf8");
+const raw: OutputsFileShape = JSON.parse(rawJson);
+
+// Normalize to array of OutputItem
+let outputsArr: OutputItem[] = [];
+if (Array.isArray(raw)) {
+  outputsArr = raw as OutputItem[];
+} else {
+  const keys = Object.keys(raw as Record<string, OutputItem[]>);
+  if (keys.length === 0) {
+    throw new Error("cfn-outputs/all-outputs.json has no stack keys.");
+  }
+  const firstKey = keys[0];
+  const bucket = (raw as Record<string, OutputItem[]>)[firstKey];
+  if (!Array.isArray(bucket)) {
+    throw new Error(`Unexpected outputs shape for key ${firstKey}.`);
+  }
+  outputsArr = bucket;
+}
+
 const outputs: Record<string, string> = {};
-for (const o of outputsArr) outputs[o.OutputKey] = o.OutputValue;
+for (const o of outputsArr) {
+  if (o && typeof o.OutputKey === "string") {
+    outputs[o.OutputKey] = String(o.OutputValue ?? "");
+  }
+}
 
 /* ------------------------------- Helpers -------------------------------- */
 
 function getRegionFromBucketName(name?: string): string | null {
   if (!name) return null;
-  // format: fin-docs-<acct>-<region>-<suffix>
-  const parts = name.split("-");
-  // Try to find an AWS region pattern like xx-yyy-n
+  // Format: fin-docs-<acct>-<region>-<suffix>
   const m = name.match(/[a-z]{2}-[a-z-]+-\d/);
-  return m ? m[0] : (parts.length >= 5 ? `${parts[2]}-${parts[3]}-${parts[4]}` : null);
+  return m ? m[0] : null;
 }
 
 function deducePrimaryRegion(): string {
-  // Use the stack's reported deployment region if present; else parse from bucket name
   const fromOutput = outputs.DeploymentRegion || outputs.Region || "";
   const m = String(fromOutput).match(/[a-z]{2}-[a-z-]+-\d/);
   if (m) return m[0];
@@ -76,18 +95,18 @@ function deducePrimaryRegion(): string {
 }
 
 function deduceSecondaryRegion(): string {
-  const fromName = getRegionFromBucketName(outputs.SecondaryBucketName);
-  return fromName || "us-west-2";
+  const fromBucket = getRegionFromBucketName(outputs.SecondaryBucketName);
+  return fromBucket || "us-west-2";
 }
 
 function arnToRoleName(arn: string): string {
   // arn:aws:iam::<acct>:role/Name
-  const ix = arn.indexOf("/"); 
+  const ix = arn.indexOf("/");
   return ix > -1 ? arn.slice(ix + 1) : arn;
 }
 
 async function retry<T>(fn: () => Promise<T>, attempts = 4, baseMs = 1000): Promise<T> {
-  let last: any;
+  let last: unknown;
   for (let i = 0; i < attempts; i++) {
     try {
       return await fn();
@@ -99,8 +118,8 @@ async function retry<T>(fn: () => Promise<T>, attempts = 4, baseMs = 1000): Prom
   throw last;
 }
 
-function isAccessDenied(e: any): boolean {
-  const msg = String(e?.message || e);
+function isAccessDenied(e: unknown): boolean {
+  const msg = String((e as any)?.message ?? e);
   return /AccessDenied|Forbidden|NotAuthorized|AuthorizationError/i.test(msg);
 }
 
@@ -123,10 +142,10 @@ const iam = new IAMClient({ region: primaryRegion });
 const cwPrimary = new CloudWatchClient({ region: primaryRegion });
 const sns = new SNSClient({ region: primaryRegion });
 
-/* ------------------------------- Sanity --------------------------------- */
+/* ------------------------------- Tests ---------------------------------- */
 
 describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)", () => {
-  jest.setTimeout(10 * 60 * 1000); // 10 minutes for the full suite
+  jest.setTimeout(10 * 60 * 1000); // 10 minutes
 
   it("01) Outputs: required keys exist and look sane", () => {
     const required = [
@@ -194,31 +213,27 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(hasNoncurrent).toBe(true);
   });
 
-  it("08) S3 (primary): Replication rule exists OR is gracefully absent if this stack is secondary", async () => {
+  it("08) S3 (primary): Replication rule exists OR gracefully absent if this stack is secondary", async () => {
     try {
       const rep = await retry(() => s3Primary.send(new GetBucketReplicationCommand({ Bucket: outputs.PrimaryBucketName })));
       const rules = rep.ReplicationConfiguration?.Rules || [];
       expect(rules.length).toBeGreaterThan(0);
-      // destination bucket should match our secondary
       const destArns = rules.map(r => r.Destination?.Bucket).filter(Boolean);
       const expectedDest = `arn:aws:s3:::${outputs.SecondaryBucketName}`;
       expect(destArns).toContain(expectedDest);
     } catch (e) {
-      // If replication is not found here, assert it's because this deployment is not primary
       expect(/ReplicationConfigurationNotFoundError|NoSuchReplicationConfiguration/i.test(String(e))).toBe(true);
     }
   });
 
-  it("09) S3 (primary): Bucket policy enforces TLS and VPCe restriction (policy fetch allowed)", async () => {
+  it("09) S3 (primary): Bucket policy enforces TLS and VPCe restriction (policy fetch allowed or AccessDenied)", async () => {
     try {
       const pol = await retry(() => s3Primary.send(new GetBucketPolicyCommand({ Bucket: outputs.PrimaryBucketName })));
       const doc = JSON.parse(pol.Policy as string);
       const j = JSON.stringify(doc);
       expect(j.includes('"aws:SecureTransport":false')).toBe(true);
-      // aws:SourceVpce condition must exist somewhere
       expect(/aws:SourceVpce/.test(j)).toBe(true);
     } catch (e) {
-      // If the caller lacks GetBucketPolicy permission, still confirm bucket exists (already done) and pass
       expect(isAccessDenied(e)).toBe(true);
     }
   });
@@ -258,7 +273,6 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
   it("15) KMS (primary): Key policy accessible OR gracefully AccessDenied (non-fatal)", async () => {
     try {
       const pol = await retry(() => kmsPrimary.send(new GetKeyPolicyCommand({ KeyId: outputs.PrimaryKmsKeyArn, PolicyName: "default" })));
-      // basic structure check
       expect(typeof pol.Policy).toBe("string");
       expect((pol.Policy as string).length).toBeGreaterThan(10);
     } catch (e) {
@@ -274,27 +288,24 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(role.Role?.Arn).toBe(outputs.ReplicationRoleArn);
     const inline = await retry(() => iam.send(new ListRolePoliciesCommand({ RoleName: roleName })));
     expect((inline.PolicyNames || []).length).toBeGreaterThanOrEqual(1);
-    // one inline policy should start with s3-replication-policy-
     const hasPrefix = (inline.PolicyNames || []).some(n => /^s3-replication-policy-/.test(n));
     expect(hasPrefix).toBe(true);
   });
 
   /* ---------------------------- CloudWatch / SNS ------------------------ */
 
-  it("17) CloudWatch: RTC metrics namespace query executes; ReplicationLatency metric exists or not (both valid early after deploy)", async () => {
+  it("17) CloudWatch: ReplicationLatency metric query executes (may be empty immediately after deploy)", async () => {
     const metrics = await retry(() => cwPrimary.send(new ListMetricsCommand({
       Namespace: "AWS/S3",
       MetricName: "ReplicationLatency",
       Dimensions: [{ Name: "BucketName", Value: outputs.PrimaryBucketName }],
     })));
-    // It is acceptable for metrics to be empty immediately after creation; we validate the call succeeds.
     expect(Array.isArray(metrics.Metrics) || !metrics.Metrics).toBe(true);
   });
 
-  it("18) CloudWatch: Alarms API reachable; if monitoring enabled in this stack, find our replication alarms", async () => {
+  it("18) CloudWatch: Find replication alarms when monitoring enabled", async () => {
     const resp = await retry(() => cwPrimary.send(new DescribeAlarmsCommand({})));
     expect(Array.isArray(resp.MetricAlarms)).toBe(true);
-    // If SNS topic output exists, monitoring is enabled → expect at least one S3 replication alarm in this account/region
     const monitoringEnabled = !!outputs.SnsTopicArn;
     if (monitoringEnabled) {
       const found = (resp.MetricAlarms || []).some(a =>
@@ -303,7 +314,6 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
       );
       expect(found).toBe(true);
     } else {
-      // No requirement if monitoring disabled
       expect(true).toBe(true);
     }
   });
@@ -312,7 +322,6 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     const url = outputs.MonitoringDashboardUrl || "";
     const m = url.match(/name=([^&]+)/);
     if (!m) {
-      // If no dashboard URL output (monitoring disabled), pass
       expect(true).toBe(true);
       return;
     }
@@ -327,7 +336,6 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
       return;
     }
     const t = await retry(() => sns.send(new GetTopicAttributesCommand({ TopicArn: outputs.SnsTopicArn })));
-    // Confirm basic attributes exist
     expect(typeof t.Attributes?.SubscriptionsConfirmed !== "undefined").toBe(true);
   });
 
@@ -335,14 +343,12 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
 
   it("21) S3 (primary): Names include Environment suffix pattern", () => {
     const name = outputs.PrimaryBucketName;
-    // ensure final component exists (suffix) and matches safe pattern
-    const segs = name.split("-");
+    const segs = (name || "").split("-");
     const suffix = segs[segs.length - 1];
     expect(/^[a-z0-9-]{2,20}$/.test(suffix)).toBe(true);
   });
 
-  it("22) S3 (primary): Replication RTC thresholds (EventThreshold + ReplicationTime) reflected in metrics listing eventually (non-fatal if absent yet)", async () => {
-    // This validates the ListMetrics call for both metrics names; presence is eventual.
+  it("22) S3 (primary): RTC-related metrics endpoints are callable", async () => {
     const [m1, m2] = await Promise.all([
       retry(() => cwPrimary.send(new ListMetricsCommand({
         Namespace: "AWS/S3",
@@ -378,7 +384,7 @@ describe("TapStack — Live Integration Tests (S3 DR, KMS, IAM, CloudWatch, SNS)
     expect(hasKms2).toBe(true);
   });
 
-  it("25) S3 (primary): GetBucketReplication either returns rule with destination matching SecondaryBucketName or is NotFound when this stack is secondary", async () => {
+  it("25) S3 (primary): GetBucketReplication returns destination matching SecondaryBucketName or NotFound if this is secondary", async () => {
     try {
       const rep = await retry(() => s3Primary.send(new GetBucketReplicationCommand({ Bucket: outputs.PrimaryBucketName })));
       const rules = rep.ReplicationConfiguration?.Rules || [];
