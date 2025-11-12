@@ -702,7 +702,6 @@ Resources:
   AuthorizerLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-authorizer-lambda-role-${EnvironmentName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
