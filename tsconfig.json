@@ -25,5 +25,16 @@
     "esModuleInterop": true,
     "outDir": "dist"
   },
-  "exclude": ["node_modules", "cdk.out", "templates", "archive", "worktree", "**/*.d.ts", "test/**/*"]
+  "exclude": [
+    "node_modules",
+    "cdk.out",
+    "templates",
+    "archive",
+    "subcategory-references",
+    "worktree",
+    "test",
+    "tests",
+    "**/*.d.ts"
+  ],
+  "include": ["index.ts", "lib/**/*.ts", "bin/**/*.ts", "cli/**/*.ts"]
 }
