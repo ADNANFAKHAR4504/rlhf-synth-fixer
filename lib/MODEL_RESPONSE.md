@@ -195,7 +195,7 @@ The model must configure enterprise-grade load balancing:
 The model must include scalable compute resources:
 
 **Launch Template**:
-- AMI: Latest Amazon Linux 2
+- AMI: Dynamic lookup using data.aws_ami.amazon_linux_2.id
 - Instance Type: t3.micro (cost-effective)
 - Security Groups: Application security group
 - IAM Instance Profile: Application role
@@ -329,6 +329,29 @@ data "aws_region" "current" {}
 ```hcl
 data "aws_availability_zones" "available" {
   state = "available"
+}
+```
+
+**Latest Amazon Linux 2 AMI**:
+```hcl
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+  
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+  
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+  
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
 }
 ```
 

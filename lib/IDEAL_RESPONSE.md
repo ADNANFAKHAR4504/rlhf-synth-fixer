@@ -19,6 +19,27 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Data source for latest Amazon Linux 2 AMI
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+  
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+  
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+  
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 # Random suffix for unique resource naming
 resource "random_id" "suffix" {
   byte_length = 4
@@ -1116,7 +1137,7 @@ resource "aws_lb_listener" "http" {
 # Launch Template for Auto Scaling Group
 resource "aws_launch_template" "app" {
   name_prefix   = "app-template-${random_id.suffix.hex}"
-  image_id      = "ami-0abcdef1234567890" # Amazon Linux 2 AMI
+  image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
 
   vpc_security_group_ids = [aws_security_group.app.id]
@@ -1447,7 +1468,7 @@ resource "aws_iam_role_policy" "app_logs_access" {
           "logs:DescribeLogStreams"
         ]
         Resource = [
-          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/application/*"
+          "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/application/*"
         ]
       }
     ]
@@ -1472,14 +1493,14 @@ output "vpc_id" {
   description = "ID of the VPC"
 }
 
-output "public_subnet_ids" {
-  value       = [aws_subnet.public_1.id, aws_subnet.public_2.id]
-  description = "IDs of the public subnets"
+output "alb_dns_name" {
+  value       = aws_lb.main.dns_name
+  description = "DNS name of the Application Load Balancer"
 }
 
-output "private_subnet_ids" {
-  value       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
-  description = "IDs of the private subnets"
+output "central_logs_bucket" {
+  value       = aws_s3_bucket.logs.id
+  description = "Name of the central logging S3 bucket"
 }
 
 output "rds_endpoint" {
@@ -1488,9 +1509,54 @@ output "rds_endpoint" {
   sensitive   = true
 }
 
+output "secret_arn" {
+  value       = aws_secretsmanager_secret.rds.arn
+  description = "ARN of the Secrets Manager secret for RDS credentials"
+}
+
+output "ec2_asg_name" {
+  value       = aws_autoscaling_group.main.name
+  description = "Name of the Auto Scaling Group for application instances"
+}
+
+output "sns_topic_arn" {
+  value       = aws_sns_topic.alerts.arn
+  description = "ARN of the SNS topic for monitoring alerts and notifications"
+}
+
+output "cloudwatch_log_group_ec2" {
+  value       = aws_cloudwatch_log_group.ec2.name
+  description = "Name of the CloudWatch log group for EC2 instances"
+}
+
+output "cloudwatch_log_group_rds" {
+  value       = aws_cloudwatch_log_group.rds.name
+  description = "Name of the CloudWatch log group for RDS database logs"
+}
+
+output "kms_key_id" {
+  value       = aws_kms_key.main.key_id
+  description = "ID of the main KMS key used for encryption"
+}
+
+output "kms_key_arn" {
+  value       = aws_kms_key.main.arn
+  description = "ARN of the main KMS key used for encryption"
+}
+
+output "db_secret_arn" {
+  value       = aws_secretsmanager_secret.rds.arn
+  description = "ARN of the database secrets in AWS Secrets Manager"
+}
+
+output "db_secret_name" {
+  value       = aws_secretsmanager_secret.rds.name
+  description = "Name of the database secret in AWS Secrets Manager"
+}
+
 output "rds_instance_id" {
   value       = aws_db_instance.main.id
-  description = "RDS instance ID"
+  description = "ID of the RDS database instance"
 }
 
 output "s3_bucket_name" {
@@ -1503,59 +1569,14 @@ output "s3_bucket_arn" {
   description = "ARN of the central logging S3 bucket"
 }
 
-output "kms_key_id" {
-  value       = aws_kms_key.main.key_id
-  description = "ID of the main KMS key"
+output "public_subnet_ids" {
+  value       = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+  description = "IDs of the public subnets"
 }
 
-output "kms_key_arn" {
-  value       = aws_kms_key.main.arn
-  description = "ARN of the main KMS key"
-}
-
-output "db_secret_arn" {
-  value       = aws_secretsmanager_secret.rds.arn
-  description = "ARN of the Secrets Manager secret for RDS credentials"
-}
-
-output "db_secret_name" {
-  value       = aws_secretsmanager_secret.rds.name
-  description = "Name of the Secrets Manager secret for RDS credentials"
-}
-
-output "cloudwatch_log_group_rds" {
-  value       = aws_cloudwatch_log_group.rds.name
-  description = "Name of the CloudWatch log group for RDS"
-}
-
-output "cloudwatch_log_group_ec2" {
-  value       = aws_cloudwatch_log_group.ec2.name
-  description = "Name of the CloudWatch log group for EC2"
-}
-
-output "sns_topic_arn" {
-  value       = aws_sns_topic.alerts.arn
-  description = "ARN of the SNS topic for alerts"
-}
-
-output "ec2_asg_name" {
-  value       = aws_autoscaling_group.main.name
-  description = "Name of the Auto Scaling Group"
-}
-
-output "alb_dns_name" {
-  value       = aws_lb.main.dns_name
-  description = "DNS name of the Application Load Balancer"
-}
-
-output "central_logs_bucket" {
-  value       = aws_s3_bucket.logs.id
-  description = "Name of the central logging S3 bucket"
-}
-
-output "secret_arn" {
-  value       = aws_secretsmanager_secret.rds.arn
-  description = "ARN of the Secrets Manager secret for RDS credentials"
+output "private_subnet_ids" {
+  value       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  description = "IDs of the private subnets"
 }
 ```
 

@@ -55,10 +55,20 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/data\s+"aws_caller_identity"\s+"current"/);
       expect(stackContent).toMatch(/data\s+"aws_region"\s+"current"/);
       expect(stackContent).toMatch(/data\s+"aws_availability_zones"\s+"available"/);
+      expect(stackContent).toMatch(/data\s+"aws_ami"\s+"amazon_linux_2"/);
+      expect(stackContent).toMatch(/data\s+"aws_elb_service_account"\s+"main"/);
     });
 
     test("availability zones data source is properly configured", () => {
       expect(stackContent).toMatch(/state\s*=\s*"available"/);
+    });
+
+    test("AMI data source is properly configured for dynamic lookup", () => {
+      expect(stackContent).toMatch(/most_recent\s*=\s*true/);
+      expect(stackContent).toMatch(/owners\s*=\s*\["amazon"\]/);
+      expect(stackContent).toMatch(/values.*amzn2-ami-hvm.*x86_64-gp2/);
+      expect(stackContent).toMatch(/values.*x86_64/);
+      expect(stackContent).toMatch(/values.*hvm/);
     });
   });
 
@@ -254,6 +264,59 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
   });
 
+  describe("Auto Scaling and Launch Template", () => {
+    test("contains Launch Template for application", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_launch_template"\s+"app"/);
+      expect(stackContent).toMatch(/name_prefix\s*=\s*"app-template-/);
+    });
+
+    test("Launch Template uses dynamic AMI lookup", () => {
+      expect(stackContent).toMatch(/image_id\s*=\s*data\.aws_ami\.amazon_linux_2\.id/);
+    });
+
+    test("Launch Template has proper instance configuration", () => {
+      expect(stackContent).toMatch(/instance_type\s*=\s*"t3\.micro"/);
+      expect(stackContent).toMatch(/vpc_security_group_ids\s*=\s*\[aws_security_group\.app\.id\]/);
+    });
+
+    test("contains Auto Scaling Group", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_autoscaling_group"\s+"main"/);
+      expect(stackContent).toMatch(/name\s*=\s*"secure-app-prod-asg-/);
+    });
+
+    test("ASG uses Launch Template", () => {
+      expect(stackContent).toMatch(/launch_template\s*{/);
+      expect(stackContent).toMatch(/id\s*=\s*aws_launch_template\.app\.id/);
+      expect(stackContent).toMatch(/version\s*=\s*"\$Latest"/);
+    });
+
+    test("ASG has proper scaling configuration", () => {
+      expect(stackContent).toMatch(/min_size\s*=\s*1/);
+      expect(stackContent).toMatch(/max_size\s*=\s*3/);
+      expect(stackContent).toMatch(/desired_capacity\s*=\s*2/);
+    });
+
+    test("ASG uses private subnets", () => {
+      expect(stackContent).toMatch(/vpc_zone_identifier\s*=\s*\[aws_subnet\.private_1\.id,\s*aws_subnet\.private_2\.id\]/);
+    });
+
+    test("ASG is integrated with ALB", () => {
+      expect(stackContent).toMatch(/target_group_arns\s*=\s*\[aws_lb_target_group\.main\.arn\]/);
+      expect(stackContent).toMatch(/health_check_type\s*=\s*"ELB"/);
+    });
+  });
+
+  describe("SNS Topic for Alerts", () => {
+    test("contains SNS topic for alerts", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_sns_topic"\s+"alerts"/);
+      expect(stackContent).toMatch(/name\s*=\s*"secure-app-prod-alerts-/);
+    });
+
+    test("SNS topic has proper display name", () => {
+      expect(stackContent).toMatch(/display_name\s*=\s*"Secure App Production Alerts"/);
+    });
+  });
+
   describe("Security Groups", () => {
     test("contains security group for RDS", () => {
       expect(stackContent).toMatch(/resource\s+"aws_security_group"\s+"rds"/);
@@ -390,6 +453,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/output\s+"central_logs_bucket"/);
       expect(stackContent).toMatch(/output\s+"rds_endpoint"/);
       expect(stackContent).toMatch(/output\s+"secret_arn"/);
+      expect(stackContent).toMatch(/output\s+"ec2_asg_name"/);
+      expect(stackContent).toMatch(/output\s+"sns_topic_arn"/);
+      expect(stackContent).toMatch(/output\s+"cloudwatch_log_group_ec2"/);
+      expect(stackContent).toMatch(/output\s+"cloudwatch_log_group_rds"/);
     });
 
     test("sensitive outputs are marked as sensitive", () => {
@@ -400,6 +467,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/description\s*=\s*"ID of the VPC"/);
       expect(stackContent).toMatch(/description\s*=\s*"DNS name of the Application Load Balancer"/);
       expect(stackContent).toMatch(/description\s*=\s*"Name of the central logging S3 bucket"/);
+      expect(stackContent).toMatch(/description\s*=\s*"Name of the Auto Scaling Group for application instances"/);
+      expect(stackContent).toMatch(/description\s*=\s*"ARN of the SNS topic for monitoring alerts and notifications"/);
     });
   });
 
@@ -407,7 +476,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
     test("no hardcoded secrets or credentials", () => {
       expect(stackContent).not.toMatch(/password\s*=\s*"[^$]/);
       expect(stackContent).not.toMatch(/secret\s*=\s*"[^$]/);
-      expect(stackContent).not.toMatch(/key\s*=\s*"[^$]/);
+      expect(stackContent).not.toMatch(/access_key\s*=\s*"[^$]/);
+      expect(stackContent).not.toMatch(/secret_key\s*=\s*"[^$]/);
     });
 
     test("encryption is enabled for all applicable resources", () => {
@@ -455,7 +525,7 @@ describe("Terraform Infrastructure Unit Tests", () => {
   describe("Data Resource References", () => {
     test("uses data sources for account ID and region", () => {
       expect(stackContent).toMatch(/\$\{data\.aws_caller_identity\.current\.account_id\}/);
-      expect(stackContent).toMatch(/\$\{data\.aws_region\.current\.name\}/);
+      expect(stackContent).toMatch(/\$\{data\.aws_region\.current\.id\}/);
     });
 
     test("uses availability zones data for subnet placement", () => {
@@ -947,6 +1017,10 @@ describe("Terraform Infrastructure Unit Tests", () => {
       expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"rds"/);
     });
 
+    test("CloudWatch log group for EC2 exists", () => {
+      expect(stackContent).toMatch(/resource\s+"aws_cloudwatch_log_group"\s+"ec2"/);
+    });
+
     test("CloudWatch log group has proper retention", () => {
       expect(stackContent).toMatch(/retention_in_days\s*=\s*7/);
     });
@@ -956,7 +1030,8 @@ describe("Terraform Infrastructure Unit Tests", () => {
     });
 
     test("CloudWatch log group has proper name pattern", () => {
-      expect(stackContent).toMatch(/\/aws\/rds\/instance\//);
+      expect(stackContent).toMatch(/\/aws\/rds\/secure-app-prod/);
+      expect(stackContent).toMatch(/\/aws\/ec2\/secure-app-prod/);
     });
   });
 

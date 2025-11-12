@@ -14,6 +14,27 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# Data source for latest Amazon Linux 2 AMI
+data "aws_ami" "amazon_linux_2" {
+  most_recent = true
+  owners      = ["amazon"]
+
+  filter {
+    name   = "name"
+    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+  }
+
+  filter {
+    name   = "architecture"
+    values = ["x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
 # Random suffix for unique resource naming
 resource "random_id" "suffix" {
   byte_length = 4
@@ -887,7 +908,7 @@ resource "aws_iam_role_policy_attachment" "rds_enhanced_monitoring" {
 
 # CloudWatch Log Group for RDS
 resource "aws_cloudwatch_log_group" "rds" {
-  name              = "/aws/rds/instance/main-db-${random_id.suffix.hex}/error"
+  name              = "/aws/rds/secure-app-prod"
   retention_in_days = 7
   kms_key_id        = aws_kms_key.main.arn
 
@@ -1345,7 +1366,7 @@ resource "aws_iam_role_policy" "app_logs_access" {
           "logs:DescribeLogStreams"
         ]
         Resource = [
-          "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/application/*"
+          "arn:aws:logs:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:log-group:/aws/application/*"
         ]
       }
     ]
@@ -1361,6 +1382,111 @@ resource "aws_iam_instance_profile" "app" {
     Name        = "app-instance-profile-${random_id.suffix.hex}"
     Environment = "production"
     ManagedBy   = "terraform"
+  }
+}
+
+# CloudWatch Log Group for EC2
+resource "aws_cloudwatch_log_group" "ec2" {
+  name              = "/aws/ec2/secure-app-prod"
+  retention_in_days = 7
+  kms_key_id        = aws_kms_key.main.arn
+
+  tags = {
+    Name        = "ec2-logs-${random_id.suffix.hex}"
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+
+# SNS Topic for Alerts
+resource "aws_sns_topic" "alerts" {
+  name         = "secure-app-prod-alerts-${random_id.suffix.hex}"
+  display_name = "Secure App Production Alerts"
+
+  tags = {
+    Name        = "secure-app-prod-alerts-${random_id.suffix.hex}"
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+
+# Launch Template for Auto Scaling Group
+resource "aws_launch_template" "app" {
+  name_prefix   = "app-template-${random_id.suffix.hex}"
+  image_id      = data.aws_ami.amazon_linux_2.id
+  instance_type = "t3.micro"
+
+  vpc_security_group_ids = [aws_security_group.app.id]
+
+  iam_instance_profile {
+    name = aws_iam_instance_profile.app.name
+  }
+
+  user_data = base64encode(<<-EOF
+              #!/bin/bash
+              yum update -y
+              yum install -y httpd
+              systemctl start httpd
+              systemctl enable httpd
+              echo "<h1>Secure App Server</h1>" > /var/www/html/index.html
+              
+              # Configure CloudWatch agent for logs
+              yum install -y amazon-cloudwatch-agent
+              
+              # Basic security hardening
+              systemctl disable postfix
+              systemctl stop postfix
+              EOF
+  )
+
+  tag_specifications {
+    resource_type = "instance"
+    tags = {
+      Name        = "app-instance-${random_id.suffix.hex}"
+      Environment = "production"
+      ManagedBy   = "terraform"
+    }
+  }
+
+  tags = {
+    Name        = "app-launch-template-${random_id.suffix.hex}"
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}
+
+# Auto Scaling Group
+resource "aws_autoscaling_group" "main" {
+  name                      = "secure-app-prod-asg-${random_id.suffix.hex}"
+  vpc_zone_identifier       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
+  health_check_grace_period = 300
+  min_size                  = 1
+  max_size                  = 3
+  desired_capacity          = 2
+
+  launch_template {
+    id      = aws_launch_template.app.id
+    version = "$Latest"
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "secure-app-prod-asg-${random_id.suffix.hex}"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "Environment"
+    value               = "production"
+    propagate_at_launch = true
+  }
+
+  tag {
+    key                 = "ManagedBy"
+    value               = "terraform"
+    propagate_at_launch = true
   }
 }
 
@@ -1389,4 +1515,69 @@ output "rds_endpoint" {
 output "secret_arn" {
   value       = aws_secretsmanager_secret.rds.arn
   description = "ARN of the Secrets Manager secret for RDS credentials"
+}
+
+output "ec2_asg_name" {
+  value       = aws_autoscaling_group.main.name
+  description = "Name of the Auto Scaling Group for application instances"
+}
+
+output "sns_topic_arn" {
+  value       = aws_sns_topic.alerts.arn
+  description = "ARN of the SNS topic for monitoring alerts and notifications"
+}
+
+output "cloudwatch_log_group_ec2" {
+  value       = aws_cloudwatch_log_group.ec2.name
+  description = "Name of the CloudWatch log group for EC2 instances"
+}
+
+output "cloudwatch_log_group_rds" {
+  value       = aws_cloudwatch_log_group.rds.name
+  description = "Name of the CloudWatch log group for RDS database logs"
+}
+
+output "kms_key_id" {
+  value       = aws_kms_key.main.key_id
+  description = "ID of the main KMS key used for encryption"
+}
+
+output "kms_key_arn" {
+  value       = aws_kms_key.main.arn
+  description = "ARN of the main KMS key used for encryption"
+}
+
+output "db_secret_arn" {
+  value       = aws_secretsmanager_secret.rds.arn
+  description = "ARN of the database secrets in AWS Secrets Manager"
+}
+
+output "db_secret_name" {
+  value       = aws_secretsmanager_secret.rds.name
+  description = "Name of the database secret in AWS Secrets Manager"
+}
+
+output "rds_instance_id" {
+  value       = aws_db_instance.main.id
+  description = "ID of the RDS database instance"
+}
+
+output "s3_bucket_name" {
+  value       = aws_s3_bucket.logs.id
+  description = "Name of the central logging S3 bucket"
+}
+
+output "s3_bucket_arn" {
+  value       = aws_s3_bucket.logs.arn
+  description = "ARN of the central logging S3 bucket"
+}
+
+output "public_subnet_ids" {
+  value       = [aws_subnet.public_1.id, aws_subnet.public_2.id]
+  description = "IDs of the public subnets"
+}
+
+output "private_subnet_ids" {
+  value       = [aws_subnet.private_1.id, aws_subnet.private_2.id]
+  description = "IDs of the private subnets"
 }
