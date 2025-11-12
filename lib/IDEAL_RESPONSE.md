@@ -850,7 +850,7 @@ All mock ARNs use the eu-south-1 region to match the deployment target.
 **Critical Improvement**: Tests discover resources dynamically instead of reading from static output files.
 
 Tests validate live infrastructure:
-- VPC exists with correct CIDR (10.0.0.0/16) and DNS settings
+- VPC exists with correct CIDR (10.0.0.0/16) and DNS settings (using `describe_vpc_attribute`)
 - Subnets span multiple AZs (minimum 2 public, 2 private)
 - ALB is active and internet-facing
 - ECS cluster is active
@@ -862,7 +862,25 @@ Tests validate live infrastructure:
 - Secrets Manager secret exists for database password
 - NAT Gateways available (2+ for multi-AZ)
 
-**Dynamic Discovery Implementation**:
+**Key Testing Patterns**:
+
+1. **VPC DNS Settings Validation** (correct pattern):
+```python
+# DNS settings require describe_vpc_attribute, not included in describe_vpcs
+dns_hostnames = self.ec2_client.describe_vpc_attribute(
+    VpcId=self.vpc_id,
+    Attribute="enableDnsHostnames"
+)
+self.assertTrue(dns_hostnames["EnableDnsHostnames"]["Value"])
+
+dns_support = self.ec2_client.describe_vpc_attribute(
+    VpcId=self.vpc_id,
+    Attribute="enableDnsSupport"
+)
+self.assertTrue(dns_support["EnableDnsSupport"]["Value"])
+```
+
+2. **Dynamic Resource Discovery**:
 ```python
 @classmethod
 def _discover_resources(cls):

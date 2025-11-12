@@ -129,9 +129,24 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             # Verify CIDR block
             self.assertEqual(vpc["CidrBlock"], "10.0.0.0/16")
 
-            # Verify DNS settings
-            self.assertTrue(vpc["EnableDnsHostnames"])
-            self.assertTrue(vpc["EnableDnsSupport"])
+            # Verify DNS settings using describe_vpc_attribute
+            dns_hostnames = self.ec2_client.describe_vpc_attribute(
+                VpcId=self.vpc_id,
+                Attribute="enableDnsHostnames"
+            )
+            self.assertTrue(
+                dns_hostnames["EnableDnsHostnames"]["Value"],
+                "DNS hostnames should be enabled"
+            )
+
+            dns_support = self.ec2_client.describe_vpc_attribute(
+                VpcId=self.vpc_id,
+                Attribute="enableDnsSupport"
+            )
+            self.assertTrue(
+                dns_support["EnableDnsSupport"]["Value"],
+                "DNS support should be enabled"
+            )
 
         except ClientError as e:
             self.fail(f"Failed to describe VPC: {e}")

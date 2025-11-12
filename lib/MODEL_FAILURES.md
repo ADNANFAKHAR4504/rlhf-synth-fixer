@@ -257,9 +257,53 @@ The model confused the parameter names between `list_secrets()` (which returns `
 
 ---
 
+### 6. Incorrect VPC DNS Attribute Testing
+
+**Impact Level**: Low - Test Execution
+
+**MODEL_RESPONSE Issue**:
+Attempted to read DNS settings directly from `describe_vpcs()` response:
+
+```python
+response = self.ec2_client.describe_vpcs(VpcIds=[self.vpc_id])
+vpc = response["Vpcs"][0]
+self.assertTrue(vpc["EnableDnsHostnames"])  # ❌ KeyError - not in response
+self.assertTrue(vpc["EnableDnsSupport"])    # ❌ KeyError - not in response
+```
+
+**Error**:
+```
+KeyError: 'EnableDnsHostnames'
+```
+
+**IDEAL_RESPONSE Fix**:
+Use `describe_vpc_attribute()` to check DNS settings:
+
+```python
+# DNS settings require separate API call
+dns_hostnames = self.ec2_client.describe_vpc_attribute(
+    VpcId=self.vpc_id,
+    Attribute="enableDnsHostnames"
+)
+self.assertTrue(dns_hostnames["EnableDnsHostnames"]["Value"])
+
+dns_support = self.ec2_client.describe_vpc_attribute(
+    VpcId=self.vpc_id,
+    Attribute="enableDnsSupport"
+)
+self.assertTrue(dns_support["EnableDnsSupport"]["Value"])
+```
+
+**Root Cause**:
+The model assumed VPC attributes are returned in the basic `describe_vpcs()` response, but DNS settings require the dedicated `describe_vpc_attribute()` API call.
+
+**Training Value**: Low - Understanding AWS EC2 API structure and which attributes require separate API calls.
+
+---
+
 ## Medium-Severity Failures
 
-### 6. Missing Region-Specific Documentation
+### 7. Missing Region-Specific Documentation
 
 **Impact Level**: Medium - Operational Knowledge
 
@@ -289,7 +333,7 @@ This infrastructure is configured for deployment to **eu-south-1** (Milan).
 
 ---
 
-### 7. Hardcoded us-east-1 in Unit Test Mocks
+### 8. Hardcoded us-east-1 in Unit Test Mocks
 
 **Impact Level**: Low - Test Accuracy
 
@@ -332,10 +376,11 @@ def mock_aws_resource(self, args):
 | AWS_REGION file creation | High | 10 minutes | +1 file, +20 lines |
 | Dynamic integration tests | Critical | 3 hours rewrite | ~200 lines |
 | Secrets Manager API parameter | Medium | 15 minutes | 1 line |
+| VPC DNS attribute testing | Low | 10 minutes | 10 lines |
 | Region documentation | Medium | 30 minutes | +50 lines |
 | Mock ARN regions | Low | 20 minutes | ~20 lines |
 
-**Total QA Effort**: ~5 hours to transform MODEL_RESPONSE into production-ready IDEAL_RESPONSE
+**Total QA Effort**: ~5.5 hours to transform MODEL_RESPONSE into production-ready IDEAL_RESPONSE
 
 ---
 
@@ -343,7 +388,8 @@ def mock_aws_resource(self, args):
 
 1. **Regional Awareness**: Always validate service versions and availability in target region
 2. **Dynamic Testing**: Integration tests must discover resources dynamically, not rely on static files
-3. **API Parameter Knowledge**: Know the exact parameter names for AWS API calls (SecretId vs Name)
+3. **API Knowledge**: Understand AWS API structure - some attributes require dedicated API calls (VPC DNS settings, Secrets Manager SecretId parameter)
+4. **API Parameter Knowledge**: Know the exact parameter names for AWS API calls (SecretId vs Name, describe_vpc_attribute vs describe_vpcs)
 4. **Project Structure**: Respect framework conventions (Pulumi.yaml main entry point)
 5. **Configuration Management**: Provide explicit configuration files for regional settings
 6. **Documentation Completeness**: Include operational notes about regional considerations
