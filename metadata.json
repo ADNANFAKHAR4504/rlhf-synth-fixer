@@ -1,0 +1,27 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912428",
+  "team": "synth",
+  "startedAt": "2025-11-12T00:00:00Z",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "DynamoDB",
+    "EC2",
+    "IAM",
+    "Kinesis",
+    "Lambda",
+    "S3",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "training_notes": "High-value training data demonstrating AWS quota limit handling, cascading architectural changes, environment-appropriate resource sizing, and graceful degradation patterns. Model failures include VPC endpoint quota limits, Lambda concurrency limits, and IAM policy mismatches. Successfully deployed 36 AWS resources after 5 deployment attempts with critical fixes applied."
+}
