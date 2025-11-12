@@ -10,7 +10,7 @@ This document analyzes the failures in the MODEL_RESPONSE implementation and com
 
 **MODEL_RESPONSE Issue**:
 The API Lambda IAM policy granted KMS permissions with a wildcard resource:
-```python
+```py
 {
     "Effect": "Allow",
     "Action": [
@@ -24,7 +24,7 @@ The API Lambda IAM policy granted KMS permissions with a wildcard resource:
 
 **IDEAL_RESPONSE Fix**:
 Use specific KMS key ARN for least privilege access:
-```python
+```py
 policy=pulumi.Output.all(
     self.dynamodb_table.arn,
     self.kms_key.arn  # Use specific KMS key ARN
@@ -62,13 +62,13 @@ policy=pulumi.Output.all(
 
 **MODEL_RESPONSE Issue**:
 API Lambda timeout set to 30 seconds, which is too short for VPC-attached Lambda cold starts:
-```python
+```py
 timeout=30,  # Too short for VPC cold starts
 ```
 
 **IDEAL_RESPONSE Fix**:
 Increase timeout to 60 seconds to accommodate VPC ENI setup:
-```python
+```py
 timeout=60,  # Sufficient for VPC Lambda cold starts
 ```
 
@@ -86,13 +86,13 @@ timeout=60,  # Sufficient for VPC Lambda cold starts
 
 **MODEL_RESPONSE Issue**:
 Fraud detection Lambda configured with 50 reserved concurrent executions instead of required 100:
-```python
+```py
 reserved_concurrent_executions=50,  # Should be 100 per requirements
 ```
 
 **IDEAL_RESPONSE Fix**:
 Set reserved concurrent executions to 100 as specified in requirements:
-```python
+```py
 reserved_concurrent_executions=100,
 ```
 
@@ -110,7 +110,7 @@ reserved_concurrent_executions=100,
 
 **MODEL_RESPONSE Issue**:
 Attempted to use EventBridge rule to capture DynamoDB stream events directly:
-```python
+```py
 rule = aws.cloudwatch.EventRule(
     f"fraud-eventbridge-rule-{self.environment_suffix}",
     event_pattern=json.dumps({
@@ -127,7 +127,7 @@ This is architecturally incorrect - EventBridge cannot directly subscribe to Dyn
 
 **IDEAL_RESPONSE Fix**:
 Use Lambda EventSourceMapping to directly consume DynamoDB stream:
-```python
+```py
 event_source_mapping = aws.lambda_.EventSourceMapping(
     f"fraud-lambda-dynamodb-trigger-{self.environment_suffix}",
     event_source_arn=self.dynamodb_table.stream_arn,
@@ -139,7 +139,7 @@ event_source_mapping = aws.lambda_.EventSourceMapping(
 ```
 
 Also updated Lambda handler to process DynamoDB stream events directly:
-```python
+```py
 # Process DynamoDB stream records directly
 for record in event['Records']:
     if record['eventName'] != 'INSERT':
@@ -169,7 +169,7 @@ EventBridge rules cannot directly subscribe to DynamoDB streams.
 
 **MODEL_RESPONSE Issue**:
 Lambda environment variables were not encrypted with customer-managed KMS key:
-```python
+```py
 environment={
     "variables": {
         "QUEUE_URL": self.fraud_queue.url,
@@ -181,7 +181,7 @@ environment={
 
 **IDEAL_RESPONSE Fix**:
 Add KMS key ARN for environment variable encryption:
-```python
+```py
 environment={
     "variables": {
         "QUEUE_URL": self.fraud_queue.url,
@@ -205,7 +205,7 @@ kms_key_arn=self.kms_key.arn,  # Encrypt environment variables
 
 **MODEL_RESPONSE Issue**:
 API Gateway usage plan configured with mismatched throttle settings:
-```python
+```py
 throttle_settings={
     "rate_limit": 1000,
     "burst_limit": 2000  # Should match rate_limit
@@ -214,7 +214,7 @@ throttle_settings={
 
 **IDEAL_RESPONSE Fix**:
 Align burst limit with rate limit as specified in requirements:
-```python
+```py
 throttle_settings={
     "rate_limit": 1000,
     "burst_limit": 1000  # Matches rate limit requirement

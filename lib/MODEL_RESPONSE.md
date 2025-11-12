@@ -4,7 +4,7 @@ This implementation creates a complete serverless fraud detection pipeline with 
 
 ## File: lib/tap_stack.py
 
-```python
+```py
 """
 TapStack implementation for serverless fraud detection pipeline.
 Creates all infrastructure components including API Gateway, Lambda functions,
@@ -784,7 +784,7 @@ Please investigate immediately.
 
 ## File: lib/__init__.py
 
-```python
+```py
 """Fraud detection pipeline infrastructure module."""
 from .tap_stack import TapStack, TapStackArgs
 

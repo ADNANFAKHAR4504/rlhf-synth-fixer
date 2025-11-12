@@ -29,7 +29,7 @@ The corrected implementation is in `lib/tap_stack.py` with the following structu
 
 ### TapStack Class
 
-```python
+```py
 class TapStack(pulumi.ComponentResource):
     def __init__(self, name: str, args: TapStackArgs, opts: Optional[pulumi.ResourceOptions] = None):
         # Component initialization
@@ -54,7 +54,7 @@ class TapStack(pulumi.ComponentResource):
 ### Critical Implementation Details
 
 #### 1. KMS Key with Rotation
-```python
+```py
 key = aws.kms.Key(
     f"fraud-detection-kms-{self.environment_suffix}",
     description="KMS key for fraud detection pipeline encryption",
@@ -64,7 +64,7 @@ key = aws.kms.Key(
 ```
 
 #### 2. VPC for Lambda Isolation
-```python
+```py
 vpc = aws.ec2.Vpc(
     f"fraud-vpc-{self.environment_suffix}",
     cidr_block="10.0.0.0/16",
@@ -77,7 +77,7 @@ vpc = aws.ec2.Vpc(
 ```
 
 #### 3. DynamoDB with Streams
-```python
+```py
 table = aws.dynamodb.Table(
     f"transactions-{self.environment_suffix}",
     name=f"transactions-{self.environment_suffix}",
@@ -94,7 +94,7 @@ table = aws.dynamodb.Table(
 ```
 
 #### 4. API Lambda with Specific KMS Permissions
-```python
+```py
 policy = aws.iam.RolePolicy(
     f"api-lambda-policy-{self.environment_suffix}",
     role=role.id,
@@ -145,7 +145,7 @@ lambda_func = aws.lambda_.Function(
 ```
 
 #### 5. DynamoDB Stream Integration (Fixed Architecture)
-```python
+```py
 # Correct approach: Lambda EventSourceMapping (not EventBridge)
 event_source_mapping = aws.lambda_.EventSourceMapping(
     f"fraud-lambda-dynamodb-trigger-{self.environment_suffix}",
@@ -168,7 +168,7 @@ def handler(event, context):
 ```
 
 #### 6. SQS Queue Configuration
-```python
+```py
 queue = aws.sqs.Queue(
     f"fraud-queue-{self.environment_suffix}",
     name=f"fraud-queue-{self.environment_suffix}",
@@ -189,7 +189,7 @@ dlq = aws.sqs.Queue(
 ```
 
 #### 7. API Gateway with Correct Throttling
-```python
+```py
 usage_plan = aws.apigateway.UsagePlan(
     f"api-usage-plan-{self.environment_suffix}",
     name=f"fraud-api-plan-{self.environment_suffix}",
