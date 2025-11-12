@@ -23,8 +23,31 @@ export class TapStack extends cdk.Stack {
     const environmentSuffix =
       props?.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
-    // Use us-east-1 as the single region
-    const region = 'us-east-1';
+    // Determine region with priority: props.env.region > AWS_REGION env var > AWS_REGION file > default
+    let region = 'us-east-1'; // Default region
+
+    // Check if region is provided in props
+    if (props?.env?.region) {
+      region = props.env.region;
+    } else if (process.env.AWS_REGION) {
+      // Fall back to AWS_REGION environment variable
+      region = process.env.AWS_REGION;
+    } else {
+      // Try to read from lib/AWS_REGION file
+      try {
+        const fs = require('fs');
+        const path = require('path');
+        const regionFile = path.join(__dirname, 'AWS_REGION');
+        if (fs.existsSync(regionFile)) {
+          const fileContent = fs.readFileSync(regionFile, 'utf8').trim();
+          if (fileContent) {
+            region = fileContent;
+          }
+        }
+      } catch (error) {
+        // If file reading fails, use default region
+      }
+    }
 
     // ===========================
     // SINGLE REGION (us-east-1)

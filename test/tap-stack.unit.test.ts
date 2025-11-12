@@ -468,19 +468,18 @@ describe('TapStack Unit Tests', () => {
       }
 
       try {
-        process.env.AWS_REGION = 'us-west-2';
+        process.env.AWS_REGION = 'eu-central-1';
         const testApp = new cdk.App();
         const testStack = new TapStack(testApp, 'TestStackNoFile', {
-          env: { region: 'us-west-2' },
-          environmentSuffix: 'nofile',
+          environmentSuffix: 'envtest',
         });
         const testTemplate = Template.fromStack(testStack);
 
         expect(testStack).toBeDefined();
         expect(testTemplate).toBeDefined();
-        // Should use env var (us-west-2) when file doesn't exist
+        // Should use env var (eu-central-1) when file doesn't exist and props.env not set
         testTemplate.hasOutput('Region', {
-          Value: 'us-west-2',
+          Value: 'eu-central-1',
         });
       } finally {
         // Restore the file
@@ -488,6 +487,78 @@ describe('TapStack Unit Tests', () => {
           fs.renameSync(backupFile, regionFile);
         }
         delete process.env.AWS_REGION;
+      }
+    });
+
+    test('Should read region from AWS_REGION file when env var not set', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const regionFile = path.join(__dirname, '..', 'lib', 'AWS_REGION');
+      const originalEnv = process.env.AWS_REGION;
+      let fileCreated = false;
+
+      try {
+        // Remove AWS_REGION env var
+        delete process.env.AWS_REGION;
+
+        // Create AWS_REGION file with test region
+        fs.writeFileSync(regionFile, 'ap-southeast-1\n', 'utf8');
+        fileCreated = true;
+
+        const testApp = new cdk.App();
+        const testStack = new TapStack(testApp, 'TestStackFileRegion', {
+          environmentSuffix: 'ft',
+        });
+        const testTemplate = Template.fromStack(testStack);
+
+        // Should use region from file (ap-southeast-1)
+        testTemplate.hasOutput('Region', {
+          Value: 'ap-southeast-1',
+        });
+      } finally {
+        // Cleanup
+        if (fileCreated && fs.existsSync(regionFile)) {
+          fs.unlinkSync(regionFile);
+        }
+        if (originalEnv) {
+          process.env.AWS_REGION = originalEnv;
+        }
+      }
+    });
+
+    test('Should handle empty AWS_REGION file gracefully', () => {
+      const fs = require('fs');
+      const path = require('path');
+      const regionFile = path.join(__dirname, '..', 'lib', 'AWS_REGION');
+      const originalEnv = process.env.AWS_REGION;
+      let fileCreated = false;
+
+      try {
+        // Remove AWS_REGION env var
+        delete process.env.AWS_REGION;
+
+        // Create empty AWS_REGION file
+        fs.writeFileSync(regionFile, '  \n  ', 'utf8');
+        fileCreated = true;
+
+        const testApp = new cdk.App();
+        const testStack = new TapStack(testApp, 'TestStackEmptyFile', {
+          environmentSuffix: 'emptyfile',
+        });
+        const testTemplate = Template.fromStack(testStack);
+
+        // Should use default region (us-east-1) when file is empty
+        testTemplate.hasOutput('Region', {
+          Value: 'us-east-1',
+        });
+      } finally {
+        // Cleanup
+        if (fileCreated && fs.existsSync(regionFile)) {
+          fs.unlinkSync(regionFile);
+        }
+        if (originalEnv) {
+          process.env.AWS_REGION = originalEnv;
+        }
       }
     });
 
