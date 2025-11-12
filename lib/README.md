@@ -2,6 +2,13 @@
 
 Production-ready multi-region disaster recovery infrastructure for payment processing systems using Pulumi with TypeScript. Automated failover between US-EAST-1 (primary) and US-EAST-2 (DR) regions with RPO < 1 minute and RTO < 5 minutes.
 
+## Documentation
+
+- **[README.md](./README.md)** (this file) - Complete deployment and operations guide
+- **[MIGRATION.md](./MIGRATION.md)** - v1 to v2 migration procedures and best practices
+- **[CHANGELOG.md](./CHANGELOG.md)** - Version history and release notes
+- **[PROMPT.md](./PROMPT.md)** - Original task requirements and constraints
+
 ## Architecture Overview
 
 ```
@@ -59,6 +66,27 @@ Production-ready multi-region disaster recovery infrastructure for payment proce
 - **Hourly Backups**: 1-day retention for quick recovery
 - **Daily Backups**: 30-day retention with cold storage after 7 days
 - **Cross-Region Copies**: Automatic backup to DR region
+
+## Resource Versioning (v2)
+
+All database resources in this infrastructure use a **-v2** naming suffix. This versioning strategy enables:
+
+- **Zero-downtime migrations**: Deploy v2 alongside v1 without service interruption
+- **Blue-green deployments**: Validate v2 before switching traffic
+- **Safe rollbacks**: Keep v1 resources available as fallback
+- **State management**: Avoid Pulumi state conflicts during updates
+
+For detailed migration procedures from v1 to v2 resources, see [MIGRATION.md](./MIGRATION.md).
+
+### v2 Resource Names
+
+| Resource Type | Name Pattern |
+|---------------|--------------|
+| Secrets Manager | `db-password-v2-{env}` |
+| RDS Global Cluster | `global-db-v2-{env}` |
+| RDS Clusters | `{primary\|dr}-db-cluster-v2-{env}` |
+| RDS Instances | `{primary\|dr}-db-instance-v2-{i}-{env}` |
+| DynamoDB Table | `session-table-v2-{env}` |
 
 ## Prerequisites
 
@@ -148,8 +176,10 @@ Outputs:
   drSnsTopicArn        : "arn:aws:sns:us-east-2:...:dr-alerts-dev"
   failoverLambdaArn    : "arn:aws:lambda:us-east-1:...:failover-lambda-dev"
   backupPlanId         : "backup-plan-dev-id"
-  dynamoTableName      : "session-table-dev"
-  dbPasswordSecretArn  : "arn:aws:secretsmanager:us-east-1:...:db-password-dev"
+  dynamoTableName      : "session-table-v2-dev"
+  dbPasswordSecretArn  : "arn:aws:secretsmanager:us-east-1:...:db-password-v2-dev"
+  primaryClusterId     : "primary-db-cluster-v2-dev"
+  drClusterId          : "dr-db-cluster-v2-dev"
 ```
 
 ## Testing
@@ -171,16 +201,16 @@ curl $DR_ALB/health.html
 ### Database Connectivity
 
 ```bash
-# Get RDS endpoint from AWS Console or CLI
+# Get RDS endpoint from AWS Console or CLI (note: v2 resources)
 aws rds describe-db-clusters \
-  --db-cluster-identifier primary-db-cluster-dev \
+  --db-cluster-identifier primary-db-cluster-v2-dev \
   --region us-east-1 \
   --query 'DBClusters[0].Endpoint' \
   --output text
 
-# Get password from Secrets Manager
+# Get password from Secrets Manager (note: v2 secret)
 aws secretsmanager get-secret-value \
-  --secret-id db-password-dev \
+  --secret-id db-password-v2-dev \
   --region us-east-1 \
   --query 'SecretString' \
   --output text
@@ -428,13 +458,36 @@ This infrastructure supports:
 - **PCI-DSS**: Customer-managed encryption, network segmentation, monitoring
 - **HIPAA**: Encrypted storage, secure key management, audit trails
 
+## Version History
+
+This infrastructure is currently at **version 2.0.0**.
+
+For complete version history, breaking changes, and migration notes, see [CHANGELOG.md](./CHANGELOG.md).
+
+### Latest Changes (v2.0.0 - 2025-11-12)
+
+**BREAKING CHANGE**: Database resources renamed with `-v2` suffix
+
+- All database resources use v2 naming convention
+- Enables zero-downtime migrations and blue-green deployments
+- Requires application configuration updates for new deployments
+- See [MIGRATION.md](./MIGRATION.md) for complete migration procedures
+
+## Related Documentation
+
+- **[MIGRATION.md](./MIGRATION.md)** - Detailed v1 to v2 migration guide with step-by-step procedures
+- **[CHANGELOG.md](./CHANGELOG.md)** - Complete version history and release notes
+- **[PROMPT.md](./PROMPT.md)** - Original infrastructure requirements and constraints
+
 ## Support
 
 For issues or questions:
 1. Check CloudWatch Logs for error messages
 2. Review Pulumi state: `pulumi stack --show-urns`
 3. Consult AWS service quotas and limits
-4. Contact your infrastructure team
+4. Review [CHANGELOG.md](./CHANGELOG.md) for known issues
+5. Check [MIGRATION.md](./MIGRATION.md) troubleshooting section
+6. Contact your infrastructure team
 
 ## License
 

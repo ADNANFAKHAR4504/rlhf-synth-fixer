@@ -73,3 +73,23 @@ Multi-region disaster recovery infrastructure spanning us-east-1 (primary) and u
 
 - Primary: us-east-1
 - DR: us-east-2
+
+## Implementation Notes
+
+### Resource Versioning (v2)
+
+This implementation uses a **v2 naming suffix** for all database resources to support:
+
+- **Blue-Green Deployments**: Enable side-by-side deployment of new versions
+- **Zero-Downtime Migrations**: Allow data migration without service interruption
+- **State Management**: Avoid infrastructure-as-code state conflicts
+- **Production Testing**: Validate new resources before cutover
+
+All database-related resources follow the pattern: `{resource-name}-v2-{environment}`
+
+Examples:
+- Secrets Manager: `db-password-v2-dev`
+- RDS Clusters: `primary-db-cluster-v2-dev`, `dr-db-cluster-v2-dev`
+- DynamoDB: `session-table-v2-dev`
+
+For migration procedures and best practices, refer to `MIGRATION.md` in the implementation.

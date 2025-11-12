@@ -90,6 +90,14 @@ export class DatabaseStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // NOTE: Resource Versioning Strategy (v2)
+    // All database resources use '-v2' suffix to enable blue-green deployment pattern.
+    // This allows:
+    // 1. Side-by-side deployment of new resources without destroying existing ones
+    // 2. Zero-downtime migration with data transfer from v1 to v2
+    // 3. Safe rollback to v1 resources if issues arise during migration
+    // 4. Clean separation in Pulumi state management
+    // See MIGRATION.md for complete v1 to v2 migration procedures
     const dbPassword = new aws.secretsmanager.Secret(
       `db-password-v2-${environmentSuffix}`,
       {
@@ -226,7 +234,8 @@ export class DatabaseStack extends pulumi.ComponentResource {
       { provider: drProvider, parent: this }
     );
 
-    // RDS Aurora Global Cluster
+    // RDS Aurora Global Cluster (v2)
+    // Using v2 naming to avoid conflicts with existing v1 resources during migration
     const globalCluster = new aws.rds.GlobalCluster(
       `global-db-v2-${environmentSuffix}`,
       {
@@ -330,7 +339,8 @@ export class DatabaseStack extends pulumi.ComponentResource {
       );
     }
 
-    // DynamoDB Global Table
+    // DynamoDB Global Table (v2)
+    // v2 suffix enables parallel operation with legacy v1 table during migration
     const dynamoTable = new aws.dynamodb.Table(
       `session-table-v2-${environmentSuffix}`,
       {
