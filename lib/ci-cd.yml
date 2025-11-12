@@ -193,7 +193,7 @@ jobs:
           path: reports/validation
       - store_artifacts:
           path: reports/validation
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   infrastructure-validation:
     executor: terraform-executor
@@ -233,7 +233,7 @@ jobs:
             checkov -d infrastructure --output-file reports/checkov-report.json
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- SECURITY SCANNING --------------------
   dependency-scan:
@@ -252,7 +252,7 @@ jobs:
             npm audit --json > reports/npm-audit.json || true
       - store_artifacts:
           path: reports/npm-audit.json
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- BUILD JOBS --------------------
   build-services:
@@ -292,7 +292,7 @@ jobs:
               ${ECR_REGISTRY}/<< parameters.service-name >>:${CIRCLE_SHA1}
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- INFRASTRUCTURE DEPLOYMENT --------------------
   terraform-deploy:
@@ -340,7 +340,7 @@ jobs:
           plan: tfplan-<< parameters.environment >>
       - store_artifacts:
           path: infrastructure/tfplan-<< parameters.environment >>
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- TESTING JOBS --------------------
   unit-tests:
@@ -360,7 +360,7 @@ jobs:
           path: reports/junit
       - store_artifacts:
           path: coverage
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   integration-tests:
     executor: docker-executor
@@ -389,6 +389,10 @@ jobs:
             docker-compose -f docker-compose.test.yml \
               run --rm test-runner npm run test:integration
       - run:
+          name: Rollback on integration test failure
+          command: ./scripts/rollback-integration-failure.sh
+          when: on_fail
+      - run:
           name: Pact contract tests
           command: |
             docker-compose -f docker-compose.test.yml \
@@ -397,7 +401,7 @@ jobs:
           path: reports/integration
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   e2e-tests:
     executor: docker-executor
@@ -412,9 +416,13 @@ jobs:
               -v $(pwd):/app \
               -e SPECS="${SPECS}" \
               ${PRIVATE_REGISTRY}/e2e-runner:latest
+      - run:
+          name: Rollback on E2E test failure
+          command: ./scripts/rollback-e2e-failure.sh
+          when: on_fail
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- SECURITY VALIDATION --------------------
   security-scan:
@@ -445,7 +453,7 @@ jobs:
             checkov -d k8s-manifests --framework kubernetes -o json > reports/checkov-k8s.json
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- PERFORMANCE TESTING --------------------
   performance-tests:
@@ -474,7 +482,7 @@ jobs:
               reports/artillery-report.json
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- DEPLOYMENT JOBS --------------------
   deploy-dev:
@@ -674,7 +682,7 @@ jobs:
           path: reports/validation
       - store_artifacts:
           path: reports/validation
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   security-compliance-check:
     executor: docker-executor
@@ -724,7 +732,7 @@ jobs:
             ./scripts/validate-tenant-isolation.sh << parameters.environment >>
       - store_artifacts:
           path: reports
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   smoke-tests:
     executor: node-executor
@@ -745,7 +753,7 @@ jobs:
           path: reports/smoke
       - store_artifacts:
           path: reports/smoke
-          # Note: Artifact retention (7 days) is configured at CircleCI organization level
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- MONITORING SETUP --------------------
   setup-monitoring:

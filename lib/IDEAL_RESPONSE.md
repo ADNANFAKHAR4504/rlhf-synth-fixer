@@ -11,27 +11,77 @@ Every non-Markdown file under `lib/` (excluding Terraform provider binaries/stat
 # Platform: EKS, RDS Aurora, ElastiCache, Cognito
 
 # ==================== OIDC CONTEXT REQUIREMENTS ====================
-
+#
+# This configuration requires three CircleCI Contexts for environment isolation.
+# Each context must be configured in CircleCI Project Settings > Contexts.
+#
+# IMPORTANT: All AWS authentication uses OIDC (OpenID Connect) - NO static access keys!
+# Configure OIDC trust relationship in IAM for each role before use.
+#
 # Required CircleCI Contexts and Environment Variables:
 #
-# aws-dev (Development Environment):
-#   - OIDC_ROLE_ARN_DEV: AWS IAM Role ARN for OIDC authentication in dev environment
-#   - AWS_DEFAULT_REGION: AWS region for all deployments
-#   - CLUSTER_NAME: EKS cluster name prefix (e.g., 'saas-platform')
-#   - ECR_REGISTRY: ECR registry URL for container images
-#   - PRIVATE_REGISTRY: Private Docker registry URL for base images
-#   - TENANT_ID: Default tenant identifier for dev deployments
-#   - HOSTED_ZONE_ID: Route53 hosted zone ID for DNS management
-#   - DATADOG_API_KEY: Datadog API key for monitoring
-#   - SENTRY_DSN: Sentry DSN for error tracking
+# Context: aws-dev (Development Environment)
+# -----------------------------------------------
+#   - OIDC_ROLE_ARN_DEV: arn:aws:iam::123456789012:role/circleci-dev-role
+#     (IAM role for dev environment with OIDC trust policy)
+#   - AWS_DEFAULT_REGION: us-east-1
+#     (Primary AWS region for all deployments)
+#   - CLUSTER_NAME: saas-platform
+#     (EKS cluster name prefix; full name: saas-platform-dev)
+#   - ECR_REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+#     (ECR registry URL for container image storage)
+#   - PRIVATE_REGISTRY: registry.company.com
+#     (Private Docker registry URL for base images)
+#   - TENANT_ID: default-tenant
+#     (Default tenant identifier for dev deployments)
+#   - HOSTED_ZONE_ID: Z1234567890ABC
+#     (Route53 hosted zone ID for DNS management)
+#   - DATADOG_API_KEY: <sensitive-key>
+#     (Datadog API key for monitoring integration)
+#   - SENTRY_DSN: https://<key>@sentry.io/<project>
+#     (Sentry DSN for error tracking and alerting)
 #
-# aws-staging (Staging Environment):
-#   - OIDC_ROLE_ARN_STAGING: AWS IAM Role ARN for staging environment
-#   - (Same variables as dev, with environment-specific values)
+# Context: aws-staging (Staging Environment)
+# -----------------------------------------------
+#   - OIDC_ROLE_ARN_STAGING: arn:aws:iam::123456789012:role/circleci-staging-role
+#   - AWS_DEFAULT_REGION: us-east-1
+#   - CLUSTER_NAME: saas-platform
+#   - ECR_REGISTRY: 123456789012.dkr.ecr.us-east-1.amazonaws.com
+#   - PRIVATE_REGISTRY: registry.company.com
+#   - TENANT_ID: staging-tenant
+#   - HOSTED_ZONE_ID: Z1234567890ABC
+#   - DATADOG_API_KEY: <sensitive-key>
+#   - SENTRY_DSN: https://<key>@sentry.io/<project>
 #
-# aws-prod (Production Environment):
-#   - OIDC_ROLE_ARN_PROD: AWS IAM Role ARN for production environment
-#   - (Same variables as dev, with environment-specific values)
+# Context: aws-prod (Production Environment)
+# -----------------------------------------------
+#   - OIDC_ROLE_ARN_PROD: arn:aws:iam::987654321098:role/circleci-prod-role
+#     (Production may use separate AWS account for security isolation)
+#   - AWS_DEFAULT_REGION: us-east-1
+#   - CLUSTER_NAME: saas-platform
+#   - ECR_REGISTRY: 987654321098.dkr.ecr.us-east-1.amazonaws.com
+#   - PRIVATE_REGISTRY: registry.company.com
+#   - TENANT_ID: prod-tenant
+#   - HOSTED_ZONE_ID: Z9876543210XYZ
+#   - DATADOG_API_KEY: <sensitive-key>
+#   - SENTRY_DSN: https://<key>@sentry.io/<project>
+#
+# IAM Role Trust Policy Example (for OIDC):
+# {
+#   "Version": "2012-10-17",
+#   "Statement": [{
+#     "Effect": "Allow",
+#     "Principal": {
+#       "Federated": "arn:aws:iam::ACCOUNT_ID:oidc-provider/oidc.circleci.com/org/ORG_ID"
+#     },
+#     "Action": "sts:AssumeRoleWithWebIdentity",
+#     "Condition": {
+#       "StringLike": {
+#         "oidc.circleci.com/org/ORG_ID:sub": "org/ORG_ID/project/PROJECT_ID/user/*"
+#       }
+#     }
+#   }]
+# }
 #
 
 version: 2.1
@@ -114,6 +164,9 @@ commands:
       environment:
         type: string
         description: "Deployment environment"
+      role-arn:
+        type: string
+        description: "AWS IAM Role ARN for EKS authentication"
     steps:
       - run:
           name: Configure tenant context
@@ -121,7 +174,7 @@ commands:
             aws eks update-kubeconfig \
               --name ${CLUSTER_NAME}-<< parameters.environment >> \
               --region ${AWS_DEFAULT_REGION} \
-              --role-arn ${ROLE_ARN}
+              --role-arn << parameters.role-arn >>
             kubectl config set-context --current \
               --namespace=tenant-<< parameters.tenant-id >>-<< parameters.environment >>
 
@@ -147,14 +200,14 @@ jobs:
           path: reports/validation
       - store_artifacts:
           path: reports/validation
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   infrastructure-validation:
     executor: terraform-executor
     steps:
       - checkout
       - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN}
+          role-arn: ${OIDC_ROLE_ARN_DEV}
       - run:
           name: Terraform format check
           command: |
@@ -187,7 +240,7 @@ jobs:
             checkov -d infrastructure --output-file reports/checkov-report.json
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- SECURITY SCANNING --------------------
   dependency-scan:
@@ -206,7 +259,7 @@ jobs:
             npm audit --json > reports/npm-audit.json || true
       - store_artifacts:
           path: reports/npm-audit.json
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- BUILD JOBS --------------------
   build-services:
@@ -217,7 +270,7 @@ jobs:
     steps:
       - checkout
       - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN}
+          role-arn: ${OIDC_ROLE_ARN_DEV}
       - run:
           name: Login to ECR
           command: |
@@ -246,7 +299,7 @@ jobs:
               ${ECR_REGISTRY}/<< parameters.service-name >>:${CIRCLE_SHA1}
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- INFRASTRUCTURE DEPLOYMENT --------------------
   terraform-deploy:
@@ -294,7 +347,7 @@ jobs:
           plan: tfplan-<< parameters.environment >>
       - store_artifacts:
           path: infrastructure/tfplan-<< parameters.environment >>
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- TESTING JOBS --------------------
   unit-tests:
@@ -314,7 +367,7 @@ jobs:
           path: reports/junit
       - store_artifacts:
           path: coverage
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   integration-tests:
     executor: docker-executor
@@ -343,6 +396,10 @@ jobs:
             docker-compose -f docker-compose.test.yml \
               run --rm test-runner npm run test:integration
       - run:
+          name: Rollback on integration test failure
+          command: ./scripts/rollback-integration-failure.sh
+          when: on_fail
+      - run:
           name: Pact contract tests
           command: |
             docker-compose -f docker-compose.test.yml \
@@ -351,7 +408,7 @@ jobs:
           path: reports/integration
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   e2e-tests:
     executor: docker-executor
@@ -366,9 +423,13 @@ jobs:
               -v $(pwd):/app \
               -e SPECS="${SPECS}" \
               ${PRIVATE_REGISTRY}/e2e-runner:latest
+      - run:
+          name: Rollback on E2E test failure
+          command: ./scripts/rollback-e2e-failure.sh
+          when: on_fail
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- SECURITY VALIDATION --------------------
   security-scan:
@@ -399,7 +460,7 @@ jobs:
             checkov -d k8s-manifests --framework kubernetes -o json > reports/checkov-k8s.json
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- PERFORMANCE TESTING --------------------
   performance-tests:
@@ -408,7 +469,7 @@ jobs:
     steps:
       - checkout
       - assume-aws-role:
-          role-arn: ${OIDC_ROLE_ARN}
+          role-arn: ${OIDC_ROLE_ARN_DEV}
       - run:
           name: K6 load tests
           command: |
@@ -428,7 +489,7 @@ jobs:
               reports/artillery-report.json
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- DEPLOYMENT JOBS --------------------
   deploy-dev:
@@ -441,6 +502,7 @@ jobs:
       - setup-tenant-context:
           tenant-id: "${TENANT_ID}"
           environment: "dev"
+          role-arn: ${OIDC_ROLE_ARN_DEV}
       - run:
           name: Deploy to dev
           command: |
@@ -452,9 +514,11 @@ jobs:
       - run:
           name: Health check after deployment
           command: ./scripts/health-check.sh dev
-          timeout: 300
-          on_fail:
-            run: ./scripts/rollback-dev.sh
+          no_output_timeout: 5m
+      - run:
+          name: Rollback on health check failure
+          command: ./scripts/rollback-dev.sh
+          when: on_fail
       - run:
           name: Configure tenant isolation
           command: |
@@ -470,6 +534,7 @@ jobs:
       - setup-tenant-context:
           tenant-id: "${TENANT_ID}"
           environment: "staging"
+          role-arn: ${OIDC_ROLE_ARN_STAGING}
       - run:
           name: Deploy blue-green to staging
           command: |
@@ -477,9 +542,11 @@ jobs:
       - run:
           name: Health check after deployment
           command: ./scripts/health-check.sh staging
-          timeout: 300
-          on_fail:
-            run: ./scripts/rollback-staging.sh
+          no_output_timeout: 5m
+      - run:
+          name: Rollback on health check failure
+          command: ./scripts/rollback-staging.sh
+          when: on_fail
       - run:
           name: Validate deployment
           command: |
@@ -506,6 +573,7 @@ jobs:
       - setup-tenant-context:
           tenant-id: "${TENANT_ID}"
           environment: "production"
+          role-arn: ${OIDC_ROLE_ARN_PROD}
       # Deployment strategy selection: rolling update vs canary deployment
       # Rolling: Immediate full deployment with zero-downtime rolling update
       # Canary: Gradual traffic shifting with health checks and monitoring
@@ -523,9 +591,11 @@ jobs:
             - run:
                 name: Health check after rolling update
                 command: ./scripts/health-check.sh production
-                timeout: 300
-                on_fail:
-                  run: ./scripts/rollback-production.sh application
+                no_output_timeout: 5m
+            - run:
+                name: Rollback on health check failure
+                command: ./scripts/rollback-production.sh application
+                when: on_fail
       - when:
           condition:
             equal: [canary, << parameters.deployment-type >>]
@@ -540,8 +610,10 @@ jobs:
                 name: Health check after 10%
                 command: |
                   ./scripts/health-check.sh production
-                on_fail:
-                  run: ./scripts/rollback-production.sh application
+            - run:
+                name: Rollback on 10% health check failure
+                command: ./scripts/rollback-production.sh application
+                when: on_fail
             - run:
                 name: Audit after 10%
                 command: |
@@ -557,8 +629,10 @@ jobs:
                 name: Health check after 50%
                 command: |
                   ./scripts/health-check.sh production
-                on_fail:
-                  run: ./scripts/rollback-production.sh application
+            - run:
+                name: Rollback on 50% health check failure
+                command: ./scripts/rollback-production.sh application
+                when: on_fail
             - run:
                 name: Audit after 50%
                 command: |
@@ -574,8 +648,10 @@ jobs:
                 name: Final health check
                 command: |
                   ./scripts/health-check.sh production
-                on_fail:
-                  run: ./scripts/rollback-production.sh application
+            - run:
+                name: Rollback on final health check failure
+                command: ./scripts/rollback-production.sh application
+                when: on_fail
             - run:
                 name: Final audit
                 command: |
@@ -601,8 +677,10 @@ jobs:
           name: API validation
           command: |
             npm run test:api:<< parameters.environment >>
-          on_fail:
-            run: ./scripts/rollback-validation-failure.sh << parameters.environment >>
+      - run:
+          name: Rollback on API validation failure
+          command: ./scripts/rollback-validation-failure.sh << parameters.environment >>
+          when: on_fail
       - run:
           name: Tenant isolation check
           command: |
@@ -611,7 +689,7 @@ jobs:
           path: reports/validation
       - store_artifacts:
           path: reports/validation
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   security-compliance-check:
     executor: docker-executor
@@ -661,7 +739,7 @@ jobs:
             ./scripts/validate-tenant-isolation.sh << parameters.environment >>
       - store_artifacts:
           path: reports
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   smoke-tests:
     executor: node-executor
@@ -674,13 +752,15 @@ jobs:
           name: Run smoke tests
           command: |
             npm run test:smoke:<< parameters.environment >>
-          on_fail:
-            run: ./scripts/rollback-smoke-failure.sh << parameters.environment >>
+      - run:
+          name: Rollback on smoke test failure
+          command: ./scripts/rollback-smoke-failure.sh << parameters.environment >>
+          when: on_fail
       - store_test_results:
           path: reports/smoke
       - store_artifacts:
           path: reports/smoke
-          retention: 7d
+          # Note: Artifact retention is configured at CircleCI organization/project level, not in YAML
 
   # -------------------- MONITORING SETUP --------------------
   setup-monitoring:
