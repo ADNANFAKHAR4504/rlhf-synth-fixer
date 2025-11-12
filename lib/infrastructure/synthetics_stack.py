@@ -153,7 +153,7 @@ def handler(event, context):
             execution_role_arn=self.canary_role.arn,
             handler="handler.handler",
             zip_file=canary_zip_path,
-            runtime_version="syn-python-selenium-3.2",  # Updated from deprecated syn-python-selenium-1.0
+            runtime_version="syn-python-selenium-7.0",  # Updated from deprecated syn-python-selenium-1.0
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
             ),
