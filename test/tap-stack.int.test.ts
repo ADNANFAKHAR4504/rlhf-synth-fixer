@@ -176,7 +176,7 @@ describe('TapStack CloudFormation Integration Tests', () => {
           response.ServerSideEncryptionConfiguration!.Rules
         ).toHaveLength(1);
         expect(
-          response.ServerSideEncryptionConfiguration!.Rules[0]
+          response.ServerSideEncryptionConfiguration!.Rules![0]
             .ApplyServerSideEncryptionByDefault?.SSEAlgorithm
         ).toBe('AES256');
       }, 60000);
