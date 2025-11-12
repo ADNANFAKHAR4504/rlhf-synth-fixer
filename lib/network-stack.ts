@@ -2,12 +2,14 @@
 /* eslint-disable quotes */
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
+
 /**
  * network-stack.ts
- *
+ * 
  * This module defines the VPC and networking infrastructure for the payment
  * processing environment.
  */
+
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -32,14 +34,17 @@ export class NetworkStack extends pulumi.ComponentResource {
 
     const { environmentSuffix, tags } = args;
 
-    // HARDCODED: Set region to ap-southeast-1 for VPC endpoint service names
-    const region = 'ap-southeast-1';
-    
-    // DYNAMIC: Get actual availability zones from AWS
+    // DYNAMIC: Get the current AWS region from the provider
+    const currentRegion = aws.getRegionOutput({}, opts);
+    const region = currentRegion.name;
+
+    // DYNAMIC: Get actual availability zones from AWS for the current region
     // This prevents errors if zones change in the future
-    const availableAZs = pulumi.output(aws.getAvailabilityZones({
-      state: 'available',
-    }));
+    const availableAZs = pulumi.output(
+      aws.getAvailabilityZones({
+        state: 'available',
+      }, opts)
+    );
 
     // Create VPC
     this.vpc = new aws.ec2.Vpc(
@@ -172,7 +177,6 @@ export class NetworkStack extends pulumi.ComponentResource {
     // Create private subnets across multiple AZs (dynamically fetched)
     this.privateSubnets = [];
     const privateRouteTables = [];
-
     for (let i = 0; i < 3; i++) {
       // Create private subnet
       const subnet = new aws.ec2.Subnet(
@@ -232,13 +236,13 @@ export class NetworkStack extends pulumi.ComponentResource {
     }
 
     // Create VPC Endpoints for AWS services
-    // CRITICAL: Using hardcoded region for service names + explicit Gateway type
+    // DYNAMIC: Use current region for service names + explicit Gateway type
     this.s3Endpoint = new aws.ec2.VpcEndpoint(
       `payment-s3-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        // HARDCODED: Use ap-southeast-1 region
-        serviceName: `com.amazonaws.${region}.s3`,
+        // DYNAMIC: Use current region from provider
+        serviceName: pulumi.interpolate`com.amazonaws.${region}.s3`,
         // CRITICAL: Explicitly set Gateway type
         vpcEndpointType: 'Gateway',
         routeTableIds: [
@@ -258,8 +262,8 @@ export class NetworkStack extends pulumi.ComponentResource {
       `payment-dynamodb-endpoint-${environmentSuffix}`,
       {
         vpcId: this.vpc.id,
-        // HARDCODED: Use ap-southeast-1 region
-        serviceName: `com.amazonaws.${region}.dynamodb`,
+        // DYNAMIC: Use current region from provider
+        serviceName: pulumi.interpolate`com.amazonaws.${region}.dynamodb`,
         // CRITICAL: Explicitly set Gateway type
         vpcEndpointType: 'Gateway',
         routeTableIds: [
