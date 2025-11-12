@@ -610,9 +610,6 @@
         "LambdaSecurityGroup": {
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
-                "GroupName": {
-                    "Fn::Sub": "${ProjectName}-lambda-sg-${EnvironmentName}"
-                },
                 "GroupDescription": "Security group for Lambda functions with VPC endpoint access",
                 "VpcId": {
                     "Ref": "VPC"
