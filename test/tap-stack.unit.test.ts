@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 
 // Set up Pulumi mocks before importing the stack
 pulumi.runtime.setMocks({
-  newResource: function(args: pulumi.runtime.MockResourceArgs): {id: string, state: any} {
+  newResource: function (args: pulumi.runtime.MockResourceArgs): { id: string, state: any } {
     return {
       id: args.inputs.name ? `${args.name}_id` : args.name + '_id',
       state: {
@@ -13,7 +13,7 @@ pulumi.runtime.setMocks({
       },
     };
   },
-  call: function(args: pulumi.runtime.MockCallArgs) {
+  call: function (args: pulumi.runtime.MockCallArgs) {
     if (args.token === 'aws:index/getAvailabilityZones:getAvailabilityZones') {
       return {
         names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
@@ -92,12 +92,12 @@ describe('TapStack Structure', () => {
     });
 
     it('ECS cluster name includes environment suffix pattern', async () => {
-      const value = await stack.ecsClusterName.promise();
+      const value = await pulumi.output(stack.ecsClusterName).apply((v: string) => v);
       expect(value).toMatch(/payment-cluster/);
     });
 
     it('ECS service name includes environment suffix pattern', async () => {
-      const value = await stack.ecsServiceName.promise();
+      const value = await pulumi.output(stack.ecsServiceName).apply((v: string) => v);
       expect(value).toMatch(/payment-service/);
     });
 
@@ -114,7 +114,7 @@ describe('TapStack Structure', () => {
     });
 
     it('flow logs bucket name includes flowlogs', async () => {
-      const value = await stack.flowLogsBucketName.promise();
+      const value = await pulumi.output(stack.flowLogsBucketName).apply((v: string) => v);
       expect(value).toBeTruthy();
       if (value) {
         expect(value).toContain('flowlogs');
@@ -133,9 +133,9 @@ describe('TapStack Structure', () => {
     });
 
     it('uses consistent payment prefix for resources', async () => {
-      const clusterName = await stack.ecsClusterName.promise();
-      const serviceName = await stack.ecsServiceName.promise();
-      const bucketName = await stack.flowLogsBucketName.promise();
+      const clusterName = await pulumi.output(stack.ecsClusterName).apply((v: string) => v);
+      const serviceName = await pulumi.output(stack.ecsServiceName).apply((v: string) => v);
+      const bucketName = await pulumi.output(stack.flowLogsBucketName).apply((v: string) => v);
 
       expect(clusterName).toContain('payment');
       expect(serviceName).toContain('payment');
@@ -143,7 +143,7 @@ describe('TapStack Structure', () => {
     });
 
     it('includes region in bucket names', async () => {
-      const bucketName = await stack.flowLogsBucketName.promise();
+      const bucketName = await pulumi.output(stack.flowLogsBucketName).apply((v: string) => v);
       expect(bucketName).toContain('ap-southeast-1');
     });
   });

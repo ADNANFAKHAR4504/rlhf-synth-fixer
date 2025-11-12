@@ -13,6 +13,7 @@ export interface TapStackProps {
   stateBucket?: string;
   stateBucketRegion?: string;
   awsRegion?: string;
+  tags?: Record<string, string>;
 }
 
 export class TapStack {
