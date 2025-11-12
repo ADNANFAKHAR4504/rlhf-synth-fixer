@@ -160,7 +160,6 @@ export class TapStack extends TerraformStack {
       variables: {
         SNS_TOPIC_ARN: snsModule.topic.arn,
         BUCKET_NAME: s3Module.bucket.id,
-        STATE_MACHINE_ARN: stepFunctions.stateMachine.arn,
       },
     });
 
