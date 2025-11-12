@@ -1092,12 +1092,16 @@ Resources:
           logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
           
           # Initialize AWS clients with timeout configuration
+          # Force path-style addressing for VPC Gateway endpoint compatibility
           from botocore.config import Config
           s3_config = Config(
               region_name=os.environ.get('AWS_REGION'),
               connect_timeout=10,
               read_timeout=30,
-              retries={'max_attempts': 2}
+              retries={'max_attempts': 2},
+              s3={
+                  'addressing_style': 'path'  # Force path-style for VPC Gateway endpoint
+              }
           )
           s3_client = boto3.client('s3', config=s3_config)
           

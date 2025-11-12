@@ -42,6 +42,25 @@ const logsClient = new CloudWatchLogsClient({});
 const TEST_CUSTOMER_ID = `test-customer-${Date.now()}`;
 const TEST_API_KEY = 'A'.repeat(32); // 32-character API key
 
+// Helper function to generate a certificate-like string dynamically
+// Must be at least 500 characters to pass authorizer validation
+// This generates a unique certificate string for each test run
+function generateMockCertificate(): string {
+  // Generate a unique base64-like string that's at least 500 characters
+  // Using timestamp and random data to ensure uniqueness
+  const timestamp = Date.now();
+  const randomData = crypto.randomBytes(200).toString('base64');
+  const uniqueId = crypto.randomUUID();
+  
+  // Create a certificate-like structure with dynamic content
+  const certContent = `${randomData}${timestamp}${uniqueId}${crypto.randomBytes(100).toString('base64')}`;
+  
+  // Ensure it's at least 500 characters (authorizer requirement)
+  const padding = 'A'.repeat(Math.max(0, 500 - certContent.length));
+  
+  return `-----BEGIN CERTIFICATE-----\n${certContent}${padding}\n-----END CERTIFICATE-----`;
+}
+
 // Helper function to wait
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -229,7 +248,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
           requestId: requestId,
           identity: {
             clientCert: {
-              clientCertPem: '-----BEGIN CERTIFICATE-----\nMOCK_CERT\n-----END CERTIFICATE-----',
+              clientCertPem: generateMockCertificate(),
             },
           },
         },
@@ -266,7 +285,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
           requestId: crypto.randomUUID(),
           identity: {
             clientCert: {
-              clientCertPem: '-----BEGIN CERTIFICATE-----\nMOCK_CERT\n-----END CERTIFICATE-----',
+              clientCertPem: generateMockCertificate(),
             },
           },
         },
@@ -327,7 +346,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
           requestId: requestId,
           identity: {
             clientCert: {
-              clientCertPem: '-----BEGIN CERTIFICATE-----\nMOCK_CERT\n-----END CERTIFICATE-----',
+              clientCertPem: generateMockCertificate(),
             },
           },
         },
@@ -359,7 +378,7 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
           requestId: requestId,
           identity: {
             clientCert: {
-              clientCertPem: '-----BEGIN CERTIFICATE-----\nMOCK_CERT\n-----END CERTIFICATE-----',
+              clientCertPem: generateMockCertificate(),
             },
           },
         },
