@@ -79,8 +79,11 @@ class ApiGatewayStack(pulumi.ComponentResource):
             f"api-authorizer-{self.environment_suffix}",
             name=f"custom-authorizer-{self.environment_suffix}",
             rest_api=self.rest_api.id,
-            authorizer_uri=args.authorizer_lambda_arn.apply(
-                lambda arn: f"arn:aws:apigateway:{aws.get_region().name}:lambda:path/2015-03-31/functions/{arn}/invocations"
+            authorizer_uri=Output.all(
+                aws.get_region().name.apply(lambda name: name if name else "us-east-1"),
+                args.authorizer_lambda_arn
+            ).apply(
+                lambda args: f"arn:aws:apigateway:{args[0]}:lambda:path/2015-03-31/functions/{args[1]}/invocations"
             ),
             authorizer_credentials=self._create_api_gateway_role().arn,
             type="TOKEN",
@@ -243,14 +246,13 @@ class ApiGatewayStack(pulumi.ComponentResource):
         )
 
         # API Gateway endpoint
-        self.api_endpoint = Output.concat(
-            "https://",
+        # Get region with fallback to avoid NoneType errors in tests
+        region_name = aws.get_region().name.apply(lambda name: name if name else "us-east-1")
+        self.api_endpoint = Output.all(
             self.rest_api.id,
-            ".execute-api.",
-            aws.get_region().name,
-            ".amazonaws.com/",
+            region_name,
             self.stage.stage_name
-        )
+        ).apply(lambda args: f"https://{args[0]}.execute-api.{args[1]}.amazonaws.com/{args[2]}")
 
         # Register outputs
         self.register_outputs({

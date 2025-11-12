@@ -85,6 +85,8 @@ class TapMocks(pulumi.runtime.Mocks):
             return {"account_id": "123456789012"}
         if token == "aws:kms/getKey:getKey":
             return {"arn": "arn:aws:kms:mock:123456789012:key/mock"}
+        if token == "aws:index/getRegion:getRegion" or token == "aws:getRegion:getRegion":
+            return {"name": "us-east-1", "id": "us-east-1"}
         return {}
 
 
