@@ -317,8 +317,6 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // VPC Endpoints REMOVED - They were causing deployment errors
-
     // Security Groups for ALB
     const blueAlbSecurityGroup = new aws.ec2.SecurityGroup(
       `blue-alb-sg-${environmentSuffix}`,
@@ -332,6 +330,13 @@ export class TapStack extends pulumi.ComponentResource {
             toPort: 443,
             cidrBlocks: ['0.0.0.0/0'],
             description: 'HTTPS from internet',
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTP from internet',
           },
         ],
         egress: [
@@ -363,6 +368,13 @@ export class TapStack extends pulumi.ComponentResource {
             toPort: 443,
             cidrBlocks: ['0.0.0.0/0'],
             description: 'HTTPS from internet',
+          },
+          {
+            protocol: 'tcp',
+            fromPort: 80,
+            toPort: 80,
+            cidrBlocks: ['0.0.0.0/0'],
+            description: 'HTTP from internet',
           },
         ],
         egress: [
@@ -1755,8 +1767,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB Listeners - Blue
-    new aws.lb.Listener(
+    // ALB Listeners - Blue (MUST CREATE BEFORE ECS SERVICES)
+    const blueAlbListener = new aws.lb.Listener(
       `blue-alb-listener-${environmentSuffix}`,
       {
         loadBalancerArn: blueAlb.arn,
@@ -1772,8 +1784,53 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB Listeners - Green
-    new aws.lb.Listener(
+    // Additional listener rules for other target groups
+    new aws.lb.ListenerRule(
+      `blue-txn-processor-rule-${environmentSuffix}`,
+      {
+        listenerArn: blueAlbListener.arn,
+        priority: 100,
+        actions: [
+          {
+            type: 'forward',
+            targetGroupArn: blueTransactionProcessorTargetGroup.arn,
+          },
+        ],
+        conditions: [
+          {
+            pathPattern: {
+              values: ['/transaction/*'],
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    new aws.lb.ListenerRule(
+      `blue-reporting-rule-${environmentSuffix}`,
+      {
+        listenerArn: blueAlbListener.arn,
+        priority: 101,
+        actions: [
+          {
+            type: 'forward',
+            targetGroupArn: blueReportingTargetGroup.arn,
+          },
+        ],
+        conditions: [
+          {
+            pathPattern: {
+              values: ['/reporting/*'],
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    // ALB Listeners - Green (MUST CREATE BEFORE ECS SERVICES)
+    const greenAlbListener = new aws.lb.Listener(
       `green-alb-listener-${environmentSuffix}`,
       {
         loadBalancerArn: greenAlb.arn,
@@ -1789,7 +1846,52 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ECS Services - Blue
+    // Additional listener rules for other target groups
+    new aws.lb.ListenerRule(
+      `green-txn-processor-rule-${environmentSuffix}`,
+      {
+        listenerArn: greenAlbListener.arn,
+        priority: 100,
+        actions: [
+          {
+            type: 'forward',
+            targetGroupArn: greenTransactionProcessorTargetGroup.arn,
+          },
+        ],
+        conditions: [
+          {
+            pathPattern: {
+              values: ['/transaction/*'],
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    new aws.lb.ListenerRule(
+      `green-reporting-rule-${environmentSuffix}`,
+      {
+        listenerArn: greenAlbListener.arn,
+        priority: 101,
+        actions: [
+          {
+            type: 'forward',
+            targetGroupArn: greenReportingTargetGroup.arn,
+          },
+        ],
+        conditions: [
+          {
+            pathPattern: {
+              values: ['/reporting/*'],
+            },
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    // ECS Services - Blue (CREATE AFTER LISTENERS)
     new aws.ecs.Service(
       `blue-payment-api-service-${environmentSuffix}`,
       {
@@ -1816,7 +1918,7 @@ export class TapStack extends pulumi.ComponentResource {
           Service: 'payment-api',
         },
       },
-      { parent: this, dependsOn: [bluePaymentApiTargetGroup] }
+      { parent: this, dependsOn: [blueAlbListener] }
     );
 
     new aws.ecs.Service(
@@ -1845,7 +1947,7 @@ export class TapStack extends pulumi.ComponentResource {
           Service: 'transaction-processor',
         },
       },
-      { parent: this, dependsOn: [blueTransactionProcessorTargetGroup] }
+      { parent: this, dependsOn: [blueAlbListener] }
     );
 
     new aws.ecs.Service(
@@ -1874,10 +1976,10 @@ export class TapStack extends pulumi.ComponentResource {
           Service: 'reporting',
         },
       },
-      { parent: this, dependsOn: [blueReportingTargetGroup] }
+      { parent: this, dependsOn: [blueAlbListener] }
     );
 
-    // ECS Services - Green
+    // ECS Services - Green (CREATE AFTER LISTENERS)
     new aws.ecs.Service(
       `green-payment-api-service-${environmentSuffix}`,
       {
@@ -1904,7 +2006,7 @@ export class TapStack extends pulumi.ComponentResource {
           Service: 'payment-api',
         },
       },
-      { parent: this, dependsOn: [greenPaymentApiTargetGroup] }
+      { parent: this, dependsOn: [greenAlbListener] }
     );
 
     new aws.ecs.Service(
@@ -1933,7 +2035,7 @@ export class TapStack extends pulumi.ComponentResource {
           Service: 'transaction-processor',
         },
       },
-      { parent: this, dependsOn: [greenTransactionProcessorTargetGroup] }
+      { parent: this, dependsOn: [greenAlbListener] }
     );
 
     new aws.ecs.Service(
@@ -1962,7 +2064,7 @@ export class TapStack extends pulumi.ComponentResource {
           Service: 'reporting',
         },
       },
-      { parent: this, dependsOn: [greenReportingTargetGroup] }
+      { parent: this, dependsOn: [greenAlbListener] }
     );
 
     // Lambda Role for Data Migration
@@ -2182,7 +2284,7 @@ exports.handler = async (event) => {
       { parent: this }
     );
 
-    // CloudWatch Dashboard
+    // CloudWatch Dashboard - FIXED METRICS FORMAT
     const dashboard = new aws.cloudwatch.Dashboard(
       `payment-dashboard-${environmentSuffix}`,
       {
@@ -2201,18 +2303,8 @@ exports.handler = async (event) => {
                   type: 'metric',
                   properties: {
                     metrics: [
-                      [
-                        'AWS/ApplicationELB',
-                        'RequestCount',
-                        { LoadBalancer: blueAlbSuffix, label: 'Blue Requests' },
-                      ],
-                      [
-                        '...',
-                        {
-                          LoadBalancer: greenAlbSuffix,
-                          label: 'Green Requests',
-                        },
-                      ],
+                      ['AWS/ApplicationELB', 'RequestCount', 'LoadBalancer', blueAlbSuffix],
+                      ['...', greenAlbSuffix],
                     ],
                     period: 300,
                     stat: 'Sum',
@@ -2224,18 +2316,8 @@ exports.handler = async (event) => {
                   type: 'metric',
                   properties: {
                     metrics: [
-                      [
-                        'AWS/ApplicationELB',
-                        'TargetResponseTime',
-                        { LoadBalancer: blueAlbSuffix, label: 'Blue Latency' },
-                      ],
-                      [
-                        '...',
-                        {
-                          LoadBalancer: greenAlbSuffix,
-                          label: 'Green Latency',
-                        },
-                      ],
+                      ['AWS/ApplicationELB', 'TargetResponseTime', 'LoadBalancer', blueAlbSuffix],
+                      ['...', greenAlbSuffix],
                     ],
                     period: 300,
                     stat: 'Average',
@@ -2247,15 +2329,8 @@ exports.handler = async (event) => {
                   type: 'metric',
                   properties: {
                     metrics: [
-                      [
-                        'AWS/ApplicationELB',
-                        'HTTPCode_Target_5XX_Count',
-                        { LoadBalancer: blueAlbSuffix, label: 'Blue Errors' },
-                      ],
-                      [
-                        '...',
-                        { LoadBalancer: greenAlbSuffix, label: 'Green Errors' },
-                      ],
+                      ['AWS/ApplicationELB', 'HTTPCode_Target_5XX_Count', 'LoadBalancer', blueAlbSuffix],
+                      ['...', greenAlbSuffix],
                     ],
                     period: 300,
                     stat: 'Sum',
@@ -2267,18 +2342,8 @@ exports.handler = async (event) => {
                   type: 'metric',
                   properties: {
                     metrics: [
-                      [
-                        'AWS/RDS',
-                        'CPUUtilization',
-                        { DBClusterIdentifier: blueDbId, label: 'Blue DB CPU' },
-                      ],
-                      [
-                        '...',
-                        {
-                          DBClusterIdentifier: greenDbId,
-                          label: 'Green DB CPU',
-                        },
-                      ],
+                      ['AWS/RDS', 'CPUUtilization', 'DBClusterIdentifier', blueDbId],
+                      ['...', greenDbId],
                     ],
                     period: 300,
                     stat: 'Average',
@@ -2297,13 +2362,12 @@ exports.handler = async (event) => {
     new aws.route53.HealthCheck(
       `blue-health-check-${environmentSuffix}`,
       {
-        type: 'HTTPS_STR_MATCH',
+        type: 'HTTP',
         resourcePath: '/health',
         fqdn: blueAlb.dnsName,
-        port: 443,
+        port: 80,
         requestInterval: 30,
         failureThreshold: 3,
-        searchString: 'healthy',
         tags: {
           Name: `blue-health-check-${environmentSuffix}`,
           Environment: 'blue',
@@ -2315,13 +2379,12 @@ exports.handler = async (event) => {
     new aws.route53.HealthCheck(
       `green-health-check-${environmentSuffix}`,
       {
-        type: 'HTTPS_STR_MATCH',
+        type: 'HTTP',
         resourcePath: '/health',
         fqdn: greenAlb.dnsName,
-        port: 443,
+        port: 80,
         requestInterval: 30,
         failureThreshold: 3,
-        searchString: 'healthy',
         tags: {
           Name: `green-health-check-${environmentSuffix}`,
           Environment: 'green',
