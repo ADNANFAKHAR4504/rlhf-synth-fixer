@@ -1,0 +1,2602 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Secure Payment Processing Infrastructure - Multi-region deployment with comprehensive security controls",
+    "Parameters": {
+        "Environment": {
+            "Type": "String",
+            "Default": "dev",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "production"
+            ],
+            "Description": "Environment name"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "default",
+            "AllowedPattern": "[a-z0-9-]*",
+            "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens",
+            "Description": "Suffix to append to resource names for uniqueness (lowercase only)"
+        },
+        "ProjectName": {
+            "Type": "String",
+            "Default": "payment",
+            "AllowedPattern": "[a-z0-9-]*",
+            "Description": "Project name for tagging and resource naming (lowercase only)"
+        },
+        "CostCenter": {
+            "Type": "String",
+            "Default": "finance-001",
+            "Description": "Cost center for billing"
+        },
+        "AlertEmail": {
+            "Type": "String",
+            "Default": "alerts@example.com",
+            "AllowedPattern": "^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$",
+            "Description": "Email address for CloudWatch alerts"
+        },
+        "DBMasterUsername": {
+            "Type": "String",
+            "Default": "dbadmin",
+            "NoEcho": true,
+            "Description": "Database master username"
+        },
+        "ECSTaskCPU": {
+            "Type": "String",
+            "Default": "512",
+            "AllowedValues": [
+                "256",
+                "512",
+                "1024",
+                "2048"
+            ],
+            "Description": "CPU units for ECS tasks"
+        },
+        "ECSTaskMemory": {
+            "Type": "String",
+            "Default": "1024",
+            "AllowedValues": [
+                "512",
+                "1024",
+                "2048",
+                "4096"
+            ],
+            "Description": "Memory for ECS tasks (MB)"
+        }
+    },
+    "Mappings": {
+        "SubnetConfig": {
+            "VPC": {
+                "CIDR": "10.0.0.0/16"
+            },
+            "PublicSubnet1": {
+                "CIDR": "10.0.1.0/24"
+            },
+            "PublicSubnet2": {
+                "CIDR": "10.0.2.0/24"
+            },
+            "PublicSubnet3": {
+                "CIDR": "10.0.3.0/24"
+            },
+            "PrivateSubnet1": {
+                "CIDR": "10.0.11.0/24"
+            },
+            "PrivateSubnet2": {
+                "CIDR": "10.0.12.0/24"
+            },
+            "PrivateSubnet3": {
+                "CIDR": "10.0.13.0/24"
+            }
+        }
+    },
+    "Resources": {
+        "MasterKMSKey": {
+            "Type": "AWS::KMS::Key",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "Master KMS key for ${ProjectName}-${Environment}-${EnvironmentSuffix}"
+                },
+                "EnableKeyRotation": true,
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM policies",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow services to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": [
+                                    "rds.amazonaws.com",
+                                    "s3.amazonaws.com",
+                                    "logs.amazonaws.com",
+                                    "sns.amazonaws.com",
+                                    "lambda.amazonaws.com",
+                                    "secretsmanager.amazonaws.com"
+                                ]
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*"
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-master-key"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "MasterKMSKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/${ProjectName}-${Environment}-${EnvironmentSuffix}-master"
+                },
+                "TargetKeyId": {
+                    "Ref": "MasterKMSKey"
+                }
+            }
+        },
+        "DBPasswordSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-password"
+                },
+                "Description": "RDS Aurora database master password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBMasterUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "KmsKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-password"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "VPC",
+                        "CIDR"
+                    ]
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-vpc"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenter"
+                        }
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-igw"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "Environment"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AttachGateway": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-1"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-2"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PublicSubnet3",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-3"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet1",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-1"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet2",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-2"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet3": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "CidrBlock": {
+                    "Fn::FindInMap": [
+                        "SubnetConfig",
+                        "PrivateSubnet3",
+                        "CIDR"
+                    ]
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        2,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-3"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-eip-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-eip-2"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway3EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-eip-3"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-2"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "NATGateway3": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NATGateway3EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet3"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-3"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-rt"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "AttachGateway",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PublicSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PublicSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-rt-1"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-rt-2"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                }
+            }
+        },
+        "PrivateRouteTable3": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-rt-3"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "PrivateRoute3": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable3"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NATGateway3"
+                }
+            }
+        },
+        "PrivateSubnet3RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "SubnetId": {
+                    "Ref": "PrivateSubnet3"
+                },
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable3"
+                }
+            }
+        },
+        "S3VPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.s3"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable1"
+                    },
+                    {
+                        "Ref": "PrivateRouteTable2"
+                    },
+                    {
+                        "Ref": "PrivateRouteTable3"
+                    }
+                ]
+            }
+        },
+        "DynamoDBVPCEndpoint": {
+            "Type": "AWS::EC2::VPCEndpoint",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "ServiceName": {
+                    "Fn::Sub": "com.amazonaws.${AWS::Region}.dynamodb"
+                },
+                "VpcEndpointType": "Gateway",
+                "RouteTableIds": [
+                    {
+                        "Ref": "PrivateRouteTable1"
+                    },
+                    {
+                        "Ref": "PrivateRouteTable2"
+                    },
+                    {
+                        "Ref": "PrivateRouteTable3"
+                    }
+                ]
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-sg"
+                },
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTPS from Internet"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "HTTP from Internet"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ECSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-sg"
+                },
+                "GroupDescription": "Security group for ECS tasks",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "Traffic from ALB"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-sg"
+                },
+                "GroupDescription": "Security group for RDS Aurora cluster",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ECSSecurityGroup"
+                        },
+                        "Description": "PostgreSQL from ECS"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "SourceSecurityGroupId": {
+                            "Ref": "LambdaSecurityGroup"
+                        },
+                        "Description": "PostgreSQL from Lambda"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "LambdaSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-lambda-sg"
+                },
+                "GroupDescription": "Security group for Lambda functions",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-lambda-sg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-subnet"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS Aurora",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    },
+                    {
+                        "Ref": "PrivateSubnet3"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-subnet"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "DBClusterParameterGroup": {
+            "Type": "AWS::RDS::DBClusterParameterGroup",
+            "Properties": {
+                "Description": "Aurora PostgreSQL Cluster Parameter Group",
+                "Family": "aurora-postgresql13",
+                "Parameters": {
+                    "shared_preload_libraries": "pg_stat_statements",
+                    "log_statement": "all",
+                    "log_min_duration_statement": 1000
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-cluster-params"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AuroraDBCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-aurora"
+                },
+                "Engine": "aurora-postgresql",
+                "EngineVersion": "13.9",
+                "MasterUsername": {
+                    "Ref": "DBMasterUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}"
+                },
+                "DatabaseName": "payments",
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "BackupRetentionPeriod": 1,
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "postgresql"
+                ],
+                "StorageEncrypted": true,
+                "KmsKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "DBClusterParameterGroupName": {
+                    "Ref": "DBClusterParameterGroup"
+                },
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-aurora"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AuroraDBInstance1": {
+            "Type": "AWS::RDS::DBInstance",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-writer"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "AuroraDBCluster"
+                },
+                "DBInstanceClass": "db.t3.medium",
+                "Engine": "aurora-postgresql",
+                "PubliclyAccessible": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-writer"
+                        }
+                    },
+                    {
+                        "Key": "Role",
+                        "Value": "Writer"
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "IpAddressType": "ipv4",
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    },
+                    {
+                        "Ref": "PublicSubnet3"
+                    }
+                ],
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-tg"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "ip",
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": 200
+                },
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": "30"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-tg"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-cluster"
+                },
+                "ClusterSettings": [
+                    {
+                        "Name": "containerInsights",
+                        "Value": "enabled"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-cluster"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ECSLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/${ProjectName}-${Environment}-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-exec"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "KMSDecrypt",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MasterKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-exec"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ECSTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-task"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "TaskPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${AuditLogsBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MasterKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-task"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ECSTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-api"
+                },
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": {
+                    "Ref": "ECSTaskCPU"
+                },
+                "Memory": {
+                    "Ref": "ECSTaskMemory"
+                },
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": "payment-api",
+                        "Image": "public.ecr.aws/docker/library/nginx:latest",
+                        "Essential": true,
+                        "PortMappings": [
+                            {
+                                "ContainerPort": 80,
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "Environment": [
+                            {
+                                "Name": "DB_HOST",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "AuroraDBCluster",
+                                        "Endpoint.Address"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "DB_PORT",
+                                "Value": {
+                                    "Fn::GetAtt": [
+                                        "AuroraDBCluster",
+                                        "Endpoint.Port"
+                                    ]
+                                }
+                            },
+                            {
+                                "Name": "DB_NAME",
+                                "Value": "payments"
+                            },
+                            {
+                                "Name": "ENVIRONMENT",
+                                "Value": {
+                                    "Ref": "Environment"
+                                }
+                            },
+                            {
+                                "Name": "AWS_REGION",
+                                "Value": {
+                                    "Ref": "AWS::Region"
+                                }
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "ECSLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "payment-api"
+                            }
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-task-def"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ECSService": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": "ALBListener",
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-svc"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "ECSTaskDefinition"
+                },
+                "DesiredCount": 2,
+                "LaunchType": "FARGATE",
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "Subnets": [
+                            {
+                                "Ref": "PrivateSubnet1"
+                            },
+                            {
+                                "Ref": "PrivateSubnet2"
+                            },
+                            {
+                                "Ref": "PrivateSubnet3"
+                            }
+                        ],
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ECSSecurityGroup"
+                            }
+                        ],
+                        "AssignPublicIp": "DISABLED"
+                    }
+                },
+                "LoadBalancers": [
+                    {
+                        "ContainerName": "payment-api",
+                        "ContainerPort": 80,
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "HealthCheckGracePeriodSeconds": 60,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-svc"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "LambdaExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-lambda-exec"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "lambda.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "LambdaPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "${AuditLogsBucket.Arn}/*"
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "kms:Decrypt",
+                                        "kms:GenerateDataKey"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "MasterKMSKey",
+                                            "Arn"
+                                        ]
+                                    }
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "sns:Publish"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "AlertTopic"
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-lambda-exec"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "FraudDetectionLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/${ProjectName}-${Environment}-${EnvironmentSuffix}-fraud"
+                },
+                "RetentionInDays": 7
+            }
+        },
+        "FraudDetectionFunction": {
+            "Type": "AWS::Lambda::Function",
+            "Properties": {
+                "FunctionName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-fraud"
+                },
+                "Runtime": "python3.9",
+                "Handler": "index.lambda_handler",
+                "Role": {
+                    "Fn::GetAtt": [
+                        "LambdaExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "Timeout": 30,
+                "MemorySize": 256,
+                "Environment": {
+                    "Variables": {
+                        "DB_HOST": {
+                            "Fn::GetAtt": [
+                                "AuroraDBCluster",
+                                "Endpoint.Address"
+                            ]
+                        },
+                        "DB_PORT": {
+                            "Fn::GetAtt": [
+                                "AuroraDBCluster",
+                                "Endpoint.Port"
+                            ]
+                        },
+                        "ENVIRONMENT": {
+                            "Ref": "Environment"
+                        }
+                    }
+                },
+                "VpcConfig": {
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "LambdaSecurityGroup"
+                        }
+                    ],
+                    "SubnetIds": [
+                        {
+                            "Ref": "PrivateSubnet1"
+                        },
+                        {
+                            "Ref": "PrivateSubnet2"
+                        },
+                        {
+                            "Ref": "PrivateSubnet3"
+                        }
+                    ]
+                },
+                "Code": {
+                    "ZipFile": "import json\ndef lambda_handler(event, context):\n    return {'statusCode': 200, 'body': json.dumps('Fraud detection')}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-fraud"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "ApiGateway": {
+            "Type": "AWS::ApiGatewayV2::Api",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-api"
+                },
+                "ProtocolType": "HTTP",
+                "Description": "Payment Processing API Gateway",
+                "CorsConfiguration": {
+                    "AllowOrigins": [
+                        "*"
+                    ],
+                    "AllowMethods": [
+                        "GET",
+                        "POST",
+                        "PUT",
+                        "DELETE"
+                    ],
+                    "AllowHeaders": [
+                        "*"
+                    ]
+                },
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": "2"
+                }
+            }
+        },
+        "ApiGatewayStage": {
+            "Type": "AWS::ApiGatewayV2::Stage",
+            "Properties": {
+                "ApiId": {
+                    "Ref": "ApiGateway"
+                },
+                "StageName": {
+                    "Ref": "Environment"
+                },
+                "AutoDeploy": true,
+                "DefaultRouteSettings": {
+                    "ThrottlingBurstLimit": 5000,
+                    "ThrottlingRateLimit": 2000
+                },
+                "Tags": {
+                    "project": "iac-rlhf-amazon",
+                    "team-number": "2"
+                }
+            }
+        },
+        "AuditLogsBucket": {
+            "Type": "AWS::S3::Bucket",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "BucketName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-audit-${AWS::AccountId}"
+                },
+                "VersioningConfiguration": {
+                    "Status": "Enabled"
+                },
+                "BucketEncryption": {
+                    "ServerSideEncryptionConfiguration": [
+                        {
+                            "ServerSideEncryptionByDefault": {
+                                "SSEAlgorithm": "aws:kms",
+                                "KMSMasterKeyID": {
+                                    "Ref": "MasterKMSKey"
+                                }
+                            }
+                        }
+                    ]
+                },
+                "LifecycleConfiguration": {
+                    "Rules": [
+                        {
+                            "Id": "DeleteOldObjects",
+                            "Status": "Enabled",
+                            "ExpirationInDays": 90
+                        },
+                        {
+                            "Id": "DeleteOldVersions",
+                            "Status": "Enabled",
+                            "NoncurrentVersionExpirationInDays": 30
+                        }
+                    ]
+                },
+                "PublicAccessBlockConfiguration": {
+                    "BlockPublicAcls": true,
+                    "BlockPublicPolicy": true,
+                    "IgnorePublicAcls": true,
+                    "RestrictPublicBuckets": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-audit"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AlertTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alerts"
+                },
+                "DisplayName": "Payment Processing Alerts",
+                "KmsMasterKeyId": {
+                    "Ref": "MasterKMSKey"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alerts"
+                        }
+                    },
+                    {
+                        "Key": "project",
+                        "Value": "iac-rlhf-amazon"
+                    },
+                    {
+                        "Key": "team-number",
+                        "Value": "2"
+                    }
+                ]
+            }
+        },
+        "AlertTopicSubscription": {
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Protocol": "email",
+                "Endpoint": {
+                    "Ref": "AlertEmail"
+                },
+                "TopicArn": {
+                    "Ref": "AlertTopic"
+                }
+            }
+        },
+        "ECSHighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-cpu"
+                },
+                "AlarmDescription": "ECS service CPU utilization is too high",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/ECS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ServiceName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ECSService",
+                                "Name"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "ClusterName",
+                        "Value": {
+                            "Ref": "ECSCluster"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        },
+        "RDSHighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-cpu"
+                },
+                "AlarmDescription": "RDS cluster CPU utilization is too high",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBClusterIdentifier",
+                        "Value": {
+                            "Ref": "AuroraDBCluster"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "AlertTopic"
+                    }
+                ]
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-vpc-id"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-subnet-1"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-subnet-2"
+                }
+            }
+        },
+        "PublicSubnet3Id": {
+            "Description": "Public Subnet 3 ID",
+            "Value": {
+                "Ref": "PublicSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-public-subnet-3"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-subnet-1"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-subnet-2"
+                }
+            }
+        },
+        "PrivateSubnet3Id": {
+            "Description": "Private Subnet 3 ID",
+            "Value": {
+                "Ref": "PrivateSubnet3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-private-subnet-3"
+                }
+            }
+        },
+        "NATGateway1Id": {
+            "Description": "NAT Gateway 1 ID",
+            "Value": {
+                "Ref": "NATGateway1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-1"
+                }
+            }
+        },
+        "NATGateway2Id": {
+            "Description": "NAT Gateway 2 ID",
+            "Value": {
+                "Ref": "NATGateway2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-2"
+                }
+            }
+        },
+        "NATGateway3Id": {
+            "Description": "NAT Gateway 3 ID",
+            "Value": {
+                "Ref": "NATGateway3"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-nat-3"
+                }
+            }
+        },
+        "ALBSecurityGroupId": {
+            "Description": "ALB Security Group ID",
+            "Value": {
+                "Ref": "ALBSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-sg"
+                }
+            }
+        },
+        "ECSSecurityGroupId": {
+            "Description": "ECS Security Group ID",
+            "Value": {
+                "Ref": "ECSSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-sg"
+                }
+            }
+        },
+        "RDSSecurityGroupId": {
+            "Description": "RDS Security Group ID",
+            "Value": {
+                "Ref": "RDSSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-sg"
+                }
+            }
+        },
+        "LambdaSecurityGroupId": {
+            "Description": "Lambda Security Group ID",
+            "Value": {
+                "Ref": "LambdaSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-lambda-sg"
+                }
+            }
+        },
+        "ALBDNSName": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-dns"
+                }
+            }
+        },
+        "ALBArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-alb-arn"
+                }
+            }
+        },
+        "ALBTargetGroupArn": {
+            "Description": "ALB Target Group ARN",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-tg-arn"
+                }
+            }
+        },
+        "APIGatewayEndpoint": {
+            "Description": "API Gateway Endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/${Environment}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-api-endpoint"
+                }
+            }
+        },
+        "APIGatewayId": {
+            "Description": "API Gateway ID",
+            "Value": {
+                "Ref": "ApiGateway"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-api-id"
+                }
+            }
+        },
+        "RDSClusterEndpoint": {
+            "Description": "RDS Aurora Writer Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-endpoint"
+                }
+            }
+        },
+        "RDSClusterPort": {
+            "Description": "RDS Aurora Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuroraDBCluster",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-port"
+                }
+            }
+        },
+        "RDSClusterArn": {
+            "Description": "RDS Aurora Cluster ARN",
+            "Value": {
+                "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:cluster:${AuroraDBCluster}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-rds-arn"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS Topic ARN for Alerts",
+            "Value": {
+                "Ref": "AlertTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-sns-topic"
+                }
+            }
+        },
+        "AuditLogsBucketName": {
+            "Description": "S3 Bucket for Audit Logs",
+            "Value": {
+                "Ref": "AuditLogsBucket"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-audit-bucket"
+                }
+            }
+        },
+        "AuditLogsBucketArn": {
+            "Description": "S3 Bucket ARN for Audit Logs",
+            "Value": {
+                "Fn::GetAtt": [
+                    "AuditLogsBucket",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-audit-bucket-arn"
+                }
+            }
+        },
+        "ECSClusterName": {
+            "Description": "ECS Cluster Name",
+            "Value": {
+                "Ref": "ECSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-cluster"
+                }
+            }
+        },
+        "ECSClusterArn": {
+            "Description": "ECS Cluster ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSCluster",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-cluster-arn"
+                }
+            }
+        },
+        "ECSServiceName": {
+            "Description": "ECS Service Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSService",
+                    "Name"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-service"
+                }
+            }
+        },
+        "ECSTaskDefinitionArn": {
+            "Description": "ECS Task Definition ARN",
+            "Value": {
+                "Ref": "ECSTaskDefinition"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-task-def-arn"
+                }
+            }
+        },
+        "KMSKeyId": {
+            "Description": "KMS Key ID for Encryption",
+            "Value": {
+                "Ref": "MasterKMSKey"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-kms-key-id"
+                }
+            }
+        },
+        "KMSKeyArn": {
+            "Description": "KMS Key ARN for Encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "MasterKMSKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-kms-key-arn"
+                }
+            }
+        },
+        "FraudDetectionFunctionArn": {
+            "Description": "Fraud Detection Lambda Function ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "FraudDetectionFunction",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-fraud-fn-arn"
+                }
+            }
+        },
+        "FraudDetectionFunctionName": {
+            "Description": "Fraud Detection Lambda Function Name",
+            "Value": {
+                "Ref": "FraudDetectionFunction"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-fraud-fn-name"
+                }
+            }
+        },
+        "ECSTaskRoleArn": {
+            "Description": "ECS Task Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSTaskRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-task-role"
+                }
+            }
+        },
+        "ECSExecutionRoleArn": {
+            "Description": "ECS Task Execution Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSTaskExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-ecs-exec-role"
+                }
+            }
+        },
+        "LambdaExecutionRoleArn": {
+            "Description": "Lambda Execution Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LambdaExecutionRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-lambda-exec-role"
+                }
+            }
+        },
+        "DBPasswordSecretArn": {
+            "Description": "Database Password Secret ARN",
+            "Value": {
+                "Ref": "DBPasswordSecret"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-password-secret"
+                }
+            }
+        },
+        "DBPasswordSecretName": {
+            "Description": "Database Password Secret Name",
+            "Value": {
+                "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-password"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${ProjectName}-${Environment}-${EnvironmentSuffix}-db-password-secret-name"
+                }
+            }
+        }
+    }
+}
