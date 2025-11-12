@@ -30,5 +30,6 @@
     "lines": 100,
     "branches": 100
   },
-  "reviewer": "raghav-turing"
+  "reviewer": "raghav-turing",
+  "dockerS3Location": ""
 }
