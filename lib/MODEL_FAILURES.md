@@ -76,7 +76,7 @@ timeout=60,  # Sufficient for VPC Lambda cold starts
 
 **AWS Documentation Reference**: [Lambda VPC Networking](https://docs.aws.amazon.com/lambda/latest/dg/configuration-vpc.html)
 
-**Performance Impact**: Critical - API Gateway returns 504 Gateway Timeout errors during Lambda cold starts, causing failed transactions and poor user experience. In production, this could result in significant transaction failures.
+**Performance Impact**: Critical - API Gateway returns 504 Gateway Timeout errors during Lambda cold starts, causing failed transactions and poor user experience. In production, this could result in significant transaction failures
 
 ---
 
