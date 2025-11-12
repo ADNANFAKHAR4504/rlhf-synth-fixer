@@ -3,160 +3,104 @@ set -e
 
 echo "🔧 Starting optimized environment setup..."
 export PIPENV_VENV_IN_PROJECT=1
+
 NODE_VERSION=${NODE_VERSION:-22.17.0}
 TERRAFORM_VERSION=${TERRAFORM_VERSION:-1.12.2}
 PULUMI_VERSION=${PULUMI_VERSION:-3.109.0}
 PLATFORM=${PLATFORM:-""}
 LANGUAGE=${LANGUAGE:-""}
-export PIPENV_VENV_IN_PROJECT=1
+
 echo "Platform: $PLATFORM"
 echo "Language: $LANGUAGE"
 echo "Node: $NODE_VERSION | Terraform: $TERRAFORM_VERSION | Pulumi: $PULUMI_VERSION"
 
-# -------------------------------------------------------------------
-# Pre-check for required system utilities
-# -------------------------------------------------------------------
+# Ensure system utilities
 if ! command -v jq &>/dev/null; then
-  echo "📦 Installing jq (required for metadata parsing)..."
+  echo "📦 Installing jq..."
   sudo apt-get update -y && sudo apt-get install -y jq
 fi
 
+# Configure npm global directory
 export NPM_CONFIG_PREFIX="$HOME/.npm-global"
-export PATH="$PATH:$HOME/.npm-global/bin"
+export PATH="$HOME/.npm-global/bin:$PATH"
 
-# -------------------------------------------------------------------
-# Common sanity checks
-# -------------------------------------------------------------------
-echo "🔹 Checking available tools..."
-node --version 2>/dev/null || echo "⚠️ Node not found"
-python --version 2>/dev/null || echo "⚠️ Python not found"
-terraform --version 2>/dev/null || true
-pulumi version 2>/dev/null || true
-go version 2>/dev/null || true
-java -version 2>&1 | head -n 1 || true
+echo "🔹 Checking tools..."
+node --version || echo "⚠️ Node not found"
+python --version || echo "⚠️ Python not found"
 
-# -------------------------------------------------------------------
-# Conditional environment setup per platform/language
-# -------------------------------------------------------------------
-case "$PLATFORM" in
-  cdk)
-    echo "🪄 CDK project detected."
-    if [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
-      elif [ -f "package-lock.json" ]; then npm ci;
-      else npm install; fi
-    elif [ "$LANGUAGE" = "java" ]; then
-      gradle --version || echo "Gradle wrapper will be used."
-    elif [ "$LANGUAGE" = "py" ]; then
-      if ! command -v pipenv &>/dev/null; then pip install pipenv; fi
-      pipenv install --dev
+# 1) === Install Node.js dependencies IF package.json exists ===
+if [ -f "package.json" ]; then
+  echo "📦 Ensuring Node dependencies..."
+
+  if [ -d "node_modules" ]; then
+    echo "✅ node_modules exists — cache restored — skipping npm ci"
+  elif [ -f "package-lock.json" ]; then
+    echo "📦 Running npm ci (first install or cache miss)"
+    npm ci
+  else
+    echo "📦 Running npm install (no lockfile)"
+    npm install
+  fi
+fi
+
+# 2) === Install Python dependencies IF Pipfile exists ===
+if [ -f "Pipfile" ]; then
+  echo "🐍 Ensuring pipenv environment..."
+
+  if ! command -v pipenv &>/dev/null; then
+    echo "📦 Installing pipenv..."
+    pip install pipenv
+  fi
+
+  # Rebuild venv if cache mismatched interpreter version
+  if [ -d ".venv" ] && [ ! -f ".venv/bin/python" ]; then
+    echo "⚠️ Cached venv invalid — removing and recreating..."
+    rm -rf .venv
+  fi
+
+  if [ -d ".venv" ]; then
+    echo "✅ .venv exists — using cached environment"
+    pipenv sync --dev
+  else
+    echo "📦 Creating new pipenv environment..."
+    pipenv install --dev
+  fi
+  if [ "$PLATFORM" = "cdktf" ] && [ "$LANGUAGE" = "py" ]; then
+    echo "📦 Ensuring CDKTF Python libraries are available..."
+
+    # Check if cdktf is installed in the venv
+    if ! pipenv run python -c "import cdktf" 2>/dev/null; then
+      echo "📦 Installing CDKTF Python SDK into existing venv..."
+      pipenv install "cdktf~=0.21.0" "constructs>=10.0.0,<11.0.0"
+    else
+      echo "✅ CDKTF Python library already installed in venv"
     fi
-    ;;
+  fi
 
-  cdktf)
-    echo "🪄 CDKTF project detected."
-    if [ "$LANGUAGE" = "go" ]; then
-      echo "📦 Go CDKTF project — skipping npm install."
+  echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
+fi
 
-    elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
-      elif [ -f "package-lock.json" ]; then npm ci;
-      else npm install; fi
+# 3) === CDKTF extra handling ===
+if [ "$PLATFORM" = "cdktf" ]; then
+  if ! command -v cdktf &>/dev/null; then
+    echo "📦 Installing CDKTF CLI..."
+    npm install -g cdktf-cli@latest >/dev/null 2>&1
+  else
+    echo "✅ CDKTF CLI already installed"
+  fi
 
-    elif [ "$LANGUAGE" = "py" ]; then
-      echo "🐍 CDKTF + Python detected — preparing environment..."
+  if [ ! -d ".gen/aws" ]; then
+    echo "📦 Generating provider bindings (.gen)..."
+    npx --yes cdktf get
+  else
+    echo "✅ .gen restored from cache — skipping cdktf get"
+  fi
+fi
 
-      # ✅ Guarantee pipenv available
-      if ! command -v pipenv &>/dev/null; then
-        echo "📦 Installing pipenv..."
-        pip install pipenv
-      fi
-
-      # ✅ Create venv if missing
-      if [ ! -d ".venv" ]; then
-        echo "📦 Installing Python dependencies..."
-        pipenv install --dev
-      else
-        echo "✅ .venv exists — skipping pipenv install"
-      fi
-
-      # ✅ Ensure CDKTF CLI installed (required for cdktf synth / get)
-      if ! command -v cdktf &>/dev/null; then
-        echo "📦 Installing CDKTF CLI globally..."
-        npm install -g cdktf-cli@latest >/dev/null 2>&1
-      else
-        echo "✅ CDKTF CLI already available"
-      fi
-      export PATH="$HOME/.npm-global/bin:$PATH"
-      echo "$HOME/.npm-global/bin" >> "$GITHUB_PATH"
-      # ✅ Ensure .gen exists (critical for synth + lint + integration tests)
-      if [ ! -d ".gen/aws" ]; then
-        echo "📦 Generating provider bindings (.gen)..."
-        npx --yes cdktf get
-      else
-        echo "✅ .gen/aws exists — skipping cdktf get"
-      fi
-    fi
-    ;;
-
-  tf)
-    echo "🪄 Terraform project — minimal setup."
-    if [ ! -d "node_modules" ]; then
-      npm init -y >/dev/null 2>&1 || true
-      npm install --no-save jest ts-jest typescript @types/jest >/dev/null 2>&1
-    fi
-    ;;
-
-  pulumi)
-    echo "🪄 Pulumi project detected."
-    if [ "$LANGUAGE" = "py" ]; then
-      if ! command -v pipenv &>/dev/null; then pip install pipenv; fi
-      [ -d ".venv" ] && echo "✅ venv exists" || pipenv install --dev
-    elif [[ "$LANGUAGE" =~ ^(ts|js)$ ]]; then
-      if [ -d "node_modules" ]; then echo "node_modules exists — skipping npm ci";
-      elif [ -f "package-lock.json" ]; then npm ci;
-      else npm install; fi
-    elif [ "$LANGUAGE" = "java" ]; then
-      gradle --version || echo "Gradle wrapper will handle it."
-    fi
-    ;;
-
-  cfn)
-    echo "🪄 CloudFormation project detected."
-
-    # No pipenv, no Python environment setup — CFN uses npm-based tests.
-    echo "✅ Skipping pipenv setup for CFN (tests will run via npm)."
-
-    echo "📦 Installing Node dependencies for CFN..."
-    npm ci --prefer-offline --no-audit --omit=optional
-    ;;
-esac
-
-# -------------------------------------------------------------------
-# Universal Jest fallback
-# -------------------------------------------------------------------
+# 4) Universal Jest fallback
 if ! command -v jest &>/dev/null; then
-  npm install -g jest@28.1.3 ts-node typescript@5.4.5 @types/jest
+  echo "📦 Installing Jest fallback..."
+  npm install -g jest@28.1.3 ts-node typescript @types/jest >/dev/null 2>&1 || true
 fi
-
-# -------------------------------------------------------------------
-# Java wrapper fallback
-# -------------------------------------------------------------------
-if [ "$LANGUAGE" = "java" ] && [ ! -f "./gradlew" ]; then
-  gradle wrapper || echo "Gradle wrapper generation failed"
-fi
-
-# -------------------------------------------------------------------
-# Configure AWS
-# -------------------------------------------------------------------
-if [ -n "$AWS_ACCESS_KEY_ID" ] && [ -n "$AWS_SECRET_ACCESS_KEY" ]; then
-  ./scripts/configure-aws.sh
-fi
-
-# -------------------------------------------------------------------
-# PATH setup
-# -------------------------------------------------------------------
-[ -d "node_modules/.bin" ] && echo "$(pwd)/node_modules/.bin" >> "$GITHUB_PATH"
-[ -d ".venv/bin" ] && echo "$(pwd)/.venv/bin" >> "$GITHUB_PATH"
 
 echo "✅ Environment setup completed successfully"

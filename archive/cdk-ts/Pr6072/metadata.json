@@ -1,0 +1,40 @@
+{
+  "task_id": "1xqfl",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "multi",
+  "po_id": "1xqfl",
+  "team": "synth",
+  "startedAt": "2025-11-07T18:08:00Z",
+  "subtask": "Application Deployment",
+  "aws_services": [
+    "ECS",
+    "ECR",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "SQS",
+    "CloudWatch",
+    "IAM",
+    "CloudMap",
+    "SNS",
+    "SystemsManager"
+  ],
+  "subject_labels": [
+    "containers",
+    "ecs-fargate",
+    "auto-scaling",
+    "load-balancing",
+    "queue-processing",
+    "monitoring",
+    "alerting"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

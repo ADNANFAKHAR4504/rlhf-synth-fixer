@@ -12,12 +12,12 @@ on:
   workflow_dispatch:
     inputs:
       environment_suffix:
-        description: 'Environment suffix for resource naming (e.g., pr123, dev, test)'
+        description: "Environment suffix for resource naming (e.g., pr123, dev, test)"
         required: false
-        default: 'manual'
+        default: "manual"
         type: string
       skip_cleanup:
-        description: 'Skip cleanup/destroy step after deployment'
+        description: "Skip cleanup/destroy step after deployment"
         required: false
         default: false
         type: boolean
@@ -26,30 +26,30 @@ permissions:
   contents: read
 
 env:
-  NODE_VERSION: '22.17.0'
-  GO_VERSION: '1.23.12'
+  NODE_VERSION: "22.17.0"
+  GO_VERSION: "1.23.12"
   # Use PR number for resource isolation, manual input, or fallback to 'dev' for main branch
   # Prefix with 'pr' to ensure AWS resource names start with a letter
   ENVIRONMENT_SUFFIX: ${{ github.event.inputs.environment_suffix || (github.event.number && format('pr{0}', github.event.number)) || 'dev' }}
-  S3_RELEASE_BUCKET_NAME: 'iac-rlhf-aws-release-342597974367-us-east-1'
-  TERRAFORM_STATE_BUCKET: 'iac-rlhf-tf-states-342597974367'
-  TERRAFORM_STATE_BUCKET_REGION: 'us-east-1'
+  S3_RELEASE_BUCKET_NAME: "iac-rlhf-aws-release-342597974367-us-east-1"
+  TERRAFORM_STATE_BUCKET: "iac-rlhf-tf-states-342597974367"
+  TERRAFORM_STATE_BUCKET_REGION: "us-east-1"
   TERRAFORM_STATE_BUCKET_KEY: ${{ github.event.pull_request.number }}
-  PULUMI_STATE_BUCKET: 'iac-rlhf-pulumi-states-342597974367'
-  PULUMI_BUCKET_REGION: 'us-east-1'
+  PULUMI_STATE_BUCKET: "iac-rlhf-pulumi-states-342597974367"
+  PULUMI_BUCKET_REGION: "us-east-1"
   PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
-  PULUMI_ORG: 'organization'
+  PULUMI_ORG: "organization"
   AWS_REGION: ${{ vars.AWS_REGION }}
   CDK_DEFAULT_REGION: ${{ vars.CDK_DEFAULT_REGION || vars.AWS_REGION || 'us-east-1' }}
   CURRENT_ACCOUNT_ID: ${{ vars.ACCOUNT_ID }}
   AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
   AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  MODEL_S3_URI: 's3://social-platform-sagemaker-342597974367-dev/model.tar.gz'
+  MODEL_S3_URI: "s3://social-platform-sagemaker-342597974367-dev/model.tar.gz"
   # Go caching optimization
   GOCACHE: ${{ github.workspace }}/.cache/go-build
   GOMODCACHE: ${{ github.workspace }}/.cache/go-mod
-  IAC_ANALYSIS_SUBJECT_LABEL: "Infrastructure Analysis/Monitoring"
-  CICD_PIPELINE_SUBJECT_LABEL: "CI/CD Pipeline"
+  IAC_ANALYSIS_SUBJECT_LABEL: 'Infrastructure Analysis/Monitoring'
+  CICD_PIPELINE_SUBJECT_LABEL: 'CI/CD Pipeline'
 
 jobs:
   detect-metadata:
@@ -107,7 +107,7 @@ jobs:
     name: Build
     runs-on: ubuntu-24.04
     needs: detect-metadata
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
     environment: dev
 
     steps:
@@ -118,19 +118,26 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
-          upload-artifacts: 'true'
+          download-artifacts: "false"
+          upload-artifacts: "true"
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
       - name: Build
         run: ./scripts/build.sh
 
+      - name: Upload build artifacts (dist/)
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-dist
+          path: dist
+          if-no-files-found: ignore
+
   synth:
     name: Synth
     runs-on: ubuntu-24.04
     needs: [detect-metadata, build]
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch' && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: dev
     permissions:
       contents: read
@@ -142,12 +149,18 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Skip Synth for non-CDK/CDKTF platforms
+        if: ${{ needs.detect-metadata.outputs.platform != 'cdk' && needs.detect-metadata.outputs.platform != 'cdktf' }}
+        run: |
+          echo "✅ Synth step not required for platform: ${{ needs.detect-metadata.outputs.platform }}"
+          echo "This platform does not require synthesis. Job passes automatically."
+
       - name: Setup Environment
         if: ${{ needs.detect-metadata.outputs.platform == 'cdk' || needs.detect-metadata.outputs.platform == 'cdktf' }}
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "false"
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -264,8 +277,8 @@ jobs:
   analysis:
     name: Analysis
     runs-on: ubuntu-24.04
-    needs: detect-metadata
-    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) }}
+    needs: [detect-metadata, lint, unit-tests]
+    if: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && needs.lint.result == 'success' && needs.unit-tests.result == 'success' }}
     environment: dev
     env:
       AWS_ENDPOINT_URL: http://127.0.0.1:5001
@@ -287,8 +300,8 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: "false"
-          is-analysis: "true"
+          download-artifacts: 'false'
+          is-analysis: 'true'
 
       - name: Run analysis
         run: ./scripts/analysis.sh
@@ -349,10 +362,16 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
+      - name: Download build artifacts (dist/)
+        if: ${{ needs.detect-metadata.outputs.language == 'ts' || needs.detect-metadata.outputs.language == 'js' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: build-dist
+          path: dist
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
         with:
@@ -398,15 +417,13 @@ jobs:
           path: |
             cfn-outputs/
             cdk-stacks.json
-  lint:
-    name: Lint
+
+  iac-optimization:
+    name: IaC Optimization
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, build]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
-    environment: qa
-    outputs:
-      platform: ${{ needs.detect-metadata.outputs.platform }}
-      language: ${{ needs.detect-metadata.outputs.language }}
+    needs: [detect-metadata, deploy]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && contains(needs.detect-metadata.outputs.subject_labels, 'IaC Optimization')}}
+    environment: dev
 
     steps:
       - name: Checkout code
@@ -420,6 +437,47 @@ jobs:
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
+      - name: Download Deployment Outputs
+        uses: actions/download-artifact@v4
+        with:
+          name: cfn-outputs
+          path: .
+
+      - name: Configure AWS
+        uses: ./.github/actions/configure-aws
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION || 'us-east-1' }}
+
+      - name: Check and Run IaC Optimization
+        run: ./scripts/optimize.sh
+        env:
+          ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
+
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    needs: [detect-metadata, build]
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label)}}
+    environment: qa
+    outputs:
+      platform: ${{ needs.detect-metadata.outputs.platform }}
+      language: ${{ needs.detect-metadata.outputs.language }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup-environment
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          download-artifacts: "true"
+          platform: ${{ needs.detect-metadata.outputs.platform }}
+          language: ${{ needs.detect-metadata.outputs.language }}
+
       # Python setup is handled by the setup-environment action
 
       - name: Run Linting
@@ -429,7 +487,7 @@ jobs:
     name: Unit Testing
     runs-on: ubuntu-24.04
     needs: [detect-metadata, lint]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.analysis_subject_label) && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
+    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && !contains(needs.detect-metadata.outputs.subject_labels, needs.detect-metadata.outputs.cicd_pipeline_subject_label) }}
     environment: qa
 
     steps:
@@ -440,7 +498,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -494,88 +552,6 @@ jobs:
             coverage/
             cov.json
 
-  claude-task-analyze:
-    runs-on: ubuntu-24.04
-    name: 'Claude Task Analysis'
-    needs: [detect-metadata, unit-tests]
-    if: ${{ (github.event_name == 'pull_request' && github.event.action != 'closed' || github.event_name == 'workflow_dispatch') && !contains(github.event.head_commit.message, '[skip-jobs]') && needs.detect-metadata.outputs.subtask != 'IaC Program Optimization'}}
-    permissions:
-      contents: write
-      pull-requests: write
-      issues: write
-      id-token: write
-      actions: read
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.pull_request.number) || github.ref }}
-
-      - name: Setup Environment
-        uses: ./.github/actions/setup-environment
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
-
-      - name: Run Claude Task Analysis
-        uses: anthropics/claude-code-action@beta
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
-          trigger_phrase: ''
-          custom_instructions: |
-            Analyze the IAC task files in the lib/ folder and generate a report showing which resources have deletion protection enabled.
-            This helps identify resources that will REMAIN after stack deletion.
-
-            Your task:
-            1. Read all IAC code files in the lib/ folder (including TypeScript, Python, Java, Go, Terraform, CloudFormation, etc.)
-            2. Identify all AWS resources defined in the infrastructure code
-            3. For each resource, check ONLY for deletion protection settings:
-               - Look for properties like: DeletionProtection, deletion_protection, DeletionPolicy: Retain, etc.
-               - Common patterns:
-                 * CloudFormation: DeletionProtection: true, DeletionPolicy: Retain
-                 * Terraform: deletion_protection = true, prevent_destroy = true
-                 * CDK: deletionProtection: true, removalPolicy: RemovalPolicy.RETAIN
-                 * RDS: DeletionProtection: true
-                 * DynamoDB: DeletionProtectionEnabled: true
-                 * S3: (bucket-level policy prevents deletion)
-               - Note: RDS databases should NOT have delete protection enabled (deleteProtection should be false for RDS)
-            4. For each resource, determine:
-               - Resource name/identifier
-               - deleteProtection: true if deletion protection is enabled, false otherwise
-               - cost: Estimate the monthly cost (for resources that will remain after deletion)
-
-            5. Generate a markdown table with the following columns:
-               - resource: The resource name/identifier
-               - deleteProtection: true/false based on deletion protection settings
-               - cost: Estimated monthly cost (in USD, or "N/A" if not applicable)
-
-            6. At the bottom of the table, add a summary row with:
-               - Total monthly cost (sum of all costs, excluding "N/A")
-               - Total per day cost (monthly cost / 30)
-
-            7. Post the report as a GitHub comment on the pull request.
-
-            Example table format:
-            | resource | deleteProtection | cost |
-            |----------|------------------|------|
-            | s3-bucket-myapp | true | $0.023 |
-            | rds-database-prod | false | $150.00 |
-            | dynamodb-table-users | true | $25.00 |
-            | **Total (per month)** | | **$175.023** |
-            | **Total (per day)** | | **$5.83** |
-
-            Important:
-            - ONLY check for deletion protection settings - ignore encryption, MFA, backup, versioning, etc.
-            - Focus on identifying resources that will remain after stack deletion
-            - Resources with deleteProtection: true will persist after stack deletion
-            - For cost estimation, use standard AWS pricing or reasonable estimates
-            - If cost cannot be determined, use "N/A" and exclude from totals
-            - Calculate per day cost as monthly cost divided by 30
-            - Post the complete report as a GitHub comment with the cost summary at the bottom
-
   # mocked-integration-tests:
   #   name: Mocked Integration Tests
   #   runs-on: ubuntu-24.04
@@ -614,7 +590,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'true'
+          download-artifacts: "true"
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -638,7 +614,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ env.AWS_REGION || 'us-east-1' }}
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
-          CI: '1' # Set CI for the entire step
+          CI: "1" # Set CI for the entire step
           PULUMI_BACKEND_URL: s3://${{ env.PULUMI_STATE_BUCKET }}?region=${{ env.PULUMI_BUCKET_REGION }}
           PULUMI_CONFIG_PASSPHRASE: ${{ secrets.PULUMI_CONFIG_PASSPHRASE }}
           PULUMI_ORG: ${{ env.PULUMI_ORG }}
@@ -646,7 +622,13 @@ jobs:
   claude-code-action:
     runs-on: ubuntu-24.04
     name: "Claude Review"
-    needs: [detect-metadata, integration-tests-live, analysis, cicd-pipeline-optimization]
+    needs:
+      [
+        detect-metadata,
+        integration-tests-live,
+        analysis,
+        cicd-pipeline-optimization,
+      ]
     # For Infrastructure Analysis/Monitoring OR CI/CD Pipeline: Allow int-tests to be skipped
     # For all other subject labels: Require int-tests to succeed
     if: |
@@ -722,13 +704,15 @@ jobs:
           fi
 
       - name: Run Claude PR Review Action
-        uses: anthropics/claude-code-action@beta
+        uses: anthropics/claude-code-action@v1
         with:
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          allowed_tools: 'Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite'
-          trigger_phrase: ''
-          custom_instructions: |
+          prompt: "Review this pull request's infrastructure code changes, validate file formats and compliance, and provide a comprehensive code review. You MUST post your review findings as a comment on this pull request when complete."
+          claude_args: |
+            --allowedTools "Bash,Read,Write,Edit,MultiEdit,Glob,Grep,LS,Task,TodoWrite"
+            --system-prompt "CRITICAL: You MUST post a GitHub comment on this pull request when your review is complete. This is mandatory and non-negotiable.
+
             # Determine Review Type
 
             First, check the subject_labels in metadata.json to determine the review type:
@@ -880,8 +864,15 @@ jobs:
             - The numeric value (0–10) represents the final quality score.
             - Continue to post your detailed GitHub comment as usual.
 
-            Once your review is complete, post the summary comment and finish execution successfully.
-            Do not exit with a non-zero code unless explicitly instructed by the workflow.
+            **MANDATORY FINAL STEP**: Once your review is complete, you MUST post a comprehensive GitHub comment on this pull request summarizing your findings, scores, and any recommendations. The comment should include:
+            - Summary of the review
+            - Training quality score
+            - Any issues found
+            - Recommendations for improvement
+            - The final SCORE line at the end
+
+            After posting the comment, finish execution successfully.
+            Do not exit with a non-zero code unless explicitly instructed by the workflow."
 
       - name: Extract Claude Quality Score from PR Comment
         id: extract
@@ -929,7 +920,14 @@ jobs:
   cleanup:
     name: Cleanup (Destroy Resources)
     runs-on: ubuntu-24.04
-    needs: [detect-metadata, integration-tests-live, claude-code-action, analysis, cicd-pipeline-optimization]
+    needs:
+      [
+        detect-metadata,
+        integration-tests-live,
+        claude-code-action,
+        analysis,
+        cicd-pipeline-optimization,
+      ]
     # Cleanup runs when:
     # 1. Claude review succeeded
     # 2. For Analysis/CI/CD tasks: int-tests can be success OR skipped
@@ -947,7 +945,6 @@ jobs:
        (github.event_name == 'workflow_dispatch' && !inputs.skip_cleanup)) &&
       !contains(github.event.head_commit.message, '[skip-jobs]')
     environment: qa
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -972,7 +969,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
           platform: ${{ needs.detect-metadata.outputs.platform }}
           language: ${{ needs.detect-metadata.outputs.language }}
 
@@ -989,6 +986,7 @@ jobs:
         run: ./scripts/destroy.sh
         env:
           ENVIRONMENT_SUFFIX: ${{ env.ENVIRONMENT_SUFFIX }}
+          TF_VAR_environmentSuffix: ${{ env.ENVIRONMENT_SUFFIX }}
           TERRAFORM_STATE_BUCKET: ${{ env.TERRAFORM_STATE_BUCKET }}
           TERRAFORM_STATE_BUCKET_REGION: ${{ env.TERRAFORM_STATE_BUCKET_REGION }}
           TERRAFORM_STATE_BUCKET_KEY: ${{ env.ENVIRONMENT_SUFFIX }}
@@ -1317,7 +1315,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Configure AWS
         uses: ./.github/actions/configure-aws
@@ -1358,7 +1356,7 @@ jobs:
         uses: ./.github/actions/setup-environment
         with:
           node-version: ${{ env.NODE_VERSION }}
-          download-artifacts: 'false'
+          download-artifacts: "false"
 
       - name: Run semantic-release
         run: npm run release
