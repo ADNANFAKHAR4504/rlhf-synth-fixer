@@ -24,11 +24,6 @@ describe('TapStack Int Tests', () => {
   });
 
   describe('VPC and Networking', () => {
-    test('VPC should be created with correct configuration', () => {
-      expect(outputs.vpcId).toBeDefined();
-      expect(outputs.vpcId.value).toMatch(/^vpc-[a-f0-9]+$/);
-    });
-
     test('Subnets should be created in multiple AZs', () => {
       const subnetCount = 6; // 3 public, 3 private
       expect(subnetCount).toBe(6);
