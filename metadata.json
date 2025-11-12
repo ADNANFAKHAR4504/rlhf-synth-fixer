@@ -5,6 +5,8 @@
   "turn_type": "single",
   "po_id": "101912510",
   "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "startedAt": "2025-11-12T13:55:59+00:00",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
