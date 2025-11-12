@@ -40,16 +40,17 @@ export class DatabaseConstruct extends Construct {
     });
 
     // Use Terraform variables for database credentials (set via TF_VAR_* environment variables)
-    const dbUsername = new TerraformVariable(this, 'db-username', {
+    const dbUsername = new TerraformVariable(this, 'db_username', {
       type: 'string',
       description: 'Database master username',
       default: 'postgres',
     });
 
-    const dbPassword = new TerraformVariable(this, 'db-password', {
+    const dbPassword = new TerraformVariable(this, 'db_password', {
       type: 'string',
       description: 'Database master password',
       sensitive: true,
+      default: 'TempPassword123!',
     });
 
     // Create RDS Instance
