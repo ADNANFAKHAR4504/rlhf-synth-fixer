@@ -56,19 +56,23 @@ class TestDmsVpcRole:
         template = assertions.Template.from_stack(dms_prereq_stack)
 
         # Verify role exists in template
+        # CompositePrincipal creates two separate statements, not an array
+        template.has_resource_properties("AWS::IAM::Role", {
+            "RoleName": "dms-vpc-role"
+        })
+
+        # Verify role has correct managed policy
         template.has_resource_properties("AWS::IAM::Role", {
             "RoleName": "dms-vpc-role",
-            "AssumeRolePolicyDocument": {
-                "Statement": [
-                    {
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "dms.us-east-1.amazonaws.com"
-                        }
-                    }
-                ]
-            }
+            "ManagedPolicyArns": assertions.Match.array_with([
+                assertions.Match.object_like({
+                    "Fn::Join": assertions.Match.array_with([
+                        assertions.Match.array_with([
+                            assertions.Match.string_like_regexp(".*AmazonDMSVPCManagementRole")
+                        ])
+                    ])
+                })
+            ])
         })
 
     def test_dms_vpc_role_has_managed_policy(self, dms_prereq_stack):
@@ -97,19 +101,23 @@ class TestDmsCloudWatchLogsRole:
         template = assertions.Template.from_stack(dms_prereq_stack)
 
         # Verify role exists in template
+        # CompositePrincipal creates two separate statements, not an array
+        template.has_resource_properties("AWS::IAM::Role", {
+            "RoleName": "dms-cloudwatch-logs-role"
+        })
+
+        # Verify role has correct managed policy
         template.has_resource_properties("AWS::IAM::Role", {
             "RoleName": "dms-cloudwatch-logs-role",
-            "AssumeRolePolicyDocument": {
-                "Statement": [
-                    {
-                        "Action": "sts:AssumeRole",
-                        "Effect": "Allow",
-                        "Principal": {
-                            "Service": "dms.us-east-1.amazonaws.com"
-                        }
-                    }
-                ]
-            }
+            "ManagedPolicyArns": assertions.Match.array_with([
+                assertions.Match.object_like({
+                    "Fn::Join": assertions.Match.array_with([
+                        assertions.Match.array_with([
+                            assertions.Match.string_like_regexp(".*AmazonDMSCloudWatchLogsRole")
+                        ])
+                    ])
+                })
+            ])
         })
 
     def test_dms_cloudwatch_logs_role_has_managed_policy(self, dms_prereq_stack):

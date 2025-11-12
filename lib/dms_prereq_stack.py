@@ -13,12 +13,15 @@ class DmsPrerequisitesStack(Stack):
 
         # Create DMS VPC management role
         # AWS DMS requires this specific role name to manage VPC resources
-        # Note: Using regional service principal for DMS resources
+        # Note: Using both regional and global service principals for compatibility
         self.dms_vpc_role = iam.Role(
             self,
             "dms-vpc-role",
             role_name="dms-vpc-role",
-            assumed_by=iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+                iam.ServicePrincipal("dms.amazonaws.com")
+            ),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "service-role/AmazonDMSVPCManagementRole"
@@ -27,12 +30,15 @@ class DmsPrerequisitesStack(Stack):
         )
 
         # Create DMS CloudWatch Logs role
-        # Note: Using regional service principal for DMS resources
+        # Note: Using both regional and global service principals for compatibility
         self.dms_cloudwatch_logs_role = iam.Role(
             self,
             "dms-cloudwatch-logs-role",
             role_name="dms-cloudwatch-logs-role",
-            assumed_by=iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+                iam.ServicePrincipal("dms.amazonaws.com")
+            ),
             managed_policies=[
                 iam.ManagedPolicy.from_aws_managed_policy_name(
                     "service-role/AmazonDMSCloudWatchLogsRole"
