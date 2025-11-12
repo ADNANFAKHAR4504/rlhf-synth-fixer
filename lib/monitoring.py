@@ -30,12 +30,13 @@ class MonitoringModule(Construct):
         caller = DataAwsCallerIdentity(self, "caller")
 
         # Create CloudWatch Log Group for CloudTrail
+        # Note: CloudWatch Logs are encrypted by default with AWS-managed keys
+        # Customer-managed KMS keys require additional permissions configuration
         cloudtrail_log_group = CloudwatchLogGroup(
             self,
             "cloudtrail_log_group",
             name=f"/aws/cloudtrail/{environment_suffix}",
             retention_in_days=90,
-            kms_key_id=kms_key_id,
             tags={
                 "Name": f"cloudtrail-logs-{environment_suffix}",
                 "Environment": environment_suffix,

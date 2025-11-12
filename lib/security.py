@@ -286,7 +286,7 @@ class SecurityModule(Construct):
             self,
             "config_policy",
             role=self.config_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
+            policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigRole",
         )
 
         # Add S3 write permissions for Config
