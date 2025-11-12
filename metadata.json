@@ -1,0 +1,25 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T12:03:37+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "S3 buckets must have versioning enabled and lifecycle policies for 30-day retention",
+    "DynamoDB tables must use on-demand billing mode with point-in-time recovery enabled",
+    "Lambda functions must use Node.js 18.x runtime with 3GB memory allocation",
+    "All Lambda functions must have X-Ray tracing enabled for performance monitoring",
+    "CloudWatch Logs retention must be set to 7 days for all Lambda function logs",
+    "API Gateway must implement request throttling at 10,000 requests per second",
+    "SQS queues must have message retention period of 4 days and visibility timeout of 5 minutes",
+    "IAM roles must follow least privilege principle with explicit deny statements",
+    "EventBridge rules must trigger Lambda functions with at least once delivery guarantee",
+    "Dead letter queues must be configured for all asynchronous Lambda invocations"
+  ],
+  "po_id": "6zn07n",
+  "aws_services": ["S3", "DynamoDB", "Lambda", "SQS", "EventBridge", "API Gateway", "IAM", "CloudWatch", "X-Ray"],
+  "region": "us-east-1",
+  "training_quality": 9
+}
