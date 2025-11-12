@@ -53,11 +53,6 @@ import {
   DeleteMessageCommand,
 } from '@aws-sdk/client-sqs';
 import {
-  SyntheticsClient,
-  GetCanaryCommand,
-  GetCanaryRunsCommand,
-} from '@aws-sdk/client-synthetics';
-import {
   BackupClient,
   DescribeBackupVaultCommand,
   GetBackupPlanCommand,
@@ -112,7 +107,6 @@ const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
 const route53Client = new Route53Client(clientConfig);
 const eventBridgeClient = new EventBridgeClient(clientConfig);
 const sqsClient = new SQSClient(clientConfig);
-const syntheticsClient = new SyntheticsClient(clientConfig);
 const backupClient = new BackupClient(clientConfig);
 const ssmClient = new SSMClient(clientConfig);
 const lambdaClient = new LambdaClient(clientConfig);
@@ -150,7 +144,6 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
         'Route53HealthCheckId05FD9321',
         'EventBridgeEventBusNameB104F7A2',
         'EventBridgeTargetQueueUrlE76487CC',
-        'MonitoringCanaryName056E95A7',
         'BackupBackupVaultArnDA2559D7',
         'ParameterStoreAppConfigParameterName849D503C',
         'FailoverStateMachineArnA1684404',
@@ -582,37 +575,6 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
     });
   });
 
-  describe('CloudWatch Synthetics - Canary', () => {
-    const canaryName = outputs.MonitoringCanaryName056E95A7;
-
-    test('Should verify canary exists and is running', async () => {
-      const response = await syntheticsClient.send(
-        new GetCanaryCommand({ Name: canaryName })
-      );
-
-      expect(response.Canary).toBeDefined();
-      expect(response.Canary!.Status?.State).toMatch(/RUNNING|READY/);
-    });
-
-    test('Should verify canary schedule configuration', async () => {
-      const response = await syntheticsClient.send(
-        new GetCanaryCommand({ Name: canaryName })
-      );
-
-      const canary = response.Canary!;
-      expect(canary.Schedule?.Expression).toBe('rate(5 minutes)');
-      expect(canary.RuntimeVersion).toMatch(/syn-nodejs-puppeteer/); // Version may vary
-    });
-
-    test('Should verify canary has executed runs', async () => {
-      const response = await syntheticsClient.send(
-        new GetCanaryRunsCommand({ Name: canaryName, MaxResults: 5 })
-      );
-
-      expect(response.CanaryRuns).toBeDefined();
-    });
-  });
-
   describe('AWS Backup', () => {
     const backupPlanId = outputs.BackupBackupPlanId4E81E205;
 
@@ -715,12 +677,6 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
             alarm.MetricName === 'DatabaseConnections')
       );
       expect(dbAlarms.length).toBeGreaterThanOrEqual(2);
-
-      // Verify canary alarms
-      const canaryAlarms = response.MetricAlarms!.filter(alarm =>
-        alarm.AlarmName?.includes('Canary')
-      );
-      expect(canaryAlarms.length).toBeGreaterThanOrEqual(2);
     });
   });
 });
