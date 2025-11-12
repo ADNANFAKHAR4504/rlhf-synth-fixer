@@ -19,8 +19,8 @@
     "CloudWatch",
     "S3"
   ],
-  "training_quality": 8,
-  "author": "mayanksethi-turing",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
   "reviewer": "adnan-turing",
   "region": "eu-central-2"
 }

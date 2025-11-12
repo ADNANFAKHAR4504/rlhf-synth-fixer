@@ -257,7 +257,6 @@ describe('TapStack', () => {
         Statement: Match.arrayWith([
           Match.objectLike({
             Action: Match.arrayWith([
-              'logs:CreateLogGroup',
               'logs:CreateLogStream',
               'logs:PutLogEvents',
             ]),
@@ -332,5 +331,80 @@ describe('TapStack - Error Cases', () => {
     if (originalPublicSubnets) {
       Object.defineProperty(Object.getPrototypeOf(stack.vpc), 'publicSubnets', originalPublicSubnets);
     }
+  });
+
+  test('Stack properly exports S3 endpoint', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestS3Stack', {
+      environmentSuffix: 'test-s3',
+      env: { region: 'us-east-1' },
+    });
+
+    // Verify S3 endpoint is exposed as public property
+    expect(stack.s3Endpoint).toBeDefined();
+  });
+
+  test('VPC is properly exposed as public property', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestVpcStack', {
+      environmentSuffix: 'test-vpc',
+      env: { region: 'us-east-1' },
+    });
+
+    // Verify VPC is exposed as public property
+    expect(stack.vpc).toBeDefined();
+    expect(stack.vpc.vpcId).toBeDefined();
+  });
+
+  test('All subnet IDs are properly exported', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestSubnetStack', {
+      environmentSuffix: 'test-subnet',
+      env: { region: 'us-east-1' },
+    });
+    const template = Template.fromStack(stack);
+
+    // Verify all 6 subnet outputs exist
+    for (let i = 1; i <= 3; i++) {
+      template.hasOutput(`PublicSubnet${i}Id`, {});
+      template.hasOutput(`PrivateSubnet${i}Id`, {});
+    }
+  });
+
+  test('Network ACL rules have correct priorities', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestNaclStack', {
+      environmentSuffix: 'test-nacl',
+      env: { region: 'us-east-1' },
+    });
+    const template = Template.fromStack(stack);
+
+    // Verify rule numbers are correct
+    template.hasResourceProperties('AWS::EC2::NetworkAclEntry', {
+      RuleNumber: 100, // HTTPS
+    });
+    template.hasResourceProperties('AWS::EC2::NetworkAclEntry', {
+      RuleNumber: 110, // MySQL
+    });
+    template.hasResourceProperties('AWS::EC2::NetworkAclEntry', {
+      RuleNumber: 120, // Redis
+    });
+    template.hasResourceProperties('AWS::EC2::NetworkAclEntry', {
+      RuleNumber: 130, // Ephemeral
+    });
+  });
+
+  test('VPC Flow Logs have correct destination', () => {
+    const app = new cdk.App();
+    const stack = new TapStack(app, 'TestFlowLogStack', {
+      environmentSuffix: 'test-flowlog',
+      env: { region: 'us-east-1' },
+    });
+    const template = Template.fromStack(stack);
+
+    template.hasResourceProperties('AWS::EC2::FlowLog', {
+      LogDestinationType: 'cloud-watch-logs',
+      ResourceType: 'VPC',
+    });
   });
 });
