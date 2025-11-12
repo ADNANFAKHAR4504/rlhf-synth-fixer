@@ -171,7 +171,18 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "yaml" ]; then
     echo "✅ Stack deleted successfully"
   fi
 
-  npm run cfn:deploy-yaml
+  # Deploy with error capture
+  if ! npm run cfn:deploy-yaml; then
+    echo ""
+    echo "❌ CloudFormation deployment failed. Fetching stack events..."
+    echo ""
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+      --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' \
+      --output table 2>/dev/null || echo "Could not fetch stack events"
+    echo ""
+    echo "💡 Check the CloudFormation template in lib/TapStack.yml for issues"
+    exit 1
+  fi
 
 elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
   echo "✅ CloudFormation JSON project detected, deploying with AWS CLI..."
@@ -230,7 +241,18 @@ elif [ "$PLATFORM" = "cfn" ] && [ "$LANGUAGE" = "json" ]; then
     echo "✅ Stack deleted successfully"
   fi
 
-  npm run cfn:deploy-json
+  # Deploy with error capture
+  if ! npm run cfn:deploy-json; then
+    echo ""
+    echo "❌ CloudFormation deployment failed. Fetching stack events..."
+    echo ""
+    aws cloudformation describe-stack-events --stack-name "$STACK_NAME" \
+      --query 'StackEvents[?ResourceStatus==`CREATE_FAILED` || ResourceStatus==`UPDATE_FAILED` || ResourceStatus==`DELETE_FAILED`].[Timestamp,ResourceType,LogicalResourceId,ResourceStatusReason]' \
+      --output table 2>/dev/null || echo "Could not fetch stack events"
+    echo ""
+    echo "💡 Check the CloudFormation template in lib/TapStack.json for issues"
+    exit 1
+  fi
 
 elif [ "$PLATFORM" = "tf" ]; then
   echo "✅ Terraform HCL project detected, running Terraform deploy..."
