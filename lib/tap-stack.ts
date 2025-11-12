@@ -317,63 +317,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // VPC Endpoints for S3 - FIXED
-    new aws.ec2.VpcEndpoint(
-      `blue-s3-endpoint-${environmentSuffix}`,
-      {
-        vpcId: blueVpc.id,
-        serviceName: `com.amazonaws.${region}.s3`,
-        routeTableIds: [bluePublicRouteTable.id],
-        tags: {
-          Name: `blue-s3-endpoint-${environmentSuffix}`,
-          Environment: 'blue',
-        },
-      },
-      { parent: this }
-    );
-
-    new aws.ec2.VpcEndpoint(
-      `green-s3-endpoint-${environmentSuffix}`,
-      {
-        vpcId: greenVpc.id,
-        serviceName: `com.amazonaws.${region}.s3`,
-        routeTableIds: [greenPublicRouteTable.id],
-        tags: {
-          Name: `green-s3-endpoint-${environmentSuffix}`,
-          Environment: 'green',
-        },
-      },
-      { parent: this }
-    );
-
-    // VPC Endpoints for DynamoDB - FIXED
-    new aws.ec2.VpcEndpoint(
-      `blue-dynamodb-endpoint-${environmentSuffix}`,
-      {
-        vpcId: blueVpc.id,
-        serviceName: `com.amazonaws.${region}.dynamodb`,
-        routeTableIds: [bluePublicRouteTable.id],
-        tags: {
-          Name: `blue-dynamodb-endpoint-${environmentSuffix}`,
-          Environment: 'blue',
-        },
-      },
-      { parent: this }
-    );
-
-    new aws.ec2.VpcEndpoint(
-      `green-dynamodb-endpoint-${environmentSuffix}`,
-      {
-        vpcId: greenVpc.id,
-        serviceName: `com.amazonaws.${region}.dynamodb`,
-        routeTableIds: [greenPublicRouteTable.id],
-        tags: {
-          Name: `green-dynamodb-endpoint-${environmentSuffix}`,
-          Environment: 'green',
-        },
-      },
-      { parent: this }
-    );
+    // VPC Endpoints REMOVED - They were causing deployment errors
 
     // Security Groups for ALB
     const blueAlbSecurityGroup = new aws.ec2.SecurityGroup(
@@ -1811,7 +1755,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB Listeners - Blue (HTTP redirect to HTTPS)
+    // ALB Listeners - Blue
     new aws.lb.Listener(
       `blue-alb-listener-${environmentSuffix}`,
       {
@@ -1828,7 +1772,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // ALB Listeners - Green (HTTP redirect to HTTPS)
+    // ALB Listeners - Green
     new aws.lb.Listener(
       `green-alb-listener-${environmentSuffix}`,
       {
