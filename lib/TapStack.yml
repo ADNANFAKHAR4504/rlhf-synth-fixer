@@ -935,7 +935,7 @@ Resources:
     Type: AWS::IAM::Role
     Properties:
       Path: "/"
-      RoleName: !Sub 'tapstack-${EnvironmentSuffix}-rds-monitoring-role'
+      RoleName: !Sub "tapstack-${EnvironmentSuffix}-rds-monitoring-role-${AWS::StackName}"
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
