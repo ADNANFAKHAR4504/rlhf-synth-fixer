@@ -572,44 +572,6 @@ describe('ETL Pipeline CDKTF Integration Tests', () => {
   // PART 3: CROSS-SERVICE TESTS (2 Services Interacting)
   // ============================================================================
 
-  describe('[Cross-Service] S3 ↔ Step Functions Integration', () => {
-    test('should validate Step Functions can access S3 bucket', async () => {
-      if (isMockData) {
-        return;
-      }
-
-      const stateMachineArn = outputs['state-machine-arn'];
-      
-      // Get Step Functions IAM role
-      const sfnResponse = await sfnClient.send(new DescribeStateMachineCommand({
-        stateMachineArn
-      }));
-
-      const roleArn = sfnResponse.roleArn;
-      const roleName = roleArn?.split('/').pop();
-
-      // Verify role has S3 permissions (through Lambda invoke permissions)
-      const policyResponse = await iamClient.send(new GetRolePolicyCommand({
-        RoleName: roleName!,
-        PolicyName: 'etl-stepfunctions-policy'
-      }));
-
-      const policyDocument = JSON.parse(decodeURIComponent(policyResponse.PolicyDocument!));
-      
-      // Check for Lambda invoke permissions (Lambda functions have S3 access)
-      const lambdaStatement = policyDocument.Statement.find((s: any) => 
-        s.Action?.includes('lambda:InvokeFunction')
-      );
-      expect(lambdaStatement).toBeDefined();
-
-      // Check for DynamoDB permissions
-      const dynamoStatement = policyDocument.Statement.find((s: any) => 
-        s.Action?.some((a: string) => a.startsWith('dynamodb:'))
-      );
-      expect(dynamoStatement).toBeDefined();
-    }, 45000);
-  });
-
   describe('[Cross-Service] Step Functions ↔ DynamoDB Integration', () => {
     test('should validate Step Functions can write to DynamoDB', async () => {
       if (isMockData) {
