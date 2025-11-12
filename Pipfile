@@ -27,15 +27,15 @@ moto = {extras = ["server"], version = "*"}
 pytest-testdox = "*"
 pytest-env = "*"
 pylint = "*"
+pytest = "*"
 requests = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
 pillow = "*"
 psycopg2-binary = "*"
-yamllint = "*"
-pytest = "*"
 pytest-cov = "*"
+yamllint = "*"
 
 [requires]
 python_version = "3.12"
