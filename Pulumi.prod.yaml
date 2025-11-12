@@ -1,0 +1,11 @@
+config:
+  multi-env-infrastructure:environment: "prod"
+  multi-env-infrastructure:vpcCidr: "10.2.0.0/16"
+  multi-env-infrastructure:instanceType: "t3.medium"
+  multi-env-infrastructure:asgMinSize: "2"
+  multi-env-infrastructure:asgMaxSize: "6"
+  multi-env-infrastructure:asgDesiredCapacity: "2"
+  multi-env-infrastructure:rdsInstanceClass: "db.t3.small"
+  multi-env-infrastructure:rdsMultiAz: "true"
+  multi-env-infrastructure:environmentSuffix: "prd001"
+  aws:region: "us-east-1"

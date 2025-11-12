@@ -1,0 +1,11 @@
+config:
+  multi-env-infrastructure:environment: "staging"
+  multi-env-infrastructure:vpcCidr: "10.1.0.0/16"
+  multi-env-infrastructure:instanceType: "t3.small"
+  multi-env-infrastructure:asgMinSize: "2"
+  multi-env-infrastructure:asgMaxSize: "4"
+  multi-env-infrastructure:asgDesiredCapacity: "2"
+  multi-env-infrastructure:rdsInstanceClass: "db.t3.small"
+  multi-env-infrastructure:rdsMultiAz: "false"
+  multi-env-infrastructure:environmentSuffix: "stg001"
+  aws:region: "us-east-1"

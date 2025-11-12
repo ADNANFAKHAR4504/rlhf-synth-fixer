@@ -1,0 +1,3 @@
+name: multi-env-infrastructure
+runtime: python
+description: Multi-environment infrastructure with Pulumi Python

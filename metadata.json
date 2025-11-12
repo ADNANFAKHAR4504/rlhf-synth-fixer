@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000915",
+  "team": "synth",
+  "startedAt": "2025-11-12T08:19:22+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "multi-environment",
+    "vpc",
+    "rds",
+    "alb",
+    "asg",
+    "s3",
+    "secrets-manager"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "AutoScaling",
+    "RDS",
+    "S3",
+    "SecretsManager"
+  ],
+  "training_quality": 10
+}
