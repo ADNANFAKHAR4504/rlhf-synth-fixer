@@ -459,9 +459,9 @@ class TapStack(TerraformStack):
                 f"lambda_{priority}_{environment_suffix}",
                 function_name=f"transaction-processor-{priority}-{environment_suffix}",
                 runtime="python3.11",
-                handler="index.handler",
+                handler="lambda_function.handler",
                 role=lambda_role.arn,
-                code={"zip_file": self._get_lambda_code()},
+                filename="lambda_package.zip",
                 timeout=300,
                 memory_size=512,
                 reserved_concurrent_executions=concurrency_limits[priority],
@@ -766,95 +766,6 @@ class TapStack(TerraformStack):
             value=step_function.arn,
             description="Step Functions state machine ARN for transaction validation"
         )
-
-    def _get_lambda_code(self) -> str:
-        """Return the Lambda function code for transaction processing."""
-        return """
-import json
-import boto3
-import os
-import time
-from decimal import Decimal
-
-# Initialize AWS clients
-dynamodb = boto3.resource('dynamodb')
-stepfunctions = boto3.client('stepfunctions')
-sqs = boto3.client('sqs')
-
-# Get environment variables
-TABLE_NAME = os.environ['DYNAMODB_TABLE']
-PRIORITY = os.environ['PRIORITY']
-STEP_FUNCTION_ARN = os.environ['STEP_FUNCTION_ARN']
-
-table = dynamodb.Table(TABLE_NAME)
-
-def handler(event, context):
-    print(f"Processing {len(event['Records'])} messages with {PRIORITY} priority")
-    
-    for record in event['Records']:
-        try:
-            # Parse SQS message
-            message_body = json.loads(record['body'])
-            
-            # Extract transaction details
-            transaction_id = message_body.get('transactionId')
-            amount = Decimal(str(message_body.get('amount', 0)))
-            
-            print(f"Processing transaction {transaction_id} with amount ${amount}")
-            
-            # Store transaction metadata in DynamoDB
-            ttl_timestamp = int(time.time()) + (90 * 24 * 60 * 60)  # 90 days from now
-            
-            table.put_item(
-                Item={
-                    'transactionId': transaction_id,
-                    'amount': amount,
-                    'priority': PRIORITY,
-                    'status': 'processing',
-                    'timestamp': int(time.time()),
-                    'expirationTime': ttl_timestamp
-                }
-            )
-            
-            # Start Step Functions execution for complex validation
-            step_input = {
-                'transactionId': transaction_id,
-                'amount': float(amount),
-                'priority': PRIORITY,
-                'fraudCheck': True,
-                'balanceVerification': True,
-                'complianceScreening': True
-            }
-            
-            sf_response = stepfunctions.start_execution(
-                stateMachineArn=STEP_FUNCTION_ARN,
-                name=f"{transaction_id}-{int(time.time())}",
-                input=json.dumps(step_input)
-            )
-            
-            print(f"Started Step Functions execution: {sf_response['executionArn']}")
-            
-            # Update transaction status
-            table.update_item(
-                Key={'transactionId': transaction_id},
-                UpdateExpression='SET #status = :status, executionArn = :arn',
-                ExpressionAttributeNames={'#status': 'status'},
-                ExpressionAttributeValues={
-                    ':status': 'validation_started',
-                    ':arn': sf_response['executionArn']
-                }
-            )
-            
-        except Exception as e:
-            print(f"Error processing message: {str(e)}")
-            # In production, you might want to send to DLQ or implement retry logic
-            raise e
-    
-    return {
-        'statusCode': 200,
-        'body': json.dumps(f'Successfully processed {len(event["Records"])} messages')
-    }
-"""
 
     def _get_step_function_definition(self, environment_suffix: str) -> dict:
         """Return the Step Functions state machine definition."""
