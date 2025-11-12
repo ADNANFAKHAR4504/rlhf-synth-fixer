@@ -1,19 +1,13 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-/* eslint-disable quotes */
-/* eslint-disable @typescript-eslint/quotes */
-/* eslint-disable prettier/prettier */
-
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
- * 
+ *
  * This module defines the core Pulumi stack and instantiates the TapStack with appropriate
  * configuration based on the deployment environment. It handles environment-specific settings,
  * tagging, and deployment configuration for AWS resources.
- * 
+ *
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
-
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
@@ -26,12 +20,11 @@ const environmentSuffix =
   process.env.ENVIRONMENT_SUFFIX || config.get('env') || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
-// These are often injected by CI/CD systems.
 const repository = config.get('repository') || 'unknown';
 const commitAuthor = config.get('commitAuthor') || 'unknown';
 
-// CHANGE: Get AWS region from config, defaulting to us-east-1
-const awsRegion = config.get('awsRegion') || 'us-east-1';
+// Get AWS region from config, defaulting to ap-southeast-1
+const awsRegion = config.get('awsRegion') || 'ap-southeast-1';
 
 // Define a set of default tags to apply to all resources.
 const defaultTags = {
@@ -42,7 +35,6 @@ const defaultTags = {
 };
 
 // Create AWS provider with explicit region configuration
-// This ensures ALL AWS resources are created in us-east-1
 const awsProvider = new aws.Provider('aws-provider', {
   region: awsRegion,
   defaultTags: {
@@ -51,7 +43,6 @@ const awsProvider = new aws.Provider('aws-provider', {
 });
 
 // Instantiate the main stack component for the infrastructure.
-// This encapsulates all the resources for the platform.
 const stack = new TapStack(
   'pulumi-infra',
   {
@@ -60,15 +51,54 @@ const stack = new TapStack(
     notificationEmail: config.get('notificationEmail'),
   },
   {
-    provider: awsProvider, // Pass the provider with explicit region
+    provider: awsProvider,
   }
 );
 
-// Export the stack outputs
-export const apiUrl = stack.apiUrl;
-export const auditBucketName = stack.auditBucketName;
-export const dynamoTableName = stack.dynamoTableName;
-export const dashboardUrl = stack.dashboardUrl;
+// ============================================================
+// STACK OUTPUTS
+// ============================================================
 
-// Export the configured region for reference
+// API Gateway
+export const apiUrl = stack.apiUrl;
+export const apiId = stack.apiId;
+export const apiStage = stack.apiStage;
+
+// Storage
+export const auditBucketName = stack.auditBucketName;
+export const auditBucketArn = stack.auditBucketArn;
+export const dynamoTableName = stack.dynamoTableName;
+export const dynamoTableArn = stack.dynamoTableArn;
+
+// Lambda Functions
+export const validatorFunctionName = stack.validatorFunctionName;
+export const validatorFunctionArn = stack.validatorFunctionArn;
+export const processorFunctionName = stack.processorFunctionName;
+export const processorFunctionArn = stack.processorFunctionArn;
+export const notifierFunctionName = stack.notifierFunctionName;
+export const notifierFunctionArn = stack.notifierFunctionArn;
+
+// Network
+export const vpcId = stack.vpcId;
+export const vpcCidr = stack.vpcCidr;
+export const publicSubnetIds = stack.publicSubnetIds;
+export const privateSubnetIds = stack.privateSubnetIds;
+export const s3EndpointId = stack.s3EndpointId;
+export const dynamodbEndpointId = stack.dynamodbEndpointId;
+
+// Security
+export const kmsKeyId = stack.kmsKeyId;
+export const kmsKeyArn = stack.kmsKeyArn;
+export const kmsKeyAlias = stack.kmsKeyAlias;
+
+// Notifications
+export const snsTopicArn = stack.snsTopicArn;
+export const snsTopicName = stack.snsTopicName;
+
+// Monitoring
+export const dashboardUrl = stack.dashboardUrl;
+export const dashboardName = stack.dashboardName;
+
+// Metadata
 export const region = awsRegion;
+export const environment = environmentSuffix;

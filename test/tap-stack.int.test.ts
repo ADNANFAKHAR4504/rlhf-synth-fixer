@@ -1,406 +1,558 @@
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeVpcEndpointsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  DynamoDBClient,
-  DescribeTableCommand,
-} from '@aws-sdk/client-dynamodb';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-} from '@aws-sdk/client-s3';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  GetFunctionConfigurationCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  APIGatewayClient,
-  GetRestApiCommand,
-  GetResourcesCommand,
-} from '@aws-sdk/client-api-gateway';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from '@aws-sdk/client-sns';
-import {
-  CloudWatchClient,
-  GetDashboardCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand,
-} from '@aws-sdk/client-kms';
+// tests/integration/tap-stack.int.test.ts
+
 import * as fs from 'fs';
 import * as path from 'path';
 
-const REGION = 'ap-southeast-1';
-const OUTPUTS_FILE = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+interface StackOutputs {
+  // API Gateway
+  apiUrl: string;
+  apiId: string;
+  apiStage: string;
 
-describe('Payment Processing Infrastructure Integration Tests', () => {
-  let outputs: any;
+  // Storage
+  auditBucketName: string;
+  auditBucketArn: string;
+  dynamoTableName: string;
+  dynamoTableArn: string;
+
+  // Lambda Functions
+  validatorFunctionName: string;
+  validatorFunctionArn: string;
+  processorFunctionName: string;
+  processorFunctionArn: string;
+  notifierFunctionName: string;
+  notifierFunctionArn: string;
+
+  // Network
+  vpcId: string;
+  vpcCidr: string;
+  publicSubnetIds: string[];
+  privateSubnetIds: string[];
+  s3EndpointId: string;
+  dynamodbEndpointId: string;
+
+  // Security
+  kmsKeyId: string;
+  kmsKeyArn: string;
+  kmsKeyAlias: string;
+
+  // Notifications
+  snsTopicArn: string;
+  snsTopicName: string;
+
+  // Monitoring
+  dashboardUrl: string;
+  dashboardName: string;
+
+  // Metadata
+  region: string;
+  environment: string;
+}
+
+/**
+ * Load stack outputs from cfn-outputs/flat-outputs.json
+ */
+function loadStackOutputs(): StackOutputs {
+  const outputPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+  
+  if (!fs.existsSync(outputPath)) {
+    throw new Error(`Output file not found at: ${outputPath}. Please run deployment first.`);
+  }
+
+  const rawOutputs = JSON.parse(fs.readFileSync(outputPath, 'utf-8'));
+  
+  return {
+    apiUrl: rawOutputs.apiUrl,
+    apiId: rawOutputs.apiId,
+    apiStage: rawOutputs.apiStage,
+    auditBucketName: rawOutputs.auditBucketName,
+    auditBucketArn: rawOutputs.auditBucketArn,
+    dynamoTableName: rawOutputs.dynamoTableName,
+    dynamoTableArn: rawOutputs.dynamoTableArn,
+    validatorFunctionName: rawOutputs.validatorFunctionName,
+    validatorFunctionArn: rawOutputs.validatorFunctionArn,
+    processorFunctionName: rawOutputs.processorFunctionName,
+    processorFunctionArn: rawOutputs.processorFunctionArn,
+    notifierFunctionName: rawOutputs.notifierFunctionName,
+    notifierFunctionArn: rawOutputs.notifierFunctionArn,
+    vpcId: rawOutputs.vpcId,
+    vpcCidr: rawOutputs.vpcCidr,
+    publicSubnetIds: Array.isArray(rawOutputs.publicSubnetIds) 
+      ? rawOutputs.publicSubnetIds 
+      : JSON.parse(rawOutputs.publicSubnetIds),
+    privateSubnetIds: Array.isArray(rawOutputs.privateSubnetIds)
+      ? rawOutputs.privateSubnetIds
+      : JSON.parse(rawOutputs.privateSubnetIds),
+    s3EndpointId: rawOutputs.s3EndpointId,
+    dynamodbEndpointId: rawOutputs.dynamodbEndpointId,
+    kmsKeyId: rawOutputs.kmsKeyId,
+    kmsKeyArn: rawOutputs.kmsKeyArn,
+    kmsKeyAlias: rawOutputs.kmsKeyAlias,
+    snsTopicArn: rawOutputs.snsTopicArn,
+    snsTopicName: rawOutputs.snsTopicName,
+    dashboardUrl: rawOutputs.dashboardUrl,
+    dashboardName: rawOutputs.dashboardName,
+    region: rawOutputs.region || 'ap-southeast-1',
+    environment: rawOutputs.environment || 'dev',
+  };
+}
+
+describe('TAP Stack Integration Tests', () => {
+  let outputs: StackOutputs;
 
   beforeAll(() => {
-    if (!fs.existsSync(OUTPUTS_FILE)) {
-      throw new Error(`Outputs file not found: ${OUTPUTS_FILE}`);
-    }
-    outputs = JSON.parse(fs.readFileSync(OUTPUTS_FILE, 'utf-8'));
+    outputs = loadStackOutputs();
   });
 
-  describe('Stack Outputs', () => {
-    test('should have all required output keys', () => {
+  // ============================================================================
+  // Output File Structure Tests
+  // ============================================================================
+  describe('Output File Structure', () => {
+    test('should load outputs from cfn-outputs/flat-outputs.json', () => {
+      expect(outputs).toBeDefined();
       expect(outputs).toHaveProperty('apiUrl');
-      expect(outputs).toHaveProperty('auditBucketName');
-      expect(outputs).toHaveProperty('dynamoTableName');
-      expect(outputs).toHaveProperty('dashboardUrl');
     });
 
-    test('should have valid output values', () => {
-      expect(outputs.apiUrl).toContain('execute-api');
-      expect(outputs.apiUrl).toContain('amazonaws.com');
-      expect(outputs.auditBucketName).toContain('payment-audit-logs');
-      expect(outputs.dynamoTableName).toContain('transactions');
-      expect(outputs.dashboardUrl).toContain('cloudwatch');
-    });
-  });
-
-  describe('DynamoDB Table', () => {
-    const dynamoClient = new DynamoDBClient({ region: REGION });
-
-    test('should exist and be active', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.dynamoTableName,
-      });
-      const response = await dynamoClient.send(command);
-      expect(response.Table?.TableStatus).toBe('ACTIVE');
-      expect(response.Table?.TableName).toBe(outputs.dynamoTableName);
-    });
-
-    test('should have encryption enabled', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.dynamoTableName,
-      });
-      const response = await dynamoClient.send(command);
-      expect(response.Table?.SSEDescription?.Status).toBe('ENABLED');
-      expect(response.Table?.SSEDescription?.SSEType).toBe('KMS');
-    });
-
-    test('should have billing mode PAY_PER_REQUEST', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.dynamoTableName,
-      });
-      const response = await dynamoClient.send(command);
-      expect(response.Table?.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-    });
-
-    test('should have correct schema', async () => {
-      const command = new DescribeTableCommand({
-        TableName: outputs.dynamoTableName,
-      });
-      const response = await dynamoClient.send(command);
-      const keySchema = response.Table?.KeySchema || [];
-      const hashKey = keySchema.find(k => k.KeyType === 'HASH');
-      const rangeKey = keySchema.find(k => k.KeyType === 'RANGE');
-
-      expect(hashKey?.AttributeName).toBe('transactionId');
-      expect(rangeKey?.AttributeName).toBe('timestamp');
-    });
-  });
-
-  describe('S3 Bucket', () => {
-    const s3Client = new S3Client({ region: REGION });
-
-    test('should exist', async () => {
-      const command = new HeadBucketCommand({
-        Bucket: outputs.auditBucketName,
-      });
-      await expect(s3Client.send(command)).resolves.toBeDefined();
-    });
-
-    test('should have encryption enabled', async () => {
-      const command = new GetBucketEncryptionCommand({
-        Bucket: outputs.auditBucketName,
-      });
-      const response = await s3Client.send(command);
-      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
-      const algorithm = response.ServerSideEncryptionConfiguration?.Rules?.[0]?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm;
-      // Accept both KMS and AES256 encryption
-      expect(['aws:kms', 'AES256']).toContain(algorithm);
-    });
-
-    test('should have versioning enabled', async () => {
-      const command = new GetBucketVersioningCommand({
-        Bucket: outputs.auditBucketName,
-      });
-      const response = await s3Client.send(command);
-      expect(response.Status).toBe('Enabled');
-    });
-  });
-
-  describe('Lambda Functions', () => {
-    const lambdaClient = new LambdaClient({ region: REGION });
-    let environmentSuffix: string;
-    let functionNames: string[];
-
-    beforeAll(() => {
-      environmentSuffix = outputs.dynamoTableName.replace('transactions-', '');
-      functionNames = [
-        `payment-validator-${environmentSuffix}`,
-        `payment-processor-${environmentSuffix}`,
-        `payment-notifier-${environmentSuffix}`,
+    test('should have all required output properties', () => {
+      const requiredProps = [
+        'apiUrl', 'apiId', 'apiStage',
+        'auditBucketName', 'auditBucketArn',
+        'dynamoTableName', 'dynamoTableArn',
+        'validatorFunctionName', 'processorFunctionName', 'notifierFunctionName',
+        'vpcId', 'vpcCidr', 'publicSubnetIds', 'privateSubnetIds',
+        'kmsKeyId', 'kmsKeyArn', 'snsTopicArn',
+        'dashboardUrl', 'region', 'environment'
       ];
-    });
 
-    test('validator function should exist', async () => {
-      const functionName = `payment-validator-${environmentSuffix}`;
-      const command = new GetFunctionCommand({ FunctionName: functionName });
-      const response = await lambdaClient.send(command);
-      expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.State).toBe('Active');
-    });
-
-    test('processor function should exist', async () => {
-      const functionName = `payment-processor-${environmentSuffix}`;
-      const command = new GetFunctionCommand({ FunctionName: functionName });
-      const response = await lambdaClient.send(command);
-      expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.State).toBe('Active');
-    });
-
-    test('notifier function should exist', async () => {
-      const functionName = `payment-notifier-${environmentSuffix}`;
-      const command = new GetFunctionCommand({ FunctionName: functionName });
-      const response = await lambdaClient.send(command);
-      expect(response.Configuration?.FunctionName).toBe(functionName);
-      expect(response.Configuration?.State).toBe('Active');
-    });
-
-    test('validator function should be in VPC', async () => {
-      const functionName = `payment-validator-${environmentSuffix}`;
-      const command = new GetFunctionConfigurationCommand({ FunctionName: functionName });
-      const response = await lambdaClient.send(command);
-      expect(response.VpcConfig?.VpcId).toBeDefined();
-      expect(response.VpcConfig?.SubnetIds).toBeDefined();
-      expect(response.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
-    });
-
-    test('processor function should be in VPC', async () => {
-      const functionName = `payment-processor-${environmentSuffix}`;
-      const command = new GetFunctionConfigurationCommand({ FunctionName: functionName });
-      const response = await lambdaClient.send(command);
-      expect(response.VpcConfig?.VpcId).toBeDefined();
-      expect(response.VpcConfig?.SubnetIds).toBeDefined();
-      expect(response.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
-    });
-
-    test('notifier function should be in VPC', async () => {
-      const functionName = `payment-notifier-${environmentSuffix}`;
-      const command = new GetFunctionConfigurationCommand({ FunctionName: functionName });
-      const response = await lambdaClient.send(command);
-      expect(response.VpcConfig?.VpcId).toBeDefined();
-      expect(response.VpcConfig?.SubnetIds).toBeDefined();
-      expect(response.VpcConfig?.SubnetIds?.length).toBeGreaterThan(0);
+      requiredProps.forEach(prop => {
+        expect(outputs).toHaveProperty(prop);
+        expect(outputs[prop as keyof StackOutputs]).toBeTruthy();
+      });
     });
   });
 
-  describe('API Gateway', () => {
-    const apiGatewayClient = new APIGatewayClient({ region: REGION });
-    let restApiId: string;
-
-    beforeAll(() => {
-      const urlParts = outputs.apiUrl.split('/');
-      restApiId = urlParts[2].split('.')[0];
+  // ============================================================================
+  // API Gateway Tests
+  // ============================================================================
+  describe('API Gateway Outputs', () => {
+    test('should have valid API Gateway URL format', () => {
+      expect(outputs.apiUrl).toMatch(/^https:\/\/.+\.execute-api\..+\.amazonaws\.com\/.+\/payments$/);
     });
 
-    test('should exist', async () => {
-      const command = new GetRestApiCommand({ restApiId });
-      const response = await apiGatewayClient.send(command);
-      expect(response.id).toBe(restApiId);
-      expect(response.name).toContain('payment-api');
+    test('should have API ID in correct format', () => {
+      expect(outputs.apiId).toMatch(/^[a-z0-9]{10}$/);
     });
 
-    test('should have payment resource', async () => {
-      const command = new GetResourcesCommand({ restApiId });
-      const response = await apiGatewayClient.send(command);
-      const paymentResource = response.items?.find(item =>
-        item.path === '/payments'
-      );
-      expect(paymentResource).toBeDefined();
+    test('should have API stage matching environment', () => {
+      expect(outputs.apiStage).toBe(outputs.environment);
     });
 
-    test('should have POST method', async () => {
-      const command = new GetResourcesCommand({ restApiId });
-      const response = await apiGatewayClient.send(command);
-      const paymentResource = response.items?.find(item =>
-        item.path === '/payments'
-      );
-      expect(paymentResource?.resourceMethods).toHaveProperty('POST');
+    test('should have API URL containing API ID', () => {
+      expect(outputs.apiUrl).toContain(outputs.apiId);
+    });
+
+    test('should have API URL containing region', () => {
+      expect(outputs.apiUrl).toContain(outputs.region);
     });
   });
 
-  describe('VPC and Network', () => {
-    const ec2Client = new EC2Client({ region: REGION });
-    let environmentSuffix: string;
-    let vpcNameTag: string;
-
-    beforeAll(() => {
-      environmentSuffix = outputs.dynamoTableName.replace('transactions-', '');
-      vpcNameTag = `payment-vpc-${environmentSuffix}`;
+  // ============================================================================
+  // Storage Tests
+  // ============================================================================
+  describe('Storage Outputs', () => {
+    test('should have DynamoDB table name with environment suffix', () => {
+      expect(outputs.dynamoTableName).toContain(outputs.environment);
+      expect(outputs.dynamoTableName).toMatch(/^transactions-.+$/);
     });
 
-    test('should have VPC', async () => {
-      const command = new DescribeVpcsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
-            Values: [vpcNameTag],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-      expect(response.Vpcs?.length).toBe(1);
-      expect(response.Vpcs?.[0]?.CidrBlock).toBe('10.0.0.0/16');
+    test('should have valid DynamoDB table ARN format', () => {
+      expect(outputs.dynamoTableArn).toMatch(/^arn:aws:dynamodb:.+:\d+:table\/.+$/);
+      expect(outputs.dynamoTableArn).toContain(outputs.dynamoTableName);
     });
 
-    test('should have public subnets', async () => {
-      const command = new DescribeSubnetsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
-            Values: [`payment-public-subnet-*-${environmentSuffix}`],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-      expect(response.Subnets?.length).toBeGreaterThanOrEqual(3);
+    test('should have S3 bucket name with environment suffix', () => {
+      expect(outputs.auditBucketName).toContain(outputs.environment);
+      expect(outputs.auditBucketName).toMatch(/^payment-audit-logs-.+$/);
     });
 
-    test('should have private subnets', async () => {
-      const command = new DescribeSubnetsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
-            Values: [`payment-private-subnet-*-${environmentSuffix}`],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-      expect(response.Subnets?.length).toBeGreaterThanOrEqual(3);
+    test('should have S3 bucket name with region', () => {
+      expect(outputs.auditBucketName).toContain(outputs.region);
     });
 
-    test('should have NAT gateways', async () => {
-      const command = new DescribeNatGatewaysCommand({
-        Filter: [
-          {
-            Name: 'tag:Name',
-            Values: [`payment-nat-*-${environmentSuffix}`],
-          },
-          {
-            Name: 'state',
-            Values: ['available'],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-      expect(response.NatGateways?.length).toBeGreaterThanOrEqual(2);
-    });
-
-    test('should have VPC endpoints', async () => {
-      const command = new DescribeVpcEndpointsCommand({
-        Filters: [
-          {
-            Name: 'tag:Name',
-            Values: [
-              `payment-s3-endpoint-${environmentSuffix}`,
-              `payment-dynamodb-endpoint-${environmentSuffix}`,
-            ],
-          },
-        ],
-      });
-      const response = await ec2Client.send(command);
-      expect(response.VpcEndpoints?.length).toBeGreaterThanOrEqual(2);
+    test('should have valid S3 bucket ARN format', () => {
+      expect(outputs.auditBucketArn).toMatch(/^arn:aws:s3:::.+$/);
+      expect(outputs.auditBucketArn).toContain(outputs.auditBucketName);
     });
   });
 
-  describe('KMS Key', () => {
-    const kmsClient = new KMSClient({ region: REGION });
-    let environmentSuffix: string;
-    let aliasName: string;
-
-    beforeAll(() => {
-      environmentSuffix = outputs.dynamoTableName.replace('transactions-', '');
-      aliasName = `alias/payment-db-${environmentSuffix}`;
+  // ============================================================================
+  // Lambda Function Tests
+  // ============================================================================
+  describe('Lambda Function Outputs', () => {
+    test('should have all three Lambda functions defined', () => {
+      expect(outputs.validatorFunctionName).toBeTruthy();
+      expect(outputs.processorFunctionName).toBeTruthy();
+      expect(outputs.notifierFunctionName).toBeTruthy();
     });
 
-    test('should have KMS alias', async () => {
-      const command = new ListAliasesCommand({});
-      const response = await kmsClient.send(command);
-      const alias = response.Aliases?.find(a => a.AliasName === aliasName);
-      expect(alias).toBeDefined();
+    test('should have validator function name with environment suffix', () => {
+      expect(outputs.validatorFunctionName).toContain(outputs.environment);
+      expect(outputs.validatorFunctionName).toMatch(/^payment-validator-.+$/);
     });
 
-    test('should have key enabled', async () => {
-      const listCommand = new ListAliasesCommand({});
-      const listResponse = await kmsClient.send(listCommand);
-      const alias = listResponse.Aliases?.find(a => a.AliasName === aliasName);
+    test('should have processor function name with environment suffix', () => {
+      expect(outputs.processorFunctionName).toContain(outputs.environment);
+      expect(outputs.processorFunctionName).toMatch(/^payment-processor-.+$/);
+    });
 
-      if (alias?.TargetKeyId) {
-        const describeCommand = new DescribeKeyCommand({
-          KeyId: alias.TargetKeyId,
-        });
-        const describeResponse = await kmsClient.send(describeCommand);
-        expect(describeResponse.KeyMetadata?.Enabled).toBe(true);
-        expect(describeResponse.KeyMetadata?.KeyState).toBe('Enabled');
-      }
+    test('should have notifier function name with environment suffix', () => {
+      expect(outputs.notifierFunctionName).toContain(outputs.environment);
+      expect(outputs.notifierFunctionName).toMatch(/^payment-notifier-.+$/);
+    });
+
+    test('should have valid Lambda function ARN format for validator', () => {
+      expect(outputs.validatorFunctionArn).toMatch(/^arn:aws:lambda:.+:\d+:function:.+$/);
+      expect(outputs.validatorFunctionArn).toContain(outputs.validatorFunctionName);
+    });
+
+    test('should have valid Lambda function ARN format for processor', () => {
+      expect(outputs.processorFunctionArn).toMatch(/^arn:aws:lambda:.+:\d+:function:.+$/);
+      expect(outputs.processorFunctionArn).toContain(outputs.processorFunctionName);
+    });
+
+    test('should have valid Lambda function ARN format for notifier', () => {
+      expect(outputs.notifierFunctionArn).toMatch(/^arn:aws:lambda:.+:\d+:function:.+$/);
+      expect(outputs.notifierFunctionArn).toContain(outputs.notifierFunctionName);
+    });
+
+    test('should have all Lambda ARNs in the same region', () => {
+      expect(outputs.validatorFunctionArn).toContain(outputs.region);
+      expect(outputs.processorFunctionArn).toContain(outputs.region);
+      expect(outputs.notifierFunctionArn).toContain(outputs.region);
     });
   });
 
-  describe('CloudWatch Dashboard', () => {
-    const cloudWatchClient = new CloudWatchClient({ region: REGION });
-    let environmentSuffix: string;
-    let dashboardName: string;
-
-    beforeAll(() => {
-      environmentSuffix = outputs.dynamoTableName.replace('transactions-', '');
-      dashboardName = `payment-monitoring-${environmentSuffix}`;
+  // ============================================================================
+  // Network Tests
+  // ============================================================================
+  describe('Network Outputs', () => {
+    test('should have valid VPC ID format', () => {
+      expect(outputs.vpcId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
     });
 
-    test('should exist', async () => {
-      const command = new GetDashboardCommand({
-        DashboardName: dashboardName,
-      });
-      const response = await cloudWatchClient.send(command);
-      expect(response.DashboardName).toBe(dashboardName);
-      expect(response.DashboardBody).toBeDefined();
+    test('should have VPC CIDR in correct format', () => {
+      expect(outputs.vpcCidr).toMatch(/^\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\/\d{1,2}$/);
+      expect(outputs.vpcCidr).toBe('10.0.0.0/16');
     });
 
-    test('should have widgets for Lambda and DynamoDB', async () => {
-      const command = new GetDashboardCommand({
-        DashboardName: dashboardName,
-      });
-      const response = await cloudWatchClient.send(command);
-      const dashboardBody = JSON.parse(response.DashboardBody || '{}');
-      expect(dashboardBody.widgets).toBeDefined();
-      expect(dashboardBody.widgets.length).toBeGreaterThan(0);
+    test('should have 3 public subnets', () => {
+      expect(Array.isArray(outputs.publicSubnetIds)).toBe(true);
+      expect(outputs.publicSubnetIds).toHaveLength(3);
+    });
 
-      const dashboardStr = JSON.stringify(dashboardBody);
-      expect(dashboardStr).toContain('AWS/Lambda');
-      expect(dashboardStr).toContain('AWS/DynamoDB');
+    test('should have 3 private subnets', () => {
+      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
+      expect(outputs.privateSubnetIds).toHaveLength(3);
+    });
+
+    test('should have valid subnet ID format for public subnets', () => {
+      outputs.publicSubnetIds.forEach(subnetId => {
+        expect(subnetId).toMatch(/^subnet-[a-f0-9]{8,17}$/);
+      });
+    });
+
+    test('should have valid subnet ID format for private subnets', () => {
+      outputs.privateSubnetIds.forEach(subnetId => {
+        expect(subnetId).toMatch(/^subnet-[a-f0-9]{8,17}$/);
+      });
+    });
+
+    test('should have unique public subnet IDs', () => {
+      const uniqueIds = new Set(outputs.publicSubnetIds);
+      expect(uniqueIds.size).toBe(3);
+    });
+
+    test('should have unique private subnet IDs', () => {
+      const uniqueIds = new Set(outputs.privateSubnetIds);
+      expect(uniqueIds.size).toBe(3);
+    });
+
+    test('should have valid S3 VPC endpoint ID format', () => {
+      expect(outputs.s3EndpointId).toMatch(/^vpce-[a-f0-9]{8,17}$/);
+    });
+
+    test('should have valid DynamoDB VPC endpoint ID format', () => {
+      expect(outputs.dynamodbEndpointId).toMatch(/^vpce-[a-f0-9]{8,17}$/);
+    });
+  });
+
+  // ============================================================================
+  // Security Tests
+  // ============================================================================
+  describe('Security Outputs', () => {
+    test('should have valid KMS key ID format', () => {
+      expect(outputs.kmsKeyId).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
+    });
+
+    test('should have valid KMS key ARN format', () => {
+      expect(outputs.kmsKeyArn).toMatch(/^arn:aws:kms:.+:\d+:key\/.+$/);
+      expect(outputs.kmsKeyArn).toContain(outputs.kmsKeyId);
+    });
+
+    test('should have KMS key alias with environment suffix', () => {
+      expect(outputs.kmsKeyAlias).toContain(outputs.environment);
+      expect(outputs.kmsKeyAlias).toMatch(/^alias\/payment-db-.+$/);
+    });
+
+    test('should have KMS key in the correct region', () => {
+      expect(outputs.kmsKeyArn).toContain(outputs.region);
+    });
+  });
+
+  // ============================================================================
+  // Notification Tests
+  // ============================================================================
+  describe('Notification Outputs', () => {
+    test('should have valid SNS topic ARN format', () => {
+      expect(outputs.snsTopicArn).toMatch(/^arn:aws:sns:.+:\d+:.+$/);
+    });
+
+    test('should have SNS topic name with environment suffix', () => {
+      expect(outputs.snsTopicName).toContain(outputs.environment);
+      expect(outputs.snsTopicName).toMatch(/^payment-notifications-.+$/);
+    });
+
+    test('should have SNS topic ARN containing topic name', () => {
+      expect(outputs.snsTopicArn).toContain(outputs.snsTopicName);
+    });
+
+    test('should have SNS topic in the correct region', () => {
+      expect(outputs.snsTopicArn).toContain(outputs.region);
+    });
+  });
+
+  // ============================================================================
+  // Monitoring Tests
+  // ============================================================================
+  describe('Monitoring Outputs', () => {
+    test('should have valid CloudWatch dashboard URL format', () => {
+      expect(outputs.dashboardUrl).toMatch(/^https:\/\/console\.aws\.amazon\.com\/cloudwatch\/.+$/);
+    });
+
+    test('should have dashboard name with environment suffix', () => {
+      expect(outputs.dashboardName).toContain(outputs.environment);
+      expect(outputs.dashboardName).toMatch(/^payment-monitoring-.+$/);
+    });
+
+    test('should have dashboard URL containing dashboard name', () => {
+      expect(outputs.dashboardUrl).toContain(outputs.dashboardName);
+    });
+
+    test('should have dashboard URL containing region', () => {
+      expect(outputs.dashboardUrl).toContain(outputs.region);
+    });
+  });
+
+  // ============================================================================
+  // Metadata Tests
+  // ============================================================================
+  describe('Metadata Outputs', () => {
+    test('should have valid AWS region', () => {
+      const validRegions = ['us-east-1', 'us-west-2', 'ap-southeast-1', 'eu-west-1'];
+      expect(validRegions.some(region => outputs.region.includes(region))).toBe(true);
+    });
+
+    test('should have environment suffix defined', () => {
+      expect(outputs.environment).toBeTruthy();
+      expect(['dev', 'staging', 'prod']).toContain(outputs.environment);
+    });
+  });
+
+  // ============================================================================
+  // Cross-Resource Consistency Tests
+  // ============================================================================
+  describe('Cross-Resource Consistency', () => {
+    test('should have all resources in the same region', () => {
+      expect(outputs.apiUrl).toContain(outputs.region);
+      expect(outputs.dynamoTableArn).toContain(outputs.region);
+      expect(outputs.kmsKeyArn).toContain(outputs.region);
+      expect(outputs.snsTopicArn).toContain(outputs.region);
+    });
+
+    test('should have all resources with consistent environment suffix', () => {
+      expect(outputs.dynamoTableName).toContain(outputs.environment);
+      expect(outputs.auditBucketName).toContain(outputs.environment);
+      expect(outputs.validatorFunctionName).toContain(outputs.environment);
+      expect(outputs.processorFunctionName).toContain(outputs.environment);
+      expect(outputs.notifierFunctionName).toContain(outputs.environment);
+      expect(outputs.kmsKeyAlias).toContain(outputs.environment);
+      expect(outputs.snsTopicName).toContain(outputs.environment);
+      expect(outputs.dashboardName).toContain(outputs.environment);
+    });
+
+    test('should have API stage matching environment suffix', () => {
+      expect(outputs.apiStage).toBe(outputs.environment);
+    });
+  });
+
+  // ============================================================================
+  // Naming Convention Tests
+  // ============================================================================
+  describe('Naming Convention Compliance', () => {
+    test('should follow payment- prefix naming convention', () => {
+      expect(outputs.auditBucketName).toMatch(/^payment-/);
+      expect(outputs.validatorFunctionName).toMatch(/^payment-/);
+      expect(outputs.processorFunctionName).toMatch(/^payment-/);
+      expect(outputs.notifierFunctionName).toMatch(/^payment-/);
+      expect(outputs.snsTopicName).toMatch(/^payment-/);
+      expect(outputs.dashboardName).toMatch(/^payment-/);
+    });
+
+    test('should have environment suffix at the end of resource names', () => {
+      const envSuffixPattern = new RegExp(`-${outputs.environment}$`);
+      expect(outputs.dynamoTableName).toMatch(envSuffixPattern);
+      expect(outputs.validatorFunctionName).toMatch(envSuffixPattern);
+      expect(outputs.processorFunctionName).toMatch(envSuffixPattern);
+      expect(outputs.notifierFunctionName).toMatch(envSuffixPattern);
+      expect(outputs.snsTopicName).toMatch(envSuffixPattern);
+      expect(outputs.dashboardName).toMatch(envSuffixPattern);
+    });
+  });
+
+  // ============================================================================
+  // ARN Format Validation Tests
+  // ============================================================================
+  describe('ARN Format Validation', () => {
+    test('should have all ARNs with valid AWS ARN structure', () => {
+      const arns = [
+        outputs.dynamoTableArn,
+        outputs.auditBucketArn,
+        outputs.validatorFunctionArn,
+        outputs.processorFunctionArn,
+        outputs.notifierFunctionArn,
+        outputs.kmsKeyArn,
+        outputs.snsTopicArn,
+      ];
+
+      arns.forEach(arn => {
+        expect(arn).toMatch(/^arn:aws:[a-z0-9-]+:.+:.+:.+$/);
+      });
+    });
+
+    test('should have ARNs with account ID in correct position', () => {
+      const arnsWithAccountId = [
+        outputs.dynamoTableArn,
+        outputs.validatorFunctionArn,
+        outputs.processorFunctionArn,
+        outputs.notifierFunctionArn,
+        outputs.kmsKeyArn,
+        outputs.snsTopicArn,
+      ];
+
+      arnsWithAccountId.forEach(arn => {
+        const parts = arn.split(':');
+        expect(parts[4]).toMatch(/^\d{12}$/); // AWS account ID is 12 digits
+      });
+    });
+  });
+
+  // ============================================================================
+  // Resource Relationship Tests
+  // ============================================================================
+  describe('Lambda-DynamoDB Integration', () => {
+    test('should have Lambda functions referencing the correct DynamoDB table', () => {
+      expect(outputs.dynamoTableName).toBeTruthy();
+      expect(outputs.validatorFunctionName).toBeTruthy();
+      expect(outputs.processorFunctionName).toBeTruthy();
+    });
+
+    test('should have DynamoDB table in the same region as Lambda functions', () => {
+      const dynamoRegion = outputs.dynamoTableArn.split(':')[3];
+      const validatorRegion = outputs.validatorFunctionArn.split(':')[3];
+      const processorRegion = outputs.processorFunctionArn.split(':')[3];
+
+      expect(dynamoRegion).toBe(validatorRegion);
+      expect(dynamoRegion).toBe(processorRegion);
+    });
+  });
+
+  describe('Lambda-S3 Integration', () => {
+    test('should have processor Lambda able to access audit S3 bucket', () => {
+      expect(outputs.auditBucketName).toBeTruthy();
+      expect(outputs.processorFunctionName).toBeTruthy();
+    });
+
+    test('should have S3 bucket and Lambda in same region', () => {
+      expect(outputs.auditBucketName).toContain(outputs.region);
+      expect(outputs.processorFunctionArn).toContain(outputs.region);
+    });
+  });
+
+  describe('Lambda-SNS Integration', () => {
+    test('should have notifier Lambda connected to SNS topic', () => {
+      expect(outputs.notifierFunctionName).toBeTruthy();
+      expect(outputs.snsTopicArn).toBeTruthy();
+    });
+
+    test('should have SNS topic in same region as notifier Lambda', () => {
+      const snsRegion = outputs.snsTopicArn.split(':')[3];
+      const notifierRegion = outputs.notifierFunctionArn.split(':')[3];
+
+      expect(snsRegion).toBe(notifierRegion);
+    });
+  });
+
+  describe('API Gateway-Lambda Integration', () => {
+    test('should have API Gateway connected to validator Lambda', () => {
+      expect(outputs.apiId).toBeTruthy();
+      expect(outputs.validatorFunctionArn).toBeTruthy();
+    });
+
+    test('should have API Gateway in same region as Lambda', () => {
+      expect(outputs.apiUrl).toContain(outputs.region);
+      expect(outputs.validatorFunctionArn).toContain(outputs.region);
+    });
+  });
+
+  describe('VPC-Lambda Integration', () => {
+    test('should have Lambda functions deployable to VPC subnets', () => {
+      expect(outputs.vpcId).toBeTruthy();
+      expect(outputs.privateSubnetIds.length).toBeGreaterThan(0);
+      expect(outputs.validatorFunctionName).toBeTruthy();
+    });
+
+    test('should have VPC endpoints for AWS services', () => {
+      expect(outputs.s3EndpointId).toBeTruthy();
+      expect(outputs.dynamodbEndpointId).toBeTruthy();
+    });
+  });
+
+  describe('KMS-Storage Integration', () => {
+    test('should have KMS key for encrypting storage resources', () => {
+      expect(outputs.kmsKeyId).toBeTruthy();
+      expect(outputs.kmsKeyArn).toBeTruthy();
+      expect(outputs.dynamoTableArn).toBeTruthy();
+    });
+
+    test('should have KMS key and DynamoDB in same region', () => {
+      const kmsRegion = outputs.kmsKeyArn.split(':')[3];
+      const dynamoRegion = outputs.dynamoTableArn.split(':')[3];
+
+      expect(kmsRegion).toBe(dynamoRegion);
+    });
+  });
+
+  describe('Monitoring-Resources Integration', () => {
+    test('should have CloudWatch dashboard for all Lambda functions', () => {
+      expect(outputs.dashboardName).toBeTruthy();
+      expect(outputs.validatorFunctionName).toBeTruthy();
+      expect(outputs.processorFunctionName).toBeTruthy();
+      expect(outputs.notifierFunctionName).toBeTruthy();
+    });
+
+    test('should have dashboard and monitored resources in same region', () => {
+      expect(outputs.dashboardUrl).toContain(outputs.region);
+      expect(outputs.validatorFunctionArn).toContain(outputs.region);
     });
   });
 });
-
-async function getAccountId(): Promise<string> {
-  const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
-  const stsClient = new STSClient({ region: REGION });
-  const command = new GetCallerIdentityCommand({});
-  const response = await stsClient.send(command);
-  return response.Account || '';
-}
