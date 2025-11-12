@@ -22,6 +22,7 @@ export interface EcsConstructProps {
   cpu: string;
   memory: string;
   environmentSuffix: string;
+  certificateArn?: string; // Optional ACM certificate ARN for HTTPS
 }
 
 export class EcsConstruct extends Construct {
@@ -249,27 +250,56 @@ export class EcsConstruct extends Construct {
       },
     });
 
-    new LbListener(this, 'listener', {
+    // HTTP Listener - redirect to HTTPS if certificate provided, otherwise forward
+    new LbListener(this, 'listener-http', {
       loadBalancerArn: alb.arn,
       port: 80,
       protocol: 'HTTP',
-      defaultAction: [
-        {
-          type: 'forward',
-          targetGroupArn: targetGroup.arn,
-        },
-      ],
+      defaultAction: props.certificateArn
+        ? [
+            {
+              type: 'redirect',
+              redirect: {
+                port: '443',
+                protocol: 'HTTPS',
+                statusCode: 'HTTP_301',
+              },
+            },
+          ]
+        : [
+            {
+              type: 'forward',
+              targetGroupArn: targetGroup.arn,
+            },
+          ],
     });
 
+    // HTTPS Listener - only create if certificate ARN is provided
+    if (props.certificateArn) {
+      new LbListener(this, 'listener-https', {
+        loadBalancerArn: alb.arn,
+        port: 443,
+        protocol: 'HTTPS',
+        certificateArn: props.certificateArn,
+        sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
+        defaultAction: [
+          {
+            type: 'forward',
+            targetGroupArn: targetGroup.arn,
+          },
+        ],
+      });
+    }
+
     // ECS Service
-    // Note: desiredCount is set to 0 initially to prevent task failures
-    // due to missing container image. After deploying infrastructure,
-    // push your container image to ECR and then update desiredCount.
+    // Note: For initial deployment without container image, set desiredCount to 0
+    // in environment config to prevent task failures. After pushing container image
+    // to ECR, update the environment config desiredCount and redeploy.
     const service = new EcsService(this, 'service', {
       name: `app-service-${props.environmentName}-${props.environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: taskDef.arn,
-      desiredCount: 0,
+      desiredCount: props.desiredCount,
       launchType: 'FARGATE',
       networkConfiguration: {
         subnets: props.privateSubnetIds,

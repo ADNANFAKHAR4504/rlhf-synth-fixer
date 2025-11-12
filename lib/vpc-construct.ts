@@ -8,6 +8,10 @@ import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
 import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
 import { Route } from '@cdktf/provider-aws/lib/route';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
+import { FlowLog } from '@cdktf/provider-aws/lib/flow-log';
+import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
+import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
+import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 
 export interface VpcConstructProps {
   environmentName: string;
@@ -153,5 +157,70 @@ export class VpcConstruct extends Construct {
 
     this.publicSubnetIds = publicSubnets.map(s => s.id);
     this.privateSubnetIds = privateSubnets.map(s => s.id);
+
+    // VPC Flow Logs - CloudWatch Logs destination
+    const flowLogGroup = new CloudwatchLogGroup(this, 'flow-log-group', {
+      name: `/aws/vpc/flowlogs/${props.environmentName}-${props.environmentSuffix}`,
+      retentionInDays: 7,
+      tags: {
+        Name: `vpc-flow-logs-${props.environmentName}-${props.environmentSuffix}`,
+        Environment: props.environmentName,
+      },
+    });
+
+    // IAM Role for VPC Flow Logs
+    const flowLogRole = new IamRole(this, 'flow-log-role', {
+      name: `vpc-flow-log-role-${props.environmentName}-${props.environmentSuffix}`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: {
+        Environment: props.environmentName,
+      },
+    });
+
+    // IAM Policy for Flow Logs to write to CloudWatch
+    new IamRolePolicy(this, 'flow-log-policy', {
+      name: `vpc-flow-log-policy-${props.environmentName}-${props.environmentSuffix}`,
+      role: flowLogRole.id,
+      policy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Action: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            Resource: '*',
+          },
+        ],
+      }),
+    });
+
+    // VPC Flow Log
+    new FlowLog(this, 'flow-log', {
+      vpcId: vpc.id,
+      trafficType: 'ALL',
+      logDestinationType: 'cloud-watch-logs',
+      logDestination: flowLogGroup.arn,
+      iamRoleArn: flowLogRole.arn,
+      tags: {
+        Name: `vpc-flow-log-${props.environmentName}-${props.environmentSuffix}`,
+        Environment: props.environmentName,
+      },
+    });
   }
 }

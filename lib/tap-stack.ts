@@ -2,6 +2,7 @@ import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
+import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { S3Backend, TerraformStack, TerraformOutput } from 'cdktf';
 import { Construct } from 'constructs';
 import { VpcConstruct } from './vpc-construct';
@@ -26,6 +27,7 @@ interface EnvironmentConfig {
   rds: {
     instanceCount: number;
     instanceClass: string;
+    readReplicaCount: number; // Number of read replicas
   };
   ecs: {
     desiredCount: number;
@@ -36,6 +38,7 @@ interface EnvironmentConfig {
     cpuThreshold: number;
     memoryThreshold: number;
   };
+  certificateArn?: string; // Optional ACM certificate ARN for HTTPS
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
@@ -50,21 +53,33 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
   dev: {
     name: 'dev',
     cidrBase: 1,
-    rds: { instanceCount: 1, instanceClass: 'db.t3.medium' },
+    rds: {
+      instanceCount: 1,
+      instanceClass: 'db.t3.medium',
+      readReplicaCount: 0, // No read replicas for dev
+    },
     ecs: { desiredCount: 1, cpu: '256', memory: '512' },
     alarms: { cpuThreshold: 80, memoryThreshold: 80 },
   },
   staging: {
     name: 'staging',
     cidrBase: 2,
-    rds: { instanceCount: 1, instanceClass: 'db.t3.large' },
+    rds: {
+      instanceCount: 1,
+      instanceClass: 'db.t3.large',
+      readReplicaCount: 1, // 1 read replica for staging
+    },
     ecs: { desiredCount: 2, cpu: '512', memory: '1024' },
     alarms: { cpuThreshold: 75, memoryThreshold: 75 },
   },
   prod: {
     name: 'prod',
     cidrBase: 3,
-    rds: { instanceCount: 2, instanceClass: 'db.r5.large' },
+    rds: {
+      instanceCount: 2,
+      instanceClass: 'db.r5.large',
+      readReplicaCount: 2, // 2 read replicas for prod (HA)
+    },
     ecs: { desiredCount: 3, cpu: '1024', memory: '2048' },
     alarms: { cpuThreshold: 70, memoryThreshold: 70 },
   },
@@ -96,6 +111,9 @@ export class TapStack extends TerraformStack {
       defaultTags: defaultTags,
     });
 
+    // Configure Random Provider for password generation
+    new RandomProvider(this, 'random');
+
     // Configure S3 Backend with native state locking
     new S3Backend(this, {
       bucket: stateBucket,
@@ -124,12 +142,13 @@ export class TapStack extends TerraformStack {
       environmentSuffix,
     });
 
-    // Create Aurora PostgreSQL cluster
+    // Create Aurora PostgreSQL cluster with read replicas for staging/prod
     const aurora = new AuroraConstruct(this, 'Aurora', {
       vpcId: vpc.vpcId,
       subnetIds: vpc.privateSubnetIds,
       environmentName: envConfig.name,
       instanceCount: envConfig.rds.instanceCount,
+      readReplicaCount: envConfig.rds.readReplicaCount,
       instanceClass: envConfig.rds.instanceClass,
       environmentSuffix,
       cidrBase: envConfig.cidrBase,
@@ -146,6 +165,7 @@ export class TapStack extends TerraformStack {
       cpu: envConfig.ecs.cpu,
       memory: envConfig.ecs.memory,
       environmentSuffix,
+      certificateArn: envConfig.certificateArn, // Optional HTTPS certificate
     });
 
     // Create S3 bucket for static assets

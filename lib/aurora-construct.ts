@@ -5,6 +5,7 @@ import { DbSubnetGroup } from '@cdktf/provider-aws/lib/db-subnet-group';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
 import { SsmParameter } from '@cdktf/provider-aws/lib/ssm-parameter';
+import { Password } from '@cdktf/provider-random/lib/password';
 
 export interface AuroraConstructProps {
   vpcId: string;
@@ -14,6 +15,7 @@ export interface AuroraConstructProps {
   instanceClass: string;
   environmentSuffix: string;
   cidrBase: number;
+  readReplicaCount?: number; // Number of read replicas for prod/staging
 }
 
 export class AuroraConstruct extends Construct {
@@ -65,11 +67,22 @@ export class AuroraConstruct extends Construct {
       },
     });
 
-    // Master password stored in SSM
+    // Generate secure random password for Aurora master user
+    const randomPassword = new Password(this, 'master-password-random', {
+      length: 32,
+      special: true,
+      overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+      minLower: 1,
+      minUpper: 1,
+      minNumeric: 1,
+      minSpecial: 1,
+    });
+
+    // Store master password in SSM Parameter Store
     const masterPassword = new SsmParameter(this, 'master-password', {
       name: `/${props.environmentSuffix}/aurora/master-password`,
       type: 'SecureString',
-      value: 'ChangeMe123!SecurePassword',
+      value: randomPassword.result,
       tags: {
         Environment: props.environmentName,
       },
@@ -96,7 +109,7 @@ export class AuroraConstruct extends Construct {
       },
     });
 
-    // Cluster Instances
+    // Cluster Instances (Writer)
     for (let i = 0; i < props.instanceCount; i++) {
       new RdsClusterInstance(this, `instance-${i}`, {
         identifier: `aurora-${props.environmentName}-${props.environmentSuffix}-${i}`,
@@ -107,6 +120,24 @@ export class AuroraConstruct extends Construct {
         tags: {
           Name: `aurora-instance-${i}-${props.environmentName}-${props.environmentSuffix}`,
           Environment: props.environmentName,
+        },
+      });
+    }
+
+    // Read Replicas (for prod and staging environments)
+    const readReplicaCount = props.readReplicaCount || 0;
+    for (let i = 0; i < readReplicaCount; i++) {
+      new RdsClusterInstance(this, `read-replica-${i}`, {
+        identifier: `aurora-${props.environmentName}-${props.environmentSuffix}-read-${i}`,
+        clusterIdentifier: cluster.id,
+        instanceClass: props.instanceClass,
+        engine: cluster.engine,
+        engineVersion: cluster.engineVersion,
+        promotionTier: 15, // Lower priority for promotion
+        tags: {
+          Name: `aurora-read-replica-${i}-${props.environmentName}-${props.environmentSuffix}`,
+          Environment: props.environmentName,
+          Role: 'ReadReplica',
         },
       });
     }

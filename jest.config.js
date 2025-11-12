@@ -2,10 +2,16 @@ module.exports = {
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
   testMatch: ['**/*.test.ts', '**/*.test.mjs'],
-  preset: 'ts-jest',
+  // preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', {
+      isolatedModules: true,
+      tsconfig: {
+        allowJs: true,
+        esModuleInterop: true,
+      }
+    }],
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
@@ -33,13 +39,7 @@ module.exports = {
   testTimeout: 30000,
   silent: false,
   verbose: true,
-  globals: {
-    'ts-jest': {
-      isolatedModules: true,
-      tsconfig: {
-        allowJs: true,
-        esModuleInterop: true
-      }
-    }
-  }
+  moduleNameMapper: {
+    '^(\\.{1,2}/.*)\\.js$': '$1',
+  },
 };

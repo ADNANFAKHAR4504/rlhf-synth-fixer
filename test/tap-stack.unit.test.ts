@@ -208,6 +208,8 @@ describe('TapStack Unit Tests', () => {
       expect(synthesized).toContain('aws_ssm_parameter');
       expect(synthesized).toContain('"type": "SecureString"');
       expect(synthesized).toContain('/test/aurora/master-password');
+      // Verify random password is generated
+      expect(synthesized).toContain('random_password');
     });
 
     test('Aurora resources include environmentSuffix', () => {
@@ -304,9 +306,9 @@ describe('TapStack Unit Tests', () => {
       const devSynth = Testing.synth(devStack);
       const prodSynth = Testing.synth(prodStack);
 
-      // Note: desiredCount is set to 0 to prevent task failures before container images are pushed
-      expect(devSynth).toContain('"desired_count": 0');
-      expect(prodSynth).toContain('"desired_count": 0');
+      // Verify different desired counts per environment
+      expect(devSynth).toContain('"desired_count": 1');
+      expect(prodSynth).toContain('"desired_count": 3');
 
       // Verify different CPU/memory configurations
       expect(devSynth).toContain('"cpu": "256"');
