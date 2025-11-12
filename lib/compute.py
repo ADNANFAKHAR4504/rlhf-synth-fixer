@@ -48,6 +48,8 @@ class ComputeModule(Construct):
         )
 
         # Create Lambda function
+        # Note: AWS_REGION is a reserved environment variable automatically provided by Lambda
+        # Do not set reserved variables: AWS_REGION, AWS_DEFAULT_REGION, AWS_ACCOUNT_ID, etc.
         self.lambda_function = LambdaFunction(
             self,
             "data_processor",
@@ -67,7 +69,6 @@ class ComputeModule(Construct):
                 variables={
                     "ENVIRONMENT": environment_suffix,
                     "DATA_BUCKET": data_bucket_arn,
-                    "AWS_REGION": aws_region,
                 }
             ),
             tags={
