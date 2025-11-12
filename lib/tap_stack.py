@@ -274,7 +274,7 @@ class TapStack(TerraformStack):
             f"eks-cluster-{environment_suffix}",
             name=f"eks-cluster-{environment_suffix}",
             role_arn=eks_cluster_role.arn,
-            version="1.29",  # CHANGED FROM 1.28 TO 1.29
+            version="1.29",
             vpc_config=EksClusterVpcConfig(
                 subnet_ids=[subnet.id for subnet in private_subnets],
                 endpoint_private_access=True,
@@ -388,13 +388,13 @@ class TapStack(TerraformStack):
             tags={"Name": f"eks-fargate-dev-{environment_suffix}"}
         )
         
-        # Install VPC CNI addon
+        # Install VPC CNI addon - UPDATED VERSION FOR EKS 1.29
         EksAddon(
             self,
             f"eks-addon-vpc-cni-{environment_suffix}",
             cluster_name=eks_cluster.name,
             addon_name="vpc-cni",
-            addon_version="v1.15.1-eksbuild.1",
+            addon_version="v1.20.4-eksbuild.1",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             configuration_values=json.dumps({
@@ -407,13 +407,13 @@ class TapStack(TerraformStack):
             tags={"Name": f"eks-addon-vpc-cni-{environment_suffix}"}
         )
         
-        # Install CoreDNS addon
+        # Install CoreDNS addon - UPDATED VERSION FOR EKS 1.29
         EksAddon(
             self,
             f"eks-addon-coredns-{environment_suffix}",
             cluster_name=eks_cluster.name,
             addon_name="coredns",
-            addon_version="v1.10.1-eksbuild.4",
+            addon_version="v1.11.1-eksbuild.9",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             configuration_values=json.dumps({
@@ -426,13 +426,13 @@ class TapStack(TerraformStack):
             depends_on=[fargate_profile_system]
         )
         
-        # Install kube-proxy addon
+        # Install kube-proxy addon - UPDATED VERSION FOR EKS 1.29
         EksAddon(
             self,
             f"eks-addon-kube-proxy-{environment_suffix}",
             cluster_name=eks_cluster.name,
             addon_name="kube-proxy",
-            addon_version="v1.28.2-eksbuild.2",
+            addon_version="v1.29.7-eksbuild.9",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="OVERWRITE",
             tags={"Name": f"eks-addon-kube-proxy-{environment_suffix}"}

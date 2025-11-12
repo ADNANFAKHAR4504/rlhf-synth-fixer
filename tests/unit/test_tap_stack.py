@@ -431,7 +431,7 @@ class TestEKSResources:
         # Verify cluster configuration
         cluster_key = list(clusters.keys())[0]
         cluster = clusters[cluster_key]
-        assert cluster["version"] == "1.28"
+        assert cluster["version"] == "1.29"
         assert "vpc_config" in cluster
         assert cluster["vpc_config"]["endpoint_private_access"] is True
 
