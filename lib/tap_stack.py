@@ -312,7 +312,7 @@ class TapStack(pulumi.ComponentResource):
             f"flask-api-aurora-{self.environment_suffix}",
             cluster_identifier=f"flask-api-aurora-{self.environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.5",
+            engine_version="15.8",
             database_name="flaskapi",
             master_username="apiuser",
             master_password=db_password,
