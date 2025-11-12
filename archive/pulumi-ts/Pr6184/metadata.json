@@ -1,5 +1,5 @@
 {
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "platform": "pulumi",
   "language": "ts",
   "complexity": "hard",
@@ -24,5 +24,10 @@
     "IAM"
   ],
   "region": "us-east-2",
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
