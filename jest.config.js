@@ -39,7 +39,8 @@ module.exports = {
       tsconfig: {
         allowJs: true,
         esModuleInterop: true,
-      },
-    },
-  },
+        esModuleInterop: true
+      }
+    }
+  }
 };
