@@ -6,6 +6,7 @@ DynamoDB, EventBridge, SQS, SNS, IAM roles, and monitoring.
 import pulumi
 import pulumi_aws as aws
 import json
+import os
 from typing import Optional
 
 
@@ -34,6 +35,7 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('custom:infrastructure:TapStack', name, {}, opts)
 
         self.environment_suffix = args.environment_suffix
+        self.lambda_reserved_concurrency = self._resolve_reserved_concurrency()
 
         # Create KMS key for encryption
         self.kms_key = self._create_kms_key()
@@ -197,11 +199,15 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Subscribe email (placeholder - will need actual email)
+        # Email subscription - Update this email address before deployment
+        # Can be set via environment variable FRAUD_ALERT_EMAIL or config
+        alert_email = os.getenv('FRAUD_ALERT_EMAIL', 'security-team@example.com')
+
         aws.sns.TopicSubscription(
             f"fraud-alert-email-{self.environment_suffix}",
             topic=topic.arn,
             protocol="email",
-            endpoint="security-team@example.com",
+            endpoint=alert_email,
             opts=pulumi.ResourceOptions(parent=self)
         )
 
@@ -280,13 +286,12 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Create Lambda function
-        lambda_func = aws.lambda_.Function(
-            f"api-lambda-{self.environment_suffix}",
-            name=f"api-transaction-{self.environment_suffix}",
-            runtime="python3.11",
-            handler="index.handler",
-            role=role.arn,
-            code=pulumi.AssetArchive({
+        lambda_args = {
+            "name": f"api-transaction-{self.environment_suffix}",
+            "runtime": "python3.11",
+            "handler": "index.handler",
+            "role": role.arn,
+            "code": pulumi.AssetArchive({
                 "index.py": pulumi.StringAsset("""
 import json
 import boto3
@@ -331,21 +336,28 @@ def handler(event, context):
         }
 """)
             }),
-            environment={
+            "environment": {
                 "variables": {
                     "TABLE_NAME": self.dynamodb_table.name
                 }
             },
-            kms_key_arn=self.kms_key.arn,
-            vpc_config={
+            "kms_key_arn": self.kms_key.arn,
+            "vpc_config": {
                 "subnet_ids": [s.id for s in self.vpc["private_subnets"]],
                 "security_group_ids": [self.vpc["security_group"].id]
             },
-            reserved_concurrent_executions=100,
-            tracing_config={"mode": "Active"},
-            timeout=60,
-            tags={"Environment": self.environment_suffix},
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[log_group, policy])
+            "tracing_config": {"mode": "Active"},
+            "timeout": 60,
+            "tags": {"Environment": self.environment_suffix},
+            "opts": pulumi.ResourceOptions(parent=self, depends_on=[log_group, policy])
+        }
+
+        if self.lambda_reserved_concurrency is not None:
+            lambda_args["reserved_concurrent_executions"] = self.lambda_reserved_concurrency
+
+        lambda_func = aws.lambda_.Function(
+            f"api-lambda-{self.environment_suffix}",
+            **lambda_args
         )
 
         return lambda_func
@@ -423,13 +435,12 @@ def handler(event, context):
         )
 
         # Create Lambda function
-        lambda_func = aws.lambda_.Function(
-            f"fraud-lambda-{self.environment_suffix}",
-            name=f"fraud-detection-{self.environment_suffix}",
-            runtime="python3.11",
-            handler="index.handler",
-            role=role.arn,
-            code=pulumi.AssetArchive({
+        lambda_args = {
+            "name": f"fraud-detection-{self.environment_suffix}",
+            "runtime": "python3.11",
+            "handler": "index.handler",
+            "role": role.arn,
+            "code": pulumi.AssetArchive({
                 "index.py": pulumi.StringAsset("""
 import json
 import boto3
@@ -475,22 +486,29 @@ def handler(event, context):
         raise
 """)
             }),
-            environment={
+            "environment": {
                 "variables": {
                     "QUEUE_URL": self.fraud_queue.url,
                     "KMS_KEY_ID": self.kms_key.id
                 }
             },
-            kms_key_arn=self.kms_key.arn,
-            vpc_config={
+            "kms_key_arn": self.kms_key.arn,
+            "vpc_config": {
                 "subnet_ids": [s.id for s in self.vpc["private_subnets"]],
                 "security_group_ids": [self.vpc["security_group"].id]
             },
-            reserved_concurrent_executions=100,
-            tracing_config={"mode": "Active"},
-            timeout=60,
-            tags={"Environment": self.environment_suffix},
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[log_group, policy])
+            "tracing_config": {"mode": "Active"},
+            "timeout": 60,
+            "tags": {"Environment": self.environment_suffix},
+            "opts": pulumi.ResourceOptions(parent=self, depends_on=[log_group, policy])
+        }
+
+        if self.lambda_reserved_concurrency is not None:
+            lambda_args["reserved_concurrent_executions"] = self.lambda_reserved_concurrency
+
+        lambda_func = aws.lambda_.Function(
+            f"fraud-lambda-{self.environment_suffix}",
+            **lambda_args
         )
 
         return lambda_func
@@ -567,13 +585,12 @@ def handler(event, context):
         )
 
         # Create Lambda function
-        lambda_func = aws.lambda_.Function(
-            f"notification-lambda-{self.environment_suffix}",
-            name=f"fraud-notification-{self.environment_suffix}",
-            runtime="python3.11",
-            handler="index.handler",
-            role=role.arn,
-            code=pulumi.AssetArchive({
+        lambda_args = {
+            "name": f"fraud-notification-{self.environment_suffix}",
+            "runtime": "python3.11",
+            "handler": "index.handler",
+            "role": role.arn,
+            "code": pulumi.AssetArchive({
                 "index.py": pulumi.StringAsset("""
 import json
 import boto3
@@ -614,17 +631,24 @@ Please investigate immediately.
         raise
 """)
             }),
-            environment={
+            "environment": {
                 "variables": {
                     "TOPIC_ARN": self.sns_topic.arn
                 }
             },
-            kms_key_arn=self.kms_key.arn,
-            reserved_concurrent_executions=100,
-            tracing_config={"mode": "Active"},
-            timeout=30,
-            tags={"Environment": self.environment_suffix},
-            opts=pulumi.ResourceOptions(parent=self, depends_on=[log_group, policy])
+            "kms_key_arn": self.kms_key.arn,
+            "tracing_config": {"mode": "Active"},
+            "timeout": 30,
+            "tags": {"Environment": self.environment_suffix},
+            "opts": pulumi.ResourceOptions(parent=self, depends_on=[log_group, policy])
+        }
+
+        if self.lambda_reserved_concurrency is not None:
+            lambda_args["reserved_concurrent_executions"] = self.lambda_reserved_concurrency
+
+        lambda_func = aws.lambda_.Function(
+            f"notification-lambda-{self.environment_suffix}",
+            **lambda_args
         )
 
         # Add SQS trigger
@@ -761,3 +785,41 @@ Please investigate immediately.
         pulumi.export("fraud_queue_url", self.fraud_queue.url)
         pulumi.export("sns_topic_arn", self.sns_topic.arn)
         pulumi.export("kms_key_id", self.kms_key.id)
+
+    @staticmethod
+    def _parse_reserved_value(value: Optional[str]) -> Optional[int]:
+        if value in (None, ""):
+            return None
+        try:
+            parsed = int(value)
+            if parsed < 0:
+                pulumi.log.warn(
+                    "LAMBDA_RESERVED_CONCURRENCY cannot be negative; ignoring value %s", value
+                )
+                return None
+            return parsed
+        except ValueError:
+            pulumi.log.warn(
+                "Invalid LAMBDA_RESERVED_CONCURRENCY value '%s'; expected integer", value
+            )
+            return None
+
+    def _resolve_reserved_concurrency(self) -> Optional[int]:
+        env_value = self._parse_reserved_value(os.getenv("LAMBDA_RESERVED_CONCURRENCY"))
+        if env_value is not None:
+            return env_value
+
+        config = pulumi.Config()
+        cfg_value = config.get_int("lambda_reserved_concurrency")
+        if cfg_value is not None:
+            return cfg_value
+
+        # Check for legacy config key
+        legacy_value = config.get_int("lambdaReservedConcurrency")
+        if legacy_value is not None:
+            return legacy_value
+
+        # Return None (no reserved concurrency) to avoid AWS account limit issues
+        # For production, set LAMBDA_RESERVED_CONCURRENCY=100 after requesting AWS quota increase
+        # or use pulumi config set lambda_reserved_concurrency 100
+        return None

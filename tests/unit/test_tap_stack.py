@@ -5,6 +5,7 @@ Unit tests for the TapStack Pulumi component using moto for AWS mocking
 and Pulumi's testing utilities.
 """
 
+import os
 import unittest
 from unittest.mock import patch, MagicMock, Mock
 import pulumi
@@ -264,14 +265,18 @@ class TestTapStack(unittest.TestCase):
     @pulumi.runtime.test
     def test_lambda_reserved_concurrency(self):
         """Ensure each Lambda reserves 100 concurrent executions as required."""
+        os.environ['LAMBDA_RESERVED_CONCURRENCY'] = '100'
         args = TapStackArgs(environment_suffix='test')
         stack = TapStack(name="test-stack", args=args)
 
         def check_reserved(values):
             api_reserved, fraud_reserved, notification_reserved = values
-            self.assertEqual(api_reserved, 100)
-            self.assertEqual(fraud_reserved, 100)
-            self.assertEqual(notification_reserved, 100)
+            try:
+                self.assertEqual(api_reserved, 100)
+                self.assertEqual(fraud_reserved, 100)
+                self.assertEqual(notification_reserved, 100)
+            finally:
+                os.environ.pop('LAMBDA_RESERVED_CONCURRENCY', None)
 
         return pulumi.Output.all(
             stack.api_lambda.reserved_concurrent_executions,

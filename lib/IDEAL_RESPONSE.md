@@ -18,6 +18,7 @@ This document captures the final Pulumi Python implementation that lives under `
 3. Replaced EventBridge pipe with the correct DynamoDB stream → Lambda event source mapping
 4. Added VPC subnets + security group plus CloudWatch log retention
 5. Hardened SQS redrive policy and API Gateway throttling to 1000 rps
+6. Added configurable Lambda reserved concurrency via Pulumi config or the `LAMBDA_RESERVED_CONCURRENCY` environment variable so production can enforce 100 reserved executions while CI stacks with smaller quotas can deploy successfully.
 
 ## Full Source Listings
 

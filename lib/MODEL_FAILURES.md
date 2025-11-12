@@ -100,7 +100,7 @@ reserved_concurrent_executions=100,
 
 **Performance Impact**: High - Under load, fraud detection processing would throttle at 50 concurrent executions, causing delays in fraud alerts and potential data loss if transactions are processed faster than fraud detection can handle.
 
-**Note**: AWS account concurrency limits prevented deploying with 100 reserved executions for all 3 Lambdas (would require 300 total). Adjusted to 10 each for testing purposes, but production deployment would require quota increase.
+**Note**: AWS account concurrency limits can block CI/CD deployments. The fix now reads `lambda_reserved_concurrency` from Pulumi config (or `LAMBDA_RESERVED_CONCURRENCY` env var). Production stacks should set the value to 100, while shared CI stacks can temporarily lower or unset it to stay within the account's available unreserved concurrency.
 
 ---
 
