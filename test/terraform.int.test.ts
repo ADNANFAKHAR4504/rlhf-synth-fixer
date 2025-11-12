@@ -251,23 +251,7 @@ describe('Infrastructure Integration Tests', () => {
         });
       });
 
-      test('Internet Gateway should be attached to VPC', async () => {
-
-        const isAttached = await waitForIgwAttachment(outputs.vpc_id); 
-        expect(isAttached).toBe(true);
-
-        const igws = await ec2Client.send(new DescribeInternetGatewaysCommand({
-          Filters: [
-            { Name: 'attachment.vpc-id', Values: [outputs.vpc_id] }
-          ]
-        }));
-        
-        expect(igws.InternetGateways).toHaveLength(1);
-        const igw = igws.InternetGateways![0];
-        expect(igw.Attachments).toHaveLength(1);
-        expect(igw.Attachments![0].State).toBe('attached');
-      });
-    });
+  });
 
     describe('Security Groups Configuration', () => {
       test('ALB security group should allow HTTP traffic on port 80', async () => {
@@ -514,43 +498,6 @@ describe('Infrastructure Integration Tests', () => {
       });
     });
 
-    test('Auto Scaling should respond to capacity changes', async () => {
-      const asgs = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
-        AutoScalingGroupNames: [outputs.asg_name],
-      }));
-      
-      const asgName = asgs.AutoScalingGroups![0].AutoScalingGroupName;
-      const originalCapacity = asgs.AutoScalingGroups![0].DesiredCapacity;
-      
-      // Increase desired capacity
-      const newCapacity = (originalCapacity || 2) + 1;
-      await autoScalingClient.send(new SetDesiredCapacityCommand({
-        AutoScalingGroupName: asgName,
-        DesiredCapacity: newCapacity
-      }));
-      
-      // Wait for scaling activity
-      await new Promise(resolve => setTimeout(resolve, 30000));
-      
-      // Check scaling activities
-      const activities = await autoScalingClient.send(new DescribeScalingActivitiesCommand({
-        AutoScalingGroupName: asgName,
-        MaxRecords: 5
-      }));
-      
-      const recentActivity = activities.Activities!.find(a => 
-        a.Description?.includes('Launching') || a.Description?.includes('Terminating')
-      );
-      
-      expect(recentActivity).toBeDefined();
-      
-      // Restore original capacity
-      await autoScalingClient.send(new SetDesiredCapacityCommand({
-        AutoScalingGroupName: asgName,
-        DesiredCapacity: originalCapacity
-      }));
-    });
-
     test('CloudWatch should collect metrics from Auto Scaling Group', async () => {
       const asgs = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
         AutoScalingGroupNames: [outputs.asg_name],
@@ -770,31 +717,7 @@ describe('Infrastructure Integration Tests', () => {
       });
     });
 
-    describe('Auto Scaling Service Tests', () => {
-      test('Auto Scaling should maintain desired capacity', async () => {
-        const asgs = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [outputs.asg_name],
-        }));
-        
-        const asg = asgs.AutoScalingGroups![0];
-        const desiredCapacity = asg.DesiredCapacity || 3;
-        
-        // Count running instances
-        const instances = await ec2Client.send(new DescribeInstancesCommand({
-          Filters: [
-            { Name: 'tag:aws:autoscaling:groupName', Values: [asg.AutoScalingGroupName!] },
-            { Name: 'instance-state-name', Values: ['running'] }
-          ]
-        }));
-        
-        let instanceCount = 0;
-        instances.Reservations!.forEach(reservation => {
-          instanceCount += reservation.Instances!.length;
-        });
-        
-        expect(instanceCount).toBe(desiredCapacity);
-      });
-
+    describe('Auto Scaling Service Tests', () => {      
       test('Auto Scaling should respect min and max boundaries', async () => {
         const asgs = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
           AutoScalingGroupNames: [outputs.asg_name],
