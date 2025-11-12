@@ -24,10 +24,9 @@ from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 import json
 
-
 class TapStack(TerraformStack):
     """CDKTF Python stack for EKS Fargate infrastructure."""
-
+    
     def __init__(
         self,
         scope: Construct,
@@ -36,14 +35,14 @@ class TapStack(TerraformStack):
     ):
         """Initialize the EKS Fargate stack."""
         super().__init__(scope, construct_id)
-
+        
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
         aws_region = kwargs.get('aws_region', 'ap-southeast-1')
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
-
+        
         # Configure AWS Provider
         AwsProvider(
             self,
@@ -51,10 +50,10 @@ class TapStack(TerraformStack):
             region=aws_region,
             default_tags=[default_tags],
         )
-
+        
         # Get current AWS account ID
         current_account = DataAwsCallerIdentity(self, "current")
-
+        
         # Configure S3 Backend
         S3Backend(
             self,
@@ -63,10 +62,10 @@ class TapStack(TerraformStack):
             region=state_bucket_region,
             encrypt=True,
         )
-
+        
         # Define availability zones
         azs = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
-
+        
         # Create VPC
         vpc = Vpc(
             self,
@@ -79,7 +78,7 @@ class TapStack(TerraformStack):
                 f"kubernetes.io/cluster/eks-cluster-{environment_suffix}": "shared"
             }
         )
-
+        
         # Create Internet Gateway
         igw = InternetGateway(
             self,
@@ -87,7 +86,7 @@ class TapStack(TerraformStack):
             vpc_id=vpc.id,
             tags={"Name": f"eks-igw-{environment_suffix}"}
         )
-
+        
         # Create private subnets for Fargate
         private_subnets = []
         for i, az in enumerate(azs):
@@ -105,7 +104,7 @@ class TapStack(TerraformStack):
                 }
             )
             private_subnets.append(subnet)
-
+        
         # Create public subnets for NAT gateways
         public_subnets = []
         for i, az in enumerate(azs):
@@ -123,7 +122,7 @@ class TapStack(TerraformStack):
                 }
             )
             public_subnets.append(subnet)
-
+        
         # Create public route table
         public_rt = RouteTable(
             self,
@@ -135,7 +134,7 @@ class TapStack(TerraformStack):
             )],
             tags={"Name": f"eks-public-rt-{environment_suffix}"}
         )
-
+        
         # Associate public subnets with public route table
         for i, subnet in enumerate(public_subnets):
             RouteTableAssociation(
@@ -144,7 +143,7 @@ class TapStack(TerraformStack):
                 subnet_id=subnet.id,
                 route_table_id=public_rt.id
             )
-
+        
         # Create NAT Gateways and EIPs
         nat_gateways = []
         for i, subnet in enumerate(public_subnets):
@@ -154,6 +153,7 @@ class TapStack(TerraformStack):
                 domain="vpc",
                 tags={"Name": f"eks-nat-eip-{i}-{environment_suffix}"}
             )
+            
             nat_gw = NatGateway(
                 self,
                 f"eks-nat-gw-{i}-{environment_suffix}",
@@ -162,7 +162,7 @@ class TapStack(TerraformStack):
                 tags={"Name": f"eks-nat-gw-{i}-{environment_suffix}"}
             )
             nat_gateways.append(nat_gw)
-
+        
         # Create private route tables with NAT gateway routes
         for i, (subnet, nat_gw) in enumerate(zip(private_subnets, nat_gateways)):
             private_rt = RouteTable(
@@ -175,13 +175,14 @@ class TapStack(TerraformStack):
                 )],
                 tags={"Name": f"eks-private-rt-{i}-{environment_suffix}"}
             )
+            
             RouteTableAssociation(
                 self,
                 f"eks-private-rta-{i}-{environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=private_rt.id
             )
-
+        
         # Create KMS key for EKS encryption
         kms_key = KmsKey(
             self,
@@ -202,14 +203,14 @@ class TapStack(TerraformStack):
             }),
             tags={"Name": f"eks-kms-key-{environment_suffix}"}
         )
-
+        
         KmsAlias(
             self,
             f"eks-kms-alias-{environment_suffix}",
             name=f"alias/eks-cluster-{environment_suffix}",
             target_key_id=kms_key.id
         )
-
+        
         # Create CloudWatch log group for EKS
         CloudwatchLogGroup(
             self,
@@ -218,7 +219,7 @@ class TapStack(TerraformStack):
             retention_in_days=7,
             tags={"Name": f"eks-log-group-{environment_suffix}"}
         )
-
+        
         # Create EKS cluster IAM role
         eks_assume_role_policy = json.dumps({
             "Version": "2012-10-17",
@@ -228,7 +229,7 @@ class TapStack(TerraformStack):
                 "Action": "sts:AssumeRole"
             }]
         })
-
+        
         eks_cluster_role = IamRole(
             self,
             f"eks-cluster-role-{environment_suffix}",
@@ -236,21 +237,21 @@ class TapStack(TerraformStack):
             assume_role_policy=eks_assume_role_policy,
             tags={"Name": f"eks-cluster-role-{environment_suffix}"}
         )
-
+        
         IamRolePolicyAttachment(
             self,
             f"eks-cluster-policy-{environment_suffix}",
             role=eks_cluster_role.name,
             policy_arn="arn:aws:iam::aws:policy/AmazonEKSClusterPolicy"
         )
-
+        
         IamRolePolicyAttachment(
             self,
             f"eks-vpc-resource-controller-{environment_suffix}",
             role=eks_cluster_role.name,
             policy_arn="arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
         )
-
+        
         # Create cluster security group
         cluster_sg = SecurityGroup(
             self,
@@ -266,14 +267,14 @@ class TapStack(TerraformStack):
             )],
             tags={"Name": f"eks-cluster-sg-{environment_suffix}"}
         )
-
+        
         # Create EKS cluster
         eks_cluster = EksCluster(
             self,
             f"eks-cluster-{environment_suffix}",
             name=f"eks-cluster-{environment_suffix}",
             role_arn=eks_cluster_role.arn,
-            version="1.28",
+            version="1.29",  # CHANGED FROM 1.28 TO 1.29
             vpc_config=EksClusterVpcConfig(
                 subnet_ids=[subnet.id for subnet in private_subnets],
                 endpoint_private_access=True,
@@ -283,13 +284,12 @@ class TapStack(TerraformStack):
             enabled_cluster_log_types=["api", "audit", "authenticator", "controllerManager", "scheduler"],
             tags={"Name": f"eks-cluster-{environment_suffix}"}
         )
-
+        
         # Create OIDC provider for IRSA
         oidc_thumbprint = "9e99a48a9960b14926bb7f3b02e22da2b0ab7280"
-
         # Extract OIDC issuer URL without https://
         oidc_issuer = Fn.replace(eks_cluster.identity.get(0).oidc.get(0).issuer, "https://", "")
-
+        
         oidc_provider = IamOpenidConnectProvider(
             self,
             f"eks-oidc-provider-{environment_suffix}",
@@ -298,7 +298,7 @@ class TapStack(TerraformStack):
             thumbprint_list=[oidc_thumbprint],
             tags={"Name": f"eks-oidc-provider-{environment_suffix}"}
         )
-
+        
         # Create Fargate pod execution role
         fargate_assume_role_policy = json.dumps({
             "Version": "2012-10-17",
@@ -308,7 +308,7 @@ class TapStack(TerraformStack):
                 "Action": "sts:AssumeRole"
             }]
         })
-
+        
         # Production Fargate role
         fargate_prod_role = IamRole(
             self,
@@ -317,14 +317,14 @@ class TapStack(TerraformStack):
             assume_role_policy=fargate_assume_role_policy,
             tags={"Name": f"eks-fargate-prod-role-{environment_suffix}"}
         )
-
+        
         IamRolePolicyAttachment(
             self,
             f"fargate-prod-policy-{environment_suffix}",
             role=fargate_prod_role.name,
             policy_arn="arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
         )
-
+        
         # Development Fargate role
         fargate_dev_role = IamRole(
             self,
@@ -333,14 +333,14 @@ class TapStack(TerraformStack):
             assume_role_policy=fargate_assume_role_policy,
             tags={"Name": f"eks-fargate-dev-role-{environment_suffix}"}
         )
-
+        
         IamRolePolicyAttachment(
             self,
             f"fargate-dev-policy-{environment_suffix}",
             role=fargate_dev_role.name,
             policy_arn="arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy"
         )
-
+        
         # Create Fargate profile for kube-system (for CoreDNS)
         fargate_profile_system = EksFargateProfile(
             self,
@@ -357,7 +357,7 @@ class TapStack(TerraformStack):
             ],
             tags={"Name": f"eks-fargate-system-{environment_suffix}"}
         )
-
+        
         # Create Fargate profile for production namespace
         fargate_profile_prod = EksFargateProfile(
             self,
@@ -372,7 +372,7 @@ class TapStack(TerraformStack):
             )],
             tags={"Name": f"eks-fargate-prod-{environment_suffix}"}
         )
-
+        
         # Create Fargate profile for development namespace
         fargate_profile_dev = EksFargateProfile(
             self,
@@ -387,7 +387,7 @@ class TapStack(TerraformStack):
             )],
             tags={"Name": f"eks-fargate-dev-{environment_suffix}"}
         )
-
+        
         # Install VPC CNI addon
         EksAddon(
             self,
@@ -406,7 +406,7 @@ class TapStack(TerraformStack):
             }),
             tags={"Name": f"eks-addon-vpc-cni-{environment_suffix}"}
         )
-
+        
         # Install CoreDNS addon
         EksAddon(
             self,
@@ -425,7 +425,7 @@ class TapStack(TerraformStack):
             tags={"Name": f"eks-addon-coredns-{environment_suffix}"},
             depends_on=[fargate_profile_system]
         )
-
+        
         # Install kube-proxy addon
         EksAddon(
             self,
@@ -437,7 +437,7 @@ class TapStack(TerraformStack):
             resolve_conflicts_on_update="OVERWRITE",
             tags={"Name": f"eks-addon-kube-proxy-{environment_suffix}"}
         )
-
+        
         # Outputs
         TerraformOutput(
             self,
@@ -445,42 +445,42 @@ class TapStack(TerraformStack):
             value=vpc.id,
             description="VPC ID"
         )
-
+        
         TerraformOutput(
             self,
             "eks_cluster_name",
             value=eks_cluster.name,
             description="EKS cluster name"
         )
-
+        
         TerraformOutput(
             self,
             "eks_cluster_endpoint",
             value=eks_cluster.endpoint,
             description="EKS cluster endpoint"
         )
-
+        
         TerraformOutput(
             self,
             "eks_cluster_version",
             value=eks_cluster.version,
             description="EKS cluster version"
         )
-
+        
         TerraformOutput(
             self,
             "fargate_profile_prod_id",
             value=fargate_profile_prod.id,
             description="Production Fargate profile ID"
         )
-
+        
         TerraformOutput(
             self,
             "fargate_profile_dev_id",
             value=fargate_profile_dev.id,
             description="Development Fargate profile ID"
         )
-
+        
         TerraformOutput(
             self,
             "oidc_provider_arn",

@@ -24,5 +24,11 @@
     "OIDC"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 9
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "reviewer": "raghav-turing"
 }
