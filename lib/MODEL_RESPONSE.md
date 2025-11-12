@@ -1,219 +1,320 @@
-I'll provide a comprehensive Terraform migration plan for moving your AWS application from us-west-1 to us-west-2. This approach uses `terraform import` to preserve resource identities and minimize downtime.
-
+# main.tf
 ```hcl
 # main.tf
-terraform {
-  required_version = ">= 1.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
+
+# ============================================================================
+# Variables
+# ============================================================================
+
+variable "aws_region" {
+  description = "AWS region for resources"
+  type        = string
+  default     = "us-east-1"
 }
 
-# Primary provider for the new region (us-west-2)
-provider "aws" {
-  region = var.aws_region
-  
-  default_tags {
-    tags = {
-      Environment   = var.environment
-      Project       = var.project_name
-      ManagedBy     = "terraform"
-      MigratedFrom  = "us-west-1"
-      MigrationDate = var.migration_date
-    }
-  }
+variable "environment" {
+  description = "Environment name"
+  type        = string
+  default     = "production"
 }
 
-# Alias provider for the old region (for reference/cleanup)
-provider "aws" {
-  alias  = "old_region"
-  region = "us-west-1"
+variable "project" {
+  description = "Project name"
+  type        = string
+  default     = "web-app"
 }
 
-# Data sources for existing resources in new region
+# ============================================================================
+# Data Sources
+# ============================================================================
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-data "aws_caller_identity" "current" {}
+data "aws_ami" "amazon_linux_2023" {
+  most_recent = true
+  owners      = ["amazon"]
 
-# VPC and Networking
+  filter {
+    name   = "name"
+    values = ["al2023-ami-*-x86_64"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
+  }
+}
+
+# ============================================================================
+# Locals
+# ============================================================================
+
+locals {
+  common_tags = {
+    Environment = var.environment
+    Project     = var.project
+    ManagedBy   = "Terraform"
+  }
+  
+  azs = slice(data.aws_availability_zones.available.names, 0, 3)
+}
+
+# ============================================================================
+# Secrets Manager
+# ============================================================================
+
+resource "random_password" "db_password" {
+  length  = 32
+  special = true
+}
+
+resource "aws_secretsmanager_secret" "db_password" {
+  name_prefix             = "${var.project}-db-password-"
+  recovery_window_in_days = 7
+  
+  tags = local.common_tags
+}
+
+resource "aws_secretsmanager_secret_version" "db_password" {
+  secret_id     = aws_secretsmanager_secret.db_password.id
+  secret_string = random_password.db_password.result
+}
+
+# ============================================================================
+# VPC & Networking
+# ============================================================================
+
 resource "aws_vpc" "main" {
-  cidr_block           = var.vpc_cidr
+  cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-
-  tags = {
-    Name = "${var.project_name}-vpc"
-  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-vpc"
+  })
 }
 
+# Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-igw"
-  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-igw"
+  })
 }
 
+# Public Subnets
 resource "aws_subnet" "public" {
-  count = length(var.public_subnet_cidrs)
-
+  count = 3
+  
   vpc_id                  = aws_vpc.main.id
-  cidr_block              = var.public_subnet_cidrs[count.index]
-  availability_zone       = data.aws_availability_zones.available.names[count.index]
+  cidr_block              = "10.0.${count.index + 1}.0/24"
+  availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-
-  tags = {
-    Name = "${var.project_name}-public-subnet-${count.index + 1}"
-    Type = "public"
-  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-public-subnet-${count.index + 1}"
+    Type = "Public"
+  })
 }
 
+# Private Subnets
 resource "aws_subnet" "private" {
-  count = length(var.private_subnet_cidrs)
-
+  count = 3
+  
   vpc_id            = aws_vpc.main.id
-  cidr_block        = var.private_subnet_cidrs[count.index]
-  availability_zone = data.aws_availability_zones.available.names[count.index]
-
-  tags = {
-    Name = "${var.project_name}-private-subnet-${count.index + 1}"
-    Type = "private"
-  }
+  cidr_block        = "10.0.${count.index + 11}.0/24"
+  availability_zone = local.azs[count.index]
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-private-subnet-${count.index + 1}"
+    Type = "Private"
+  })
 }
 
-# Route Tables
+# Elastic IPs for NAT Gateways
+resource "aws_eip" "nat" {
+  count = 3
+  
+  domain = "vpc"
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-nat-eip-${count.index + 1}"
+  })
+  
+  depends_on = [aws_internet_gateway.main]
+}
+
+# NAT Gateways
+resource "aws_nat_gateway" "main" {
+  count = 3
+  
+  allocation_id = aws_eip.nat[count.index].id
+  subnet_id     = aws_subnet.public[count.index].id
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-nat-gateway-${count.index + 1}"
+  })
+  
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
-  tags = {
-    Name = "${var.project_name}-public-rt"
-  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-public-rt"
+  })
 }
 
-resource "aws_route_table" "private" {
-  count  = length(aws_subnet.private)
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project_name}-private-rt-${count.index + 1}"
-  }
-}
-
+# Public Route Table Associations
 resource "aws_route_table_association" "public" {
-  count = length(aws_subnet.public)
-
+  count = 3
+  
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_route_table_association" "private" {
-  count = length(aws_subnet.private)
+# Private Route Tables
+resource "aws_route_table" "private" {
+  count = 3
+  
+  vpc_id = aws_vpc.main.id
+  
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.main[count.index].id
+  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-private-rt-${count.index + 1}"
+  })
+}
 
+# Private Route Table Associations
+resource "aws_route_table_association" "private" {
+  count = 3
+  
   subnet_id      = aws_subnet.private[count.index].id
   route_table_id = aws_route_table.private[count.index].id
 }
 
+# ============================================================================
 # Security Groups
-resource "aws_security_group" "web" {
-  name_prefix = "${var.project_name}-web-"
-  vpc_id      = aws_vpc.main.id
+# ============================================================================
 
+# ALB Security Group
+resource "aws_security_group" "alb" {
+  name_prefix = "${var.project}-alb-sg-"
+  description = "Security group for Application Load Balancer"
+  vpc_id      = aws_vpc.main.id
+  
   ingress {
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow HTTP traffic"
   }
-
-  ingress {
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
-
-  tags = {
-    Name = "${var.project_name}-web-sg"
-  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-alb-sg"
+  })
 }
 
-resource "aws_security_group" "app" {
-  name_prefix = "${var.project_name}-app-"
+# EC2 Security Group
+resource "aws_security_group" "ec2" {
+  name_prefix = "${var.project}-ec2-sg-"
+  description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
-
+  
   ingress {
-    from_port       = 8080
-    to_port         = 8080
+    from_port       = 3000
+    to_port         = 3000
     protocol        = "tcp"
-    security_groups = [aws_security_group.web.id]
+    security_groups = [aws_security_group.alb.id]
+    description     = "Allow traffic from ALB"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
-
-  tags = {
-    Name = "${var.project_name}-app-sg"
-  }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-ec2-sg"
+  })
 }
 
-resource "aws_security_group" "database" {
-  name_prefix = "${var.project_name}-db-"
+# RDS Security Group
+resource "aws_security_group" "rds" {
+  name_prefix = "${var.project}-rds-sg-"
+  description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
-
+  
   ingress {
-    from_port       = 3306
-    to_port         = 3306
+    from_port       = 5432
+    to_port         = 5432
     protocol        = "tcp"
-    security_groups = [aws_security_group.app.id]
+    security_groups = [aws_security_group.ec2.id]
+    description     = "Allow PostgreSQL traffic from EC2 instances"
   }
-
-  tags = {
-    Name = "${var.project_name}-db-sg"
+  
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    description = "Allow all outbound traffic"
   }
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-rds-sg"
+  })
 }
 
+# ============================================================================
 # Application Load Balancer
+# ============================================================================
+
 resource "aws_lb" "main" {
-  name               = "${var.project_name}-alb"
+  name               = "${var.project}-alb"
   internal           = false
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.web.id]
+  security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection = var.enable_deletion_protection
-
-  tags = {
-    Name = "${var.project_name}-alb"
-  }
+  
+  enable_deletion_protection = false
+  enable_http2              = true
+  
+  tags = local.common_tags
 }
 
-resource "aws_lb_target_group" "app" {
-  name     = "${var.project_name}-app-tg"
-  port     = 8080
+resource "aws_lb_target_group" "main" {
+  name     = "${var.project}-tg"
+  port     = 3000
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -223,697 +324,507 @@ resource "aws_lb_target_group" "app" {
     path                = "/health"
     matcher             = "200"
   }
-
-  tags = {
-    Name = "${var.project_name}-app-tg"
-  }
+  
+  deregistration_delay = 30
+  
+  tags = local.common_tags
 }
 
-resource "aws_lb_listener" "app" {
+resource "aws_lb_listener" "main" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.app.arn
+    target_group_arn = aws_lb_target_group.main.arn
   }
+  
+  tags = local.common_tags
 }
 
-# Launch Template and Auto Scaling Group
-resource "aws_launch_template" "app" {
-  name_prefix   = "${var.project_name}-app-"
-  image_id      = var.ami_id
-  instance_type = var.instance_type
-  key_name      = var.key_pair_name
+# ============================================================================
+# IAM Role for EC2 Instances
+# ============================================================================
 
-  vpc_security_group_ids = [aws_security_group.app.id]
+resource "aws_iam_role" "ec2" {
+  name = "${var.project}-ec2-role"
+  
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+  
+  tags = local.common_tags
+}
 
-  user_data = base64encode(var.user_data_script)
+resource "aws_iam_role_policy_attachment" "ec2_ssm" {
+  role       = aws_iam_role.ec2.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
 
+resource "aws_iam_role_policy" "ec2_secrets" {
+  name = "${var.project}-ec2-secrets-policy"
+  role = aws_iam_role.ec2.id
+  
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "secretsmanager:GetSecretValue"
+        ]
+        Resource = aws_secretsmanager_secret.db_password.arn
+      }
+    ]
+  })
+}
+
+resource "aws_iam_instance_profile" "ec2" {
+  name = "${var.project}-ec2-instance-profile"
+  role = aws_iam_role.ec2.name
+  
+  tags = local.common_tags
+}
+
+# ============================================================================
+# Launch Template
+# ============================================================================
+
+resource "aws_launch_template" "main" {
+  name_prefix   = "${var.project}-lt-"
+  image_id      = data.aws_ami.amazon_linux_2023.id
+  instance_type = "t3.medium"
+  
+  iam_instance_profile {
+    arn = aws_iam_instance_profile.ec2.arn
+  }
+  
+  vpc_security_group_ids = [aws_security_group.ec2.id]
+  
+  metadata_options {
+    http_endpoint               = "enabled"
+    http_tokens                 = "required"
+    http_put_response_hop_limit = 1
+    instance_metadata_tags      = "enabled"
+  }
+  
+  user_data = base64encode(templatefile("${path.module}/user_data.sh", {
+    db_endpoint = aws_db_instance.main.endpoint
+    db_name     = aws_db_instance.main.db_name
+    secret_arn  = aws_secretsmanager_secret.db_password.arn
+    region      = var.aws_region
+  }))
+  
   tag_specifications {
     resource_type = "instance"
-    tags = {
-      Name = "${var.project_name}-app-instance"
-    }
+    tags = merge(local.common_tags, {
+      Name = "${var.project}-instance"
+    })
   }
+  
+  tags = local.common_tags
+}
 
-  tags = {
-    Name = "${var.project_name}-app-lt"
+# User data script embedded as a heredoc since external files aren't allowed
+resource "local_file" "user_data" {
+  filename = "${path.module}/user_data.sh"
+  content  = <<-EOF
+#!/bin/bash
+set -e
+
+# Update system
+yum update -y
+
+# Install Node.js 18
+curl -sL https://rpm.nodesource.com/setup_18.x | bash -
+yum install -y nodejs
+
+# Install PostgreSQL client
+yum install -y postgresql15
+
+# Create app directory
+mkdir -p /app
+cd /app
+
+# Create a simple Node.js app
+cat > app.js << 'APPJS'
+const express = require('express');
+const { Client } = require('pg');
+const AWS = require('aws-sdk');
+
+const app = express();
+const port = 3000;
+
+// Initialize AWS SDK
+const secretsManager = new AWS.SecretsManager({ region: '${var.aws_region}' });
+
+async function getDbPassword() {
+  try {
+    const data = await secretsManager.getSecretValue({ SecretId: '${secret_arn}' }).promise();
+    return data.SecretString;
+  } catch (err) {
+    console.error('Error retrieving secret:', err);
+    throw err;
   }
 }
 
-resource "aws_autoscaling_group" "app" {
-  name                = "${var.project_name}-app-asg"
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+// Root endpoint
+app.get('/', async (req, res) => {
+  res.json({ 
+    message: 'Hello from EC2 instance!',
+    instance_id: process.env.INSTANCE_ID,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Database test endpoint
+app.get('/db-test', async (req, res) => {
+  try {
+    const password = await getDbPassword();
+    const client = new Client({
+      host: '${db_endpoint}'.split(':')[0],
+      port: 5432,
+      database: '${db_name}',
+      user: 'dbadmin',
+      password: password,
+    });
+    
+    await client.connect();
+    const result = await client.query('SELECT NOW()');
+    await client.end();
+    
+    res.json({ 
+      database_time: result.rows[0].now,
+      status: 'Database connection successful'
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      error: 'Database connection failed',
+      message: error.message 
+    });
+  }
+});
+
+app.listen(port, '0.0.0.0', () => {
+  console.log(\`App listening at http://0.0.0.0:\${port}\`);
+});
+APPJS
+
+# Create package.json
+cat > package.json << 'PACKAGE'
+{
+  "name": "web-app",
+  "version": "1.0.0",
+  "description": "Simple web application",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "pg": "^8.11.3",
+    "aws-sdk": "^2.1450.0"
+  }
+}
+PACKAGE
+
+# Install dependencies
+npm install
+
+# Get instance ID
+export INSTANCE_ID=$(ec2-metadata --instance-id | cut -d " " -f 2)
+
+# Create systemd service
+cat > /etc/systemd/system/webapp.service << 'SERVICE'
+[Unit]
+Description=Web Application
+After=network.target
+
+[Service]
+Type=simple
+User=ec2-user
+WorkingDirectory=/app
+ExecStart=/usr/bin/node /app/app.js
+Restart=on-failure
+RestartSec=10
+Environment=NODE_ENV=production
+Environment=INSTANCE_ID=%i
+
+[Install]
+WantedBy=multi-user.target
+SERVICE
+
+# Start the service
+systemctl daemon-reload
+systemctl enable webapp.service
+systemctl start webapp.service
+EOF
+}
+
+# ============================================================================
+# Auto Scaling Group
+# ============================================================================
+
+resource "aws_autoscaling_group" "main" {
+  name                = "${var.project}-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.app.arn]
+  target_group_arns   = [aws_lb_target_group.main.arn]
   health_check_type   = "ELB"
   health_check_grace_period = 300
-
-  min_size         = var.asg_min_size
-  max_size         = var.asg_max_size
-  desired_capacity = var.asg_desired_capacity
-
+  min_size            = 2
+  max_size            = 10
+  desired_capacity    = 2
+  
   launch_template {
-    id      = aws_launch_template.app.id
+    id      = aws_launch_template.main.id
     version = "$Latest"
   }
-
+  
   tag {
     key                 = "Name"
-    value               = "${var.project_name}-app-asg"
-    propagate_at_launch = false
+    value               = "${var.project}-asg-instance"
+    propagate_at_launch = true
   }
+  
+  tag {
+    key                 = "Environment"
+    value               = var.environment
+    propagate_at_launch = true
+  }
+  
+  tag {
+    key                 = "Project"
+    value               = var.project
+    propagate_at_launch = true
+  }
+  
+  tag {
+    key                 = "ManagedBy"
+    value               = "Terraform"
+    propagate_at_launch = true
+  }
+  
+  depends_on = [
+    aws_lb_listener.main,
+    aws_db_instance.main,
+    local_file.user_data
+  ]
 }
 
-# RDS Subnet Group and Database
-resource "aws_db_subnet_group" "main" {
-  name       = "${var.project_name}-db-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
+# Auto Scaling Policy
+resource "aws_autoscaling_policy" "scale_out" {
+  name                   = "${var.project}-scale-out"
+  scaling_adjustment     = 2
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
 
-  tags = {
-    Name = "${var.project_name}-db-subnet-group"
+resource "aws_cloudwatch_metric_alarm" "cpu_high" {
+  alarm_name          = "${var.project}-cpu-high"
+  comparison_operator = "GreaterThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "70"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_out.arn]
+  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
   }
+  
+  tags = local.common_tags
+}
+
+resource "aws_autoscaling_policy" "scale_in" {
+  name                   = "${var.project}-scale-in"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.main.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "cpu_low" {
+  alarm_name          = "${var.project}-cpu-low"
+  comparison_operator = "LessThanThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "120"
+  statistic           = "Average"
+  threshold           = "30"
+  alarm_description   = "This metric monitors ec2 cpu utilization"
+  alarm_actions       = [aws_autoscaling_policy.scale_in.arn]
+  
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.main.name
+  }
+  
+  tags = local.common_tags
+}
+
+# ============================================================================
+# RDS Database
+# ============================================================================
+
+resource "aws_db_subnet_group" "main" {
+  name       = "${var.project}-db-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-db-subnet-group"
+  })
 }
 
 resource "aws_db_instance" "main" {
-  identifier = "${var.project_name}-database"
-
-  engine         = "mysql"
-  engine_version = var.db_engine_version
-  instance_class = var.db_instance_class
-
-  allocated_storage     = var.db_allocated_storage
-  max_allocated_storage = var.db_max_allocated_storage
-  storage_type          = "gp2"
+  identifier     = "${var.project}-db"
+  engine         = "postgres"
+  engine_version = "15.4"
+  instance_class = "db.t3.micro"
+  
+  allocated_storage     = 20
+  storage_type          = "gp3"
   storage_encrypted     = true
-
-  db_name  = var.db_name
-  username = var.db_username
-  password = var.db_password
-
-  vpc_security_group_ids = [aws_security_group.database.id]
+  
+  db_name  = "webapp"
+  username = "dbadmin"
+  password = aws_secretsmanager_secret_version.db_password.secret_string
+  
+  vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
+  
+  multi_az                = true
+  publicly_accessible     = false
+  backup_retention_period = 7
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
+  skip_final_snapshot       = true
+  deletion_protection       = false
+  apply_immediately         = true
+  auto_minor_version_upgrade = true
+  
+  enabled_cloudwatch_logs_exports = ["postgresql"]
+  
+  tags = merge(local.common_tags, {
+    Name = "${var.project}-database"
+  })
+  
+  depends_on = [aws_secretsmanager_secret_version.db_password]
+}
 
-  backup_retention_period = var.db_backup_retention_period
-  backup_window          = var.db_backup_window
-  maintenance_window     = var.db_maintenance_window
+# ============================================================================
+# Outputs
+# ============================================================================
 
-  skip_final_snapshot = var.skip_final_snapshot
-  deletion_protection = var.enable_deletion_protection
+output "alb_dns_name" {
+  description = "DNS name of the Application Load Balancer"
+  value       = aws_lb.main.dns_name
+}
 
-  tags = {
-    Name = "${var.project_name}-database"
-  }
+output "rds_endpoint" {
+  description = "RDS database endpoint"
+  value       = aws_db_instance.main.endpoint
+}
+
+output "secret_arn" {
+  description = "ARN of the Secrets Manager secret containing the database password"
+  value       = aws_secretsmanager_secret.db_password.arn
+}
+
+output "vpc_id" {
+  description = "ID of the VPC"
+  value       = aws_vpc.main.id
+}
+
+output "public_subnet_ids" {
+  description = "IDs of public subnets"
+  value       = aws_subnet.public[*].id
+}
+
+output "private_subnet_ids" {
+  description = "IDs of private subnets"
+  value       = aws_subnet.private[*].id
+}
+
+output "alb_security_group_id" {
+  description = "Security group ID for the ALB"
+  value       = aws_security_group.alb.id
+}
+
+output "ec2_security_group_id" {
+  description = "Security group ID for EC2 instances"
+  value       = aws_security_group.ec2.id
+}
+
+output "rds_security_group_id" {
+  description = "Security group ID for RDS"
+  value       = aws_security_group.rds.id
+}
+
+output "nat_gateway_ids" {
+  description = "IDs of NAT Gateways"
+  value       = aws_nat_gateway.main[*].id
+}
+
+output "internet_gateway_id" {
+  description = "ID of the Internet Gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "autoscaling_group_name" {
+  description = "Name of the Auto Scaling Group"
+  value       = aws_autoscaling_group.main.name
+}
+
+output "launch_template_id" {
+  description = "ID of the launch template"
+  value       = aws_launch_template.main.id
+}
+
+output "target_group_arn" {
+  description = "ARN of the target group"
+  value       = aws_lb_target_group.main.arn
 }
 ```
-
+# provider.tf
 ```hcl
-# variables.tf
-variable "aws_region" {
-  description = "AWS region for resources"
-  type        = string
-  default     = "us-west-2"
-}
+# provider.tf
 
-variable "environment" {
-  description = "Environment name"
-  type        = string
-  default     = "production"
-}
-
-variable "project_name" {
-  description = "Project name for resource naming"
-  type        = string
-  default     = "myapp"
-}
-
-variable "migration_date" {
-  description = "Date of migration for tagging"
-  type        = string
-  default     = "2024-01-15"
-}
-
-# Network Configuration
-variable "vpc_cidr" {
-  description = "CIDR block for VPC"
-  type        = string
-  default     = "10.0.0.0/16"
-}
-
-variable "public_subnet_cidrs" {
-  description = "CIDR blocks for public subnets"
-  type        = list(string)
-  default     = ["10.0.1.0/24", "10.0.2.0/24"]
-}
-
-variable "private_subnet_cidrs" {
-  description = "CIDR blocks for private subnets"
-  type        = list(string)
-  default     = ["10.0.10.0/24", "10.0.20.0/24"]
-}
-
-# EC2 Configuration
-variable "ami_id" {
-  description = "AMI ID for EC2 instances"
-  type        = string
-  default     = "ami-0c02fb55956c7d316" # Amazon Linux 2 in us-west-2
-}
-
-variable "instance_type" {
-  description = "EC2 instance type"
-  type        = string
-  default     = "t3.medium"
-}
-
-variable "key_pair_name" {
-  description = "EC2 Key Pair name"
-  type        = string
-  default     = "myapp-keypair"
-}
-
-variable "user_data_script" {
-  description = "User data script for EC2 instances"
-  type        = string
-  default     = <<-EOF
-    #!/bin/bash
-    yum update -y
-    yum install -y docker
-    service docker start
-    usermod -a -G docker ec2-user
-    # Add your application startup commands here
-  EOF
-}
-
-# Auto Scaling Configuration
-variable "asg_min_size" {
-  description = "Minimum size of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-variable "asg_max_size" {
-  description = "Maximum size of Auto Scaling Group"
-  type        = number
-  default     = 6
-}
-
-variable "asg_desired_capacity" {
-  description = "Desired capacity of Auto Scaling Group"
-  type        = number
-  default     = 2
-}
-
-# Database Configuration
-variable "db_engine_version" {
-  description = "RDS engine version"
-  type        = string
-  default     = "8.0.35"
-}
-
-variable "db_instance_class" {
-  description = "RDS instance class"
-  type        = string
-  default     = "db.t3.micro"
-}
-
-variable "db_allocated_storage" {
-  description = "RDS allocated storage in GB"
-  type        = number
-  default     = 20
-}
-
-variable "db_max_allocated_storage" {
-  description = "RDS maximum allocated storage in GB"
-  type        = number
-  default     = 100
-}
-
-variable "db_name" {
-  description = "Database name"
-  type        = string
-  default     = "myappdb"
-}
-
-variable "db_username" {
-  description = "Database username"
-  type        = string
-  default     = "admin"
-  sensitive   = true
-}
-
-variable "db_password" {
-  description = "Database password"
-  type        = string
-  sensitive   = true
-}
-
-variable "db_backup_retention_period" {
-  description = "Database backup retention period in days"
-  type        = number
-  default     = 7
-}
-
-variable "db_backup_window" {
-  description = "Database backup window"
-  type        = string
-  default     = "03:00-04:00"
-}
-
-variable "db_maintenance_window" {
-  description = "Database maintenance window"
-  type        = string
-  default     = "sun:04:00-sun:05:00"
-}
-
-# General Configuration
-variable "enable_deletion_protection" {
-  description = "Enable deletion protection for critical resources"
-  type        = bool
-  default     = true
-}
-
-variable "skip_final_snapshot" {
-  description = "Skip final snapshot when destroying RDS instance"
-  type        = bool
-  default     = false
-}
-```
-
-```hcl
-# backend.tf
 terraform {
-  backend "s3" {
-    bucket         = "PLACEHOLDER-terraform-state-bucket"
-    key            = "myapp/us-west-2/terraform.tfstate"
-    region         = "us-west-2"
-    encrypt        = true
-    dynamodb_table = "PLACEHOLDER-terraform-locks"
-    
-    # Optional: Use assume role for cross-account access
-    # role_arn = "arn:aws:iam::ACCOUNT-ID:role/TerraformRole"
+  required_version = ">= 1.4.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = ">= 5.0"
+    }
   }
+
+  # Partial backend config: values are injected at `terraform init` time
+  backend "s3" {}
 }
 
-# Alternative backend configuration for remote state management
-# terraform {
-#   backend "remote" {
-#     hostname     = "app.terraform.io"
-#     organization = "PLACEHOLDER-ORG-NAME"
-#
-#     workspaces {
-#       name = "myapp-us-west-2"
-#     }
-#   }
-# }
-
-# Local backend for testing (not recommended for production)
-# terraform {
-#   backend "local" {
-#     path = "terraform.tfstate"
-#   }
-# }
+# Primary AWS provider for general resources
+provider "aws" {
+  region = var.aws_region
+}
 ```
-
-```markdown
-# state-migration.md
-
-# Terraform State Migration Guide: us-west-1 → us-west-2
-
-## Prerequisites
-
-1. Ensure you have appropriate AWS credentials configured
-2. Backup existing Terraform state files
-3. Verify all resources exist in both regions
-4. Have the old resource IDs documented (see id-mapping.csv)
-
-## Step 1: Backup Current State
-
-```bash
-# Backup current state from us-west-1
-terraform workspace select myapp-us-west-1
-terraform state pull > backup-us-west-1-$(date +%Y%m%d-%H%M%S).json
-
-# List all resources in current state
-terraform state list > resources-us-west-1.txt
-```
-
-## Step 2: Create New Workspace for us-west-2
-
-```bash
-# Create new workspace for us-west-2
-terraform workspace new myapp-us-west-2
-
-# Or select if already exists
-terraform workspace select myapp-us-west-2
-
-# Initialize the new workspace
-terraform init
-```
-
-## Step 3: Import Resources to New State
-
-**Important**: Execute imports in dependency order (VPC → Subnets → Security Groups → etc.)
-
-### Network Resources
-
-```bash
-# Import VPC
-terraform import aws_vpc.main vpc-0123456789abcdef0
-
-# Import Internet Gateway
-terraform import aws_internet_gateway.main igw-0123456789abcdef0
-
-# Import Subnets
-terraform import 'aws_subnet.public[0]' subnet-0123456789abcdef0
-terraform import 'aws_subnet.public[1]' subnet-0123456789abcdef1
-terraform import 'aws_subnet.private[0]' subnet-0123456789abcdef2
-terraform import 'aws_subnet.private[1]' subnet-0123456789abcdef3
-
-# Import Route Tables
-terraform import aws_route_table.public rtb-0123456789abcdef0
-terraform import 'aws_route_table.private[0]' rtb-0123456789abcdef1
-terraform import 'aws_route_table.private[1]' rtb-0123456789abcdef2
-
-# Import Route Table Associations
-terraform import 'aws_route_table_association.public[0]' subnet-0123456789abcdef0/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.public[1]' subnet-0123456789abcdef1/rtb-0123456789abcdef0
-terraform import 'aws_route_table_association.private[0]' subnet-0123456789abcdef2/rtb-0123456789abcdef1
-terraform import 'aws_route_table_association.private[1]' subnet-0123456789abcdef3/rtb-0123456789abcdef2
-```
-
-### Security Groups
-
-```bash
-# Import Security Groups
-terraform import aws_security_group.web sg-0123456789abcdef0
-terraform import aws_security_group.app sg-0123456789abcdef1
-terraform import aws_security_group.database sg-0123456789abcdef2
-```
-
-### Load Balancer Resources
-
-```bash
-# Import ALB
-terraform import aws_lb.main arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/1234567890123456
-
-# Import Target Group
-terraform import aws_lb_target_group.app arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/1234567890123456
-
-# Import Listener
-terraform import aws_lb_listener.app arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/1234567890123456/1234567890123456
-```
-
-### Auto Scaling Resources
-
-```bash
-# Import Launch Template
-terraform import aws_launch_template.app lt-0123456789abcdef0
-
-# Import Auto Scaling Group
-terraform import aws_autoscaling_group.app myapp-app-asg
-```
-
-### Database Resources
-
-```bash
-# Import DB Subnet Group
-terraform import aws_db_subnet_group.main myapp-db-subnet-group
-
-# Import RDS Instance
-terraform import aws_db_instance.main myapp-database
-```
-
-## Step 4: Verify State Consistency
-
-```bash
-# Plan should show no changes if import was successful
-terraform plan
-
-# If there are differences, review and adjust configuration
-terraform show
-
-# Verify all resources are in state
-terraform state list
-```
-
-## Step 5: Test Configuration
-
-```bash
-# Validate configuration
-terraform validate
-
-# Run plan to ensure no unexpected changes
-terraform plan -out=migration-plan
-
-# Apply only if plan shows expected results
-# terraform apply migration-plan
-```
-
-## Step 6: State Verification Commands
-
-```bash
-# Compare resource counts
-echo "Old region resources:"
-wc -l resources-us-west-1.txt
-
-echo "New region resources:"
-terraform state list | wc -l
-
-# Verify specific resources
-terraform state show aws_vpc.main
-terraform state show aws_db_instance.main
-terraform state show aws_lb.main
-
-# Check for any drift
-terraform plan -detailed-exitcode
-```
-
-## Rollback Procedure
-
-If migration fails:
-
-```bash
-# Switch back to old workspace
-terraform workspace select myapp-us-west-1
-
-# Restore from backup if needed
-terraform state push backup-us-west-1-TIMESTAMP.json
-
-# Delete problematic new workspace
-terraform workspace select default
-terraform workspace delete myapp-us-west-2
-```
-
-## Post-Migration Cleanup
-
-```bash
-# After successful migration and testing
-terraform workspace select myapp-us-west-1
-
-# Document old resources for cleanup
-terraform state list > old-resources-for-cleanup.txt
-
-# Eventually destroy old resources (after DNS cutover)
-# terraform destroy
-```
-```
-
-```csv
-# id-mapping.csv
-resource,address,old_id,new_id,notes
-VPC,aws_vpc.main,vpc-abc123def456,vpc-def456abc123,Main application VPC
-Internet Gateway,aws_internet_gateway.main,igw-abc123def456,igw-def456abc123,Main internet gateway
-Public Subnet 1,aws_subnet.public[0],subnet-abc123def456,subnet-def456abc123,Public subnet AZ-a
-Public Subnet 2,aws_subnet.public[1],subnet-bcd234efa567,subnet-efa567bcd234,Public subnet AZ-b
-Private Subnet 1,aws_subnet.private[0],subnet-cde345fgb678,subnet-fgb678cde345,Private subnet AZ-a
-Private Subnet 2,aws_subnet.private[1],subnet-def456ghc789,subnet-ghc789def456,Private subnet AZ-b
-Public Route Table,aws_route_table.public,rtb-abc123def456,rtb-def456abc123,Public route table
-Private Route Table 1,aws_route_table.private[0],rtb-bcd234efa567,rtb-efa567bcd234,Private route table AZ-a
-Private Route Table 2,aws_route_table.private[1],rtb-cde345fgb678,rtb-fgb678cde345,Private route table AZ-b
-Web Security Group,aws_security_group.web,sg-abc123def456,sg-def456abc123,Web tier security group
-App Security Group,aws_security_group.app,sg-bcd234efa567,sg-efa567bcd234,Application tier security group
-DB Security Group,aws_security_group.database,sg-cde345fgb678,sg-fgb678cde345,Database tier security group
-Application Load Balancer,aws_lb.main,arn:aws:elasticloadbalancing:us-west-1:123456789012:loadbalancer/app/myapp-alb/50dc6c495c0c9188,arn:aws:elasticloadbalancing:us-west-2:123456789012:loadbalancer/app/myapp-alb/60ec7d596d1d9299,Main application load balancer
-Target Group,aws_lb_target_group.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:targetgroup/myapp-app-tg/73e2d6ba618ba529,arn:aws:elasticloadbalancing:us-west-2:123456789012:targetgroup/myapp-app-tg/84f3e7cb729cb63a,Application target group
-ALB Listener,aws_lb_listener.app,arn:aws:elasticloadbalancing:us-west-1:123456789012:listener/app/myapp-alb/50dc6c495c0c9188/f2f7dc8efc522ab2,arn:aws:elasticloadbalancing:us-west-2:123456789012:listener/app/myapp-alb/60ec7d596d1d9299/g3g8ed9fgd633bc3,HTTP listener port 80
-Launch Template,aws_launch_template.app,lt-abc123def456,lt-def456abc123,Application launch template
-Auto Scaling Group,aws_autoscaling_group.app,myapp-app-asg,myapp-app-asg,Application auto scaling group
-DB Subnet Group,aws_db_subnet_group.main,myapp-db-subnet-group,myapp-db-subnet-group,Database subnet group
-RDS Instance,aws_db_instance.main,myapp-database,myapp-database,Main database instance
-Route Table Association 1,aws_route_table_association.public[0],subnet-abc123def456/rtb-abc123def456,subnet-def456abc123/rtb-def456abc123,Public subnet 1 association
-Route Table Association 2,aws_route_table_association.public[1],subnet-bcd234efa567/rtb-abc123def456,subnet-efa567bcd234/rtb-def456abc123,Public subnet 2 association
-Route Table Association 3,aws_route_table_association.private[0],subnet-cde345fgb678/rtb-bcd234efa567,subnet-fgb678cde345/rtb-efa567bcd234,Private subnet 1 association
-Route Table Association 4,aws_route_table_association.private[1],subnet-def456ghc789/rtb-cde345fgb678,subnet-ghc789def456/rtb-fgb678cde345,Private subnet 2 association
-```
-
-```markdown
-# runbook.md
-
-# AWS Region Migration Runbook: us-west-1 → us-west-2
-
-## Overview
-
-This runbook provides step-by-step instructions for migrating the application from us-west-1 to us-west-2 with minimal downtime.
-
-## Pre-Migration Checklist
-
-- [ ] All stakeholders notified of maintenance window
-- [ ] Backup verification completed
-- [ ] New region resources provisioned and tested
-- [ ] Database replication/backup restored in new region
-- [ ] Application configuration updated for new region
-- [ ] DNS TTL reduced to 60 seconds (24-48 hours before migration)
-- [ ] Monitoring and alerting configured for new region
-- [ ] Rollback procedures tested
-
-## Migration Timeline
-
-**Total Estimated Downtime: 15-30 minutes**
-
-### Phase 1: Pre-Cutover (No Downtime)
-*Duration: 2-4 hours*
-
-#### Step 1: Final Data Sync
-```bash
-# Stop application writes (enable maintenance mode)
-# Perform final database backup/sync
-aws rds create-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-$(date +%Y%m%d-%H%M%S) \
-  --region us-west-1
-
-# Wait for snapshot completion
-aws rds wait db-snapshot-completed \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-1
-
-# Restore snapshot in new region
-aws rds restore-db-instance-from-db-snapshot \
-  --db-instance-identifier myapp-database \
-  --db-snapshot-identifier myapp-final-snapshot-TIMESTAMP \
-  --region us-west-2
-```
-
-#### Step 2: Application Deployment
-```bash
-# Deploy application to new region
-terraform workspace select myapp-us-west-2
-terraform apply
-
-# Verify application health
-curl -f https://internal-alb-us-west-2.example.com/health
-```
-
-#### Step 3: Pre-Cutover Testing
-```bash
-# Test application functionality
-./scripts/smoke-test.sh us-west-2
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh us-west-2
-
-# Load test (optional)
-./scripts/load-test.sh us-west-2
-```
-
-### Phase 2: DNS Cutover (Downtime Begins)
-*Duration: 5-10 minutes*
-
-#### Step 4: Update DNS Records
-```bash
-# Get new ALB DNS name
-NEW_ALB_DNS=$(aws elbv2 describe-load-balancers \
-  --names myapp-alb \
-  --region us-west-2 \
-  --query 'LoadBalancers[0].DNSName' \
-  --output text)
-
-echo "New ALB DNS: $NEW_ALB_DNS"
-
-# Update Route 53 records
-aws route53 change-resource-record-sets \
-  --hosted-zone-id Z123456789 \
-  --change-batch '{
-    "Changes": [{
-      "Action": "UPSERT",
-      "ResourceRecordSet": {
-        "Name": "api.example.com",
-        "Type": "CNAME",
-        "TTL": 60,
-        "ResourceRecords": [{"Value": "'$NEW_ALB_DNS'"}]
-      }
-    }]
-  }'
-```
-
-#### Step 5: Verify DNS Propagation
-```bash
-# Monitor DNS propagation
-while true; do
-  RESOLVED=$(dig +short api.example.com)
-  echo "$(date): DNS resolves to: $RESOLVED"
-  if [[ "$RESOLVED" == *"us-west-2"* ]]; then
-    echo "DNS cutover successful!"
-    break
-  fi
-  sleep 10
-done
-```
-
-### Phase 3: Post-Cutover Verification (Downtime Ends)
-*Duration: 10-15 minutes*
-
-#### Step 6: Application Health Checks
-```bash
-# Verify application is responding
-curl -f https://api.example.com/health
-
-# Check application logs
-aws logs tail /aws/ec2/myapp --region us-west-2 --follow
-
-# Verify database connectivity
-./scripts/db-connectivity-test.sh production
-```
-
-#### Step 7: Traffic Monitoring
-```bash
-# Monitor ALB metrics
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name RequestCount \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-
-# Check error rates
-aws cloudwatch get-metric-statistics \
-  --namespace AWS/ApplicationELB \
-  --metric-name HTTPCode_ELB_5XX_Count \
-  --dimensions Name=LoadBalancer,Value=app/myapp-alb/1234567890123456 \
-  --start-time $(date -u -d '10 minutes ago' +%Y-%m-%dT%H:%M:%S) \
-  --end-time $(date -u +%Y-%m-%dT%H:%M:%S) \
-  --period 300 \
-  --statistics Sum \
-  --region us-west-2
-```
-
-## Post-Migration Tasks
-
-### Immediate (Within 1 hour)
-- [ ] Verify all application functionality
-- [ ] Confirm monitoring and alerting are working
-- [ ] Update documentation with new resource IDs
-- [ ] Notify stakeholders of successful migration
-- [ ] Monitor application performance for anomalies
-
-### Within 24 hours
-- [ ] Increase DNS TTL back to normal values (300-3600 seconds)
-- [ ] Update any hardcoded references to old region
-- [ ] Verify backup procedures are working in new region
-- [ ] Update disaster recovery procedures
-
-### Within 1 week
