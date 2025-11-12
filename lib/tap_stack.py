@@ -569,7 +569,7 @@ class TapStack(TerraformStack):
             f"transaction_validation_{environment_suffix}",
             name=f"transaction-validation-{environment_suffix}",
             role_arn=sf_role.arn,
-            definition=json.dumps(self._get_step_function_definition(environment_suffix)),
+            definition=json.dumps(self._get_step_function_definition(environment_suffix, lambda_functions)),
             logging_configuration={
                 "log_destination": f"{sf_log_group.arn}:*",
                 "include_execution_data": True,
@@ -715,7 +715,7 @@ class TapStack(TerraformStack):
                 namespace="AWS/SQS",
                 period=60,
                 statistic="Average",
-                threshold=str(threshold),
+                threshold=threshold,
                 alarm_description=f"Alarm when {priority} priority queue depth exceeds {threshold}",
                 alarm_actions=[],  # Add SNS topic ARN here if needed
                 dimensions={
@@ -767,7 +767,7 @@ class TapStack(TerraformStack):
             description="Step Functions state machine ARN for transaction validation"
         )
 
-    def _get_step_function_definition(self, environment_suffix: str) -> dict:
+    def _get_step_function_definition(self, environment_suffix: str, lambda_functions: dict) -> dict:
         """Return the Step Functions state machine definition."""
         return {
             "Comment": "Transaction validation workflow with fraud checks, balance verification, and compliance screening",
@@ -777,7 +777,7 @@ class TapStack(TerraformStack):
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke",
                     "Parameters": {
-                        "FunctionName": f"${{aws_lambda_function.lambda_high_{environment_suffix}.function_name}}",
+                        "FunctionName": lambda_functions['high'].arn,
                         "Payload": {
                             "operation": "fraud_check",
                             "transactionId.$": "$.transactionId",
@@ -822,7 +822,7 @@ class TapStack(TerraformStack):
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke",
                     "Parameters": {
-                        "FunctionName": f"${{aws_lambda_function.lambda_medium_{environment_suffix}.function_name}}",
+                        "FunctionName": lambda_functions['medium'].arn,
                         "Payload": {
                             "operation": "balance_check",
                             "transactionId.$": "$.transactionId",
@@ -867,7 +867,7 @@ class TapStack(TerraformStack):
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke",
                     "Parameters": {
-                        "FunctionName": f"${{aws_lambda_function.lambda_low_{environment_suffix}.function_name}}",
+                        "FunctionName": lambda_functions['low'].arn,
                         "Payload": {
                             "operation": "compliance_check",
                             "transactionId.$": "$.transactionId",
@@ -907,7 +907,7 @@ class TapStack(TerraformStack):
                     "Type": "Task",
                     "Resource": "arn:aws:states:::lambda:invoke.waitForTaskToken",
                     "Parameters": {
-                        "FunctionName": f"${{aws_lambda_function.lambda_high_{environment_suffix}.function_name}}",
+                        "FunctionName": lambda_functions['high'].arn,
                         "Payload": {
                             "operation": "request_human_approval",
                             "transactionId.$": "$.transactionId",
