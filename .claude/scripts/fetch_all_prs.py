@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 import json
 import subprocess
-import csv
 import sys
 from datetime import datetime
 
@@ -113,27 +112,42 @@ for pr in all_pr_data:
         reason = ''
 
     results.append({
-        'PR_no': pr_number,
+        'pr_number': pr_number,
         'pr_link': pr_url,
         'assignee': assignee_names,
         'status': status,
-        'reason': reason,
+        'failure_reason': reason if reason else None,
         'last_updated_at': last_updated
     })
 
-# Write to CSV
-with open('.claude/PR.csv', 'w', newline='') as csvfile:
-    fieldnames = ['PR_no', 'pr_link', 'assignee', 'status', 'reason', 'last_updated_at']
-    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-
-    writer.writeheader()
-    for row in sorted(results, key=lambda x: x['PR_no'], reverse=True):
-        writer.writerow(row)
-
-# Print statistics
-print(f"\nProcessed {len(results)} valid OPEN PRs for mayanksethi-turing", file=sys.stderr)
+# Calculate statistics
 failed_count = sum(1 for r in results if r['status'] == 'FAILED')
 passed_count = sum(1 for r in results if r['status'] == 'PASSED')
 in_progress_count = sum(1 for r in results if r['status'] == 'IN PROGRESS')
+
+# Sort results by PR number (descending)
+sorted_results = sorted(results, key=lambda x: x['pr_number'], reverse=True)
+
+# Create presentable JSON structure
+output_data = {
+    'metadata': {
+        'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'author': 'mayanksethi-turing',
+        'total_open_prs': len(results)
+    },
+    'summary': {
+        'failed': failed_count,
+        'passed': passed_count,
+        'in_progress': in_progress_count
+    },
+    'pull_requests': sorted_results
+}
+
+# Write to JSON file with pretty formatting
+with open('.claude/open_pr_status.json', 'w') as jsonfile:
+    json.dump(output_data, jsonfile, indent=2, ensure_ascii=False)
+
+# Print statistics
+print(f"\nProcessed {len(results)} valid OPEN PRs for mayanksethi-turing", file=sys.stderr)
 print(f"FAILED: {failed_count}, PASSED: {passed_count}, IN PROGRESS: {in_progress_count}", file=sys.stderr)
-print(f"CSV file created at .claude/PR.csv", file=sys.stderr)
+print(f"JSON file created at .claude/open_pr_status.json", file=sys.stderr)
