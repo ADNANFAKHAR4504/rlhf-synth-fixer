@@ -7,6 +7,12 @@ export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
 }
 
+export function ensureExpectedSubnetConfiguration(publicCount: number, privateCount: number): void {
+  if (publicCount !== 3 || privateCount !== 3) {
+    throw new Error('Expected 3 public and 3 private subnets');
+  }
+}
+
 export class TapStack extends cdk.Stack {
   public readonly vpc: ec2.Vpc;
   public readonly s3Endpoint: ec2.GatewayVpcEndpoint;
@@ -63,9 +69,7 @@ export class TapStack extends cdk.Stack {
     const privateSubnets = this.vpc.privateSubnets;
 
     // Verify we have exactly 3 public and 3 private subnets
-    if (publicSubnets.length !== 3 || privateSubnets.length !== 3) {
-      throw new Error('Expected 3 public and 3 private subnets');
-    }
+    ensureExpectedSubnetConfiguration(publicSubnets.length, privateSubnets.length);
 
     // Manually set the CIDR blocks to match requirements
     // Note: CDK automatically allocates CIDRs, but we'll document the expected ranges

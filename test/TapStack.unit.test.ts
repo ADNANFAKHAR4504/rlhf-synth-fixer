@@ -1,7 +1,7 @@
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import { TapStack } from '../lib/TapStack';
+import { TapStack, ensureExpectedSubnetConfiguration } from '../lib/TapStack';
 
 describe('TapStack', () => {
   let app: cdk.App;
@@ -285,55 +285,6 @@ describe('TapStack', () => {
 });
 
 describe('TapStack - Error Cases', () => {
-  test('Should throw error for incorrect subnet count', () => {
-    // Mock the ec2.Vpc constructor to return wrong number of subnets
-    const originalVpc = ec2.Vpc;
-
-    // Create a mock VPC class that returns wrong subnet counts
-    const MockVpc = jest.fn().mockImplementation(function(this: any, scope: any, id: string, props: any) {
-      // Call original constructor
-      const instance = new originalVpc(scope, id, props);
-
-      // Override the subnet getters to return incorrect counts
-      Object.defineProperty(instance, 'publicSubnets', {
-        get: () => [{ subnetId: 'subnet-1' }, { subnetId: 'subnet-2' }] as any,
-        configurable: true
-      });
-      Object.defineProperty(instance, 'privateSubnets', {
-        get: () => [{ subnetId: 'subnet-1' }] as any,
-        configurable: true
-      });
-
-      // Also need to mock other required VPC properties
-      Object.defineProperty(instance, 'vpcId', {
-        get: () => 'vpc-mock',
-        configurable: true
-      });
-      Object.defineProperty(instance, 'vpcCidrBlock', {
-        get: () => '10.0.0.0/16',
-        configurable: true
-      });
-
-      return instance;
-    });
-
-    // Replace the ec2.Vpc constructor
-    (ec2 as any).Vpc = MockVpc;
-
-    const app = new cdk.App();
-
-    // This should throw an error due to incorrect subnet counts
-    expect(() => {
-      new TapStack(app, 'ErrorTestStack', {
-        environmentSuffix: 'error-test',
-        env: { region: 'us-east-1' },
-      });
-    }).toThrow('Expected 3 public and 3 private subnets');
-
-    // Restore original Vpc constructor
-    (ec2 as any).Vpc = originalVpc;
-  });
-
   test('Should validate subnet count requirement - additional coverage', () => {
     // This is a unit test to ensure the validation code path exists
     const app = new cdk.App();
@@ -456,5 +407,15 @@ describe('TapStack - Error Cases', () => {
       LogDestinationType: 'cloud-watch-logs',
       ResourceType: 'VPC',
     });
+  });
+
+  test('Subnet validation helper enforces exact counts', () => {
+    expect(() => ensureExpectedSubnetConfiguration(3, 3)).not.toThrow();
+    expect(() => ensureExpectedSubnetConfiguration(2, 3)).toThrow(
+      'Expected 3 public and 3 private subnets'
+    );
+    expect(() => ensureExpectedSubnetConfiguration(3, 4)).toThrow(
+      'Expected 3 public and 3 private subnets'
+    );
   });
 });
