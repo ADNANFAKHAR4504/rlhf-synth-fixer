@@ -3,4 +3,3 @@
  * This file imports the Pulumi application
  */
 import './bin/tap';
-
