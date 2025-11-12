@@ -901,67 +901,64 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "🔍 Checking metadata.json first (primary source)..."
-          # Try metadata.json first - this is the authoritative source
-          if [ -f "metadata.json" ]; then
-            SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
-            if [ -n "$SCORE" ] && [ "$SCORE" != "null" ]; then
-              echo "✅ Found training_quality in metadata.json: $SCORE"
-              echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
-              exit 0
-            else
-              echo "⚠️ training_quality not found in metadata.json, falling back to comment parsing..."
-            fi
-          else
-            echo "⚠️ metadata.json not found, falling back to comment parsing..."
-          fi
-
           echo "🔍 Fetching latest Claude review comment..."
           gh pr view ${{ github.event.pull_request.number }} --comments --json comments \
             | jq -r '.comments[].body' > all_comments.txt
 
-          echo "🍀 Searching for quality score pattern..."
-          # Search for multiple score patterns with priority order:
-          # 1. SCORE:<number> (highest priority - explicit score line)
-          # 2. Training Quality: <number>/10 or Final Score: <number>/10
-          # 3. training_quality: <number> (JSON format)
+          echo "🍀 Searching for Claude quality score patterns..."
 
-          # First try to find explicit SCORE: line
-          SCORE=$(grep -Poi '^\s*SCORE:\s*([0-9]+(?:\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+          # 1️⃣ Try to find most flexible Claude score pattern
+          # Matches things like:
+          # SCORE:9, Score: 9, Training Quality: **9.2/10**, Final Score ⭐️: 8.5/10, etc.
+          SCORE=$(grep -Poi \
+            '(?i)(score|training\s*quality|training\s*score|final\s*score|estimated\s*score)[^0-9]{0,15}([0-9]+(\.[0-9]+)?)' \
+            all_comments.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
 
-          # If not found, try "Training Quality: X/10" or "Final Score: X/10" patterns
+          # 2️⃣ If not found, try clean "SCORE:" line (in case of strict format)
           if [ -z "$SCORE" ]; then
-            SCORE=$(grep -Poi '(?:training\s+quality|final\s+score):\s*\*?\*?([0-9]+(?:\.[0-9]+)?)\s*/\s*10' all_comments.txt | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+            SCORE=$(grep -Poi '^\s*\*?\**\s*SCORE\s*[:=-]?\s*\**\*?\s*([0-9]+(\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(\.[0-9]+)?' | tail -1)
           fi
 
-          # If still not found, try training_quality field (JSON format)
+          # 3️⃣ If still not found, check for any “X/10” patterns (sometimes Claude just ends with 9/10)
           if [ -z "$SCORE" ]; then
-            SCORE=$(grep -Poi 'training_quality["\s:]+([0-9]+(?:\.[0-9]+)?)' all_comments.txt | grep -Po '[0-9]+(?:\.[0-9]+)?' | tail -1)
+            SCORE=$(grep -Poi '\b([0-9]+(\.[0-9]+)?)/10\b' all_comments.txt | grep -Po '^[0-9]+(\.[0-9]+)?' | tail -1)
           fi
 
+          # 4️⃣ If comment parsing failed, fallback to metadata.json
           if [ -z "$SCORE" ]; then
-            echo "⚠️ Could not find any quality score in PR comments or metadata.json. Defaulting to 0."
+            echo "⚠️ Could not find score in Claude comment. Falling back to metadata.json..."
+            if [ -f "metadata.json" ]; then
+              SCORE=$(jq -r '.training_quality // empty' metadata.json 2>/dev/null || echo "")
+              if [ -n "$SCORE" ] && [[ "$SCORE" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+                echo "✅ Found fallback metadata training_quality: $SCORE"
+              else
+                echo "⚠️ metadata.json missing valid numeric score"
+                SCORE=""
+              fi
+            else
+              echo "⚠️ metadata.json not found"
+            fi
+          fi
+
+          # 5️⃣ Validate range and clean
+          if [ -z "$SCORE" ]; then
+            echo "⚠️ Could not find any quality score. Defaulting to 0."
             SCORE=0
           fi
 
-          # CRITICAL: Validate and cap score to 0-10 range
-          # Convert to integer for comparison (handle decimals)
           SCORE_INT=$(echo "$SCORE" | awk '{print int($1)}')
 
-          if [ "$SCORE_INT" -gt 10 ]; then
-            echo "⚠️ WARNING: Extracted score ($SCORE) exceeds maximum of 10. This likely indicates a false match (e.g., compliance score '12/17')."
-            echo "❌ Score validation FAILED. Setting score to 0."
-            echo "💡 Claude must output 'SCORE:X' where X is 0-10 at the end of the review comment."
+          if (( $(echo "$SCORE_INT > 10" | bc -l) )); then
+            echo "⚠️ Invalid high score ($SCORE) → set to 0"
             SCORE=0
-          elif [ "$SCORE_INT" -lt 0 ]; then
-            echo "⚠️ WARNING: Extracted score ($SCORE) is negative. Setting to 0."
+          elif (( $(echo "$SCORE_INT < 0" | bc -l) )); then
+            echo "⚠️ Invalid negative score ($SCORE) → set to 0"
             SCORE=0
-          else
-            echo "✅ Valid score extracted: $SCORE"
           fi
 
-          echo "Claude quality score: $SCORE"
+          echo "✅ Final Claude quality score: $SCORE"
           echo "quality_score=$SCORE" >> $GITHUB_OUTPUT
+
 
       - name: Enforce Quality Threshold
         id: quality_gate
