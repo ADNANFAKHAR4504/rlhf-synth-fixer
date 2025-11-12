@@ -149,31 +149,39 @@ class MonitoringStack(pulumi.ComponentResource):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/Lambda", "Invocations", {"stat": "Sum", "dimension": {"FunctionName": vals[2]}}],
-                            [".", "Errors", {"stat": "Sum", "dimension": {"FunctionName": vals[2]}}],
-                            [".", "Duration", {"stat": "Average", "dimension": {"FunctionName": vals[2]}}]
+                            ["AWS/Lambda", "Invocations"],
+                            [".", "Errors"],
+                            [".", "Duration"]
                         ],
                         "view": "timeSeries",
                         "stacked": False,
                         "region": vals[4],
                         "title": "Data Validation Lambda Metrics",
-                        "period": 300
+                        "period": 300,
+                        "stat": "Sum",
+                        "dimensions": {
+                            "FunctionName": vals[2]
+                        }
                     }
                 },
                 {
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/ApiGateway", "Count", {"stat": "Sum", "dimension": {"ApiName": vals[3]}}],
-                            [".", "4XXError", {"stat": "Sum", "dimension": {"ApiName": vals[3]}}],
-                            [".", "5XXError", {"stat": "Sum", "dimension": {"ApiName": vals[3]}}],
-                            [".", "Latency", {"stat": "Average", "dimension": {"ApiName": vals[3]}}]
+                            ["AWS/ApiGateway", "Count"],
+                            [".", "4XXError"],
+                            [".", "5XXError"],
+                            [".", "Latency"]
                         ],
                         "view": "timeSeries",
                         "stacked": False,
                         "region": vals[4],
                         "title": "API Gateway Metrics",
-                        "period": 300
+                        "period": 300,
+                        "stat": "Sum",
+                        "dimensions": {
+                            "ApiName": vals[3]
+                        }
                     }
                 },
                 {
