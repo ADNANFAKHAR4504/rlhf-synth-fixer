@@ -565,10 +565,10 @@ const taskDefinition = new aws.ecs.TaskDefinition(
 );
 
 // ECS Service
+// Note: Name field omitted to allow AWS to auto-generate unique names
 const ecsService = new aws.ecs.Service(
   `payment-service-${environmentSuffix}`,
   {
-    name: `payment-service-${environmentSuffix}`,
     cluster: ecsCluster.id,
     taskDefinition: taskDefinition.arn,
     desiredCount: 2,
