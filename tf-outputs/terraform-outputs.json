@@ -1,0 +1,118 @@
+{
+  "availability_zones": {
+    "sensitive": false,
+    "type": [
+      "list",
+      "string"
+    ],
+    "value": [
+      "us-east-1a",
+      "us-east-1b",
+      "us-east-1c",
+      "us-east-1d",
+      "us-east-1e",
+      "us-east-1f"
+    ]
+  },
+  "default_security_group_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "sg-09c36410e9d6e6c4a"
+  },
+  "internet_gateway_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "igw-01099896c527cfd29"
+  },
+  "nat_gateway_eips": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "52.86.132.103",
+      "3.233.78.198"
+    ]
+  },
+  "nat_gateway_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "nat-02af1018f9a507b68",
+      "nat-04033c8e107af3540"
+    ]
+  },
+  "private_route_table_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "rtb-04683c386a98f8072",
+      "rtb-05e8fcac7b2928b0d",
+      "rtb-085cccec68aaa7819"
+    ]
+  },
+  "private_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-0ffc457fdbee9cdeb",
+      "subnet-053c531ad09dfe338",
+      "subnet-0b7a32fd0e289d8cc"
+    ]
+  },
+  "public_route_table_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "rtb-056af138d711e61cc"
+  },
+  "public_subnet_ids": {
+    "sensitive": false,
+    "type": [
+      "tuple",
+      [
+        "string",
+        "string",
+        "string"
+      ]
+    ],
+    "value": [
+      "subnet-0892ad9c34786288c",
+      "subnet-03b24e0bab30bdbd4",
+      "subnet-07fd8a4756c42858d"
+    ]
+  },
+  "vpc_cidr": {
+    "sensitive": false,
+    "type": "string",
+    "value": "10.0.0.0/16"
+  },
+  "vpc_id": {
+    "sensitive": false,
+    "type": "string",
+    "value": "vpc-02eac2ff17450b8a9"
+  }
+}
