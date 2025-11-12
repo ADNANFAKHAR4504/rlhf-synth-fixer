@@ -56,7 +56,26 @@ resource "aws_kms_key" "main" {
         Principal = {
           AWS = "arn:aws:iam::${local.account_id}:root"
         }
-        Action   = "kms:*"
+        Action = [
+          "kms:Create*",
+          "kms:Describe*",
+          "kms:Enable*",
+          "kms:List*",
+          "kms:Put*",
+          "kms:Update*",
+          "kms:Revoke*",
+          "kms:Disable*",
+          "kms:Get*",
+          "kms:Delete*",
+          "kms:ScheduleKeyDeletion",
+          "kms:CancelKeyDeletion",
+          "kms:GenerateDataKey*",
+          "kms:Decrypt",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
+          "kms:CreateGrant",
+          "kms:RetireGrant"
+        ]
         Resource = "*"
       },
       {
@@ -84,6 +103,21 @@ resource "aws_kms_key" "main" {
         Effect = "Allow"
         Principal = {
           Service = "s3.amazonaws.com"
+        }
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:ReEncrypt*",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
+      },
+      {
+        Sid    = "Allow AWS Config Service"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
         }
         Action = [
           "kms:Encrypt",
@@ -198,11 +232,11 @@ resource "aws_security_group" "vpc_endpoints" {
   }
 
   egress {
-    description = "HTTPS to anywhere"
+    description = "HTTPS within VPC"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [var.vpc_cidr]
   }
 
   tags = merge(local.common_tags, {
@@ -450,6 +484,82 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
   }
 }
 
+# Application data bucket policy - enforce encryption in transit and deny unencrypted uploads
+resource "aws_s3_bucket_policy" "application_data" {
+  bucket = aws_s3_bucket.application_data.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DenyInsecureConnections"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          aws_s3_bucket.application_data.arn,
+          "${aws_s3_bucket.application_data.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      },
+      {
+        Sid    = "DenyUnencryptedObjectUploads"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.application_data.arn}/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Audit logs bucket policy - enforce encryption in transit and deny unencrypted uploads
+resource "aws_s3_bucket_policy" "audit_logs" {
+  bucket = aws_s3_bucket.audit_logs.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "DenyInsecureConnections"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:*"
+        Resource = [
+          aws_s3_bucket.audit_logs.arn,
+          "${aws_s3_bucket.audit_logs.arn}/*"
+        ]
+        Condition = {
+          Bool = {
+            "aws:SecureTransport" = "false"
+          }
+        }
+      },
+      {
+        Sid    = "DenyUnencryptedObjectUploads"
+        Effect = "Deny"
+        Principal = "*"
+        Action = "s3:PutObject"
+        Resource = "${aws_s3_bucket.audit_logs.arn}/*"
+        Condition = {
+          StringNotEquals = {
+            "s3:x-amz-server-side-encryption" = "aws:kms"
+          }
+        }
+      }
+    ]
+  })
+}
+
 # ================================
 # IAM ROLES WITH PERMISSION BOUNDARIES
 # ================================
@@ -604,7 +714,7 @@ resource "aws_cloudwatch_log_group" "application_logs" {
 # S3 bucket for AWS Config
 resource "aws_s3_bucket" "config" {
   bucket        = "${local.account_id}-${local.name_prefix}-aws-config"
-  force_destroy = true
+  force_destroy = false
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-config-bucket"
@@ -663,6 +773,40 @@ resource "aws_s3_bucket_policy" "config" {
       }
     ]
   })
+}
+
+  ])
+}
+
+# Config bucket encryption configuration
+resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      kms_master_key_id = aws_kms_key.main.arn
+      sse_algorithm     = "aws:kms"
+    }
+    bucket_key_enabled = true
+  }
+}
+
+# Config bucket versioning
+resource "aws_s3_bucket_versioning" "config" {
+  bucket = aws_s3_bucket.config.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Config bucket public access block
+resource "aws_s3_bucket_public_access_block" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 # AWS Config Service Role
@@ -765,6 +909,13 @@ resource "aws_config_config_rule" "access_keys_rotated" {
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-access-keys-rotation-rule"
   })
+}
+
+# Start the AWS Config configuration recorder
+resource "aws_config_configuration_recorder_status" "main" {
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+  depends_on = [aws_config_delivery_channel.main]
 }
 
 # Note: Auto-remediation for S3 encryption can be configured manually

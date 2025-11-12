@@ -476,7 +476,7 @@ describe('Zero-Trust Security Infrastructure Terraform Stack - Unit Tests', () =
 
     test('buckets use customer-managed KMS encryption', () => {
       const encryptionBlocks = stackContent.match(/aws_s3_bucket_server_side_encryption_configuration[\s\S]*?kms_master_key_id\s*=\s*aws_kms_key\.main\.arn/g);
-      expect(encryptionBlocks).toHaveLength(2);
+      expect(encryptionBlocks).toHaveLength(3); // application_data, audit_logs, and config buckets
     });
 
     test('buckets have versioning enabled', () => {
