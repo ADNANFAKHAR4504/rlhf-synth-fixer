@@ -89,6 +89,10 @@ class DmsStack(pulumi.ComponentResource):
         # CRITICAL: The IAM roles (especially dms-vpc-role) must be fully configured
         # with policy attachments complete before creating the instance, otherwise
         # it will fail with "Incompatible network" error
+        # 
+        # IMPORTANT: If an existing instance shows "Incompatible network" in AWS Console,
+        # it was created with misconfigured IAM roles. You must DELETE it first, then
+        # redeploy. The instance will be recreated with properly configured IAM roles.
         self.replication_instance = aws.dms.ReplicationInstance(
             f"dms-replication-instance-{self.environment_suffix}",
             replication_instance_id=f"dms-rep-inst-{self.environment_suffix}",
@@ -161,9 +165,10 @@ class DmsStack(pulumi.ComponentResource):
         # DMS Replication Task - Full Load + CDC
         # IMPORTANT: The task creation requires the replication instance to be in "available" state
         # Pulumi's depends_on ensures ordering but doesn't wait for the instance to be "available"
-        # The custom timeout allows retries, but the task will fail if the instance isn't ready
-        # Solution: Use the replication instance ARN in an apply() to ensure it's created first,
-        # then rely on AWS retry logic and custom timeouts to handle the availability wait
+        # Use the replication instance ARN in an apply() to ensure it's created first
+        # NOTE: If the replication instance shows "Incompatible network" in AWS Console, it was created
+        # with misconfigured IAM roles. You must DELETE the instance first, then redeploy.
+        # The instance will be recreated with properly configured IAM roles.
         replication_instance_arn_ready = self.replication_instance.replication_instance_arn.apply(
             lambda arn: arn
         )
@@ -242,18 +247,9 @@ class DmsStack(pulumi.ComponentResource):
                     self.source_endpoint,
                     self.target_endpoint
                 ],
-                # Add custom timeout to allow time for replication instance to become available
-                # DMS replication instances can take 5-10 minutes to become "available"
-                # NOTE: If this fails with "replication instance is not active", you may need to:
-                # 1. Deploy the stack in two steps: first create the instance, wait for it to be available,
-                #    then create the task in a second deployment
-                # 2. Or use a custom resource/Lambda to wait for the instance to be "available"
-                custom_timeouts=CustomTimeouts(
-                    create="20m",  # Allow 20 minutes for replication instance to become available
-                    update="20m",
-                    delete="10m"
-                ),
-                # Retry on failure - AWS may retry if the instance becomes available during the timeout window
+                # NOTE: DMS ReplicationTask does NOT support customTimeouts
+                # If this fails with "replication instance is not active", the instance must be
+                # in "available" state. If it shows "Incompatible network", delete and recreate it.
                 protect=False
             )
         )
