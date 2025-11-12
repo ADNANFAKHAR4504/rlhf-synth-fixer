@@ -81,7 +81,7 @@ export class AuroraConstruct extends Construct {
       engine: 'aurora-postgresql',
       engineVersion: '14.6',
       databaseName: 'appdb',
-      masterUsername: 'admin',
+      masterUsername: 'dbadmin',
       masterPassword: masterPassword.value,
       dbSubnetGroupName: subnetGroup.name,
       vpcSecurityGroupIds: [sg.id],

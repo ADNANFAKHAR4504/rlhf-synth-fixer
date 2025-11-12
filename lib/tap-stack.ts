@@ -43,7 +43,9 @@ interface EnvironmentConfig {
 
 const AWS_REGION_OVERRIDE = '';
 
-// Environment configurations for multi-environment support
+// Environment configurations for multi-environment support within a single AWS account
+// All three environments (dev, staging, prod) will be deployed to the same account
+// but with isolated VPCs and environment-specific resource configurations
 const environmentConfigs: Record<string, EnvironmentConfig> = {
   dev: {
     name: 'dev',
@@ -68,6 +70,13 @@ const environmentConfigs: Record<string, EnvironmentConfig> = {
   },
 };
 
+/**
+ * TapStack - Multi-environment infrastructure deployment within a single AWS account
+ *
+ * This stack creates isolated environments (dev, staging, prod) within the same AWS account.
+ * Each environment gets its own VPC with unique CIDR ranges, RDS clusters, ECS services,
+ * and other resources, all properly tagged and named with environmentSuffix for uniqueness.
+ */
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
@@ -80,7 +89,8 @@ export class TapStack extends TerraformStack {
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
 
-    // Configure AWS Provider - this expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
+    // Configure AWS Provider for single account deployment
+    // This expects AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY to be set in the environment
     new AwsProvider(this, 'aws', {
       region: awsRegion,
       defaultTags: defaultTags,

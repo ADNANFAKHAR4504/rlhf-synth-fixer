@@ -50,6 +50,11 @@ export class S3Construct extends Construct {
         {
           id: 'transition-to-ia',
           status: 'Enabled',
+          filter: [
+            {
+              prefix: '',
+            },
+          ],
           transition: [
             {
               days: 30,

@@ -4,13 +4,13 @@ Hey team,
 
 We need to build a multi-environment infrastructure deployment system for our financial services trading applications. The business wants to ensure identical infrastructure configurations across development, staging, and production environments while maintaining environment-specific parameters like instance sizes and database credentials. Currently, the team struggles with configuration drift and manual environment synchronization, which is causing issues with consistency and reliability.
 
-We have three AWS accounts - dev (123456789012), staging (234567890123), and prod (345678901234) - all in the us-east-1 region. Each environment needs isolated VPCs with 3 availability zones, RDS Aurora PostgreSQL clusters, ECS Fargate services, Application Load Balancers, and S3 buckets for static assets. The infrastructure should be managed using **CDKTF with TypeScript** to leverage the power of both Terraform's state management and TypeScript's type safety.
+We have a single AWS account in the us-east-1 region where we need to deploy three isolated environments (dev, staging, and prod). Each environment needs isolated VPCs with 3 availability zones, RDS Aurora PostgreSQL clusters, ECS Fargate services, Application Load Balancers, and S3 buckets for static assets. The infrastructure should be managed using **CDKTF with TypeScript** to leverage the power of both Terraform's state management and TypeScript's type safety.
 
-The challenge is to create a system where we can deploy consistent infrastructure across all three environments while allowing controlled variations for environment-specific requirements like database instance sizes, ECS task counts, and alarm thresholds.
+The challenge is to create a system where we can deploy consistent infrastructure across all three environments within a single AWS account while allowing controlled variations for environment-specific requirements like database instance sizes, ECS task counts, and alarm thresholds.
 
 ## What we need to build
 
-Create a multi-environment infrastructure deployment system using **CDKTF with TypeScript** that manages AWS resources across development, staging, and production accounts.
+Create a multi-environment infrastructure deployment system using **CDKTF with TypeScript** that manages AWS resources for development, staging, and production environments within a single AWS account.
 
 ### Core Requirements
 
@@ -53,8 +53,8 @@ Create a multi-environment infrastructure deployment system using **CDKTF with T
    - Service-specific roles
 
 8. **RDS Aurora Read Replicas**
-   - Production database replicates to staging
-   - Cross-environment read replica setup
+   - Production database can replicate to staging environment
+   - Read replica setup within the same account across different environments
    - For testing with production-like data
 
 9. **CloudWatch Dashboards**
@@ -92,7 +92,7 @@ Create a multi-environment infrastructure deployment system using **CDKTF with T
 - Follow naming convention: `{resource-type}-{environment}-{suffix}` or `{resource-type}-{environmentSuffix}`
 - Deploy to **us-east-1** region
 - VPC CIDR pattern: 10.{env}.0.0/16 where env is 1 for dev, 2 for staging, 3 for prod
-- Multi-account deployment across three AWS accounts
+- Single account deployment with multiple isolated environments
 
 ### Constraints
 
@@ -100,8 +100,8 @@ Create a multi-environment infrastructure deployment system using **CDKTF with T
 - Use CDKTF custom resources to verify environment parity post-deployment
 - Use CDKTF context values for environment-specific configuration (no hardcoding)
 - Implement automated drift detection using cdktf diff in deployment pipeline
-- Configure cross-environment read replicas for production database in staging
-- Each environment must have isolated VPCs with consistent CIDR block patterns
+- Configure read replicas between environments (e.g., production to staging) within the same account
+- Each environment must have isolated VPCs with consistent CIDR block patterns to prevent conflicts
 - Environment configurations must be validated at synthesis time using CDKTF aspects
 - Implement tagging strategy: environment, cost center, deployment timestamp
 - Use AWS Systems Manager Parameter Store for sensitive values with hierarchical paths
@@ -111,12 +111,12 @@ Create a multi-environment infrastructure deployment system using **CDKTF with T
 
 ## Success Criteria
 
-- **Functionality**: All three environments deploy successfully with identical infrastructure patterns
+- **Functionality**: All three environments deploy successfully within the same account with identical infrastructure patterns
 - **Configuration**: Environment-specific values properly managed through CDKTF context and SSM
-- **Security**: IAM roles follow least-privilege principle with cross-environment isolation
+- **Security**: IAM roles follow least-privilege principle with proper environment isolation
 - **Monitoring**: CloudWatch dashboards aggregate metrics with environment-specific thresholds
-- **Database**: Production data successfully replicates to staging read replica
-- **Resource Naming**: All resources include environmentSuffix for uniqueness
+- **Database**: Production data can replicate to staging read replica within the same account
+- **Resource Naming**: All resources include environmentSuffix for uniqueness to avoid conflicts
 - **Validation**: Custom validation constructs verify environment parity
 - **Code Quality**: Clean TypeScript code, well-structured, properly typed
 - **Deployability**: Infrastructure can be synthesized and deployed without errors

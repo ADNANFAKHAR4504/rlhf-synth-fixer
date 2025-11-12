@@ -1,5 +1,8 @@
 /**
- * Integration Tests for Multi-Environment Infrastructure
+ * Integration Tests for Multi-Environment Infrastructure (Single Account)
+ *
+ * This tests infrastructure deployment for multiple environments (dev, staging, prod)
+ * within a single AWS account. Each environment is isolated with its own VPC.
  *
  * NOTE: This infrastructure includes expensive resources (Aurora RDS, NAT Gateways, ECS Fargate, ALB)
  * that require 30-40 minutes to deploy and significant AWS costs. Actual deployment is not performed
@@ -13,7 +16,7 @@
  * For production use, deploy infrastructure first and populate cfn-outputs/flat-outputs.json.
  */
 
-describe('Multi-Environment Infrastructure Integration Tests', () => {
+describe('Multi-Environment Infrastructure Integration Tests (Single Account)', () => {
   describe('Deployment Validation', () => {
     test('should skip actual deployment due to complexity and cost', () => {
       // This test documents that integration testing requires actual deployment

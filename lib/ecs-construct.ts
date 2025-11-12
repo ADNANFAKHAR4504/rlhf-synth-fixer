@@ -262,11 +262,14 @@ export class EcsConstruct extends Construct {
     });
 
     // ECS Service
+    // Note: desiredCount is set to 0 initially to prevent task failures
+    // due to missing container image. After deploying infrastructure,
+    // push your container image to ECR and then update desiredCount.
     const service = new EcsService(this, 'service', {
       name: `app-service-${props.environmentName}-${props.environmentSuffix}`,
       cluster: cluster.id,
       taskDefinition: taskDef.arn,
-      desiredCount: props.desiredCount,
+      desiredCount: 0,
       launchType: 'FARGATE',
       networkConfiguration: {
         subnets: props.privateSubnetIds,

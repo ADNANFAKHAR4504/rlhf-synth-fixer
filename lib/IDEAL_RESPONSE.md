@@ -1,6 +1,19 @@
 # Multi-Environment Infrastructure with CDKTF TypeScript
 
-This implementation provides a complete CDKTF TypeScript solution for managing multi-environment infrastructure across dev, staging, and production AWS accounts. The solution uses a single-stack approach with environment-specific configurations, reusable constructs, and comprehensive monitoring.
+This implementation provides a complete CDKTF TypeScript solution for managing multi-environment infrastructure within a single AWS account for dev, staging, and production environments. The solution uses a single-stack approach with environment-specific configurations, reusable constructs, and comprehensive monitoring.
+
+## Deployment Notes
+
+**ECS Service Configuration**: The ECS service is configured with `desiredCount: 0` initially to prevent task failures due to missing container images in ECR. After initial deployment:
+
+1. Build and push your container image to the ECR repository created by the infrastructure
+2. Update `desiredCount` in `lib/ecs-construct.ts` to the desired number (or use environment-specific config)
+3. Redeploy with `npx cdktf deploy`
+
+**Container Image Requirements**:
+- Image must listen on port 8080
+- Must provide a `/health` endpoint for ALB health checks
+- Image URL format: `{account-id}.dkr.ecr.{region}.amazonaws.com/app-repo-{environmentSuffix}:latest`
 
 ## Architecture Overview
 
