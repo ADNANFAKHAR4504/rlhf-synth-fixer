@@ -2246,6 +2246,7 @@
     },
     "WAFWebACLAssociation": {
       "Type": "AWS::WAFv2::WebACLAssociation",
+      "DependsOn": "APIGatewayStage",
       "Properties": {
         "ResourceArn": {
           "Fn::Sub": "arn:aws:apigateway:${AWS::Region}::/restapis/${APIGatewayRestAPI}/stages/prod"
