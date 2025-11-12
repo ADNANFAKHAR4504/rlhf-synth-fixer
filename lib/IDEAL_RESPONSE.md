@@ -1,6 +1,6 @@
 # E-commerce Flask API Infrastructure with Pulumi Python - IDEAL RESPONSE
 
-This is the ideal implementation for deploying a production-ready containerized Flask API on AWS ECS Fargate with high availability, auto-scaling, and comprehensive monitoring using Pulumi with Python.
+This is the ideal implementation for deploying a production-ready containerized Flask API on AWS ECS Fargate with high availability, auto-scaling, and comprehensive monitoring using Pulumi with Python
 
 ## Architecture Overview
 
