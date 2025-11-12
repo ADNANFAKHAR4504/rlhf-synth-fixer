@@ -12,7 +12,7 @@ describe('TapStack', () => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestStack', {
       environmentSuffix: 'test',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
     template = Template.fromStack(stack);
   });
@@ -137,7 +137,7 @@ describe('TapStack', () => {
   });
 
   test('Stack has correct environment configuration', () => {
-    expect(stack.region).toBe('us-east-1');
+    expect(stack.region).toBe('eu-central-2');
   });
 
   test('VPC has correct subnet configuration', () => {
@@ -155,7 +155,7 @@ describe('TapStack', () => {
       // Note: This is testing the error path exists, actual trigger would require mocking
       new TapStack(testApp, 'TestValidationStack', {
         environmentSuffix: 'validation-test',
-        env: { region: 'us-east-1' },
+        env: { region: 'eu-central-2' },
       });
     }).not.toThrow(); // With correct config, it shouldn't throw
   });
@@ -290,7 +290,7 @@ describe('TapStack - Error Cases', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestStack', {
       environmentSuffix: 'test',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
 
     // Mock the VPC to return wrong number of subnets
@@ -311,7 +311,7 @@ describe('TapStack - Error Cases', () => {
       const mockApp = new cdk.App();
       const errorStack = new TapStack(mockApp, 'ErrorStack', {
         environmentSuffix: 'error-test',
-        env: { region: 'us-east-1' },
+        env: { region: 'eu-central-2' },
       });
       // Override the subnets to trigger error
       Object.defineProperty(errorStack.vpc, 'publicSubnets', {
@@ -338,7 +338,7 @@ describe('TapStack - Error Cases', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestS3Stack', {
       environmentSuffix: 'test-s3',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
 
     // Verify S3 endpoint is exposed as public property
@@ -349,7 +349,7 @@ describe('TapStack - Error Cases', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestVpcStack', {
       environmentSuffix: 'test-vpc',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
 
     // Verify VPC is exposed as public property
@@ -361,7 +361,7 @@ describe('TapStack - Error Cases', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestSubnetStack', {
       environmentSuffix: 'test-subnet',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
     const template = Template.fromStack(stack);
 
@@ -376,7 +376,7 @@ describe('TapStack - Error Cases', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestNaclStack', {
       environmentSuffix: 'test-nacl',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
     const template = Template.fromStack(stack);
 
@@ -399,7 +399,7 @@ describe('TapStack - Error Cases', () => {
     const app = new cdk.App();
     const stack = new TapStack(app, 'TestFlowLogStack', {
       environmentSuffix: 'test-flowlog',
-      env: { region: 'us-east-1' },
+      env: { region: 'eu-central-2' },
     });
     const template = Template.fromStack(stack);
 

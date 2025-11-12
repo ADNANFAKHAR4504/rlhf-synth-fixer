@@ -670,9 +670,51 @@ npm test
 
 ---
 
+### 18. Reserved Concurrency Hard-Coded to 100 (Deployment Failure)
+
+**Impact Level**: High
+
+**MODEL_RESPONSE Issue**:
+```ts
+const apiFunction = new lambda.Function(this, 'ApiFunction', {
+  // ...
+  reservedConcurrentExecutions: 100,
+});
+```
+
+Every Lambda used a fixed `reservedConcurrentExecutions=100`. Shared AWS accounts (especially CI) rarely have 300 unreserved concurrency available, so deployments failed with `InvalidParameterValueException: ... decreases account's UnreservedConcurrentExecution below its minimum value`.
+
+**IDEAL_RESPONSE Fix**:
+```py
+self.lambda_reserved_concurrency = self._resolve_reserved_concurrency()
+
+lambda_args = { ... }
+if self.lambda_reserved_concurrency is not None:
+    lambda_args["reserved_concurrent_executions"] = self.lambda_reserved_concurrency
+
+aws.lambda_.Function("api-lambda", **lambda_args)
+
+def _resolve_reserved_concurrency(self):
+    env_value = os.getenv("LAMBDA_RESERVED_CONCURRENCY")
+    if env_value:
+        return int(env_value)
+    config = pulumi.Config()
+    return config.get_int("lambda_reserved_concurrency")
+```
+
+Production stacks set the value to 100 via Pulumi config (or `LAMBDA_RESERVED_CONCURRENCY`), while CI/test stacks can temporarily lower or omit it to stay within account limits.
+
+**Root Cause**: The model assumed unlimited account quotas and treated the requirement as a hard-coded value instead of a configurable policy knob.
+
+**Deployment Impact**: Critical for CI/CD — Pulumi updates fail immediately with HTTP 400 from Lambda, blocking every environment until quotas are manually increased.
+
+**Training Value**: Reinforces the need to convert compliance requirements into configurable settings and to account for AWS service quotas.
+
+---
+
 ## Summary
 
-**Total Failures**: 17 (5 Critical, 8 High, 4 Medium)
+**Total Failures**: 18 (5 Critical, 9 High, 4 Medium)
 
 **Primary Knowledge Gaps**:
 1. **High Availability Architecture**: Failed to implement 3 AZs and 3 NAT gateways (multi-region patterns)

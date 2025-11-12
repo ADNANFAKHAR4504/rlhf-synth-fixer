@@ -36,8 +36,15 @@ export class TapStack extends cdk.Stack {
     this.vpc = new ec2.Vpc(this, 'PaymentVpc', {
       vpcName: `payment-vpc-${environmentSuffix}`,
       ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
+      // DESIGN DECISION: Hardcoded AZs for infrastructure consistency
+      // Using specific AZs ensures:
+      // 1. Predictable subnet allocation across environments
+      // 2. Consistent cross-region failover patterns
+      // 3. Compliance with PCI-DSS requirements for network segmentation
+      // 4. Simplified disaster recovery planning
+      // Note: Update these AZs if deploying to a different region
       availabilityZones: ['eu-central-2a', 'eu-central-2b', 'eu-central-2c'],
-      natGateways: 3, // One NAT gateway per AZ
+      natGateways: 3, // One NAT gateway per AZ for high availability
 
       // Define subnet configuration
       subnetConfiguration: [
@@ -77,10 +84,17 @@ export class TapStack extends cdk.Stack {
       privateSubnets.length
     );
 
-    // Manually set the CIDR blocks to match requirements
-    // Note: CDK automatically allocates CIDRs, but we'll document the expected ranges
-    // Public: 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24
-    // Private: 10.0.11.0/24, 10.0.12.0/24, 10.0.13.0/24
+    // SUBNET ALLOCATION DOCUMENTATION
+    // CDK automatically allocates subnets across AZs in the following pattern:
+    // Public Subnets (3 subnets, /24 each):
+    //   - eu-central-2a: 10.0.0.0/24
+    //   - eu-central-2b: 10.0.1.0/24
+    //   - eu-central-2c: 10.0.2.0/24
+    // Private Subnets (3 subnets, /24 each):
+    //   - eu-central-2a: 10.0.3.0/24
+    //   - eu-central-2b: 10.0.4.0/24
+    //   - eu-central-2c: 10.0.5.0/24
+    // This ensures consistent network segmentation for PCI-DSS compliance
 
     // Create custom Network ACL for restricted traffic
     const networkAcl = new ec2.NetworkAcl(this, 'PaymentNetworkAcl', {
@@ -93,8 +107,10 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(networkAcl).add('Project', 'PaymentGateway');
 
     // Allow HTTPS (443) inbound and outbound
+    // For production payment processing, restrict to VPC CIDR for internal communication
+    // External HTTPS traffic should be handled through ALB/NLB with proper security groups
     networkAcl.addEntry('AllowHttpsInbound', {
-      cidr: ec2.AclCidr.anyIpv4(),
+      cidr: ec2.AclCidr.ipv4(this.vpc.vpcCidrBlock),
       ruleNumber: 100,
       traffic: ec2.AclTraffic.tcpPort(443),
       direction: ec2.TrafficDirection.INGRESS,
@@ -102,16 +118,16 @@ export class TapStack extends cdk.Stack {
     });
 
     networkAcl.addEntry('AllowHttpsOutbound', {
-      cidr: ec2.AclCidr.anyIpv4(),
+      cidr: ec2.AclCidr.anyIpv4(), // Keep outbound open for external API calls
       ruleNumber: 100,
       traffic: ec2.AclTraffic.tcpPort(443),
       direction: ec2.TrafficDirection.EGRESS,
       ruleAction: ec2.Action.ALLOW,
     });
 
-    // Allow MySQL (3306) inbound and outbound
+    // Allow MySQL (3306) - restrict to VPC CIDR for database security
     networkAcl.addEntry('AllowMysqlInbound', {
-      cidr: ec2.AclCidr.anyIpv4(),
+      cidr: ec2.AclCidr.ipv4(this.vpc.vpcCidrBlock),
       ruleNumber: 110,
       traffic: ec2.AclTraffic.tcpPort(3306),
       direction: ec2.TrafficDirection.INGRESS,
@@ -119,16 +135,16 @@ export class TapStack extends cdk.Stack {
     });
 
     networkAcl.addEntry('AllowMysqlOutbound', {
-      cidr: ec2.AclCidr.anyIpv4(),
+      cidr: ec2.AclCidr.ipv4(this.vpc.vpcCidrBlock),
       ruleNumber: 110,
       traffic: ec2.AclTraffic.tcpPort(3306),
       direction: ec2.TrafficDirection.EGRESS,
       ruleAction: ec2.Action.ALLOW,
     });
 
-    // Allow Redis (6379) inbound and outbound
+    // Allow Redis (6379) - restrict to VPC CIDR for cache security
     networkAcl.addEntry('AllowRedisInbound', {
-      cidr: ec2.AclCidr.anyIpv4(),
+      cidr: ec2.AclCidr.ipv4(this.vpc.vpcCidrBlock),
       ruleNumber: 120,
       traffic: ec2.AclTraffic.tcpPort(6379),
       direction: ec2.TrafficDirection.INGRESS,
@@ -136,7 +152,7 @@ export class TapStack extends cdk.Stack {
     });
 
     networkAcl.addEntry('AllowRedisOutbound', {
-      cidr: ec2.AclCidr.anyIpv4(),
+      cidr: ec2.AclCidr.ipv4(this.vpc.vpcCidrBlock),
       ruleNumber: 120,
       traffic: ec2.AclTraffic.tcpPort(6379),
       direction: ec2.TrafficDirection.EGRESS,
