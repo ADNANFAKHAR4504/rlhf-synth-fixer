@@ -76,6 +76,19 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    // S3 Bucket Public Access Block
+    new aws.s3.BucketPublicAccessBlock(
+      `market-data-bucket-pab-${environmentSuffix}`,
+      {
+        bucket: dataBucket.id,
+        blockPublicAcls: true,
+        blockPublicPolicy: true,
+        ignorePublicAcls: true,
+        restrictPublicBuckets: true,
+      },
+      { parent: this }
+    );
+
     // DynamoDB Table for market data state
     const marketDataTable = new aws.dynamodb.Table(
       `market-data-state-${environmentSuffix}`,
@@ -202,7 +215,7 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         role: dataIngestionRole.arn,
-        memorySize: 3072,
+        memorySize: 1024,
         timeout: 300,
         code: new pulumi.asset.AssetArchive({
           '.': new pulumi.asset.FileArchive(
@@ -349,7 +362,7 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         role: dataProcessorRole.arn,
-        memorySize: 3072,
+        memorySize: 1024,
         timeout: 300,
         code: new pulumi.asset.AssetArchive({
           '.': new pulumi.asset.FileArchive(
@@ -494,7 +507,7 @@ export class TapStack extends pulumi.ComponentResource {
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         role: dataAggregatorRole.arn,
-        memorySize: 3072,
+        memorySize: 1024,
         timeout: 300,
         code: new pulumi.asset.AssetArchive({
           '.': new pulumi.asset.FileArchive(
@@ -696,14 +709,40 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [apiIntegration] }
     );
 
+    // CloudWatch Log Group for API Gateway
+    const apiLogGroup = new aws.cloudwatch.LogGroup(
+      `api-gateway-logs-${environmentSuffix}`,
+      {
+        name: `/aws/apigateway/MarketDataAPI-${environmentSuffix}`,
+        retentionInDays: 7,
+        tags: baseTags,
+      },
+      { parent: this }
+    );
+
     const apiStage = new aws.apigateway.Stage(
       `api-stage-${environmentSuffix}`,
       {
         restApi: api.id,
         deployment: apiDeployment.id,
         stageName: 'prod',
+        accessLogSettings: {
+          destinationArn: apiLogGroup.arn,
+          format: JSON.stringify({
+            requestId: '$context.requestId',
+            ip: '$context.identity.sourceIp',
+            caller: '$context.identity.caller',
+            user: '$context.identity.user',
+            requestTime: '$context.requestTime',
+            httpMethod: '$context.httpMethod',
+            resourcePath: '$context.resourcePath',
+            status: '$context.status',
+            protocol: '$context.protocol',
+            responseLength: '$context.responseLength',
+          }),
+        },
       },
-      { parent: this }
+      { parent: this, dependsOn: [apiLogGroup] }
     );
 
     // API Gateway Usage Plan for throttling
@@ -720,6 +759,10 @@ export class TapStack extends pulumi.ComponentResource {
         throttleSettings: {
           burstLimit: 10000,
           rateLimit: 10000,
+        },
+        quotaSettings: {
+          limit: 1000000,
+          period: 'DAY',
         },
         tags: baseTags,
       },
