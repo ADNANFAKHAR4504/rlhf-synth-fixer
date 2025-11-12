@@ -3,11 +3,11 @@ test_tap_stack_integration.py
 
 Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack.
+Dynamically discovers resources using tags and environment suffix.
 """
 
 import unittest
 import os
-import json
 import boto3
 from botocore.exceptions import ClientError
 
@@ -17,22 +17,23 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        """Set up integration test with live stack outputs."""
-        # Load outputs from flat-outputs.json
-        outputs_file = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "cfn-outputs",
-            "flat-outputs.json",
-        )
-
-        if os.path.exists(outputs_file):
-            with open(outputs_file, "r", encoding="utf-8") as f:
-                cls.outputs = json.load(f)
-        else:
-            cls.outputs = {}
-
-        # Get region from environment or default
-        cls.region = os.getenv("AWS_REGION", "us-east-1")
+        """Set up integration test with live stack discovery."""
+        # Get environment suffix from environment variable
+        cls.environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
+        
+        # Get region from environment or AWS_REGION file
+        cls.region = os.getenv("AWS_REGION")
+        if not cls.region:
+            aws_region_file = os.path.join(
+                os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+                "lib",
+                "AWS_REGION"
+            )
+            if os.path.exists(aws_region_file):
+                with open(aws_region_file, "r", encoding="utf-8") as f:
+                    cls.region = f.read().strip()
+            else:
+                cls.region = "us-east-1"
 
         # Initialize AWS clients
         cls.ec2_client = boto3.client("ec2", region_name=cls.region)
@@ -45,15 +46,81 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             "secretsmanager", region_name=cls.region
         )
 
+        # Discover resources dynamically
+        cls._discover_resources()
+
+    @classmethod
+    def _discover_resources(cls):
+        """Discover deployed resources dynamically."""
+        cls.vpc_id = None
+        cls.alb_dns_name = None
+        cls.ecs_cluster_name = None
+        cls.rds_cluster_endpoint = None
+        cls.ecr_repository_uri = None
+
+        # Discover VPC by name tag
+        try:
+            vpc_name = f"flask-api-vpc-{cls.environment_suffix}"
+            response = cls.ec2_client.describe_vpcs(
+                Filters=[{"Name": "tag:Name", "Values": [vpc_name]}]
+            )
+            if response["Vpcs"]:
+                cls.vpc_id = response["Vpcs"][0]["VpcId"]
+        except ClientError:
+            pass
+
+        # Discover ALB by name pattern
+        try:
+            response = cls.elbv2_client.describe_load_balancers()
+            for alb in response["LoadBalancers"]:
+                if f"flask-api-alb-{cls.environment_suffix}" in alb["LoadBalancerName"]:
+                    cls.alb_dns_name = alb["DNSName"]
+                    break
+        except ClientError:
+            pass
+
+        # Discover ECS cluster by name pattern
+        try:
+            cluster_name = f"flask-api-cluster-{cls.environment_suffix}"
+            response = cls.ecs_client.describe_clusters(clusters=[cluster_name])
+            if response["clusters"] and response["clusters"][0]["status"] == "ACTIVE":
+                cls.ecs_cluster_name = cluster_name
+        except ClientError:
+            pass
+
+        # Discover RDS cluster by identifier pattern
+        try:
+            cluster_id = f"flask-api-aurora-{cls.environment_suffix}"
+            response = cls.rds_client.describe_db_clusters(
+                DBClusterIdentifier=cluster_id
+            )
+            if response["DBClusters"]:
+                cls.rds_cluster_endpoint = response["DBClusters"][0]["Endpoint"]
+        except ClientError:
+            pass
+
+        # Discover ECR repository by name pattern
+        try:
+            repo_name = f"flask-api-repo-{cls.environment_suffix}"
+            response = cls.ecr_client.describe_repositories(
+                repositoryNames=[repo_name]
+            )
+
+            response = cls.ecr_client.describe_repositories(
+                repositoryNames=[repo_name]
+            )
+            if response["repositories"]:
+                cls.ecr_repository_uri = response["repositories"][0]["repositoryUri"]
+        except ClientError:
+            pass
+
     def test_vpc_exists_and_configured(self):
         """Test that VPC exists with correct configuration."""
-        if "vpc_id" not in self.outputs:
-            self.skipTest("VPC ID not found in outputs")
-
-        vpc_id = self.outputs["vpc_id"]
+        if not self.vpc_id:
+            self.skipTest("VPC not found or not deployed yet")
 
         try:
-            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
+            response = self.ec2_client.describe_vpcs(VpcIds=[self.vpc_id])
             vpcs = response["Vpcs"]
 
             self.assertEqual(len(vpcs), 1, "VPC should exist")
@@ -71,14 +138,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_subnets_exist_across_azs(self):
         """Test that subnets exist across multiple availability zones."""
-        if "vpc_id" not in self.outputs:
-            self.skipTest("VPC ID not found in outputs")
-
-        vpc_id = self.outputs["vpc_id"]
+        if not self.vpc_id:
+            self.skipTest("VPC not found or not deployed yet")
 
         try:
             response = self.ec2_client.describe_subnets(
-                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                Filters=[{"Name": "vpc-id", "Values": [self.vpc_id]}]
             )
             subnets = response["Subnets"]
 
@@ -98,13 +163,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_alb_exists_and_accessible(self):
         """Test that Application Load Balancer exists and is reachable."""
-        if "alb_dns_name" not in self.outputs:
-            self.skipTest("ALB DNS name not found in outputs")
-
-        alb_dns = self.outputs["alb_dns_name"]
+        if not self.alb_dns_name:
+            self.skipTest("ALB not found or not deployed yet")
 
         # Verify DNS format
-        self.assertIn(".elb.amazonaws.com", alb_dns)
+        self.assertIn(".elb.amazonaws.com", self.alb_dns_name)
 
         try:
             # Get ALB by DNS name
@@ -112,7 +175,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             albs = [
                 alb
                 for alb in response["LoadBalancers"]
-                if alb["DNSName"] == alb_dns
+                if alb["DNSName"] == self.alb_dns_name
             ]
 
             self.assertEqual(len(albs), 1, "ALB should exist")
@@ -132,13 +195,11 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_ecs_cluster_exists(self):
         """Test that ECS cluster exists and is active."""
-        if "ecs_cluster_name" not in self.outputs:
-            self.skipTest("ECS cluster name not found in outputs")
-
-        cluster_name = self.outputs["ecs_cluster_name"]
+        if not self.ecs_cluster_name:
+            self.skipTest("ECS cluster not found or not deployed yet")
 
         try:
-            response = self.ecs_client.describe_clusters(clusters=[cluster_name])
+            response = self.ecs_client.describe_clusters(clusters=[self.ecs_cluster_name])
             clusters = response["clusters"]
 
             self.assertEqual(len(clusters), 1, "ECS cluster should exist")
@@ -155,14 +216,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_ecs_service_running(self):
         """Test that ECS service is running with desired task count."""
-        if "ecs_cluster_name" not in self.outputs:
-            self.skipTest("ECS cluster name not found in outputs")
-
-        cluster_name = self.outputs["ecs_cluster_name"]
+        if not self.ecs_cluster_name:
+            self.skipTest("ECS cluster not found or not deployed yet")
 
         try:
             # List services in cluster
-            response = self.ecs_client.list_services(cluster=cluster_name)
+            response = self.ecs_client.list_services(cluster=self.ecs_cluster_name)
             service_arns = response["serviceArns"]
 
             self.assertGreater(
@@ -171,7 +230,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
             # Describe the first service
             services_response = self.ecs_client.describe_services(
-                cluster=cluster_name, services=[service_arns[0]]
+                cluster=self.ecs_cluster_name, services=[service_arns[0]]
             )
             service = services_response["services"][0]
 
@@ -189,25 +248,18 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_rds_cluster_exists(self):
         """Test that RDS Aurora cluster exists and is available."""
-        if "rds_cluster_endpoint" not in self.outputs:
-            self.skipTest("RDS cluster endpoint not found in outputs")
-
-        cluster_endpoint = self.outputs["rds_cluster_endpoint"]
+        if not self.rds_cluster_endpoint:
+            self.skipTest("RDS cluster not found or not deployed yet")
 
         try:
             # Get cluster identifier from endpoint
-            cluster_id = cluster_endpoint.split(".")[0]
+            cluster_id = f"flask-api-aurora-{self.environment_suffix}"
 
-            # Describe RDS clusters
-            response = self.rds_client.describe_db_clusters()
-            clusters = [
-                c
-                for c in response["DBClusters"]
-                if cluster_id in c["DBClusterIdentifier"]
-            ]
-
-            self.assertGreater(len(clusters), 0, "RDS cluster should exist")
-            cluster = clusters[0]
+            # Describe RDS cluster
+            response = self.rds_client.describe_db_clusters(
+                DBClusterIdentifier=cluster_id
+            )
+            cluster = response["DBClusters"][0]
 
             # Verify cluster is available
             self.assertEqual(cluster["Status"], "available")
@@ -225,11 +277,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_ecr_repository_exists(self):
         """Test that ECR repository exists with scan on push enabled."""
-        if "ecr_repository_uri" not in self.outputs:
-            self.skipTest("ECR repository URI not found in outputs")
+        if not self.ecr_repository_uri:
+            self.skipTest("ECR repository not found or not deployed yet")
 
-        repo_uri = self.outputs["ecr_repository_uri"]
-        repo_name = repo_uri.split("/")[-1]
+        repo_name = self.ecr_repository_uri.split("/")[-1]
 
         try:
             response = self.ecr_client.describe_repositories(
@@ -251,11 +302,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_cloudwatch_log_groups_exist(self):
         """Test that CloudWatch log groups exist with correct retention."""
-        environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-
         log_groups_to_check = [
-            f"/ecs/flask-api-{environment_suffix}",
-            f"/aws/alb/flask-api-{environment_suffix}",
+            f"/ecs/flask-api-{self.environment_suffix}",
+            f"/aws/alb/flask-api-{self.environment_suffix}",
         ]
 
         for log_group_name in log_groups_to_check:
@@ -287,14 +336,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_security_groups_configured(self):
         """Test that security groups are properly configured."""
-        if "vpc_id" not in self.outputs:
-            self.skipTest("VPC ID not found in outputs")
-
-        vpc_id = self.outputs["vpc_id"]
+        if not self.vpc_id:
+            self.skipTest("VPC not found or not deployed yet")
 
         try:
             response = self.ec2_client.describe_security_groups(
-                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                Filters=[{"Name": "vpc-id", "Values": [self.vpc_id]}]
             )
             security_groups = response["SecurityGroups"]
 
@@ -327,11 +374,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_secrets_manager_secret_exists(self):
         """Test that database password secret exists in Secrets Manager."""
-        environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
-        secret_name = f"flask-api-db-password-{environment_suffix}"
+        secret_name = f"flask-api-db-password-{self.environment_suffix}"
 
         try:
-            response = self.secretsmanager_client.describe_secret(Name=secret_name)
+            response = self.secretsmanager_client.describe_secret(SecretId=secret_name)
 
             # Verify secret exists
             self.assertIsNotNone(response["ARN"])
@@ -346,14 +392,12 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
     def test_nat_gateways_exist(self):
         """Test that NAT gateways exist for private subnet outbound access."""
-        if "vpc_id" not in self.outputs:
-            self.skipTest("VPC ID not found in outputs")
-
-        vpc_id = self.outputs["vpc_id"]
+        if not self.vpc_id:
+            self.skipTest("VPC not found or not deployed yet")
 
         try:
             response = self.ec2_client.describe_nat_gateways(
-                Filters=[{"Name": "vpc-id", "Values": [vpc_id]}]
+                Filters=[{"Name": "vpc-id", "Values": [self.vpc_id]}]
             )
             nat_gateways = response["NatGateways"]
 
