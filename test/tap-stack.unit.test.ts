@@ -2,15 +2,6 @@
 import * as fs from "fs";
 import * as path from "path";
 
-/**
- * These tests validate the TapStack CloudFormation template (JSON),
- * assuming files exist at:
- *  - ../lib/TapStack.yml
- *  - ../lib/TapStack.json
- *
- * We parse ONLY the JSON to avoid adding YAML parser dependencies.
- */
-
 type CFNTemplate = {
   AWSTemplateFormatVersion?: string;
   Description?: string;
