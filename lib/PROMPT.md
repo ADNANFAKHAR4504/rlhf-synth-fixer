@@ -4,7 +4,7 @@
 > 
 > Platform: **pulumi**  
 > Language: **ts**  
-> Region: **ap-southeast-1**
+> Region: **eu-central-2**
 >
 > **Do not substitute or change the platform or language.** All infrastructure code must be written using the specified platform and language combination.
 
@@ -23,7 +23,7 @@ A fintech startup needs to deploy their payment processing web application with 
 - [VPC flow logs must be enabled and stored in S3 with lifecycle policies, All security groups must explicitly deny all traffic except required ports, All RDS instances must use encrypted storage with customer-managed KMS keys, Application Load Balancer must terminate SSL with ACM certificates, ECS task definitions must use specific CPU and memory limits, IAM roles must follow principle of least privilege with no wildcard permissions, ECS tasks must run in private subnets with no direct internet access, All resources must be tagged with Environment, Application, and CostCenter, RDS automated backups must be retained for 35 days minimum, CloudWatch Logs retention must be set to 7 years for compliance]
 
 ### Environment Setup
-Production-grade infrastructure in ap-southeast-1 region for payment processing application. Uses ECS Fargate for containerized services, RDS Aurora MySQL for transaction data, Application Load Balancer for traffic distribution, and CloudWatch for monitoring. Requires Node.js 18+, Pulumi 3.x CLI, AWS CLI configured with appropriate credentials. Multi-AZ VPC setup with 3 public subnets for ALB and 3 private subnets for ECS tasks and RDS. Single NAT Gateway for outbound connectivity (to avoid EIP account limits in non-production environments). S3 buckets for VPC flow logs and application artifacts.
+Production-grade infrastructure in eu-central-2 region for payment processing application. Uses ECS Fargate for containerized services, RDS Aurora MySQL for transaction data, Application Load Balancer for traffic distribution, and CloudWatch for monitoring. Requires Node.js 18+, Pulumi 3.x CLI, AWS CLI configured with appropriate credentials. Multi-AZ VPC setup with 3 public subnets for ALB and 3 private subnets for ECS tasks and RDS. Single NAT Gateway for outbound connectivity (to avoid EIP account limits in non-production environments). S3 buckets for VPC flow logs and application artifacts.
 
 ## Project-Specific Conventions
 
@@ -47,4 +47,4 @@ Production-grade infrastructure in ap-southeast-1 region for payment processing 
 - Enable appropriate logging and monitoring
 
 ## Target Region
-All resources should be deployed to: **ap-southeast-1**
+All resources should be deployed to: **eu-central-2**

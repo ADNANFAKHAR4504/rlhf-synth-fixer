@@ -1,35 +1,35 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeFlowLogsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  S3Client,
-  GetBucketEncryptionCommand,
-  GetBucketLifecycleConfigurationCommand,
-  HeadBucketCommand,
-} from '@aws-sdk/client-s3';
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from '@aws-sdk/client-cloudwatch-logs';
+import {
+  DescribeFlowLogsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  DescribeDBClustersCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetBucketLifecycleConfigurationCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import * as fs from 'fs';
+import * as path from 'path';
 
 // Load outputs from deployment
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
@@ -44,7 +44,7 @@ beforeAll(() => {
   }
 });
 
-const region = 'ap-southeast-1';
+const region = 'eu-central-2';
 
 describe('Payment Processing Infrastructure Integration Tests', () => {
   describe('VPC Configuration', () => {

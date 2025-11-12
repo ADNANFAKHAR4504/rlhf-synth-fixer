@@ -22,7 +22,7 @@ pulumi.runtime.setMocks({
     }
     if (args.token === 'aws:index/getRegion:getRegion') {
       return {
-        name: 'ap-southeast-1',
+        name: 'eu-central-2',
       };
     }
     return args.inputs;
@@ -150,7 +150,7 @@ describe('TapStack Structure', () => {
 
     it('includes region in bucket names', (done) => {
       stack.flowLogsBucketName.apply((bucketName: string) => {
-        expect(bucketName).toContain('ap-southeast-1');
+        expect(bucketName).toContain('eu-central-2');
         done();
       });
     });

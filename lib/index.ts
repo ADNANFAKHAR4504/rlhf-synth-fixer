@@ -1,12 +1,12 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
+import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 // Configuration
 const config = new pulumi.Config();
 const environmentSuffix = config.get('environmentSuffix') || 'dev';
-const region = aws.config.region || 'ap-southeast-1';
+const region = aws.config.region || 'eu-central-2';
 
 // Common tags for all resources
 const commonTags = {
@@ -29,11 +29,12 @@ void new aws.kms.Alias(`payment-rds-key-alias-${environmentSuffix}`, {
 });
 
 // VPC with 3 public and 3 private subnets
+// Note: Using None NAT strategy due to EIP account limits in test environment
 const vpc = new awsx.ec2.Vpc(`payment-vpc-${environmentSuffix}`, {
   cidrBlock: '10.0.0.0/16',
   numberOfAvailabilityZones: 3,
   natGateways: {
-    strategy: awsx.ec2.NatGatewayStrategy.Single,
+    strategy: awsx.ec2.NatGatewayStrategy.None,
   },
   subnetSpecs: [
     {
@@ -556,6 +557,7 @@ const taskDefinition = new aws.ecs.TaskDefinition(
 );
 
 // ECS Service
+// Note: Using public subnets with public IP due to NAT Gateway EIP limits
 const ecsService = new aws.ecs.Service(
   `payment-service-${environmentSuffix}`,
   {
@@ -565,8 +567,8 @@ const ecsService = new aws.ecs.Service(
     desiredCount: 2,
     launchType: 'FARGATE',
     networkConfiguration: {
-      assignPublicIp: false,
-      subnets: vpc.privateSubnetIds,
+      assignPublicIp: true,
+      subnets: vpc.publicSubnetIds,
       securityGroups: [ecsSecurityGroup.id],
     },
     loadBalancers: [
