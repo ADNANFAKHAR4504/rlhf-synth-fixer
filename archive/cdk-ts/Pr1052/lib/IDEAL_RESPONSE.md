@@ -4,7 +4,7 @@
 
 ### Main Stack Implementation (`lib/tap-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -390,7 +390,7 @@ export class TapStack extends cdk.Stack {
 
 ### CDK App Entry Point (`bin/tap.ts`)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

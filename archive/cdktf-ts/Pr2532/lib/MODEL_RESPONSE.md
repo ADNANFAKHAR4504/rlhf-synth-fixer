@@ -2,7 +2,7 @@ I'll create a secure and scalable AWS cloud environment using CDK for Terraform 
 
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -458,7 +458,7 @@ export class InfrastructureModule extends Construct {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";

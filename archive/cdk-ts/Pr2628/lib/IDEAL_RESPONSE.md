@@ -1,6 +1,6 @@
 I'll help you create a comprehensive, security-focused AWS infrastructure using AWS CDK with TypeScript. Here's the updated `lib/tap-stack.ts` file that includes all the required security components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

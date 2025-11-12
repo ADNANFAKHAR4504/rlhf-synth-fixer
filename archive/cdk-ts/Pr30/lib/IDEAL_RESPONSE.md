@@ -1,4 +1,4 @@
-```typescript
+```ts
 // metadata-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -375,7 +375,7 @@ export class MetadataProcessingStack extends cdk.Stack {
 
 ```
 
-```typescript
+```ts
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

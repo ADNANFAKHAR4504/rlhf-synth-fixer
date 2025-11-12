@@ -4,7 +4,7 @@
 
 ### 1. Missing Archive Provider Dependency
 **Issue**: The infrastructure code imported `@cdktf/provider-archive` but it was missing from dependencies.
-```typescript
+```ts
 import { DataArchiveFile } from '@cdktf/provider-archive/lib/data-archive-file';
 import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 ```
@@ -19,13 +19,13 @@ import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 
 ### 2. Terraform Backend Configuration Error
 **Issue**: The original code used an invalid `use_lockfile` property in S3Backend configuration.
-```typescript
+```ts
 // Original incorrect code
 this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
 **Fix**: Replaced with proper DynamoDB table configuration for state locking:
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -55,7 +55,7 @@ new S3Backend(this, {
 **Issue**: No outputs were defined for integration with other systems.
 
 **Fix**: Added comprehensive Terraform outputs:
-```typescript
+```ts
 new TerraformOutput(this, 'dynamodb-table-name', {
   value: priceTable.name,
   description: 'DynamoDB table name for price data',
@@ -67,13 +67,13 @@ new TerraformOutput(this, 'dynamodb-table-name', {
 
 ### 1. Fixed Test Matcher Issues
 **Issue**: Tests used incorrect CDKTF Testing API methods.
-```typescript
+```ts
 // Original incorrect code
 expect(synthesized).toHaveResourceWithProperties('aws_dynamodb_table', {...});
 ```
 
 **Fix**: Updated to use proper JSON parsing and direct property access:
-```typescript
+```ts
 const synthesized = Testing.synth(stack);
 const synthOutput = JSON.parse(synthesized);
 const dynamoResource = synthOutput.resource?.aws_dynamodb_table?.['price-table'];
@@ -82,25 +82,25 @@ expect(dynamoResource).toBeDefined();
 
 ### 2. Fixed DynamoDB PITR Test Assertion
 **Issue**: Incorrect array access for point_in_time_recovery property.
-```typescript
+```ts
 // Original incorrect
 expect(dynamoResource.point_in_time_recovery[0].enabled).toBe(true);
 ```
 
 **Fix**: Direct property access:
-```typescript
+```ts
 expect(dynamoResource.point_in_time_recovery.enabled).toBe(true);
 ```
 
 ### 3. Fixed Lambda Function Resource Names
 **Issue**: Test expectations used incorrect resource identifiers.
-```typescript
+```ts
 // Original incorrect
 synthOutput.resource?.aws_lambda_function?.['price-scraper']
 ```
 
 **Fix**: Updated to match actual resource names:
-```typescript
+```ts
 synthOutput.resource?.aws_lambda_function?.['scraper-function']
 synthOutput.resource?.aws_lambda_function?.['stream-processor-function']
 ```
@@ -116,7 +116,7 @@ synthOutput.resource?.aws_lambda_function?.['stream-processor-function']
 **Issue**: No support for AWS region override via environment variables.
 
 **Fix**: Added environment variable support:
-```typescript
+```ts
 const AWS_REGION_OVERRIDE = process.env.AWS_REGION_OVERRIDE || '';
 ```
 

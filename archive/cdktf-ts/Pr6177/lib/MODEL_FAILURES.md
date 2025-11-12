@@ -18,12 +18,12 @@ The task explicitly required: "outputs.tf exposing the S3 bucket name, Lambda fu
 **Location**: lib/csv-processing-stack.ts
 
 **Original Code**:
-```typescript
+```ts
 // No outputs defined
 ```
 
 **Corrected Code**:
-```typescript
+```ts
 // Outputs
 new TerraformOutput(this, 's3-bucket-name', {
   value: csvBucket.bucket,
@@ -61,12 +61,12 @@ The MODEL_RESPONSE imported `LambdaEventSourceMapping` from '@cdktf/provider-aws
 **Location**: lib/csv-processing-stack.ts
 
 **Original Code**:
-```typescript
+```ts
 import { LambdaEventSourceMapping } from '@cdktf/provider-aws/lib/lambda-event-source-mapping';
 ```
 
 **Corrected Code**:
-```typescript
+```ts
 // Import removed as it was not used
 ```
 
@@ -90,7 +90,7 @@ The S3BucketNotification included a `dependsOn: [lambdaFunction]` clause, which 
 **Location**: lib/csv-processing-stack.ts
 
 **Original Code**:
-```typescript
+```ts
 new S3BucketNotification(this, 'csv-bucket-notification', {
   bucket: csvBucket.id,
   lambdaFunction: [
@@ -106,7 +106,7 @@ new S3BucketNotification(this, 'csv-bucket-notification', {
 ```
 
 **Corrected Code**:
-```typescript
+```ts
 new S3BucketNotification(this, 'csv-bucket-notification', {
   bucket: csvBucket.id,
   lambdaFunction: [

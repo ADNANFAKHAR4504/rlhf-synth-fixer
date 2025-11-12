@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -663,7 +663,7 @@ export class CloudTrailModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider, RandomProvider, RandomId } from "@cdktf/provider-aws";

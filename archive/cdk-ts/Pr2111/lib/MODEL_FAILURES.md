@@ -10,7 +10,7 @@
 
 **Fix**: Changed to `RemovalPolicy.DESTROY` with `autoDeleteObjects: true` to ensure complete resource cleanup:
 
-```typescript
+```ts
 // Before (problematic)
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 
@@ -52,7 +52,7 @@ autoDeleteObjects: true,
 
 **Fix**: Removed IAM policies from tagging loop and added explanatory comment:
 
-```typescript
+```ts
 // Apply tags only to roles (policies don't support tags in CloudFormation)
 [this.lambdaExecutionRole, this.lambdaS3AccessRole].forEach(
   resource => {

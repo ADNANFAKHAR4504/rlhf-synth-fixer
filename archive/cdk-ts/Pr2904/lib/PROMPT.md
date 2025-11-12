@@ -26,7 +26,7 @@ I need to build a comprehensive serverless application with the following compon
 
 Here's my existing stack file that needs to be updated:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

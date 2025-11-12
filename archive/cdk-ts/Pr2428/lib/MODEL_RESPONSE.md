@@ -16,7 +16,7 @@
 
 ## 1. Main Stack Definition (`lib/tapstack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';
@@ -426,7 +426,7 @@ export class TapStack extends cdk.Stack {
 
 ## 2. CDK App Entry Point (`bin/tap.ts`)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -550,7 +550,7 @@ cache:
 
 ## 4. Unit Tests (`test/tapstack.test.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tapstack';
@@ -782,7 +782,7 @@ describe('TapStack', () => {
 
 ## 5. Integration Tests (`test/pipeline-integration.test.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tapstack';

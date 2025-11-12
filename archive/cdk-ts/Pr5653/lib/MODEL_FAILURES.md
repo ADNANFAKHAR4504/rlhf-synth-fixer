@@ -163,7 +163,7 @@ Both needed to be updated to a version that supports global databases.
 3. **CDK limitation**: VER_15_13 not yet available in aws-cdk-lib
 4. **Final solution**: Updated to **15.12** (latest non-deprecated version available in CDK)
 
-```typescript
+```ts
 // In CfnGlobalCluster:
 // Before (failed):
 engineVersion: '13.7',
@@ -203,7 +203,7 @@ Resource handler returned message: "Invalid / Unmodifiable / Unsupported DB Para
 These parameters are valid for standard RDS PostgreSQL but not for Aurora PostgreSQL.
 
 **Solution**: Updated parameter group configuration
-```typescript
+```ts
 // Before (failed):
 engine: rds.DatabaseClusterEngine.auroraPostgres({
   version: rds.AuroraPostgresEngineVersion.VER_13_7,
@@ -261,7 +261,7 @@ CREATE_FAILED: Invalid / Unmodifiable / Unsupported DB Parameter: rds.force_ssl
 **Solution Applied**:
 
 1. **Migrated to new API** - Replaced deprecated properties:
-```typescript
+```ts
 // Before (deprecated):
 instanceProps: {
   instanceType: ec2.InstanceType.of(...),
@@ -288,7 +288,7 @@ securityGroups: [securityGroup],
 ```
 
 2. **Removed problematic SSL parameter** - Removed `rds.force_ssl` from parameter groups:
-```typescript
+```ts
 // Instance parameter group (clean):
 parameters: {
   shared_preload_libraries: 'pg_stat_statements',
@@ -341,7 +341,7 @@ parameters: {
 
 Converted TapStack from template to full orchestration construct:
 
-```typescript
+```ts
 // Before (template only):
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -387,7 +387,7 @@ export class TapStack extends Construct {
 
 Added environmentSuffix to all stack props interfaces and used in resource naming:
 
-```typescript
+```ts
 // Stack Props Updates:
 export interface AuroraGlobalStackProps extends cdk.StackProps {
   environmentSuffix: string; // Added
@@ -427,7 +427,7 @@ dashboardName: `aurora-dr-monitoring-${suffix}`
 
 Updated to use TapStack:
 
-```typescript
+```ts
 // Before (direct instantiation):
 const primaryStack = new AuroraGlobalStack(app, 'Aurora-DR-Primary', {...});
 const secondaryStack = new AuroraGlobalStack(app, 'Aurora-DR-Secondary', {...});
@@ -476,7 +476,7 @@ Error: Some exports have changed!
 
 The GlobalCluster identifier included `Date.now()`:
 
-```typescript
+```ts
 globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`
 ```
 
@@ -491,7 +491,7 @@ This causes:
 
 Changed to stable identifier in `lib/constructs/aurora-cluster.ts`:
 
-```typescript
+```ts
 // Before (unstable)
 globalClusterIdentifier: `aurora-dr-global-${suffix}-${Date.now()}`
 

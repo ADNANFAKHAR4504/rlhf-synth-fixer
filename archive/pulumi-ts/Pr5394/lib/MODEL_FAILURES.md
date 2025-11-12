@@ -11,12 +11,12 @@ The model-generated code had 10 significant issues that would have prevented suc
 **Issue**: The model failed to merge required tags (Environment, Project, ManagedBy) with user-provided tags.
 
 **Model Code**:
-```typescript
+```ts
 const resourceTags = args.tags || {};
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const resourceTags = pulumi.output(args.tags || {}).apply((t) => ({
   ...t,
   Environment: environmentSuffix,
@@ -38,7 +38,7 @@ const resourceTags = pulumi.output(args.tags || {}).apply((t) => ({
 **Issue**: Bucket name didn't include random suffix, which would cause failures when bucket names collide globally.
 
 **Model Code**:
-```typescript
+```ts
 const bucket = new aws.s3.Bucket(
   `datapipeline-bucket-${environmentSuffix}`,
   {
@@ -49,7 +49,7 @@ const bucket = new aws.s3.Bucket(
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 import * as random from '@pulumi/random';
 
 const randomSuffix = new random.RandomId(
@@ -80,7 +80,7 @@ const bucket = new aws.s3.Bucket(
 **Issue**: Used deprecated bucket properties (`versioning`, `serverSideEncryptionConfiguration`, `lifecycleRules`) instead of separate V2 resources.
 
 **Model Code**:
-```typescript
+```ts
 const bucket = new aws.s3.Bucket(
   `datapipeline-bucket-${environmentSuffix}`,
   {
@@ -92,7 +92,7 @@ const bucket = new aws.s3.Bucket(
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const bucket = new aws.s3.Bucket(/* ... */);
 
 const bucketVersioning = new aws.s3.BucketVersioningV2(
@@ -121,7 +121,7 @@ const bucketLifecycle = new aws.s3.BucketLifecycleConfigurationV2(/* ... */);
 **Issue**: DynamoDB table didn't have point-in-time recovery enabled as required by the specification.
 
 **Model Code**:
-```typescript
+```ts
 const table = new aws.dynamodb.Table(
   `datapipeline-table-${environmentSuffix}`,
   {
@@ -132,7 +132,7 @@ const table = new aws.dynamodb.Table(
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const table = new aws.dynamodb.Table(
   `datapipeline-table-${environmentSuffix}`,
   {
@@ -157,13 +157,13 @@ const table = new aws.dynamodb.Table(
 **Issue**: No queue policy to allow S3 to send messages to the SQS queue.
 
 **Model Code**:
-```typescript
+```ts
 const queue = new aws.sqs.Queue(/* ... */);
 // Missing: QueuePolicy to allow S3
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const queue = new aws.sqs.Queue(/* ... */);
 
 const queuePolicy = new aws.sqs.QueuePolicy(
@@ -201,12 +201,12 @@ const queuePolicy = new aws.sqs.QueuePolicy(
 **Issue**: Used `bucket.onObjectCreated()` which doesn't exist in Pulumi AWS provider.
 
 **Model Code**:
-```typescript
+```ts
 bucket.onObjectCreated('object-created', queue);
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const bucketNotification = new aws.s3.BucketNotification(
   `datapipeline-bucket-notification-${environmentSuffix}`,
   {
@@ -238,12 +238,12 @@ const bucketNotification = new aws.s3.BucketNotification(
 **Issue**: Exported `bucket.id` instead of `bucket.bucket`, which would return the ARN instead of the bucket name.
 
 **Model Code**:
-```typescript
+```ts
 this.bucketName = bucket.id;
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 this.bucketName = bucket.bucket;
 ```
 
@@ -264,7 +264,7 @@ Use the most explicit property for clarity.
 **Issue**: Didn't call `registerOutputs()` at the end of the constructor.
 
 **Model Code**:
-```typescript
+```ts
 this.bucketName = bucket.bucket;
 this.tableName = table.name;
 this.queueUrl = queue.url;
@@ -272,7 +272,7 @@ this.queueUrl = queue.url;
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 this.bucketName = bucket.bucket;
 this.tableName = table.name;
 this.queueUrl = queue.url;
@@ -299,7 +299,7 @@ this.registerOutputs({
 **Issue**: Bucket notification didn't explicitly depend on queue policy, which could cause race conditions.
 
 **Model Code**:
-```typescript
+```ts
 const bucketNotification = new aws.s3.BucketNotification(
   /* ... */,
   { parent: bucket }
@@ -307,7 +307,7 @@ const bucketNotification = new aws.s3.BucketNotification(
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const bucketNotification = new aws.s3.BucketNotification(
   /* ... */,
   {
@@ -330,12 +330,12 @@ const bucketNotification = new aws.s3.BucketNotification(
 **Issue**: Used template literals instead of `pulumi.interpolate` for resource names.
 
 **Model Code**:
-```typescript
+```ts
 name: `datapipeline-queue-${environmentSuffix}`
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 name: pulumi.interpolate`datapipeline-queue-${environmentSuffix}`
 ```
 

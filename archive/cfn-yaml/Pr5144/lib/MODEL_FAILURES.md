@@ -133,7 +133,7 @@ Alternative fix (if encryption-in-transit required):
 
 **MODEL_RESPONSE Issue**:
 The template tests (tap-stack.unit.test.ts and tap-stack.int.test.ts) were generic placeholders:
-```typescript
+```ts
 describe('Write Integration TESTS', () => {
   test('Dont forget!', async () => {
     expect(false).toBe(true);

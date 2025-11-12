@@ -4,7 +4,7 @@ IDEAL_RESPONSE.md
 
 ## bin/tap.ts
 
-```typescript
+```ts
 
 /* eslint-disable prettier/prettier */
 
@@ -116,7 +116,7 @@ export const migrationTimestamp = stack.outputs.apply(o => o.migrationTimestamp)
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 
 /* eslint-disable prettier/prettier */
 

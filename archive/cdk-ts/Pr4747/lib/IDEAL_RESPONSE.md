@@ -6,7 +6,7 @@ This document contains the corrected and complete implementation of the TAP Serv
 
 ### `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -362,7 +362,7 @@ export class TapStack extends cdk.Stack {
 
 ### `lib/constructs/secure-bucket.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -437,7 +437,7 @@ export class SecureBucket extends Construct {
 
 ### `lib/constructs/lambda-with-canary.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as codedeploy from 'aws-cdk-lib/aws-codedeploy';
@@ -521,7 +521,7 @@ export class LambdaWithCanary extends Construct {
 
 ### `lib/lambda/serverless-ci-cd-function/handler.ts`
 
-```typescript
+```ts
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 import { GetSecretValueCommand, SecretsManagerClient } from '@aws-sdk/client-secrets-manager';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';

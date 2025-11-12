@@ -15,7 +15,7 @@ This document contains the complete AWS CDK TypeScript implementation for the TA
 
 The main entry point for the CDK application that configures environment variables and creates the stack.
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -53,7 +53,7 @@ new TapStack(app, stackName, {
 
 The core infrastructure stack that defines all AWS resources including KMS, DynamoDB, S3, Lambda functions, and API Gateway.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -408,7 +408,7 @@ The Lambda functions are stored in the `lambda/` directory and handle the core b
 
 ### create_item.handler
 
-```typescript
+```ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
@@ -465,7 +465,7 @@ export const handler = async (
 
 ### get_item.handler
 
-```typescript
+```ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, ScanCommand } from '@aws-sdk/lib-dynamodb';
 import { SecretsManagerClient, GetSecretValueCommand } from '@aws-sdk/client-secrets-manager';
@@ -526,7 +526,7 @@ export const handler = async (
 
 ### upload_file.handler
 
-```typescript
+```ts
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, UpdateCommand } from '@aws-sdk/lib-dynamodb';

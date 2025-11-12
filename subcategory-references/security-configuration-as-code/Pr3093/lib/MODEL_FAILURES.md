@@ -203,7 +203,7 @@ def handler(event, context):
 - **Fix Applied**: Implemented VPC discovery logic with fallback handling
 
 #### Resolution Implementation:
-```typescript
+```ts
 // BEFORE (Broken)
 const runCommand = new RunInstancesCommand({
   ImageId: 'ami-0c02fb55956c7d316',

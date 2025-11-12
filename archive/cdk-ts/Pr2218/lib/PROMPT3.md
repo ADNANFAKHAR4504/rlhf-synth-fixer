@@ -12,7 +12,7 @@ error TS2339: Property 'variable' does not exist on type 'typeof CodeBuildAction
 
 ### Code (current)
 
-```typescript
+```ts
 {
   stageName: 'Build',
   actions: [

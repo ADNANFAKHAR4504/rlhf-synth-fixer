@@ -22,7 +22,7 @@ All resources are deployed to eu-west-1 and tagged appropriately for production.
 
 Main stack orchestrating the entire infrastructure migration:
 
-```typescript
+```ts
 /**
  * Main stack orchestrating the payment infrastructure migration
  */
@@ -301,7 +301,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 KMS key management for encryption:
 
-```typescript
+```ts
 /**
  * KMS key management for encryption
  */
@@ -357,7 +357,7 @@ export class KmsKey extends pulumi.ComponentResource {
 
 S3 bucket creation with versioning, lifecycle, and encryption:
 
-```typescript
+```ts
 /**
  * S3 bucket creation with versioning, lifecycle, and encryption
  */
@@ -468,7 +468,7 @@ export class S3Migration extends pulumi.ComponentResource {
 
 DynamoDB table creation with on-demand billing and PITR:
 
-```typescript
+```ts
 /**
  * DynamoDB table creation with on-demand billing and PITR
  */
@@ -522,7 +522,7 @@ export class DynamoMigration extends pulumi.ComponentResource {
 
 DynamoDB backup plan for automated daily backups:
 
-```typescript
+```ts
 /**
  * DynamoDB backup plan for automated daily backups
  */
@@ -633,7 +633,7 @@ export class DynamoBackupPlan extends pulumi.ComponentResource {
 
 IAM roles and policies with region restrictions:
 
-```typescript
+```ts
 /**
  * IAM roles and policies with region restrictions
  */
@@ -733,7 +733,7 @@ export class LambdaRole extends pulumi.ComponentResource {
 
 Lambda function deployment with X-Ray tracing:
 
-```typescript
+```ts
 /**
  * Lambda function deployment with X-Ray tracing
  */
@@ -812,7 +812,7 @@ export class LambdaMigration extends pulumi.ComponentResource {
 
 API Gateway with WAF, throttling, and X-Ray:
 
-```typescript
+```ts
 /**
  * API Gateway with WAF, throttling, and X-Ray
  */
@@ -977,7 +977,7 @@ export class ApiGatewayMigration extends pulumi.ComponentResource {
 
 WAF Web ACL for API Gateway protection:
 
-```typescript
+```ts
 /**
  * WAF Web ACL for API Gateway protection
  */
@@ -1067,7 +1067,7 @@ export class WafWebAcl extends pulumi.ComponentResource {
 
 CloudWatch alarms and dashboard:
 
-```typescript
+```ts
 /**
  * CloudWatch alarms and dashboard
  */
@@ -1300,7 +1300,7 @@ export class CloudWatchMonitoring extends pulumi.ComponentResource {
 
 Configuration types and utilities:
 
-```typescript
+```ts
 /**
  * Configuration types and utilities for the payment infrastructure migration
  */

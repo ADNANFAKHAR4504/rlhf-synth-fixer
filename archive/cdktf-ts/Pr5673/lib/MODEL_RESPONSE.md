@@ -4,7 +4,7 @@ This document contains the complete CDKTF TypeScript implementation for the mult
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput, Fn } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -410,7 +410,7 @@ exports.handler = async (event) => {
 
 ## File: bin/main.ts
 
-```typescript
+```ts
 import { App } from "cdktf";
 import { TapStack } from "../lib/tap-stack";
 

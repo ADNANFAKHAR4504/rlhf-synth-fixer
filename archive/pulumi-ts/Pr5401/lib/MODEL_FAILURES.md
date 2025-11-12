@@ -27,7 +27,7 @@ The MODEL_RESPONSE contained **2 critical deployment-blocking failures** in the 
 
 The task definition container configuration passed logGroup.name directly to JSON.stringify without resolving the Pulumi Output:
 
-```typescript
+```ts
 containerDefinitions: pulumi.all([accountId, region])
   .apply(([accId, reg]) => JSON.stringify([{
     logConfiguration: {
@@ -51,7 +51,7 @@ ClientException: Log driver awslogs option 'awslogs-group' contains invalid char
 Pulumi Output is a container type representing an asynchronous, eventually-available value. When not properly resolved, it serializes as an object literal rather than its contained value. The model failed to recognize that all Pulumi Outputs used within apply callbacks must be included in the pulumi.all() dependency array.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 containerDefinitions: pulumi.all([accountId, region, logGroup.name])
   .apply(([accId, reg, logGroupName]) => JSON.stringify([{
     logConfiguration: {
@@ -86,7 +86,7 @@ containerDefinitions: pulumi.all([accountId, region, logGroup.name])
 
 The ECS service definition included both launchType and capacityProviderStrategies parameters simultaneously:
 
-```typescript
+```ts
 const service = new aws.ecs.Service(`service-${environmentSuffix}`, {
   launchType: 'FARGATE',              // WRONG: Mutually exclusive
   capacityProviderStrategies: [       // WRONG: Mutually exclusive
@@ -111,7 +111,7 @@ AWS ECS evolved from simple launchType-based configuration to more flexible capa
 The model incorrectly attempted to specify both, likely interpreting "use Fargate launch type" literally without recognizing that capacity provider strategies implicitly define the launch mechanism.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const service = new aws.ecs.Service(`service-${environmentSuffix}`, {
   // Removed launchType - capacity providers define this
   capacityProviderStrategies: [
@@ -147,7 +147,7 @@ const service = new aws.ecs.Service(`service-${environmentSuffix}`, {
 
 The code references ECR repository 'product-catalog-api' without creating it or validating its existence:
 
-```typescript
+```ts
 // Commented-out repository lookup
 // const ecrRepo = aws.ecr.getRepositoryOutput({
 //   name: 'product-catalog-api',
@@ -167,7 +167,7 @@ image: `${accId}.dkr.ecr.${reg}.amazonaws.com/product-catalog-api:latest`
 
 While PROMPT specified using existing ECR image (not creating it), IDEAL_RESPONSE should document prerequisites clearly:
 
-```typescript
+```ts
 /**
  * PREREQUISITES:
  * 1. ECR repository 'product-catalog-api' must exist in target region

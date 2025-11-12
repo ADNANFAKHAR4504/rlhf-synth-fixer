@@ -2,7 +2,7 @@ I'll help you create a serverless infrastructure on AWS using CDK TypeScript tha
 
 ## lambda-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -252,7 +252,7 @@ export class LambdaStack extends cdk.Stack {
 
 ## api-gateway-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -457,7 +457,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
 ## monitoring-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -633,7 +633,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ## updated tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { LambdaStack } from './lambda-stack';

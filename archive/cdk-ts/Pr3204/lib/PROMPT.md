@@ -6,7 +6,7 @@ I need help implementing a comprehensive CI/CD pipeline for a web application us
 
 Here's my existing stack file that needs to be updated:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

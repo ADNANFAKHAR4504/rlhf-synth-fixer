@@ -2,7 +2,7 @@
 
 ## Complete Infrastructure Solution
 
-```typescript
+```ts
 // lib/infrastructure.ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -1001,7 +1001,7 @@ echo "<h1>WebApp __PREFIX__ - __ENVIRONMENT_SUFFIX__</h1><p><a href='/test/'>Tes
 
 ## Usage Example
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -1060,7 +1060,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-```typescript
+```ts
 // bin/tap.ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';

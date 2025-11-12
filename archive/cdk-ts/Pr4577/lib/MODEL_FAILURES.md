@@ -6,7 +6,7 @@ This document outlines the issues identified in the initial model response (MODE
 
 ### 1. **Outdated Lambda Runtime and SDK**
 **Problem**: The model response used Node.js 18.x runtime with AWS SDK v2 (CommonJS `require('aws-sdk')`)
-```typescript
+```ts
 // MODEL_RESPONSE.md - INCORRECT
 runtime: lambda.Runtime.NODEJS_18_X,
 code: lambda.Code.fromInline(`
@@ -16,7 +16,7 @@ code: lambda.Code.fromInline(`
 ```
 
 **Solution**: Upgraded to Node.js 22.x with AWS SDK v3 (included in runtime) using NodejsFunction for proper bundling
-```typescript
+```ts
 // ACTUAL IMPLEMENTATION - CORRECT
 const mainLambdaFunction = new NodejsFunction(
   this,
@@ -52,7 +52,7 @@ const mainLambdaFunction = new NodejsFunction(
 **Problem**: No tags were applied to AWS resources for tracking and compliance
 
 **Solution**: Added `iac-rlhf-amazon: true` tag to all taggable resources
-```typescript
+```ts
 cdk.Tags.of(vpc).add('iac-rlhf-amazon', 'true');
 cdk.Tags.of(staticFilesBucket).add('iac-rlhf-amazon', 'true');
 cdk.Tags.of(applicationTable).add('iac-rlhf-amazon', 'true');
@@ -98,7 +98,7 @@ cdk.Tags.of(applicationTable).add('iac-rlhf-amazon', 'true');
 **Problem**: CRUD Lambda only supported basic GET, POST, DELETE operations without UPDATE
 
 **Solution**: Implemented full CRUD with UpdateCommand:
-```typescript
+```ts
 case 'PUT':
   const updateResult = await dynamodb.send(
     new UpdateCommand({
@@ -116,7 +116,7 @@ case 'PUT':
 **Problem**: GSI was created but not used in Lambda code for querying by status
 
 **Solution**: Implemented proper GSI queries in both CRUD and file-processing handlers:
-```typescript
+```ts
 const queryResult = await dynamodb.send(
   new QueryCommand({
     TableName: tableName,
@@ -151,7 +151,7 @@ const queryResult = await dynamodb.send(
 **Problem**: Lambda code used `any` types and lacked proper interfaces
 
 **Solution**: Created TypeScript interfaces for all data structures:
-```typescript
+```ts
 interface ServiceStatus {
   service: string;
   status: 'healthy' | 'unhealthy';

@@ -36,7 +36,7 @@ Let me now create these three files.
 
 For `bin/tap.ts`, I need to create the CDK application and instantiate the stack in both regions:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -68,7 +68,7 @@ app.synth();
 
 For `lib/tap-stack.ts`, I'll define the stack with all the required components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -595,7 +595,7 @@ Everything required appears to be included in the code. Now I'll provide the fin
 ---
 
 # bin/tap.ts
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -623,7 +623,7 @@ app.synth();
 ```
 
 # lib/tap-stack.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

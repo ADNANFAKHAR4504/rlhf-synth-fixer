@@ -2,7 +2,7 @@
 
 ## compute-stack.ts
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -270,7 +270,7 @@ EOF
 
 ## database-stack.ts
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -363,7 +363,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
 ## iam-stack.ts
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -513,7 +513,7 @@ export class IamStack extends pulumi.ComponentResource {
 
 ## network-stack.ts
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -726,7 +726,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## security-stack.ts
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -866,7 +866,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
 ## storage-stack.ts
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -973,7 +973,7 @@ export class StorageStack extends pulumi.ComponentResource {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

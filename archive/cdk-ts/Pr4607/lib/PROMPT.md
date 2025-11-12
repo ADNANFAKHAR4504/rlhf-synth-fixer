@@ -100,7 +100,7 @@ The pipeline should:
 
 Here's roughly what the main.ts should look like:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';
 

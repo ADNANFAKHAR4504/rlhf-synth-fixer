@@ -71,7 +71,7 @@ AWS credentials not configured
 
 #### Initial Approach (Failed)
 First attempt tried to catch specific error types:
-```typescript
+```ts
 try {
   // AWS SDK calls
 } catch (error: any) {
@@ -85,7 +85,7 @@ try {
 
 #### Successful Resolution
 Implemented comprehensive try-catch blocks with generic error handling:
-```typescript
+```ts
 try {
   // AWS SDK calls and assertions
 } catch (error) {
@@ -131,7 +131,7 @@ ReferenceError: outputs.vpc_id is undefined
 
 #### Resolution
 Added output validation before accessing properties:
-```typescript
+```ts
 const hasOutputs = outputs && Object.keys(outputs).length > 0;
 
 if (!hasOutputs || !outputs.vpc_id) {
@@ -197,7 +197,7 @@ Added 65 new unit tests covering:
 Initial test implementation read output files without verifying they existed or contained valid JSON.
 
 #### Risk
-```typescript
+```ts
 // Risky approach
 const outputs = JSON.parse(fs.readFileSync('outputs.json', 'utf-8'));
 ```
@@ -208,7 +208,7 @@ Could fail with:
 
 #### Resolution
 Added file existence and JSON validation:
-```typescript
+```ts
 const outputPath = path.join(__dirname, '../outputs.json');
 if (!fs.existsSync(outputPath)) {
   console.log('⚠️  No outputs.json found. Skipping tests.');

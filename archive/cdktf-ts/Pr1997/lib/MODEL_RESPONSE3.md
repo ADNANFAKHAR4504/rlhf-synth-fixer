@@ -2,7 +2,7 @@ You're right! The CDKTF provider has specific naming conventions and some classe
 
 ## modules.ts (Fully Corrected)
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { 
   provider,
@@ -745,7 +745,7 @@ export class SecureInfrastructureModules extends Construct {
 
 ## tap-stack.ts (Complete and Corrected)
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { provider } from "@cdktf/provider-aws";

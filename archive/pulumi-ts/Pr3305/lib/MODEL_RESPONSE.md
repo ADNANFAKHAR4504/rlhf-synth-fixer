@@ -4,7 +4,7 @@ Here is the complete Pulumi TypeScript infrastructure code for hosting a static 
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -53,7 +53,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/static-website-stack.ts
 
-```typescript
+```ts
 /**
  * static-website-stack.ts
  *

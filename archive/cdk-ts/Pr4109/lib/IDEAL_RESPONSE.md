@@ -1,7 +1,7 @@
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -349,7 +349,7 @@ export class TapStack extends cdk.Stack {
 
 ## lib/constructs/networking.ts
 
-```typescript
+```ts
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
@@ -421,7 +421,7 @@ export class NetworkingConstruct extends Construct {
 
 ## lib/constructs/security.ts
 
-```typescript
+```ts
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -515,7 +515,7 @@ export class SecurityConstruct extends Construct {
 
 ## lib/constructs/database.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';

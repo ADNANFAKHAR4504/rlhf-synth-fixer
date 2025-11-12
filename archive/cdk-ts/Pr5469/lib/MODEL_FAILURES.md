@@ -8,7 +8,7 @@ The following issues were identified and corrected in the initial CDK TypeScript
 
 **Problem**: The `RetentionDays` enum values `THIRTY_DAYS` and `SEVEN_DAYS` do not exist in the AWS CDK API.
 
-```typescript
+```ts
 // INCORRECT
 this.logGroup = new logs.LogGroup(this, 'ApiLogGroup', {
   logGroupName: `/aws/lambda/financeapp-api-${props.environmentSuffix}`,
@@ -19,7 +19,7 @@ this.logGroup = new logs.LogGroup(this, 'ApiLogGroup', {
 
 **Solution**: Updated to use the correct enum values `ONE_MONTH` and `ONE_WEEK`.
 
-```typescript
+```ts
 // CORRECT
 this.logGroup = new logs.LogGroup(this, 'ApiLogGroup', {
   logGroupName: `/aws/lambda/financeapp-api-${props.environmentSuffix}`,
@@ -38,7 +38,7 @@ this.logGroup = new logs.LogGroup(this, 'ApiLogGroup', {
 
 **Problem**: The `CloudFormationCreateUpdateStackAction` constructor uses `cfnCapabilities` property, not `capabilities`.
 
-```typescript
+```ts
 // INCORRECT
 const cfnDeployAction =
   new codepipeline_actions.CloudFormationCreateUpdateStackAction({
@@ -57,7 +57,7 @@ const cfnDeployAction =
 
 **Solution**: Changed property name from `capabilities` to `cfnCapabilities`.
 
-```typescript
+```ts
 // CORRECT
 const cfnDeployAction =
   new codepipeline_actions.CloudFormationCreateUpdateStackAction({
@@ -82,7 +82,7 @@ const cfnDeployAction =
 
 **Problem**: The Lambda function bundling would fail during deployment because there was no `package.json` file in the `lib/lambda` directory, which is required for `npm install` during the bundling process.
 
-```typescript
+```ts
 // The bundling command expects package.json to exist
 code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
   bundling: {
@@ -108,7 +108,7 @@ code: lambda.Code.fromAsset(path.join(__dirname, '../lambda'), {
 
 **Problem**: The `pointInTimeRecovery` property is deprecated and will be removed in the next major release.
 
-```typescript
+```ts
 // INCORRECT - Deprecated API
 this.dynamoTable = new dynamodb.Table(this, 'DataTable', {
   tableName: `financeapp-data-${props.environmentSuffix}`,
@@ -119,7 +119,7 @@ this.dynamoTable = new dynamodb.Table(this, 'DataTable', {
 
 **Solution**: Updated to use the new `pointInTimeRecoverySpecification` property.
 
-```typescript
+```ts
 // CORRECT - New API
 this.dynamoTable = new dynamodb.Table(this, 'DataTable', {
   tableName: `financeapp-data-${props.environmentSuffix}`,
@@ -138,7 +138,7 @@ this.dynamoTable = new dynamodb.Table(this, 'DataTable', {
 
 **Problem**: The `type` property on `StringParameter` is deprecated. The type will always be 'String' and `ParameterType` enum is no longer used. The `SECURE_STRING` type is also deprecated.
 
-```typescript
+```ts
 // INCORRECT - Deprecated API
 new ssm.StringParameter(this, 'ApiKeyParameter', {
   parameterName: `/financeapp/${props.environmentSuffix}/api-key`,
@@ -150,7 +150,7 @@ new ssm.StringParameter(this, 'ApiKeyParameter', {
 
 **Solution**: Removed the deprecated `type` property. StringParameter always creates String type parameters.
 
-```typescript
+```ts
 // CORRECT - Updated API
 new ssm.StringParameter(this, 'ApiKeyParameter', {
   parameterName: `/financeapp/${props.environmentSuffix}/api-key`,
@@ -229,14 +229,14 @@ The current codebase intentionally diverges from the reference implementation in
 
 **Problem**: Setting `reservedConcurrentExecutions` to `1` for non-production environments disables function invocations and can cause outages due to hard throttling.
 
-```typescript
+```ts
 // INCORRECT
 reservedConcurrentExecutions: isProd ? 100 : 1,
 ```
 
 **Solution**: Use a sane non-zero minimum or omit the setting to rely on account-level limits. Current implementation uses a fixed concurrency limit to ensure availability.
 
-```typescript
+```ts
 // CORRECT
 reservedConcurrentExecutions: 100;
 ```

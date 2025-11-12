@@ -9,7 +9,7 @@ This solution provides a production-ready serverless notification system using A
 ### Core Infrastructure Stack (lib/tap-stack.ts)
 
 #### 1. DynamoDB Table - Notification Audit Trail
-```typescript
+```ts
 const notificationTable = new dynamodb.Table(this, 'NotificationTable', {
   tableName: `notification-logs-${environmentSuffix}`,
   partitionKey: { name: 'notificationId', type: dynamodb.AttributeType.STRING },
@@ -29,7 +29,7 @@ const notificationTable = new dynamodb.Table(this, 'NotificationTable', {
 - Point-in-time recovery for data protection
 
 #### 2. SNS Topic - Message Distribution Hub
-```typescript
+```ts
 const orderNotificationTopic = new sns.Topic(this, 'OrderNotificationTopic', {
   topicName: `order-notifications-${environmentSuffix}`,
   displayName: 'Order Notification Distribution Topic',
@@ -44,7 +44,7 @@ const orderNotificationTopic = new sns.Topic(this, 'OrderNotificationTopic', {
 #### 3. Lambda Functions - Message Processing Engines
 
 **Email Formatter Lambda:**
-```typescript
+```ts
 const emailFormatterFunction = new lambda.Function(this, 'EmailFormatterFunction', {
   functionName: `email-formatter-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -59,7 +59,7 @@ const emailFormatterFunction = new lambda.Function(this, 'EmailFormatterFunction
 ```
 
 **SMS Formatter Lambda:**
-```typescript
+```ts
 const smsFormatterFunction = new lambda.Function(this, 'SmsFormatterFunction', {
   functionName: `sms-formatter-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -80,7 +80,7 @@ const smsFormatterFunction = new lambda.Function(this, 'SmsFormatterFunction', {
 - Delivery confirmation tracking
 
 #### 4. IAM Security Model - Least Privilege Access
-```typescript
+```ts
 // Grant DynamoDB write permissions
 notificationTable.grantWriteData(emailFormatterFunction);
 notificationTable.grantWriteData(smsFormatterFunction);
@@ -105,7 +105,7 @@ smsFormatterFunction.addToRolePolicy(
 ```
 
 #### 5. CloudWatch Monitoring Stack
-```typescript
+```ts
 const dashboard = new cdk.aws_cloudwatch.Dashboard(this, 'NotificationDashboard', {
   dashboardName: `notification-metrics-${environmentSuffix}`,
 });
@@ -158,7 +158,7 @@ const emailErrorAlarm = new cdk.aws_cloudwatch.Alarm(this, 'EmailErrorAlarm', {
 
 ### Configuration Parameters
 
-```typescript
+```ts
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;  // Multi-environment resource naming
   notificationEmail?: string;  // Admin email for system notifications
@@ -182,7 +182,7 @@ interface TapStackProps extends cdk.StackProps {
 
 ### Deployment Outputs
 
-```typescript
+```ts
 // CloudFormation outputs for integration
 new cdk.CfnOutput(this, 'NotificationTopicArn', {
   value: orderNotificationTopic.topicArn,

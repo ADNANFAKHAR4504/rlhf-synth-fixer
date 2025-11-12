@@ -4,7 +4,7 @@ I'll help you build a serverless shipment tracking system with all the component
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -255,7 +255,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/lambdas/status-update.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand } from '@aws-sdk/lib-dynamodb';
@@ -353,7 +353,7 @@ export const handler = async (
 
 ## File: lib/lambdas/stream-processor.ts
 
-```typescript
+```ts
 import { DynamoDBStreamEvent, DynamoDBRecord } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, QueryCommand } from '@aws-sdk/lib-dynamodb';
@@ -458,7 +458,7 @@ async function getActiveConnections(): Promise<any[]> {
 
 ## File: lib/lambdas/websocket-handler.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, DeleteCommand } from '@aws-sdk/lib-dynamodb';

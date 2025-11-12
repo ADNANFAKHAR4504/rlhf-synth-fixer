@@ -31,7 +31,7 @@ Error: lib/tap-stack.ts(179,7): error TS2353: Object literal may only specify kn
 
 **Solution**: Moved `tracingEnabled` property to correct location in API Gateway configuration
 
-```typescript
+```ts
 // BEFORE (incorrect placement)
 const api = new apigateway.RestApi(this, 'ApiGateway', {
   tracingEnabled: true,  // ❌ Property doesn't exist at root level
@@ -63,7 +63,7 @@ WARNING: aws-cdk-lib.aws_lambda.FunctionOptions#logRetention is deprecated. use 
 
 **Fix**: Created dedicated CloudWatch Log Group
 
-```typescript
+```ts
 // BEFORE
 const apiFunction = new lambda.Function(this, 'ApiFunction', {
   logRetention: logs.RetentionDays.ONE_MONTH, // ❌ Deprecated
@@ -84,7 +84,7 @@ const apiFunction = new lambda.Function(this, 'ApiFunction', {
 
 **Fix**: Implemented API Key authentication with usage plans
 
-```typescript
+```ts
 // Added API Key
 const apiKey = new apigateway.ApiKey(this, 'ApiKey', {
   apiKeyName: `${projectName}-API-Key-${environmentSuffix}`,
@@ -108,7 +108,7 @@ api.root.addProxy({
 
 **Fix**: Implemented comprehensive WAF with multiple rule sets
 
-```typescript
+```ts
 const webAcl = new wafv2.CfnWebACL(this, 'ApiWebAcl', {
   rules: [
     // Rate limiting rule (2000 requests per 5 minutes per IP)
@@ -134,7 +134,7 @@ new wafv2.CfnWebACLAssociation(this, 'WebAclAssociation', {
 
 **Issue**: Wildcard CORS origins allowing any domain access
 
-```typescript
+```ts
 // BEFORE (security risk)
 defaultCorsPreflightOptions: {
   allowOrigins: apigateway.Cors.ALL_ORIGINS,  // ❌ Allows any domain
@@ -143,7 +143,7 @@ defaultCorsPreflightOptions: {
 
 **Fix**: Specific allowed origins with credential support
 
-```typescript
+```ts
 // AFTER (secure)
 defaultCorsPreflightOptions: {
   allowOrigins: ['https://yourdomain.com', 'https://app.yourdomain.com'],  // ✅ Specific origins

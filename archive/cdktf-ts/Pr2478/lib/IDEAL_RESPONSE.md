@@ -1,6 +1,6 @@
 ## 1. modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -529,7 +529,7 @@ EOF
 
 ## 1. tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

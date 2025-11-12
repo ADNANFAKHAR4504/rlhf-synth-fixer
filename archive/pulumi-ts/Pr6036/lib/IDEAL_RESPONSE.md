@@ -13,7 +13,7 @@ Production-grade order processing API infrastructure deployed with Pulumi TypeSc
 
 ## Implementation
 
-```typescript
+```ts
 /**
  * Order Processing API Infrastructure - Pulumi TypeScript Implementation
  *

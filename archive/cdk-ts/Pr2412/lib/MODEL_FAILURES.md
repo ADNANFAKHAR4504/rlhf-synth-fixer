@@ -9,7 +9,7 @@ The initial attempts to create AWS CDK infrastructure encountered several critic
 **Problem Identified:**
 The original code attempted to pass custom properties to the CDK Stack constructor without proper TypeScript interface definition.
 
-```typescript
+```ts
 // This failed because environmentSuffix is not part of StackProps
 new TapStack(app, 'TapStack', {
   environmentSuffix: 'dev', // Error: Property does not exist
@@ -20,7 +20,7 @@ new TapStack(app, 'TapStack', {
 **Resolution Applied:**
 Defined a proper interface extending the base CDK StackProps to include custom properties.
 
-```typescript
+```ts
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -53,7 +53,7 @@ Implemented comprehensive resource naming strategy using environment suffixes an
 **Problem Identified:**
 The original code used deprecated VPC configuration properties that are no longer supported in current CDK versions.
 
-```typescript
+```ts
 // Deprecated approach
 const vpc = new ec2.Vpc(this, 'TapVpc', {
   cidr: '10.0.0.0/16' // This property was deprecated
@@ -63,7 +63,7 @@ const vpc = new ec2.Vpc(this, 'TapVpc', {
 **Resolution Applied:**
 Updated to use the current VPC IP address assignment method.
 
-```typescript
+```ts
 const vpc = new ec2.Vpc(this, `TapVpc${environmentSuffix}`, {
   ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16') // Current API
 });
@@ -77,7 +77,7 @@ The infrastructure code specified MySQL version 8.0.35 which is no longer availa
 **Resolution Applied:**
 Updated to MySQL version 8.0.42 with compatible log export configuration.
 
-```typescript
+```ts
 const database = new rds.DatabaseInstance(this, 'TapDatabase', {
   engine: rds.DatabaseInstanceEngine.mysql({
     version: rds.MysqlEngineVersion.VER_8_0_42 // Updated version
@@ -94,7 +94,7 @@ The original configuration enabled RDS Performance Insights on t3.micro instance
 **Resolution Applied:**
 Disabled Performance Insights for t3.micro instance class to ensure successful deployment.
 
-```typescript
+```ts
 const database = new rds.DatabaseInstance(this, 'TapDatabase', {
   enablePerformanceInsights: false // Disabled for t3.micro
 });

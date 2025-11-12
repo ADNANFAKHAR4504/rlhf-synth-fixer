@@ -37,7 +37,7 @@ I need to ensure:
 ### Answer 
 ---
 
-```typescript
+```ts
 // main.ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';
@@ -98,7 +98,7 @@ cdk.Tags.of(app).add('CostCenter', 'Platform');
 app.synth();
 ```
 
-```typescript
+```ts
 // tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';

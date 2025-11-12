@@ -90,7 +90,7 @@ This document catalogs the specific differences between the initial MODEL_RESPON
 
           { "Fn::GetAZs": "" }
 
-        ]```typescript```json
+        ]```ts```json
 
       }
 
@@ -202,7 +202,7 @@ const iamClient = new IAMClient({ region });        }
 
 ## Fix 3: Missing Metadata and Parameter Validation (Category C)
 
-```typescript  "VPC": {
+```ts  "VPC": {
 
 **Issue**: Template lacked `AWS::CloudFormation::Interface` metadata for organizing parameters, and EnvironmentSuffix parameter had no validation pattern.
 
@@ -310,7 +310,7 @@ describe('VPC Infrastructure Integration Tests', () => {```
 
 **MODEL_RESPONSE** (Incorrect):
 
-```typescript    test('VPC should exist with correct CIDR block', async () => {**Lesson**: Every resource name in CloudFormation must include the EnvironmentSuffix parameter using `Fn::Sub` to enable multi-environment deployments without conflicts. This applies to all AWS::EC2, AWS::Logs, and AWS::IAM resources.
+```ts    test('VPC should exist with correct CIDR block', async () => {**Lesson**: Every resource name in CloudFormation must include the EnvironmentSuffix parameter using `Fn::Sub` to enable multi-environment deployments without conflicts. This applies to all AWS::EC2, AWS::Logs, and AWS::IAM resources.
 
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 
@@ -338,7 +338,7 @@ test('VPC should exist', async () => {
 
 **IDEAL_RESPONSE** (Correct):
 
-```typescript      expect(response.Vpcs.length).toBe(1);
+```ts      expect(response.Vpcs.length).toBe(1);
 
 import { execSync } from 'child_process';
 
@@ -480,7 +480,7 @@ The corrected implementation ensures reliable CloudFormation deployment with com
 
 4. **Implementation Pattern**:**Impact**: Poor user experience when deploying via AWS Console - parameters appear ungrouped and unordered.
 
-   ```typescript
+   ```ts
 
    // Create helper function for AWS CLI execution**MODEL_RESPONSE** (Incorrect):
 

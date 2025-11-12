@@ -6,7 +6,7 @@ This implementation provides a HIPAA-compliant healthcare data processing system
 ## Files Generated
 
 ### lib/healthcare-stack.ts
-```typescript
+```ts
 
 import { Apigatewayv2Api } from '@cdktf/provider-aws/lib/apigatewayv2-api';
 import { Apigatewayv2Integration } from '@cdktf/provider-aws/lib/apigatewayv2-integration';
@@ -603,7 +603,7 @@ export class HealthcareStack extends Construct {
 ```
 
 ### lib/tap-stack.ts
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

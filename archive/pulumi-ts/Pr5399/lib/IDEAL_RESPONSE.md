@@ -2,7 +2,7 @@
 
 ## `alb-stack.ts`
 
-```typescript
+```ts
 /**
  * Application Load Balancer Stack Component
  *
@@ -190,7 +190,7 @@ export class AlbStack extends pulumi.ComponentResource {
 
 ## `ecs-stack.ts`
 
-```typescript
+```ts
 /**
  * ECS Stack Component
  *
@@ -449,7 +449,7 @@ export class EcsStack extends pulumi.ComponentResource {
 
 ## `tap-stack.ts`
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -568,7 +568,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## `vpc-stack.ts`
 
-```typescript
+```ts
 /**
  * VPC Stack Component
  *

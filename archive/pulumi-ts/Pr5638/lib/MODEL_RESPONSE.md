@@ -4,7 +4,7 @@ This implementation provides a comprehensive automated infrastructure compliance
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

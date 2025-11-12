@@ -11,7 +11,7 @@ The project has:
 - Build scripts in the `scripts/` folder
 
 ### Existing Stack Code (`lib/tap-stack.ts`)
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

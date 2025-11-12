@@ -1,4 +1,4 @@
-```typescript lib/tap-stack.ts
+```ts lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -33,7 +33,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-```typescript lib/app-stack.ts
+```ts lib/app-stack.ts
 import { CfnOutput, Stack, StackProps, Tags } from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3n from 'aws-cdk-lib/aws-s3-notifications';
@@ -122,7 +122,7 @@ export class AppStack extends Stack {
 }
 ```
 
-```typescript lib/stacks/lambda-stack.ts
+```ts lib/stacks/lambda-stack.ts
 import { Duration, RemovalPolicy } from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cwactions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -314,7 +314,7 @@ export class LambdaConstruct extends Construct {
 }
 ```
 
-```typescript lib/stacks/storage-stack.ts
+```ts lib/stacks/storage-stack.ts
 import { RemovalPolicy, Duration } from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -418,7 +418,7 @@ export class StorageConstruct extends Construct {
 }
 ```
 
-```typescript lib/lambda/data-processor.ts
+```ts lib/lambda/data-processor.ts
 import { Logger } from '@aws-lambda-powertools/logger';
 import { MetricUnit, Metrics } from '@aws-lambda-powertools/metrics';
 import { Tracer } from '@aws-lambda-powertools/tracer';

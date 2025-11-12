@@ -3,7 +3,7 @@
 
 ### 1. Main Entry Point (main.ts)
 
-```typescript
+```ts
 import { App } from 'cdktf';
 import { TapStack } from './lib/tap-stack';
 import { getEnvironmentConfig } from './lib/config/environment';
@@ -25,7 +25,7 @@ app.synth();
 
 ### 2. Main Stack (lib/tap-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

@@ -1,6 +1,6 @@
 **tap-stack.ts**
 
-```typescript
+```ts
 
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
@@ -538,7 +538,7 @@ exports.handler = async (event) => {
 ```
 
 **modules.ts**
-```typescript
+```ts
 // lib/modules.ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';

@@ -51,7 +51,7 @@ I'll implement a secure, scalable, and highly available AWS infrastructure using
 
 ## `modules.ts`
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 
@@ -767,7 +767,7 @@ export class DynamoDBModule extends Construct {
 
 ## `tap-stack.ts`
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';

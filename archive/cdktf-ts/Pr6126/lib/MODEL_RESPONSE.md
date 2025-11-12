@@ -58,7 +58,7 @@ I'll implement a complete serverless webhook processing system using CDKTF in Ty
 
 ## Complete Implementation
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

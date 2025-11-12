@@ -6,7 +6,7 @@
 
 **Problem**: The original model response contained invalid throttling configuration in the API Gateway deployment options:
 
-```typescript
+```ts
 // INCORRECT - throttleSettings doesn't exist in deployOptions
 deployOptions: {
   throttleSettings: {
@@ -18,7 +18,7 @@ deployOptions: {
 
 **Fix Applied**: Removed the invalid `throttleSettings` property and implemented proper throttling using AWS API Gateway's recommended approach with `UsagePlan` and `ApiKey`:
 
-```typescript
+```ts
 // CORRECT - Using UsagePlan for throttling
 const usagePlan = new apigateway.UsagePlan(this, 'ECommerceUsagePlan', {
   throttle: {
@@ -47,7 +47,7 @@ const usagePlan = new apigateway.UsagePlan(this, 'ECommerceUsagePlan', {
 
 **Fix Applied**: Changed S3 bucket removal policy to `DESTROY` to ensure complete cleanup during testing:
 
-```typescript
+```ts
 // CHANGED from RETAIN to DESTROY for testing environments
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 ```
@@ -61,7 +61,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 
 **Fix Applied**: Created explicit CloudWatch log groups before Lambda functions with proper naming and retention:
 
-```typescript
+```ts
 const productLogGroup = new logs.LogGroup(this, 'ProductLambdaLogGroup', {
   logGroupName: `/aws/lambda/ecommerce-product-handler-${environmentSuffix}`,
   retention: logs.RetentionDays.ONE_MONTH,
@@ -80,7 +80,7 @@ const productLogGroup = new logs.LogGroup(this, 'ProductLambdaLogGroup', {
 **Problem**: The original implementation used the deprecated `messageRetentionPeriod` property instead of the correct `retentionPeriod`.
 
 **Fix Applied**: 
-```typescript
+```ts
 // CHANGED from messageRetentionPeriod to retentionPeriod
 retentionPeriod: cdk.Duration.days(14),
 ```

@@ -13,7 +13,7 @@ This document outlines the critical infrastructure issues identified and fixed i
 - Database had `deletionProtection: true`
 
 **Fix Applied**:
-```typescript
+```ts
 // KMS Key
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 
@@ -42,7 +42,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 - Database instance missing `instanceIdentifier` property
 
 **Fix Applied**:
-```typescript
+```ts
 // VPC
 vpcName: `retail-vpc-${props.environmentSuffix}`,
 
@@ -58,12 +58,12 @@ instanceIdentifier: `retail-db-${props.environmentSuffix}`,
 ### 3. Invalid S3 Bucket Permissions ❌ → ✅
 
 **Issue**: Attempted to grant S3 permissions directly to RDS instance
-```typescript
+```ts
 props.backupBucket.grantReadWrite(this.database);
 ```
 
 **Fix Applied**:
-```typescript
+```ts
 // Removed invalid grant - RDS handles backups internally
 // Note: RDS automatic backups are handled by AWS internally
 // The S3 bucket is for additional manual backups if needed
@@ -76,7 +76,7 @@ props.backupBucket.grantReadWrite(this.database);
 **Issue**: No outputs for integration testing and resource discovery
 
 **Fix Applied**:
-```typescript
+```ts
 // Network Stack
 new cdk.CfnOutput(this, 'VPCId', {
   value: this.vpc.vpcId,
@@ -111,7 +111,7 @@ new cdk.CfnOutput(this, 'BackupBucketName', {
 ```
 
 **Fix Applied**: Disabled deletion protection to ensure deployability and clean teardown
-```typescript
+```ts
 deletionProtection: false, // Disabled for testing - must be destroyable
 ```
 

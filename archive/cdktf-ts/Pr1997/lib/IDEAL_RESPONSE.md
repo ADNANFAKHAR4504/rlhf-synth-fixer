@@ -1,6 +1,6 @@
 ## modules.ts (Fully Corrected)
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import {
   provider,
@@ -1017,7 +1017,7 @@ export class SecureInfrastructureModules extends Construct {
 
 ## tap-stack.ts (Complete and Corrected)
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

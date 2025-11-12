@@ -40,7 +40,7 @@ Now let's develop each file:
 
 1. First, the entry point (`bin/trading-platform.ts`):
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -125,7 +125,7 @@ app.synth();
 
 2. Now let's create the networking stack (`lib/networking-stack.ts`):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -256,7 +256,7 @@ export class NetworkingStack extends cdk.Stack {
 
 3. Let's create the database stack (`lib/database-stack.ts`):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -386,7 +386,7 @@ export class DatabaseStack extends cdk.Stack {
 
 4. Now let's implement the regional stack (`lib/regional-stack.ts`):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -713,7 +713,7 @@ export class RegionalStack extends cdk.Stack {
 
 5. Now let's create the global stack (`lib/global-stack.ts`):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as globalaccelerator from 'aws-cdk-lib/aws-globalaccelerator';
@@ -802,7 +802,7 @@ export class GlobalStack extends cdk.Stack {
 
 6. Finally, let's implement the encryption aspect (`lib/aspects/encryption-aspect.ts`):
 
-```typescript
+```ts
 import { IAspect, IConstruct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 
@@ -979,7 +979,7 @@ trading-platform/
 
 ### `bin/trading-platform.ts` (Entry Point)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -1064,7 +1064,7 @@ app.synth();
 
 ### `lib/networking-stack.ts` (VPCs & Transit Gateway)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1192,7 +1192,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ### `lib/database-stack.ts` (Aurora Global Database)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -1318,7 +1318,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ### `lib/regional-stack.ts` (ECS Services & ALB)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1504,7 +1504,7 @@ export class RegionalStack extends cdk.Stack {
 
 ### `lib/global-stack.ts` (Global Accelerator)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as globalaccelerator from 'aws-cdk-lib/aws-globalaccelerator';

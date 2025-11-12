@@ -6,7 +6,7 @@ This implementation creates a serverless food delivery API using AWS CDK with Ty
 ## Infrastructure Code Files
 
 ### Main Stack - lib/food-delivery-stack.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -404,7 +404,7 @@ export class FoodDeliveryStack extends cdk.Stack {
 ```
 
 ### Order Processor Lambda - lib/lambda/order-processor.ts
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';
@@ -682,7 +682,7 @@ export const handler = tracer.captureLambdaHandler(async (
 ```
 
 ### Query Orders Lambda - lib/lambda/query-orders.ts
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, GetCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
@@ -812,7 +812,7 @@ export const handler = tracer.captureLambdaHandler(async (
 ```
 
 ### Updated Main Stack Integration - lib/tap-stack.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { FoodDeliveryStack } from './food-delivery-stack';

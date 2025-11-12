@@ -23,7 +23,7 @@ This ensures each state has a single, well-defined path through the workflow.
 ### 2. Unused Import Causing Linting Errors
 
 **Issue**: The code imported the IAM module but never used it:
-```typescript
+```ts
 import * as iam from 'aws-cdk-lib/aws-iam';
 ```
 

@@ -17,7 +17,7 @@ This enhanced version includes improvements in error handling, resource organiza
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

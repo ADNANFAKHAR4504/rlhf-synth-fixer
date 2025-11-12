@@ -1,4 +1,4 @@
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

@@ -121,7 +121,7 @@ Compliance: 10/10 - All resources use environment suffix correctly, proper taggi
 
 ### File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

@@ -30,7 +30,7 @@ I'll help you build a secure multi-tier AWS environment for your financial servi
 
 ### `main.ts` - CDK Application Entry Point
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -62,7 +62,7 @@ app.synth();
 
 ### `tapstack.ts` - Complete Infrastructure Stack
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

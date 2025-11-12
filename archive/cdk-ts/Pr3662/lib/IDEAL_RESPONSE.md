@@ -1,4 +1,4 @@
-```typescript
+```ts
 import _ as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import _ as dynamodb from 'aws-cdk-lib/aws-dynamodb';

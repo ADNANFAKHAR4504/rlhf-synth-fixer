@@ -2,7 +2,7 @@
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -34,7 +34,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/log-processor.ts
 
-```typescript
+```ts
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
@@ -163,7 +163,7 @@ export const handler = async (event: LambdaEvent): Promise<LambdaResponse> => {
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -643,7 +643,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -1346,7 +1346,7 @@ describe('TapStack End-to-End Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match, Capture } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

@@ -2,7 +2,7 @@ I'll help you create a complete recommendation engine infrastructure using AWS C
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { RecommendationEngineStack } from './recommendation-engine-stack';
@@ -29,7 +29,7 @@ export class TapStack extends cdk.Stack {
 
 ## lib/recommendation-engine-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';

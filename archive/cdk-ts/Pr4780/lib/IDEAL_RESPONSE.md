@@ -33,7 +33,7 @@ A comprehensive CI/CD pipeline implementation that includes:
 
 ### CDK App Entry Point (`bin/tap.ts`)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -80,7 +80,7 @@ new TapStack(app, stackName, {
 
 ### Main Infrastructure Stack (`lib/tap-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

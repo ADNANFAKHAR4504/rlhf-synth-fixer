@@ -62,7 +62,7 @@ I'll need to be careful about:
 
 I'll create a comprehensive TypeScript file that defines a production-ready AWS CDK stack meeting all your requirements. This stack follows AWS best practices for security, networking, and resource organization with proper environment suffix handling.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';

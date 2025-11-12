@@ -22,7 +22,7 @@ The implementation provides a production-ready, secure foundational AWS environm
 
 **File:** `lib/secure-foundational-environment-stack.ts:108-136`
 
-```typescript
+```ts
 // VPC with Multi-AZ Configuration (Cost-Optimized)
 this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
   vpcName: `secure-foundation-vpc-${environmentSuffix}`,
@@ -65,7 +65,7 @@ this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
 
 **File:** `lib/secure-foundational-environment-stack.ts:48-106`
 
-```typescript
+```ts
 // Customer-Managed KMS Key for encryption
 this.kmsKey = new kms.Key(this, 'SecureFoundationKMSKey', {
   alias: `alias/secure-foundation-${environmentSuffix}-${this.account}`,
@@ -97,7 +97,7 @@ this.kmsKey = new kms.Key(this, 'SecureFoundationKMSKey', {
 
 **File:** `lib/secure-foundational-environment-stack.ts:178-203`
 
-```typescript
+```ts
 // Strict Security Groups with Defense-in-Depth Controls
 this.ec2SecurityGroup = new ec2.SecurityGroup(
   this,
@@ -143,7 +143,7 @@ this.ec2SecurityGroup.addIngressRule(
 
 **File:** `lib/secure-foundational-environment-stack.ts:205-248`
 
-```typescript
+```ts
 // IAM Role for EC2 Instances (Least Privilege)
 const ec2Role = new iam.Role(this, 'SecureEC2Role', {
   roleName: `secure-ec2-role-${environmentSuffix}`,
@@ -185,7 +185,7 @@ const ec2Role = new iam.Role(this, 'SecureEC2Role', {
 
 **File:** `lib/secure-foundational-environment-stack.ts:250-291`
 
-```typescript
+```ts
 // S3 Bucket with SSE-KMS encryption and lifecycle management
 this.secureS3Bucket = new s3.Bucket(this, 'SecureFoundationS3Bucket', {
   bucketName: `secure-foundation-${environmentSuffix}-${this.account}-${this.region}`,
@@ -227,7 +227,7 @@ this.secureS3Bucket = new s3.Bucket(this, 'SecureFoundationS3Bucket', {
 
 **File:** `lib/secure-foundational-environment-stack.ts:370-386`
 
-```typescript
+```ts
 const secureEC2Instance = new ec2.Instance(this, 'SecureEC2Instance', {
   instanceName: `secure-instance-${environmentSuffix}`,
   vpc: this.vpc,
@@ -258,7 +258,7 @@ const secureEC2Instance = new ec2.Instance(this, 'SecureEC2Instance', {
 
 **File:** `lib/secure-foundational-environment-stack.ts:404-414`
 
-```typescript
+```ts
 // CloudTrail for comprehensive API audit logging
 new cloudtrail.Trail(this, 'SecurityAuditTrail', {
   trailName: `security-audit-trail-${environmentSuffix}-${this.account}`,
@@ -305,7 +305,7 @@ new cloudtrail.Trail(this, 'SecurityAuditTrail', {
 
 **File:** `test/tap-stack.unit.test.ts`
 
-```typescript
+```ts
 describe('SecureFoundationalEnvironmentStack', () => {
   // Tests for VPC configuration, KMS keys, S3 encryption, 
   // EC2 security, IAM roles, CloudTrail, monitoring
@@ -327,7 +327,7 @@ describe('SecureFoundationalEnvironmentStack', () => {
 
 **File:** `test/tap-stack.int.test.ts`
 
-```typescript
+```ts
 describe('Secure Foundational Environment Integration Tests', () => {
   // End-to-end tests using real AWS outputs
   // S3, VPC, EC2, KMS, CloudWatch, CloudTrail validation

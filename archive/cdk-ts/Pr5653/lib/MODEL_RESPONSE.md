@@ -58,7 +58,7 @@ aurora-dr-solution/
 
 **bin/app.ts**
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -126,7 +126,7 @@ app.synth();
 
 **lib/stacks/aurora-global-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -232,7 +232,7 @@ export class AuroraGlobalStack extends cdk.Stack {
 
 **lib/constructs/aurora-cluster.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -390,7 +390,7 @@ export class AuroraClusterConstruct extends Construct {
 
 **lib/constructs/networking.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -459,7 +459,7 @@ export class NetworkingConstruct extends Construct {
 
 **lib/stacks/failover-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -730,7 +730,7 @@ export class FailoverStack extends cdk.Stack {
 
 **lib/lambdas/health-check/index.ts**
 
-```typescript
+```ts
 import { Client } from 'pg';
 import {
   SecretsManagerClient,
@@ -819,7 +819,7 @@ export const handler = async (): Promise<HealthCheckResult> => {
 
 **lib/lambdas/failover-orchestrator/index.ts**
 
-```typescript
+```ts
 import {
   RDSClient,
   FailoverGlobalClusterCommand,
@@ -1002,7 +1002,7 @@ export const handler = async (): Promise<FailoverResult> => {
 
 **lib/lambdas/dr-testing/index.ts**
 
-```typescript
+```ts
 import {
   StepFunctionsClient,
   StartExecutionCommand,
@@ -1132,7 +1132,7 @@ export const handler = async (): Promise<void> => {
 
 **lib/stacks/monitoring-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as rds from 'aws-cdk-lib/aws-rds';

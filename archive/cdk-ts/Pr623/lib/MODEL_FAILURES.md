@@ -11,7 +11,7 @@ This document outlines the critical infrastructure issues identified in the orig
 #### Problem Identified
 **File:** `lib/secure-foundational-environment-stack.ts:191-196` (Original)
 
-```typescript
+```ts
 // INCOMPLETE: Only HTTPS egress rule
 this.ec2SecurityGroup.addEgressRule(
   ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
@@ -29,7 +29,7 @@ this.ec2SecurityGroup.addEgressRule(
 #### Fix Implementation
 **File:** `lib/secure-foundational-environment-stack.ts:191-203` (Fixed)
 
-```typescript
+```ts
 // Allow outbound HTTPS to VPC endpoints for AWS services  
 this.ec2SecurityGroup.addEgressRule(
   ec2.Peer.ipv4(this.vpc.vpcCidrBlock),
@@ -55,7 +55,7 @@ this.ec2SecurityGroup.addEgressRule(
 #### Problem Identified
 **File:** `lib/secure-foundational-environment-stack.ts:250-283` (Original)
 
-```typescript
+```ts
 // INCOMPLETE: Missing autoDeleteObjects for testing environments
 this.secureS3Bucket = new s3.Bucket(this, 'SecureFoundationS3Bucket', {
   // ... other configuration
@@ -75,7 +75,7 @@ this.secureS3Bucket = new s3.Bucket(this, 'SecureFoundationS3Bucket', {
 #### Fix Implementation
 **File:** `lib/secure-foundational-environment-stack.ts:289-292` (Fixed)
 
-```typescript
+```ts
 // CRITICAL FIX: Enable complete resource cleanup
 notificationsHandlerRole: new iam.Role(this, 'S3NotificationsRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -100,7 +100,7 @@ autoDeleteObjects: true, // Essential for testing/development environments
 #### Problem Identified
 **File:** `test/tap-stack.unit.test.ts` (Original Test Patterns)
 
-```typescript
+```ts
 // INCORRECT: Expected only one egress rule, but implementation has two
 template.hasResourceProperties('AWS::EC2::SecurityGroup', {
   SecurityGroupEgress: [
@@ -138,7 +138,7 @@ template.hasResourceProperties('AWS::KMS::Alias', {
 #### Fix Implementation
 **File:** `test/tap-stack.unit.test.ts` (Fixed)
 
-```typescript
+```ts
 // FIXED: Account for both HTTP and HTTPS egress rules
 template.hasResourceProperties('AWS::EC2::SecurityGroup', {
   SecurityGroupEgress: [
@@ -187,7 +187,7 @@ template.hasResourceProperties('AWS::KMS::Alias', {
 #### Fix Implementation
 **File:** `lib/secure-foundational-environment-stack.ts:108-136`
 
-```typescript
+```ts
 // OPTIMIZED: Cost-effective isolated subnet architecture
 this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
   maxAzs: 2, // Sufficient high availability
@@ -259,7 +259,7 @@ this.vpc = new ec2.Vpc(this, 'SecureFoundationVPC', {
 #### Fix Implementation
 **File:** `lib/secure-foundational-environment-stack.ts:54-105`
 
-```typescript
+```ts
 // ENHANCED: Service-specific KMS policies with conditions
 policy: new iam.PolicyDocument({
   statements: [
@@ -310,7 +310,7 @@ policy: new iam.PolicyDocument({
 #### Fix Implementation
 **File:** `lib/secure-foundational-environment-stack.ts:38-46`
 
-```typescript
+```ts
 // STANDARDIZED: Consistent tagging strategy
 const commonTags = {
   Environment: environmentSuffix,          // Dynamic environment identification

@@ -40,7 +40,7 @@ Let me start coding this solution:
 
 Here's a comprehensive single-file AWS CDK v2 TypeScript program that implements a multi-region active-passive disaster recovery environment:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

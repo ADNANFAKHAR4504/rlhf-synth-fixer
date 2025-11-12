@@ -7,7 +7,7 @@
 The model response attempts to retrieve database credentials from Secrets Manager BEFORE the secret version is created, creating a circular dependency that will cause deployment failure.
 
 **Code Location:**
-```typescript
+```ts
 // Model Response - RDS Module (INCORRECT)
 const dbSecret = new aws.dataAwsSecretsmanagerSecretVersion.DataAwsSecretsmanagerSecretVersion(
   this, 'db-secret-data', {
@@ -28,7 +28,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 - The password retrieval happens at synthesis time when no value exists
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Ideal Response - RDS Module (CORRECT)
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   username: 'tap_admin',
@@ -49,7 +49,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 The model response uses deprecated S3 ACL configuration that conflicts with bucket ownership controls and will cause Terraform apply failures.
 
 **Code Location:**
-```typescript
+```ts
 // Model Response - S3 Module (INCORRECT)
 this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, 'bucket-acl', {
   bucket: this.bucket.id,
@@ -63,7 +63,7 @@ this.bucketAcl = new aws.s3BucketAcl.S3BucketAcl(this, 'bucket-acl', {
 - Results in API error: "The bucket does not allow ACLs"
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Ideal Response - S3 Module (CORRECT)
 new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
   this, 'bucket-ownership', {
@@ -88,7 +88,7 @@ new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
 The model response uses a wildcard (`*`) for AWS account ID in the admin role trust policy, creating a severe security vulnerability.
 
 **Code Location:**
-```typescript
+```ts
 // Model Response - IAM Module (SECURITY RISK)
 this.adminRole = new aws.iamRole.IamRole(this, 'admin-role', {
   assumeRolePolicy: JSON.stringify({
@@ -107,7 +107,7 @@ this.adminRole = new aws.iamRole.IamRole(this, 'admin-role', {
 - Failed security audit finding
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Ideal Response - IAM Module (SECURE)
 const current = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
   this, 'current'
@@ -135,7 +135,7 @@ this.adminRole = new aws.iamRole.IamRole(this, 'admin-role', {
 The model response incorrectly extracts the bucket name from the ARN, resulting in invalid bucket policy application.
 
 **Code Location:**
-```typescript
+```ts
 // Model Response - CloudFront Module (INCORRECT)
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
   bucket: config.s3BucketArn.split(':').pop()!,  // WRONG!
@@ -150,7 +150,7 @@ new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
 - Terraform fails: "bucket not found"
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Ideal Response - CloudFront Module (CORRECT)
 export interface CloudFrontModuleConfig extends BaseModuleConfig {
   s3BucketName: string,  // Pass bucket name explicitly
@@ -174,7 +174,7 @@ new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
 The model response enables OpenSearch fine-grained access control but references a role that may not exist yet, and uses incorrect IAM ARN syntax.
 
 **Code Location:**
-```typescript
+```ts
 // Model Response - OpenSearch Module (PROBLEMATIC)
 advancedSecurityOptions: {
   enabled: true,
@@ -191,7 +191,7 @@ advancedSecurityOptions: {
 3. Creates ordering dependency not handled by Terraform
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Ideal Response - OpenSearch Module (SIMPLIFIED)
 // Removes advanced security options that create unnecessary dependencies
 this.domain = new aws.opensearchDomain.OpensearchDomain(this, 'opensearch', {
@@ -212,7 +212,7 @@ this.domain = new aws.opensearchDomain.OpensearchDomain(this, 'opensearch', {
 The model response has weaker password requirements than the ideal response, reducing security posture.
 
 **Code Comparison:**
-```typescript
+```ts
 // Model Response (WEAKER)
 const dbPassword = new random.password.Password(this, 'db-password', {
   length: 32,
@@ -251,7 +251,7 @@ const dbPassword = new random.password.Password(this, 'db-password', {
 The model response sets non-current version expiration to 90 days, which is excessive for most use cases and increases storage costs unnecessarily.
 
 **Code Comparison:**
-```typescript
+```ts
 // Model Response (EXCESSIVE)
 new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(
   this, 'bucket-lifecycle', {
@@ -295,7 +295,7 @@ new aws.s3BucketLifecycleConfiguration.S3BucketLifecycleConfiguration(
 The model response includes unnecessary RDS configuration (engine version hardcoding) and enables more CloudWatch log exports than the ideal response, increasing costs.
 
 **Code Comparison:**
-```typescript
+```ts
 // Model Response (OVER-CONFIGURED)
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
   engine: 'mysql',
@@ -331,7 +331,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'db-instance', {
 The model response completely omits Terraform state locking configuration, which is present in the ideal response.
 
 **Ideal Response Has:**
-```typescript
+```ts
 // Ideal Response - tap-stack.ts
 new S3Backend(this, {
   bucket: stateBucket,
@@ -367,7 +367,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 The model response has inconsistent naming patterns across resources, violating the specified convention.
 
 **Examples:**
-```typescript
+```ts
 // Model Response - Inconsistent naming
 Name: `${config.environment}-network-vpc`          // Correct
 Name: `${config.environment}-compute-ec2-role`     // Correct

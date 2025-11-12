@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.d.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 export {};
 
@@ -12,7 +12,7 @@ export {};
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -44,7 +44,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/tap-stack.d.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 interface TapStackProps extends cdk.StackProps {
@@ -59,7 +59,7 @@ export {};
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -934,14 +934,14 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.d.ts
 
-```typescript
+```ts
 export {};
 
 ```
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import fs from 'fs';
 import path from 'path';
 import {
@@ -1741,14 +1741,14 @@ describe('TAP Stack Integration Tests - Live AWS Resources', () => {
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```typescript
+```ts
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

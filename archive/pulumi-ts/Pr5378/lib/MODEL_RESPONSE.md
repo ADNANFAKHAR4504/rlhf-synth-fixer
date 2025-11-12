@@ -4,7 +4,7 @@ Here's a complete Pulumi TypeScript implementation for the multi-tier VPC infras
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -289,7 +289,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 

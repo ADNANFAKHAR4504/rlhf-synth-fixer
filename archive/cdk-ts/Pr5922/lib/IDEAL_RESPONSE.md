@@ -42,7 +42,7 @@ Webhook (Lambda + Function URL)
 **Code Location**: `lib/lambda/webhook/index.ts`
 
 **Stack Configuration** (`lib/transaction-processing-stack.ts:154-178`):
-```typescript
+```ts
 const webhookFunction = new lambda.Function(this, 'WebhookFunction', {
   functionName: `webhook-receiver-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -69,7 +69,7 @@ const webhookFunction = new lambda.Function(this, 'WebhookFunction', {
 - Topic naming convention: `transaction-topic-${environmentSuffix}`
 
 **Stack Configuration** (`lib/transaction-processing-stack.ts:40-45`):
-```typescript
+```ts
 const transactionTopic = new sns.Topic(this, 'TransactionTopic', {
   topicName: `transaction-topic-${environmentSuffix}`,
   displayName: 'Transaction Processing Topic',
@@ -167,7 +167,7 @@ const transactionTopic = new sns.Topic(this, 'TransactionTopic', {
 - Removal policy: DESTROY (for development environments)
 
 **Stack Configuration** (`lib/transaction-processing-stack.ts:28-38`):
-```typescript
+```ts
 const transactionTable = new dynamodb.Table(this, 'TransactionTable', {
   tableName: `transaction-state-${environmentSuffix}`,
   partitionKey: {
@@ -237,7 +237,7 @@ const transactionTable = new dynamodb.Table(this, 'TransactionTable', {
 **Stack Configuration** (`lib/transaction-processing-stack.ts:141-151`)
 
 **Usage**:
-```typescript
+```ts
 onSuccess: new cdk.aws_lambda_destinations.SqsDestination(successQueue),
 onFailure: new cdk.aws_lambda_destinations.SqsDestination(failureQueue),
 ```

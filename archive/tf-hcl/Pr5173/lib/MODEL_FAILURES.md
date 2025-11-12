@@ -204,7 +204,7 @@ resource "aws_db_instance" "main" {
 
 **Recommendation for Full Validation**:
 Add optional AWS SDK-based validation:
-```typescript
+```ts
 // Optional AWS resource validation (requires AWS credentials)
 describe('AWS Resource Validation', () => {
   // Validate VPC exists and is configured correctly

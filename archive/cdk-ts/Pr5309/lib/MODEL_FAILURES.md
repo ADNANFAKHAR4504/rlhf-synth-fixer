@@ -6,7 +6,7 @@ The following issues were identified in the initial implementation and corrected
 
 **Problem**: The solution did not implement a Hono TypeScript application even though the prompt explicitly required it.
 
-```typescript
+```ts
 // BEFORE (placeholder)
 exports.handler = async (event: any) => ({
   statusCode: 200,
@@ -16,7 +16,7 @@ exports.handler = async (event: any) => ({
 
 **Solution**: Implemented a proper Hono app with multiple routes and a Lambda handler.
 
-```typescript
+```ts
 // AFTER (Hono app)
 import { Hono } from 'hono';
 import { handle as handleV2 } from '@hono/aws-lambda';
@@ -76,7 +76,7 @@ export const handler = handleV2(app);
 
 **Problem**: The model response text referenced a plain `lambda.Function` with placeholder code packaging, which diverges from the actual code where `NodejsFunction` (esbuild) is used with `entry` pointing to the app’s TypeScript source. This mismatch can mislead implementation and reviewers.
 
-```typescript
+```ts
 // DOCUMENTATION (referenced plain lambda + zip updates)
 code: lambda.Code.fromAsset('lambda-placeholder');
 
@@ -106,7 +106,7 @@ this.lambdaFunction = new NodejsFunction(this, 'HonoFunction', {
 
 **Problem**: Email notifications for SNS topics were hardcoded with a placeholder value (`ops-team@example.com`) using CloudFormation conditions, making it non-configurable and production-unfriendly.
 
-```typescript
+```ts
 // INCORRECT (hardcoded email)
 const emailParam = cdk.Fn.conditionIf(
   'HasEmailSubscription',
@@ -123,7 +123,7 @@ if (emailParam !== cdk.Aws.NO_VALUE) {
 
 **Solution**: Added optional `notificationEmail` to `PipelineConfig` interface and made email subscriptions conditional based on configuration, removing hardcoded values and CloudFormation conditions.
 
-```typescript
+```ts
 // CORRECT (configurable)
 export interface PipelineConfig {
   // ... other fields
@@ -147,7 +147,7 @@ This allows email notifications to be configured per environment via CDK context
 
 **Problem**: Using `ssm.ParameterType.SECURE_STRING` with `ssm.StringParameter` construct caused deployment failures with the error: `[#/Type: SecureString is not a valid enum value]`. The L2 construct `StringParameter` does not support the `SECURE_STRING` enum value in AWS CDK v2.
 
-```typescript
+```ts
 // INCORRECT (causes deployment failure)
 new ssm.StringParameter(this, 'ApiKeyParameter', {
   parameterName: `${this.parameterPrefix}/api-key`,
@@ -159,7 +159,7 @@ new ssm.StringParameter(this, 'ApiKeyParameter', {
 
 **Solution**: Using regular `String` type parameters (non-secure) for now. The L2 construct `StringParameter` creates standard String parameters by default without requiring the type specification.
 
-```typescript
+```ts
 // CORRECT (uses regular String parameters)
 new ssm.StringParameter(this, 'ApiKeyParameter', {
   parameterName: `${this.parameterPrefix}/api-key`,
@@ -178,7 +178,7 @@ Note: For production use with sensitive data, SecureString parameters with KMS e
 - Non-production resources couldn't be cleaned up properly during testing
 - S3 buckets couldn't be deleted because they contained objects
 
-```typescript
+```ts
 // INCORRECT - Hardcoded removal policies
 this.kmsKey = new kms.Key(this, 'EncryptionKey', {
   removalPolicy: cdk.RemovalPolicy.RETAIN, // Always retains, even for dev environments
@@ -192,7 +192,7 @@ this.sourceBucket = new s3.Bucket(this, 'SourceBucket', {
 
 **Solution**: Created a `getRemovalPolicy()` helper function that returns `DESTROY` for non-production environments and `RETAIN` for production environments (when `environmentSuffix` includes "prod"). Also added `autoDeleteObjects: true` for S3 buckets in non-production environments.
 
-```typescript
+```ts
 // CORRECT - Environment-based removal policy in lib/config/pipeline-config.ts
 export function getRemovalPolicy(environmentSuffix: string): cdk.RemovalPolicy {
   return environmentSuffix.toLowerCase().includes('prod')
@@ -232,7 +232,7 @@ this.sourceBucket = new s3.Bucket(this, 'SourceBucket', {
 
 **Problem**: The monitoring infrastructure was missing complete alarm actions. Alarms were being created but didn't have SNS actions attached, causing integration tests to fail with `AlarmActions.length` being 0.
 
-```typescript
+```ts
 // INCORRECT - Alarms without actions
 const alarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
   alarmName: `${config.prefix}-lambda-errors`,
@@ -249,7 +249,7 @@ const alarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
 3. All alarms now have SNS actions attached using `addAlarmAction()` with the alarm topic
 4. Added support for reusing existing SNS topics across multiple monitoring instances
 
-```typescript
+```ts
 // CORRECT - Complete monitoring with alarm actions
 const lambdaErrorAlarm = new cloudwatch.Alarm(this, 'LambdaErrorAlarm', {
   alarmName: `${config.prefix}-lambda-errors`,
@@ -303,7 +303,7 @@ lambdaDurationAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alarmTopic));
 - Added S3 permissions for CloudFormation template access (scoped to CDK and artifacts bucket)
 - Removed broad account-level access
 
-```typescript
+```ts
 // BEFORE (overly permissive)
 deployRole.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCloudFormationFullAccess')
@@ -343,7 +343,7 @@ deployRole.addToPolicy(
 - Added CORS maxAge header
 - Added TODO comment for production CORS origin restrictions
 
-```typescript
+```ts
 // Environment-based throttling
 const throttlingBurstLimit = isProduction ? 1000 : 100;
 const throttlingRateLimit = isProduction ? 500 : 50;
@@ -367,7 +367,7 @@ new apigateway.RequestValidator(this, 'RequestValidator', {
 
 **Fix**: Added bucket policies that DENY `PutObject` unless encryption is used:
 
-```typescript
+```ts
 // Enforce encryption at rest
 this.sourceBucket.addToResourcePolicy(
   new iam.PolicyStatement({
@@ -395,7 +395,7 @@ this.sourceBucket.addToResourcePolicy(
 
 **Fix**: Removed `|| true` so test failures properly block deployment:
 
-```typescript
+```ts
 // BEFORE (tests don't fail)
 commands: [
   'npm run test:integration || true',
@@ -422,7 +422,7 @@ commands: [
 - Proper Lambda permissions
 - Configured on Lambda function with retry configuration
 
-```typescript
+```ts
 // Dead Letter Queue
 this.deadLetterQueue = new sqs.Queue(this, 'DeadLetterQueue', {
   queueName: `${config.prefix}-dlq`,
@@ -449,7 +449,7 @@ retryAttempts: 2,
 
 **Fix**: Added provisioned concurrency for production environments (configurable via `PipelineConfig`):
 
-```typescript
+```ts
 // Config-based provisioned concurrency
 provisionedConcurrency: (isProduction ? 10 : undefined, // Only in prod
   // Applied to alias
@@ -474,7 +474,7 @@ provisionedConcurrency: (isProduction ? 10 : undefined, // Only in prod
 - Non-production: 512 MB memory, 30s timeout
 - Configurable via `PipelineConfig` interface
 
-```typescript
+```ts
 // Config provides environment-based values
 lambdaMemorySize: isProduction ? 1024 : 512,
 lambdaTimeout: isProduction ? 60 : 30,
@@ -497,7 +497,7 @@ memorySize: config.lambdaMemorySize || 512,
 - Production: 1 month
 - Non-production: 1 week
 
-```typescript
+```ts
 const applicationLogGroup = new logs.LogGroup(this, 'ApplicationLogGroup', {
   logGroupName: `/aws/application/${config.prefix}`,
   retention: isProduction
@@ -558,7 +558,7 @@ The following differences exist between the current implementation in `lib/` and
 - Uses `CDK_DEFAULT_ACCOUNT` environment variable
 - No additional tags applied
 
-```typescript
+```ts
 const environmentSuffix = app.node.tryGetContext('environmentSuffix');
 if (!environmentSuffix) {
   throw new Error('environmentSuffix must be provided...');

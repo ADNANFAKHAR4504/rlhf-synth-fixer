@@ -2,7 +2,7 @@
 
 Here's the complete infrastructure code in a single file:
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';

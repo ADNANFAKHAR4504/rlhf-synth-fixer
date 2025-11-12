@@ -1,6 +1,6 @@
 You're right! Those are API compatibility issues with CDK v2. Let me fix those errors:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

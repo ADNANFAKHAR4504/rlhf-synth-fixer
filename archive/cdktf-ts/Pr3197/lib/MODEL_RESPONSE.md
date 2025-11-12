@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   DataAwsAvailabilityZones,
@@ -644,7 +644,7 @@ export class SnsModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";

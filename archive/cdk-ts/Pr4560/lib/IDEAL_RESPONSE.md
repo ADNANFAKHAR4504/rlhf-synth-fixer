@@ -91,7 +91,7 @@ global-payments-gateway/
 
 Customer-managed KMS keys must be created **in each region** for DynamoDB Global Table encryption:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -133,7 +133,7 @@ export class KmsStack extends cdk.Stack {
 
 DynamoDB Global Table with **composite primary key** and customer-managed encryption:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -213,7 +213,7 @@ Regional infrastructure with **optimized VPC architecture** (no NAT Gateway, use
 
 **CRITICAL**: API Gateway must be **REGIONAL** endpoint type (not EDGE) to avoid double CloudFront layer issues.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -566,7 +566,7 @@ export class RegionalStack extends cdk.Stack {
 
 WAF Web ACL with managed rules (must be in us-east-1 for CloudFront):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -671,7 +671,7 @@ CloudFront with **Lambda@Edge** path rewriting and Route 53 failover.
 3. Use `ALL_VIEWER_EXCEPT_HOST_HEADER` origin request policy (required for REGIONAL API Gateway)
 4. Path pattern must be `'api/*'` (no leading slash per CDK requirements)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -1033,7 +1033,7 @@ function handler(event) {
 
 Main stack coordinating all components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DatabaseStack } from './database-stack';

@@ -53,7 +53,7 @@ module.exports = {
 
 ### 3. Create `test/setup.ts`:
 
-```typescript
+```ts
 import { Testing } from 'cdktf';
 
 // Extend Jest matchers
@@ -181,7 +181,7 @@ expect.extend({
 
 ### 4. Create `test/tap-stack.unit.test.ts`:
 
-```typescript
+```ts
 import { Testing } from 'cdktf';
 import { AWSInfrastructureStack } from '../main';
 
@@ -266,7 +266,7 @@ describe('Unit Tests for AWSInfrastructureStack', () => {
 
 ### 5. Create `test/tap-stack.int.test.ts`:
 
-```typescript
+```ts
 import { Testing } from 'cdktf';
 import { AWSInfrastructureStack } from '../main';
 
@@ -335,7 +335,7 @@ describe('Integration Tests for AWSInfrastructureStack', () => {
 
 Add this line at the end of your `main.ts` file:
 
-```typescript
+```ts
 // Export the class for testing
 export { AWSInfrastructureStack };
 

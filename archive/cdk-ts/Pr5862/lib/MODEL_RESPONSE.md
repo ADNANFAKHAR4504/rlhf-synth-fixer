@@ -52,7 +52,7 @@ I'll create a comprehensive production-grade CDK stack for your fintech payment 
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -943,7 +943,7 @@ export class TapStack extends cdk.Stack {
 
 ## Usage Example
 
-```typescript
+```ts
 // app.ts
 import { App } from 'aws-cdk-lib';
 import { TapStack } from './lib/tap-stack';

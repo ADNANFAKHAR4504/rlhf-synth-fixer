@@ -1,9 +1,9 @@
-```typescript
+```ts
 // cfn-utils.ts
 
 ```
 
-```typescript
+```ts
 // security-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -113,7 +113,7 @@ export class SecurityStack extends Construct {
 
 ```
 
-```typescript
+```ts
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';

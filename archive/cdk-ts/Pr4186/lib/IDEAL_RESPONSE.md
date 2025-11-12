@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.d.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 export {};
 
@@ -12,7 +12,7 @@ export {};
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -120,7 +120,7 @@ exports.handler = async (event, context) => {
 
 ## ./lib/tap-stack.d.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 interface TapStackProps extends cdk.StackProps {
@@ -135,7 +135,7 @@ export {};
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -345,14 +345,14 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.d.ts
 
-```typescript
+```ts
 export {};
 
 ```
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
 import {
@@ -810,14 +810,14 @@ describe('TapStack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```typescript
+```ts
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

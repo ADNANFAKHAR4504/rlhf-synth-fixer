@@ -30,7 +30,7 @@ This analysis compares the MODEL_RESPONSE implementation against the requirement
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: All Lambda functions use placeholder inline handlers that only log events and return static responses:
-```typescript
+```ts
 const inlineHandler = 'exports.handler = async (event) => {\n' +
   '  console.log(JSON.stringify(event));\n' +
   '  return { statusCode: 200, body: JSON.stringify({ ok: true }) };\n' +
@@ -144,7 +144,7 @@ const inlineHandler = 'exports.handler = async (event) => {\n' +
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**: EventBridge rule only matches 'trade' and 'quote' event types:
-```typescript
+```ts
 detail: {
   type: ['trade', 'quote'],
 },

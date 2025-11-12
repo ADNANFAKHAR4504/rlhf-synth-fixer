@@ -4,7 +4,7 @@
 
 First, let's set up the project structure:
 
-```typescript
+```ts
 // package.json
 {
   "name": "serverless-cdk-infrastructure",
@@ -42,7 +42,7 @@ First, let's set up the project structure:
 
 ## Main CDK Stack Implementation
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -690,7 +690,7 @@ exports.handler = async (event, context) => {
 
 ## Application Entry Point
 
-```typescript
+```ts
 // bin/tap.ts
 #!/usr/bin/env node
 import 'source-map-support/register';

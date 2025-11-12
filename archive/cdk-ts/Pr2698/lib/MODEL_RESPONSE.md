@@ -1,6 +1,6 @@
 I'll create a comprehensive serverless application using AWS CDK in TypeScript that meets all your requirements. Here's the complete solution:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

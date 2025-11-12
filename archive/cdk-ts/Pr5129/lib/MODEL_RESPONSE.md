@@ -28,7 +28,7 @@ Let me create a comprehensive CDK stack that includes all these components:
 
 Based on the requirements, here's a complete TypeScript file that defines an AWS CDK stack with all the specified components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

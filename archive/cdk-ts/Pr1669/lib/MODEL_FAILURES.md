@@ -11,7 +11,7 @@ This document records the actual issues encountered during development and testi
 
 **Fix**: Changed `keyPolicy` to `policy` in the KMS Key constructor properties.
 
-```typescript
+```ts
 // Before (incorrect)
 const kmsKey = new kms.Key(this, `${resourcePrefix}-security-key`, {
   keyPolicy: new iam.PolicyDocument({ ... })
@@ -30,7 +30,7 @@ const kmsKey = new kms.Key(this, `${resourcePrefix}-security-key`, {
 
 **Fix**: Changed `rds.DatabaseEngine.mysql` to `rds.DatabaseInstanceEngine.mysql`.
 
-```typescript
+```ts
 // Before (incorrect)
 engine: rds.DatabaseEngine.mysql({
   version: rds.MysqlEngineVersion.VER_8_0,
@@ -51,7 +51,7 @@ engine: rds.DatabaseInstanceEngine.mysql({
 
 **Fix**: Added explicit `iam.PolicyStatement` entries to the KMS key policy for all services that use the key:
 
-```typescript
+```ts
 new iam.PolicyStatement({
   sid: 'Allow CloudWatch Logs to encrypt logs',
   effect: iam.Effect.ALLOW,
@@ -75,7 +75,7 @@ new iam.PolicyStatement({
 
 **Fix**: Replaced the problematic `DENY` statement with explicit `ALLOW` statements for specific services:
 
-```typescript
+```ts
 // Before (problematic)
 snsTopic.addToResourcePolicy(
   new iam.PolicyStatement({
@@ -110,7 +110,7 @@ snsTopic.addToResourcePolicy(
 
 **Fix**: Removed `enablePerformanceInsights: true` and `performanceInsightEncryptionKey: kmsKey` from the RDS instance configuration.
 
-```typescript
+```ts
 // Before (unsupported)
 const rdsInstance = new rds.DatabaseInstance(
   this,
@@ -144,7 +144,7 @@ const rdsInstance = new rds.DatabaseInstance(
 1. Removed `trustedPrincipals` from `TapStackProps` interface and destructuring
 2. Changed `instanceProfile` and `trail` from variable assignments to direct instantiations
 
-```typescript
+```ts
 // Before (unused variables)
 const instanceProfile = new iam.InstanceProfile(this, `${resourcePrefix}-instance-profile`, {
   instanceProfileName: `${resourcePrefix}-instance-profile`,
@@ -171,7 +171,7 @@ new cloudtrail.Trail(this, `${resourcePrefix}-cloudtrail`, { ... });
 
 **Fix**: Updated test assertions to match actual CloudFormation template structure:
 
-```typescript
+```ts
 // Before (incorrect assumptions)
 template.hasResourceProperties('AWS::KMS::Key', {
   Alias: `${environmentSuffix}-security-key`, // Wrong property

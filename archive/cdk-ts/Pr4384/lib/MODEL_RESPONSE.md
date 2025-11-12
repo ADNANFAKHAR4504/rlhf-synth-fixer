@@ -158,7 +158,7 @@ aws-ha-infrastructure/
 
 ### 4. Main Stack Implementation (lib/aws-ha-infrastructure-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -684,7 +684,7 @@ export class AwsHaInfrastructureStack extends cdk.Stack {
 
 ### 5. App Entry Point (bin/aws-ha-infrastructure.ts)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

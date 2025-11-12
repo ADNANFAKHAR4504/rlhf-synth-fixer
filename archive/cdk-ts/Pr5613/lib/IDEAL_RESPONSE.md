@@ -2,7 +2,7 @@
 
 ## bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -31,7 +31,7 @@ cdk.Tags.of(app).add('ManagedBy', 'CDK');
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';

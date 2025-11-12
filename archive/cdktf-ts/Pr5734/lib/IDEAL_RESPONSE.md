@@ -1,6 +1,6 @@
 ## **lib/modules.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
@@ -498,7 +498,7 @@ export class IrsaRoleConstruct extends Construct {
 
 ## **lib/tap-stack.ts**
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

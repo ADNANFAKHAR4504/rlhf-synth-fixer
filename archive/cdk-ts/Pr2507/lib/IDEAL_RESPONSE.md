@@ -50,7 +50,7 @@ The solution provides a complete multi-region AWS infrastructure deployment acro
 - Proper TypeScript implementation with full type safety
 - Terraform resource constructs from `@cdktf/provider-aws`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

@@ -142,7 +142,7 @@ This infrastructure provides a solid foundation for hosting scalable web applica
 
 Below is the complete implementation of the scalable web application infrastructure in TypeScript using AWS CDK:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -511,7 +511,7 @@ The described ideal response mentions HTTPS/SSL features that are not currently 
 
 To make this production-ready, you would need to add:
 
-```typescript
+```ts
 // Add HTTPS support to ALB Security Group
 albSecurityGroup.addIngressRule(
   ec2.Peer.anyIpv4(),

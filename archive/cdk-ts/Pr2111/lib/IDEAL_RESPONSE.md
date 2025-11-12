@@ -24,7 +24,7 @@ The infrastructure is deployed across three AWS regions:
 
 The main stack orchestrates the creation of S3 and IAM stacks for each region.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { S3Stack } from './s3-stack';
@@ -90,7 +90,7 @@ export class TapStack extends cdk.Stack {
 
 Creates S3 buckets with cross-region replication capabilities and lifecycle policies.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -224,7 +224,7 @@ export class S3Stack extends cdk.Stack {
 
 Creates IAM roles for Lambda functions with least privilege access to S3 buckets.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -377,7 +377,7 @@ export class IAMStack extends cdk.Stack {
 
 Creates a multi-region access point for optimized S3 access across regions.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';

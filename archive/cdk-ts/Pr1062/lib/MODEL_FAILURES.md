@@ -14,7 +14,7 @@ This document outlines the key infrastructure improvements and fixes applied to 
 - S3 bucket names exceeded the 63-character limit
 
 **Solution Applied:**
-```typescript
+```ts
 // Before - No environment suffix on named resources
 const vpc = new ec2.Vpc(this, 'ApplicationVPC', {
   maxAzs: 2,
@@ -36,7 +36,7 @@ const vpc = new ec2.Vpc(this, 'ApplicationVPC', {
 - Caused deployment failures with "Bucket name should be between 3 and 63 characters long" error
 
 **Solution Applied:**
-```typescript
+```ts
 // Before - Name too long
 bucketName: `multi-region-pipeline-artifacts-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`
 
@@ -51,7 +51,7 @@ bucketName: `pipeline-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}`
 - Difficult to retrieve deployed resource identifiers
 
 **Solution Applied:**
-```typescript
+```ts
 // Added comprehensive stack outputs
 new cdk.CfnOutput(this, 'PipelineName', {
   value: pipeline.pipelineName,
@@ -83,7 +83,7 @@ new cdk.CfnOutput(this, 'LoadBalancerDNS', {
 - Missing proper cross-region support stack configuration
 
 **Solution Applied:**
-```typescript
+```ts
 // Stack now requires explicit region in environment
 stack = new TapStack(app, 'TestTapStack', { 
   environmentSuffix,
@@ -101,7 +101,7 @@ stack = new TapStack(app, 'TestTapStack', {
 - Prevented multiple stack deployments in same account
 
 **Solution Applied:**
-```typescript
+```ts
 // Before - Explicit role names causing conflicts
 const pipelineRole = new iam.Role(this, 'PipelineRole', {
   roleName: `pipeline-role-${environmentSuffix}`,
@@ -121,7 +121,7 @@ const pipelineRole = new iam.Role(this, 'PipelineRole', {
 - CloudTrail S3 bucket had Retain policy preventing stack deletion
 
 **Solution Applied:**
-```typescript
+```ts
 // Added proper removal policies
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true
@@ -136,7 +136,7 @@ autoDeleteObjects: true
 - Security group name not specified
 
 **Solution Applied:**
-```typescript
+```ts
 // Added explicit resource names with environment suffix
 loadBalancerName: `app-alb-${environmentSuffix}`,
 targetGroupName: `app-tg-${environmentSuffix}`,
@@ -151,7 +151,7 @@ securityGroupName: `app-sg-${environmentSuffix}`
 - Unused variable `trail` in CloudTrail configuration
 
 **Solution Applied:**
-```typescript
+```ts
 // Before - Unused variable
 const trail = new cloudtrail.Trail(this, 'PipelineTrail', {
   trailName: `multi-region-pipeline-trail-${environmentSuffix}`

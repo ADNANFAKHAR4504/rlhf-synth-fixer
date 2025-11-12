@@ -4,7 +4,7 @@ Here's the complete infrastructure code for your podcast hosting platform:
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as fs from 'fs';
@@ -450,7 +450,7 @@ exports.handler = async (event) => {
 
 ## lib/mediaconvert-templates.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 
 export interface AudioTranscodingPreset {
@@ -545,7 +545,7 @@ export function createJobTemplate(roleArn: string, outputBucket: string): any {
 
 ## test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -592,7 +592,7 @@ describe('TapStack Unit Tests', () => {
 
 ## test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';

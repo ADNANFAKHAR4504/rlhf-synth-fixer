@@ -4,7 +4,7 @@ This implementation creates a production-ready infrastructure for migrating paym
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { ResourceOptions } from '@pulumi/pulumi';
@@ -320,7 +320,7 @@ exports.handler = async (event) => {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -343,7 +343,7 @@ export const snsTopicArn = stack.snsTopic.arn;
 
 ## File: lib/lambda/payment-processor/index.ts
 
-```typescript
+```ts
 import { Handler } from 'aws-lambda';
 
 export const handler: Handler = async (event) => {

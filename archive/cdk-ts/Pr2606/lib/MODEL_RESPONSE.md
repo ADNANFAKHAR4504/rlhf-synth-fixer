@@ -4,7 +4,7 @@ Here's the updated `./lib/tap-stack.ts` file and the supporting infrastructure s
 
 ## Main Stack File (`./lib/tap-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingStack } from './stacks/networking-stack';
@@ -162,7 +162,7 @@ export class TapStack extends cdk.Stack {
 
 ## Networking Stack (`./lib/stacks/networking-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -229,7 +229,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ## Security Stack (`./lib/stacks/security-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -386,7 +386,7 @@ export class SecurityStack extends cdk.Stack {
 
 ## Database Stack (`./lib/stacks/database-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -505,7 +505,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ## Storage Stack (`./lib/stacks/storage-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -607,7 +607,7 @@ export class StorageStack extends cdk.Stack {
 
 ## Compute Stack (`./lib/stacks/compute-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

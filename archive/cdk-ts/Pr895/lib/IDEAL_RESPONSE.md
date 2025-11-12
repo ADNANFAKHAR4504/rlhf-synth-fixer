@@ -2,7 +2,7 @@ I'll create a scalable web application deployment on AWS using CDK TypeScript wi
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -395,7 +395,7 @@ export class TapStack extends cdk.Stack {
 
 ## bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

@@ -6,7 +6,7 @@ This implementation provides enterprise-level secure network infrastructure usin
 
 ### 1. Main Stack File - `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -259,7 +259,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Security Monitoring Stack - `lib/security-monitoring-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -379,7 +379,7 @@ export class SecurityMonitoringStack extends cdk.Stack {
 
 ### 3. Main Application Entry Point - `bin/tap.ts`
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

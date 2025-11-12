@@ -17,7 +17,7 @@ Lambda functions would fail to send X-Ray trace data, resulting in missing distr
 ### Fix Applied in IDEAL_RESPONSE
 Added X-Ray policy attachments for both Lambda roles:
 
-```typescript
+```ts
 new aws.iam.RolePolicyAttachment(
   `validation-lambda-xray-${environmentSuffix}`,
   {
@@ -54,7 +54,7 @@ Without a DLQ, failed Lambda invocations would be permanently lost with no abili
 ### Fix Applied in IDEAL_RESPONSE
 Added SQS queue with correct configuration:
 
-```typescript
+```ts
 const deadLetterQueue = new aws.sqs.Queue(
   `dlq-${environmentSuffix}`,
   {
@@ -86,7 +86,7 @@ MODEL_RESPONSE did not create explicit CloudWatch Log Groups for the Lambda func
 ### Fix Applied in IDEAL_RESPONSE
 Created explicit Log Groups with 30-day retention:
 
-```typescript
+```ts
 const validationLogGroup = new aws.cloudwatch.LogGroup(
   `validation-logs-${environmentSuffix}`,
   {
@@ -110,7 +110,7 @@ const processingLogGroup = new aws.cloudwatch.LogGroup(
 
 And added dependsOn to Lambda functions:
 
-```typescript
+```ts
 { parent: this, dependsOn: [validationLogGroup] }
 ```
 
@@ -131,7 +131,7 @@ Validation Lambda would successfully validate transactions but fail when attempt
 ### Fix Applied in IDEAL_RESPONSE
 Added inline IAM policy granting SNS publish permissions:
 
-```typescript
+```ts
 const validationSnsPolicy = new aws.iam.RolePolicy(
   `validation-sns-policy-${environmentSuffix}`,
   {
@@ -168,7 +168,7 @@ Failed processing attempts would be lost after Lambda's built-in retry mechanism
 ### Fix Applied in IDEAL_RESPONSE
 Added deadLetterConfig to processing Lambda:
 
-```typescript
+```ts
 deadLetterConfig: {
   targetArn: deadLetterQueue.arn,
 },
@@ -191,7 +191,7 @@ Processing Lambda would successfully receive messages from SNS and enrich transa
 ### Fix Applied in IDEAL_RESPONSE
 Added inline IAM policy with DynamoDB write permissions:
 
-```typescript
+```ts
 const processingDynamoPolicy = new aws.iam.RolePolicy(
   `processing-dynamodb-policy-${environmentSuffix}`,
   {
@@ -216,7 +216,7 @@ const processingDynamoPolicy = new aws.iam.RolePolicy(
 
 Also added SQS SendMessage permission for DLQ:
 
-```typescript
+```ts
 const processingSqsPolicy = new aws.iam.RolePolicy(
   `processing-sqs-policy-${environmentSuffix}`,
   {
@@ -255,7 +255,7 @@ MODEL_RESPONSE created the API Gateway stage but did not configure method settin
 ### Fix Applied in IDEAL_RESPONSE
 Added MethodSettings resource with throttling configuration:
 
-```typescript
+```ts
 const methodSettings = new aws.apigateway.MethodSettings(
   `webhook-throttling-${environmentSuffix}`,
   {
@@ -291,7 +291,7 @@ MODEL_RESPONSE completely omitted CloudWatch alarms. The requirement explicitly 
 ### Fix Applied in IDEAL_RESPONSE
 Added CloudWatch MetricAlarms for both Lambda functions:
 
-```typescript
+```ts
 const validationErrorAlarm = new aws.cloudwatch.MetricAlarm(
   `validation-error-alarm-${environmentSuffix}`,
   {
@@ -327,7 +327,7 @@ Similar alarm created for processing Lambda.
 ### Problem
 MODEL_RESPONSE hardcoded 'us-east-1' in the API URL construction:
 
-```typescript
+```ts
 this.apiUrl = pulumi.interpolate`${api.id}.execute-api.us-east-1.amazonaws.com/...`;
 ```
 
@@ -341,7 +341,7 @@ While the target region is us-east-1, hardcoding violates infrastructure-as-code
 ### Fix Applied in IDEAL_RESPONSE
 Used dynamic region lookup:
 
-```typescript
+```ts
 this.apiUrl = pulumi.interpolate`${api.id}.execute-api.${aws.getRegionOutput().name}.amazonaws.com/${stage.stageName}/webhook`;
 ```
 
@@ -370,7 +370,7 @@ MODEL_RESPONSE only registered `apiUrl` and `tableName` outputs. While this sati
 ### Fix Applied in IDEAL_RESPONSE
 Added complete outputs registration:
 
-```typescript
+```ts
 this.registerOutputs({
   apiUrl: this.apiUrl,
   tableName: this.tableName,

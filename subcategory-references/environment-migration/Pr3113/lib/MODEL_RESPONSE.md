@@ -27,7 +27,7 @@ First, let's set up the basic structure of the CDK stack. We'll need to import t
 
 Let's start by writing the CDK stack TypeScript file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -216,7 +216,7 @@ Let me review this code and ensure it meets all the requirements:
 
 This implementation seems to meet all the requirements specified, but let's further improve and refine it with more detailed comments, better error handling, and some additional best practices. Let me add some more comments and refine the implementation:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -487,7 +487,7 @@ The final code for lib/migration-stack.ts:
 
 Below is a complete AWS CDK stack using TypeScript that deploys a secure, highly available three-tier web application architecture. This implementation follows best practices for enterprise cloud migrations.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

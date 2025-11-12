@@ -6,7 +6,7 @@ This TypeScript CDK solution creates a production-ready, secure, and highly avai
 
 ## Solution
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

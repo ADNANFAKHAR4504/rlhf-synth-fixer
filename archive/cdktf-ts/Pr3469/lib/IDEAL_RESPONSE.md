@@ -2,7 +2,7 @@
 
 ## Main Stack File
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import {
   AwsProvider,
@@ -690,7 +690,7 @@ export class TapStack extends TerraformStack {
 
 ## Main Entry Point
 
-```typescript
+```ts
 // lib/main.ts
 import { App } from 'cdktf';
 import { TapStack } from './tap-stack';

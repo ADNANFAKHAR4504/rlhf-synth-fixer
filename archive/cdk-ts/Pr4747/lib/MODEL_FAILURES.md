@@ -21,7 +21,7 @@ This document details all the issues found in the MODEL_RESPONSE.md compared to 
 **Category**: Missing Required Parameter
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 export interface TapStackProps extends cdk.StackProps {
   pipelineSourceBucket?: s3.IBucket;
@@ -34,7 +34,7 @@ constructor(scope: Construct, id: string, props?: TapStackProps) {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 export interface TapStackProps extends cdk.StackProps {
   pipelineSourceBucket?: s3.IBucket;
@@ -57,7 +57,7 @@ constructor(scope: Construct, id: string, props: TapStackProps) {
 
 **Problem**:
 All resources use hard-coded names without environment differentiation:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 bucketName: `tap-app-data-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
 queueName: 'tap-lambda-dlq'
@@ -68,7 +68,7 @@ topicName: 'tap-alarm-topic'
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 bucketName: `tap-app-data-${envSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
 queueName: `tap-lambda-dlq-${envSuffix}`
@@ -87,13 +87,13 @@ topicName: `tap-alarm-topic-${envSuffix}`
 **Category**: Runtime Error
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 requestId: context.requestId, // Property does not exist
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 requestId: context.awsRequestId, // Correct property name
 ```
@@ -112,7 +112,7 @@ requestId: context.awsRequestId, // Correct property name
 MODEL_RESPONSE has no VPC implementation. Lambda runs in AWS-managed VPC.
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 this.vpc = new ec2.Vpc(this, 'TapVpc', {
   vpcName: `tap-vpc-${envSuffix}`,
@@ -151,7 +151,7 @@ vpcSubnets: {
 MODEL_RESPONSE has no EventBridge implementation for event-driven architecture.
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const eventRule = new events.Rule(this, 'TapS3EventRule', {
   ruleName: `tap-s3-events-${envSuffix}`,
@@ -180,12 +180,12 @@ eventRule.addTarget(new eventsTargets.LambdaFunction(this.lambdaFunction));
 **Category**: Missing Imports
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - Missing imports
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 import * as events from 'aws-cdk-lib/aws-events';
 import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
@@ -198,12 +198,12 @@ import * as eventsTargets from 'aws-cdk-lib/aws-events-targets';
 **Category**: Missing Imports
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - Missing imports
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 ```
@@ -215,7 +215,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 **Category**: Configuration
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - Missing ENVIRONMENT variable
 environment: {
   APPLICATION_BUCKET: this.applicationBucket.bucketName,
@@ -225,7 +225,7 @@ environment: {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 environment: {
   APPLICATION_BUCKET: this.applicationBucket.bucketName,
@@ -244,14 +244,14 @@ environment: {
 **Category**: Resource Cleanup
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 removalPolicy: cdk.RemovalPolicy.RETAIN, // Resources persist
 // No autoDeleteObjects
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 removalPolicy: cdk.RemovalPolicy.DESTROY, // Clean destruction
 autoDeleteObjects: true, // Delete objects before bucket
@@ -266,7 +266,7 @@ autoDeleteObjects: true, // Delete objects before bucket
 **Category**: Resource Cleanup
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
   enableKeyRotation: true,
@@ -276,7 +276,7 @@ const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
   enableKeyRotation: true,
@@ -292,7 +292,7 @@ const encryptionKey = new kms.Key(this, 'BucketEncryptionKey', {
 **Category**: Resource Cleanup
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
   secretName: 'tap-app-secrets',
@@ -302,7 +302,7 @@ const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
   secretName: `tap-app-secrets-${envSuffix}`,
@@ -318,7 +318,7 @@ const appSecret = new secretsmanager.Secret(this, 'TapAppSecret', {
 **Category**: Missing Parameter
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 export interface SecureBucketProps {
   bucketName: string;
@@ -335,7 +335,7 @@ this.applicationBucket = new SecureBucket(this, 'TapApplicationBucket', {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 export interface SecureBucketProps {
   bucketName: string;
@@ -361,7 +361,7 @@ this.applicationBucket = new SecureBucket(this, 'TapApplicationBucket', {
 MODEL_RESPONSE uses deprecated `logRetention` without explicit log group management.
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const logGroup = logRetention
   ? new logs.LogGroup(this, 'LogGroup', {
@@ -379,7 +379,7 @@ const logGroup = logRetention
 **Category**: Public Interface
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 export class TapStack extends cdk.Stack {
   public readonly applicationBucket: s3.Bucket;
@@ -390,7 +390,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 export class TapStack extends cdk.Stack {
   public readonly applicationBucket: s3.Bucket;
@@ -409,7 +409,7 @@ export class TapStack extends cdk.Stack {
 **Category**: Type Error
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 canaryConfig: {
   deploymentConfig:
@@ -418,7 +418,7 @@ canaryConfig: {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 canaryConfig: {
   deploymentConfig:
@@ -433,13 +433,13 @@ canaryConfig: {
 **Category**: Property Name
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG (in construct)
 alarmConfiguration: props.canaryConfig.alarmConfiguration?.alarms,
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 alarms: props.canaryConfig.alarmConfiguration?.alarms,
 ```
@@ -451,7 +451,7 @@ alarms: props.canaryConfig.alarmConfiguration?.alarms,
 **Category**: Type Safety
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 constructor(scope: Construct, id: string, props?: TapStackProps) {
   // Props optional, but environmentSuffix would be required
@@ -459,7 +459,7 @@ constructor(scope: Construct, id: string, props?: TapStackProps) {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 constructor(scope: Construct, id: string, props: TapStackProps) {
   // Props required to enforce environmentSuffix
@@ -473,12 +473,12 @@ constructor(scope: Construct, id: string, props: TapStackProps) {
 **Category**: Missing Import
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - Missing logs import in LambdaWithCanary
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 import * as logs from 'aws-cdk-lib/aws-logs';
 ```
@@ -492,7 +492,7 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 **Category**: Deprecated API
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 this.lambdaFunction = new lambda.Function(this, 'Function', {
   ...props,
@@ -509,7 +509,7 @@ this.lambdaFunction = new lambda.Function(this, 'Function', {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const { logRetention, ...lambdaProps } = props;
 
@@ -551,13 +551,13 @@ IDEAL_RESPONSE explicitly creates log group with `RemovalPolicy.DESTROY`.
 **Category**: Scalability
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - Could have this (not shown, but common mistake)
 reservedConcurrentExecutions: 1000,
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 // No reservedConcurrentExecutions set
 // Allows Lambda to scale automatically
@@ -572,12 +572,12 @@ reservedConcurrentExecutions: 1000,
 **Category**: Type Safety
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - Missing in LambdaWithCanary
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 import * as cdk from 'aws-cdk-lib';
 // Needed for RemovalPolicy.DESTROY
@@ -590,7 +590,7 @@ import * as cdk from 'aws-cdk-lib';
 **Category**: Naming
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - No explicit alarm names
 const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
   // No alarmName property
@@ -599,7 +599,7 @@ const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
   alarmName: `tap-lambda-errors-${envSuffix}`, // Explicit name
@@ -614,7 +614,7 @@ const errorAlarm = new cloudwatch.Alarm(this, 'TapLambdaErrorAlarm', {
 **Category**: Naming
 
 **Problem**:
-```typescript
+```ts
 // MODEL_RESPONSE - WRONG
 const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
   displayName: 'TAP Application Alarms',
@@ -623,7 +623,7 @@ const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
 ```
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
   displayName: `TAP Application Alarms ${envSuffix}`,
@@ -641,7 +641,7 @@ const alarmTopic = new sns.Topic(this, 'TapAlarmTopic', {
 MODEL_RESPONSE has no VPC, but if it did, description should include environment.
 
 **Solution**:
-```typescript
+```ts
 // IDEAL_RESPONSE - CORRECT
 description: `Encryption key for ${props.bucketName} (${props.environmentSuffix})`,
 ```

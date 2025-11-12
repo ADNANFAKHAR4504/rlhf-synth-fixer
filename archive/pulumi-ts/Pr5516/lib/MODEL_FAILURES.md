@@ -27,7 +27,7 @@ Both issues were resolved after understanding Pulumi's asynchronous Output handl
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // lib/compute-stack.ts (MODEL_RESPONSE)
 tags: [
   {
@@ -52,7 +52,7 @@ Attribute must be a single value, not a map. Examine values at 'asg-synthqx221.t
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // lib/compute-stack.ts (IDEAL_RESPONSE)
 tags: pulumi.output(args.tags).apply((t) => {
   const baseTags = [
@@ -90,7 +90,7 @@ The model misunderstood Pulumi's `Output<T>` type handling. When working with `p
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // lib/monitoring-stack.ts (MODEL_RESPONSE)
 metrics: [
   [
@@ -128,7 +128,7 @@ InvalidParameterInput: The dashboard body is invalid, there are 2 validation err
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // lib/monitoring-stack.ts (IDEAL_RESPONSE)
 metrics: [
   [
@@ -171,7 +171,7 @@ The model needs to differentiate between these API formats based on context.
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // lib/monitoring-stack.ts (MODEL_RESPONSE - Lines 116-117)
 .apply(([tgArn, lbArn, asgName]) => {
   const tgSuffix = tgArn.split(':').pop();       // ❌ Declared but never used
@@ -192,7 +192,7 @@ lib/monitoring-stack.ts:117:19  error  'lbSuffix' is assigned a value but never 
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // lib/monitoring-stack.ts (IDEAL_RESPONSE)
 .apply(([_tgArn, _lbArn, asgName]) => {  // ✅ Prefix with _ to indicate intentionally unused
   return JSON.stringify({

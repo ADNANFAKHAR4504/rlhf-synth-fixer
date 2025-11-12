@@ -28,7 +28,7 @@ I'll generate a comprehensive production-ready AWS CDKTF TypeScript project for 
 
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import * as aws from "@cdktf/provider-aws";
 import { TerraformOutput } from "cdktf";

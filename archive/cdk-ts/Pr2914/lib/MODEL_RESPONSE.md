@@ -56,7 +56,7 @@ Let me implement this step by step:
 
 I'll help you implement a comprehensive multi-tier AWS infrastructure using CDK. Here's the complete implementation for your `./lib/tap-stack.ts` file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

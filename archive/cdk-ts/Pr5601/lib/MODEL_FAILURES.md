@@ -17,7 +17,7 @@ AWS RDS doesn't support PostgreSQL 14.7. The available versions in AWS are 14.15
 **Fix:**
 Updated the RDS database configuration to use PostgreSQL 15.12:
 
-```typescript
+```ts
 engine: rds.DatabaseInstanceEngine.postgres({
   version: rds.PostgresEngineVersion.VER_15_12,
 })
@@ -26,7 +26,7 @@ engine: rds.DatabaseInstanceEngine.postgres({
 **Additional Change:**
 Updated the EC2 user data to install `postgresql15` instead of `postgresql14` to match the RDS version:
 
-```typescript
+```ts
 'yum install -y amazon-cloudwatch-agent postgresql15',
 ```
 
@@ -46,7 +46,7 @@ When `encrypted: true` is specified without an explicit `kmsKeyId`, AWS attempts
 **Fix:**
 Removed the explicit `encrypted: true` flag from the EBS volume configuration, allowing the account-level default EBS encryption setting to apply:
 
-```typescript
+```ts
 blockDevices: [
   {
     deviceName: '/dev/xvda',

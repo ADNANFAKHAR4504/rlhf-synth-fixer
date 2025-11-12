@@ -9,7 +9,7 @@ This document identifies critical failures and deviations in MODEL_RESPONSE.md c
 ### 1. Incorrect EventBridge Pipe Configuration (Lines 311-352, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 const pipe = new pipes.CfnPipe(this, 'DynamoDbStreamPipe', {
   name: `MarketGrid-${stageName}-DynamoDb-Stream-Pipe`,
   roleArn: pipeRole.roleArn,
@@ -26,7 +26,7 @@ const pipe = new pipes.CfnPipe(this, 'DynamoDbStreamPipe', {
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 const vendorNotificationLambda = new lambda.Function(
   this,
   'VendorNotificationLambda',
@@ -62,14 +62,14 @@ const pipe = new pipes.CfnPipe(this, 'DynamoStreamPipe', {
 ### 2. Wrong Stack Type - NestedStack Instead of Regular Stack (Line 45, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 export class WebhookStack extends cdk.NestedStack {
   constructor(scope: Construct, id: string, props: WebhookStackProps) {
     super(scope, id, props);
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 export class WebhookStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: WebhookStackProps) {
     super(scope, id, props);
@@ -89,7 +89,7 @@ export class WebhookStack extends cdk.Stack {
 ### 3. Incorrect Auto Scaling Metric (Lines 230-247, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 scalableTarget.scaleToTrackMetric('QueueDepthScaling', {
   targetValue: 5, // Target having 5 messages per provisioned instance
   predefinedMetric:
@@ -98,7 +98,7 @@ scalableTarget.scaleToTrackMetric('QueueDepthScaling', {
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 scalableTarget.scaleToTrackMetric(
   'WebhookProcessorScalingPolicy',
   {
@@ -129,7 +129,7 @@ scalableTarget.scaleToTrackMetric(
 Does not create a separate Lambda function for vendor notifications. Attempts to use SNS topic directly in EventBridge Pipe enrichment parameter (which is invalid).
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 const vendorNotificationLambda = new lambda.Function(
   this,
   'VendorNotificationLambda',
@@ -167,7 +167,7 @@ vendorNotificationTopic.grantPublish(vendorNotificationLambda);
 No CloudFormation outputs defined at all.
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 new cdk.CfnOutput(this, 'ApiEndpoint', {
   value: api.url,
   description: 'Webhook API Gateway endpoint URL',
@@ -197,7 +197,7 @@ new cdk.CfnOutput(this, 'StripeWebhookUrl', {
 ### 6. Insufficient AWS WAF Rules (Lines 466-508, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INSUFFICIENT):**
-```typescript
+```ts
 rules: [
   {
     name: 'AWSManagedRulesCommonRuleSet',
@@ -219,7 +219,7 @@ rules: [
 ```
 
 **IDEAL_RESPONSE (COMPREHENSIVE):**
-```typescript
+```ts
 rules: [
   // 1. AWSManagedRulesCommonRuleSet
   // 2. RateLimitRule
@@ -251,7 +251,7 @@ rules: [
 ### 7. Missing Environment Suffix in Resource Names (Multiple Locations)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 export interface WebhookStackProps extends cdk.NestedStackProps {
   stageName: string;
   domainName?: string;
@@ -270,7 +270,7 @@ const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 interface WebhookStackProps extends cdk.StackProps {
   environmentSuffix: string;
   stageName: string;
@@ -303,7 +303,7 @@ const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
 ### 8. Missing Sort Key in DynamoDB Table (Lines 64-89, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
   billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
   partitionKey: {
@@ -316,7 +316,7 @@ const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
   tableName: `MarketGrid-Transactions-${envSuffix}`,
   partitionKey: {
@@ -353,7 +353,7 @@ const transactionsTable = new dynamodb.Table(this, 'TransactionsTable', {
 ### 9. Incorrect Lambda Event Source Configuration (Lines 210-215, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 webhookProcessingLambda.addEventSource(
   new lambda.SqsEventSource(webhookQueue, {
     batchSize: 10,
@@ -363,7 +363,7 @@ webhookProcessingLambda.addEventSource(
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 webhookProcessingLambda.addEventSource(
   new lambda.EventSourceMapping(this, 'SQSEventSource', {
     eventSourceArn: webhookQueue.queueArn,
@@ -389,14 +389,14 @@ webhookQueue.grantConsumeMessages(webhookProcessingLambda);
 ### 10. Missing Lambda Function Code Files
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 code: lambda.Code.fromAsset('lambda/authorizer'),
 code: lambda.Code.fromAsset('lambda/webhook-processor'),
 code: lambda.Code.fromAsset('lambda/webhook-archiver'),
 ```
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 code: lambda.Code.fromAsset('lib/lambdas/authorizer'),
 code: lambda.Code.fromAsset('lib/lambdas/webhook-processor'),
 code: lambda.Code.fromAsset('lib/lambdas/webhook-archiver'),
@@ -423,7 +423,7 @@ Additionally, IDEAL_RESPONSE provides complete Lambda function implementations:
 ### 11. CloudWatch Metric Not Actually Emitted (Lines 594-606, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 const successfulTransactionsMetric = new cloudwatch.Metric({
   namespace: 'MarketGrid',
   metricName: 'SuccessfulTransactions',
@@ -484,7 +484,7 @@ await cloudwatchClient.send(metricCommand);
 ### 12. Incorrect API Gateway Authorizer Identity Source (Lines 374-382, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 const lambdaAuthorizer = new apigateway.TokenAuthorizer(
   this,
   'ApiKeyAuthorizer',
@@ -496,7 +496,7 @@ const lambdaAuthorizer = new apigateway.TokenAuthorizer(
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 const authorizer = new apigateway.TokenAuthorizer(this, 'ApiAuthorizer', {
   handler: authorizerLambda,
   identitySource: 'method.request.header.Authorization',
@@ -519,7 +519,7 @@ const authorizer = new apigateway.TokenAuthorizer(this, 'ApiAuthorizer', {
 ### 13. Unnecessary LogRetentionRole (Lines 173-175, MODEL_RESPONSE.md)
 
 **MODEL_RESPONSE (INCORRECT):**
-```typescript
+```ts
 logRetention: logs.RetentionDays.THIRTY_DAYS,
 logRetentionRole: new iam.Role(this, 'LogRetentionRole', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -527,7 +527,7 @@ logRetentionRole: new iam.Role(this, 'LogRetentionRole', {
 ```
 
 **IDEAL_RESPONSE (CORRECT):**
-```typescript
+```ts
 logRetention: logs.RetentionDays.ONE_MONTH,
 ```
 
@@ -581,7 +581,7 @@ Does not provide a package.json file with required dependencies.
 Does not set `reservedConcurrentExecutions` on webhook processing Lambda.
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 const webhookProcessingLambda = new lambda.Function(
   this,
   'WebhookProcessingLambda',

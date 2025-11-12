@@ -23,7 +23,7 @@ The error occurs because the code is trying to look up a Route 53 hosted zone fo
 
 Update **lib/secure-cloud-stack.ts** to make Route 53 configuration optional:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -155,7 +155,7 @@ export class SecureCloudStack extends cdk.Stack {
 
 Update **bin/app.ts** to handle the domain configuration better:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -192,7 +192,7 @@ new SecureCloudStack(app, 'SecureCloudStack', {
 
 Update **test/secure-cloud-stack.test.ts** to handle optional Route 53:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { SecureCloudStack } from '../lib/secure-cloud-stack';

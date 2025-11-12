@@ -18,7 +18,7 @@ This document analyzes the differences between MODEL_RESPONSE.md (the initial mo
 #### 1. AWS Provider Configuration (Architecture)
 **Issue**: MODEL_RESPONSE did not include explicit AWS provider configuration for target region
 **Fix**: Added `aws.Provider` with explicit region setting
-```typescript
+```ts
 const targetProvider = new aws.Provider(`migration-provider-${environmentSuffix}`, {
   region: migrationConfig.targetRegion,
 }, { parent: this });
@@ -29,7 +29,7 @@ const targetProvider = new aws.Provider(`migration-provider-${environmentSuffix}
 #### 2. Enhanced KMS Key Policy (Security)
 **Issue**: MODEL_RESPONSE had basic KMS key without explicit service permissions
 **Fix**: Added comprehensive key policy with service principals
-```typescript
+```ts
 policy: JSON.stringify({
   Version: '2012-10-17',
   Statement: [
@@ -56,7 +56,7 @@ policy: JSON.stringify({
 #### 3. S3 Public Access Block (Security)
 **Issue**: MODEL_RESPONSE did not include S3 public access blocking
 **Fix**: Added `BucketPublicAccessBlock` for all buckets
-```typescript
+```ts
 const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${bucketName}-public-block`, {
   bucket: bucket.id,
   blockPublicAcls: true,
@@ -71,7 +71,7 @@ const publicAccessBlock = new aws.s3.BucketPublicAccessBlock(`${bucketName}-publ
 #### 4. DynamoDB Streams for Replication (Architecture)
 **Issue**: MODEL_RESPONSE created tables without enabling streams for custom replication
 **Fix**: Added stream configuration
-```typescript
+```ts
 streamEnabled: true,
 streamViewType: 'NEW_AND_OLD_IMAGES',
 ttl: {
@@ -85,7 +85,7 @@ ttl: {
 #### 5. Lambda Dead Letter Queue (Resilience)
 **Issue**: MODEL_RESPONSE had no error handling for failed Lambda invocations
 **Fix**: Added DLQ configuration
-```typescript
+```ts
 deadLetterConfig: {
   targetArn: snsTopic.arn,
 },
@@ -97,7 +97,7 @@ reservedConcurrentExecutions: 5,
 #### 6. CloudWatch Dashboard (Monitoring)
 **Issue**: MODEL_RESPONSE had alarms but no centralized monitoring dashboard
 **Fix**: Added CloudWatch Dashboard with metrics for S3 and DynamoDB
-```typescript
+```ts
 const dashboard = new aws.cloudwatch.Dashboard(`migration-dashboard-${environmentSuffix}`, {
   dashboardName: `migration-${environmentSuffix}`,
   dashboardBody: pulumi.all([...]).apply([...]) => JSON.stringify({
@@ -113,7 +113,7 @@ const dashboard = new aws.cloudwatch.Dashboard(`migration-dashboard-${environmen
 #### 7. Enhanced S3 Replication Policy (Configuration)
 **Issue**: MODEL_RESPONSE had basic replication permissions
 **Fix**: Added additional S3 actions for complete replication support
-```typescript
+```ts
 Action: [
   's3:GetObjectVersionForReplication',
   's3:GetObjectVersionAcl',
@@ -128,7 +128,7 @@ Action: [
 #### 8. Enhanced Lambda Validation Policy (Configuration)
 **Issue**: MODEL_RESPONSE Lambda policy lacked KMS and Stream permissions
 **Fix**: Added KMS decrypt and DynamoDB Stream permissions
-```typescript
+```ts
 {
   Effect: 'Allow',
   Action: ['kms:Decrypt', 'kms:DescribeKey'],
@@ -141,7 +141,7 @@ Action: [
 #### 9. Lifecycle Policy Enhancement (Best Practice)
 **Issue**: MODEL_RESPONSE had basic lifecycle rules
 **Fix**: Added abort incomplete multipart upload rule
-```typescript
+```ts
 {
   id: 'abort-incomplete-multipart',
   status: 'Enabled',
@@ -154,7 +154,7 @@ Action: [
 #### 10. Additional CloudWatch Alarms (Monitoring)
 **Issue**: MODEL_RESPONSE had only read throttle alarms for DynamoDB
 **Fix**: Added write throttle alarms and enhanced alarm configuration
-```typescript
+```ts
 const writeThrottleAlarm = new aws.cloudwatch.MetricAlarm(
   `${tableName}-write-throttle-alarm`,
   {
@@ -174,7 +174,7 @@ const writeThrottleAlarm = new aws.cloudwatch.MetricAlarm(
 #### 11. Enhanced Migration Report (Documentation)
 **Issue**: MODEL_RESPONSE had basic report with minimal details
 **Fix**: Added detailed status, dashboard URL, next steps, and configuration details
-```typescript
+```ts
 resources: {
   s3Buckets: bucketInfo.map((b: any) => ({
     name: b.name,

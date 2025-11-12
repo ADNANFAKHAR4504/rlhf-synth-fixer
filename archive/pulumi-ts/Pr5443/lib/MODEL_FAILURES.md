@@ -23,7 +23,7 @@ The MODEL_RESPONSE provided a comprehensive Pulumi TypeScript implementation but
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE attempted to set `AWS_REGION` as a Lambda environment variable:
 
-```typescript
+```ts
 environment: {
   variables: {
     DYNAMODB_TABLE: webhookTable.name,
@@ -42,7 +42,7 @@ this request: AWS_REGION
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 environment: {
   variables: {
     DYNAMODB_TABLE: webhookTable.name,
@@ -95,7 +95,7 @@ The model should learn that:
 **Observation**:
 The MODEL_RESPONSE initially included `stageName` in the Deployment resource arguments, which is not supported in newer Pulumi AWS provider versions:
 
-```typescript
+```ts
 const deployment = new aws.apigateway.Deployment(
   `webhook-deployment-${environmentSuffix}`,
   {
@@ -110,7 +110,7 @@ const deployment = new aws.apigateway.Deployment(
 This was corrected during build validation (TypeScript compilation error), demonstrating good infrastructure-as-code practices with type safety.
 
 **Correct Implementation**:
-```typescript
+```ts
 const deployment = new aws.apigateway.Deployment(
   `webhook-deployment-${environmentSuffix}`,
   {

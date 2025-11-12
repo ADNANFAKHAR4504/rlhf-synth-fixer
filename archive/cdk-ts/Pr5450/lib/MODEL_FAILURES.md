@@ -6,7 +6,7 @@
 +
 +In certain deployment stages, the model evaluation step now simulates *controlled failure conditions* to verify rollback and alert mechanisms.
 +
-+```typescript
++```ts
 +// src/pipeline/model-validation.ts
 +
 +import { CloudWatchClient, PutMetricDataCommand } from "@aws-sdk/client-cloudwatch";

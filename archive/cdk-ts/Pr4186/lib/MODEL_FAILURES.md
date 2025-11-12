@@ -65,7 +65,7 @@ Initial implementation used hardcoded resource names without environment suffix.
 
 ### Correction
 Updated all resource names to include `environmentSuffix`:
-```typescript
+```ts
 bucketName: `prod-data-bucket-${environmentSuffix}`
 functionName: `prod-object-logger-${environmentSuffix}`
 roleName: `prod-data-bucket-readonly-role-${environmentSuffix}`

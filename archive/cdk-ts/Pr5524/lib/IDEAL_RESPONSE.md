@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/key-rotation-monitor.ts
 
-```typescript
+```ts
 /* eslint-disable import/no-extraneous-dependencies */
 import {
   KMSClient,
@@ -232,7 +232,7 @@ async function sendRotationNotification(
 
 ## ./lib/lambda/s3-remediation.ts
 
-```typescript
+```ts
 /* eslint-disable import/no-extraneous-dependencies */
 import {
   S3Client,
@@ -531,7 +531,7 @@ async function sendNotification(results: RemediationResult[]): Promise<void> {
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 // ============================================================================
 // IMPORTS
 // ============================================================================
@@ -1844,7 +1844,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 /* eslint-disable import/no-extraneous-dependencies */
 import fs from 'fs';
 import path from 'path';
@@ -2192,7 +2192,7 @@ describe('TAP Stack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match, Capture } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

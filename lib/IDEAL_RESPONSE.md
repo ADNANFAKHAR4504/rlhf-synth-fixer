@@ -4,7 +4,7 @@ This implementation creates a production-ready VPC infrastructure with PCI DSS c
 
 ## File: lib/TapStack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -244,7 +244,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -269,7 +269,7 @@ app.synth();
 
 ## File: test/TapStack.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/TapStack';

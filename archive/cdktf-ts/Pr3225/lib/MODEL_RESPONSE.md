@@ -1,6 +1,6 @@
 ## **lib/modules.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput } from 'cdktf';
@@ -915,7 +915,7 @@ export class BackupModule extends Construct {
 
 ## **lib/tap-stack.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';

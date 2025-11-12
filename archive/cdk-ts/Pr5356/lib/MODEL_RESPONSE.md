@@ -34,7 +34,7 @@ I'll build a production-ready serverless transaction pipeline following your exa
 
 ## Project Structure
 
-```typescript
+```ts
 // bin/tap.ts
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -48,7 +48,7 @@ new TapStack(app, 'TapStack', {
 
 ## Complete Stack Implementation
 
-```typescript
+```ts
 // lib/tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -1258,7 +1258,7 @@ Access the CloudWatch dashboard at the URL output after deployment.
 
 ## Test Files
 
-```typescript
+```ts
 // test/tap-stack.unit.test.ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
@@ -1331,7 +1331,7 @@ describe('TapStack Unit Tests', () => {
 });
 ```
 
-```typescript
+```ts
 // test/tap-stack.int.test.ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tapstack';

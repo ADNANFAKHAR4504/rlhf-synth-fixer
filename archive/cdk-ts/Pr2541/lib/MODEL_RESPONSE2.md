@@ -2,7 +2,7 @@ The error indicates that the KMS key doesn't have the proper permissions to be u
 
 ## lib/iam-core-stack.ts (Fixed)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';

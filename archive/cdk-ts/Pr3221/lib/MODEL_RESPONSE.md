@@ -112,7 +112,7 @@ production-infrastructure/
 ```
 
 ### `bin/production-infrastructure.ts`
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -137,7 +137,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 ```
 
 ### `lib/production-infrastructure-stack.ts`
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -557,7 +557,7 @@ All resources are tagged with `Environment: Production`.
 
 ### Code-Level Fixes:
 
-```typescript
+```ts
 // Fix 1: Restrict RDS access to VPC CIDR only (compromise solution)
 rdsSecurityGroup.addIngressRule(
   ec2.Peer.ipv4(vpc.vpcCidrBlock), // Instead of anyIpv4()
@@ -635,7 +635,7 @@ const dbSubnetGroup = new rds.SubnetGroup(this, 'DbSubnetGroup', {
 ## 4) Generate Tests / Validations
 
 ### `test/production-infrastructure.test.ts`
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { ProductionInfrastructureStack } from '../lib/production-infrastructure-stack';

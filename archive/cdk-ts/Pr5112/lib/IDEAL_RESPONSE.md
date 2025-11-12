@@ -1,4 +1,4 @@
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -30,7 +30,7 @@ export class TapStack extends cdk.Stack {
 }
 ```
 
-```typescript
+```ts
 // lib/aml-pipeline-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';

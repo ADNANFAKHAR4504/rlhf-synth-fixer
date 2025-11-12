@@ -26,7 +26,7 @@ lib/
 
 ### 1. Multi-Region VPC Stack (lib/multi-region-vpc.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -103,7 +103,7 @@ export class MultiRegionVpcStack extends cdk.Stack {
 
 ### 2. IAM Roles Stack (lib/iam-roles.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import { Construct } from 'constructs';
@@ -193,7 +193,7 @@ export class IamRolesStack extends cdk.Stack {
 
 ### 3. Main Orchestration Stack (lib/tap-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { MultiRegionVpcStack } from './multi-region-vpc';

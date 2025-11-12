@@ -44,7 +44,7 @@ Proper separation of concerns across dev, staging, and production environments w
 **Problem**: RDS instances were not encrypted at rest, violating security compliance requirements.
 
 **Solution**:
-```typescript
+```ts
 this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuffix}`, {
   // ... other config
   storageEncrypted: true,  // ← FIX 1: Enable storage encryption
@@ -60,7 +60,7 @@ this.database = new rds.DatabaseInstance(this, `Database-${props.environmentSuff
 **Problem**: RDS instance types were hardcoded as strings (e.g., "db.t3.micro") instead of using CDK's typed InstanceType classes.
 
 **Solution**:
-```typescript
+```ts
 // Parse instance type string from config
 const instanceParts = props.config.rdsInstanceClass.split('.');
 const instanceClass = instanceParts[1].toUpperCase() as keyof typeof ec2.InstanceClass;
@@ -81,7 +81,7 @@ instanceType: ec2.InstanceType.of(
 **Problem**: Log retention was set using numeric values instead of proper enum values.
 
 **Solution**:
-```typescript
+```ts
 // Map numeric days to RetentionDays enum
 const retentionMapping: Record<number, logs.RetentionDays> = {
   7: logs.RetentionDays.ONE_WEEK,
@@ -105,7 +105,7 @@ const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuff
 **Problem**: Log groups didn't have RemovalPolicy set, causing cleanup issues during stack deletion.
 
 **Solution**:
-```typescript
+```ts
 const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuffix}`, {
   logGroupName: `/aws/lambda/data-processor-${props.environmentSuffix}`,
   retention: retentionMapping[props.config.logRetention],
@@ -121,7 +121,7 @@ const logGroup = new logs.LogGroup(this, `LambdaLogGroup-${props.environmentSuff
 **Problem**: No validation of environment values, allowing invalid environments to be used.
 
 **Solution**:
-```typescript
+```ts
 export function getEnvironmentConfig(env: string): EnvironmentConfig {
   const validEnvironments = ['dev', 'staging', 'prod'];
   if (!validEnvironments.includes(env)) {
@@ -142,7 +142,7 @@ export function getEnvironmentConfig(env: string): EnvironmentConfig {
 
 **Solution**: Comprehensive environment configs with appropriate resource sizing:
 
-```typescript
+```ts
 const configs: Record<string, EnvironmentConfig> = {
   dev: {
     vpcCidr: '10.0.0.0/16',
@@ -181,7 +181,7 @@ const configs: Record<string, EnvironmentConfig> = {
 
 ## File: lib/environment-config.ts
 
-```typescript
+```ts
 export interface EnvironmentConfig {
   vpcCidr: string;
   maxAzs: number;
@@ -248,7 +248,7 @@ export function getEnvironmentConfig(env: string): EnvironmentConfig {
 
 ## File: lib/vpc-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -341,7 +341,7 @@ export class VpcConstruct extends Construct {
 
 ## File: lib/database-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -421,7 +421,7 @@ export class DatabaseConstruct extends Construct {
 
 ## File: lib/lambda-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -533,7 +533,7 @@ def handler(event, context):
 
 ## File: lib/storage-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -592,7 +592,7 @@ export class StorageConstruct extends Construct {
 
 ## File: lib/parameter-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
@@ -647,7 +647,7 @@ export class ParameterConstruct extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcConstruct } from './vpc-construct';

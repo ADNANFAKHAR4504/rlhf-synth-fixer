@@ -4,7 +4,7 @@ This solution provides AWS infrastructure using CDK TypeScript.
 
 ## lib/compute-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -96,7 +96,7 @@ export class ComputeConstruct extends Construct {
 
 ## lib/database-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -156,7 +156,7 @@ export class DatabaseConstruct extends Construct {
 
 ## lib/monitoring-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -274,7 +274,7 @@ export class MonitoringConstruct extends Construct {
 
 ## lib/networking-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -324,7 +324,7 @@ export class NetworkingConstruct extends Construct {
 
 ## lib/security-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -449,7 +449,7 @@ export class SecurityConstruct extends Construct {
 
 ## lib/storage-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
@@ -520,7 +520,7 @@ export class StorageConstruct extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ComputeConstruct } from './compute-construct';

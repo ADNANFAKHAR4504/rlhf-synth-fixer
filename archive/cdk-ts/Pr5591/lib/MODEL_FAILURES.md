@@ -44,7 +44,7 @@ Model response enabled point-in-time recovery by default.
 **IDEAL_RESPONSE Fix:**
 Disabled point-in-time recovery to allow proper stack cleanup in test environments.
 
-```typescript
+```ts
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: false,
 }

@@ -2,7 +2,7 @@ I see the issue. The CDKTF provider has different naming conventions for some re
 
 ## Fixed main.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

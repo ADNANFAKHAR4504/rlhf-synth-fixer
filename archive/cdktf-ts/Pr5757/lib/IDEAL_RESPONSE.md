@@ -4,7 +4,7 @@ This is the corrected implementation with all model failures fixed.
 
 ## File: lib/monitoring-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
@@ -315,7 +315,7 @@ export class MonitoringStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 
 // VPC
@@ -862,7 +862,7 @@ export class SsmParameterModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

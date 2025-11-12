@@ -2,7 +2,7 @@ I'll provide a complete CDKTF solution in TypeScript organized into the two file
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, S3Backend } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -329,7 +329,7 @@ app.synth();
 
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformOutput } from "cdktf";
 

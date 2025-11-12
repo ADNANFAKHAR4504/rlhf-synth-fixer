@@ -2,7 +2,7 @@
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -95,7 +95,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/network-stack.ts
 
-```typescript
+```ts
 /**
  * network-stack.ts
  *
@@ -319,7 +319,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## File: lib/ecs-stack.ts
 
-```typescript
+```ts
 /**
  * ecs-stack.ts
  *

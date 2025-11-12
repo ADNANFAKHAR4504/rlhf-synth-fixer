@@ -4,7 +4,7 @@ This document contains the complete Infrastructure as Code (IaC) solution for a 
 
 ## bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -44,7 +44,7 @@ cdk.Tags.of(app).add('ManagedBy', 'CDK');
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecr from 'aws-cdk-lib/aws-ecr';

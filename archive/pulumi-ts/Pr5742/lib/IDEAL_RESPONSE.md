@@ -19,7 +19,7 @@ The implementation creates a complete security infrastructure using Pulumi TypeS
 
 ## Implementation Code
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

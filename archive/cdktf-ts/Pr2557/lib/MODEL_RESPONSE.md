@@ -4,7 +4,7 @@ I'll create a comprehensive CDKTF TypeScript project that implements your multi-
 
 First, let me show you the complete stack implementation:
 
-```typescript
+```ts
 // main.ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';

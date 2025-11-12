@@ -1,7 +1,7 @@
 I'll create a comprehensive Pulumi TypeScript infrastructure for your software distribution platform. Here's the complete implementation:
 
 ## lib/tap-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { StorageStack } from './storage-stack';
@@ -94,7 +94,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 **CRITICAL FIX**: Lambda@Edge function naming must be consistent to avoid Pulumi state corruption:
 
-```typescript
+```ts
 // lib/lambda-stack.ts
 // Create Lambda@Edge function for license verification
 const edgeLambda = new aws.lambda.Function(
@@ -235,7 +235,7 @@ This implementation demonstrates several production-grade patterns:
 
 ### Lambda@Edge State Management
 
-```typescript
+```ts
 // PRODUCTION PATTERN: Complete Lambda@Edge protection
 const edgeLambda = new aws.lambda.Function(
   `license-verify-edge-fixed-${environmentSuffix}`, // Consistent naming prevents state corruption

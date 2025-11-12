@@ -35,7 +35,7 @@ Here's what I need to implement:
 
 I already have a base stack file at `lib/tap-stack.ts`. Here's what it currently contains:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

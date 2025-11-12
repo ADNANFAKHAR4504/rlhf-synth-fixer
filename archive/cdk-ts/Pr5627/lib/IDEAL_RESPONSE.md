@@ -8,7 +8,7 @@ The infrastructure implements a phased migration approach with active-active rep
 
 ## Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';

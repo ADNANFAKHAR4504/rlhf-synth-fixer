@@ -29,7 +29,7 @@ The application implements a single-stack architecture that includes:
 
 ### 1. Main Stack - `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -873,7 +873,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Entry Point - `bin/tap.ts`
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

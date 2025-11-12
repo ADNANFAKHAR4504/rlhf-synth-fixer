@@ -4,7 +4,7 @@ Here's the complete CDK TypeScript code for your job board web application infra
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { WebApplicationStack } from './web-application-stack';
@@ -31,7 +31,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/web-application-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -345,7 +345,7 @@ export class WebApplicationStack extends cdk.Stack {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

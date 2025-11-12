@@ -1,6 +1,6 @@
 I'll create a comprehensive AWS CDK TypeScript template that provisions a secure AWS environment for handling sensitive enterprise data. Let me address each requirement systematically:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

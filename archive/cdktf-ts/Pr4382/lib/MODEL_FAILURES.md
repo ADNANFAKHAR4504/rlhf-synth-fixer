@@ -6,12 +6,12 @@ This document captures the critical failures in the original MODEL_RESPONSE.md i
 
 ### 1. **Stack Name Conflicts**
 **Failure**: Static stack naming caused conflicts when multiple deployments ran simultaneously.
-```typescript
+```ts
 // BROKEN: Static naming
 const stackName = `TapStack${environmentSuffix}`;
 ```
 **Fix**: Dynamic timestamp-based naming to prevent conflicts.
-```typescript
+```ts
 // WORKING: Dynamic naming with timestamp
 const timestamp = Math.floor(Date.now() / 1000);
 const stackName = `TapStack${environmentSuffix}-${timestamp}`;
@@ -19,14 +19,14 @@ const stackName = `TapStack${environmentSuffix}-${timestamp}`;
 
 ### 2. **S3 Backend State Key Conflicts**
 **Failure**: Static Terraform state keys caused state conflicts between concurrent deployments.
-```typescript
+```ts
 // BROKEN: Static state key
 new S3Backend(this, {
   key: `${environmentSuffix}/${id}.tfstate`,
 });
 ```
 **Fix**: Dynamic state keys using timestamp-based stack names.
-```typescript
+```ts
 // WORKING: Dynamic state key
 const dynamicStackName = `${id}-${environmentSuffix}-${timestamp}`;
 new S3Backend(this, {
@@ -45,12 +45,12 @@ new S3Backend(this, {
 
 ### 4. **Unit Tests with Hardcoded JSON Expectations**
 **Failure**: Unit tests expected exact JSON string matches, which broke due to dynamic content and formatting differences.
-```typescript
+```ts
 // BROKEN: Hardcoded JSON expectations
 expect(synthesized).toContain('{"terraform":{"required_providers"');
 ```
 **Fix**: Flexible content-based assertions instead of exact JSON matching.
-```typescript
+```ts
 // WORKING: Flexible assertions
 expect(synthesized).toContain('terraform');
 expect(synthesized).toContain('required_providers');
@@ -65,24 +65,24 @@ expect(synthesized).toContain('required_providers');
 
 ### 6. **Incorrect AWS Resource ID Extraction**
 **Failure**: ElastiCache tests failed because they extracted the wrong part of the endpoint as the replication group ID.
-```typescript
+```ts
 // BROKEN: Wrong ID extraction
 const replicationGroupId = outputs.RedisEndpoint.split('.')[0]; // Returns "master"
 ```
 **Fix**: Use the actual replication group ID.
-```typescript
+```ts
 // WORKING: Correct resource ID
 const replicationGroupId = 'assessment-cache-dev';
 ```
 
 ### 7. **AWS SDK Attribute Structure Assumptions**
 **Failure**: VPC DNS attributes test failed due to incorrect attribute structure assumptions.
-```typescript
+```ts
 // BROKEN: Incorrect structure assumption
 expect(response.Vpcs![0].EnableDnsSupport?.Value).toBe(true);
 ```
 **Fix**: Use correct AWS SDK response structure or remove problematic assertions.
-```typescript
+```ts
 // WORKING: Simplified validation
 expect(response.Vpcs![0].VpcId).toBe(outputs.VPCId);
 ```

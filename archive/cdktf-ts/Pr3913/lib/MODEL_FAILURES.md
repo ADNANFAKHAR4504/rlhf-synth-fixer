@@ -12,7 +12,7 @@ The ideal response demonstrates superior implementation quality through better a
 
 The model response uses the deprecated `acl` parameter directly on S3 buckets:
 
-```typescript
+```ts
 this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
   bucket: `secure-logs-${Date.now()}`,
   acl: 'log-delivery-write',  // DEPRECATED
@@ -33,7 +33,7 @@ this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
 - Blocks entire infrastructure deployment
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Uses proper ownership controls instead
 new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
   this,
@@ -55,7 +55,7 @@ new aws.s3BucketOwnershipControls.S3BucketOwnershipControls(
 
 Model response attempts to send VPC Flow Logs to S3 with improper configuration:
 
-```typescript
+```ts
 this.flowLogBucket = new aws.s3Bucket.S3Bucket(this, 'flow-log-bucket', {
   bucket: `vpc-flow-logs-${Date.now()}`,
   acl: 'private',  // Wrong approach
@@ -82,7 +82,7 @@ new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
 - Security monitoring gaps
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Proper CloudWatch Logs destination with full IAM setup
 this.flowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
   this,
@@ -118,7 +118,7 @@ const flowLogRole = new aws.iamRole.IamRole(this, 'flow-log-role', {
 
 Model response has a broken KMS key policy:
 
-```typescript
+```ts
 this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
   description: 'KMS key for S3 bucket encryption',
   enableKeyRotation: true,
@@ -150,7 +150,7 @@ this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
 - Deployment errors for encrypted log resources
 
 **Ideal Response Solution:**
-```typescript
+```ts
 const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
   this,
   'current'
@@ -205,7 +205,7 @@ this.kmsKey = new aws.kmsKey.KmsKey(this, 's3-kms-key', {
 
 Model response uses incorrect interpolation in bucket policies:
 
-```typescript
+```ts
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-policy', {
   bucket: this.logBucket.id,
   policy: JSON.stringify({
@@ -237,7 +237,7 @@ new aws.s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-policy', {
 - Silent security vulnerability
 
 **Ideal Response Solution:**
-```typescript
+```ts
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-policy', {
   bucket: this.logBucket.id,
   policy: JSON.stringify({
@@ -267,7 +267,7 @@ new aws.s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-policy', {
 
 Model response uses non-existent placeholder for Lambda code:
 
-```typescript
+```ts
 this.function = new aws.lambdaFunction.LambdaFunction(
   this,
   'secure-function',
@@ -296,7 +296,7 @@ this.function = new aws.lambdaFunction.LambdaFunction(
 - Violates requirement for working Lambda deployment
 
 **Ideal Response Solution:**
-```typescript
+```ts
 this.function = new aws.lambdaFunction.LambdaFunction(
   this,
   'secure-function',
@@ -321,7 +321,7 @@ this.function = new aws.lambdaFunction.LambdaFunction(
 
 Model response attempts server access logging incorrectly:
 
-```typescript
+```ts
 this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
   bucket: `secure-logs-${Date.now()}`,
   logging: {
@@ -345,7 +345,7 @@ this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
 - Security monitoring gap
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Ideal response doesn't include server access logging
 // which is correct since it's not a requirement
 // and adds unnecessary complexity
@@ -373,7 +373,7 @@ this.logBucket = new aws.s3Bucket.S3Bucket(this, 'log-bucket', {
 
 Model response hardcodes availability zones:
 
-```typescript
+```ts
 const azs = ['us-east-1a', 'us-east-1b'];
 ```
 
@@ -390,7 +390,7 @@ const azs = ['us-east-1a', 'us-east-1b'];
 - Fails requirement for flexible infrastructure
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // In tap-stack.ts
 const awsRegion = AWS_REGION_OVERRIDE
   ? AWS_REGION_OVERRIDE
@@ -416,7 +416,7 @@ constructor(scope: Construct, id: string, availabilityZones: string[]) {
 
 Model response uses deprecated parameter:
 
-```typescript
+```ts
 const natEip = new aws.eip.Eip(this, 'nat-eip', {
   vpc: true,  // DEPRECATED
   tags: { Name: 'nat-gateway-eip' }
@@ -436,7 +436,7 @@ const natEip = new aws.eip.Eip(this, 'nat-eip', {
 - Technical debt
 
 **Ideal Response Solution:**
-```typescript
+```ts
 const natEip = new aws.eip.Eip(this, 'nat-eip', {
   domain: 'vpc',  // Correct parameter
   tags: { Name: 'nat-gateway-eip' }
@@ -451,7 +451,7 @@ const natEip = new aws.eip.Eip(this, 'nat-eip', {
 
 Model response specifies engine version that may not be compatible:
 
-```typescript
+```ts
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'secure-db', {
   identifier: 'secure-mysql-db',
   engine: 'mysql',
@@ -473,7 +473,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'secure-db', {
 - Version drift between deployments
 
 **Ideal Response Solution:**
-```typescript
+```ts
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'secure-db', {
   identifier: 'secure-mysql-db-654',
   engine: 'mysql',
@@ -493,7 +493,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'secure-db', {
 
 Model response enables excessive CloudWatch log exports:
 
-```typescript
+```ts
 enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
 ```
 
@@ -510,7 +510,7 @@ enabledCloudwatchLogsExports: ['error', 'general', 'slowquery'],
 - Over-engineering without benefit
 
 **Ideal Response Solution:**
-```typescript
+```ts
 enabledCloudwatchLogsExports: ['error'],  // Only error logs needed
 ```
 
@@ -522,7 +522,7 @@ enabledCloudwatchLogsExports: ['error'],  // Only error logs needed
 
 Model response lacks S3 backend configuration in tap-stack.ts:
 
-```typescript
+```ts
 const app = new App();
 new TapStack(app, 'tap-security-stack');
 app.synth();
@@ -542,7 +542,7 @@ app.synth();
 - State management is manual and error-prone
 
 **Ideal Response Solution:**
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -560,7 +560,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 
 Model response has no configuration parameters:
 
-```typescript
+```ts
 class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -582,7 +582,7 @@ class TapStack extends TerraformStack {
 - Violates DRY principle
 
 **Ideal Response Solution:**
-```typescript
+```ts
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -612,7 +612,7 @@ export class TapStack extends TerraformStack {
 
 Model response uses timestamps for bucket names:
 
-```typescript
+```ts
 bucket: `secure-logs-${Date.now()}`,
 bucket: `cloudtrail-logs-${Date.now()}`,
 ```
@@ -630,7 +630,7 @@ bucket: `cloudtrail-logs-${Date.now()}`,
 - State management becomes problematic
 
 **Ideal Response Solution:**
-```typescript
+```ts
 bucket: 'secure-logs-654',
 bucket: 'cloudtrail-logs-654',
 ```
@@ -643,7 +643,7 @@ bucket: 'cloudtrail-logs-654',
 
 Model response has minimal parameter group config:
 
-```typescript
+```ts
 this.dbParameterGroup = new aws.dbParameterGroup.DbParameterGroup(
   this,
   'db-param-group',
@@ -672,7 +672,7 @@ this.dbParameterGroup = new aws.dbParameterGroup.DbParameterGroup(
 - Not fully optimized configuration
 
 **Ideal Response Solution:**
-```typescript
+```ts
 // Similar to model but ideal could add more parameters
 parameter: [
   {

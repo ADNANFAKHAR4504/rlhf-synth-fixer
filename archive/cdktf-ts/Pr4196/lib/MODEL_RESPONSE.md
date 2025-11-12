@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import {
   AwsProvider,
@@ -764,7 +764,7 @@ export function getEnvVar(name: string, defaultValue?: string): string {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider, ec2, iam } from '@cdktf/provider-aws';

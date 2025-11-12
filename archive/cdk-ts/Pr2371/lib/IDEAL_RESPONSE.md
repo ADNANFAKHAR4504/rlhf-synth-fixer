@@ -4,7 +4,7 @@ This is the ideal implementation for the secure, production-ready AWS infrastruc
 
 ## Complete CDK Stack Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

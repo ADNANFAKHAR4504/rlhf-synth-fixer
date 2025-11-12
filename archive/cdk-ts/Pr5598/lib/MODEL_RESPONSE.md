@@ -51,7 +51,7 @@ I'll create two files:
 ### Answer 
 ---
 
-```typescript
+```ts
 // main.ts
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -104,7 +104,7 @@ Object.entries(globalTags).forEach(([key, value]) => {
 app.synth();
 ```
 
-```typescript
+```ts
 // tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

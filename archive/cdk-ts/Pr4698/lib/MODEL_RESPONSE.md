@@ -35,7 +35,7 @@ Let's start by creating the main project structure and then implement each compo
 
 First, the main stack file (`lib/tap-stack.ts`):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AnalyticsStack } from './analytics';
@@ -59,7 +59,7 @@ export class TapStack extends cdk.Stack {
 
 Now, let's implement the `analytics.ts` file with all the required components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -351,7 +351,7 @@ export class AnalyticsStack extends cdk.NestedStack {
 
 Let's also create stubs for the Lambda function source files to complete the project. First, the validation Lambda:
 
-```typescript
+```ts
 // src/validation-lambda.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -397,7 +397,7 @@ export const handler = async (
 
 Next, the transformation Lambda:
 
-```typescript
+```ts
 // src/transformation-lambda.ts
 import { S3Event } from 'aws-lambda';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -470,7 +470,7 @@ function streamToString(stream: any): Promise<string> {
 
 Finally, let's create the main CDK app entry point:
 
-```typescript
+```ts
 // bin/smart-agriculture.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -604,7 +604,7 @@ smart-agriculture-platform/
 
 Let's start with the main stack file:
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -633,7 +633,7 @@ export class TapStack extends cdk.Stack {
 
 Now let's implement the analytics stack with all the required components:
 
-```typescript
+```ts
 // lib/analytics.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -925,7 +925,7 @@ export class AnalyticsStack extends cdk.NestedStack {
 
 Here are the Lambda functions for data validation and transformation:
 
-```typescript
+```ts
 // src/validation-lambda.ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -969,7 +969,7 @@ export const handler = async (
 };
 ```
 
-```typescript
+```ts
 // src/transformation-lambda.ts
 import { S3Event } from 'aws-lambda';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -1040,7 +1040,7 @@ function streamToString(stream: any): Promise<string> {
 
 ## Main App Entry Point
 
-```typescript
+```ts
 // bin/smart-agriculture.ts
 #!/usr/bin/env node
 import 'source-map-support/register';

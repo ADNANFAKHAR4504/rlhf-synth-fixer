@@ -6,7 +6,7 @@ This document provides the complete, ideal CDKTF TypeScript implementation for t
 
 ### lib/tap-stack.ts
 
-```typescript
+```ts
 import { AppautoscalingPolicy } from '@cdktf/provider-aws/lib/appautoscaling-policy';
 import { AppautoscalingTarget } from '@cdktf/provider-aws/lib/appautoscaling-target';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
@@ -241,7 +241,7 @@ app.synth();
 
 ### 5. **Configuration Interface**
 
-```typescript interface GamingDatabaseStackProps {
+```ts interface GamingDatabaseStackProps {
   environment?: string;        // Default: 'production'
   team?: string;              // Default: 'gaming-platform'
   region?: string;            // Default: 'us-west-2'
@@ -335,7 +335,7 @@ app.synth();
 
 ### 5. Configuration Interface
 
-```typescript
+```ts
 interface GamingDatabaseStackProps {
   environment?: string; // Default: 'production'
   team?: string; // Default: 'gaming-platform'
@@ -367,7 +367,7 @@ This implementation includes comprehensive test coverage:
 
 ## Export Compatibility
 
-```typescript
+```ts
 // Primary export
 export class GamingDatabaseStack extends TerraformStack { ... }
 

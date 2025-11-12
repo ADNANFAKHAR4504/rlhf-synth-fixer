@@ -28,12 +28,12 @@ This document analyzes the failures and shortcomings in the MODEL_RESPONSE compa
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: Hardcoded resource names without proper environment suffix integration:
-```typescript
+```ts
 bucket: `financial-services-${name}-${pulumi.getStack()}`
 ```
 
 **IDEAL_RESPONSE Fix**: Consistent environment suffix usage:
-```typescript
+```ts
 bucket: `${serviceName}-${bucketName}-${environmentSuffix}`
 ```
 
@@ -48,12 +48,12 @@ bucket: `${serviceName}-${bucketName}-${environmentSuffix}`
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: Uses deprecated Python runtime:
-```typescript
+```ts
 runtime: aws.lambda.Runtime.Python3d9
 ```
 
 **IDEAL_RESPONSE Fix**: Uses current supported runtime:
-```typescript
+```ts
 runtime: aws.lambda.Runtime.Python3d12
 ```
 
@@ -98,7 +98,7 @@ new_secret = {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: Lambda VPC configuration lacks proper service endpoints:
-```typescript
+```ts
 egress: [{
     fromPort: 443,
     toPort: 443, 
@@ -108,7 +108,7 @@ egress: [{
 ```
 
 **IDEAL_RESPONSE Fix**: Comprehensive VPC endpoints for AWS services:
-```typescript
+```ts
 const secretsManagerEndpoint = new aws.ec2.VpcEndpoint('secrets-manager-endpoint', {
     vpcId: lambdaVpc.id,
     serviceName: `com.amazonaws.${region}.secretsmanager`,
@@ -173,7 +173,7 @@ const secretsManagerEndpoint = new aws.ec2.VpcEndpoint('secrets-manager-endpoint
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Basic AWS Config rules without proper integration:
-```typescript
+```ts
 const cisConfigRules = [
     new aws.cfg.Rule('root-account-mfa-enabled', {
         source: {
@@ -197,14 +197,14 @@ const cisConfigRules = [
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Resources created without proper parent relationships:
-```typescript
+```ts
 new aws.kms.Key(`${name}-key`, {
     // Missing parent configuration
 });
 ```
 
 **IDEAL_RESPONSE Fix**: Consistent parent resource configuration:
-```typescript
+```ts
 new aws.kms.Key(`${keyName}-key`, {
     // configuration
 }, { parent: this });
@@ -221,12 +221,12 @@ new aws.kms.Key(`${keyName}-key`, {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Hardcoded email addresses in SNS subscriptions:
-```typescript
+```ts
 endpoint: 'security@financialservices.com', // Replace with actual email
 ```
 
 **IDEAL_RESPONSE Fix**: Parameterized email configuration through constructor arguments:
-```typescript
+```ts
 if (args.email) {
     new aws.sns.TopicSubscription('security-alert-email-subscription', {
         topic: securityAlertTopic.arn,

@@ -9,7 +9,7 @@ This document outlines the critical fixes and improvements made to transform the
 **Original Issue**: The TapStack constructor accepted an `environmentSuffix` parameter but never used it, causing resource naming conflicts in multi-environment deployments.
 
 **Fix Applied**:
-```typescript
+```ts
 // Before: environmentSuffix parameter ignored
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
@@ -30,7 +30,7 @@ export class TapStack extends cdk.Stack {
 **Original Issue**: All AWS resources used generic names without environment differentiation, causing deployment conflicts.
 
 **Fixes Applied**:
-```typescript
+```ts
 // Before: Generic resource names
 const vpc = new ec2.Vpc(this, 'ProductionVpc', {
 const albLogsBucket = new s3.Bucket(this, 'AlbAccessLogsBucket', {
@@ -51,7 +51,7 @@ const ec2Role = new iam.Role(this, `Ec2Role${environmentSuffix}`, {
 **Original Issue**: Resources configured with retention policies prevented clean teardown for testing environments.
 
 **Fixes Applied**:
-```typescript
+```ts
 // Before: Resources retained after stack deletion
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 deletionProtection: true,
@@ -68,7 +68,7 @@ deletionProtection: false,
 **Original Issue**: Code referenced `elbv2.InstanceTarget` which doesn't exist in the standard ELB module.
 
 **Fix Applied**:
-```typescript
+```ts
 // Before: Missing import
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 targetGroup.addTarget(new elbv2.InstanceTarget(ec2Instance1, 80)); // ❌ Doesn't exist
@@ -85,7 +85,7 @@ targetGroup.addTarget(new targets.InstanceTarget(ec2Instance1, 80)); // ✅ Work
 **Original Issue**: Code used deprecated `MachineImage.latestAmazonLinux()` method.
 
 **Fix Applied**:
-```typescript
+```ts
 // Before: Deprecated API
 const amzn2Ami = ec2.MachineImage.latestAmazonLinux({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
@@ -144,7 +144,7 @@ const amzn2Ami = ec2.MachineImage.latestAmazonLinux2();
 **Original Issue**: Security groups used default names causing conflicts.
 
 **Fix Applied**:
-```typescript
+```ts
 // Before: Default naming
 const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
 

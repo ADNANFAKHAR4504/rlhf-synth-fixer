@@ -17,7 +17,7 @@ This is a production-ready disaster recovery solution for healthcare application
 
 **lib/tap-stack.ts**
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -114,7 +114,7 @@ export class TapStack extends TerraformStack {
 
 **lib/database-stack.ts**
 
-```typescript
+```ts
 import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
 import { BackupSelection } from '@cdktf/provider-aws/lib/backup-selection';
 import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
@@ -504,7 +504,7 @@ export class DatabaseStack extends Construct {
 
 **lib/storage-stack.ts**
 
-```typescript
+```ts
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
@@ -806,7 +806,7 @@ export class StorageStack extends Construct {
 
 **lib/monitoring-stack.ts**
 
-```typescript
+```ts
 import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
@@ -957,7 +957,7 @@ export class MonitoringStack extends Construct {
 
 **lib/disaster-recovery-stack.ts**
 
-```typescript
+```ts
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
@@ -1211,7 +1211,7 @@ export class DisasterRecoveryStack extends Construct {
 
 **lib/lambda/failover-handler.ts**
 
-```typescript
+```ts
 import { DescribeDBClustersCommand, RDSClient } from '@aws-sdk/client-rds';
 import { PublishCommand, SNSClient } from '@aws-sdk/client-sns';
 import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';

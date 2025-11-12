@@ -23,7 +23,7 @@ Error: creating API Gateway Deployment: BadRequestException: No integration defi
 **Root Cause**: API Gateway deployment was created before the integrations were fully configured, causing dependency resolution issues in CDKTF.
 
 **Original Code**:
-```typescript
+```ts
 const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
   restApiId: apiGateway.id,
   triggers: {
@@ -37,7 +37,7 @@ const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const apiDeployment = new ApiGatewayDeployment(this, 'api-deployment', {
   restApiId: apiGateway.id,
   triggers: {
@@ -76,7 +76,7 @@ arn:aws:kms:us-east-1:xxxxx:key/xxxx-xxxx-xxxx
 **Root Cause**: CI/CD service role lacked sufficient KMS permissions for CloudWatch log encryption, and the KMS key policy was too restrictive.
 
 **Original Code**:
-```typescript
+```ts
 const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
   name: `/ecs/edu-analytics-${environmentSuffix}`,
   retentionInDays: 7,
@@ -89,7 +89,7 @@ const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 const ecsLogGroup = new CloudwatchLogGroup(this, 'ecs-log-group', {
   name: `/ecs/edu-analytics-${environmentSuffix}`,
   retentionInDays: 7,
@@ -121,7 +121,7 @@ DB subnet group 'edu-db-subnet-group-pr4910' already exists.
 **Root Cause**: Previous PR deployments left resources in AWS, and CI/CD cleanup processes weren't working properly. Resource names were not unique enough for concurrent PR deployments.
 
 **Original Code**:
-```typescript
+```ts
 const environmentSuffix = props?.environmentSuffix || 'dev';
 // ❌ Same resource names for same PR number across all runs
 
@@ -132,7 +132,7 @@ const dbSubnetGroup = new DbSubnetGroup(this, 'edu-db-subnet-group', {
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 // Add timestamp to PR environments to avoid resource conflicts
 const baseSuffix = props?.environmentSuffix || 'dev';
 const environmentSuffix = baseSuffix.startsWith('pr')
@@ -165,7 +165,7 @@ Received: "us-east-1"
 **Root Cause**: Original MODEL_RESPONSE specified ap-northeast-1 region, but CI/CD environment and practical deployment considerations required standardization to us-east-1.
 
 **Original Code**:
-```typescript
+```ts
 // Region varied by environment configuration
 const awsRegion = props?.awsRegion || 'ap-northeast-1';  // ❌ Inconsistent
 
@@ -175,7 +175,7 @@ expect(synthesizedStack.resource.aws_provider.aws.region)
 ```
 
 **Fixed Code**:
-```typescript
+```ts
 // Force region to us-east-1 for consistent CI/CD deployment
 const awsRegion = 'us-east-1';  // ✅ Standardized for CI/CD
 
@@ -222,7 +222,7 @@ The implementation now successfully deploys in CI/CD environments with:
 
 **Test Fixes**:
 
-```typescript
+```ts
 // Fix 1: Redis encryption at rest
 expect(redis.at_rest_encryption_enabled).toBe('true');  // ✅ String, not boolean
 
@@ -251,7 +251,7 @@ expect(rotationRules.automatically_after_days).toBe(30);
 
 **Solution**: Added test case for the `defaultTags` constructor parameter to cover the uncovered branch:
 
-```typescript
+```ts
 test('TapStack configures default tags when provided', () => {
   app = new App();
   stack = new TapStack(app, 'TestTapStackTags', {

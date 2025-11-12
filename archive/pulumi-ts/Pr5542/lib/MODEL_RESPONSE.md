@@ -4,7 +4,7 @@ Complete implementation of automated disaster recovery for PostgreSQL RDS with h
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as fs from "fs";

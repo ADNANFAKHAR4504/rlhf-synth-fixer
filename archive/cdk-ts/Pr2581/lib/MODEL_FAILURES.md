@@ -30,14 +30,14 @@ const param = await ssm.getParameter({
 
 **Issue**: Several resources used `RemovalPolicy.RETAIN` which prevents proper cleanup during automated testing:
 
-```typescript
+```ts
 // PROBLEMATIC CODE - prevents cleanup
 removalPolicy: cdk.RemovalPolicy.RETAIN,
 ```
 
 **Fix Applied**: Changed removal policies to allow destruction for testing environments:
 
-```typescript
+```ts
 // S3 Bucket fixes
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true, // Auto-delete objects when bucket is destroyed
@@ -51,7 +51,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 
 **Issue**: In MODEL_RESPONSE.md, the CloudWatch alarm used an incorrect action implementation:
 
-```typescript
+```ts
 // BROKEN CODE - invalid alarm action format
 securityGroupAlarm.addAlarmAction({
   bind: () => ({
@@ -62,7 +62,7 @@ securityGroupAlarm.addAlarmAction({
 
 **Fix Applied**: Used proper CloudWatch actions:
 
-```typescript
+```ts
 // FIXED CODE - proper CloudWatch action
 securityGroupAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(logsTopic));
 ```
@@ -71,7 +71,7 @@ securityGroupAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(logsTopic));
 
 **Issue**: Inconsistent environment suffix usage across resources, leading to potential naming conflicts during parallel deployments:
 
-```typescript
+```ts
 // PROBLEMATIC - inconsistent naming
 bucketName: `secure-app-bucket-${this.account}-${this.region}`,
 // vs
@@ -80,7 +80,7 @@ topicName: `app-logs-topic-${environmentSuffix}`,
 
 **Fix Applied**: Consistent environment suffix integration:
 
-```typescript
+```ts
 // FIXED CODE - consistent naming pattern
 bucketName: `secure-app-bucket-${this.account}-${this.region}-${environmentSuffix}`,
 secretName: `rds-credentials-${environmentSuffix}`,
@@ -91,7 +91,7 @@ alarmName: `SecurityGroupChanges-Alarm-${environmentSuffix}`,
 
 **Issue**: MODEL_RESPONSE2.md had step scaling policies that didn't meet AWS requirements for minimum intervals:
 
-```typescript
+```ts
 // PROBLEMATIC - insufficient scaling steps
 scalingSteps: [
   { upper: 80, change: +1 }, // Only one step - AWS requires at least 2
@@ -100,7 +100,7 @@ scalingSteps: [
 
 **Fix Applied**: Proper step scaling configuration with multiple intervals:
 
-```typescript
+```ts
 // FIXED CODE - proper step scaling
 scalingSteps: [
   { upper: 80, change: +1 }, // Add 1 instance when CPU 70-80%
@@ -112,7 +112,7 @@ scalingSteps: [
 
 **Issue**: Manual alarm action binding was incorrectly implemented in MODEL_RESPONSE3.md:
 
-```typescript
+```ts
 // PROBLEMATIC - incorrect binding format
 }).addAlarmAction({
   bind: () => ({ alarmActionArn: scaleUpPolicy.scalingPolicyArn }),
@@ -121,7 +121,7 @@ scalingSteps: [
 
 **Fix Applied**: Proper alarm action binding:
 
-```typescript
+```ts
 // FIXED CODE - correct alarm action binding  
 }).addAlarmAction({
   bind: () => ({ alarmActionArn: scaleUpPolicy.scalingPolicyArn }),
@@ -132,7 +132,7 @@ scalingSteps: [
 
 **Issue**: IAM policy resource ARNs didn't consistently reference the environment-specific SNS topic:
 
-```typescript
+```ts
 // PROBLEMATIC - hardcoded topic name
 resources: [
   `arn:aws:sns:${this.region}:${this.account}:app-logs-topic`,
@@ -141,7 +141,7 @@ resources: [
 
 **Fix Applied**: Consistent environment-specific resource references:
 
-```typescript  
+```ts  
 // FIXED CODE - environment-aware ARN
 resources: [
   `arn:aws:sns:${this.region}:${this.account}:app-logs-topic-${environmentSuffix}`,

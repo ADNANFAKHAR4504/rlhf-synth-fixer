@@ -35,12 +35,12 @@ This document provides a detailed comparison between the **PROMPT requirements**
 - `setupLoadBalancing()` method stub in MODEL_RESPONSE but absent in actual file
 
 **Evidence from tap-stack.ts:**
-```typescript
+```ts
 private alb: aws.lb.LoadBalancer;  // Declared but never initialized
 ```
 
 **Evidence from tap.ts (expects these outputs):**
-```typescript
+```ts
 export const albDnsName = stack.albDnsName;  // Will be undefined
 export const albArn = stack.outputs.albArn;  // Will fail - property doesn't exist
 ```
@@ -74,7 +74,7 @@ Create ALB with:
 - No auto scaling policies
 
 **Evidence from tap-stack.ts:**
-```typescript
+```ts
 private blueAsg: aws.autoscaling.Group;    // Declared
 private greenAsg: aws.autoscaling.Group;   // Declared
 private prodAutoScalingGroup: aws.autoscaling.Group;  // Declared
@@ -82,7 +82,7 @@ private prodAutoScalingGroup: aws.autoscaling.Group;  // Declared
 ```
 
 **Evidence from tap.ts (expects):**
-```typescript
+```ts
 export const prodAutoScalingGroupName = stack.outputs.prodAutoScalingGroupName;
 export const devAutoScalingGroupName = pulumi.interpolate`prod-asg-blue-${environmentSuffix}`;
 export const prodLaunchTemplateInstanceType = pulumi.output("m5.large");
@@ -112,13 +112,13 @@ export const devLaunchTemplateInstanceType = pulumi.output("t3.micro");
 - Traffic shifting phases (0%→10%→50%→100%) not implemented
 
 **Evidence from tap-stack.ts:**
-```typescript
+```ts
 private route53Zone: aws.route53.Zone;  // Declared but never initialized
 // No Route53 record creation code exists
 ```
 
 **Evidence from tap.ts (expects):**
-```typescript
+```ts
 export const route53ZoneId = stack.outputs.route53ZoneId;  // Will fail
 export const route53DomainName = stack.route53DomainName;  // Undefined
 export const route53WeightedRoutingEnabled = pulumi.output(true);
@@ -148,7 +148,7 @@ export const trafficWeights = stack.outputs.trafficWeights;  // Missing
 - No monitoring dashboard
 
 **Evidence from tap.ts (expects):**
-```typescript
+```ts
 export const cpuAlarmName = pulumi.interpolate`prod-cpu-alarm-${environmentSuffix}`;
 export const dbConnectionsAlarmName = pulumi.interpolate`prod-db-connections-alarm-${environmentSuffix}`;
 export const targetHealthAlarmName = pulumi.interpolate`prod-target-health-alarm-${environmentSuffix}`;
@@ -178,7 +178,7 @@ export const snsTopicArn = pulumi.interpolate`arn:aws:sns:us-east-1:...`;
 - Versioning enabled but replication rules missing
 
 **Evidence from tap-stack.ts (lines ~600-700):**
-```typescript
+```ts
 this.replicaLogBucket = new aws.s3.Bucket(
   `prod-logs-replica-${args.environmentSuffix}`,
   {
@@ -213,14 +213,14 @@ this.replicaLogBucket = new aws.s3.Bucket(
 - Required for ALB to route traffic
 
 **Evidence from tap-stack.ts:**
-```typescript
+```ts
 private targetGroupBlue: aws.lb.TargetGroup;   // Declared
 private targetGroupGreen: aws.lb.TargetGroup;  // Declared
 // Never created
 ```
 
 **Evidence from tap.ts (expects):**
-```typescript
+```ts
 export const targetGroupGreenArn = stack.outputs.targetGroupGreenArn;
 export const targetGroupBlueArn = stack.outputs.targetGroupBlueArn;
 export const targetGroupHealthCheckPath = pulumi.output("/health");
@@ -245,7 +245,7 @@ export const targetGroupHealthCheckPath = pulumi.output("/health");
 - tap.ts expects 60+ outputs but stack provides ~10
 
 **Evidence from tap-stack.ts:**
-```typescript
+```ts
 public readonly outputs: Record<string, pulumi.Output<any>> = {};
 // This object is never populated with subnet IDs, security group IDs, etc.
 ```
@@ -281,7 +281,7 @@ public readonly outputs: Record<string, pulumi.Output<any>> = {};
 - No state machine for phased deployment
 
 **Evidence from tap-stack.ts:**
-```typescript
+```ts
 constructor(name: string, args: TapStackArgs, ...) {
   const migrationPhase = args.migrationPhase || "initial";
   // Variable declared but NEVER used anywhere in the file
@@ -313,7 +313,7 @@ constructor(name: string, args: TapStackArgs, ...) {
 - But ALB configured for port 80 (mismatch)
 
 **Evidence:**
-```typescript
+```ts
 this.albSecurityGroup = new aws.ec2.SecurityGroup(
   `prod-alb-sg-${args.environmentSuffix}`,
   {
@@ -369,7 +369,7 @@ new aws.ec2.SecurityGroupRule(
 - Snapshot creation unnecessary (should import existing)
 
 **Evidence:**
-```typescript
+```ts
 if (
   args.devEnvironment?.rdsInstanceIdentifier &&
   migrationPhase !== "initial"
@@ -396,7 +396,7 @@ this.prodRdsInstance = new aws.rds.Instance(
 ```
 
 **Correct Implementation:**
-```typescript
+```ts
 // Snapshot should already exist from dev environment
 // Just reference it by name
 snapshotIdentifier: args.devEnvironment?.snapshotId || "dev-snapshot-final"
@@ -425,7 +425,7 @@ snapshotIdentifier: args.devEnvironment?.snapshotId || "dev-snapshot-final"
 - Should use specific RDS instance ARN
 
 **Evidence:**
-```typescript
+```ts
 const rdsPolicy = new aws.iam.Policy(
   `prod-rds-policy-${args.environmentSuffix}`,
   {
@@ -450,7 +450,7 @@ const rdsPolicy = new aws.iam.Policy(
 > "Service-specific policies with explicit resource ARNs"
 
 **Correct Implementation:**
-```typescript
+```ts
 Resource: pulumi.interpolate`arn:aws:rds:us-east-1:${account}:db:${this.prodRdsInstance.identifier}`
 ```
 
@@ -473,7 +473,7 @@ Resource: pulumi.interpolate`arn:aws:rds:us-east-1:${account}:db:${this.prodRdsI
 - Calls undefined method `createRdsMonitoringRole()`
 
 **Evidence:**
-```typescript
+```ts
 this.prodRdsInstance = new aws.rds.Instance(
   `prod-rds-${args.environmentSuffix}`,
   {
@@ -506,7 +506,7 @@ this.prodRdsInstance = new aws.rds.Instance(
 > "IMDSv2 enforced for metadata access"
 
 **Expected:**
-```typescript
+```ts
 const greenLaunchTemplate = new aws.ec2.LaunchTemplate(..., {
   instanceType: "m5.large",
   iamInstanceProfile: { arn: instanceProfile.arn },
@@ -542,7 +542,7 @@ const greenLaunchTemplate = new aws.ec2.LaunchTemplate(..., {
 - Key alias not created
 
 **Evidence:**
-```typescript
+```ts
 this.kmsKey = new aws.kms.Key(
   `prod-kms-${args.environmentSuffix}`,
   {
@@ -554,7 +554,7 @@ this.kmsKey = new aws.kms.Key(
 ```
 
 **tap.ts expects:**
-```typescript
+```ts
 export const kmsKeyId = stack.outputs.kmsKeyId;  // Will be undefined
 export const kmsKeyArn = pulumi.interpolate`arn:aws:kms:.../${stack.outputs.kmsKeyId}`;
 ```
@@ -578,7 +578,7 @@ export const kmsKeyArn = pulumi.interpolate`arn:aws:kms:.../${stack.outputs.kmsK
 - Replication rules missing (no actual replication happening)
 
 **Evidence:**
-```typescript
+```ts
 new aws.s3.BucketServerSideEncryptionConfiguration(
   `prod-logs-sse-${args.environmentSuffix}`,
   {
@@ -623,7 +623,7 @@ this.replicaLogBucket = new aws.s3.Bucket(
 - `ignoreChanges` masks the issue
 
 **Evidence:**
-```typescript
+```ts
 this.prodRdsInstance = new aws.rds.Instance(
   `prod-rds-${args.environmentSuffix}`,
   {
@@ -635,7 +635,7 @@ this.prodRdsInstance = new aws.rds.Instance(
 ```
 
 **Best Practice:**
-```typescript
+```ts
 const dbSecret = new aws.secretsmanager.Secret(`prod-db-secret-${args.environmentSuffix}`);
 const dbSecretVersion = new aws.secretsmanager.SecretVersion(`prod-db-secret-version`, {
   secretId: dbSecret.id,
@@ -705,12 +705,12 @@ masterPassword: dbSecretVersion.secretString.apply(s => JSON.parse(s).password),
 - No interface for stack outputs
 
 **Evidence:**
-```typescript
+```ts
 public readonly outputs: Record<string, pulumi.Output<any>> = {};  // 'any' type
 ```
 
 **Better:**
-```typescript
+```ts
 export interface TapStackOutputs {
   publicSubnetIds: pulumi.Output<string[]>;
   privateSubnetIds: pulumi.Output<string[]>;
@@ -735,7 +735,7 @@ public readonly outputs: TapStackOutputs;
 - No resource creation error handling
 
 **Evidence:**
-```typescript
+```ts
 constructor(...) {
   try {
     // All setup calls
@@ -780,7 +780,7 @@ constructor(...) {
 - tap.ts expects these outputs
 
 **Evidence:**
-```typescript
+```ts
 private publicSubnets: aws.ec2.Subnet[] = [];   // Created
 private privateSubnets: aws.ec2.Subnet[] = [];  // Created
 
@@ -789,7 +789,7 @@ private privateSubnets: aws.ec2.Subnet[] = [];  // Created
 ```
 
 **tap.ts expects:**
-```typescript
+```ts
 export const publicSubnetIds = stack.outputs.publicSubnetIds;   // undefined
 export const privateSubnetIds = stack.outputs.privateSubnetIds; // undefined
 ```
@@ -823,7 +823,7 @@ export const privateSubnetIds = stack.outputs.privateSubnetIds; // undefined
 - Cannot track migration progress
 
 **Evidence:**
-```typescript
+```ts
 public readonly migrationStatus: pulumi.Output<string>;  // Declared
 // But never assigned:
 // this.migrationStatus = pulumi.output(migrationPhase);  Missing

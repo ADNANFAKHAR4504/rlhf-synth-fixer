@@ -15,7 +15,7 @@ The solution includes:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -752,7 +752,7 @@ exports.handler = async (event) => {
 
 ## File: index.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import { TapStack } from "./lib/tap-stack";
 

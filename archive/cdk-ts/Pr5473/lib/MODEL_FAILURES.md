@@ -28,7 +28,7 @@ The task requires creating a CDK TypeScript program to implement an automated IA
 ### 1. KMS Key Configuration Failures
 
 **Failure Scenario**: Model creates KMS key without automatic key rotation enabled
-```typescript
+```ts
 // INCORRECT
 const key = new kms.Key(this, 'Key', {
   description: 'Encryption key',
@@ -43,7 +43,7 @@ const key = new kms.Key(this, 'Key', {
 ---
 
 **Failure Scenario**: Model fails to restrict KMS key policy to specific AWS services
-```typescript
+```ts
 // INCORRECT - Too permissive
 new iam.PolicyStatement({
   principals: [new iam.AnyPrincipal()],
@@ -61,7 +61,7 @@ new iam.PolicyStatement({
 ### 2. Lambda Function Timeout Failures
 
 **Failure Scenario**: Model sets Lambda timeout greater than 60 seconds
-```typescript
+```ts
 // INCORRECT
 const lambda = new lambda.Function(this, 'Fn', {
   timeout: cdk.Duration.seconds(120), // Exceeds 60 second limit
@@ -77,7 +77,7 @@ const lambda = new lambda.Function(this, 'Fn', {
 ### 3. IAM Policy Explicit Deny Failures
 
 **Failure Scenario**: Model creates IAM policies without explicit deny statements for sensitive actions
-```typescript
+```ts
 // INCORRECT - Only allow statements, no explicit denies
 inlinePolicies: {
   Policy: new iam.PolicyDocument({
@@ -102,7 +102,7 @@ inlinePolicies: {
 ### 4. CloudWatch Log Group Encryption Failures
 
 **Failure Scenario**: Model creates log groups without KMS encryption
-```typescript
+```ts
 // INCORRECT
 const logGroup = new logs.LogGroup(this, 'LogGroup', {
   retention: logs.RetentionDays.THREE_MONTHS,
@@ -119,7 +119,7 @@ const logGroup = new logs.LogGroup(this, 'LogGroup', {
 ### 5. CloudWatch Log Retention Failures
 
 **Failure Scenario**: Model sets log retention to a value other than 90 days
-```typescript
+```ts
 // INCORRECT
 const logGroup = new logs.LogGroup(this, 'LogGroup', {
   retention: logs.RetentionDays.ONE_MONTH, // Not 90 days
@@ -135,7 +135,7 @@ const logGroup = new logs.LogGroup(this, 'LogGroup', {
 ### 6. EventBridge Dead Letter Queue Failures
 
 **Failure Scenario**: Model creates EventBridge rules without configuring DLQ
-```typescript
+```ts
 // INCORRECT
 rule.addTarget(new targets.LambdaFunction(lambdaFn, {
   // Missing: deadLetterQueue
@@ -153,7 +153,7 @@ rule.addTarget(new targets.LambdaFunction(lambdaFn, {
 ### 7. CloudWatch Alarm Threshold Failures
 
 **Failure Scenario**: Model creates alarm with incorrect threshold for policy changes
-```typescript
+```ts
 // INCORRECT
 const alarm = new cloudwatch.Alarm(this, 'Alarm', {
   metric: policyChangeMetric,
@@ -171,7 +171,7 @@ const alarm = new cloudwatch.Alarm(this, 'Alarm', {
 ### 8. EventBridge Event Pattern Failures
 
 **Failure Scenario**: Model creates incomplete event pattern missing key IAM events
-```typescript
+```ts
 // INCORRECT
 eventPattern: {
   source: ['aws.iam'],
@@ -190,7 +190,7 @@ eventPattern: {
 ### 9. Cross-Account Role External ID Failures
 
 **Failure Scenario**: Model creates cross-account role without external ID validation
-```typescript
+```ts
 // INCORRECT
 const role = new iam.Role(this, 'AuditRole', {
   assumedBy: new iam.AccountPrincipal('123456789012'),
@@ -207,7 +207,7 @@ const role = new iam.Role(this, 'AuditRole', {
 ### 10. Node.js Runtime Version Failures
 
 **Failure Scenario**: Model uses outdated Node.js runtime
-```typescript
+```ts
 // INCORRECT
 const fn = new lambda.Function(this, 'Fn', {
   runtime: lambda.Runtime.NODEJS_18_X, // Outdated
@@ -223,7 +223,7 @@ const fn = new lambda.Function(this, 'Fn', {
 ### 11. Resource Tagging Failures
 
 **Failure Scenario**: Model fails to implement compliance tagging
-```typescript
+```ts
 // INCORRECT - No tags applied
 const stack = new TapStack(app, 'Stack', props);
 // Missing: cdk.Tags.of(stack).add() calls
@@ -238,7 +238,7 @@ const stack = new TapStack(app, 'Stack', props);
 ### 12. Lambda Policy Analysis Logic Failures
 
 **Failure Scenario**: Model creates policy analyzer that doesn't check for wildcard actions and resources
-```typescript
+```ts
 // INCORRECT - Incomplete analysis
 function analyzePolicy(policy: PolicyDocument) {
   // Only checks for wildcard actions, missing resource wildcards
@@ -257,7 +257,7 @@ function analyzePolicy(policy: PolicyDocument) {
 ### 13. Session Duration Failures
 
 **Failure Scenario**: Model creates IAM roles without session duration restrictions
-```typescript
+```ts
 // INCORRECT
 const role = new iam.Role(this, 'Role', {
   assumedBy: new iam.ServicePrincipal('lambda.amazonaws.com'),
@@ -274,7 +274,7 @@ const role = new iam.Role(this, 'Role', {
 ### 14. Scheduled Rule Configuration Failures
 
 **Failure Scenario**: Model creates scheduled rule without proper cron expression
-```typescript
+```ts
 // INCORRECT
 const rule = new events.Rule(this, 'DailyRule', {
   schedule: events.Schedule.rate(cdk.Duration.days(1)), // Not specific time
@@ -290,7 +290,7 @@ const rule = new events.Rule(this, 'DailyRule', {
 ### 15. Missing CloudWatch Metrics Failures
 
 **Failure Scenario**: Model doesn't publish custom metrics for IAM security monitoring
-```typescript
+```ts
 // INCORRECT - Lambda doesn't publish metrics
 export const handler = async (event: any) => {
   // Analyze policy
@@ -309,7 +309,7 @@ export const handler = async (event: any) => {
 ### 16. Environment Suffix Handling
 
 **Failure**: Hardcoding resource names without environment suffix support
-```typescript
+```ts
 // INCORRECT
 const resourceName = 'iam-security-logs';
 ```
@@ -321,7 +321,7 @@ const resourceName = 'iam-security-logs';
 ### 17. Region-Specific Resource Naming
 
 **Failure**: Not including region in resource names, causing conflicts in multi-region deployments
-```typescript
+```ts
 // INCORRECT
 const prefix = `iam-security-${environmentSuffix}`;
 ```
@@ -333,7 +333,7 @@ const prefix = `iam-security-${environmentSuffix}`;
 ### 18. Lambda Environment Variables
 
 **Failure**: Forgetting to pass necessary environment variables to Lambda functions
-```typescript
+```ts
 // INCORRECT
 const fn = new lambda.Function(this, 'Fn', {
   // Missing: environment variables for SNS_TOPIC_ARN, LOG_GROUP_NAME
@@ -347,7 +347,7 @@ const fn = new lambda.Function(this, 'Fn', {
 ### 19. CloudWatch Alarm Actions
 
 **Failure**: Creating alarms without SNS actions
-```typescript
+```ts
 // INCORRECT
 const alarm = new cloudwatch.Alarm(this, 'Alarm', {
   // Alarm configuration
@@ -362,7 +362,7 @@ const alarm = new cloudwatch.Alarm(this, 'Alarm', {
 ### 20. Output Export Names
 
 **Failure**: Not exporting critical outputs or using non-unique export names
-```typescript
+```ts
 // INCORRECT
 new cdk.CfnOutput(this, 'TopicArn', {
   value: topic.topicArn,
@@ -391,7 +391,7 @@ new cdk.CfnOutput(this, 'TopicArn', {
 ### 22. Integration Test Real Resources
 
 **Failure**: Using mocks instead of testing real deployed resources
-```typescript
+```ts
 // INCORRECT
 jest.mock('@aws-sdk/client-lambda');
 ```
@@ -403,7 +403,7 @@ jest.mock('@aws-sdk/client-lambda');
 ### 23. Integration Test Output Reading
 
 **Failure**: Using describe-stacks to get outputs instead of flat-outputs.json
-```typescript
+```ts
 // INCORRECT
 const outputs = await cloudformation.describeStacks({ StackName: stackName }).promise();
 ```

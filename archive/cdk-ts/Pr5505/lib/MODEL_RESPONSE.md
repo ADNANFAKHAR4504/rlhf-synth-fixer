@@ -4,7 +4,7 @@ I'll help you design and implement a high-performance serverless event processin
 
 ## Infrastructure Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigwv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as apigwv2Auth from 'aws-cdk-lib/aws-apigatewayv2-authorizers';

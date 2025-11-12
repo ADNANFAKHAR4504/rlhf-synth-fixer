@@ -3,7 +3,7 @@
 
 ## ./bin/tap.d.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 export {};
 
@@ -1397,7 +1397,7 @@ export {};
 
 ## ./lib/tap-stack.d.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 interface TapStackProps extends cdk.StackProps {
@@ -1412,14 +1412,14 @@ export {};
 
 ## ./test/tap-stack.int.test.d.ts
 
-```typescript
+```ts
 export {};
 
 ```
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import fs from 'fs';
 import {
   DynamoDBClient,
@@ -1900,14 +1900,14 @@ describe('Document Automation System Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.d.ts
 
-```typescript
+```ts
 export {};
 
 ```
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import fs from 'fs';
 import path from 'path';
 

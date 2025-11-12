@@ -19,7 +19,7 @@
 ### 2. **Security Implementation Depth**
 
 **Ideal Response Security Features:**
-```typescript
+```ts
 // Proper IAM policy escaping for Terraform interpolation
 Resource: 'arn:aws:iam::*:user/$${aws:username}' // Double escaped
 
@@ -47,7 +47,7 @@ policy: JSON.stringify({
 ### 3. **Error Handling and Resource Management**
 
 **Ideal Response:**
-```typescript
+```ts
 // Lifecycle management for critical resources
 lifecycle: {
   preventDestroy: true,
@@ -85,7 +85,7 @@ const subnetData = new DataAwsSubnet(this, 'subnet-data', {
 ### 1. **Import Statement Failures**
 
 **Issue:**
-```typescript
+```ts
 import {
   AwsProvider,
   Vpc,
@@ -100,7 +100,7 @@ import {
 - Shows lack of understanding of CDKTF package structure
 
 **Correct Implementation:**
-```typescript
+```ts
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 ```
@@ -108,7 +108,7 @@ import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 ### 2. **Resource Configuration Errors**
 
 **Issue:**
-```typescript
+```ts
 // Model response - incorrect resource configuration
 availabilityZone: props.subnetId, // This should be the AZ, not subnet ID
 ```
@@ -119,7 +119,7 @@ availabilityZone: props.subnetId, // This should be the AZ, not subnet ID
 - Infrastructure deployment failure
 
 **Correct Implementation:**
-```typescript
+```ts
 const subnetData = new DataAwsSubnet(this, 'subnet-data', {
   id: props.subnetId,
 });
@@ -133,7 +133,7 @@ new EbsVolume(this, 'encrypted-volume', {
 ### 3. **Security Group Rule Structure**
 
 **Issue:**
-```typescript
+```ts
 // Model response - incorrect security group syntax
 ingress: [
   {
@@ -161,7 +161,7 @@ ingress: [
 - Not suitable for team environments
 
 **Correct Implementation:**
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -173,7 +173,7 @@ new S3Backend(this, {
 ### 5. **WAF Implementation Inadequacy**
 
 **Model Response Issues:**
-```typescript
+```ts
 // Overly simplistic WAF rules
 const sqlInjectionRule = new WafRule(this, 'sql-injection-rule', {
   // ... missing actual protection logic
@@ -200,7 +200,7 @@ const sqlInjectionRule = new WafRule(this, 'sql-injection-rule', {
 - Compliance requirements not met
 
 **Correct Implementation:**
-```typescript
+```ts
 new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
   bucket: this.cloudtrailBucket.id,
   policy: JSON.stringify({
@@ -221,7 +221,7 @@ new S3BucketPolicy(this, 'cloudtrail-bucket-policy', {
 ### 7. **IAM Policy Template String Errors**
 
 **Issue:**
-```typescript
+```ts
 // Model response - incorrect template syntax
 Resource: 'arn:aws:iam::*:user/${aws:username}' // Single brace
 ```
@@ -232,7 +232,7 @@ Resource: 'arn:aws:iam::*:user/${aws:username}' // Single brace
 - Security restrictions ineffective
 
 **Correct Implementation:**
-```typescript
+```ts
 Resource: 'arn:aws:iam::*:user/$${aws:username}' // Double escaped for Terraform
 ```
 
@@ -248,7 +248,7 @@ Resource: 'arn:aws:iam::*:user/$${aws:username}' // Double escaped for Terraform
 ### 9. **Incomplete KMS Key Policy**
 
 **Model Response:**
-```typescript
+```ts
 policy: JSON.stringify({
   Statement: [
     {

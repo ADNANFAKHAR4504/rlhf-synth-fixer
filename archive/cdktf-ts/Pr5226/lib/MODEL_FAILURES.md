@@ -5,7 +5,7 @@
 ### 1. **Security Group Circular Dependency**
 
 **Model Response (BROKEN):**
-```typescript
+```ts
 // In SecurityGroupsConstruct constructor
 this.ec2SecurityGroup = new aws.securityGroup.SecurityGroup(
   this,
@@ -29,7 +29,7 @@ this.ec2SecurityGroup = new aws.securityGroup.SecurityGroup(
 Creates a circular dependency where `ec2SecurityGroup` references `albSecurityGroup.id` in its constructor, but both are being created simultaneously. Terraform cannot resolve the dependency order, causing deployment failure: `Error: Cycle: aws_security_group.ec2-sg, aws_security_group.alb-sg`
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // Create security groups WITHOUT inline ingress rules
 this.appSecurityGroup = new aws.securityGroup.SecurityGroup(
   this,
@@ -60,7 +60,7 @@ new aws.securityGroupRule.SecurityGroupRule(this, 'app-from-alb', {
 ### 2. **RDS Secret Version Created Before Database Instance**
 
 **Model Response (BROKEN):**
-```typescript
+```ts
 // In RDSConstruct
 this.dbSecretVersion = new aws.secretsmanagerSecretVersion.SecretsmanagerSecretVersion(
   this,
@@ -88,7 +88,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, "db", {
 The secret version tries to reference `this.dbInstance.address` before the database instance is created, resulting in: `Error: Reference to undeclared resource: The resource "aws_db_instance.db" has not been declared in the root module.`
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // Create RDS instance FIRST
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'db', {
   identifier: `${config.projectName}-db-${config.environment}`,
@@ -119,7 +119,7 @@ this.dbSecretVersion = new aws.secretsmanagerSecretVersion.SecretsmanagerSecretV
 ### 3. **Incorrect AWS Resource Class Names**
 
 **Model Response (BROKEN):**
-```typescript
+```ts
 // Using non-existent class names
 this.internetGateway = new aws.ec2.InternetGateway(this, "igw", { // ❌ Wrong namespace
   vpcId: this.vpc.id,
@@ -147,7 +147,7 @@ this.publicSubnets = this.availabilityZones.map((az, index) => {
 These classes don't exist in the CDKTF AWS provider. Results in TypeScript compilation errors: `Property 'InternetGateway' does not exist on type 'typeof ec2'` and similar errors for `Eip`, `RouteTable`, and `Subnet`.
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // Correct class imports and usage
 this.internetGateway = new aws.internetGateway.InternetGateway(this, 'igw', { // ✅ Correct
   vpcId: this.vpc.id,
@@ -178,7 +178,7 @@ this.publicSubnets = config.publicSubnetCidrs.map((cidr, index) => {
 ### 4. **Invalid ALB Resource Class Usage**
 
 **Model Response (BROKEN):**
-```typescript
+```ts
 // Using wrong class name
 this.alb = new aws.alb.Alb(this, "alb", { // ❌ Wrong class name
   name: `${config.tags.Project}-alb`,
@@ -204,7 +204,7 @@ this.httpsListener = new aws.albListener.AlbListener(this, "https-listener", { /
 CDKTF uses `Lb` not `Alb` for Application Load Balancers. Also uses camelCase for properties, not snake_case. Results in: `Module '"@cdktf/provider-aws"' has no exported member 'alb'` and `Property 'healthy_threshold' does not exist`.
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // Correct ALB classes and property names
 this.alb = new aws.lb.Lb(this, 'alb', { // ✅ Correct class: lb.Lb
   name: `${config.projectName}-alb-${config.environment}`,
@@ -251,7 +251,7 @@ Error: creating Auto Scaling Group: ValidationError: The key pair 'tap-ecommerce
 ```
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // In main.ts
 import { TlsProvider } from '@cdktf/provider-tls/lib/provider';
 import { privateKey } from '@cdktf/provider-tls';
@@ -317,7 +317,7 @@ export class KeyPairConstruct extends Construct {
 ### 6. **Dynamic Availability Zone Lookup Instead of Hardcoded Values**
 
 **Model Response (BROKEN):**
-```typescript
+```ts
 // Uses Fn.element with DataAwsAvailabilityZones
 const azs = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
   this,
@@ -344,7 +344,7 @@ this.publicSubnets = this.availabilityZones.map((az, index) => {
 Using `Fn.element()` returns Terraform tokens that aren't fully resolved at synthesis time, causing issues with resource naming and dependencies. Also, `Fn.cidrsubnet()` calculates CIDRs dynamically, making it harder to predict and manage network layout.
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // In TapStack constructor - explicitly define AZs based on region
 const availabilityZones = [`${awsRegion}a`, `${awsRegion}b`]; // ✅ Explicit, predictable
 
@@ -383,7 +383,7 @@ Error: state file locked by another process
 ```
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // In TapStack constructor
 new S3Backend(this, {
   bucket: stateBucket,
@@ -407,7 +407,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 8. **Incorrect IAM Policy Attachment for Secrets Access**
 
 **Model Response (BROKEN):**
-```typescript
+```ts
 // Uses inline policy with wrong structure
 new aws.iamRolePolicy.IamRolePolicy(this, "secrets-policy", {
   role: instanceRole.id,
@@ -431,7 +431,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, "secrets-policy", {
 Inline policies are less maintainable and the structure doesn't support multiple secret ARNs properly.
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // Create separate policy resource
 const secretsPolicy = new aws.iamPolicy.IamPolicy(this, 'secrets-policy', {
   name: `${config.projectName}-secrets-policy-${config.environment}`,
@@ -469,7 +469,7 @@ new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
 No user data implementation at all, meaning instances launch without application setup.
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // In ComputeConstruct
 const userData = config.userData
   ? Fn.base64encode(Fn.rawString(config.userData)) // ✅ Proper encoding with rawString
@@ -498,7 +498,7 @@ Without `Fn.rawString()`, Terraform treats the user data as a Terraform expressi
 
 **Model Response (BROKEN):**
 Uses `TerraformVariable` for everything, making it impossible to have environment-specific defaults:
-```typescript
+```ts
 const dbInstanceClass = new TerraformVariable(this, "db_instance_class", {
   type: "string",
   default: "db.t3.medium", // ❌ Same for all environments
@@ -507,7 +507,7 @@ const dbInstanceClass = new TerraformVariable(this, "db_instance_class", {
 ```
 
 **Actual Implementation (FIXED):**
-```typescript
+```ts
 // In DatabaseConfig
 instanceClass: environment === 'production' ? 'db.t3.medium' : 'db.t3.micro', // ✅ Environment-aware
 allocatedStorage: environment === 'production' ? 100 : 20,

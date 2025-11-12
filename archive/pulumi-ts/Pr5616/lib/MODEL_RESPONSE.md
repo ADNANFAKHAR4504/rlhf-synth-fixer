@@ -15,7 +15,7 @@ The solution creates three DynamoDB tables (events, sessions, users) with:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -304,7 +304,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

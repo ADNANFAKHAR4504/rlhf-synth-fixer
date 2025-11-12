@@ -241,7 +241,7 @@ Deploy the following infrastructure across all regions:
 
 ### Code Structure
 
-```typescript
+```ts
 // Organize Pulumi code into logical modules:
 // - network/
 // - compute/

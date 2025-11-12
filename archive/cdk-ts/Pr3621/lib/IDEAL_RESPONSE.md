@@ -6,7 +6,7 @@ This document provides the ideal implementation of a comprehensive real-time ana
 
 ## bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -42,7 +42,7 @@ app.synth();
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

@@ -72,7 +72,7 @@ name = "prod-lambda-execution-role-${random_string.db_suffix.result}"
 - Undefined object property access warnings
 
 **Resolution**: Added proper null safety checks:
-```typescript
+```ts
 // Before
 expect(encryptionResult.ServerSideEncryptionConfiguration.Rules[0].ApplyServerSideEncryptionByDefault.SSEAlgorithm).toBe('AES256');
 

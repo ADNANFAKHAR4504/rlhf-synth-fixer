@@ -22,7 +22,7 @@ This document details all the issues found in the initial MODEL_RESPONSE impleme
 **Fix**: Added `-${environmentSuffix}` to all resource names to ensure uniqueness.
 
 **Example**:
-```typescript
+```ts
 // BEFORE (Wrong)
 const albSg = new aws.ec2.SecurityGroup(`payment-alb-sg`, { ... });
 
@@ -38,7 +38,7 @@ const albSg = new aws.ec2.SecurityGroup(`payment-alb-sg-${environmentSuffix}`, {
 
 **Fix**: Changed `deregistrationDelay` from 30 to 20 seconds.
 
-```typescript
+```ts
 // BEFORE (Wrong)
 deregistrationDelay: 30,
 
@@ -54,7 +54,7 @@ deregistrationDelay: 20,
 
 **Fix**: Created both primary and secondary Route 53 records with proper failover routing policies.
 
-```typescript
+```ts
 // ADDED in IDEAL_RESPONSE
 const secondaryRecord = new aws.route53.Record(`payment-secondary-${environmentSuffix}`, {
   zoneId: zone.then(z => z.zoneId),
@@ -93,7 +93,7 @@ const secondaryRecord = new aws.route53.Record(`payment-secondary-${environmentS
 
 **Fix**: Added TCP health checks for both primary and secondary ALBs, combined with HTTP checks using calculated health checks.
 
-```typescript
+```ts
 // ADDED
 const primaryTcpHealthCheck = new aws.route53.HealthCheck(`payment-health-tcp-primary-${environmentSuffix}`, {
   type: 'TCP',
@@ -125,7 +125,7 @@ const primaryCombinedHealthCheck = new aws.route53.HealthCheck(`payment-health-c
 
 **Fix**: Added self-signed certificate creation (for development) with proper certificate attachment to listeners.
 
-```typescript
+```ts
 // ADDED
 const certificate = new aws.acm.Certificate(`payment-cert-${environmentSuffix}`, { ... });
 
@@ -147,7 +147,7 @@ const primaryListener = new aws.lb.Listener(`payment-listener-primary-${environm
 
 **Fix**: Added lifecycle rules with transitions to cheaper storage classes and automatic deletion after 90 days.
 
-```typescript
+```ts
 // ADDED
 lifecycleRules: [{
   enabled: true,
@@ -170,7 +170,7 @@ lifecycleRules: [{
 
 **Fix**: Added specific AWS health check IP ranges for us-east-1 region.
 
-```typescript
+```ts
 // ADDED
 const awsHealthCheckCidrs = [
   '54.239.98.0/24',
@@ -197,7 +197,7 @@ const awsHealthCheckCidrs = [
 
 **Fix**: Added clear comment explaining the calculation and separated alarms for primary and secondary.
 
-```typescript
+```ts
 // IMPROVED with better documentation
 threshold: 3, // 50% of 6 instances
 ```
@@ -210,7 +210,7 @@ threshold: 3, // 50% of 6 instances
 
 **Fix**: Used dynamic AMI lookup to get latest Amazon Linux 2 AMI.
 
-```typescript
+```ts
 // BEFORE (Wrong)
 imageId: "ami-0c55b159cbfafe1f0",
 
@@ -241,7 +241,7 @@ imageId: ami.then(a => a.id),
 - Create health check endpoint
 - Install CloudWatch agent for monitoring
 
-```typescript
+```ts
 // ADDED
 const userData = `#!/bin/bash
 set -e
@@ -276,7 +276,7 @@ rpm -U ./amazon-cloudwatch-agent.rpm
 
 **Fix**: Created IAM role with CloudWatch and SSM policies attached.
 
-```typescript
+```ts
 // ADDED
 const instanceRole = new aws.iam.Role(`payment-instance-role-${environmentSuffix}`, { ... });
 const instanceProfile = new aws.iam.InstanceProfile(`payment-instance-profile-${environmentSuffix}`, {
@@ -303,7 +303,7 @@ new aws.iam.RolePolicyAttachment(`payment-ssm-policy-${environmentSuffix}`, {
 
 **Fix**: Changed to use `vpcZoneIdentifiers` with per-AZ subnet selection.
 
-```typescript
+```ts
 // BEFORE (Wrong)
 availabilityZones: [az],
 
@@ -329,7 +329,7 @@ vpcZoneIdentifiers: subnetIds,
 
 **Fix**: Added bucket policy granting ELB service account permission to write logs.
 
-```typescript
+```ts
 // ADDED
 const elbServiceAccount = aws.elb.getServiceAccount({});
 const bucketPolicy = new aws.s3.BucketPolicy(`payment-alb-logs-policy-${environmentSuffix}`, {
@@ -356,7 +356,7 @@ const bucketPolicy = new aws.s3.BucketPolicy(`payment-alb-logs-policy-${environm
 
 **Fix**: Added KMS alias.
 
-```typescript
+```ts
 // ADDED
 const kmsAlias = new aws.kms.Alias(`payment-ebs-key-alias-${environmentSuffix}`, {
   name: `alias/payment-ebs-${environmentSuffix}`,
@@ -372,7 +372,7 @@ const kmsAlias = new aws.kms.Alias(`payment-ebs-key-alias-${environmentSuffix}`,
 
 **Fix**: Added latency alarm for comprehensive monitoring.
 
-```typescript
+```ts
 // ADDED
 const primaryLatencyAlarm = new aws.cloudwatch.MetricAlarm(`payment-latency-primary-${environmentSuffix}`, {
   comparisonOperator: 'GreaterThanThreshold',
@@ -401,7 +401,7 @@ const primaryLatencyAlarm = new aws.cloudwatch.MetricAlarm(`payment-latency-prim
 
 **Fix**: Added configuration parameters in TapStackArgs interface.
 
-```typescript
+```ts
 // ADDED to interface
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -435,7 +435,7 @@ export interface TapStackArgs {
 
 **Fix**: Added `matcher: '200'` to health check configuration.
 
-```typescript
+```ts
 // ADDED
 healthCheck: {
   enabled: true,
@@ -457,7 +457,7 @@ healthCheck: {
 
 **Fix**: Added cookie-based stickiness.
 
-```typescript
+```ts
 // ADDED
 stickiness: {
   enabled: true,
@@ -474,7 +474,7 @@ stickiness: {
 
 **Fix**: Added explicit 30-day deletion window.
 
-```typescript
+```ts
 // ADDED
 deletionWindowInDays: 30,
 ```

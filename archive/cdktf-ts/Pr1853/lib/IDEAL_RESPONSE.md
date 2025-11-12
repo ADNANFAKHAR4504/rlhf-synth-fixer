@@ -1,5 +1,5 @@
 ## lib/modules.ts
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -124,7 +124,7 @@ echo "Instance initialized for ${config.name}" > /var/log/init.log
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

@@ -9,14 +9,14 @@ This document outlines the infrastructure issues identified in the initial MODEL
 **Problem**: The original MODEL_RESPONSE.md implementation did not properly integrate environment suffixes throughout the resource naming, causing potential naming conflicts in multi-environment deployments.
 
 **Original Code Issues**:
-```typescript
+```ts
 // Resources were named without environment suffixes
 this.vpc = new ec2.Vpc(this, 'SecureVPC', { ... });
 const webSecurityGroup = new ec2.SecurityGroup(this, 'WebSecurityGroup', { ... });
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // All resources now include environment suffix for proper isolation
 this.vpc = new ec2.Vpc(this, `SecureVPC${environmentSuffix}`, { ... });
 const webSecurityGroup = new ec2.SecurityGroup(this, `WebSecurityGroup${environmentSuffix}`, { ... });
@@ -27,7 +27,7 @@ const webSecurityGroup = new ec2.SecurityGroup(this, `WebSecurityGroup${environm
 **Problem**: The original implementation used deprecated or incorrect CDK API methods that caused compilation failures.
 
 **Original Code Issues**:
-```typescript
+```ts
 // Deprecated CIDR assignment method
 cidr: vpcCidr,
 
@@ -42,7 +42,7 @@ this.natGateway = ... as ec2.NatGateway;
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Updated to current CDK API
 ipAddresses: ec2.IpAddresses.cidr(vpcCidr),
 
@@ -61,7 +61,7 @@ public readonly natGateway: ec2.CfnNatGateway | undefined;
 **Problem**: The original implementation used instance methods that don't exist in the current CDK version for CloudWatch metrics.
 
 **Original Code Issues**:
-```typescript
+```ts
 // Non-existent method on EC2 instance
 metric: instance.metricCpuUtilization({
   period: cdk.Duration.minutes(5),
@@ -69,7 +69,7 @@ metric: instance.metricCpuUtilization({
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Proper CloudWatch metric creation
 metric: new cloudwatch.Metric({
   namespace: 'AWS/EC2',
@@ -86,13 +86,13 @@ metric: new cloudwatch.Metric({
 **Problem**: Required import statements were missing, causing compilation failures.
 
 **Original Code Issues**:
-```typescript
+```ts
 // Missing cloudwatch actions import for SNS alarm actions
 alarm.addAlarmAction(new cdk.aws_cloudwatch_actions.SnsAction(alertTopic));
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Added proper import
 import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 
@@ -105,14 +105,14 @@ alarm.addAlarmAction(new cw_actions.SnsAction(alertTopic));
 **Problem**: Several TypeScript type mismatches that prevented compilation.
 
 **Original Code Issues**:
-```typescript
+```ts
 // Incorrect type assignments
 public readonly publicSubnets: ec2.Subnet[];
 public readonly privateSubnets: ec2.Subnet[];
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Correct interface types
 public readonly publicSubnets: ec2.ISubnet[];
 public readonly privateSubnets: ec2.ISubnet[];
@@ -123,12 +123,12 @@ public readonly privateSubnets: ec2.ISubnet[];
 **Problem**: The original implementation referenced a hardcoded key pair name that wouldn't exist.
 
 **Original Code Issues**:
-```typescript
+```ts
 keyName: 'my-key-pair', // Hardcoded key pair name
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Removed hardcoded key pair reference entirely
 // Key pairs should be managed separately or through context variables
 ```
@@ -138,13 +138,13 @@ keyName: 'my-key-pair', // Hardcoded key pair name
 **Problem**: Parameter and log group names didn't include environment suffixes, causing conflicts.
 
 **Original Code Issues**:
-```typescript
+```ts
 parameterName: '/secure-vpc/vpc-id',
 logGroupName: '/aws/ec2/secure-vpc',
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 parameterName: `/secure-vpc-${environmentSuffix}/vpc-id`,
 logGroupName: `/aws/ec2/secure-vpc-${environmentSuffix}`,
 ```
@@ -154,7 +154,7 @@ logGroupName: `/aws/ec2/secure-vpc-${environmentSuffix}`,
 **Problem**: Resources weren't configured for proper cleanup in development environments.
 
 **Original Code Issues**:
-```typescript
+```ts
 // No removal policies specified for CloudWatch log groups
 const logGroup = new logs.LogGroup(this, 'EC2LogGroup', {
   // Missing removalPolicy
@@ -162,7 +162,7 @@ const logGroup = new logs.LogGroup(this, 'EC2LogGroup', {
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Added proper removal policies for dev environments
 new logs.LogGroup(this, `EC2LogGroup${environmentSuffix}`, {
   logGroupName: `/aws/ec2/secure-vpc-${environmentSuffix}`,
@@ -176,7 +176,7 @@ new logs.LogGroup(this, `EC2LogGroup${environmentSuffix}`, {
 **Problem**: The bin/tap.ts file had incorrect import and instantiation logic.
 
 **Original Code Issues**:
-```typescript
+```ts
 // Tried to import SecureVpcStack directly instead of TapStack
 import { SecureVpcStack } from '../lib/tap-stack';
 
@@ -189,7 +189,7 @@ new SecureVpcStack(app, 'SecureVpcStack', {
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Correct import and orchestration pattern
 import { TapStack } from '../lib/tap-stack';
 
@@ -209,7 +209,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 **Problem**: Unit tests expected different resource configurations than what the updated implementation provided.
 
 **Original Test Issues**:
-```typescript
+```ts
 // Tests expected hardcoded comparison operators
 ComparisonOperator: 'GreaterThanThreshold',
 
@@ -219,7 +219,7 @@ Name: '/secure-vpc/vpc-id',
 ```
 
 **✅ Fix Applied**:
-```typescript
+```ts
 // Updated tests to match actual CDK output
 ComparisonOperator: 'GreaterThanOrEqualToThreshold',
 

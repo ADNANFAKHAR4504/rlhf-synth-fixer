@@ -32,7 +32,7 @@ The model response demonstrates understanding of the requirements but contains c
 
 **Issue**: The model attempts to add ARM64 support using a fabricated API:
 
-```typescript
+```ts
 orderBrokerTaskDef.addRuntimePlatformAlternative({
   cpuArchitecture: ecs.CpuArchitecture.ARM64,
   operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
@@ -56,7 +56,7 @@ orderBrokerTaskDef.addRuntimePlatformAlternative({
 
 **Issue**: Production listener configured for HTTPS with empty certificates array:
 
-```typescript
+```ts
 const productionListener = alb.addListener('ProductionListener', {
   port: 80,
   protocol: elbv2.ApplicationProtocol.HTTPS,
@@ -68,7 +68,7 @@ const productionListener = alb.addListener('ProductionListener', {
 
 **IDEAL_RESPONSE**: Uses HTTP protocol for testing:
 
-```typescript
+```ts
 protocol: elbv2.ApplicationProtocol.HTTP,
 ```
 
@@ -85,7 +85,7 @@ protocol: elbv2.ApplicationProtocol.HTTP,
 
 **Issue**: Uses non-existent placeholder image:
 
-```typescript
+```ts
 image: ecs.ContainerImage.fromRegistry('your-ecr-repo/order-broker:latest'),
 ```
 
@@ -93,7 +93,7 @@ image: ecs.ContainerImage.fromRegistry('your-ecr-repo/order-broker:latest'),
 
 **IDEAL_RESPONSE**: Uses actual working test image:
 
-```typescript
+```ts
 image: ecs.ContainerImage.fromRegistry('amasucci/bluegreen'),
 environment: {
   COLOR: 'blue',
@@ -113,7 +113,7 @@ environment: {
 
 **Issue**: ALB configured as internal (not internet-facing):
 
-```typescript
+```ts
 const alb = new elbv2.ApplicationLoadBalancer(this, 'OrderBrokerALB', {
   vpc: props.vpc,
   internetFacing: false, // WRONG for testing
@@ -124,7 +124,7 @@ const alb = new elbv2.ApplicationLoadBalancer(this, 'OrderBrokerALB', {
 
 **IDEAL_RESPONSE**: Uses internet-facing ALB:
 
-```typescript
+```ts
 internetFacing: true,
 ```
 
@@ -164,7 +164,7 @@ internetFacing: true,
 
 **Issue**: Construct only exposes 2 properties:
 
-```typescript
+```ts
 public readonly ecsCluster: ecs.Cluster;
 public readonly orderBrokerService: ecs.FargateService;
 ```
@@ -173,7 +173,7 @@ public readonly orderBrokerService: ecs.FargateService;
 
 **IDEAL_RESPONSE**: Exposes 10 public properties:
 
-```typescript
+```ts
 public readonly loadBalancer: elbv2.ApplicationLoadBalancer;
 public readonly blueTargetGroup: elbv2.ApplicationTargetGroup;
 public readonly greenTargetGroup: elbv2.ApplicationTargetGroup;
@@ -196,7 +196,7 @@ public readonly logGroup: logs.LogGroup;
 
 **Issue**: ALB security group created but no ingress rules added:
 
-```typescript
+```ts
 const albSG = new ec2.SecurityGroup(this, 'OrderBrokerALBSG', {
   vpc: props.vpc,
   description: 'Security group for OrderBroker ALB',
@@ -208,7 +208,7 @@ const albSG = new ec2.SecurityGroup(this, 'OrderBrokerALBSG', {
 
 **IDEAL_RESPONSE**: Explicitly adds ingress rules:
 
-```typescript
+```ts
 albSG.addIngressRule(
   ec2.Peer.anyIpv4(),
   ec2.Port.tcp(80),
@@ -232,7 +232,7 @@ albSG.addIngressRule(
 
 **Issue**: Container configured for port 8080:
 
-```typescript
+```ts
 orderBrokerContainer.addPortMappings({
   containerPort: 8080,
 });
@@ -244,7 +244,7 @@ But target groups expect port 8080, and health check on `/health` endpoint.
 
 **IDEAL_RESPONSE**: Correctly uses port 80:
 
-```typescript
+```ts
 containerPort: 80,
 ```
 
@@ -261,7 +261,7 @@ containerPort: 80,
 
 **Issue**: Uses deprecated `dimensions` property:
 
-```typescript
+```ts
 const jvmHeapUsageMetric = new cloudwatch.Metric({
   namespace: 'AWS/ECS',
   metricName: 'JVMHeapUtilization',
@@ -275,7 +275,7 @@ const jvmHeapUsageMetric = new cloudwatch.Metric({
 
 **IDEAL_RESPONSE**: Uses current `dimensionsMap` property:
 
-```typescript
+```ts
 dimensionsMap: {
   ClusterName: this.ecsCluster.clusterName,
   ServiceName: this.orderBrokerService.serviceName,
@@ -293,7 +293,7 @@ dimensionsMap: {
 
 **Issue**: Uses wrong import path:
 
-```typescript
+```ts
 jvmHeapUsageAlarm.addAlarmAction(new cloudwatch.SnsAction(alarmTopic));
 ```
 
@@ -301,7 +301,7 @@ jvmHeapUsageAlarm.addAlarmAction(new cloudwatch.SnsAction(alarmTopic));
 
 **IDEAL_RESPONSE**: Uses correct import:
 
-```typescript
+```ts
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
 // ...
 jvmHeapUsageAlarm.addAlarmAction(
@@ -320,13 +320,13 @@ jvmHeapUsageAlarm.addAlarmAction(
 
 **Issue**: Uses deprecated subnet type:
 
-```typescript
+```ts
 subnetType: ec2.SubnetType.PRIVATE_WITH_NAT,
 ```
 
 **IDEAL_RESPONSE**: Uses current subnet type:
 
-```typescript
+```ts
 subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
 ```
 
@@ -341,7 +341,7 @@ subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
 
 **Issue**: Creates custom Aspect class for simple tagging:
 
-```typescript
+```ts
 class TaggingAspect implements cdk.IAspect {
   visit(node: cdk.IConstruct): void {
     if (cdk.CfnResource.isCfnResource(node)) {
@@ -356,7 +356,7 @@ cdk.Aspects.of(this).add(new TaggingAspect());
 
 **IDEAL_RESPONSE**: Uses built-in Tags API directly:
 
-```typescript
+```ts
 cdk.Tags.of(this).add('CostCenter', 'Trading');
 cdk.Tags.of(this).add('Project', 'TradingPlatform');
 cdk.Tags.of(this).add('Service', 'OrderBroker');
@@ -375,7 +375,7 @@ cdk.Tags.of(this).add('Service', 'OrderBroker');
 
 **IDEAL_RESPONSE**: Includes environment suffix throughout:
 
-```typescript
+```ts
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -398,14 +398,14 @@ const environmentSuffix =
 
 **Issue**: Long wait times unsuitable for testing:
 
-```typescript
+```ts
 deploymentApprovalWaitTime: cdk.Duration.minutes(10),
 terminationWaitTime: cdk.Duration.minutes(5),
 ```
 
 **IDEAL_RESPONSE**: Short wait times for rapid testing:
 
-```typescript
+```ts
 deploymentApprovalWaitTime: cdk.Duration.minutes(1),
 terminationWaitTime: cdk.Duration.minutes(1),
 ```
@@ -421,7 +421,7 @@ terminationWaitTime: cdk.Duration.minutes(1),
 
 **Issue**: Includes alarm-based rollback without alarm configuration:
 
-```typescript
+```ts
 autoRollback: {
   failedDeployment: true,
   stoppedDeployment: true,
@@ -431,7 +431,7 @@ autoRollback: {
 
 **IDEAL_RESPONSE**: Omits alarm-based rollback:
 
-```typescript
+```ts
 autoRollback: {
   failedDeployment: true,
   stoppedDeployment: true,
@@ -464,7 +464,7 @@ autoRollback: {
 
 **Issue**: Defines complex curl-based health check:
 
-```typescript
+```ts
 healthCheck: {
   command: ['CMD-SHELL', 'curl -f http://localhost:8080/health || exit 1'],
   interval: cdk.Duration.seconds(30),
@@ -489,7 +489,7 @@ healthCheck: {
 
 **Issue**: Creates VPC with 3 AZs and complex subnet configuration:
 
-```typescript
+```ts
 maxAzs: 3,
 natGateways: 3,
 ```

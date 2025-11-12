@@ -7,7 +7,7 @@ During quality assurance of the serverless API infrastructure for mobile gaming 
 
 ### 1. Reserved Lambda Environment Variable
 **Issue**: The implementation attempted to set `_X_AMZN_TRACE_ID` as an environment variable in Lambda functions.
-```typescript
+```ts
 // INCORRECT - From original implementation
 environment: {
   TABLE_NAME: playerScoresTable.tableName,
@@ -19,7 +19,7 @@ environment: {
 **Error**: `ValidationError: _X_AMZN_TRACE_ID environment variable is reserved by the lambda runtime`
 
 **Fix**: Removed the reserved environment variable. AWS Lambda automatically injects the X-Ray trace ID when tracing is enabled.
-```typescript
+```ts
 // CORRECT
 environment: {
   TABLE_NAME: playerScoresTable.tableName,
@@ -29,7 +29,7 @@ environment: {
 
 ### 2. Log Group Retention and Deletion Policy Issues
 **Issue**: Manual LogGroup creation was causing conflicts with CDK's automatic log retention management, resulting in duplicate log groups with incorrect deletion policies.
-```typescript
+```ts
 // PROBLEMATIC - From original implementation
 ].forEach(fn => {
   new logs.LogGroup(this, `${fn.node.id}LogGroup`, {
@@ -43,7 +43,7 @@ environment: {
 **Problem**: This created duplicate log groups - one from Lambda's automatic creation and one manual, leading to resource conflicts and retention policy issues.
 
 **Fix**: Used Lambda's built-in `logRetention` property for cleaner management:
-```typescript
+```ts
 // CORRECT
 const lambdaFunction = new lambda.Function(this, 'Function', {
   // ... other properties
@@ -80,12 +80,12 @@ exports.handler = async (event) => {
 **Issue**: Tests failed because they didn't account for CDK's automatic creation of LogRetention Lambda functions.
 
 **Original Test**:
-```typescript
+```ts
 expect(functionNames).toHaveLength(4); // Failed - found 5 functions
 ```
 
 **Fix**: Filtered out system-generated functions:
-```typescript
+```ts
 const appFunctionNames = functionNames.filter(
   name => !name.includes('LogRetention')
 );
@@ -105,7 +105,7 @@ expect(appFunctionNames).toHaveLength(4);
 **Issue**: Code formatting didn't meet project standards.
 
 **Fix**: Applied consistent formatting:
-```typescript
+```ts
 // Before
 iam.ManagedPolicy.fromAwsManagedPolicyName(
   'AWSXRayDaemonWriteAccess'

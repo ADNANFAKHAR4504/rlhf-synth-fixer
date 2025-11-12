@@ -10,7 +10,7 @@ This document outlines the issues found in the initial model response and the fi
 
 **Fix:** Added `privateDnsEnabled: false` to the DynamoDB interface endpoint configuration:
 
-```typescript
+```ts
 vpc.addInterfaceEndpoint('DynamoDbEndpoint', {
   service: ec2.InterfaceVpcEndpointAwsService.DYNAMODB,
   privateDnsEnabled: false, // DynamoDB endpoint does not support private DNS
@@ -23,7 +23,7 @@ vpc.addInterfaceEndpoint('DynamoDbEndpoint', {
 
 **Fix:** Changed to use the correct CDK Duration-based property:
 
-```typescript
+```ts
 new lambda_event_sources.SqsEventSource(batchQueue, {
   batchSize: 25,
   maxBatchingWindow: cdk.Duration.seconds(5), // Fixed from maxBatchingWindowInMs
@@ -37,7 +37,7 @@ new lambda_event_sources.SqsEventSource(batchQueue, {
 
 **Fix:** Added conditional logic to check for directory existence before creating the layer:
 
-```typescript
+```ts
 const lambdaLayerPath = path.join(__dirname, '..', 'lambda-layer');
 let sharedLayer: lambda.ILayerVersion | undefined;
 
@@ -55,7 +55,7 @@ if (fs.existsSync(lambdaLayerPath)) {
 
 **Fix:** Updated to use the actual email address provided:
 
-```typescript
+```ts
 alertTopic.addSubscription(
   new sns_subscriptions.EmailSubscription('prakhar.j@turing.com')
 );
@@ -76,7 +76,7 @@ alertTopic.addSubscription(
 
 **Fix:** Implemented proper fallback logic:
 
-```typescript
+```ts
 const environmentSuffix =
   props?.environmentSuffix ||
   this.node.tryGetContext('environmentSuffix') ||
@@ -89,7 +89,7 @@ const environmentSuffix =
 
 **Fix:** Created a naming prefix at the stack level and used it consistently:
 
-```typescript
+```ts
 const namingPrefix = `prod-transaction-${environmentSuffix}`;
 // Used in all resource names: `${namingPrefix}-resource-name`
 ```

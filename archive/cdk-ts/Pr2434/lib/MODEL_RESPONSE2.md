@@ -2,7 +2,7 @@ I'll fix all the TypeScript errors in the code. Here's the corrected version:
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -608,7 +608,7 @@ export class TapStack extends cdk.Stack {
 
 ## bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

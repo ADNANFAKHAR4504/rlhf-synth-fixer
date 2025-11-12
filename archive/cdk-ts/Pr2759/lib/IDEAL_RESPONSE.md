@@ -8,7 +8,7 @@ This solution provides a comprehensive AWS CDK v2 TypeScript implementation that
 
 ### 1. Core Infrastructure (`lib/tap-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -91,7 +91,7 @@ export class TapStack extends cdk.Stack {
 - **NAT Gateway** for outbound internet access from private subnets
 
 ### 3. EC2 Instance
-```typescript
+```ts
 private createEC2Instance(environmentSuffix: string, vpc: ec2.IVpc, kmsKey: kms.Key): ec2.Instance {
   // HTTPS-only security group
   const securityGroup = new ec2.SecurityGroup(this, `EC2SecurityGroup-${environmentSuffix}`, {
@@ -126,7 +126,7 @@ private createEC2Instance(environmentSuffix: string, vpc: ec2.IVpc, kmsKey: kms.
 ```
 
 ### 4. RDS PostgreSQL Database
-```typescript
+```ts
 private createRDSInstance(
   environmentSuffix: string,
   vpc: ec2.IVpc,
@@ -203,7 +203,7 @@ private createRDSInstance(
 - **CloudWatch agent policy** for monitoring
 
 ### 6. Automated Patching
-```typescript
+```ts
 private createSystemsManagerSetup(environmentSuffix: string): void {
   // Maintenance window for patching
   const maintenanceWindow = new ssm.CfnMaintenanceWindow(this, `MaintenanceWindow-${environmentSuffix}`, {
@@ -227,7 +227,7 @@ private createSystemsManagerSetup(environmentSuffix: string): void {
 ```
 
 ### 7. Automated Remediation
-```typescript
+```ts
 private createRemediationFunction(environmentSuffix: string): lambda.Function {
   return new lambda.Function(this, `RemediationFunction-${environmentSuffix}`, {
     functionName: `tap-security-remediation-${environmentSuffix}`,

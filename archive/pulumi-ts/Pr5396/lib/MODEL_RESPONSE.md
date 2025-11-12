@@ -4,7 +4,7 @@ This implementation provides a complete Pulumi TypeScript solution for deploying
 
 ## File: lib/content-hosting-stack.ts
 
-```typescript
+```ts
 /**
  * ContentHostingStack - Reusable Pulumi component for multi-environment static content hosting
  *
@@ -310,7 +310,7 @@ export class ContentHostingStack extends pulumi.ComponentResource {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -392,7 +392,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

@@ -4,7 +4,7 @@ This implementation creates a multi-environment VPC infrastructure for a payment
 
 ## File: lib/vpc-component.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -281,7 +281,7 @@ export class VpcComponent extends pulumi.ComponentResource {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import { VpcComponent } from "./vpc-component";
 

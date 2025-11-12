@@ -31,7 +31,7 @@ Let me create the complete implementation now.
 ### Answer 
 ---
 
-```typescript
+```ts
 // main.ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';
@@ -49,7 +49,7 @@ new TapStack(app, 'HubSpokeNetworkStack', {
 app.synth();
 ```
 
-```typescript
+```ts
 // tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

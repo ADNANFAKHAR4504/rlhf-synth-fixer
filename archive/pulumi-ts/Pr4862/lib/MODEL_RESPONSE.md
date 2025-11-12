@@ -29,7 +29,7 @@ I'll implement a production-ready hub-and-spoke network architecture using Pulum
 
 ## 1. lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -722,7 +722,7 @@ export const flowLogsBucketArn = stack.outputs.flowLogsBucketArn;
 
 ## 2. tests/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { HubSpokeNetworkStack } from "../lib/tap-stack";
@@ -1063,7 +1063,7 @@ describe("HubSpokeNetworkStack Unit Tests", () => {
 
 ## 3. tests/tap-stack.int.test.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { HubSpokeNetworkStack } from "../lib/tap-stack";

@@ -6,7 +6,7 @@ During the implementation and deployment of the three-tier web stack, we encount
 
 The original MODEL_RESPONSE.md implementation includes a CodePipeline with a GitHub source action that references a non-existent secret in AWS Secrets Manager:
 
-```typescript
+```ts
 new codepipelineActions.GitHubSourceAction({
   actionName: 'GitHub_Source',
   owner: 'placeholder',

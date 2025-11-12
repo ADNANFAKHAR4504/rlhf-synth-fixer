@@ -21,7 +21,7 @@ MalformedPolicyDocument: Action vendors (e.g., aws, ec2, etc.) must not contain 
 
 **Fix Applied**: Changed the Deny statement from using `Action` with service wildcards to using `NotAction` with an explicit list of allowed read-only actions:
 
-```typescript
+```ts
 // BEFORE (Failed):
 {
   Sid: 'ExplicitDenyWriteActions',
@@ -70,7 +70,7 @@ MalformedPolicyDocument: Action vendors (e.g., aws, ec2, etc.) must not contain 
 **Issue**: The `bin/tap.ts` entry point file instantiated `TapStack` without passing the `environmentSuffix` parameter, even though it was read from environment variables and config.
 
 **Code Issue**:
-```typescript
+```ts
 // BEFORE (Missing parameter):
 new TapStack('pulumi-infra', {
   tags: defaultTags,
@@ -101,7 +101,7 @@ const stack = new TapStack('pulumi-infra', {
 **Issue**: The Pulumi entry point (`bin/tap.ts`) didn't export any stack outputs, making it impossible for integration tests and CI/CD pipelines to retrieve deployed resource information.
 
 **Code Issue**:
-```typescript
+```ts
 // BEFORE: No exports
 new TapStack('pulumi-infra', { ... });
 
@@ -137,7 +137,7 @@ error TS2564: Property 'secretsRotationRole' has no initializer and is not defin
 ```
 
 **Code Issue**:
-```typescript
+```ts
 // BEFORE:
 public readonly ec2Role: aws.iam.Role;
 public readonly lambdaRole: aws.iam.Role;

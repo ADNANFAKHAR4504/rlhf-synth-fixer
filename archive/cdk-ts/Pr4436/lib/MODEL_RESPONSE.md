@@ -1,6 +1,6 @@
 ### Main Stack - `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -177,7 +177,7 @@ export class TapStack extends cdk.Stack {
 
 ### Global Database Construct - `lib/constructs/global-database.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -373,7 +373,7 @@ export class GlobalDatabase extends Construct {
 
 ### Regional API Construct - `lib/constructs/regional-api.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -585,7 +585,7 @@ export class RegionalApi extends Construct {
 
 ### Health Check System - `lib/constructs/health-check.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -724,7 +724,7 @@ export class HealthCheckSystem extends Construct {
 
 ### Failover Orchestrator - `lib/constructs/failover-orchestrator.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
@@ -951,7 +951,7 @@ export class FailoverOrchestrator extends Construct {
 
 ### Chaos Testing System - `lib/constructs/chaos-testing.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -1066,7 +1066,7 @@ export class ChaosTestingSystem extends Construct {
 
 ### Constants - `lib/utils/constants.ts`
 
-```typescript
+```ts
 export const PRIMARY_REGION = 'us-east-1';
 export const SECONDARY_REGIONS = ['eu-west-1', 'ap-southeast-1'];
 export const REGIONS = [PRIMARY_REGION, ...SECONDARY_REGIONS];
@@ -1256,7 +1256,7 @@ function generateTransactionId() {
 
 ## Deployment Script - `bin/deploy.ts`
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

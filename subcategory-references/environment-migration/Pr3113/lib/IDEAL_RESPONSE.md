@@ -27,7 +27,7 @@ First, let's set up the basic structure of the CDK stack. We'll need to import t
 
 Let's start by writing the CDK stack TypeScript file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';

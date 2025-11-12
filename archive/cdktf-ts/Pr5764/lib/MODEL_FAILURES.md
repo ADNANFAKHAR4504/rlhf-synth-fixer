@@ -9,7 +9,7 @@ This document analyzes the failures in the MODEL_RESPONSE that prevented success
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/data-processing-stack.ts line 22
 export class DataProcessingStack extends TerraformStack {
   constructor(scope: Construct, id: string, props: DataProcessingStackProps) {
@@ -19,7 +19,7 @@ export class DataProcessingStack extends TerraformStack {
 The DataProcessingStack incorrectly extends `TerraformStack` when it should be a `Construct`. This creates a nested stack structure where the child stack doesn't have access to the parent's AWS provider.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 export class DataProcessingStack extends Construct {
   constructor(scope: Construct, id: string, props: DataProcessingStackProps) {
     super(scope, id);
@@ -41,7 +41,7 @@ export class DataProcessingStack extends Construct {
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/data-processing-stack.ts line 295
 dataProcessor.addOverride('depends_on', [logGroup]);
 ```
@@ -49,7 +49,7 @@ dataProcessor.addOverride('depends_on', [logGroup]);
 Using `addOverride('depends_on', [logGroup])` passes the entire logGroup construct object, which creates a circular reference during Terraform synthesis.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 dataProcessor.node.addDependency(logGroup);
 ```
 
@@ -69,7 +69,7 @@ dataProcessor.node.addDependency(logGroup);
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/tap-stack.ts lines 33-37
 const environment =
   this.node.tryGetContext('env') ||
@@ -81,7 +81,7 @@ const environment =
 The fallback logic attempts to extract environment name from `environmentSuffix` by removing non-alphabetic characters. This fails when environmentSuffix is "synthov1iii", resulting in "synthoviii" which is not a valid environment.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const environment =
   this.node.tryGetContext('env') || process.env.ENVIRONMENT || 'dev';
 ```
@@ -100,7 +100,7 @@ const environment =
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/tap-stack.ts line 52
 this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
@@ -108,7 +108,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 The `use_lockfile` property does not exist in Terraform's S3 backend configuration. This is an invalid property that causes Terraform init to fail.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Remove the line entirely - S3 backend already has native locking via DynamoDB
 new S3Backend(this, {
   bucket: stateBucket,
@@ -134,7 +134,7 @@ new S3Backend(this, {
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/data-processing-stack.ts line 286
 environment: {
   variables: {
@@ -149,7 +149,7 @@ environment: {
 The Lambda function configuration uses `AWS_REGION` as an environment variable key, which is a reserved AWS Lambda runtime variable and cannot be overridden by user code.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 environment: {
   variables: {
     ENVIRONMENT: environment,

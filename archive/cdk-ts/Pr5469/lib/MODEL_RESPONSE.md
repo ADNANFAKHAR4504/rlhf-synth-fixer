@@ -122,7 +122,7 @@ cdk-cicd-pipeline/
 
 **lib/lambda/api-handler.ts**
 
-```typescript
+```ts
 import express, { Request, Response } from 'express';
 import serverless from 'serverless-http';
 import {
@@ -401,7 +401,7 @@ export const handler = serverless(app);
 
 **lib/constructs/storage-construct.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -526,7 +526,7 @@ export class StorageConstruct extends Construct {
 
 **lib/constructs/lambda-api-construct.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -727,7 +727,7 @@ export class LambdaApiConstruct extends Construct {
 
 **lib/constructs/pipeline-construct.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
@@ -1006,7 +1006,7 @@ export class PipelineConstruct extends Construct {
 
 **lib/constructs/monitoring-construct.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -1293,7 +1293,7 @@ export class MonitoringConstruct extends Construct {
 
 **lib/tap-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StorageConstruct } from './constructs/storage-construct';
@@ -1458,7 +1458,7 @@ export class TapStack extends cdk.Stack {
 
 **bin/app.ts**
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

@@ -11,7 +11,7 @@ This document analyzes discrepancies between the MODEL_RESPONSE.md and the actua
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE uses hardcoded UTC times in cron expressions without accounting for EST/EDT timezone variations:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Line 225, ec2-scheduler-stack.ts
 scheduleExpression: 'cron(0 0 ? * MON-FRI *)',  // Claims 7 PM EST = midnight UTC
 ```
@@ -25,13 +25,13 @@ scheduleExpression: 'cron(0 0 ? * MON-FRI *)',  // Claims 7 PM EST = midnight UT
 **IDEAL_RESPONSE Fix**:
 Should either:
 1. Use EventBridge Scheduler (not CloudWatch Events) which supports timezones natively:
-```typescript
+```ts
 scheduleExpression: 'cron(0 19 ? * MON-FRI *)',
 scheduleExpressionTimezone: 'America/New_York',
 ```
 
 2. Or document the limitation and use correct UTC conversion:
-```typescript
+```ts
 // Stop at 7 PM EST = 00:00 UTC (next day)
 scheduleExpression: 'cron(0 0 ? * TUE-SAT *)',  // Adjusted for day rollover
 
@@ -56,7 +56,7 @@ scheduleExpression: 'cron(0 13 ? * MON-FRI *)',
 **MODEL_RESPONSE Issue**:
 The PROMPT explicitly requires "Import existing EC2 instances tagged with Environment=development or Environment=staging" using Pulumi's import functionality. The MODEL_RESPONSE only queries instances but doesn't import them:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Lines 34-60, ec2-scheduler-stack.ts
 const developmentInstances = aws.ec2.getInstancesOutput({
   filters: [
@@ -69,7 +69,7 @@ const developmentInstances = aws.ec2.getInstancesOutput({
 **IDEAL_RESPONSE Fix**:
 Should use Pulumi's `import` resource option to adopt existing instances into state:
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -117,7 +117,7 @@ devInstanceIds.apply(ids => {
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE has conflicting region information. The code defaults to `ap-southeast-1` but comments reference pricing for Singapore while environment setup mentions `eu-north-1`:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Line 44, tap-stack.ts
 const region = aws.config.region || 'ap-southeast-1';
 
@@ -147,7 +147,7 @@ So the region is correct. However, the PROMPT's "Environment Setup" section ment
 **IDEAL_RESPONSE Fix**:
 The code should respect the explicit region specification at the top of PROMPT (ap-southeast-1) and ignore the conflicting mention in Environment Setup:
 
-```typescript
+```ts
 // IDEAL: Use Pulumi config or explicit region setting
 const config = new pulumi.Config("aws");
 const region = config.require("region"); // Explicitly require region from Pulumi config
@@ -174,7 +174,7 @@ const region = process.env.AWS_REGION || 'ap-southeast-1';
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE uses deprecated `aws.cloudwatch.EventRule` instead of the newer `aws.eventbridge` resources:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Line 221, ec2-scheduler-stack.ts
 const stopRule = new aws.cloudwatch.EventRule(
   `ec2-stop-rule-${environmentSuffix}`,
@@ -184,7 +184,7 @@ const stopRule = new aws.cloudwatch.EventRule(
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Use EventBridge (new service) instead of CloudWatch Events (legacy)
 const stopRule = new aws.eventbridge.Rule(
   `ec2-stop-rule-${environmentSuffix}`,
@@ -219,7 +219,7 @@ const stopRule = new aws.eventbridge.Rule(
 **MODEL_RESPONSE Issue**:
 The IAM policy uses string equality condition for tags but doesn't account for instances that might have multiple environment tags or variations:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Lines 214-217, ec2-scheduler-stack.ts
 Condition: {
   StringEquals: {
@@ -231,7 +231,7 @@ Condition: {
 **IDEAL_RESPONSE Fix**:
 Use more robust condition with explicit permissions:
 
-```typescript
+```ts
 Condition: {
   'StringEquals': {
     'ec2:ResourceTag/Environment': ['development', 'staging'],
@@ -244,7 +244,7 @@ Condition: {
 
 Also add explicit deny for production:
 
-```typescript
+```ts
 {
   Effect: 'Deny',
   Action: ['ec2:StartInstances', 'ec2:StopInstances'],
@@ -278,7 +278,7 @@ Also add explicit deny for production:
 **MODEL_RESPONSE Issue**:
 The cost calculation doesn't handle several edge cases:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Line 62, cost-calculation-stack.ts
 const hourlyRate = pricingMap[instanceType] || 0.05; // Default rate
 ```
@@ -291,7 +291,7 @@ Issues:
 5. Doesn't factor in EBS costs
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const hourlyRate = pricingMap[instanceType];
 if (!hourlyRate) {
   console.warn(`Unknown instance type ${instanceType}, using default rate $0.05/hr`);
@@ -328,7 +328,7 @@ const rate = hourlyRate || 0.05;
 **MODEL_RESPONSE Issue**:
 Lambda functions have minimal error handling:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Line 65-67, lib/lambda/ec2-stop.js
 catch (error) {
   console.warn(`Could not fetch details for instance ${instanceId}`);
@@ -371,7 +371,7 @@ try {
 
 Add DLQ to Lambda:
 
-```typescript
+```ts
 const stopFunction = new aws.lambda.Function(
   `ec2-stop-function-${environmentSuffix}`,
   {
@@ -472,7 +472,7 @@ exports.handler = async (event, context) => {
 **MODEL_RESPONSE Issue**:
 Lambda configuration could be optimized:
 
-```typescript
+```ts
 // MODEL_RESPONSE - Line 205, ec2-scheduler-stack.ts
 timeout: 60,
 ```
@@ -483,7 +483,7 @@ Issues:
 - Timeout of 60s might be excessive for simple EC2 API calls
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const stopFunction = new aws.lambda.Function(
   `ec2-stop-function-${environmentSuffix}`,
   {
@@ -525,7 +525,7 @@ While there are TSDoc comments, they lack detail on:
 **IDEAL_RESPONSE Fix**:
 Add comprehensive documentation:
 
-```typescript
+```ts
 /**
  * EC2 Scheduler Stack
  *

@@ -1,6 +1,6 @@
 I'll create a comprehensive TypeScript CloudFormation stack that meets all your requirements. This will be a robust, secure, and scalable serverless infrastructure.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

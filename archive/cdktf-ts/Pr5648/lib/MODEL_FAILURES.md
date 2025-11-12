@@ -17,7 +17,7 @@ The most significant issue is that all CloudWatch alarms created in `MODEL_RESPO
 The model used an inefficient and outdated import strategy that severely impacts performance.
 
 - Failure: `MODEL_RESPONSE.md` uses a single, massive wildcard import for the AWS provider:
-  ```typescript
+  ```ts
   import {
     AwsProvider,
     iam,
@@ -27,7 +27,7 @@ The model used an inefficient and outdated import strategy that severely impacts
   ```
 - Why this is wrong: This forces CDKTF to load the _entire_ AWS provider (thousands of resources) into memory during `cdktf synth`, which dramatically increases synthesis time and memory consumption.
 - Ideal Implementation: `IDEAL_RESPONSE.md` correctly uses deep imports, which is the documented best practice. This loads _only_ the specific resources needed.
-  ```typescript
+  ```ts
   import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
   import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
   import { Cloudtrail } from '@cdktf/provider-aws/lib/cloudtrail';

@@ -54,7 +54,7 @@ I'll implement a production-ready ML inference pipeline with comprehensive A/B t
 
 ## File 1: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -985,7 +985,7 @@ def handler(event, context):
 
 ## File 2: tests/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
@@ -1447,7 +1447,7 @@ describe('TapStack Unit Tests', () => {
 
 ## File 3: tests/tap-stack.int.test.ts
 
-```typescript
+```ts
 import { App, Stack } from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 import * as AWS from 'aws-sdk';

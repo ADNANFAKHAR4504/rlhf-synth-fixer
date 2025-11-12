@@ -1,6 +1,6 @@
 I'll fix the remaining TypeScript errors. The issues are with the `environmentSuffix` property and the `throttleSettings` property in `CfnStageProps`. Here's the corrected code:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -753,7 +753,7 @@ if (require.main === module) {
 
 2. **Fixed API Gateway throttling**: Replaced the invalid `CfnStage` approach with the correct `UsagePlan` approach:
 
-   ```typescript
+   ```ts
    // Before (incorrect - throttleSettings doesn't exist in CfnStageProps)
    new apigateway.CfnStage(this, getResourceName('api-stage'), {
      throttleSettings: { ... } // This property doesn't exist
@@ -788,7 +788,7 @@ The new `UsagePlan` approach provides:
 
 Added a new output for the Usage Plan ID:
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'UsagePlanId', {
   value: usagePlan.usagePlanId,
   description: 'API Gateway Usage Plan ID',

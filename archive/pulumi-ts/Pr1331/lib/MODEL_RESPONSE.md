@@ -8,7 +8,7 @@ The infrastructure will be organized into the following TypeScript files:
 
 ## `lib/network-stack.ts`
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -176,7 +176,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## `lib/security-stack.ts`
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -292,7 +292,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
 ## `lib/iam-stack.ts`
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -412,7 +412,7 @@ export class IamStack extends pulumi.ComponentResource {
 
 ## `lib/storage-stack.ts`
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -494,7 +494,7 @@ export class StorageStack extends pulumi.ComponentResource {
 
 ## `lib/compute-stack.ts`
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -715,7 +715,7 @@ EOF
 
 ## `lib/database-stack.ts`
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -791,7 +791,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
 ## `lib/tap-stack.ts` (Updated)
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { NetworkStack } from './network-stack';

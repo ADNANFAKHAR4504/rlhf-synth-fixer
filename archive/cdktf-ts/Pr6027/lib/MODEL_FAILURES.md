@@ -17,7 +17,7 @@ The MODEL_RESPONSE provided a comprehensive CDKTF TypeScript implementation but 
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue** (Line 68 in lib/tap-stack.ts):
-```typescript
+```ts
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -29,7 +29,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);  // ❌ INVALID
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -69,7 +69,7 @@ https://developer.hashicorp.com/terraform/language/settings/backends/s3
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 146 in lib/networking-construct.ts):
-```typescript
+```ts
 constructor(scope: Construct, id: string, props: NetworkingConstructProps) {
   super(scope, id);
 
@@ -82,7 +82,7 @@ constructor(scope: Construct, id: string, props: NetworkingConstructProps) {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 constructor(scope: Construct, id: string, props: NetworkingConstructProps) {
   super(scope, id);
 
@@ -113,7 +113,7 @@ lib/networking-construct.ts:146:32 error 'region' is assigned a value but never 
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Lines 77-104 in lib/tap-stack.ts):
-```typescript
+```ts
 // Create security groups with strict ingress/egress rules
 const security = new SecurityConstruct(this, 'Security', {  // ❌ Unused
   environmentSuffix,
@@ -146,7 +146,7 @@ const flowLogs = new FlowLogsConstruct(this, 'FlowLogs', {  // ❌ Unused
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Create security groups with strict ingress/egress rules
 new SecurityConstruct(this, 'Security', {  // ✅ No variable assignment
   environmentSuffix,
@@ -197,7 +197,7 @@ lib/tap-stack.ts:101:11 error 'flowLogs' is assigned a value but never used
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Multiple files):
-```typescript
+```ts
 // flow-logs-construct.ts line 110
 Actions: [
             's3:PutObject',
@@ -249,7 +249,7 @@ The model generated code that doesn't conform to the project's Prettier configur
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 71-73 in lib/flow-logs-construct.ts):
-```typescript
+```ts
 new S3BucketLifecycleConfiguration(this, 'FlowLogsBucketLifecycle', {
   bucket: flowLogsBucket.id,
   rule: [
@@ -265,7 +265,7 @@ new S3BucketLifecycleConfiguration(this, 'FlowLogsBucketLifecycle', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 new S3BucketLifecycleConfiguration(this, 'FlowLogsBucketLifecycle', {
   bucket: flowLogsBucket.id,
   rule: [

@@ -34,14 +34,14 @@ main: lib/
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: The code imported `@pulumi/random` package but never used it:
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as random from "@pulumi/random";  // ← Unused import
 ```
 
 **IDEAL_RESPONSE Fix**: Removed the unused import:
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 // No @pulumi/random import needed
@@ -69,7 +69,7 @@ import * as aws from '@pulumi/aws';
 - Spacing inconsistencies
 
 Examples:
-```typescript
+```ts
 // MODEL_RESPONSE (incorrect formatting)
 new aws.s3.BucketNotification(`bucket-notification-${args.environment}-${args.environmentSuffix}`, {
             bucket: this.bucket.id,
@@ -81,7 +81,7 @@ new aws.s3.BucketNotification(`bucket-notification-${args.environment}-${args.en
 ```
 
 **IDEAL_RESPONSE Fix**: Applied consistent formatting with ESLint --fix:
-```typescript
+```ts
 new aws.s3.BucketNotification(
   `bucket-notification-${args.environment}-${args.environmentSuffix}`,
   {

@@ -38,7 +38,7 @@ Provide complete, deployable code for all three files with no truncation.
 The prompt explicitly requires "Athena workgroup for running analytics queries on prediction results." The model response creates a Glue database but never implements the Athena workgroup.
 
 **Expected:**
-```typescript
+```ts
 const athenaWorkgroup = new athena.CfnWorkGroup(this, 'AthenaWorkgroup', {
   name: 'ml-pipeline-analytics-prod',
   workGroupConfiguration: {
@@ -63,7 +63,7 @@ Only Glue database is created. Athena workgroup is missing entirely.
 Prompt requires "Glue Data Catalog for automated data cataloging." A database alone doesn't provide automated cataloging - a Glue Crawler is needed.
 
 **Missing Component:**
-```typescript
+```ts
 const glueCrawler = new glue.CfnCrawler(this, 'GlueCrawler', {
   name: 'ml-predictions-crawler',
   role: glueCrawlerRole.roleArn,
@@ -87,7 +87,7 @@ const glueCrawler = new glue.CfnCrawler(this, 'GlueCrawler', {
 **Description:**
 The preprocessing Lambda role includes:
 
-```typescript
+```ts
 new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
   actions: ['sagemaker:InvokeEndpoint', 'sagemaker:InvokeEndpointAsync'],
@@ -99,7 +99,7 @@ new iam.PolicyStatement({
 This violates the least privilege principle explicitly mentioned in the prompt. The Lambda can invoke ANY SageMaker endpoint in the account.
 
 **Correct Implementation:**
-```typescript
+```ts
 new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
   actions: ['sagemaker:InvokeEndpoint'],
@@ -116,7 +116,7 @@ new iam.PolicyStatement({
 While a KMS key is created, there are no explicit key policies granting service principals access. This could lead to "Access Denied" errors at runtime.
 
 **Missing:**
-```typescript
+```ts
 encryptionKey.addToResourcePolicy(
   new iam.PolicyStatement({
     principals: [new iam.ServicePrincipal('lambda.amazonaws.com')],
@@ -134,7 +134,7 @@ encryptionKey.addToResourcePolicy(
 **Description:**
 The response only configures auto-scaling for VariantA:
 
-```typescript
+```ts
 const scalingTarget = new applicationautoscaling.ScalableTarget(this, 'SageMakerScalingTarget', {
   resourceId: `endpoint/${sagemakerEndpoint.endpointName}/variant/VariantA`,
   // ...
@@ -156,7 +156,7 @@ Both variants need independent auto-scaling configurations.
 The prompt requires "CloudWatch metrics per variant for comparison" and alarms for both variants. The response creates dashboard widgets but only one latency alarm for VariantA.
 
 **Missing:**
-```typescript
+```ts
 // Alarm for VariantB
 const latencyAlarmB = new cloudwatch.Alarm(this, 'HighLatencyAlarmB', {
   metric: new cloudwatch.Metric({
@@ -186,7 +186,7 @@ const variantComparisonAlarm = new cloudwatch.Alarm(this, 'VariantPerformanceAla
 **Description:**
 The batch workflow implementation is overly simplistic:
 
-```typescript
+```ts
 parallelProcessing.branch(
   submitBatchJob.next(
     new stepfunctions.Wait(this, 'WaitForBatch1', {
@@ -203,7 +203,7 @@ parallelProcessing.branch(
 - Error handling only has a Catch block that goes to Succeed (hides failures)
 
 **Required:**
-```typescript
+```ts
 const batchProcessing = new stepfunctions.Map(this, 'MapOverBatches', {
   maxConcurrency: 10,
   itemsPath: '$.batches',
@@ -245,7 +245,7 @@ The prompt requires monitoring for batch jobs, but there are no CloudWatch alarm
 **Description:**
 The prompt states: "Configure cache key parameters based on inference input features." The response enables caching but doesn't configure cache keys:
 
-```typescript
+```ts
 predictResource.addMethod(
   'POST',
   new apigateway.LambdaIntegration(preprocessingLambda),
@@ -254,7 +254,7 @@ predictResource.addMethod(
 ```
 
 **Required:**
-```typescript
+```ts
 predictResource.addMethod(
   'POST',
   new apigateway.LambdaIntegration(preprocessingLambda),
@@ -274,7 +274,7 @@ predictResource.addMethod(
 For a production API handling 100,000 predictions daily, there should be usage plans and throttling limits. None are configured.
 
 **Missing:**
-```typescript
+```ts
 const usagePlan = api.addUsagePlan('UsagePlan', {
   throttle: {
     rateLimit: 100,
@@ -317,7 +317,7 @@ expiration_time = int(time.time()) + (ttl_days * 24 * 60 * 60)
 The prompt explicitly requires "CloudWatch alarms for data drift detection." This is completely absent from the implementation.
 
 **Required:**
-```typescript
+```ts
 // Custom metric for data drift
 const driftMetric = new cloudwatch.Metric({
   namespace: 'MLPipeline/DataQuality',
@@ -354,7 +354,7 @@ Only latency and invocations are included.
 **Description:**
 The integration tests contain only commented-out code and placeholder assertions:
 
-```typescript
+```ts
 test('API Gateway to Lambda to SageMaker integration', async () => {
   // const response = await axios.post(...)
   // expect(response.status).toBe(200);
@@ -388,7 +388,7 @@ The unit tests only cover ~40-50% of the required components. Missing tests for:
 **Description:**
 The SageMaker models are created without VPC configuration:
 
-```typescript
+```ts
 const sagemakerModel1 = new sagemaker.CfnModel(this, 'MLModelVariantA', {
   modelName: `ml-pipeline-model-a-${environment}`,
   executionRoleArn: sagemakerExecutionRole.roleArn,
@@ -398,7 +398,7 @@ const sagemakerModel1 = new sagemaker.CfnModel(this, 'MLModelVariantA', {
 ```
 
 **Required:**
-```typescript
+```ts
 vpcConfig: {
   subnets: vpc.selectSubnets({ subnetType: ec2.SubnetType.PRIVATE_ISOLATED }).subnetIds,
   securityGroupIds: [computeSecurityGroup.securityGroupId],
@@ -427,7 +427,7 @@ A Lambda function that:
 - Deploys new endpoint
 
 **Required:**
-```typescript
+```ts
 const modelDeployLambda = new lambda.Function(this, 'ModelDeployFunction', {
   runtime: lambda.Runtime.PYTHON_3_11,
   handler: 'index.handler',
@@ -460,7 +460,7 @@ const modelDeployLambda = new lambda.Function(this, 'ModelDeployFunction', {
 The prompt requires: `ml-pipeline-{resourceType}-{environment}-{region}`
 
 **Violations:**
-```typescript
+```ts
 // Correct
 modelBucket: `ml-pipeline-models-${environment}-${region}-${this.account}`
 
@@ -480,12 +480,12 @@ inferenceStream: `ml-pipeline-stream-${environment}`
 The prompt requires "Add inline comments explaining non-obvious AWS configurations." Many configurations lack explanatory comments:
 
 **Example:**
-```typescript
+```ts
 cacheClusterSize: '0.5',  // No comment explaining why 0.5GB was chosen
 ```
 
 **Should be:**
-```typescript
+```ts
 cacheClusterSize: '0.5',  // 0.5GB cache supports ~100 concurrent requests with average response size of 5KB
 ```
 
@@ -495,7 +495,7 @@ cacheClusterSize: '0.5',  // 0.5GB cache supports ~100 concurrent requests with 
 **Description:**
 The prompt requires "JSDoc comments for all public methods and complex logic." Many methods lack JSDoc:
 
-```typescript
+```ts
 constructor(scope: Construct, id: string, props?: cdk.StackProps) {
   // No JSDoc explaining constructor parameters or stack purpose
 }
@@ -510,7 +510,7 @@ constructor(scope: Construct, id: string, props?: cdk.StackProps) {
 The prompt mentions cost optimization. The batch input bucket should have aggressive lifecycle rules since processed data isn't needed long-term. While there is an expiration rule, it's missing intelligent tiering.
 
 **Missing:**
-```typescript
+```ts
 lifecycleRules: [
   {
     id: 'intelligent-tiering',
@@ -530,7 +530,7 @@ lifecycleRules: [
 For cost control on Lambda functions processing 100K predictions daily, reserved concurrency should be set to prevent runaway costs.
 
 **Missing:**
-```typescript
+```ts
 const preprocessingLambda = new lambda.Function(this, 'PreprocessingFunction', {
   // ...
   reservedConcurrentExecutions: 100, // Limit maximum concurrent executions
@@ -546,7 +546,7 @@ const preprocessingLambda = new lambda.Function(this, 'PreprocessingFunction', {
 The EventBridge rule has no DLQ configured. If the Step Functions execution fails to start, the event is lost.
 
 **Required:**
-```typescript
+```ts
 const dlq = new sqs.Queue(this, 'BatchScheduleDLQ', {
   queueName: 'ml-pipeline-batch-schedule-dlq',
   retentionPeriod: cdk.Duration.days(14),
@@ -572,7 +572,7 @@ The response doesn't include CfnOutput statements for key resources. Outputs are
 - Manual testing
 
 **Missing Outputs:**
-```typescript
+```ts
 new cdk.CfnOutput(this, 'APIEndpoint', {
   value: this.inferenceApi.url,
   exportName: 'MLPipelineAPIEndpoint',
@@ -601,7 +601,7 @@ While preprocessing Lambda has `tracing: lambda.Tracing.ACTIVE`, other component
 - Stream processing Lambda has no tracing
 
 **Required:**
-```typescript
+```ts
 // API Gateway
 deployOptions: {
   tracingEnabled: true,  // Missing in response
@@ -623,7 +623,7 @@ The prompt requires "Configure resource tags for cost allocation and resource ma
 
 **Required:**
 Explicit tagging on individual resources:
-```typescript
+```ts
 cdk.Tags.of(modelBucket).add('DataClassification', 'Confidential');
 cdk.Tags.of(predictionTable).add('DataRetention', '30days');
 cdk.Tags.of(sagemakerEndpoint).add('CostCenter', 'ML-Inference');

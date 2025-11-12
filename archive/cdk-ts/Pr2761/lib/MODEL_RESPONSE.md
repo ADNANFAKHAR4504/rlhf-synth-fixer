@@ -167,7 +167,7 @@ tap-cdk-project/
 
 ## 3. bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -196,7 +196,7 @@ new TapStack(app, 'TapStack', {
 
 ## 4. lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -530,7 +530,7 @@ export class TapStack extends cdk.Stack {
 
 ## 5. lambda/handler.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';

@@ -5,7 +5,7 @@
 This serverless food delivery API infrastructure handles 3,500 daily orders with high availability, automatic scaling, and comprehensive monitoring.
 
 ### Main Stack - `lib/tap-stack.ts`
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { FoodDeliveryStack } from './food-delivery-stack';
@@ -29,7 +29,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ### Food Delivery Stack - `lib/food-delivery-stack.ts`
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -515,7 +515,7 @@ export class FoodDeliveryStack extends cdk.Stack {
 ```
 
 ### Lambda Function - Order Processing
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, UpdateCommand } from '@aws-sdk/lib-dynamodb';

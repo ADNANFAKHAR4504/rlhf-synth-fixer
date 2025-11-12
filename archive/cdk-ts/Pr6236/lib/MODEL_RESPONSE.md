@@ -4,7 +4,7 @@ Complete AWS CDK TypeScript implementation for serverless transaction processing
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -258,7 +258,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/lambda/processTransaction/index.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
@@ -326,7 +326,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 
 ## File: lib/lambda/auditTransaction/index.ts
 
-```typescript
+```ts
 import { SQSEvent } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -366,7 +366,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 
 ## File: lib/lambda/dailySummary/index.ts
 
-```typescript
+```ts
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 

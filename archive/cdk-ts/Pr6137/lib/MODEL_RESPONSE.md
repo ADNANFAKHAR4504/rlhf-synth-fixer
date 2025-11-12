@@ -39,7 +39,7 @@ I'll implement a comprehensive serverless transaction processing pipeline using 
 
 ## Implementation: `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

@@ -39,7 +39,7 @@ I'll need to make sure everything follows AWS best practices and security requir
 
 I'll create a comprehensive CDK stack that meets all your requirements. This production-ready infrastructure follows AWS best practices for security, compliance, and high availability.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -805,7 +805,7 @@ npm install @aws-cdk/aws-wafv2 @aws-cdk/aws-config
 
 4. Update `bin/secure-webapp-infrastructure.ts`:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

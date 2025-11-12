@@ -10,7 +10,7 @@ This document analyzes the failures in the original MODEL_RESPONSE and explains 
 
 **MODEL_RESPONSE Issue**:
 The model generated CloudWatch dashboard metrics using object notation for dimensions:
-```typescript
+```ts
 metrics: lambdaNames.map((name: string) => [
   'AWS/Lambda',
   'Invocations',
@@ -20,7 +20,7 @@ metrics: lambdaNames.map((name: string) => [
 
 **IDEAL_RESPONSE Fix**:
 CloudWatch dashboard API requires flat array notation:
-```typescript
+```ts
 metrics: lambdaNames.map((name: string) => [
   'AWS/Lambda',
   'Invocations',
@@ -43,14 +43,14 @@ metrics: lambdaNames.map((name: string) => [
 
 **MODEL_RESPONSE Issue**:
 Lambda functions referenced S3 keys for code but no S3 BucketObject resources were created to upload the code:
-```typescript
+```ts
 // Lambda functions reference: codeS3Key: 'payment-processor.zip'
 // But no code to upload this file to S3
 ```
 
 **IDEAL_RESPONSE Fix**:
 Added S3 BucketObject resources to upload Lambda code:
-```typescript
+```ts
 new aws.s3.BucketObject(
   `lambda-code-${funcConfig.name}`,
   {
@@ -76,14 +76,14 @@ new aws.s3.BucketObject(
 
 **MODEL_RESPONSE Issue**:
 File used `aws.s3.BucketObject` but didn't import `@pulumi/aws`:
-```typescript
+```ts
 // Missing: import * as aws from '@pulumi/aws';
 new aws.s3.BucketObject(...) // TypeScript compilation error
 ```
 
 **IDEAL_RESPONSE Fix**:
 Added proper import statement:
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 ```
 
@@ -101,7 +101,7 @@ import * as aws from '@pulumi/aws';
 
 **MODEL_RESPONSE Issue**:
 bin/tap.ts didn't pass environmentSuffix to TapStack:
-```typescript
+```ts
 new TapStack('pulumi-infra', {
   tags: defaultTags,
   // Missing: environmentSuffix parameter
@@ -109,7 +109,7 @@ new TapStack('pulumi-infra', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 new TapStack('pulumi-infra', {
   environmentSuffix,
   tags: defaultTags,
@@ -128,13 +128,13 @@ new TapStack('pulumi-infra', {
 
 **MODEL_RESPONSE Issue**:
 bin/tap.ts created stack but didn't export outputs:
-```typescript
+```ts
 new TapStack('pulumi-infra', {...});
 // No exports for integration tests
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const stack = new TapStack('pulumi-infra', {...});
 
 export const kmsKeyArn = stack.kmsKeyArn;
@@ -159,7 +159,7 @@ export const dashboardName = stack.dashboardName;
 
 **MODEL_RESPONSE Issue**:
 Used require() in TypeScript module:
-```typescript
+```ts
 export function loadDevConfig(configPath: string): DevConfig {
   const fs = require('fs');  // Inconsistent with TypeScript best practices
   return JSON.parse(fs.readFileSync(configPath, 'utf-8'));
@@ -167,7 +167,7 @@ export function loadDevConfig(configPath: string): DevConfig {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 import * as fs from 'fs';
 
 export function loadDevConfig(configPath: string): DevConfig {

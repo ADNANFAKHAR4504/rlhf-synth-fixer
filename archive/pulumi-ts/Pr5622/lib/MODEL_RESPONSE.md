@@ -13,7 +13,7 @@ The solution consists of:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -99,7 +99,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/ec2-scheduler-stack.ts
 
-```typescript
+```ts
 /**
  * ec2-scheduler-stack.ts
  *
@@ -422,7 +422,7 @@ export class Ec2SchedulerStack extends pulumi.ComponentResource {
 
 ## File: lib/cost-calculation-stack.ts
 
-```typescript
+```ts
 /**
  * cost-calculation-stack.ts
  *
@@ -684,7 +684,7 @@ exports.handler = async (event) => {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for EC2 cost optimization infrastructure.
  *

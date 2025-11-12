@@ -5,7 +5,7 @@ This document captures the specific failures observed in AI model responses when
 **Task**: Create an S3 bucket with versioning enabled and public read access
 
 **Expected Output**:
-```typescript
+```ts
 const bucket = new s3.Bucket(this, 'MyBucket', {
   versioned: true,
   publicReadAccess: true,
@@ -14,7 +14,7 @@ const bucket = new s3.Bucket(this, 'MyBucket', {
 ```
 
 **Model's Incorrect Response**:
-```typescript
+```ts
 const bucket = new s3.Bucket(this, 'MyBucket', {
   versioned: true,
   publicReadAccess: true,
@@ -33,7 +33,7 @@ const bucket = new s3.Bucket(this, 'MyBucket', {
 **Task**: Create an RDS instance with encryption enabled
 
 **Expected Output**:
-```typescript
+```ts
 const db = new rds.DatabaseInstance(this, 'MyDatabase', {
   engine: rds.DatabaseInstanceEngine.mysql({
     version: rds.MysqlEngineVersion.VER_8_0
@@ -48,7 +48,7 @@ const db = new rds.DatabaseInstance(this, 'MyDatabase', {
 ```
 
 **Model's Incorrect Response**:
-```typescript
+```ts
 const db = new rds.DatabaseInstance(this, 'MyDatabase', {
   engine: rds.DatabaseInstanceEngine.mysql({
     version: rds.MysqlEngineVersion.VER_8_0
@@ -69,7 +69,7 @@ const db = new rds.DatabaseInstance(this, 'MyDatabase', {
 **Task**: Create a Lambda function with an IAM role
 
 **Expected Output**:
-```typescript
+```ts
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
 
@@ -86,7 +86,7 @@ const fn = new lambda.Function(this, 'MyFunction', {
 ```
 
 **Model's Incorrect Response**:
-```typescript
+```ts
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 // MISSING: import * as iam from 'aws-cdk-lib/aws-iam';
 
@@ -113,7 +113,7 @@ const fn = new lambda.Function(this, 'MyFunction', {
 **Task**: Create a CloudWatch alarm for high CPU usage
 
 **Expected Output**:
-```typescript
+```ts
 const alarm = new cloudwatch.Alarm(this, 'HighCpuAlarm', {
   metric: ec2Instance.metricCpuUtilization(),
   threshold: 80,
@@ -123,7 +123,7 @@ const alarm = new cloudwatch.Alarm(this, 'HighCpuAlarm', {
 ```
 
 **Model's Incorrect Response**:
-```typescript
+```ts
 const alarm = new cloudwatch.Alarm(this, 'high-cpu-alarm', {  // WRONG: kebab-case instead of PascalCase
   metric: ec2Instance.metricCpuUtilization(),
   threshold: 80,
@@ -143,7 +143,7 @@ const alarm = new cloudwatch.Alarm(this, 'high-cpu-alarm', {  // WRONG: kebab-ca
 **Task**: Create an ECS service with Fargate
 
 **Expected Output**:
-```typescript
+```ts
 const service = new ecs.FargateService(this, 'MyService', {
   cluster: cluster,
   taskDefinition: taskDefinition,
@@ -156,7 +156,7 @@ const service = new ecs.FargateService(this, 'MyService', {
 ```
 
 **Model's Incorrect Response**:
-```typescript
+```ts
 const service = new ecs.FargateService(this, 'MyService', {
   cluster: cluster,
   taskDefinition: taskDefinition,

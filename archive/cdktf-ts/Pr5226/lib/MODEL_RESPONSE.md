@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import * as aws from "@cdktf/provider-aws";
 import { Fn, Token } from "cdktf";
@@ -787,7 +787,7 @@ export class EC2ApplicationConstruct extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput, TerraformVariable } from "cdktf";
 import * as aws from "@cdktf/provider-aws";

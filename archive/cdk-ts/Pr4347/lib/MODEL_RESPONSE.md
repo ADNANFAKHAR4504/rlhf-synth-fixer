@@ -29,7 +29,7 @@ Now, let's implement each component:
 
 1. First, the global endpoint stack:
 
-```typescript
+```ts
 // lib/global-endpoint-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -83,7 +83,7 @@ export class GlobalEndpointStack extends cdk.Stack {
 
 2. Event Bus Stack:
 
-```typescript
+```ts
 // lib/event-bus-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -145,7 +145,7 @@ export class EventBusStack extends cdk.Stack {
 
 3. Lambda Function Stack:
 
-```typescript
+```ts
 // lib/processing-lambda-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -234,7 +234,7 @@ export class ProcessingLambdaStack extends cdk.Stack {
 
 4. DynamoDB Stack:
 
-```typescript
+```ts
 // lib/dynamodb-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -273,7 +273,7 @@ export class DynamoDBStack extends cdk.Stack {
 
 5. Monitoring Stack:
 
-```typescript
+```ts
 // lib/monitoring-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -327,7 +327,7 @@ export class MonitoringStack extends cdk.Stack {
 
 Finally, the main stack that brings it all together:
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -390,7 +390,7 @@ export class TapStack extends cdk.Stack {
 
 And for completeness, let's also create a sample Lambda function that uses Lambda Powertools:
 
-```typescript
+```ts
 // lambda/index.ts
 import { Logger, injectLambdaContext } from '@aws-lambda-powertools/logger';
 import { Metrics, logMetrics } from '@aws-lambda-powertools/metrics';
@@ -518,7 +518,7 @@ I'll design a highly resilient, multi-region disaster recovery system for real-t
 
 ### 1. Global Endpoint Stack (`lib/global-endpoint-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -569,7 +569,7 @@ export class GlobalEndpointStack extends cdk.Stack {
 
 ### 2. Event Bus Stack (`lib/event-bus-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -628,7 +628,7 @@ export class EventBusStack extends cdk.Stack {
 
 ### 3. Processing Lambda Stack (`lib/processing-lambda-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -714,7 +714,7 @@ export class ProcessingLambdaStack extends cdk.Stack {
 
 ### 4. DynamoDB Stack (`lib/dynamodb-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -746,7 +746,7 @@ export class DynamoDBStack extends cdk.Stack {
 
 ### 5. Monitoring Stack (`lib/monitoring-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -793,7 +793,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ### 6. Main TAP Stack (`lib/tap-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { GlobalEndpointStack } from './global-endpoint-stack';
@@ -857,7 +857,7 @@ export class TapStack extends cdk.Stack {
 
 Here's the Lambda code with AWS Lambda Powertools for structured logging and tracing:
 
-```typescript
+```ts
 // lambda/index.ts
 import { Logger, injectLambdaContext } from '@aws-lambda-powertools/logger';
 import { Metrics, logMetrics } from '@aws-lambda-powertools/metrics';

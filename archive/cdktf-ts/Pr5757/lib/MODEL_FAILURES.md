@@ -7,14 +7,14 @@
 **Issue**: The model incorrectly made `MonitoringStack` extend `TerraformStack` directly.
 
 **What the model generated** (lib/MODEL_RESPONSE.md:31):
-```typescript
+```ts
 export class MonitoringStack extends TerraformStack {
 ```
 
 **Why it's wrong**: In CDKTF, only the root application stack should extend `TerraformStack`. Child stacks or constructs should extend `Construct`. This is a fundamental CDKTF architecture pattern.
 
 **Correct implementation**:
-```typescript
+```ts
 export class MonitoringStack extends Construct {
 ```
 
@@ -32,7 +32,7 @@ export class MonitoringStack extends Construct {
 **Issue**: Model placed provider configuration inside `MonitoringStack` instead of parent `TapStack`.
 
 **What the model generated** (lib/MODEL_RESPONSE.md:38):
-```typescript
+```ts
 // Inside MonitoringStack constructor
 new ArchiveProvider(this, 'archive');
 ```
@@ -40,7 +40,7 @@ new ArchiveProvider(this, 'archive');
 **Why it's wrong**: Providers should be configured at the stack level (TapStack), not within child constructs. This creates provider scoping issues.
 
 **Correct implementation** (lib/tap-stack.ts:42-43):
-```typescript
+```ts
 // In TapStack constructor
 new AwsProvider(this, 'aws', { region: awsRegion, defaultTags });
 new ArchiveProvider(this, 'archive');
@@ -53,7 +53,7 @@ new ArchiveProvider(this, 'archive');
 **Issue**: Model generated invalid backend option `use_lockfile`.
 
 **What the model generated** (bin/tap.ts - original):
-```typescript
+```ts
 backend: 's3',
 backendConfig: {
   bucket: 'terraform-state',
@@ -74,7 +74,7 @@ backendConfig: {
 **Issue**: Model generated malformed dashboard metrics syntax.
 
 **What the model generated** (MODEL_RESPONSE.md:250-260):
-```typescript
+```ts
 metrics: [
   ['AWS/Lambda', 'Invocations', 'FunctionName', logProcessor.functionName, { stat: 'Sum' }],
   ['...', 'Errors', '.', '.', { stat: 'Sum' }]  // Shorthand notation
@@ -84,7 +84,7 @@ metrics: [
 **Why it's wrong**: While the shorthand `['...', 'Errors', '.', '.']` works in CloudWatch console, it's inconsistent in programmatic dashboard definitions and harder to maintain.
 
 **Correct implementation** (lib/monitoring-stack.ts:250-268):
-```typescript
+```ts
 metrics: [
   ['AWS/Lambda', 'Invocations', 'FunctionName', logProcessor.functionName, { stat: 'Sum' }],
   ['AWS/Lambda', 'Errors', 'FunctionName', logProcessor.functionName, { stat: 'Sum' }]

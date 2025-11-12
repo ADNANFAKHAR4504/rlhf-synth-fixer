@@ -43,7 +43,7 @@ Remove the `aws:region` from Pulumi.yaml entirely. Set it using `pulumi config s
 
 **IDEAL_RESPONSE Fix**:
 1. Prefix intentionally unused variables with underscore:
-```typescript
+```ts
 const _publicRoute = new aws.ec2.Route(...)
 const _publicRtAssoc1 = new aws.ec2.RouteTableAssociation(...)
 ```
@@ -75,7 +75,7 @@ This is incomplete guidance that leaves the snapshot import functionality unimpl
 **Root Cause**: The model provided a basic RDS instance creation without implementing the snapshot import feature, which was explicitly required for the migration scenario.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Add optional snapshot configuration
 const snapshotId = config.get('dbSnapshotIdentifier');
 
@@ -107,7 +107,7 @@ This leaves a critical migration feature unimplemented.
 **Root Cause**: The model created the replication IAM role and policy but did not configure the actual S3 bucket replication rules. S3 replication can be fully defined in Pulumi/IaC.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const sourceBucketArn = config.get('sourceBucketArn');
 const sourceAccountId = config.get('sourceAccountId');
 
@@ -216,7 +216,7 @@ pulumi config set sourceBucketArn <arn>
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: The S3 bucket configuration uses deprecated attribute patterns:
-```typescript
+```ts
 const migrationBucket = new aws.s3.Bucket(`migration-bucket-${environmentSuffix}`, {
   versioning: { enabled: true },  // DEPRECATED
   serverSideEncryptionConfiguration: { ... },  // DEPRECATED
@@ -226,7 +226,7 @@ const migrationBucket = new aws.s3.Bucket(`migration-bucket-${environmentSuffix}
 **Root Cause**: The Pulumi AWS provider (v6+) has moved these to separate resources (`aws.s3.BucketVersioningV2`, `aws.s3.BucketServerSideEncryptionConfigurationV2`) following AWS API best practices.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const migrationBucket = new aws.s3.Bucket(`migration-bucket-${environmentSuffix}`, {
   bucket: `migration-bucket-${environmentSuffix}`,
   tags: {

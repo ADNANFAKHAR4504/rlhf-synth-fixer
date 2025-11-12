@@ -6,14 +6,14 @@ This document outlines the issues identified in the original MODEL_RESPONSE and 
 
 **Problem**: The original code attempted to use `endpoint.attrArn` property on `CfnEndpoint`, which doesn't exist in the CDK library.
 
-```typescript
+```ts
 // Original (INCORRECT)
 resources: [endpoint.attrArn]
 ```
 
 **Fix**: Constructed the ARN manually using CDK tokens:
 
-```typescript
+```ts
 // Fixed
 resources: [`arn:aws:sagemaker:${cdk.Aws.REGION}:${cdk.Aws.ACCOUNT_ID}:endpoint/${sagemakerEndpointName}`]
 ```
@@ -33,7 +33,7 @@ Could not find model data at s3://recommendation-synth68172439-model-artifacts-3
 
 **Fix**: Added explicit removal policy:
 
-```typescript
+```ts
 const eventStream = new kinesis.Stream(this, 'EventStream', {
   streamName: `${stackName}-user-events`,
   streamMode: kinesis.StreamMode.PROVISIONED,
@@ -49,7 +49,7 @@ const eventStream = new kinesis.Stream(this, 'EventStream', {
 
 **Fix**: Added log retention configuration to Lambda functions:
 
-```typescript
+```ts
 logRetention: logs.RetentionDays.ONE_DAY,
 ```
 
@@ -61,7 +61,7 @@ Note: This is deprecated in favor of `logGroup` property, but functional for thi
 
 **Fix**: Removed variable assignments and directly instantiated alarms:
 
-```typescript
+```ts
 // Before
 const lambdaLatencyAlarm = new cloudwatch.Alarm(...)
 
@@ -75,7 +75,7 @@ new cloudwatch.Alarm(...)
 
 **Fix**: Added comprehensive stack outputs:
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'StreamProcessorFunctionName', {
   value: streamProcessorFunction.functionName,
   description: 'Stream Processor Lambda Function Name',

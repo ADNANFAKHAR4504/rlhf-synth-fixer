@@ -11,7 +11,7 @@
 - `license-verify-edge-${environmentSuffix}` → still had drift due to previous changes
 **Final Fix**: Used `license-verify-edge-fixed-${environmentSuffix}` to completely bypass the corrupted state
 **Additional Resource Options Added**:
-```typescript
+```ts
 {
   ignoreChanges: [
     'code', 'handler', 'runtime', 'publish', 'timeout', 'memorySize',
@@ -28,7 +28,7 @@
 **Original Issue**: AWS SDK v3 imports caused ES module conflicts with Jest
 **Error**: `TypeError: A dynamic import callback was invoked without --experimental-vm-modules`
 **Imports that failed**:
-```typescript
+```ts
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { APIGatewayClient, GetRestApiCommand } from '@aws-sdk/client-api-gateway';
 import { CloudFrontClient, GetDistributionCommand } from '@aws-sdk/client-cloudfront';
@@ -53,7 +53,7 @@ import { CloudFrontClient, GetDistributionCommand } from '@aws-sdk/client-cloudf
 - **CloudFront Validation**: Direct CloudFront API calls were unnecessary for basic availability testing
 
 **Better Approach Applied**:
-```typescript
+```ts
 // Instead of AWS SDK calls:
 const command = new HeadBucketCommand({ Bucket: outputs.bucketName });
 await expect(s3Client.send(command)).resolves.toBeDefined();
@@ -291,14 +291,14 @@ export PULUMI_CONFIG_PASSPHRASE=""
 
 #### 1. Lambda@Edge Resource Protection (CRITICAL)
 **MODEL_RESPONSE** (Failed):
-```typescript
+```ts
 const edgeLambda = new aws.lambda.Function(`license-verify-edge-${environmentSuffix}`, {
   // Basic configuration without lifecycle protection
 });
 ```
 
 **IDEAL_RESPONSE** (Working):
-```typescript
+```ts
 const edgeLambda = new aws.lambda.Function(`license-verify-edge-fixed-${environmentSuffix}`, {
   // ... same config plus:
   skipDestroy: true,
@@ -322,13 +322,13 @@ export PULUMI_CONFIG_PASSPHRASE=""
 
 #### 3. Integration Test Implementation (HIGH) 
 **MODEL_RESPONSE** (Failed):
-```typescript
+```ts
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3'; // ES module conflicts
 const command = new HeadBucketCommand({ Bucket: outputs.bucketName });
 ```
 
 **IDEAL_RESPONSE** (Working):
-```typescript
+```ts
 import axios from 'axios'; // HTTP-based testing
 expect(outputs.bucketName).toMatch(/^software-dist-binaries-dev-[a-z0-9]+$/);
 ```

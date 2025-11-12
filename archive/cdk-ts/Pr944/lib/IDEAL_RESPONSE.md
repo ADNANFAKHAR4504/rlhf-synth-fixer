@@ -1,4 +1,4 @@
-```typescript
+```ts
 // compute-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as targets from 'aws-cdk-lib/aws-elasticloadbalancingv2-targets';
@@ -179,7 +179,7 @@ def handler(event, context):
 
 ```
 
-```typescript
+```ts
 // database-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -296,7 +296,7 @@ export class DatabaseConstruct extends Construct {
 
 ```
 
-```typescript
+```ts
 // monitoring-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -465,7 +465,7 @@ export class MonitoringConstruct extends Construct {
 
 ```
 
-```typescript
+```ts
 // networking-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -596,7 +596,7 @@ export class NetworkingConstruct extends Construct {
 
 ```
 
-```typescript
+```ts
 // security-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -708,7 +708,7 @@ export class SecurityConstruct extends Construct {
 
 ```
 
-```typescript
+```ts
 // storage-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -763,7 +763,7 @@ export class StorageConstruct extends Construct {
 
 ```
 
-```typescript
+```ts
 // tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

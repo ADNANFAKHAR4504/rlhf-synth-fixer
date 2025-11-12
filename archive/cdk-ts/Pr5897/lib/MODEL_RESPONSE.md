@@ -31,7 +31,7 @@ I'll create a complete CDK TypeScript stack that includes all these components w
 
 Below is a comprehensive AWS CDK TypeScript implementation that meets all specified requirements:
 
-```typescript
+```ts
 import * as cdk from '@aws-cdk/core';
 import * as lambda from '@aws-cdk/aws-lambda';
 import * as apigateway from '@aws-cdk/aws-apigateway';

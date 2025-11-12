@@ -122,14 +122,14 @@ export ENVIRONMENT_SUFFIX=prod
 Or modify the default in the code (currently defaults to 'dev').
 
 **NFS Server IP** - In the DataSync stack, update the NFS server hostname from the placeholder IP address to your actual NFS server:
-```typescript
+```ts
 serverHostname: '10.0.0.100'  // Change this to your real NFS server IP
 ```
 
 **Database Credentials** - The Aurora cluster generates a random password stored in AWS Secrets Manager. If you want to use specific credentials, you'll need to modify the database stack.
 
 **DMS Source Endpoint** - Update the source endpoint configuration with your actual on-premises database details:
-```typescript
+```ts
 serverName: 'source.example.com'  // Your source database hostname
 port: 3306
 username: 'admin'

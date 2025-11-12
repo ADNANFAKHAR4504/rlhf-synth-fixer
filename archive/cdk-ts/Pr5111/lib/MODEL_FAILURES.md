@@ -22,7 +22,7 @@ The model response provided a functional baseline but missed several production-
 - No monitoring/alarming on DLQ message counts
 
 **Required fix**:
-```typescript
+```ts
 const validatorDLQ = new sqs.Queue(this, 'ValidatorDLQ', {
   queueName: `validator-dlq-${environmentSuffix}`,
   retentionPeriod: cdk.Duration.days(14),
@@ -47,7 +47,7 @@ const validatorLambda = new lambda.Function(this, 'ValidatorFunction', {
 - No way to distinguish resources across environments
 
 **Required fix**:
-```typescript
+```ts
 interface SecurityEventStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -87,7 +87,7 @@ const phiDataBucket = new s3.Bucket(this, 'PHIDataBucket', {
 **Impact**: Temporary API throttling or network issues cause incident response workflows to fail completely instead of retrying.
 
 **What was missing**:
-```typescript
+```ts
 // Model response had no retry configuration on any tasks
 athenaQueryTask // No .addRetry()
 macieJobTask    // No .addRetry()
@@ -96,7 +96,7 @@ reportTask      // No .addRetry()
 ```
 
 **Required fix**: Add retry policies with exponential backoff:
-```typescript
+```ts
 .addRetry({
   errors: ['States.TaskFailed', 'States.Timeout'],
   interval: cdk.Duration.seconds(2),
@@ -120,7 +120,7 @@ reportTask      // No .addRetry()
 **Impact**: Limited visibility into Lambda performance metrics, cold starts, memory usage patterns.
 
 **Required addition**:
-```typescript
+```ts
 insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
 ```
 
@@ -148,7 +148,7 @@ insightsVersion: lambda.LambdaInsightsVersion.VERSION_1_0_229_0,
 **Impact**: Uses deprecated API that may not be supported in future CDK versions.
 
 **Wrong**:
-```typescript
+```ts
 workGroupConfiguration: {
   resultConfigurationUpdates: { // Deprecated
     outputLocation: ...
@@ -157,7 +157,7 @@ workGroupConfiguration: {
 ```
 
 **Correct**:
-```typescript
+```ts
 workGroupConfiguration: {
   resultConfiguration: {
     outputLocation: ...
@@ -172,7 +172,7 @@ workGroupConfiguration: {
 **Impact**: Logs don't include execution input/output data, making debugging unauthorized access incidents much harder.
 
 **Required fix**:
-```typescript
+```ts
 logs: {
   destination: new logs.LogGroup(...),
   level: stepfunctions.LogLevel.ALL,
@@ -196,7 +196,7 @@ logs: {
 **Impact**: Reduced availability for security monitoring dashboards during AZ failures.
 
 **Required addition**:
-```typescript
+```ts
 zoneAwareness: {
   enabled: true,
   availabilityZoneCount: 2,
@@ -209,12 +209,12 @@ multiAzWithStandbyEnabled: false,
 **Issue**: Used `pointInTimeRecovery: true` instead of proper property structure.
 
 **Wrong**:
-```typescript
+```ts
 pointInTimeRecovery: true, // Not the correct CDK property
 ```
 
 **Correct**:
-```typescript
+```ts
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: true,
 },
@@ -225,7 +225,7 @@ pointInTimeRecoverySpecification: {
 **Issue**: Model used complex SNS key alias lookup that's unnecessary.
 
 **What was done**:
-```typescript
+```ts
 masterKey: sns.Alias.fromAliasName(this, 'aws-managed-key', 'alias/aws/sns'),
 ```
 
@@ -238,7 +238,7 @@ masterKey: sns.Alias.fromAliasName(this, 'aws-managed-key', 'alias/aws/sns'),
 **Issue**: Model included complex scoping configuration in Macie job that wasn't required.
 
 **What was included**:
-```typescript
+```ts
 Scoping: {
   Includes: {
     And: [
@@ -286,7 +286,7 @@ Scoping: {
 **Issue**: TapStack in MODEL_RESPONSE doesn't accept or pass through environmentSuffix.
 
 **What was wrong**:
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     // No way to pass environmentSuffix
@@ -307,7 +307,7 @@ export class TapStack extends cdk.Stack {
 **Issue**: The one alarm in MODEL_RESPONSE doesn't trigger any notifications.
 
 **What was missing**:
-```typescript
+```ts
 new cdk.aws_cloudwatch.Alarm(this, 'UnauthorizedAccessAlarm', {
   // ... alarm config
   // No .addAlarmAction() call
@@ -317,7 +317,7 @@ new cdk.aws_cloudwatch.Alarm(this, 'UnauthorizedAccessAlarm', {
 **Impact**: Alarm fires but nobody gets notified. Defeats the purpose of alarming.
 
 **Required fix**: Connect all alarms to SNS topic:
-```typescript
+```ts
 alarm.addAlarmAction(new cloudwatch_actions.SnsAction(securityAlertTopic));
 ```
 

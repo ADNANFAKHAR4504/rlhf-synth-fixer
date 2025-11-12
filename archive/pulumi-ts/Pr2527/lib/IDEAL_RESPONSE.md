@@ -2,7 +2,7 @@
 
 Here's a complete, production-ready Pulumi Go implementation that meets all your requirements:
 
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as crypto from 'crypto';

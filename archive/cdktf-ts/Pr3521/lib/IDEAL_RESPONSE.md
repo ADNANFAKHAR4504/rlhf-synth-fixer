@@ -16,7 +16,7 @@ lib/
 
 ## Main Stack (lib/tap-stack.ts)
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -72,7 +72,7 @@ export class TapStack extends TerraformStack {
 
 ## Loyalty Program Stack (lib/loyalty-program-stack.ts)
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';

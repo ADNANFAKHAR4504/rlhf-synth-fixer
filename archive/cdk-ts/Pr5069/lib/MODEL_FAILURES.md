@@ -6,13 +6,13 @@
 **Location:** `tap-stack.ts` - Stack constructor
 **Issue:** Stack does not accept or use `environmentSuffix` parameter for multi-environment deployments
 **Original Code:**
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
     super(scope, id, props);
 ```
 **Fixed Code:**
-```typescript
+```ts
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
 }
@@ -29,14 +29,14 @@ export class TapStack extends cdk.Stack {
 **Location:** `tap-stack.ts` - Multiple resources
 **Issue:** Resource names are hard-coded without environment suffix, causing conflicts in multi-environment deployments
 **Original Code:**
-```typescript
+```ts
 bucketName: `iot-archive-${this.account}-${this.region}`,
 tableName: 'IoTTimeSeries',
 streamName: 'iot-recovery-stream',
 queueName: `iot-${type}-dlq`,
 ```
 **Fixed Code:**
-```typescript
+```ts
 bucketName: `iot-archive-${this.environmentSuffix}-${this.account}-${this.region}`,
 tableName: `iot-device-recovery-${this.environmentSuffix}`,
 streamName: `iot-replay-stream-${this.environmentSuffix}-${i}`,
@@ -47,14 +47,14 @@ queueName: `iot-recovery-dlq-${this.environmentSuffix}-${type}`,
 **Location:** `tap-stack.ts` - All stateful resources
 **Issue:** No removal policies defined, making it difficult to clean up non-production environments
 **Original Code:**
-```typescript
+```ts
 const archiveBucket = new s3.Bucket(this, 'IoTArchiveBucket', {
   bucketName: `iot-archive-${this.account}-${this.region}`,
   versioned: true,
 });
 ```
 **Fixed Code:**
-```typescript
+```ts
 const archiveBucket = new s3.Bucket(this, 'IoTArchiveBucket', {
   bucketName: `iot-archive-${this.environmentSuffix}-${this.account}-${this.region}`,
   versioned: true,
@@ -68,7 +68,7 @@ const archiveBucket = new s3.Bucket(this, 'IoTArchiveBucket', {
 **Issue:** No CloudFormation outputs defined for resource ARNs, names, and helper commands
 **Original Code:** No outputs present
 **Fixed Code:**
-```typescript
+```ts
 new cdk.CfnOutput(this, 'IoTArchiveBucketName', {
   value: archiveBucket.bucketName,
   description: 'S3 bucket for archived IoT data',
@@ -83,11 +83,11 @@ new cdk.CfnOutput(this, 'IoTArchiveBucketName', {
 **Location:** `tap-stack.ts` - DynamoDB table
 **Issue:** Using deprecated `pointInTimeRecovery` property
 **Original Code:**
-```typescript
+```ts
 pointInTimeRecovery: true,
 ```
 **Fixed Code:**
-```typescript
+```ts
 pointInTimeRecoverySpecification: {
   pointInTimeRecoveryEnabled: true
 },
@@ -97,7 +97,7 @@ pointInTimeRecoverySpecification: {
 **Location:** `tap-stack.ts` - DynamoDB table
 **Issue:** Table named `IoTTimeSeries` with `hour` attribute doesn't match device recovery requirements
 **Original Code:**
-```typescript
+```ts
 const timeSeriesTable = new dynamodb.Table(this, 'IoTTimeSeriesTable', {
   tableName: 'IoTTimeSeries',
   partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
@@ -111,7 +111,7 @@ timeSeriesTable.addGlobalSecondaryIndex({
 });
 ```
 **Fixed Code:**
-```typescript
+```ts
 const deviceTable = new dynamodb.Table(this, 'DeviceRecoveryTable', {
   tableName: `iot-device-recovery-${this.environmentSuffix}`,
   partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
@@ -130,7 +130,7 @@ deviceTable.addGlobalSecondaryIndex({
 **Issue:** No dedicated table for recovery validation with time-series range queries and TTL
 **Original Code:** No validation table present
 **Fixed Code:**
-```typescript
+```ts
 const validationTable = new dynamodb.Table(this, 'RecoveryValidationTable', {
   tableName: `iot-recovery-validation-${this.environmentSuffix}`,
   partitionKey: { name: 'deviceId', type: dynamodb.AttributeType.STRING },
@@ -155,7 +155,7 @@ validationTable.addGlobalSecondaryIndex({
 **Location:** `tap-stack.ts` - Kinesis stream
 **Issue:** Single stream with 100 shards cannot handle 45M message replay requirement efficiently
 **Original Code:**
-```typescript
+```ts
 const recoveryStream = new kinesis.Stream(this, 'RecoveryStream', {
   streamName: 'iot-recovery-stream',
   shardCount: 100,
@@ -163,7 +163,7 @@ const recoveryStream = new kinesis.Stream(this, 'RecoveryStream', {
 });
 ```
 **Fixed Code:**
-```typescript
+```ts
 const kinesisStreams: kinesis.Stream[] = [];
 for (let i = 0; i < 10; i++) {
   kinesisStreams.push(new kinesis.Stream(this, `IoTReplayStream${i}`, {
@@ -179,11 +179,11 @@ for (let i = 0; i < 10; i++) {
 **Location:** `tap-stack.ts` - Kinesis stream
 **Issue:** 7-day retention is excessive for recovery replay (increases costs)
 **Original Code:**
-```typescript
+```ts
 retentionPeriod: cdk.Duration.days(7),
 ```
 **Fixed Code:**
-```typescript
+```ts
 retentionPeriod: cdk.Duration.hours(24),
 ```
 
@@ -193,7 +193,7 @@ retentionPeriod: cdk.Duration.hours(24),
 **Location:** `tap-stack.ts` - SQS queues
 **Issue:** No secondary DLQs for additional resilience
 **Original Code:**
-```typescript
+```ts
 dlQueues[type] = new sqs.Queue(this, `${type}DLQueue`, {
   queueName: `iot-${type}-dlq`,
   visibilityTimeout: cdk.Duration.minutes(15),
@@ -201,7 +201,7 @@ dlQueues[type] = new sqs.Queue(this, `${type}DLQueue`, {
 });
 ```
 **Fixed Code:**
-```typescript
+```ts
 dlQueues[type] = new sqs.Queue(this, `${type}DLQ`, {
   queueName: `iot-recovery-dlq-${this.environmentSuffix}-${type}`,
   visibilityTimeout: cdk.Duration.minutes(15),
@@ -223,7 +223,7 @@ dlQueues[type] = new sqs.Queue(this, `${type}DLQ`, {
 **Location:** `tap-stack.ts` - Lambda function entry points
 **Issue:** Lambda file names don't match actual implementation files
 **Original Code:**
-```typescript
+```ts
 entry: path.join(__dirname, '../lambda/shadow-analyzer.ts'),
 entry: path.join(__dirname, '../lambda/kinesis-publisher.ts'),
 entry: path.join(__dirname, '../lambda/validator.ts'),
@@ -231,7 +231,7 @@ entry: path.join(__dirname, '../lambda/orchestrator.ts'),
 entry: path.join(__dirname, '../lambda/event-router.ts'),
 ```
 **Fixed Code:**
-```typescript
+```ts
 entry: path.join(__dirname, '../lambda/shadow-analysis.ts'),
 entry: path.join(__dirname, '../lambda/kinesis-republish.ts'),
 entry: path.join(__dirname, '../lambda/dynamodb-validation.ts'),
@@ -242,13 +242,13 @@ entry: path.join(__dirname, '../lambda/trigger-recovery.ts'),
 **Location:** `tap-stack.ts` - Lambda functions
 **Issue:** Lambda functions missing critical environment variables like ENVIRONMENT
 **Original Code:**
-```typescript
+```ts
 environment: {
   REGION: this.region,
 }
 ```
 **Fixed Code:**
-```typescript
+```ts
 environment: {
   DEVICE_TABLE_NAME: deviceTable.tableName,
   BUCKET_NAME: archiveBucket.bucketName,
@@ -261,7 +261,7 @@ environment: {
 **Issue:** Lambda functions not explicitly named, making them hard to identify
 **Original Code:** No `functionName` property
 **Fixed Code:**
-```typescript
+```ts
 functionName: `iot-shadow-analysis-${this.environmentSuffix}`,
 functionName: `iot-kinesis-republish-${this.environmentSuffix}`,
 functionName: `iot-dynamodb-validation-${this.environmentSuffix}`,
@@ -274,14 +274,14 @@ functionName: `iot-trigger-recovery-${this.environmentSuffix}`,
 **Location:** `tap-stack.ts` - Step Functions state machine
 **Issue:** Using deprecated `definition` property instead of `definitionBody`
 **Original Code:**
-```typescript
+```ts
 const recoveryStateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine', {
   definition: parallel.next(validateTask),
   timeout: cdk.Duration.hours(1),
 });
 ```
 **Fixed Code:**
-```typescript
+```ts
 const stateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine', {
   stateMachineName: `iot-recovery-orchestration-${this.environmentSuffix}`,
   definitionBody: stepfunctions.DefinitionBody.fromChainable(definition),
@@ -294,7 +294,7 @@ const stateMachine = new stepfunctions.StateMachine(this, 'RecoveryStateMachine'
 **Location:** `tap-stack.ts` - Step Functions tasks
 **Issue:** Using `DynamoUpdateItem` task instead of Lambda invokes for backfill
 **Original Code:**
-```typescript
+```ts
 const backfillTask = new sfnTasks.DynamoUpdateItem(this, 'BackfillData', {
   table: timeSeriesTable,
   key: { /* complex key configuration */ },
@@ -303,7 +303,7 @@ const backfillTask = new sfnTasks.DynamoUpdateItem(this, 'BackfillData', {
 });
 ```
 **Fixed Code:**
-```typescript
+```ts
 const backfillTask = new sfnTasks.LambdaInvoke(this, 'BackfillTask', {
   lambdaFunction: shadowAnalysisLambda,
   outputPath: '$.Payload'
@@ -314,11 +314,11 @@ const backfillTask = new sfnTasks.LambdaInvoke(this, 'BackfillTask', {
 **Location:** `tap-stack.ts` - Step Functions state machine
 **Issue:** 1-hour timeout insufficient for 12-hour backfill window processing
 **Original Code:**
-```typescript
+```ts
 timeout: cdk.Duration.hours(1),
 ```
 **Fixed Code:**
-```typescript
+```ts
 timeout: cdk.Duration.hours(2),
 ```
 
@@ -328,7 +328,7 @@ timeout: cdk.Duration.hours(2),
 **Location:** `tap-stack.ts` - CloudWatch alarm metric
 **Issue:** No period specified for alarm metric (defaults may not meet requirements)
 **Original Code:**
-```typescript
+```ts
 metric: new cloudwatch.Metric({
   namespace: 'AWS/IoT',
   metricName: 'RuleMessageThrottled',
@@ -336,7 +336,7 @@ metric: new cloudwatch.Metric({
 }),
 ```
 **Fixed Code:**
-```typescript
+```ts
 metric: new cloudwatch.Metric({
   namespace: 'AWS/IoT',
   metricName: 'RuleMessageThrottled',
@@ -353,7 +353,7 @@ metric: new cloudwatch.Metric({
 **Issue:** Alarm not explicitly named, making it hard to identify
 **Original Code:** No `alarmName` property
 **Fixed Code:**
-```typescript
+```ts
 alarmName: `iot-rule-failures-${this.environmentSuffix}`,
 ```
 
@@ -363,11 +363,11 @@ alarmName: `iot-rule-failures-${this.environmentSuffix}`,
 **Location:** `lambda/shadow-analyzer.ts` - Imports
 **Issue:** `GetThingShadowCommand` imported from wrong package
 **Original Code:**
-```typescript
+```ts
 import { IoTClient, GetThingShadowCommand, ListThingsCommand } from '@aws-sdk/client-iot';
 ```
 **Fixed Code:**
-```typescript
+```ts
 import { IoTClient, ListThingsCommand } from '@aws-sdk/client-iot';
 import { GetThingShadowCommand, IoTDataPlaneClient } from '@aws-sdk/client-iot-data-plane';
 ```
@@ -376,7 +376,7 @@ import { GetThingShadowCommand, IoTDataPlaneClient } from '@aws-sdk/client-iot-d
 **Location:** `lambda/shadow-analyzer.ts` - Client instantiation
 **Issue:** Using wrong client for shadow operations
 **Original Code:**
-```typescript
+```ts
 const iotClient = new IoTClient({ region: process.env.REGION });
 // ... later
 const shadowCommand = new GetShadowCommand({
@@ -385,7 +385,7 @@ const shadowCommand = new GetShadowCommand({
 const shadowResponse = await iotDataClient.send(shadowCommand);
 ```
 **Fixed Code:**
-```typescript
+```ts
 const iot = new IoTClient({});
 const iotData = new IoTDataPlaneClient({});
 // ... later
@@ -399,11 +399,11 @@ const shadowResponse = await iotData.send(shadowCommand);
 **Location:** `lambda/shadow-analyzer.ts` - Shadow response processing
 **Issue:** Shadow payload not properly decoded from Uint8Array
 **Original Code:**
-```typescript
+```ts
 const shadow = JSON.parse(new TextDecoder().decode(shadowResponse.payload));
 ```
 **Fixed Code:**
-```typescript
+```ts
 const shadow = JSON.parse(new TextDecoder().decode(shadowResponse.payload));
 ```
 Note: This is actually correct in the original, but the issue is that the payload needs explicit handling.
@@ -413,7 +413,7 @@ Note: This is actually correct in the original, but the issue is that the payloa
 **Issue:** No actual DynamoDB writes for failed devices
 **Original Code:** No DynamoDB write implementation visible
 **Fixed Code:**
-```typescript
+```ts
 if (failedDevices.length > 0) {
   const chunks = [];
   for (let i = 0; i < failedDevices.length; i += 25) {
@@ -445,7 +445,7 @@ if (failedDevices.length > 0) {
 **Issue:** No S3 archive identification for 12-hour backfill window
 **Original Code:** Not implemented
 **Fixed Code:**
-```typescript
+```ts
 const twelveHoursAgo = Date.now() - (12 * 60 * 60 * 1000);
 const archives: string[] = [];
 
@@ -468,7 +468,7 @@ objects.forEach(obj => {
 **Location:** `lambda/shadow-analyzer.ts` - Handler return
 **Issue:** Environment not included in response for downstream processing
 **Original Code:**
-```typescript
+```ts
 return {
   statusCode: 200,
   affectedDevices,
@@ -476,7 +476,7 @@ return {
 };
 ```
 **Fixed Code:**
-```typescript
+```ts
 return {
   processedDevices,
   failedDevices: failedDevices.length,
@@ -489,11 +489,11 @@ return {
 **Location:** `lambda/kinesis-publisher.ts` - Stream handling
 **Issue:** Single stream name instead of multiple partitioned streams
 **Original Code:**
-```typescript
+```ts
 const streamName = process.env.STREAM_NAME!;
 ```
 **Fixed Code:**
-```typescript
+```ts
 const kinesisStreams = JSON.parse(process.env.KINESIS_STREAMS!);
 ```
 
@@ -501,14 +501,14 @@ const kinesisStreams = JSON.parse(process.env.KINESIS_STREAMS!);
 **Location:** `lambda/kinesis-publisher.ts` - Error handling
 **Issue:** No EventBridge integration for failed record routing
 **Original Code:**
-```typescript
+```ts
 if (result.FailedRecordCount && result.FailedRecordCount > 0) {
   console.error(`Failed to publish ${result.FailedRecordCount} records`);
   // Retry logic here
 }
 ```
 **Fixed Code:**
-```typescript
+```ts
 if (response.FailedRecordCount && response.FailedRecordCount > 0) {
   const failedRecords = batch.filter((_, index) =>
     response.Records![index].ErrorCode
@@ -538,13 +538,13 @@ async function sendToEventBridge(failedRecords: any[]) {
 **Location:** `lambda/kinesis-publisher.ts` - S3 data retrieval
 **Issue:** Assumes gzipped archive format with specific structure
 **Original Code:**
-```typescript
+```ts
 const body = await streamToBuffer(response.Body as Readable);
 const data = await gunzip(body);
 const messages = JSON.parse(data.toString()).messages;
 ```
 **Fixed Code:**
-```typescript
+```ts
 const archiveData = await s3Response.Body!.transformToString();
 const messages: IoTMessage[] = JSON.parse(archiveData);
 ```
@@ -566,7 +566,7 @@ const messages: IoTMessage[] = JSON.parse(archiveData);
 **Issue:** No CloudWatch metrics sent for monitoring
 **Original Code:** Returns only JSON response
 **Fixed Code:**
-```typescript
+```ts
 await cloudwatch.send(new PutMetricDataCommand({
   Namespace: `IoTRecovery-${environment}`,
   MetricData: [
@@ -592,7 +592,7 @@ await cloudwatch.send(new PutMetricDataCommand({
 **Issue:** Complex two-step orchestration (analyze then execute) instead of simple Step Functions trigger
 **Original Code:** Invokes shadow analyzer then starts multiple state machine executions
 **Fixed Code:** Complete rewrite to `lambda/trigger-recovery.ts`:
-```typescript
+```ts
 const startExecutionCommand = new StartExecutionCommand({
   stateMachineArn,
   name: `recovery-${Date.now()}`,
@@ -609,13 +609,13 @@ const startExecutionCommand = new StartExecutionCommand({
 **Location:** Multiple Lambda files - Error handling
 **Issue:** Inconsistent error handling and logging
 **Original Code:**
-```typescript
+```ts
 } catch (error) {
   console.error(`Error processing device ${device.deviceId}:`, error);
 }
 ```
 **Fixed Code:**
-```typescript
+```ts
 } catch (error) {
   console.error('Failed to perform DynamoDB validation:', error);
   return {
@@ -636,11 +636,11 @@ const startExecutionCommand = new StartExecutionCommand({
 **Location:** `tap-stack.ts` - EventBridge event bus
 **Issue:** Event bus name not environment-specific
 **Original Code:**
-```typescript
+```ts
 eventBusName: 'iot-recovery-bus',
 ```
 **Fixed Code:**
-```typescript
+```ts
 eventBusName: `iot-recovery-events-${this.environmentSuffix}`
 ```
 
@@ -648,11 +648,11 @@ eventBusName: `iot-recovery-events-${this.environmentSuffix}`
 **Location:** `tap-stack.ts` - EventBridge rules
 **Issue:** Rule names not environment-specific
 **Original Code:**
-```typescript
+```ts
 ruleName: `${type}-recovery-rule`,
 ```
 **Fixed Code:**
-```typescript
+```ts
 ruleName: `iot-recovery-${this.environmentSuffix}-${type}`,
 ```
 
@@ -662,7 +662,7 @@ ruleName: `iot-recovery-${this.environmentSuffix}-${type}`,
 **Location:** `tap-stack.ts` - Kinesis event source
 **Issue:** Using deprecated EventSourceMapping constructor directly
 **Original Code:**
-```typescript
+```ts
 eventRouterLambda.addEventSource(new lambda.EventSourceMapping(this, 'KinesisEventSource', {
   eventSourceArn: recoveryStream.streamArn,
   startingPosition: lambda.StartingPosition.TRIM_HORIZON,
@@ -679,11 +679,11 @@ eventRouterLambda.addEventSource(new lambda.EventSourceMapping(this, 'KinesisEve
 **Location:** `tap-stack.ts` - S3 lifecycle rule
 **Issue:** 90-day Glacier transition too long for recovery data
 **Original Code:**
-```typescript
+```ts
 transitionAfter: cdk.Duration.days(90),
 ```
 **Fixed Code:**
-```typescript
+```ts
 transitionAfter: cdk.Duration.days(30)
 ```
 
@@ -692,7 +692,7 @@ transitionAfter: cdk.Duration.days(30)
 **Issue:** Validation Lambda missing CloudWatch PutMetricData permissions
 **Original Code:** No CloudWatch permissions
 **Fixed Code:**
-```typescript
+```ts
 dynamodbValidationLambda.addToRolePolicy(new iam.PolicyStatement({
   actions: [
     'cloudwatch:PutMetricData',
@@ -706,11 +706,11 @@ dynamodbValidationLambda.addToRolePolicy(new iam.PolicyStatement({
 **Location:** `tap-stack.ts` - CloudWatch dashboard
 **Issue:** Dashboard name not environment-specific
 **Original Code:**
-```typescript
+```ts
 dashboardName: 'iot-recovery-dashboard',
 ```
 **Fixed Code:**
-```typescript
+```ts
 dashboardName: `iot-recovery-monitoring-${this.environmentSuffix}`,
 ```
 
@@ -718,10 +718,10 @@ dashboardName: `iot-recovery-monitoring-${this.environmentSuffix}`,
 **Location:** `tap-stack.ts` - Validator Lambda
 **Issue:** Validation Lambda only has 1024 MB when it needs more for large-scale queries
 **Original Code:**
-```typescript
+```ts
 memorySize: 1024,
 ```
 **Fixed Code:**
-```typescript
+```ts
 memorySize: 3008,
 ```

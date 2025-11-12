@@ -42,7 +42,7 @@ Implement these **11 nested stacks** inside the main `TapStack`:
 
 ### 1. Main Stack Structure
 
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id, { env: { region: 'us-west-2', account: process.env.CDK_DEFAULT_ACCOUNT }});
@@ -52,7 +52,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. NetworkStack - Foundation
 
-```typescript
+```ts
 class NetworkStack extends cdk.NestedStack {
   public readonly vpc: ec2.Vpc;
   // Create VPC with maxAzs: 2, natGateways: 1
@@ -62,7 +62,7 @@ class NetworkStack extends cdk.NestedStack {
 
 ### 3. StorageStack - S3 Buckets
 
-```typescript
+```ts
 class StorageStack extends cdk.NestedStack {
   public readonly dataBucket: s3.Bucket;
   // Data bucket: versioned, S3_MANAGED encryption, eventBridgeEnabled: true (NOT Lambda notifications)
@@ -72,7 +72,7 @@ class StorageStack extends cdk.NestedStack {
 
 ### 4. DatabaseStack - Aurora MySQL
 
-```typescript
+```ts
 class DatabaseStack extends cdk.NestedStack {
   public readonly auroraCluster: rds.DatabaseCluster;
   // Aurora MySQL 3.09.0, writer + reader (R6G.LARGE)
@@ -82,7 +82,7 @@ class DatabaseStack extends cdk.NestedStack {
 
 ### 5. GlueStack - ETL Jobs
 
-```typescript
+```ts
 class GlueStack extends cdk.NestedStack {
   public readonly validationJob: glue.CfnJob;
   // Glue database catalog, validation job with Glue 4.0, Python 3
@@ -92,7 +92,7 @@ class GlueStack extends cdk.NestedStack {
 
 ### 6. MessagingStack - SNS & SQS
 
-```typescript
+```ts
 class MessagingStack extends cdk.NestedStack {
   public readonly validationTopic: sns.Topic;
   // SNS topic for validation results with email subscription
@@ -101,7 +101,7 @@ class MessagingStack extends cdk.NestedStack {
 
 ### 7. DMSStack - Database Migration
 
-```typescript
+```ts
 class DMSStack extends cdk.NestedStack {
   public readonly replicationTask: dms.CfnReplicationTask;
   // DMS t3.medium instance in private subnets
@@ -111,7 +111,7 @@ class DMSStack extends cdk.NestedStack {
 
 ### 8. LambdaStack - Three Functions
 
-```typescript
+```ts
 class LambdaStack extends cdk.NestedStack {
   // glueTriggerFunction: Python 3.12, starts Glue job when S3 files arrive (reads from EventBridge event)
   // stepFunctionTriggerFunction: Python 3.12, starts state machine execution
@@ -121,7 +121,7 @@ class LambdaStack extends cdk.NestedStack {
 
 ### 9. OrchestrationStack - Step Functions
 
-```typescript
+```ts
 class OrchestrationStack extends cdk.NestedStack {
   public readonly stateMachine: sfn.StateMachine;
   // Start DMS task → Wait 5 min → Check status → Choice (success/failure/loop)
@@ -131,7 +131,7 @@ class OrchestrationStack extends cdk.NestedStack {
 
 ### 10. DataSyncStack - RESILIENT VERSION (Critical!)
 
-```typescript
+```ts
 class DataSyncStack extends cdk.NestedStack {
   // EC2 M5.LARGE in public subnet with DataSync AMI (ami-0f508ba5fd9db6606 for us-west-2)
   // Custom resource Lambda with Node.js 20: tries agent activation 10 times with 45s waits
@@ -143,7 +143,7 @@ class DataSyncStack extends cdk.NestedStack {
 
 ### 11. MonitoringStack - EventBridge Rules
 
-```typescript
+```ts
 class MonitoringStack extends cdk.NestedStack {
   // Four EventBridge rules targeting remediation Lambda:
   // 1. Glue failures (FAILED, TIMEOUT states)
@@ -153,7 +153,7 @@ class MonitoringStack extends cdk.NestedStack {
 
 ### 12. LoggingStack - OpenSearch
 
-```typescript
+```ts
 class LoggingStack extends cdk.NestedStack {
   public readonly openSearchDomain: opensearch.Domain;
   // OpenSearch 2.11, single-node t3.small.search, 20GB GP3 volume
@@ -163,7 +163,7 @@ class LoggingStack extends cdk.NestedStack {
 
 ### 13. EventBridge Integration
 
-```typescript
+```ts
 // In main TapStack (not nested stack):
 const s3ToLambdaRule = new events.Rule(this, 'S3ObjectCreatedRule', {
   eventPattern: { source: ['aws.s3'], detailType: ['Object Created'],
@@ -176,7 +176,7 @@ s3ToLambdaRule.addTarget(new targets.LambdaFunction(glueTriggerFunction));
 
 ### 14. Stack Dependencies
 
-```typescript
+```ts
 // Explicit dependency order:
 storageStack.addDependency(networkStack);
 databaseStack.addDependency(networkStack);
@@ -188,7 +188,7 @@ dmsStack.addDependency(networkStack); dmsStack.addDependency(databaseStack);
 
 ### 15. Outputs
 
-```typescript
+```ts
 // Stack outputs for all major resources:
 new cdk.CfnOutput(this, 'VpcId', { value: networkStack.vpc.vpcId });
 new cdk.CfnOutput(this, 'DataBucketName', { value: storageStack.dataBucket.bucketName });

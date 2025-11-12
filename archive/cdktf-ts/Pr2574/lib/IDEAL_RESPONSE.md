@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 
 // VPC & Networking
@@ -569,7 +569,7 @@ export class StorageModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

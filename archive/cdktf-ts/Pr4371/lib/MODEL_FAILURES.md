@@ -8,7 +8,7 @@
 **Failure Type**: Deployment Error - Invalid API Parameter
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createVPCFlowLogs(
   scope: Construct,
   config: StackConfig,
@@ -43,7 +43,7 @@ Error: creating Flow Log: InvalidParameter: 1 validation error(s) found.
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createVPCFlowLogs(
   scope: Construct,
   config: StackConfig,
@@ -121,7 +121,7 @@ export function createVPCFlowLogs(
 **Failure Type**: Runtime Error - Permission Denied
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createKmsKey(scope: Construct, config: StackConfig): KmsKey {
   const kmsKey = new KmsKey(scope, 'kms-key', {
     description: `Customer managed KMS key for ${config.environment} environment`,
@@ -172,7 +172,7 @@ because no identity-based policy allows the kms:CreateGrant action
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createKmsKey(scope: Construct, config: StackConfig): KmsKey {
   const kmsKey = new KmsKey(scope, 'kms-key', {
     description: `Customer managed KMS key for ${config.environment} environment`,
@@ -250,7 +250,7 @@ export function createKmsKey(scope: Construct, config: StackConfig): KmsKey {
 **Failure Type**: Deployment Error - Invalid Parameter Value
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createRdsMultiAz(
   scope: Construct,
   config: StackConfig,
@@ -283,7 +283,7 @@ for mysql. Available versions: 8.0.28, 8.0.32, 8.0.33, 8.0.36
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createRdsMultiAz(
   scope: Construct,
   config: StackConfig,
@@ -354,7 +354,7 @@ export function createRdsMultiAz(
 **Failure Type**: Deployment Error - Invalid KMS Key Reference
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createAlbForPrivateInstances(
   scope: Construct,
   config: StackConfig,
@@ -376,7 +376,7 @@ Error: creating SNS Topic: InvalidParameter: KMS key ID must be a valid KMS key 
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createAlbForPrivateInstances(
   scope: Construct,
   config: StackConfig,
@@ -410,7 +410,7 @@ export function createAlbForPrivateInstances(
 **Failure Type**: Deployment Error - Resource Already Exists
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function enableGuardDuty(
   scope: Construct,
   config: StackConfig
@@ -433,7 +433,7 @@ must not have an existing detector.
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function enableGuardDuty(scope: Construct, config: StackConfig): void {
   //   Try to use existing detector or create new one
   try {
@@ -470,7 +470,7 @@ export function enableGuardDuty(scope: Construct, config: StackConfig): void {
 **Failure Type**: Deployment Warning - Incorrect String Interpolation
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createBastionHost(
   scope: Construct,
   config: StackConfig,
@@ -496,7 +496,7 @@ yum update -y
 - CDKTF requires explicit handling of Terraform string interpolation
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createBastionHost(
   scope: Construct,
   config: StackConfig,
@@ -549,7 +549,7 @@ systemctl start fail2ban
 **Failure Type**: Compilation Error & Deployment Failure
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
     super(scope, id);
@@ -587,7 +587,7 @@ The intersection 'string & IResolvable' was reduced to 'never' because property
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -667,7 +667,7 @@ export class TapStack extends TerraformStack {
 **Failure Type**: Runtime Error - SSM Session Connection Failed
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createSsmSetupAndVpcEndpoints(
   scope: Construct,
   config: StackConfig,
@@ -689,7 +689,7 @@ ssmmessages:CreateControlChannel on resource
 ```
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createSsmSetupAndVpcEndpoints(
   scope: Construct,
   config: StackConfig,
@@ -773,7 +773,7 @@ export function createSsmSetupAndVpcEndpoints(
 **Failure Type**: Code Incomplete - File Truncated
 
 **MODEL_RESPONSE (BROKEN)**:
-```typescript
+```ts
 export function createCloudWatchAlarms(
   scope: Construct,
   config: StackConfig,
@@ -789,7 +789,7 @@ export function createCloudWatchAlarms(
 **Issue**: The entire CloudWatch alarms implementation was cut off mid-sentence
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 export function createCloudWatchAlarms(
   scope: Construct,
   config: StackConfig,
@@ -1010,7 +1010,7 @@ export function createCloudWatchAlarms(
 - No import for `DataAwsGuarddutyDetector`
 
 **IDEAL_RESPONSE Advantages**:
-```typescript
+```ts
 //   Complete and organized imports
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import { DataAwsGuarddutyDetector } from '@cdktf/provider-aws/lib/data-aws-guardduty-detector';
@@ -1028,7 +1028,7 @@ import { AwsProvider, AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/pro
 - No explanation of critical decisions
 
 **IDEAL_RESPONSE**:
-```typescript
+```ts
 // RDS Engine Version with helpful comments
 export function createRdsMultiAz(...) {
   const rdsInstance = new DbInstance(scope, 'rds-instance', {
@@ -1051,14 +1051,14 @@ export function createRdsMultiAz(...) {
 ### 12. **Error Messages and Validation**
 
 **MODEL_RESPONSE**:
-```typescript
+```ts
 if (config.region !== 'us-east-1') {
   throw new Error('This stack is configured for us-east-1 region only');
 }
 ```
 
 **IDEAL_RESPONSE**:
-```typescript
+```ts
 // Validate configuration settings
 if (!isMultiAz) {
   throw new Error(
@@ -1090,7 +1090,7 @@ console.log('✓ All critical resources created successfully');
 - No team collaboration support
 
 **IDEAL_RESPONSE (CORRECT)**:
-```typescript
+```ts
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,

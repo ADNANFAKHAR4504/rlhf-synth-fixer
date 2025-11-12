@@ -7,7 +7,7 @@ Complete production-ready CDK TypeScript infrastructure for hosting a static web
 ### Core Files
 
 **lib/tap-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StaticWebsiteStack } from './static-website-stack';
@@ -116,7 +116,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 **lib/static-website-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -400,7 +400,7 @@ export class StaticWebsiteStack extends cdk.NestedStack {
 ```
 
 **lib/waf-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -490,7 +490,7 @@ export class WafStack extends cdk.NestedStack {
 ```
 
 **lib/certificate-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as certificatemanager from 'aws-cdk-lib/aws-certificatemanager';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -535,7 +535,7 @@ export class CertificateStack extends cdk.NestedStack {
 ```
 
 **bin/tap.ts**
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

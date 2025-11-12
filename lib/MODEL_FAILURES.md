@@ -24,12 +24,12 @@ The MODEL_RESPONSE contained 17 intentional infrastructure defects across critic
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue** (Line 33):
-```typescript
+```ts
 maxAzs: 2, // FLAW 3: Should be 3
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 availabilityZones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
 ```
 
@@ -51,12 +51,12 @@ availabilityZones: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue** (Line 34):
-```typescript
+```ts
 natGateways: 1, // FLAW 4: Should be 3
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 natGateways: 3, // One NAT gateway per AZ
 ```
 
@@ -79,14 +79,14 @@ natGateways: 3, // One NAT gateway per AZ
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue** (Lines 26-27, 49):
-```typescript
+```ts
 // FLAW 1: CloudWatch Log Group missing - VPC Flow Logs won't work properly
 // FLAW 2: Missing 7-day retention requirement
 // FLAW 5: VPC Flow Logs not configured at all
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Create CloudWatch Log Group for VPC Flow Logs with 7-day retention
 const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
   logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
@@ -122,12 +122,12 @@ flowLogs: {
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue** (Line 86):
-```typescript
+```ts
 // FLAW 12: S3 VPC Endpoint not created at all
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Create S3 VPC Endpoint (Gateway type)
 this.s3Endpoint = this.vpc.addGatewayEndpoint('S3Endpoint', {
   service: ec2.GatewayVpcEndpointAwsService.S3,
@@ -160,12 +160,12 @@ cdk.Tags.of(this.s3Endpoint).add('Project', 'PaymentGateway');
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue** (Line 84):
-```typescript
+```ts
 // FLAW 11: Network ACL not associated with private subnets
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Associate Network ACL with all private subnets
 privateSubnets.forEach((subnet, index) => {
   new ec2.SubnetNetworkAclAssociation(this, `PrivateSubnetAclAssociation${index}`, {
@@ -196,13 +196,13 @@ privateSubnets.forEach((subnet, index) => {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 53):
-```typescript
+```ts
 // FLAW 6: Missing Environment and Project tags
 cdk.Tags.of(this.vpc).add('Name', 'PaymentVPC');
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Tag VPC and all subnets
 cdk.Tags.of(this.vpc).add('Environment', 'Production');
 cdk.Tags.of(this.vpc).add('Project', 'PaymentGateway');
@@ -227,7 +227,7 @@ cdk.Tags.of(this.vpc).add('Project', 'PaymentGateway');
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Lines 64-79):
-```typescript
+```ts
 // FLAW 8: Only HTTPS rule added, missing MySQL and Redis
 networkAcl.addEntry('AllowHttpsInbound', {
   cidr: ec2.AclCidr.anyIpv4(),
@@ -240,7 +240,7 @@ networkAcl.addEntry('AllowHttpsInbound', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Allow MySQL (3306) inbound and outbound
 networkAcl.addEntry('AllowMysqlInbound', {
   cidr: ec2.AclCidr.anyIpv4(),
@@ -279,12 +279,12 @@ networkAcl.addEntry('AllowRedisInbound', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 81):
-```typescript
+```ts
 // FLAW 9: Missing ephemeral ports for return traffic
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Allow ephemeral ports for return traffic (required for outbound connections)
 networkAcl.addEntry('AllowEphemeralInbound', {
   cidr: ec2.AclCidr.anyIpv4(),
@@ -322,12 +322,12 @@ networkAcl.addEntry('AllowEphemeralOutbound', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 82):
-```typescript
+```ts
 // FLAW 10: Missing explicit deny rules
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Deny all other traffic (explicit deny)
 networkAcl.addEntry('DenyAllInbound', {
   cidr: ec2.AclCidr.anyIpv4(),
@@ -365,13 +365,13 @@ networkAcl.addEntry('DenyAllOutbound', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Lines 25-26):
-```typescript
+```ts
 // FLAW 1: CloudWatch Log Group missing - VPC Flow Logs won't work properly
 // FLAW 2: Missing 7-day retention requirement
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Create CloudWatch Log Group for VPC Flow Logs with 7-day retention
 const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
   logGroupName: `/aws/vpc/flowlogs-${environmentSuffix}`,
@@ -399,7 +399,7 @@ const flowLogGroup = new logs.LogGroup(this, 'VpcFlowLogGroup', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Lines 94-100):
-```typescript
+```ts
 // FLAW 14: Only outputting first public subnet instead of all 3
 if (publicSubnets.length > 0) {
   new cdk.CfnOutput(this, 'PublicSubnetId', {
@@ -411,7 +411,7 @@ if (publicSubnets.length > 0) {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Output public subnet IDs
 publicSubnets.forEach((subnet, index) => {
   new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
@@ -450,12 +450,12 @@ privateSubnets.forEach((subnet, index) => {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 103):
-```typescript
+```ts
 // FLAW 16: S3 Endpoint output missing (endpoint not created)
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Output S3 VPC Endpoint ID
 new cdk.CfnOutput(this, 'S3EndpointId', {
   value: this.s3Endpoint.vpcEndpointId,
@@ -482,12 +482,12 @@ new cdk.CfnOutput(this, 'S3EndpointId', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue** (Line 104):
-```typescript
+```ts
 // FLAW 17: Flow Logs log group output missing (log group not created)
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Output Flow Logs Log Group
 new cdk.CfnOutput(this, 'FlowLogsLogGroup', {
   value: flowLogGroup.logGroupName,
@@ -516,7 +516,7 @@ new cdk.CfnOutput(this, 'FlowLogsLogGroup', {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue** (Lines 89-93):
-```typescript
+```ts
 // FLAW 13: CloudFormation Outputs incomplete - missing several subnet IDs
 new cdk.CfnOutput(this, 'VpcId', {
   value: this.vpc.vpcId,
@@ -525,7 +525,7 @@ new cdk.CfnOutput(this, 'VpcId', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 new cdk.CfnOutput(this, 'VpcId', {
   value: this.vpc.vpcId,
   description: 'VPC ID for the payment processing infrastructure',
@@ -557,7 +557,7 @@ new cdk.CfnOutput(this, 'VpcCidr', {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue** (Lines 140-168):
-```typescript
+```ts
 // Only 3 basic tests provided
 test('VPC created', () => { ... });
 test('Subnets created', () => { ... });

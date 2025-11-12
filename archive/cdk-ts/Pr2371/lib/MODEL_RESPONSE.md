@@ -16,7 +16,7 @@ npm install -D @types/node typescript
 
 Here's the complete `secure-infra-stack.ts` file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -455,7 +455,7 @@ def handler(event, context):
 
 ### `app.ts` (Main CDK App)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

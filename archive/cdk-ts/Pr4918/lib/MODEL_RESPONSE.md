@@ -31,7 +31,7 @@ I'll provide a comprehensive CDK implementation for your fintech payment process
 
 ### `main.ts` - CDK Application Entry Point
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -78,7 +78,7 @@ app.synth();
 
 ### `tapstack.ts` - Complete Infrastructure Stack
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

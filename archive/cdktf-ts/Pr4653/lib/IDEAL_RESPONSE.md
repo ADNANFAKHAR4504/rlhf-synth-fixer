@@ -15,7 +15,7 @@ The solution implements:
 
 ## File: main.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

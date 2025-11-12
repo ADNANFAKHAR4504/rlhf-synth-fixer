@@ -17,7 +17,7 @@ The solution creates:
 
 ### File: lib/constructs/network-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -102,7 +102,7 @@ export class NetworkConstruct extends Construct {
 
 ### File: lib/constructs/database-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -225,7 +225,7 @@ export class DatabaseConstruct extends Construct {
 
 ### File: lib/constructs/dms-construct.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as dms from 'aws-cdk-lib/aws-dms';
@@ -489,7 +489,7 @@ export class DmsConstruct extends Construct {
 
 ### File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkConstruct } from './constructs/network-construct';

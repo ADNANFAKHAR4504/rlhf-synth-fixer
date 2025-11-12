@@ -12,7 +12,7 @@ The initial model response was 85% correct but had 7 significant issues that wou
 **Location**: `lib/tap-stack.ts` lines 150-166
 
 **Problem**:
-```typescript
+```ts
 // Request Validator Model
 const requestModel = new apigateway.Model(this, 'TransactionRequestModel', {
   restApi: api,  // ERROR: 'api' is used before it's defined
@@ -35,7 +35,7 @@ The model attempted to create an API Gateway Model that references `api` before 
 
 **Fix**:
 Moved the API Gateway Rest API definition before the Model definition:
-```typescript
+```ts
 // API Gateway - Define FIRST
 const api = new apigateway.RestApi(this, 'TransactionApi', {
   restApiName: `transaction-api-${environmentSuffix}`,
@@ -60,7 +60,7 @@ const requestModel = new apigateway.Model(this, 'TransactionRequestModel', {
 **Location**: `lib/tap-stack.ts` lines 102-112, 138-148
 
 **Problem**:
-```typescript
+```ts
 const processErrorAlarm = new cloudwatch.Alarm(this, 'ProcessTransactionErrorAlarm', {
   metric: processTransactionFn.metricErrors({
     statistic: 'sum',  // Wrong statistic for percentage threshold
@@ -83,7 +83,7 @@ This means the alarm triggers on ANY error, not when errors exceed 1% of invocat
 - But with `sum` and threshold 1, it would alarm (incorrect)
 
 **Fix**:
-```typescript
+```ts
 const processErrorAlarm = new cloudwatch.Alarm(this, 'ProcessTransactionErrorAlarm', {
   metric: processTransactionFn.metricErrors({
     statistic: 'Average',  // Changed to Average for percentage calculation
@@ -109,7 +109,7 @@ CloudWatch's `metricErrors()` with `Average` statistic returns error rate as a r
 **Location**: `lib/tap-stack.ts` DynamoDB Table and S3 Bucket
 
 **Problem**:
-```typescript
+```ts
 const transactionTable = new dynamodb.Table(this, 'TransactionTable', {
   // ... no removalPolicy specified
 });
@@ -128,7 +128,7 @@ Without explicit removal policies, CDK defaults to `RETAIN` for stateful resourc
 - Accumulates orphaned resources across test runs
 
 **Fix**:
-```typescript
+```ts
 const transactionTable = new dynamodb.Table(this, 'TransactionTable', {
   // ...
   removalPolicy: cdk.RemovalPolicy.DESTROY,  // Added
@@ -151,7 +151,7 @@ const reportsBucket = new s3.Bucket(this, 'ReportsBucket', {
 **Location**: `lib/tap-stack.ts` line 113-125
 
 **Problem**:
-```typescript
+```ts
 const auditTransactionFn = new lambda.Function(this, 'AuditTransaction', {
   // ... no reservedConcurrentExecutions specified
 });
@@ -164,7 +164,7 @@ The requirement specified "Lambda functions: reserved concurrent executions of 1
 Both Lambda functions handle transaction data and should have same concurrency limits for consistent performance.
 
 **Fix**:
-```typescript
+```ts
 const auditTransactionFn = new lambda.Function(this, 'AuditTransaction', {
   functionName: `auditTransaction-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -190,7 +190,7 @@ const auditTransactionFn = new lambda.Function(this, 'AuditTransaction', {
 **Location**: `lib/tap-stack.ts` line 214-225
 
 **Problem**:
-```typescript
+```ts
 const dailySummaryFn = new lambda.Function(this, 'DailySummary', {
   functionName: `dailySummary-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -213,7 +213,7 @@ The dailySummary function uses AWS SDK v3 (@aws-sdk/client-dynamodb, @aws-sdk/cl
 - Inconsistent with other Lambda functions
 
 **Fix**:
-```typescript
+```ts
 const dailySummaryFn = new lambda.Function(this, 'DailySummary', {
   functionName: `dailySummary-${environmentSuffix}`,
   runtime: lambda.Runtime.NODEJS_18_X,
@@ -239,7 +239,7 @@ const dailySummaryFn = new lambda.Function(this, 'DailySummary', {
 **Location**: `lib/lambda/processTransaction/index.ts`
 
 **Problem**:
-```typescript
+```ts
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
@@ -259,7 +259,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 API Gateway has request validation, but Lambda should also validate inputs for defense-in-depth. Missing fields could cause DynamoDB errors.
 
 **Fix**:
-```typescript
+```ts
 export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayProxyResult> => {
   try {
     const body = JSON.parse(event.body || '{}');
@@ -295,7 +295,7 @@ export const handler = async (event: APIGatewayProxyEvent): Promise<APIGatewayPr
 **Location**: `lib/lambda/processTransaction/index.ts`
 
 **Problem**:
-```typescript
+```ts
 return {
   statusCode: 200,
   body: JSON.stringify({
@@ -309,7 +309,7 @@ return {
 API responses should include `Content-Type` header for proper content negotiation, especially since we're returning JSON.
 
 **Fix**:
-```typescript
+```ts
 return {
   statusCode: 200,
   headers: {

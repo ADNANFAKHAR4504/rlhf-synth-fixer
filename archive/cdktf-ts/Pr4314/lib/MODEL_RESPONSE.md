@@ -33,7 +33,7 @@ I'll create a comprehensive CI/CD pipeline infrastructure for the Brazilian educ
 
 ## Project Structure
 
-```typescript
+```ts
 // interfaces.ts - Shared interfaces for the modules
 export interface PipelineModuleConfig {
   environmentSuffix: string;
@@ -58,7 +58,7 @@ export interface MonitoringModuleConfig {
 
 ## 1. Main Stack File (tap-stack.ts)
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -168,7 +168,7 @@ export class TapStack extends TerraformStack {
 
 ## 2. Pipeline Module (pipeline-module.ts)
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { 
   CodecommitRepository,
@@ -684,7 +684,7 @@ yum install -y nodejs npm`).toString('base64'),
 
 ## 3. Content Delivery Module (content-delivery-module.ts)
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   S3Bucket,
@@ -907,7 +907,7 @@ export class ContentDeliveryModule extends Construct {
 
 ## 4. Monitoring Module (monitoring-module.ts)
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   SnsTopicSubscription,
@@ -1086,7 +1086,7 @@ export class MonitoringModule extends Construct {
 
 ## 5. Main Application Entry Point (main.ts)
 
-```typescript
+```ts
 import { App } from "cdktf";
 import { TapStack } from "./tap-stack";
 

@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -35,7 +35,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/auto-response.ts
 
-```typescript
+```ts
 import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
 import { SNSClient, PublishCommand } from '@aws-sdk/client-sns';
 
@@ -184,7 +184,7 @@ export const handler = async (event: Record<string, unknown>) => {
 
 ## ./lib/lambda/health-check.ts
 
-```typescript
+```ts
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
 import { EC2Client, DescribeTransitGatewaysCommand } from '@aws-sdk/client-ec2';
@@ -330,7 +330,7 @@ export const handler = async (event: Record<string, unknown>) => {
 
 ## ./lib/lambda/order-processor.ts
 
-```typescript
+```ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import {
   DynamoDBDocumentClient,
@@ -512,7 +512,7 @@ export const handler = async (event: DynamoDBStreamEvent) => {
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 // lib/tap-stack.ts
 
 import * as cdk from 'aws-cdk-lib';
@@ -1467,7 +1467,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import fs from 'fs';
 import path from 'path';
 import {
@@ -2128,7 +2128,7 @@ describe('TapStack Integration Tests - Live AWS Resources', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

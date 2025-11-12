@@ -2,7 +2,7 @@ This document contains the ideal implementation of the TAP infrastructure stack 
 
 ## Complete tap-stack.ts Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';

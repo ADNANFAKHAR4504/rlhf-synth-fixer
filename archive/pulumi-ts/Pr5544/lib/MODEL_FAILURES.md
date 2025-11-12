@@ -9,7 +9,7 @@ This document analyzes the failures and issues in the MODEL_RESPONSE.md compared
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // Line 190-191 in MODEL_RESPONSE s3-buckets.ts
 versioningConfiguration: {
   status: 'Enabled',
@@ -18,7 +18,7 @@ versioningConfiguration: {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Line 270-272 in IDEAL_RESPONSE s3-buckets.ts
 versioningConfiguration: {
   status: 'Enabled',
@@ -50,7 +50,7 @@ api error AccessDenied: Mfa Authentication must be used for this request
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // Lines 339-352 in MODEL_RESPONSE bucket-policies.ts
 {
   sid: 'AllowCrossAccountAuditorAccess',
@@ -68,7 +68,7 @@ api error AccessDenied: Mfa Authentication must be used for this request
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Lines 100-127 in IDEAL_RESPONSE bucket-policies.ts
 // Confidential bucket policy - enforce HTTPS
 // Note: Cross-account access removed as external account doesn't exist in test environment
@@ -136,14 +136,14 @@ The model's training data likely included older Pulumi documentation or examples
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // test/tap-stack.unit.test.ts in MODEL_RESPONSE
 // Only 71 lines of basic test structure with mocking
 // Missing comprehensive test cases for all components
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // test/tap-stack.unit.test.ts in IDEAL_RESPONSE
 // 516 lines of comprehensive unit tests
 // 100% code coverage across all four TypeScript files
@@ -165,7 +165,7 @@ The model generated a test skeleton with proper mocking setup but failed to impl
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // test/tap-stack.int.test.ts in MODEL_RESPONSE
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
@@ -177,7 +177,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // test/tap-stack.int.test.ts in IDEAL_RESPONSE
 // 473 lines of comprehensive integration tests
 // 27 test cases validating live AWS resources

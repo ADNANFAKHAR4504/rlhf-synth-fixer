@@ -1,6 +1,6 @@
 ## modules.ts
 
-```typescript
+```ts
 
 import { Construct } from 'constructs';
 
@@ -711,7 +711,7 @@ export class RdsModule extends Construct {
 
 ## tapstack.ts
 
-```typescript
+```ts
 
 // tapstack.ts
 

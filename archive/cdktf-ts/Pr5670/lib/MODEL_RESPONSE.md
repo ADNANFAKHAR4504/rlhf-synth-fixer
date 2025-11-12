@@ -4,7 +4,7 @@ This implementation creates a complete ECS Fargate infrastructure with Applicati
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

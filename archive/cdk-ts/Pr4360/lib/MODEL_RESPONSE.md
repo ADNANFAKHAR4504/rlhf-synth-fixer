@@ -24,7 +24,7 @@ Let me write the complete updated TapStack class with all the required resources
 
 I'll update your existing TapStack class to include all the required serverless infrastructure components. Here's the modified code:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -401,7 +401,7 @@ export class TapStack extends cdk.Stack {
 
 ### 9. **Region Configuration**
 To deploy to us-east-1, update your `app.ts` file:
-```typescript
+```ts
 new TapStack(app, 'TapStack', {
   env: { region: 'us-east-1' },
   environmentSuffix: 'dev'

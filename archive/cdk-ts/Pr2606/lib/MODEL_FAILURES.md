@@ -126,7 +126,7 @@ This document catalogs common failures, mistakes, and issues that AI models freq
 ## Specific Failure Examples
 
 ### **Example 1: Incomplete Auto Scaling Configuration**
-```typescript
+```ts
 // FAILURE: Missing auto-scaling policies
 const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ASG', {
   // ... basic configuration
@@ -135,7 +135,7 @@ const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'ASG', {
 ```
 
 ### **Example 2: Security Group Misconfiguration**
-```typescript
+```ts
 // FAILURE: Overly permissive database access
 databaseSecurityGroup.addIngressRule(
   ec2.Peer.anyIpv4(), // DANGEROUS: Allows any IP
@@ -145,7 +145,7 @@ databaseSecurityGroup.addIngressRule(
 ```
 
 ### **Example 3: Missing Resource Properties**
-```typescript
+```ts
 // FAILURE: RDS instance without required properties
 new rds.DatabaseInstance(this, 'Database', {
   // Missing: engine, instanceType, vpc

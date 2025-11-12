@@ -2,7 +2,7 @@ I'll create a secure, compliant, and fault-tolerant cloud infrastructure for you
 
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -611,7 +611,7 @@ export class InfrastructureModule extends Construct {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

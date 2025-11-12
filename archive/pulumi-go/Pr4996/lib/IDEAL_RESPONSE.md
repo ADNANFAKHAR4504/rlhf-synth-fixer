@@ -731,7 +731,7 @@ The infrastructure is HIPAA-compliant with encrypted storage, secure credential 
 
 ### Unit Tests (test/infrastructure.unit.test.ts)
 
-```typescript
+```ts
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
@@ -866,7 +866,7 @@ describe("Pulumi Infrastructure Unit Tests", () => {
 
 ### Integration Tests (test/infrastructure.int.test.ts)
 
-```typescript
+```ts
 import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';

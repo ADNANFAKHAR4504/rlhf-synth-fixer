@@ -27,7 +27,7 @@ The infrastructure implements:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -834,7 +834,7 @@ def handler(event, context):
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *
@@ -1108,7 +1108,7 @@ export const secretRotationLambdaArn = stack.secretRotationLambda.arn;
 
 The stack exports the following outputs for application integration:
 
-```typescript
+```ts
 {
   kmsKeyArn: string,              // ARN of customer-managed KMS key
   kmsKeyId: string,               // ID of KMS key

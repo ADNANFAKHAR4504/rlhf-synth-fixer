@@ -1,6 +1,6 @@
 I'll fix those remaining TypeScript errors. Here's the corrected `secure-setup.ts` file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';

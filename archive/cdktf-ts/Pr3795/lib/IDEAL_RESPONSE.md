@@ -1,6 +1,6 @@
 `lib/modules.ts`:
 
-```typescript
+```ts
 // lib/modules.ts
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { DbInstance } from '@cdktf/provider-aws/lib/db-instance';
@@ -810,7 +810,7 @@ export class ParameterStoreModule extends Construct {
 
 `lib/tap-stack.ts`:
 
-```typescript
+```ts
 import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-identity';
 import {
   AwsProvider,

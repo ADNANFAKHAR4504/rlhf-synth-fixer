@@ -13,7 +13,7 @@
 - Assumes the VPC exists in the target AWS account
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Will fail
 const vpcData = new aws.dataAwsVpc.DataAwsVpc(this, "existing-vpc", {
   id: "vpc-abc123",  // This VPC doesn't exist
@@ -27,7 +27,7 @@ const vpcData = new aws.dataAwsVpc.DataAwsVpc(this, "existing-vpc", {
 - Zero infrastructure deployment possible
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Creates actual VPC infrastructure
 const vpc = new VpcModule(
   this,
@@ -56,7 +56,7 @@ const vpc = new VpcModule(
 - Missing ELB service account principals
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Incomplete
 this.bucketLogging = new aws.s3BucketLogging.S3BucketLogging(
   this,
@@ -78,7 +78,7 @@ this.bucketLogging = new aws.s3BucketLogging.S3BucketLogging(
 - May violate regulatory requirements (PCI-DSS, HIPAA)
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Complete bucket policy with ELB permissions
 new aws.s3BucketPolicy.S3BucketPolicy(this, `${id}-bucket-policy`, {
   bucket: this.bucket.id,
@@ -118,7 +118,7 @@ new aws.s3BucketPolicy.S3BucketPolicy(this, `${id}-bucket-policy`, {
 - This AMI likely doesn't exist in target region
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Will fail
 const ec2Instance = new Ec2Module(
   this,
@@ -139,7 +139,7 @@ const ec2Instance = new Ec2Module(
 - No guarantee AMI is still available
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Dynamic AMI lookup
 const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'ami', {
   mostRecent: true,
@@ -176,7 +176,7 @@ const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'ami', {
 - PostgreSQL specifically restricts this username
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Will fail
 this.dbInstance = new aws.dbInstance.DbInstance(
   this,
@@ -197,7 +197,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(
 - Application cannot function without database
 
 **Ideal Response Solution**:
-```typescript
+```ts
 username: 'dbadmin', // Changed from 'admin' to 'dbadmin'
 password: 'ChangeMePlease123!',
 ```
@@ -220,7 +220,7 @@ password: 'ChangeMePlease123!',
 - No regional compatibility checking
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Region-specific failure
 this.cluster = new aws.redshiftCluster.RedshiftCluster(
   this,
@@ -241,7 +241,7 @@ this.cluster = new aws.redshiftCluster.RedshiftCluster(
 - Regional deployment strategy blocked
 
 **Ideal Response Solution**:
-```typescript
+```ts
 this.cluster = new aws.redshiftCluster.RedshiftCluster(
   this,
   `${id}-cluster`,
@@ -273,7 +273,7 @@ this.cluster = new aws.redshiftCluster.RedshiftCluster(
 - Cluster cannot be placed in network
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Missing subnet configuration
 this.cluster = new aws.redshiftCluster.RedshiftCluster(
   this,
@@ -295,7 +295,7 @@ this.cluster = new aws.redshiftCluster.RedshiftCluster(
 - Cannot apply private subnet protections
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Create subnet group first
 this.subnetGroup = new aws.redshiftSubnetGroup.RedshiftSubnetGroup(
   this,
@@ -336,7 +336,7 @@ this.cluster = new aws.redshiftCluster.RedshiftCluster(
 - CloudWatch Logs service cannot use the key
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Will fail
 this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
   this,
@@ -359,7 +359,7 @@ this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
 - Incident response severely hampered
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Remove KMS from CloudWatch Log Groups
 this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
   this,
@@ -392,7 +392,7 @@ this.logGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
 - Deployment has nothing to deploy
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Empty API
 this.api = new aws.apiGatewayRestApi.ApiGatewayRestApi(
   this,
@@ -422,7 +422,7 @@ this.deployment = new aws.apiGatewayDeployment.ApiGatewayDeployment(
 - No endpoints available for application
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Add resource
 const resource = new aws.apiGatewayResource.ApiGatewayResource(
   this,
@@ -478,7 +478,7 @@ new aws.apiGatewayIntegration.ApiGatewayIntegration(
 - Policy syntax error
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Invalid policy
 new aws.snsTopicPolicy.SnsTopicPolicy(
   this,
@@ -506,7 +506,7 @@ new aws.snsTopicPolicy.SnsTopicPolicy(
 - Cannot restrict topic access properly
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Get actual account ID
 const current = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
   this,
@@ -556,7 +556,7 @@ new aws.snsTopicPolicy.SnsTopicPolicy(this, `${id}-policy`, {
 - API Gateway cannot write to CloudWatch
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Missing account setup
 this.stage = new aws.apiGatewayStage.ApiGatewayStage(
   this,
@@ -578,7 +578,7 @@ this.stage = new aws.apiGatewayStage.ApiGatewayStage(
 - Debugging API issues impossible
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Create CloudWatch role
 const cloudwatchRole = new aws.iamRole.IamRole(
   this,
@@ -632,7 +632,7 @@ this.stage = new aws.apiGatewayStage.ApiGatewayStage(this, `${id}-stage`, {
 - Creates duplicate trails for insights
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Incomplete setup
 this.trail = new aws.cloudtrail.Cloudtrail(
   this,
@@ -657,7 +657,7 @@ new aws.cloudtrail.Cloudtrail(this, `${id}-insight`, {
 - Configuration management complexity
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // KMS key with proper CloudTrail policy
 const kmsKey = new aws.kmsKey.KmsKey(this, 'master-kms-key', {
   policy: JSON.stringify({
@@ -712,7 +712,7 @@ this.trail = new aws.cloudtrail.Cloudtrail(this, `${id}-trail`, {
 - Cannot investigate security events
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // VPC Module includes Flow Logs
 const flowLogsRole = new aws.iamRole.IamRole(this, `${id}-flow-logs-role`, {
   assumeRolePolicy: JSON.stringify({
@@ -751,7 +751,7 @@ new aws.flowLog.FlowLog(this, `${id}-flow-log`, {
 - Encryption configuration incomplete
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Incomplete encryption
 this.repository = new aws.ecrRepository.EcrRepository(
   this,
@@ -772,7 +772,7 @@ this.repository = new aws.ecrRepository.EcrRepository(
 - Compliance auditing more difficult
 
 **Ideal Response Solution**:
-```typescript
+```ts
 // Uses default encryption (AWS managed) or specify key
 this.repository = new aws.ecrRepository.EcrRepository(this, `${id}-repo`, {
   name: repositoryName,
@@ -802,7 +802,7 @@ this.repository = new aws.ecrRepository.EcrRepository(this, `${id}-repo`, {
 - CloudFront WAF specifically requires us-east-1
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Hardcoded region
 new aws.provider.AwsProvider(this, "aws", {
   region: "us-east-1", // Hardcoded
@@ -816,7 +816,7 @@ new aws.provider.AwsProvider(this, "aws", {
 - Cost optimization restricted (different regions have different pricing)
 
 **Ideal Response Solution**:
-```typescript
+```ts
 const awsRegion = AWS_REGION_OVERRIDE
   ? AWS_REGION_OVERRIDE
   : props?.awsRegion || 'us-east-1';
@@ -856,7 +856,7 @@ const cloudFront = new CloudFrontWafModule(
 - Mock testing without real resource verification
 
 **Impact**:
-```typescript
+```ts
 // Model Response - Simplified test
 test("S3 buckets have versioning enabled", () => {
   const s3Versioning = Testing.findResource(

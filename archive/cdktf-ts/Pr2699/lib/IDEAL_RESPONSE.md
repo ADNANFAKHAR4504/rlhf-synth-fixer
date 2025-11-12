@@ -1,6 +1,6 @@
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -573,7 +573,7 @@ export class MonitoringModule extends Construct {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

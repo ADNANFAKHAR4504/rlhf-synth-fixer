@@ -76,7 +76,7 @@ test/
 
 #### 1. VPC and Internet Connectivity
 
-```typescript
+```ts
 // VPC with DNS support
 const vpc = new Vpc(this, 'payment-vpc', {
   cidrBlock: '10.0.0.0/16',
@@ -94,7 +94,7 @@ const igw = new InternetGateway(this, 'internet-gateway', {
 
 #### 2. NAT Gateways with High Availability
 
-```typescript
+```ts
 // One NAT Gateway per AZ for fault tolerance
 availabilityZones.forEach((az, index) => {
   const eip = new Eip(this, `nat-eip-${index}`, {
@@ -119,7 +119,7 @@ Each subnet has an explicit route table association as required:
 
 #### 4. VPC Flow Logs
 
-```typescript
+```ts
 // CloudWatch Log Group
 const flowLogGroup = new CloudwatchLogGroup(this, 'vpc-flow-logs', {
   name: `/aws/vpc/flowlogs-${environmentSuffix}`,
@@ -143,7 +143,7 @@ new FlowLog(this, 'vpc-flow-log', {
 
 Gateway endpoints for S3 and DynamoDB eliminate data transfer charges:
 
-```typescript
+```ts
 // S3 Endpoint
 const s3Endpoint = new VpcEndpoint(this, 's3-endpoint', {
   vpcId: vpc.id,
@@ -165,7 +165,7 @@ const dynamodbEndpoint = new VpcEndpoint(this, 'dynamodb-endpoint', {
 
 #### 6. EC2 Instances with Session Manager Access
 
-```typescript
+```ts
 // Get latest Amazon Linux 2023 AMI
 const amiData = new DataAwsAmi(this, 'amazon-linux-2023', {
   mostRecent: true,

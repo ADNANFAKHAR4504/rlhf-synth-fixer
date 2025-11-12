@@ -31,7 +31,7 @@ The infrastructure should be deployed to the us-east-1 region and all resources 
 
 Here's the existing CDK stack file that needs to be updated with the security infrastructure:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

@@ -153,7 +153,7 @@ export class TapStack extends cdk.Stack {
     // Deny all other traffic (explicit deny)
     networkAcl.addEntry('DenyAllInbound', {
       cidr: ec2.AclCidr.anyIpv4(),
-      ruleNumber: 32767,
+      ruleNumber: 32766,
       traffic: ec2.AclTraffic.allTraffic(),
       direction: ec2.TrafficDirection.INGRESS,
       ruleAction: ec2.Action.DENY,
@@ -161,7 +161,7 @@ export class TapStack extends cdk.Stack {
 
     networkAcl.addEntry('DenyAllOutbound', {
       cidr: ec2.AclCidr.anyIpv4(),
-      ruleNumber: 32767,
+      ruleNumber: 32766,
       traffic: ec2.AclTraffic.allTraffic(),
       direction: ec2.TrafficDirection.EGRESS,
       ruleAction: ec2.Action.DENY,

@@ -29,7 +29,7 @@ I'll implement the complete infrastructure migration from us-west-1 to us-west-2
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

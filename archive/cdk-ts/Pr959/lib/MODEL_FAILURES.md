@@ -11,7 +11,7 @@ The initial MODEL_RESPONSE.md provided a good foundation for the CI/CD pipeline 
 **Issue**: The original implementation lacked proper environment suffix handling, which would cause resource naming conflicts when multiple deployments exist in the same AWS account.
 
 **Fix Applied**:
-```typescript
+```ts
 // Added environment suffix retrieval at the beginning
 const environmentSuffix = this.node.tryGetContext('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -26,7 +26,7 @@ logGroupName: `/aws/codebuild/${projectName}-${environmentSuffix}-${env}-build`
 **Issue**: The original used `codebuild.Source.codeCommit()` with an invalid repository URL format, which would fail during deployment.
 
 **Fix Applied**:
-```typescript
+```ts
 // Changed from:
 source: codebuild.Source.codeCommit({
   repository: codebuild.Repository.fromSourceVersion('https://git-codecommit.us-east-1.amazonaws.com/v1/repos/sample-repo'),
@@ -44,7 +44,7 @@ source: codebuild.Source.s3({
 **Issue**: Missing critical stack outputs needed for integration testing and external system integration.
 
 **Fix Applied**:
-```typescript
+```ts
 // Added exportName for all outputs
 exportName: `${this.stackName}-ArtifactsBucketName`
 exportName: `${this.stackName}-CodeBuildProjects`
@@ -67,7 +67,7 @@ environments.forEach(env => {
 **Issue**: No removal policies were set for CloudWatch Log Groups, potentially causing deletion failures during stack teardown.
 
 **Fix Applied**:
-```typescript
+```ts
 logGroups[env] = new logs.LogGroup(this, `${env}LogGroup`, {
   logGroupName: `/aws/codebuild/${projectName}-${environmentSuffix}-${env}-build`,
   retention: logs.RetentionDays.TWO_WEEKS,
@@ -80,7 +80,7 @@ logGroups[env] = new logs.LogGroup(this, `${env}LogGroup`, {
 **Issue**: Test project used the same invalid CodeCommit source configuration.
 
 **Fix Applied**:
-```typescript
+```ts
 source: codebuild.Source.s3({
   bucket: artifactsBucket,
   path: 'source/test/source.zip',
@@ -133,7 +133,7 @@ source: codebuild.Source.s3({
 **Issue**: The bin/tap.ts file needed proper environment suffix configuration.
 
 **Fix Applied**:
-```typescript
+```ts
 const envSuffix = app.node.tryGetContext('environmentSuffix') || 
                   process.env.ENVIRONMENT_SUFFIX || 
                   'synthtrainr241';

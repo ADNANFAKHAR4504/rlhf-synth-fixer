@@ -1,6 +1,6 @@
 # lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -478,7 +478,7 @@ export class TapStack extends cdk.Stack {
 
 # lambda/shadow-analysis.ts
 
-```typescript
+```ts
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { IoTClient, ListThingsCommand } from '@aws-sdk/client-iot';
 import { GetThingShadowCommand, IoTDataPlaneClient } from '@aws-sdk/client-iot-data-plane';
@@ -610,7 +610,7 @@ export const handler = async (event: any) => {
 
 # lambda/kinesis-republish.ts
 
-```typescript
+```ts
 import { EventBridgeClient, PutEventsCommand } from '@aws-sdk/client-eventbridge';
 import { KinesisClient, PutRecordsCommand } from '@aws-sdk/client-kinesis';
 import { GetObjectCommand, S3Client } from '@aws-sdk/client-s3';
@@ -724,7 +724,7 @@ async function sendToEventBridge(failedRecords: any[]) {
 
 # lambda/dynamodb-validation.ts
 
-```typescript
+```ts
 import { CloudWatchClient, PutMetricDataCommand, StandardUnit } from '@aws-sdk/client-cloudwatch';
 import { DynamoDBClient } from '@aws-sdk/client-dynamodb';
 import { DynamoDBDocumentClient, PutCommand, QueryCommand } from '@aws-sdk/lib-dynamodb';
@@ -945,7 +945,7 @@ export const handler = async (event: any) => {
 
 # lambda/trigger-recovery.ts
 
-```typescript
+```ts
 import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 
 const sfn = new SFNClient({});

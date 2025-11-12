@@ -48,7 +48,7 @@ I'll help you create a secure and highly available AWS environment using CDK for
 
 ## 1. modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { 
   AwsProvider,
@@ -829,7 +829,7 @@ export class ShieldConstruct extends Construct {
 
 ## 2. tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput, TerraformVariable } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws';

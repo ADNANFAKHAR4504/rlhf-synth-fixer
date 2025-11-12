@@ -7,7 +7,7 @@ Hey, I need help building out a complete CI/CD pipeline infrastructure using AWS
 Here's my existing stack file that needs to be updated:
 
 **File: lib/tap-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

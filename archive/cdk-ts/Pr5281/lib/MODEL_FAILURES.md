@@ -8,7 +8,7 @@ Used incorrect syntax for CodeBuild cache configuration with `codebuild.Cache.s3
 **Actual Implementation:**
 Fixed cache configuration to use the correct `codebuild.Cache.bucket()` method:
 
-```typescript
+```ts
 cache: codebuild.Cache.bucket(artifactsBucket, {
   prefix: 'build-cache',
 }),
@@ -26,7 +26,7 @@ Attempted to add `tags` property directly to IAM Role constructor, which is not 
 **Actual Implementation:**
 Removed the invalid `tags` property from the IAM Role constructor:
 
-```typescript
+```ts
 // Removed invalid tags property
 const ebInstanceRole = new iam.Role(this, 'EBInstanceRole', {
   roleName: resourceName('eb-instance-role'),
@@ -68,7 +68,7 @@ Used incorrect method `secretsmanager.RotationSchedule.hostedRotation()` which d
 **Actual Implementation:**
 Fixed rotation configuration to use the correct `hostedRotation` property directly on the `RotationSchedule` constructor:
 
-```typescript
+```ts
 new secretsmanager.RotationSchedule(this, 'DbSecretRotation', {
   secret: this.dbSecret,
   hostedRotation: secretsmanager.HostedRotation.mysqlSingleUser(),
@@ -88,7 +88,7 @@ Used outdated Elastic Beanstalk solution stack name `'64bit Amazon Linux 2023 v4
 **Actual Implementation:**
 Fixed solution stack name to use the currently available version:
 
-```typescript
+```ts
 solutionStackName: '64bit Amazon Linux 2023 v4.7.2 running Docker',
 ```
 
@@ -104,7 +104,7 @@ Enabled managed actions with `ManagedActionsEnabled: 'true'` but failed to provi
 **Actual Implementation:**
 Added the missing `PreferredStartTime` option when managed actions are enabled:
 
-```typescript
+```ts
 {
   namespace: 'aws:elasticbeanstalk:managedactions',
   optionName: 'ManagedActionsEnabled',
@@ -136,7 +136,7 @@ Added comprehensive outputs to all constructs for better resource management:
 
 **CodePipelineStack outputs:**
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'PipelineName', {
   value: this.pipeline.pipelineName,
   description: 'Name of the CodePipeline',
@@ -147,7 +147,7 @@ new cdk.CfnOutput(this, 'PipelineName', {
 
 **BuildStage outputs:**
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'BuildProjectName', {
   value: this.buildProject.projectName,
   description: 'Name of the CodeBuild build project',
@@ -158,7 +158,7 @@ new cdk.CfnOutput(this, 'BuildProjectName', {
 
 **DeployStage outputs:**
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'EnvironmentUrl', {
   value: this.environment.attrEndpointUrl,
   description: 'URL of the Elastic Beanstalk environment',
@@ -169,7 +169,7 @@ new cdk.CfnOutput(this, 'EnvironmentUrl', {
 
 **SecurityConfig outputs:**
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'DatabaseSecretArn', {
   value: this.dbSecret.secretArn,
   description: 'ARN of the database credentials secret',
@@ -210,7 +210,7 @@ Created a complete application structure in `lib/app/` with:
 
 **Simple Express Application (`lib/app/src/index.ts`):**
 
-```typescript
+```ts
 import express from 'express';
 
 const app = express();
@@ -250,7 +250,7 @@ export default app;
 
 **Updated Build Pipeline:**
 
-```typescript
+```ts
 build: {
   commands: [
     'echo Building TypeScript application...',
@@ -274,7 +274,7 @@ Created a Slack notifier Lambda function with an unused `CodePipelineClient` imp
 **Actual Implementation:**
 Removed the unused import and instantiation:
 
-```typescript
+```ts
 // Before (unused):
 import { CodePipelineClient } from '@aws-sdk/client-codepipeline';
 const codepipelineClient = new CodePipelineClient({});
@@ -301,7 +301,7 @@ Used deprecated `logRetention` property in Lambda function configuration, which 
 **Actual Implementation:**
 Replaced deprecated `logRetention` with the new `logGroup` approach:
 
-```typescript
+```ts
 // Before (deprecated):
 logRetention: cdk.aws_logs.RetentionDays.ONE_WEEK,
 
@@ -332,7 +332,7 @@ Specified `docker: '24'` in CodeBuild runtime-versions, but Docker is not a runt
 **Actual Implementation:**
 Removed the invalid Docker runtime specification:
 
-```typescript
+```ts
 // Before (invalid):
 'runtime-versions': {
   nodejs: '18',
@@ -374,7 +374,7 @@ lib/app/
 
 **Complete Application Code (`lib/app/src/index.ts`):**
 
-```typescript
+```ts
 import express from 'express';
 
 const app = express();
@@ -450,7 +450,7 @@ Failed to include ECR repository creation and integration in the CodePipeline st
 **Actual Implementation:**
 Added ECR repository creation and proper integration:
 
-```typescript
+```ts
 // Create ECR repository for Docker images
 this.ecrRepository = new ecr.Repository(this, 'EcrRepository', {
   repositoryName: resourceName('app-images'),
@@ -472,7 +472,7 @@ this.ecrRepository.grantPullPush(buildStage.buildProject.role!);
 
 **Updated Build Stage with ECR Integration:**
 
-```typescript
+```ts
 environmentVariables: {
   AWS_ACCOUNT_ID: { value: cdk.Aws.ACCOUNT_ID },
   AWS_REGION: { value: cdk.Aws.REGION },
@@ -498,7 +498,7 @@ Failed to provide a mechanism to deploy source code to the S3 source bucket, mak
 **Actual Implementation:**
 Added source code deployment using S3 BucketDeployment:
 
-```typescript
+```ts
 private deploySourceCode(sourcePath: string): s3_deployment.BucketDeployment {
   const deploySourceCode = new s3_deployment.BucketDeployment(
     this,
@@ -538,7 +538,7 @@ Failed to properly integrate the SlackNotifier construct in the main TapStack, m
 **Actual Implementation:**
 Added proper SlackNotifier integration in TapStack:
 
-```typescript
+```ts
 import { SlackNotifier } from './monitoring/notifications';
 
 // In TapStack constructor:
@@ -581,7 +581,7 @@ Failed to import the `path` module needed for constructing the application sourc
 **Actual Implementation:**
 Added missing path import:
 
-```typescript
+```ts
 import path from 'path';
 
 // Usage:
@@ -628,7 +628,7 @@ Failed to properly handle the unused `context` parameter in the Lambda handler, 
 **Actual Implementation:**
 Added proper ESLint disable comment for unused parameter:
 
-```typescript
+```ts
 export const handler = async (
   event: SNSEvent,
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -648,7 +648,7 @@ Failed to include `source-map-support/register` import in the bin/tap.ts file, m
 **Actual Implementation:**
 Added source-map-support import:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -667,7 +667,7 @@ Provided a simplified bin/tap.ts that only shows hardcoded environment examples,
 **Actual Implementation:**
 Added comprehensive bin/tap.ts with dynamic configuration:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -708,7 +708,7 @@ Failed to include KMS permissions in the EC2 instance role, causing instance lau
 **Actual Implementation:**
 Added comprehensive KMS permissions to the EC2 instance role's inline policy to allow decryption of EBS volumes encrypted with any KMS key in the account:
 
-```typescript
+```ts
 new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
   actions: [

@@ -10,7 +10,7 @@ This document analyzes the issues found in the MODEL_RESPONSE.md implementation 
 
 **MODEL_RESPONSE Issue**: The generated code included an invalid S3 backend configuration option `use_lockfile`:
 
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,

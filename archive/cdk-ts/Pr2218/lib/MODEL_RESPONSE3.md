@@ -1,6 +1,6 @@
 You're right! The `variable` method doesn't exist on `CodeBuildAction`. Here's the corrected, error-free code:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as codecommit from 'aws-cdk-lib/aws-codecommit';
@@ -443,7 +443,7 @@ new CicdPipelineStack(app, 'CicdPipelineStack', {
 The issue was in the Build Stage where I was trying to use a non-existent `variable` method. Here's what I changed:
 
 **❌ Before (Incorrect):**
-```typescript
+```ts
 environmentVariables: {
   'CODEBUILD_BUILD_NUMBER': {
     value: codepipeline_actions.CodeBuildAction.variable('CODEBUILD_BUILD_NUMBER'),
@@ -452,7 +452,7 @@ environmentVariables: {
 ```
 
 **✅ After (Fixed):**
-```typescript
+```ts
 environmentVariables: {
   'PIPELINE_EXECUTION_ID': {
     value: '#{codepipeline.PipelineExecutionId}',

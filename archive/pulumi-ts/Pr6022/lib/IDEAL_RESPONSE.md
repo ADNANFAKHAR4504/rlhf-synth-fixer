@@ -10,7 +10,7 @@ This document contains the corrected and validated Pulumi TypeScript infrastruct
 
 **Fix**: Changed to `reservedConcurrentExecutions: 10` for each Lambda function.
 
-```typescript
+```ts
 // CORRECTED: Lines 365, 399, 435
 const validatorFunction = new aws.lambda.Function(`validator-${environmentSuffix}`, {
   // ... other config
@@ -32,7 +32,7 @@ const validatorFunction = new aws.lambda.Function(`validator-${environmentSuffix
 **Ideal Future Fix**: Separate these into individual V2 resources (`BucketVersioningV2`, `BucketServerSideEncryptionConfigurationV2`, `BucketLifecycleConfigurationV2`).
 
 **Current Implementation** (lines 22-54):
-```typescript
+```ts
 const auditBucket = new aws.s3.Bucket(`audit-bucket-${environmentSuffix}`, {
   bucket: `audit-logs-${environmentSuffix}`,
   versioning: { enabled: true },  // DEPRECATED but functional

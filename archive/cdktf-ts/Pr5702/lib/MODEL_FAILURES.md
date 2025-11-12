@@ -9,13 +9,13 @@ This document analyzes the critical failures and issues in the MODEL_RESPONSE th
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // Line 347 in MODEL_RESPONSE
 const dbPassword = Fn.bcrypt('MySecurePassword123!');
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 import { Password } from '@cdktf/provider-random/lib/password';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 
@@ -49,7 +49,7 @@ password: dbPassword.result,
 **Impact Level**: Critical (for QA/Testing)
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // Line 393 - RDS Instance
 deletionProtection: true,
 skipFinalSnapshot: false,
@@ -60,7 +60,7 @@ enableDeletionProtection: true,
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // RDS Instance - QA-friendly settings
 deletionProtection: false,
 skipFinalSnapshot: true,
@@ -88,7 +88,7 @@ enableDeletionProtection: false,
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // Line 630 - ECS Service creation
 const ecsService = new EcsService(this, 'ecs-service', {
   name: `client-dashboard-service-${config.environmentSuffix}`,
@@ -100,7 +100,7 @@ const ecsService = new EcsService(this, 'ecs-service', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const ecsService = new EcsService(this, 'ecs-service', {
   // ... all config
   dependsOn: [targetGroup],
@@ -123,7 +123,7 @@ const ecsService = new EcsService(this, 'ecs-service', {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // Only 5 outputs provided:
 - vpc-id
 - alb-dns
@@ -133,7 +133,7 @@ const ecsService = new EcsService(this, 'ecs-service', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Added 3 critical outputs:
 - db-secret-arn (for credential validation tests)
 - ecs-service-name (for service health checks)

@@ -2,7 +2,7 @@ I'll provide you with a complete CDK TypeScript template that meets all your req
 
 ## CDK Template
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -294,7 +294,7 @@ def handler(event, context):
 
 Create an `app.ts` file to instantiate the stack:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

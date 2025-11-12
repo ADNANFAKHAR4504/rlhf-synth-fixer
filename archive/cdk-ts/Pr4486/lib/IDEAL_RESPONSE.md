@@ -5,7 +5,7 @@ This document contains the ideal implementation for the email notification syste
 
 ## iac-nova-app.ts
 
-```typescript
+```ts
 #!/usr/bin/env node 
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -42,7 +42,7 @@ app.synth();
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { IaCNovaStack } from './iac-nova-stack';
@@ -113,7 +113,7 @@ export class TapStack extends cdk.Stack {
 
 ## iac-nova-stack.ts (Core Infrastructure)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { NestedStack, NestedStackProps } from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

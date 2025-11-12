@@ -2,7 +2,7 @@ I'll provide you with a complete CDK TypeScript template that meets all your req
 
 ## CDK Template
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

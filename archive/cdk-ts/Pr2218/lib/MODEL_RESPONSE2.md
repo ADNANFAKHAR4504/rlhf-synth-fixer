@@ -1,6 +1,6 @@
 You're right! There's a typo in the import. Here's the corrected, error-free CDK TypeScript stack:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as codecommit from 'aws-cdk-lib/aws-codecommit';

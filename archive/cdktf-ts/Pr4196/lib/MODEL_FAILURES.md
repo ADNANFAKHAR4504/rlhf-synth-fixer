@@ -15,7 +15,7 @@ Error: only lowercase alphanumeric characters, hyphens, underscores, periods, an
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // In SecureVpc class
 this.dbSubnetGroup = new rds.DbSubnetGroup(this, 'db-subnet-group', {
   name: `${props.projectName}-${props.environment}-db`, // TapStackpr4196-pr4196-vpc-db-subnet-group
@@ -23,7 +23,7 @@ this.dbSubnetGroup = new rds.DbSubnetGroup(this, 'db-subnet-group', {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Line 526-532
 this.dbSubnetGroup = new DbSubnetGroup(this, 'db-subnet-group', {
   name:
@@ -48,13 +48,13 @@ Error: first character of "identifier" must be a letter
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 instanceIdentifier: `${props.projectName}-${props.environment}-db`,
 // Results in: "TapStackpr4196-pr4196-db" - starts with capital letter!
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/tap-stack.ts - Line 256
 const rdsModule = new SecureRdsInstance(this, 'main-rds', {
   name: `db-${id.toLowerCase().replace(/[^a-z0-9]/g, '-')}-${environmentSuffix}`,
@@ -73,7 +73,7 @@ Warning: No attribute specified when one (and only one) of [rule[0].filter,rule[
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Missing filter in lifecycle rule
 new s3.S3BucketLifecycleConfiguration(this, 'lifecycle', {
   bucket: this.bucket.id,
@@ -89,7 +89,7 @@ new s3.S3BucketLifecycleConfiguration(this, 'lifecycle', {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Line 182-196
 lifecycleRules: [
   {
@@ -119,7 +119,7 @@ Error: The argument "noncurrent_days" is required, but no definition was found.
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Wrong property names
 noncurrentVersionExpiration: {
   noncurrentDays: 90, // Wrong! Used camelCase
@@ -128,7 +128,7 @@ noncurrentVersionExpiration: {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/tap-stack.ts - Line 237-245
 lifecycleRules: [
   {
@@ -155,7 +155,7 @@ Error: "kms_key_id" (5b8fbce3-9589-44b7-9cca-c59dcacbe130) is an invalid ARN: ar
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Used keyId instead of keyArn
 this.instance = new rds.DbInstance(this, 'instance', {
   kmsKeyId: props.kmsKeyId, // Passed key ID, not ARN!
@@ -164,7 +164,7 @@ this.instance = new rds.DbInstance(this, 'instance', {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Line 320 and lib/tap-stack.ts - Line 261
 const rdsModule = new SecureRdsInstance(this, 'main-rds', {
   kmsKeyId: kmsModule.keyArn, // Pass ARN, not ID!
@@ -184,7 +184,7 @@ Error: creating IAM Role: Duplicate tag keys found. Please note that Tag keys ar
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Case-sensitive duplicate tags
 const commonTags = {
   project: config.projectName,
@@ -196,7 +196,7 @@ const commonTags = {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Line 75-86
 // Filter out duplicate tags (case-insensitive)
 const uniqueTags: { [key: string]: string } = {};
@@ -226,7 +226,7 @@ Incorrect S3 bucket policy is detected for bucket: tapstackpr4196-pr4196-audit-l
 ```
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Incomplete bucket policy for CloudTrail
 const bucketPolicy = new s3.S3BucketPolicy(this, 'bucket-policy', {
   bucket: this.bucket.bucket.id,
@@ -246,7 +246,7 @@ const bucketPolicy = new s3.S3BucketPolicy(this, 'bucket-policy', {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Line 137-165
 const keyPolicy = {
   Version: '2012-10-17',
@@ -291,14 +291,14 @@ const keyPolicy = {
 ### 8. S3 Bucket Naming Convention Violation
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Bucket names can't have uppercase letters
 bucketName: `${props.projectName}-${props.environment}-data`,
 // Results in: "TapStackpr4196-pr4196-data" - contains uppercase!
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/tap-stack.ts - Lines 232 & 248
 const publicS3Module = new EncryptedS3Bucket(this, 'public-s3', {
   name: `${id.toLowerCase()}-${environmentSuffix}-public-assets`, // .toLowerCase() added!
@@ -312,7 +312,7 @@ const publicS3Module = new EncryptedS3Bucket(this, 'public-s3', {
 ### 9. Missing Enhanced Monitoring Role for RDS
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Missing monitoring role configuration
 this.instance = new rds.DbInstance(this, 'instance', {
   monitoringInterval: 60, // Set but no role!
@@ -321,7 +321,7 @@ this.instance = new rds.DbInstance(this, 'instance', {
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Lines 324-344
 if (config.monitoringInterval && config.monitoringInterval > 0) {
   this.monitoringRole = new IamRole(this, 'monitoring-role', {
@@ -349,7 +349,7 @@ if (config.monitoringInterval && config.monitoringInterval > 0) {
 ### 10. Import Statement Failures
 
 **MODEL_RESPONSE (Failed):**
-```typescript
+```ts
 // Incorrect/outdated imports
 import { AwsProvider, iam, kms, s3, rds, ec2 } from '@cdktf/provider-aws';
 // Wrong! These are not valid import paths
@@ -360,7 +360,7 @@ import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning
 ```
 
 **IDEAL_RESPONSE (Fixed):**
-```typescript
+```ts
 // lib/modules.ts - Lines 1-45
 // Correct individual imports for each resource
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';

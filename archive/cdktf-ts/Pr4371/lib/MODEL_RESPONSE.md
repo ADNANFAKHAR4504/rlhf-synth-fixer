@@ -45,7 +45,7 @@ I'll create a comprehensive AWS CDKTF implementation that meets all your require
 
 ## File 1: lib/tap-stack.ts
 
-```typescript
+```ts
 /*
  * AWS TAP Infrastructure Stack - Production-Ready CDKTF Implementation
  * 
@@ -349,7 +349,7 @@ if (typeof process !== 'undefined' && process.env.AWS_REGION !== 'us-east-1') {
 
 ## File 2: lib/modules.ts
 
-```typescript
+```ts
 /*
  * AWS TAP Infrastructure Modules - Reusable Components
  * 

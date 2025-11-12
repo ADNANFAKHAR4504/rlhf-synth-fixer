@@ -50,7 +50,7 @@ I'll help you build a secure, production-grade AWS infrastructure using AWS CDK.
 
 ## Updated `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -164,7 +164,7 @@ Now, let me create each of the stack files:
 
 ## 1. Security Stack - `lib/stacks/security-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -297,7 +297,7 @@ export class SecurityStack extends cdk.NestedStack {
 
 ## 2. Networking Stack - `lib/stacks/networking-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -453,7 +453,7 @@ export class NetworkingStack extends cdk.NestedStack {
 
 ## 3. Storage Stack - `lib/stacks/storage-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -553,7 +553,7 @@ export class StorageStack extends cdk.NestedStack {
 
 ## 4. Database Stack - `lib/stacks/database-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -628,7 +628,7 @@ export class DatabaseStack extends cdk.NestedStack {
 
 ## 5. WAF Stack - `lib/stacks/waf-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import { Construct } from 'constructs';
@@ -736,7 +736,7 @@ export class WAFStack extends cdk.NestedStack {
 
 ## 6. Compute Stack - `lib/stacks/compute-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
@@ -949,7 +949,7 @@ export class ComputeStack extends cdk.NestedStack {
 
 ## 7. Monitoring Stack - `lib/stacks/monitoring-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as config from 'aws-cdk-lib/aws-config';
@@ -1218,7 +1218,7 @@ Now, let me create the Lambda function implementations:
 ## Lambda Function 1 - CloudTrail Log Processor
 `lib/lambdas/cloudtrail-processor.ts`
 
-```typescript
+```ts
 import { S3Event } from 'aws-lambda';
 import { S3, SNS } from 'aws-sdk';
 import * as zlib from 'zlib';
@@ -1340,7 +1340,7 @@ export const handler = async (event: S3Event): Promise<void> => {
 ## Lambda Function 2 - Access Key Cleanup
 `lib/lambdas/access-key-cleanup.ts`
 
-```typescript
+```ts
 import { IAM, SNS } from 'aws-sdk';
 
 const iam = new IAM();
@@ -1470,7 +1470,7 @@ export const handler = async (): Promise<void> => {
 ## Lambda Function 3 - Cost Monitor
 `lib/lambdas/cost-monitor.ts`
 
-```typescript
+```ts
 import { CostExplorer, SNS } from 'aws-sdk';
 
 const ce = new CostExplorer();

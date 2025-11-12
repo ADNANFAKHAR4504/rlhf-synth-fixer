@@ -7,7 +7,7 @@ This document analyzes the failures and discrepancies between the ideal response
 
 ### 1. **S3 Backend Configuration Missing**
 - **Ideal**: Includes proper S3 backend configuration with native state locking
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -21,27 +21,27 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 
 ### 2. **Incomplete Import Statements**
 - **Ideal**: Uses specific, complete imports from @cdktf/provider-aws
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
 } from '@cdktf/provider-aws/lib/provider';
 ```
 - **Model**: Uses generic imports that may not resolve correctly
-```typescript
+```ts
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 ```
 - **Impact**: High - Build failures, missing provider configurations
 
 ### 3. **Module Structure and Interface Design**
 - **Ideal**: Clean, focused interfaces with specific properties
-```typescript
+```ts
 export interface ContentDeliveryModuleProps {
   environmentSuffix: string;
 }
 ```
 - **Model**: Over-engineered interfaces with unnecessary complexity
-```typescript
+```ts
 export interface PipelineModuleConfig {
   environmentSuffix: string;
   region: string;
@@ -62,11 +62,11 @@ export interface PipelineModuleConfig {
 
 ### 5. **EC2 Instance Configuration**
 - **Ideal**: Complete EC2 instance setup with proper IAM instance profile
-```typescript
+```ts
 iamInstanceProfile: instanceProfile.name,
 ```
 - **Model**: Incomplete EC2 configuration with object-style profile reference
-```typescript
+```ts
 iamInstanceProfile: {
   // incomplete configuration
 }
@@ -103,7 +103,7 @@ iamInstanceProfile: {
 
 ### 10. **Resource Naming Consistency**
 - **Ideal**: Consistent kebab-case naming with environment suffixes
-```typescript
+```ts
 bucket: `edu-content-${environmentSuffix}`,
 ```
 - **Model**: Inconsistent naming patterns

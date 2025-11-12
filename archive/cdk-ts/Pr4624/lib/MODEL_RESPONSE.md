@@ -147,7 +147,7 @@ monitoring-dashboard/
 
 ### 4. Monitoring Configuration (lib/config/monitoring-config.ts)
 
-```typescript
+```ts
 export interface MonitoringConfig {
   // Alarm thresholds
   alarms: {
@@ -227,7 +227,7 @@ export const defaultConfig: MonitoringConfig = {
 
 ### 5. Main Application (bin/app.ts)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -258,7 +258,7 @@ app.synth();
 
 ### 6. Main Stack (lib/stacks/monitoring-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DashboardConstruct } from '../constructs/dashboard-construct';
@@ -430,7 +430,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ### 7. Dashboard Construct (lib/constructs/dashboard-construct.ts)
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as cw from 'aws-cdk-lib/aws-cloudwatch';
 import * as cdk from 'aws-cdk-lib';
@@ -723,7 +723,7 @@ export class DashboardConstruct extends Construct {
 
 ### 8. Alarms Construct (lib/constructs/alarms-construct.ts)
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as cw from 'aws-cdk-lib/aws-cloudwatch';
 import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -981,7 +981,7 @@ export class AlarmsConstruct extends Construct {
 
 ### 9. Alerting Construct (lib/constructs/alerting-construct.ts)
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as sns from 'aws-cdk-lib/aws-sns';
 import * as sns_subscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
@@ -1036,7 +1036,7 @@ export class AlertingConstruct extends Construct {
 
 ### 10. Audit Construct (lib/constructs/audit-construct.ts)
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as cdk from 'aws-cdk-lib';

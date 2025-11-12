@@ -813,7 +813,7 @@ provider "aws" {
 
 ## File: test/terraform.unit.test.ts
 
-```typescript
+```ts
 import { describe, it, expect } from '@jest/globals';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -1060,7 +1060,7 @@ describe('Terraform Configuration Unit Tests', () => {
 
 ## File: test/terraform.int.test.ts
 
-```typescript
+```ts
 import { describe, it, expect, beforeAll, afterAll } from '@jest/globals';
 import { execSync } from 'child_process';
 import * as path from 'path';

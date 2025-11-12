@@ -2,7 +2,7 @@ I'll help you create a secure AWS infrastructure using CDK for Terraform (TypeSc
 
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
@@ -518,7 +518,7 @@ export class StorageModule extends Construct {
 
 ## tapstack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

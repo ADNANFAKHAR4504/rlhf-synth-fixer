@@ -5,7 +5,7 @@ I'll create a multi-environment AWS infrastructure using CDK TypeScript that ens
 First, let's create an environment configuration system:
 
 **lib/environment-config.ts**
-```typescript
+```ts
 export interface EnvironmentConfig {
   environmentName: string;
   lambdaMemorySize: number;
@@ -72,7 +72,7 @@ export class EnvironmentConfigs {
 ## Lambda Stack
 
 **lib/lambda-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -191,7 +191,7 @@ export class LambdaStack extends cdk.Stack {
 ## API Gateway Stack
 
 **lib/api-gateway-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -322,7 +322,7 @@ export class ApiGatewayStack extends cdk.Stack {
 ## S3 Stack
 
 **lib/s3-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -427,7 +427,7 @@ export class S3Stack extends cdk.Stack {
 ## Validation Stack
 
 **lib/validation-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -561,7 +561,7 @@ export class ValidationStack extends cdk.Stack {
 ## Updated Main Stack Integration
 
 **lib/tap-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { LambdaStack } from './lambda-stack';

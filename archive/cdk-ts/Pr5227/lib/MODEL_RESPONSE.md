@@ -36,7 +36,7 @@ I'll help you build a complete serverless payment event processing pipeline usin
 
 ## Updated `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

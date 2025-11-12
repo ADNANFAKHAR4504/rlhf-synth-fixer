@@ -14,7 +14,7 @@ This implementation creates a complete containerized microservices architecture 
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -125,7 +125,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/network-stack.ts
 
-```typescript
+```ts
 /**
  * network-stack.ts
  *
@@ -338,7 +338,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## File: lib/ecr-stack.ts
 
-```typescript
+```ts
 /**
  * ecr-stack.ts
  *
@@ -451,7 +451,7 @@ export class EcrStack extends pulumi.ComponentResource {
 
 ## File: lib/secrets-stack.ts
 
-```typescript
+```ts
 /**
  * secrets-stack.ts
  *
@@ -530,7 +530,7 @@ export class SecretsStack extends pulumi.ComponentResource {
 
 ## File: lib/ecs-stack.ts
 
-```typescript
+```ts
 /**
  * ecs-stack.ts
  *
@@ -1176,7 +1176,7 @@ export class EcsStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the ECS Fargate microservices infrastructure.
  *

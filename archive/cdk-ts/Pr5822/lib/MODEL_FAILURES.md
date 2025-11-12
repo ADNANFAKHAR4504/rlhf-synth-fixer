@@ -56,7 +56,7 @@ use `pointInTimeRecoverySpecification` instead
 
 **Solution Applied**:
 - Changed from `pointInTimeRecovery: true` to:
-  ```typescript
+  ```ts
   pointInTimeRecoverySpecification: {
     pointInTimeRecoveryEnabled: true,
   }

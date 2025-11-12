@@ -36,7 +36,7 @@ This document analyzes the discrepancies between the model-generated infrastruct
 
 **What the model generated:**
 
-```typescript
+```ts
 // MODEL_RESPONSE Line 320-324
 const instance = new ec2.Instance(this, 'WebAppInstance', {
   vpc,
@@ -72,7 +72,7 @@ const instance = new ec2.Instance(this, 'WebAppInstance', {
 
 **What the model generated:**
 
-```typescript
+```ts
 // MODEL_RESPONSE Lines 286-292
 ec2Role.addToPolicy(
   new iam.PolicyStatement({
@@ -91,7 +91,7 @@ ec2Role.addToPolicy(
 
 **What was required:**
 
-```typescript
+```ts
 // IDEAL_RESPONSE Lines 181-193
 ec2Role.addToPolicy(
   new iam.PolicyStatement({
@@ -116,7 +116,7 @@ ec2Role.addToPolicy(
 
 **What the model generated:**
 
-```typescript
+```ts
 // MODEL_RESPONSE Lines 205-211, 214-220
 const publicSubnet1 = new ec2.Subnet(this, 'PublicSubnet1', {
   vpc,
@@ -135,7 +135,7 @@ const publicSubnet1 = new ec2.Subnet(this, 'PublicSubnet1', {
 
 **What was required:**
 
-```typescript
+```ts
 // IDEAL_RESPONSE Lines 74-79
 const publicSubnet1 = new ec2.PublicSubnet(this, 'PublicSubnet1', {
   vpcId: vpc.vpcId,
@@ -178,7 +178,7 @@ const publicSubnet1 = new ec2.PublicSubnet(this, 'PublicSubnet1', {
 
 **What the model generated:**
 
-```typescript
+```ts
 // MODEL_RESPONSE Lines 367-368, 369
 deletionProtection: true,  //  Prevents stack deletion
 enablePerformanceInsights: true,  //  Not available on t3.micro
@@ -192,7 +192,7 @@ enablePerformanceInsights: true,  //  Not available on t3.micro
 
 **What was required:**
 
-```typescript
+```ts
 // IDEAL_RESPONSE Lines 258-259
 deletionProtection: false,
 enablePerformanceInsights: false,
@@ -272,7 +272,7 @@ removalPolicy: cdk.RemovalPolicy.DESTROY,
 
 **What was required:**
 
-```typescript
+```ts
 // IDEAL_RESPONSE Line 275
 database.secret!.grantRead(ec2Role);
 ```

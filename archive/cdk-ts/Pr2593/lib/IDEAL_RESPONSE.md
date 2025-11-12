@@ -1,6 +1,6 @@
 Here's the comprehensive TypeScript CDK solution that creates a secure, serverless e-commerce infrastructure with proper environment suffix support and all requirements met:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

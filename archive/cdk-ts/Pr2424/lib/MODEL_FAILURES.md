@@ -25,12 +25,12 @@ The MODEL_RESPONSE3.md provided a comprehensive infrastructure implementation th
 ### 2. **TypeScript Compilation Errors**
 
 **Issue**: The CloudWatch CPU alarm used an invalid method:
-```typescript
+```ts
 metric: instance.metricCPUUtilization(),  // This method doesn't exist
 ```
 
 **Fix Applied**: Replaced with manual CloudWatch metric construction:
-```typescript
+```ts
 metric: new cloudwatch.Metric({
   namespace: 'AWS/EC2',
   metricName: 'CPUUtilization',
@@ -43,7 +43,7 @@ metric: new cloudwatch.Metric({
 ### 3. **Unused Variable**
 
 **Issue**: The `ec2InstanceProfile` variable was declared but never used:
-```typescript
+```ts
 const ec2InstanceProfile = new iam.InstanceProfile(this, 'Ec2InstanceProfile', {
   role: ec2Role,
 });

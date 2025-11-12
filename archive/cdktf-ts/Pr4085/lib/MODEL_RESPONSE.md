@@ -25,7 +25,7 @@ I'll help you create a secure and automated AWS environment using CDKTF in TypeS
 
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import * as aws from "@cdktf/provider-aws";
 import { TerraformOutput } from "cdktf";
@@ -1178,7 +1178,7 @@ export class CloudFrontWafModule extends BaseModule {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import * as aws from "@cdktf/provider-aws";
@@ -1439,7 +1439,7 @@ app.synth();
 
 ## Unit Tests (tap-stack.test.ts)
 
-```typescript
+```ts
 import { Testing } from "cdktf";
 import { TapStack } from "./tap-stack";
 import * as modules from "./modules";

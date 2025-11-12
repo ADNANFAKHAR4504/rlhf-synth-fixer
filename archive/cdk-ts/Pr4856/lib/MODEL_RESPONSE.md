@@ -15,7 +15,7 @@ This should all be in one stack file with no explanations or comments, just code
 
 Let's start building the stack:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -298,7 +298,7 @@ Let me make a few more enhancements to ensure we fully meet the requirements:
 
 Let me update the stack:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -1348,7 +1348,7 @@ export class NewsPersonalizationStack extends cdk.Stack {
 ### Answer 
 ---
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';

@@ -7,7 +7,7 @@
 **Model Response (Failed):**
 Created integration responses before the method responses existed, causing deployment failure: `"No method response exists for method."`
 
-```typescript
+```ts
 // modules.ts - MODEL_RESPONSE
 // WRONG: Creating integration response without ensuring method response exists
 new aws.apiGatewayIntegrationResponse.ApiGatewayIntegrationResponse(this, `integration-response-options-${integration.path}-${idx}`, {
@@ -24,7 +24,7 @@ new aws.apiGatewayIntegrationResponse.ApiGatewayIntegrationResponse(this, `integ
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // modules.ts - IDEAL_RESPONSE
 // CORRECT: Explicit dependency chain with proper ordering
 // 1. Create method first
@@ -88,7 +88,7 @@ const integrationResponse = new ApiGatewayIntegrationResponse(this, `${resourceN
 **Model Response (Failed):**
 Failed to track dependencies for deployment, resulting in: `"No integration defined for method"`
 
-```typescript
+```ts
 // modules.ts - MODEL_RESPONSE
 // WRONG: No dependency tracking, immediate deployment creation
 const deployment = new aws.apiGatewayDeployment.ApiGatewayDeployment(this, 'deployment', {
@@ -100,7 +100,7 @@ const deployment = new aws.apiGatewayDeployment.ApiGatewayDeployment(this, 'depl
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // modules.ts - IDEAL_RESPONSE
 // CORRECT: Comprehensive dependency tracking system
 export class ApiGatewayConstruct extends Construct {
@@ -150,14 +150,14 @@ const deployment = new ApiGatewayDeployment(this, 'api-deployment', {
 **Model Response (Failed):**
 Used deprecated `name` attribute causing warnings that could lead to future failures.
 
-```typescript
+```ts
 // tap-stack.ts - MODEL_RESPONSE (Line 86)
 // WRONG: Using deprecated attribute
 "value": "https://${aws_api_gateway_rest_api.api-gateway_api_57BFA6D4.id}.execute-api.${data.aws_region.current-region (current-region).name}.amazonaws.com/${aws_api_gateway_stage.api-stage.stage_name}"
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // tap-stack.ts - IDEAL_RESPONSE
 // CORRECT: Using DataAwsRegion with proper attribute access
 const currentRegion = new DataAwsRegion(this, 'current-region');
@@ -175,7 +175,7 @@ new TerraformOutput(this, 'api-gateway-url', {
 **Model Response (Failed):**
 Used problematic inline code override pattern and TerraformAsset incorrectly.
 
-```typescript
+```ts
 // modules.ts - MODEL_RESPONSE
 // WRONG: Creating fake assets and override patterns
 const asset = new TerraformAsset(this, 'lambda-asset', {
@@ -195,7 +195,7 @@ this.lambda = inlineCodeOverride;
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // modules.ts - IDEAL_RESPONSE
 // CORRECT: Using DataArchiveFile for proper inline code packaging
 const lambdaCode = `
@@ -236,13 +236,13 @@ this.lambda = new LambdaFunction(this, 'function', {
 **Model Response (Failed):**
 Failed to configure Archive provider, leading to inability to properly package Lambda code.
 
-```typescript
+```ts
 // tap-stack.ts - MODEL_RESPONSE
 // MISSING: No Archive provider configured
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // tap-stack.ts - IDEAL_RESPONSE
 import { ArchiveProvider } from '@cdktf/provider-archive/lib/provider';
 
@@ -266,7 +266,7 @@ export class TapStack extends TerraformStack {
 Missing S3 backend configuration and state locking mechanism.
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // tap-stack.ts - IDEAL_RESPONSE
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
@@ -287,7 +287,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 **Model Response (Failed):**
 Used complex resource ID generation that could cause conflicts and made debugging difficult.
 
-```typescript
+```ts
 // MODEL_RESPONSE
 // Complex, error-prone resource naming
 `resource-${currentPath.replace(/[^a-zA-Z0-9]/g, '-')}`
@@ -296,7 +296,7 @@ Used complex resource ID generation that could cause conflicts and made debuggin
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // IDEAL_RESPONSE
 // Clean, semantic resource naming
 'products-resource'
@@ -312,13 +312,13 @@ Used complex resource ID generation that could cause conflicts and made debuggin
 **Model Response (Failed):**
 Hardcoded region in IAM policy ARNs and overly broad permissions.
 
-```typescript
+```ts
 // MODEL_RESPONSE
 Resource: `arn:aws:ssm:${stackConfig.region}:*:parameter/${stackConfig.projectName}/${stackConfig.environment}/*`
 ```
 
 **Actual Fix (IDEAL_RESPONSE):**
-```typescript
+```ts
 // IDEAL_RESPONSE
 // Uses data sources for dynamic resolution
 Resource: `arn:aws:ssm:${currentRegion.name}:${current.accountId}:parameter/ecommerce/${environmentSuffix}/tables/*`

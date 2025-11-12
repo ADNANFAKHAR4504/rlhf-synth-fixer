@@ -103,7 +103,7 @@ The implementation should:
 
 ## Code Structure
 
-```typescript
+```ts
 // main.ts - Application entry point
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';

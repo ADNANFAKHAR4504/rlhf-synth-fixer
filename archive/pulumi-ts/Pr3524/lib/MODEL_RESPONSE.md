@@ -1,7 +1,7 @@
 I'll create a comprehensive Pulumi TypeScript infrastructure for your software distribution platform. Here's the complete implementation:
 
 ## lib/tap-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { StorageStack } from './storage-stack';
@@ -89,7 +89,7 @@ export class TapStack extends pulumi.ComponentResource {
 ```
 
 ## lib/storage-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -211,7 +211,7 @@ export class StorageStack extends pulumi.ComponentResource {
 ```
 
 ## lib/database-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -277,7 +277,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
 ```
 
 ## lib/lambda-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -567,7 +567,7 @@ exports.handler = async (event) => {
 ```
 
 ## lib/distribution-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -699,7 +699,7 @@ MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAr5bm7rC1FDrX8G6P9yKu
 ```
 
 ## lib/api-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -852,7 +852,7 @@ export class ApiStack extends pulumi.ComponentResource {
 ```
 
 ## lib/monitoring-stack.ts
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 

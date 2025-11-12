@@ -105,7 +105,7 @@ Pattern: .int.test.ts$ - 0 matches
 
 **IDEAL_RESPONSE Fix**: Enhanced integration tests with robust fallback logic and graceful handling of transient states:
 
-```typescript
+```ts
 // Fallback pattern for NAT Gateway queries
 try {
   if (natGatewayIds.length > 0) {

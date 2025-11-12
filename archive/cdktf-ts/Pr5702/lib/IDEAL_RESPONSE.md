@@ -16,7 +16,7 @@ The complete implementation includes all AWS services as requested with proper p
 
 ### Code Structure
 
-```typescript
+```ts
 // Critical imports including Random provider
 import { Password } from '@cdktf/provider-random/lib/password';
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
@@ -134,7 +134,7 @@ This implementation creates a production-ready containerized web application inf
 - **Result**: Deployment failure
 
 **After**: 
-```typescript
+```ts
 import { Password } from '@cdktf/provider-random/lib/password';
 const dbPassword = new Password(this, 'db-password', {...});
 ```

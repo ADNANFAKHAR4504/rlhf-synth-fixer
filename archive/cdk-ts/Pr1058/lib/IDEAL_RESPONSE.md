@@ -2,7 +2,7 @@ I'll help you create a secure AWS infrastructure using CDK TypeScript with the l
 
 ## lib/networking-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -84,7 +84,7 @@ export class NetworkingStack extends cdk.Stack {
 
 ## lib/security-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -179,7 +179,7 @@ export class SecurityStack extends cdk.Stack {
 
 ## lib/storage-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -273,7 +273,7 @@ export class StorageStack extends cdk.Stack {
 
 ## lib/database-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -367,7 +367,7 @@ export class DatabaseStack extends cdk.Stack {
 
 ## lib/monitoring-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatch_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -467,7 +467,7 @@ export class MonitoringStack extends cdk.Stack {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkingStack } from './networking-stack';

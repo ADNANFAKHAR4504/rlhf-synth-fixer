@@ -13,7 +13,7 @@ The ideal response demonstrates superior code organization, consistency, and adh
 **Location:** `lib/modules.ts` line 4
 
 **Issue:**
-```typescript
+```ts
 // Model Response
 import { Fn, TerraformOutput } from 'cdktf';
 
@@ -40,7 +40,7 @@ import { Fn } from 'cdktf';
 **Location:** Throughout both files
 
 **Issue - Object Literal Formatting:**
-```typescript
+```ts
 // Model Response (Inconsistent)
 tags: {
   Name: `${id}-vpc`,
@@ -67,7 +67,7 @@ tags: {
 - **Professional Standards:** Violates industry best practices for TypeScript
 
 **Examples of Inconsistency:**
-```typescript
+```ts
 // Line 38 - No trailing comma
 tags: {
   Name: `${id}-vpc`,
@@ -90,7 +90,7 @@ tags: {
 **Location:** Throughout both files
 
 **Issue:**
-```typescript
+```ts
 // Model Response (No spaces)
 Statement: [{
   Action: 'sts:AssumeRole',
@@ -131,7 +131,7 @@ Statement: [
 **Location:** `NodeGroupConfig` interface (line ~468 in modules.ts)
 
 **Issue:**
-```typescript
+```ts
 // Model Response
 export interface NodeGroupConfig {
   // ... other properties
@@ -167,7 +167,7 @@ export interface NodeGroupConfig {
 **Location:** Both `lib/modules.ts` and `lib/tap-stack.ts`
 
 **Issue:**
-```typescript
+```ts
 // Model Response has COMPLETE duplication
 // tap-stack.ts contains ALL the same constructs as modules.ts
 // Lines 1-600+ are identical between both files
@@ -188,7 +188,7 @@ export interface NodeGroupConfig {
 - **Module System:** Completely defeats the purpose of having a separate modules file
 
 **Correct Structure (Ideal Response):**
-```typescript
+```ts
 // modules.ts - Define constructs
 export class VpcConstruct { ... }
 export class SecurityGroupConstruct { ... }
@@ -205,7 +205,7 @@ import { VpcConstruct, SecurityGroupConstruct } from './modules';
 **Location:** Throughout configuration objects
 
 **Issue:**
-```typescript
+```ts
 // Model Response - Inconsistent ordering
 this.nodeGroup = new aws.eksNodeGroup.EksNodeGroup(this, 'node-group', {
   clusterName: config.clusterName,
@@ -313,7 +313,7 @@ lib/
 
 ### 3. **Complete Type Definitions**
 
-```typescript
+```ts
 // Ideal includes all properties
 export interface NodeGroupConfig {
   clusterName: string;

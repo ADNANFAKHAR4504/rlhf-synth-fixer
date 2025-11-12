@@ -4,7 +4,7 @@ This implementation provides a production-ready VPC infrastructure with complete
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput, Fn } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -343,7 +343,7 @@ export class TapStack extends TerraformStack {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import { App } from "cdktf";
 import { TapStack } from "../lib/tap-stack";

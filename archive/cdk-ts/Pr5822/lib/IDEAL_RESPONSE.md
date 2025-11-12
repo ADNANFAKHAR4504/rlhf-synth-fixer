@@ -2,7 +2,7 @@
 
 ## lib/global-resources-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
@@ -54,7 +54,7 @@ export class GlobalResourcesStack extends cdk.Stack {
 
 ## lib/multi-region-dr-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -445,7 +445,7 @@ export class MultiRegionDRStack extends cdk.Stack {
 
 ## lib/vpc-peering-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';

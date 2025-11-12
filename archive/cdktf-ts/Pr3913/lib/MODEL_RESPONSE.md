@@ -61,7 +61,7 @@ I'll create a comprehensive security-focused AWS infrastructure using CDKTF in T
 
 ## `modules.ts`
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformOutput } from 'cdktf';
@@ -895,7 +895,7 @@ export class CloudTrailModule extends Construct {
 
 ## `tap-stack.ts`
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import * as aws from '@cdktf/provider-aws';
@@ -1044,7 +1044,7 @@ app.synth();
 
 ## Unit Tests Example
 
-```typescript
+```ts
 // __tests__/security-compliance.test.ts
 import { Testing } from 'cdktf';
 import { TapStack } from '../tap-stack';

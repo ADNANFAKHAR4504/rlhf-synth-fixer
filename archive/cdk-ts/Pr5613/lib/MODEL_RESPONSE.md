@@ -50,7 +50,7 @@ Let me start coding...
 ### Answer 
 ---
 
-```typescript
+```ts
 // main.ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from './tapstack';
@@ -68,7 +68,7 @@ new TapStack(app, 'TapCICDPipelineStack', {
 app.synth();
 ```
 
-```typescript
+```ts
 // tapstack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

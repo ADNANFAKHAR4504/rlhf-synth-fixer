@@ -1,6 +1,6 @@
 Here's a complete TypeScript CDK file that provisions a secure and scalable infrastructure with all the requested components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';

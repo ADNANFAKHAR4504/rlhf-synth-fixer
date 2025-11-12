@@ -17,7 +17,7 @@ The initial infrastructure implementation had several critical issues that preve
 **Problem**: The initial code was missing the import for SNS subscriptions module, preventing Lambda functions from subscribing to SNS topics.
 
 **Fix Applied**:
-```typescript
+```ts
 import * as snsSubscriptions from 'aws-cdk-lib/aws-sns-subscriptions';
 ```
 

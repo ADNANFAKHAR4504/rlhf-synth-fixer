@@ -148,7 +148,7 @@ module.exports = {
 ### 2. Main Application Entry Point
 
 **bin/app.ts**
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -187,7 +187,7 @@ app.synth();
 ### 3. Networking Construct
 
 **lib/constructs/networking.ts**
-```typescript
+```ts
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
@@ -233,7 +233,7 @@ export class Networking extends Construct {
 ### 4. Security Construct
 
 **lib/constructs/security.ts**
-```typescript
+```ts
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
 
@@ -300,7 +300,7 @@ export class Security extends Construct {
 ### 5. Compute Construct
 
 **lib/constructs/compute.ts**
-```typescript
+```ts
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -380,7 +380,7 @@ export class Compute extends Construct {
 ### 6. Load Balancer Construct
 
 **lib/constructs/load-balancer.ts**
-```typescript
+```ts
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -457,7 +457,7 @@ export class LoadBalancer extends Construct {
 ### 7. Main Stack
 
 **lib/multi-region-web-app-stack.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Networking } from './constructs/networking';
@@ -530,7 +530,7 @@ export class MultiRegionWebAppStack extends cdk.Stack {
 ### 8. Networking Tests
 
 **test/unit/networking.test.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { Networking } from '../../lib/constructs/networking';
@@ -577,7 +577,7 @@ describe('Networking Construct', () => {
 ### 9. Security Tests
 
 **test/unit/security.test.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -647,7 +647,7 @@ describe('Security Construct', () => {
 ### 10. Compute Tests
 
 **test/unit/compute.test.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -717,7 +717,7 @@ describe('Compute Construct', () => {
 ### 11. Load Balancer Tests
 
 **test/unit/load-balancer.test.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
@@ -802,7 +802,7 @@ describe('LoadBalancer Construct', () => {
 ### 12. Stack Tests
 
 **test/unit/stack.test.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { MultiRegionWebAppStack } from '../../lib/multi-region-web-app-stack';
@@ -871,7 +871,7 @@ describe('MultiRegionWebAppStack', () => {
 ### 13. Integration Test
 
 **test/integration/deployment.test.ts**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { MultiRegionWebAppStack } from '../../lib/multi-region-web-app-stack';

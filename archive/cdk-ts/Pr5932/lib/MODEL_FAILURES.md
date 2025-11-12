@@ -31,7 +31,7 @@ Create a CDK program to establish a single-region AWS environment with advanced 
 **Model Error**: Would have used invalid value of 300 seconds (5 minutes).
 
 **Correction Applied**:
-```typescript
+```ts
 // lib/tap-stack.ts:339
 maxAggregationInterval: 600, // 10 minutes (valid values: 60 or 600 only)
 ```
@@ -50,7 +50,7 @@ maxAggregationInterval: 600, // 10 minutes (valid values: 60 or 600 only)
 **Current Status**: Code uses deprecated properties (functional but generates warnings).
 
 **Future Enhancement**:
-```typescript
+```ts
 // Should use:
 ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16')
 pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true }
@@ -80,7 +80,7 @@ pointInTimeRecoverySpecification: { pointInTimeRecoveryEnabled: true }
 **Issue**: Tests must work across dev/stg/qa/prod environments without hardcoding.
 
 **Corrections Applied**:
-```typescript
+```ts
 // Environment-independent configuration
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const region = process.env.AWS_REGION || 'ap-northeast-1';
@@ -102,7 +102,7 @@ const stackName = `TapStack${environmentSuffix}`;
 **Issue**: Initial integration tests used `ScanCommand` which is eventually consistent, causing intermittent test failures.
 
 **Correction Applied**:
-```typescript
+```ts
 // Changed from Scan to GetItem with ConsistentRead
 const getResponse = await dynamodbClient.send(
   new GetItemCommand({
@@ -121,7 +121,7 @@ const getResponse = await dynamodbClient.send(
 **Issue**: Requirement specified ARM-based Graviton2 processors for cost optimization.
 
 **Implementation**:
-```typescript
+```ts
 architecture: lambda.Architecture.ARM_64,
 ```
 
@@ -138,7 +138,7 @@ architecture: lambda.Architecture.ARM_64,
 **Issue**: Must ensure strict isolation between production and development VPCs.
 
 **Implementation**:
-```typescript
+```ts
 // Separate route tables for isolation
 const prodRouteTable = new ec2.CfnTransitGatewayRouteTable(this, 'ProdRouteTable', {
   transitGatewayId: tgw.ref,
@@ -161,7 +161,7 @@ defaultRouteTablePropagation: 'disable',
 **Issue**: S3 bucket names must be globally unique and include region codes.
 
 **Implementation**:
-```typescript
+```ts
 bucketName: `${prefix}-flowlogs-${region}-${this.account}`,
 bucketName: `${prefix}-data-${region}-${this.account}`,
 bucketName: `${prefix}-backup-${region}-${this.account}`,
@@ -178,7 +178,7 @@ bucketName: `${prefix}-backup-${region}-${this.account}`,
 **Issue**: Health checks must use HTTPS with 30-second intervals.
 
 **Implementation**:
-```typescript
+```ts
 type: route53.HealthCheckType.HTTPS,
 port: 443,
 requestInterval: cdk.Duration.seconds(30),

@@ -96,7 +96,7 @@ Updated test expectations to match the corrected template structure:
 
 **Before:**
 
-```typescript
+```ts
 expect(stage.Properties.ThrottleSettings).toBeDefined();
 expect(stage.Properties.ThrottleSettings.RateLimit).toEqual({
   Ref: 'ApiThrottleRateLimit',
@@ -105,7 +105,7 @@ expect(stage.Properties.ThrottleSettings.RateLimit).toEqual({
 
 **After:**
 
-```typescript
+```ts
 expect(stage.Properties.MethodSettings).toBeDefined();
 expect(stage.Properties.MethodSettings[0].ThrottlingRateLimit).toEqual({
   Ref: 'ApiThrottleRateLimit',
@@ -149,7 +149,7 @@ RangeError: Maximum call stack size exceeded
 
 **Step 1:** Created helper function to gracefully skip tests when stack is missing:
 
-```typescript
+```ts
 const skipIfStackMissing = (): boolean => {
   if (!stackExists) {
     console.warn('⚠️  Skipping test - CloudFormation stack not deployed');
@@ -161,7 +161,7 @@ const skipIfStackMissing = (): boolean => {
 
 **Step 2:** Fixed recursion bug - ensured function checks `!stackExists` variable, not itself:
 
-```typescript
+```ts
 // WRONG (infinite recursion):
 if (skipIfStackMissing()) { ... }
 
@@ -171,7 +171,7 @@ if (!stackExists) { ... }
 
 **Step 3:** Applied skip logic to all 46 integration tests:
 
-```typescript
+```ts
 test('should have VotesTable deployed', () => {
   if (skipIfStackMissing()) {
     return;
@@ -480,7 +480,7 @@ The bucket can still be referenced using `{ Ref: "ResultsBucket" }` in:
 - `deploy-test-cleanup.sh` - Deployment script (works with any stack name now)
 
 **Test Updated:**
-```typescript
+```ts
 test('S3 bucket should use auto-generated name', () => {
   const bucket = template.Resources.ResultsBucket;
   // BucketName should not be specified to allow CloudFormation auto-generation

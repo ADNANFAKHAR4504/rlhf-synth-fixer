@@ -11,7 +11,7 @@ The infrastructure consists of three main modules:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -156,7 +156,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/content-delivery-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -410,7 +410,7 @@ export class ContentDeliveryModule extends Construct {
 
 ## File: lib/pipeline-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { CodecommitRepository } from '@cdktf/provider-aws/lib/codecommit-repository';
 import { CodebuildProject } from '@cdktf/provider-aws/lib/codebuild-project';
@@ -988,7 +988,7 @@ chown ec2-user:ec2-user /var/www/html`,
 
 ## File: lib/monitoring-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';

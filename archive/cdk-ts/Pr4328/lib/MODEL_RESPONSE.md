@@ -14,7 +14,7 @@ This implementation provides a FERPA-compliant serverless API infrastructure wit
 
 ## File 1: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import 'source-map-support/register';
@@ -39,7 +39,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 
 ## File 2: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -397,7 +397,7 @@ export class TapStack extends cdk.Stack {
 
 ## File 3: lib/lambda/index.ts
 
-```typescript
+```ts
 import {
   DynamoDBClient,
   PutItemCommand,

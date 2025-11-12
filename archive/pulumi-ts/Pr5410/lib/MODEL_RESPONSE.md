@@ -15,7 +15,7 @@ This implementation provides a complete production-ready infrastructure for depl
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 import { NetworkStack } from './network-stack';
@@ -132,7 +132,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/network-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -295,7 +295,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## File: lib/security-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -423,7 +423,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
 ## File: lib/database-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -529,7 +529,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
 
 ## File: lib/load-balancer-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -647,7 +647,7 @@ export class LoadBalancerStack extends pulumi.ComponentResource {
 
 ## File: lib/ecs-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -884,7 +884,7 @@ export class EcsStack extends pulumi.ComponentResource {
 
 ## File: lib/monitoring-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -971,7 +971,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 
 ## File: lib/dns-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -1027,7 +1027,7 @@ export class DnsStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 
@@ -1067,7 +1067,7 @@ export const ecsClusterName = stack.ecsClusterName;
 
 ## File: test/payment-platform.test.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 
 pulumi.runtime.setMocks({

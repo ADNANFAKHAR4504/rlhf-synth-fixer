@@ -35,7 +35,7 @@ I'll structure the code as follows:
 11. Define the main function to initialize the stack
 
 Let's write the code:
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -379,7 +379,7 @@ new TapStack(app, 'TapStack', {
 
 I noticed that I've included import statements for `personalize` and `comprehend` but I haven't actually implemented those services in the stack. Let me add those implementations:
 
-```typescript
+```ts
 // Adding Amazon Personalize components to the TapStack constructor
 
 // Personalize Dataset Group for meal recommendations
@@ -1013,7 +1013,7 @@ new TapStack(app, 'TapStack', {
 
 # Meal Planning System - AWS CDK Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

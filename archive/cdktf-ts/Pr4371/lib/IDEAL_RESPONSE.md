@@ -1,6 +1,6 @@
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Fn } from 'cdktf';
 
@@ -1823,7 +1823,7 @@ export function calculateSubnetCidr(
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

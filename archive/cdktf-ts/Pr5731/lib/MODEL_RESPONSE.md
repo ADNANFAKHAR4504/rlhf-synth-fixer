@@ -52,7 +52,7 @@ I'll design a comprehensive CDKTF application that provisions three isolated AWS
 
 ## `lib/modules.ts`
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import * as aws from "@cdktf/provider-aws";
 import { TerraformOutput } from "cdktf";
@@ -712,7 +712,7 @@ export class DNSModule extends Construct {
 
 ## `lib/tap-stack.ts`
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput, S3Backend } from "cdktf";
 import * as aws from "@cdktf/provider-aws";

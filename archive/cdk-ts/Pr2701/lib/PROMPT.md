@@ -5,7 +5,7 @@ I need help updating an existing AWS CDK TypeScript stack to implement a complet
 ## Current Code Structure
 I have an existing `tap-stack.ts` file with a basic CDK stack setup:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

@@ -24,7 +24,7 @@ The initial MODEL_RESPONSE provided a basic working implementation but failed to
 **Security Risk**: Using default AWS-managed encryption (AES256) instead of customer-managed KMS keys violates compliance requirements and security best practices for financial services.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/backup-stack.ts, line 28-30
 serverSideEncryptionConfiguration: {
   rule: {
@@ -36,7 +36,7 @@ serverSideEncryptionConfiguration: {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Create dedicated KMS stack with customer-managed key
 export class KMSStack extends pulumi.ComponentResource {
   public readonly keyId: pulumi.Output<string>;
@@ -83,7 +83,7 @@ serverSideEncryptionConfiguration: {
 **Security Risk**: Database password hardcoded in infrastructure code violates security best practices and exposes credentials in version control.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/rds-stack.ts, line 36
 const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
   // ...
@@ -94,7 +94,7 @@ const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Generate random password
 const dbPassword = new random.RandomPassword(`db-password-${args.environmentSuffix}`, {
   length: 16,
@@ -141,7 +141,7 @@ const credentials = secrets_client.get_secret_value(SecretId=secret_arn)
 **Security Risk**: Using managed policy `AmazonRDSFullAccess` grants excessive permissions, violating least privilege principle.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/backup-stack.ts, lines 66-69
 new aws.iam.RolePolicyAttachment(`lambda-rds-access-${args.environmentSuffix}`, {
   role: lambdaRole.name,
@@ -150,7 +150,7 @@ new aws.iam.RolePolicyAttachment(`lambda-rds-access-${args.environmentSuffix}`, 
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Custom policy with specific permissions
 const lambdaPolicy = new aws.iam.Policy(`backup-lambda-policy-${args.environmentSuffix}`, {
   description: 'Least privilege policy for backup Lambda',
@@ -266,7 +266,7 @@ except Exception as e:
 **Observability Risk**: No centralized visibility into backup status, recovery metrics, or system health.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/monitoring-stack.ts - Dashboard completely missing
 export class MonitoringStack extends pulumi.ComponentResource {
   constructor(name: string, args: MonitoringStackArgs, opts?: pulumi.ComponentResourceOptions) {
@@ -279,7 +279,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const dashboard = new aws.cloudwatch.Dashboard(`backup-dashboard-${args.environmentSuffix}`, {
   dashboardName: `backup-dashboard-${args.environmentSuffix}`,
   dashboardBody: pulumi.all([/* ... */]).apply((/* ... */) => JSON.stringify({
@@ -339,7 +339,7 @@ const dashboard = new aws.cloudwatch.Dashboard(`backup-dashboard-${args.environm
 **Reliability Risk**: No alerting when recovery time exceeds 4-hour RTO threshold.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/monitoring-stack.ts - Only basic alarms present
 new aws.cloudwatch.MetricAlarm(`rds-backup-failed-${args.environmentSuffix}`, {
   metricName: 'BackupRetentionPeriod',  // Monitors backup retention
@@ -355,7 +355,7 @@ new aws.cloudwatch.MetricAlarm(`lambda-errors-${args.environmentSuffix}`, {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // RTO violation alarm monitoring Lambda duration
 new aws.cloudwatch.MetricAlarm(`lambda-rto-violation-${args.environmentSuffix}`, {
   comparisonOperator: 'GreaterThanThreshold',
@@ -461,7 +461,7 @@ def handler(event, context):
 **Cost Optimization**: Lambda traffic to AWS services goes through NAT Gateway, incurring unnecessary costs.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/vpc-stack.ts - Only creates VPC and subnets
 export class VPCStack extends pulumi.ComponentResource {
   constructor(name: string, args: VPCStackArgs, opts?: pulumi.ComponentResourceOptions) {
@@ -474,7 +474,7 @@ export class VPCStack extends pulumi.ComponentResource {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // S3 Gateway Endpoint (free)
 new aws.ec2.VpcEndpoint(`s3-endpoint-${args.environmentSuffix}`, {
   vpcId: vpc.id,
@@ -529,7 +529,7 @@ new aws.ec2.VpcEndpoint(`logs-endpoint-${args.environmentSuffix}`, {
 **Compliance Risk**: PROMPT requires backups every 6 hours, but RDS automated backups only run once daily by default.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/rds-stack.ts, line 39
 const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
   backupRetentionPeriod: 7,  // ✅ 7-day retention correct
@@ -541,7 +541,7 @@ const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
 **IDEAL_RESPONSE Fix**:
 While RDS automated backups run once daily, achieving 6-hour intervals requires:
 
-```typescript
+```ts
 // 1. Document the limitation in code comments
 // Note: RDS automated backups run once daily. For 6-hour RPO, combine:
 //   - Daily automated backups (for PITR)
@@ -594,7 +594,7 @@ def handler(event, context):
 **Operational Risk**: Hardcoded backup window doesn't allow flexibility for different deployment environments.
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/rds-stack.ts, line 40
 const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
   backupWindow: '03:00-04:00',  // ❌ Hardcoded, not configurable
@@ -603,7 +603,7 @@ const dbInstance = new aws.rds.Instance(`postgres-${args.environmentSuffix}`, {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // In lib/tap-stack.ts - Add parameters
 export interface TapStackArgs {
   environmentSuffix?: string;

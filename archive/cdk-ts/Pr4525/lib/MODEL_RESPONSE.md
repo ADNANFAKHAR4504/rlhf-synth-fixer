@@ -179,7 +179,7 @@ I'll create a comprehensive serverless application using AWS CDK in TypeScript w
 
 ### 4. **bin/tap.ts**
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -206,7 +206,7 @@ new TapStack(app, `ServerlessInfra-${environmentSuffix}`, {
 
 ### 5. **lib/tap-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { DynamoDBConstruct } from './constructs/dynamodb-construct';
@@ -286,7 +286,7 @@ export class TapStack extends cdk.Stack {
 
 ### 6. **lib/constructs/dynamodb-construct.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -353,7 +353,7 @@ export class DynamoDBConstruct extends Construct {
 
 ### 7. **lib/constructs/lambda-construct.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as sqs from 'aws-cdk-lib/aws-sqs';
@@ -446,7 +446,7 @@ export class LambdaConstruct extends Construct {
 
 ### 8. **lib/constructs/api-gateway-construct.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -601,7 +601,7 @@ export class ApiGatewayConstruct extends Construct {
 
 ### 9. **lib/constructs/monitoring-construct.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -838,7 +838,7 @@ export class MonitoringConstruct extends Construct {
 
 ### 10. **lambda/handler.ts**
 
-```typescript
+```ts
 import {
   APIGatewayProxyEvent,
   APIGatewayProxyResult,

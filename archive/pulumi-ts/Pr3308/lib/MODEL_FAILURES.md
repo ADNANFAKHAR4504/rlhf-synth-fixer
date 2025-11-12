@@ -8,13 +8,13 @@ This document outlines the key issues found in the original MODEL_RESPONSE.md im
 ### 1. VPC Subnet CIDR Conflicts
 
 **Issue:** The original code used conflicting CIDR blocks for subnets, causing deployment failures.
-```typescript
+```ts
 // Original problematic code
 cidrBlock: `10.5.${i * 2}.0/24`  // Results in 10.5.0.0/24, 10.5.2.0/24
 ```
 
 **Fix:** Adjusted CIDR allocation to avoid overlaps.
-```typescript
+```ts
 // Fixed code
 cidrBlock: `10.5.${i * 10}.0/24`  // Results in 10.5.0.0/24, 10.5.10.0/24
 ```
@@ -22,13 +22,13 @@ cidrBlock: `10.5.${i * 10}.0/24`  // Results in 10.5.0.0/24, 10.5.10.0/24
 ### 2. S3 Bucket Policy Syntax Error
 
 **Issue:** The S3 bucket policy had incorrect async handling causing malformed JSON policy.
-```typescript
+```ts
 // Original problematic code
 'AWS:SourceAccount': aws.getCallerIdentity().then(identity => identity.accountId)
 ```
 
 **Fix:** Properly resolved promises using pulumi.all().
-```typescript
+```ts
 // Fixed code
 policy: pulumi.all([staticBucket.arn, aws.getCallerIdentity()])
   .apply(([bucketArn, identity]) => JSON.stringify({
@@ -39,7 +39,7 @@ policy: pulumi.all([staticBucket.arn, aws.getCallerIdentity()])
 ### 3. Missing Environment Suffix Propagation
 
 **Issue:** Environment suffix wasn't properly passed from bin/tap.ts to the main stack.
-```typescript
+```ts
 // Original code
 new TapStack('pulumi-infra', {
   tags: defaultTags,
@@ -47,7 +47,7 @@ new TapStack('pulumi-infra', {
 ```
 
 **Fix:** Added environment suffix to stack instantiation.
-```typescript
+```ts
 // Fixed code
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
@@ -60,7 +60,7 @@ const stack = new TapStack('pulumi-infra', {
 **Issue:** Stack outputs weren't exported for use in integration tests.
 
 **Fix:** Added proper output exports.
-```typescript
+```ts
 export const vpcId = stack.vpcId;
 export const albDns = stack.albDns;
 export const bucketName = stack.bucketName;
@@ -77,7 +77,7 @@ export const bucketName = stack.bucketName;
 **Issue:** Resources lacked proper environment suffixes causing conflicts between deployments.
 
 **Fix:** Ensured all resource names include environment suffix:
-```typescript
+```ts
 `${name}-resource-${args.environmentSuffix}`
 ```
 
@@ -86,7 +86,7 @@ export const bucketName = stack.bucketName;
 **Issue:** Resources couldn't be destroyed cleanly during cleanup.
 
 **Fix:** Added forceDestroy flags to S3 buckets:
-```typescript
+```ts
 forceDestroy: true  // Allows bucket deletion even with objects
 ```
 
@@ -95,7 +95,7 @@ forceDestroy: true  // Allows bucket deletion even with objects
 **Issue:** EC2 instances lacked necessary permissions for CloudWatch and SSM.
 
 **Fix:** Added proper IAM role attachments:
-```typescript
+```ts
 new aws.iam.RolePolicyAttachment(`ssm-policy`, {
   role: instanceRole.name,
   policyArn: 'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
@@ -107,7 +107,7 @@ new aws.iam.RolePolicyAttachment(`ssm-policy`, {
 **Issue:** Target group health checks were too aggressive.
 
 **Fix:** Adjusted health check parameters:
-```typescript
+```ts
 healthCheck: {
   healthyThreshold: 2,
   unhealthyThreshold: 3,
@@ -121,7 +121,7 @@ healthCheck: {
 **Issue:** CloudWatch alarms weren't properly configured with SNS topics.
 
 **Fix:** Created SNS topic and attached to all alarms:
-```typescript
+```ts
 alarmActions: [alarmTopic.arn],
 okActions: [alarmTopic.arn],
 ```

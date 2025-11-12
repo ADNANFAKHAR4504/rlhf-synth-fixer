@@ -11,7 +11,7 @@ This document details the critical infrastructure issues identified and resolved
 **Error:** `Object literal may only specify known properties, and 'engineFamily' does not exist in type 'DatabaseProxyProps'`
 **Root Cause:** Incorrect usage of CDK RDS Proxy API - attempting to use standalone constructor
 **Fix:** Changed to use `database.addProxy()` method which automatically configures the engine
-```typescript
+```ts
 // Before (INCORRECT)
 const dbProxy = new rds.DatabaseProxy(this, `RDSProxy-${environmentSuffix}`, {
   engineFamily: rds.DatabaseProxyEngine.MYSQL, // This property doesn't exist
@@ -30,7 +30,7 @@ const dbProxy = database.addProxy(`RDSProxy-${environmentSuffix}`, {
 **Error:** `Property 'Schedule' does not exist on type 'typeof import("aws-cdk-lib")'`
 **Root Cause:** AWS CDK restructured modules - Schedule class moved to events module
 **Fix:** Added proper import and updated all references
-```typescript
+```ts
 import * as events from 'aws-cdk-lib/aws-events';
 
 // Changed all occurrences
@@ -41,7 +41,7 @@ scheduleExpression: events.Schedule.cron({ hour: '2', minute: '0' })
 **Error:** `Argument of type 'SecurityGroup' is not assignable to parameter of type 'IGrantable'`
 **Root Cause:** `grantConnect()` expects an IAM principal, not a security group
 **Fix:** Created proper IAM role for RDS Proxy permissions
-```typescript
+```ts
 const dbProxyRole = new iam.Role(this, `DBProxyRole-${environmentSuffix}`, {
   assumedBy: new iam.ServicePrincipal('rds.amazonaws.com'),
   description: `RDS Proxy role - ${environmentSuffix}`,
@@ -57,7 +57,7 @@ dbProxy.grantConnect(dbProxyRole);
 **Fixes Applied:**
 
 1. **Daily Backups:** Removed cold storage transition entirely
-```typescript
+```ts
 new backup.BackupPlanRule({
   ruleName: 'DailyBackup',
   deleteAfter: cdk.Duration.days(30),
@@ -66,7 +66,7 @@ new backup.BackupPlanRule({
 ```
 
 2. **Weekly Backups:** Extended retention period to meet constraint
-```typescript
+```ts
 new backup.BackupPlanRule({
   ruleName: 'WeeklyBackup',
   deleteAfter: cdk.Duration.days(180), // Increased from 90 to 180
@@ -75,7 +75,7 @@ new backup.BackupPlanRule({
 ```
 
 3. **Monthly Backups:** Already compliant (275-day gap)
-```typescript
+```ts
 new backup.BackupPlanRule({
   ruleName: 'MonthlyBackup',
   deleteAfter: cdk.Duration.days(365),
@@ -90,7 +90,7 @@ new backup.BackupPlanRule({
 - Line 12: `secretsmanager` imported but never used
 - Line 483: `backupRole` assigned but never used
 **Fix:** Removed all unused code
-```typescript
+```ts
 // Removed: import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 // Removed: const backupRole = new iam.Role(...);
 ```
@@ -105,7 +105,7 @@ new backup.BackupPlanRule({
 **Problem:** Missing `bin/tap.ts` file required for CDK CLI
 **Impact:** CDK commands fail with "Cannot find entry point"
 **Fix:** Created proper CDK app entry point with environment configuration
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -161,7 +161,7 @@ new TapStack(app, `TapStack${environmentSuffix}`, {
 **Impact:** Difficult to retrieve endpoints, ARNs, and IDs
 **Current Implementation:** Manual flat-outputs.json creation
 **Recommendation:** Add CfnOutputs to stack:
-```typescript
+```ts
 new cdk.CfnOutput(this, 'RDSEndpoint', {
   value: database.dbInstanceEndpointAddress,
   description: 'RDS MySQL Endpoint',

@@ -1,6 +1,6 @@
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { WebAppStack } from './webapp';
@@ -33,7 +33,7 @@ export class TapStack extends cdk.Stack {
 
 ## lib/webapp.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

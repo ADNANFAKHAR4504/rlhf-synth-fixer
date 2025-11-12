@@ -22,7 +22,7 @@ The solution creates separate stacks for each environment (dev, staging, prod) w
 
 The primary issue in the MODEL_RESPONSE was incorrect usage of Secrets Manager secrets with RDS. The code used:
 
-```typescript
+```ts
 // INCORRECT - This expects an RDS-generated secret with specific format
 credentials: rds.Credentials.fromSecret(dbSecret),
 ```
@@ -31,7 +31,7 @@ This causes the error: **"Could not parse SecretString JSON"** because the secre
 
 **CORRECTED APPROACH:**
 
-```typescript
+```ts
 // CORRECT - Fetch the secret and extract individual values
 credentials: rds.Credentials.fromPassword(
   dbSecret.secretValueFromJson('username').unsafeUnwrap(),
@@ -41,7 +41,7 @@ credentials: rds.Credentials.fromPassword(
 
 ## File: lib/migration-stack.ts (CORRECTED)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -795,12 +795,12 @@ The ONLY change required to fix the deployment failure is:
 **Line 155 in lib/migration-stack.ts:**
 
 BEFORE (INCORRECT):
-```typescript
+```ts
 credentials: rds.Credentials.fromSecret(dbSecret),
 ```
 
 AFTER (CORRECT):
-```typescript
+```ts
 credentials: rds.Credentials.fromPassword(
   dbSecret.secretValueFromJson('username').unsafeUnwrap(),
   dbSecret.secretValueFromJson('password')

@@ -2,7 +2,7 @@
 
 ## Main Stack
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -78,7 +78,7 @@ export class TapStack extends cdk.Stack {
 
 ## Configuration Management Stack
 
-```typescript
+```ts
 // lib/config-management-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -361,7 +361,7 @@ export class ConfigManagementStack extends cdk.Stack {
 
 ## Step Functions Orchestration Stack
 
-```typescript
+```ts
 // lib/stepfunctions-orchestration-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
@@ -697,7 +697,7 @@ exports.handler = async (event) => {
 
 ## AppConfig Stack
 
-```typescript
+```ts
 // lib/appconfig-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as appconfig from 'aws-cdk-lib/aws-appconfig';
@@ -830,7 +830,7 @@ export class AppConfigStack extends cdk.Stack {
 
 ## Parameter and Secrets Stack
 
-```typescript
+```ts
 // lib/parameter-secrets-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';

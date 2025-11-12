@@ -15,7 +15,7 @@ This implementation provides a complete serverless transaction processing system
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 
@@ -708,7 +708,7 @@ export const validatorFunctionName = validatorLambda.name;
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import "./lib/tap-stack";
 ```

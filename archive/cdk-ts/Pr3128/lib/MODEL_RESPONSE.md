@@ -4,7 +4,7 @@ Based on your requirements, I'll create the CDK TypeScript infrastructure code f
 
 ## File: lib/static-website-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
@@ -462,7 +462,7 @@ export class StaticWebsiteStack extends cdk.Stack {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StaticWebsiteStack } from './static-website-stack';

@@ -34,7 +34,7 @@ I'll create a comprehensive Pulumi TypeScript infrastructure solution for your f
 
 ## 1. lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as random from "@pulumi/random";
@@ -1002,7 +1002,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## 2. tests/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { TapStack } from "../lib/tap-stack";
@@ -1456,7 +1456,7 @@ describe("TapStack Unit Tests", () => {
 
 ## 3. tests/tap-stack.int.test.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { TapStack } from "../lib/tap-stack";

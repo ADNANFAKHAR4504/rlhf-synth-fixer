@@ -26,14 +26,14 @@ This document analyzes the failures and gaps between the AI model's proposed sol
 ### 2. **Incorrect Stack Naming and Structure**
 
 **Model Proposed:**
-```typescript
+```ts
 export class RealTimeAnalyticsStack extends cdk.Stack {
   // ...
 }
 ```
 
 **Actual Implementation:**
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
   // ...
 }
@@ -49,7 +49,7 @@ export class TapStack extends cdk.Stack {
 - Fixed resource naming
 
 **Actual Implementation:**
-```typescript
+```ts
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -65,7 +65,7 @@ this.environmentSuffix = props?.environmentSuffix ||
 ### 4. **Kinesis Analytics Runtime Issues**
 
 **Model Proposed:**
-```typescript
+```ts
 runtimeEnvironment: 'FLINK-1_18',
 applicationCodeConfiguration: {
   codeContent: {
@@ -79,7 +79,7 @@ applicationCodeConfiguration: {
 ```
 
 **Actual Implementation:**
-```typescript
+```ts
 runtimeEnvironment: 'SQL-1_0',
 applicationCodeConfiguration: {
   codeContent: {
@@ -105,7 +105,7 @@ applicationCodeConfiguration: {
 - CloudWatch alarm actions to SNS
 
 **Actual Implementation:**
-```typescript
+```ts
 // Removed SNS subscription to avoid circular dependency
 // Removed alarm actions to avoid circular dependency
 ```
@@ -120,7 +120,7 @@ applicationCodeConfiguration: {
 - Incomplete IAM policies
 
 **Actual Implementation:**
-```typescript
+```ts
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 // Inline IAM policies to avoid circular dependencies
 ```
@@ -155,7 +155,7 @@ Kinesis → Firehose → S3 → Glue → Athena
 - Limited retry mechanisms
 
 **Actual Implementation:**
-```typescript
+```ts
 deadLetterQueue: {
   queue: dlq,
   maxReceiveCount: 3,
@@ -175,7 +175,7 @@ treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
 - No key rotation policies
 
 **Actual Implementation:**
-```typescript
+```ts
 encryption: s3.BucketEncryption.KMS,
 encryptionKey: this.encryptionKey,
 enableKeyRotation: true,
@@ -193,7 +193,7 @@ EncryptionAtRestOptions: { Enabled: true },
 - Missing resource-based policies
 
 **Actual Implementation:**
-```typescript
+```ts
 // Inline policies with specific resource ARNs
 // Least privilege access patterns
 // Resource-specific permissions
@@ -211,7 +211,7 @@ EncryptionAtRestOptions: { Enabled: true },
 - No dashboard configuration
 
 **Actual Implementation:**
-```typescript
+```ts
 new cloudwatch.Dashboard(this, 'AnalyticsDashboard', {
   dashboardName: `analytics-${environmentSuffix}`,
   widgets: [
@@ -230,7 +230,7 @@ new cloudwatch.Dashboard(this, 'AnalyticsDashboard', {
 - Limited integration testing support
 
 **Actual Implementation:**
-```typescript
+```ts
 new cdk.CfnOutput(this, 'ApiEndpointOutput', {
   value: this.api.url,
   description: 'API Gateway endpoint for data ingestion',
@@ -281,7 +281,7 @@ new cdk.CfnOutput(this, 'ApiEndpointOutput', {
 - Missing capacity planning
 
 **Actual Implementation:**
-```typescript
+```ts
 provisionedStreamMode: {
   streamMode: kinesis.StreamMode.PROVISIONED,
 },
@@ -301,7 +301,7 @@ timeout: cdk.Duration.minutes(1),
 - Missing lifecycle policies
 
 **Actual Implementation:**
-```typescript
+```ts
 lifecycleRules: [
   {
     id: 'archive-old-data',

@@ -4,7 +4,7 @@ This implementation deploys a microservices architecture on Kubernetes with Isti
 
 ## File: index.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as k8s from "@pulumi/kubernetes";
 

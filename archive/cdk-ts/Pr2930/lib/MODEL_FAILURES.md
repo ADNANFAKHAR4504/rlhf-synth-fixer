@@ -13,7 +13,7 @@ This document outlines the key failures identified in the initial model response
 **Root Cause**: AWS service buckets (ALB access logs, CloudTrail logs, Config data, VPC Flow Logs) have specific encryption requirements and cannot use customer-managed KMS keys.
 
 **Fix Applied**:
-```typescript
+```ts
 // Service buckets - Use S3_MANAGED encryption
 const accessLogsBucket = new s3.Bucket(this, 'AccessLogsBucket', {
   encryption: s3.BucketEncryption.S3_MANAGED, // Fixed: Was KMS before
@@ -39,7 +39,7 @@ const assetsBucket = new s3.Bucket(this, 'AssetsBucket', {
 **Root Cause**: The AWS CDK deprecated the direct AMI selection methods in favor of SSM Parameter Store lookup for better maintainability and security.
 
 **Fix Applied**:
-```typescript
+```ts
 // Old deprecated approach
 machineImage: ec2.MachineImage.latestAmazonLinux({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
@@ -61,7 +61,7 @@ machineImage: ec2.MachineImage.fromSsmParameter(
 **Root Cause**: The model did not consider deployment isolation requirements for different environments (dev, staging, production).
 
 **Fix Applied**:
-```typescript
+```ts
 // Added environment suffix support
 const environmentSuffix =
   props?.environmentSuffix ||
@@ -82,7 +82,7 @@ const vpc = new ec2.Vpc(this, 'WebAppVPC', {
 **Root Cause**: Missing permissions for Auto Scaling service-linked roles and other AWS services led to deployment failures.
 
 **Fix Applied**:
-```typescript
+```ts
 // Added comprehensive service permissions
 new iam.PolicyStatement({
   sid: 'Allow Auto Scaling Service Linked Role',
@@ -112,7 +112,7 @@ new iam.PolicyStatement({
 **Root Cause**: The model prioritized production safety over testing environment requirements.
 
 **Fix Applied**:
-```typescript
+```ts
 const database = new rds.DatabaseInstance(this, 'WebAppDatabase', {
   deletionProtection: false, // Fixed: Enable testing environment cleanup
   // ...
@@ -126,7 +126,7 @@ const database = new rds.DatabaseInstance(this, 'WebAppDatabase', {
 **Root Cause**: CDK dependency management was not explicitly handled for AWS Config resources.
 
 **Fix Applied**:
-```typescript
+```ts
 const s3PublicReadRule = new config.ManagedRule(/* ... */);
 s3PublicReadRule.node.addDependency(configRecorder); // Added explicit dependency
 
@@ -141,7 +141,7 @@ s3PublicWriteRule.node.addDependency(configRecorder); // Added explicit dependen
 **Root Cause**: Lack of systematic approach to resource naming conventions.
 
 **Fix Applied**:
-```typescript
+```ts
 // Consistent naming pattern applied throughout
 const alb = new elbv2.ApplicationLoadBalancer(this, 'WebAppALB', {
   loadBalancerName: `webapp-alb-${environmentSuffix}`,

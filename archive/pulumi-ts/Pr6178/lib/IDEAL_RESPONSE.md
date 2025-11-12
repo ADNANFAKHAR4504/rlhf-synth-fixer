@@ -4,7 +4,7 @@ This is the corrected implementation with all issues from MODEL_RESPONSE.md fixe
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

@@ -36,7 +36,7 @@
 ## Code Structure Issues
 
 #### Problem 1: Missing Optional CloudTrail Interface
-```typescript
+```ts
 // FAILURE: Missing enableCloudTrail parameter
 export interface TapStackArgs {
   tags: Record<string, string>;
@@ -48,7 +48,7 @@ export interface TapStackArgs {
 ```
 
 Better Approach:
-```typescript
+```ts
 // SUCCESS: Include optional CloudTrail parameter
 export interface TapStackArgs {
   tags: Record<string, string>;
@@ -60,13 +60,13 @@ export interface TapStackArgs {
 ```
 
 #### Problem 2: No Error Handling in CloudTrail Creation
-```typescript
+```ts
 // FAILURE: No error handling
 this.cloudTrail = this.createCloudTrail(storageResources);
 ```
 
 Better Approach:
-```typescript
+```ts
 // SUCCESS: Error handling with graceful degradation
 if (this.enableCloudTrail && storageResources && this.cloudTrailBucket) {
   try {
@@ -79,7 +79,7 @@ if (this.enableCloudTrail && storageResources && this.cloudTrailBucket) {
 ```
 
 #### Problem 3: Unconditional Resource Properties
-```typescript
+```ts
 // FAILURE: CloudTrail resources are not optional
 public readonly cloudTrailBucket: aws.s3.Bucket;
 public readonly cloudTrailRole: aws.iam.Role;
@@ -87,7 +87,7 @@ public readonly cloudTrail: aws.cloudtrail.Trail;
 ```
 
 Better Approach:
-```typescript
+```ts
 // SUCCESS: Optional CloudTrail resources
 public readonly cloudTrailBucket?: aws.s3.Bucket;
 public readonly cloudTrailRole?: aws.iam.Role;
@@ -95,7 +95,7 @@ public readonly cloudTrail?: aws.cloudtrail.Trail;
 ```
 
 #### Problem 4: Non-Adaptive Integration Tests
-```typescript
+```ts
 // FAILURE: Tests assume CloudTrail is always available
 test('should have CloudTrail S3 bucket configured', () => {
   expect(stackOutputs.cloudTrailBucketName).toBeDefined();
@@ -104,7 +104,7 @@ test('should have CloudTrail S3 bucket configured', () => {
 ```
 
 Better Approach:
-```typescript
+```ts
 // SUCCESS: Conditional testing based on CloudTrail availability
 test('should have CloudTrail S3 bucket configured when CloudTrail is enabled', () => {
   if (stackOutputs.cloudTrailEnabled) {

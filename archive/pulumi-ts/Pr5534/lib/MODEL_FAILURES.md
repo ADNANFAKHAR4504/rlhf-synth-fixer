@@ -55,7 +55,7 @@ This document outlines potential issues, edge cases, and considerations for the 
 **Impact**: Operations team won't be automatically notified of issues.
 
 **Recommendation**: Add SNS topic and subscriptions for alarm notifications:
-```typescript
+```ts
 const alarmTopic = new aws.sns.Topic(`tap-alarms-${environmentSuffix}`, {
   displayName: 'Infrastructure Alarms',
 });

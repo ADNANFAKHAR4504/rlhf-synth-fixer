@@ -4,7 +4,7 @@ IDEAL_RESPONSE.md
 
 ## bin/tap.ts
 
-```typescript
+```ts
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable quotes */
@@ -68,7 +68,7 @@ export const environment = tapStack.environment;
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable quotes */

@@ -65,7 +65,7 @@ I'll create a comprehensive CDK application for an automated IAM security monito
 
 ### 2. Main CDK App File
 
-```typescript
+```ts
 // bin/iam-security-monitor.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -97,7 +97,7 @@ app.synth();
 
 ### 3. Complete Stack Implementation
 
-```typescript
+```ts
 // lib/iam-security-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as iam from 'aws-cdk-lib/aws-iam';

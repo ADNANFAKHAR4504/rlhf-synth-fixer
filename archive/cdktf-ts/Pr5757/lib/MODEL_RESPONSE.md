@@ -4,7 +4,7 @@ This implementation provides a complete CloudWatch-based monitoring solution usi
 
 ## File: lib/monitoring-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { CloudwatchLogGroup } from '@cdktf/provider-aws/lib/cloudwatch-log-group';
@@ -409,7 +409,7 @@ exports.handler = async (event) => {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

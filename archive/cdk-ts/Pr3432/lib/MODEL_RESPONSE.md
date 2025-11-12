@@ -33,7 +33,7 @@ Looking at this comprehensive freelancer marketplace platform requirements, I'll
 
 ### File 1: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
@@ -1147,7 +1147,7 @@ export class TapStack extends cdk.Stack {
 
 ### File 2: tests/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

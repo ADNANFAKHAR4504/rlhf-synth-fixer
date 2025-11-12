@@ -4,7 +4,7 @@ Let me fix this by properly retrieving the default VPC. Here are the corrected f
 
 ## Fixed `lib/modules.ts`:
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -245,7 +245,7 @@ export class VpcModule extends Construct {
 
 ## Fixed `lib/tap-stack.ts`:
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -392,7 +392,7 @@ export class TapStack extends TerraformStack {
 
 ### 📋 **What Was Wrong**
 The original issue was in the `VpcModule` class where:
-```typescript
+```ts
 // ❌ WRONG - This is not a valid VPC ID format
 this.vpcId = 'vpc-default';
 
@@ -412,7 +412,7 @@ this.vpcId = this.defaultVpc.id;
 1. **Default VPC requirement**: This assumes your AWS account has a default VPC. If it doesn't exist, you'll need to create one or modify the code to create a custom VPC.
 
 2. **Alternative approach**: If you don't have a default VPC, you can replace the VPC module with:
-   ```typescript
+   ```ts
    // Alternative: Use a specific VPC ID
    this.vpcId = 'vpc-your-actual-vpc-id';
    ```

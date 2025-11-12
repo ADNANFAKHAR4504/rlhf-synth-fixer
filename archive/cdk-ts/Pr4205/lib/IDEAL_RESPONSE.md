@@ -11,7 +11,7 @@ This document represents the ideal, production-ready implementation of a multi-r
 - **Pipeline Integration**: Stack naming follows `TapStack${environmentSuffix}-${region}` pattern for CI/CD compatibility
 
 ### 2. **Resource Naming and Tagging**
-```typescript
+```ts
 // All resources include environment suffix
 const resourceName = `tap-${environmentSuffix}-${regionName}`;
 
@@ -44,7 +44,7 @@ tags: {
 
 ### 1. CDK Application Entry Point (`bin/tap.ts`)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -107,7 +107,7 @@ regions.forEach(region => {
 
 #### Critical Implementation Details:
 
-```typescript
+```ts
 export interface TapStackConfig {
   isPrimary: boolean;
   regionName: string;
@@ -341,7 +341,7 @@ export class TapStack extends cdk.Stack {
 
 #### Critical Test Updates:
 
-```typescript
+```ts
 describe('TapStack', () => {
   let app: cdk.App;
   let stack: TapStack;
@@ -408,7 +408,7 @@ describe('TapStack', () => {
 
 #### Critical Implementation:
 
-```typescript
+```ts
 import { EC2Client, DescribeVpcsCommand } from '@aws-sdk/client-ec2';
 import { RDSClient, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
 import { ElasticLoadBalancingV2Client, DescribeLoadBalancersCommand } from '@aws-sdk/client-elastic-load-balancing-v2';

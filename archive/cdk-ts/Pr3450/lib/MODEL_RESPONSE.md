@@ -33,7 +33,7 @@ Let's implement each of these files in order:
 
 1. `lib/multi-region-app.ts`:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -145,7 +145,7 @@ app.synth();
 
 2. `lib/vpc-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -219,7 +219,7 @@ export class VpcStack extends cdk.Stack {
 
 `lib/vpc-peering-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -369,7 +369,7 @@ export class VpcPeeringStack extends cdk.Stack {
 
 4. `lib/security-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -511,7 +511,7 @@ export class SecurityStack extends cdk.Stack {
 
 5. `lib/storage-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -581,7 +581,7 @@ export class StorageStack extends cdk.Stack {
 
 6. `lib/database-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -696,7 +696,7 @@ export class DatabaseStack extends cdk.Stack {
 
 7. `lib/compute-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -893,7 +893,7 @@ export class ComputeStack extends cdk.Stack {
 
 8. `lib/dns-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
@@ -993,7 +993,7 @@ export class DnsStack extends cdk.Stack {
 
 9. `lib/resilience-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as fis from 'aws-cdk-lib/aws-fis';
@@ -1197,7 +1197,7 @@ multi-region-app/
 
 ## Entry Point: bin/multi-region-app.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -1366,7 +1366,7 @@ app.synth();
 
 ## lib/vpc-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1436,7 +1436,7 @@ export class VpcStack extends cdk.Stack {
 
 ## lib/vpc-peering-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

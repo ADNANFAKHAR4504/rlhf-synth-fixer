@@ -4,7 +4,7 @@ This is the corrected implementation with improvements and fixes applied to the 
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -57,7 +57,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/csv-processing-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';

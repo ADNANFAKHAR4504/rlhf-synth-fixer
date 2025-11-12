@@ -17,7 +17,7 @@ This is a comprehensive request for a single TypeScript CDK file that consolidat
 
 I need to create a complete, runnable CDK TypeScript application in a single file that covers all these requirements. Let me structure this carefully:
 
-````typescript
+````ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -41,7 +41,7 @@ I'll continue adding comprehensive imports to ensure a robust infrastructure set
 
 Here's a complete single-file TypeScript CDK application that consolidates your Lambda functions and implements all the required optimizations:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

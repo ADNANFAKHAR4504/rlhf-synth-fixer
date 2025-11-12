@@ -11,7 +11,7 @@ This document details the intentional imperfections in MODEL_RESPONSE.md and how
 - Could deploy to wrong region if environment not properly configured
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 // Added explicit AWS provider with region
 const awsProvider = new aws.Provider(`aws-provider-${environmentSuffix}`, {
   region: 'eu-central-1',
@@ -29,7 +29,7 @@ const vpc = new aws.ec2.Vpc(`vpc-${environmentSuffix}`, {
 
 ### 2. S3 Bucket Naming with Date.now()
 **Issue in MODEL_RESPONSE:**
-```typescript
+```ts
 bucket: `vpc-flow-logs-${environmentSuffix}-${Date.now()}`
 ```
 - Uses Date.now() which creates different names on each run
@@ -38,7 +38,7 @@ bucket: `vpc-flow-logs-${environmentSuffix}-${Date.now()}`
 - Not idempotent
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 const stackName = pulumi.getStack();
 bucket: `vpc-flow-logs-${environmentSuffix}-${stackName}`
 ```
@@ -57,7 +57,7 @@ bucket: `vpc-flow-logs-${environmentSuffix}-${stackName}`
 - Could cause race conditions in some scenarios
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 // Added explicit dependencies
 new aws.ec2.Route(`public-route-${environmentSuffix}`, {
   ...
@@ -83,7 +83,7 @@ const natGw = new aws.ec2.NatGateway(`nat-gw-${i}-${environmentSuffix}`, {
 - Makes security audits harder
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 description: 'Security group for bastion host - SSH access only',
 ingress: [{
   description: 'SSH access from allowed IP ranges',
@@ -103,7 +103,7 @@ egress: [{
 
 ### 5. Missing AMI Architecture Filter
 **Issue in MODEL_RESPONSE:**
-```typescript
+```ts
 filters: [
   { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
   { name: 'state', values: ['available'] },
@@ -111,7 +111,7 @@ filters: [
 ```
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 filters: [
   { name: 'name', values: ['amzn2-ami-hvm-*-x86_64-gp2'] },
   { name: 'state', values: ['available'] },
@@ -129,7 +129,7 @@ filters: [
 - May not work properly with VPC Flow Logs in all scenarios
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 {
   Sid: 'AWSLogDeliveryWrite',
   Effect: 'Allow',
@@ -154,7 +154,7 @@ filters: [
 - No role-specific or purpose tags
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 // Added descriptive tags
 tags: {
   ...defaultTags,
@@ -186,7 +186,7 @@ tags: {
 - Flow logs bucket name not exposed
 
 **Fix in IDEAL_RESPONSE:**
-```typescript
+```ts
 this.registerOutputs({
   vpcId: this.vpcId,
   publicSubnetIds: this.publicSubnetIds,

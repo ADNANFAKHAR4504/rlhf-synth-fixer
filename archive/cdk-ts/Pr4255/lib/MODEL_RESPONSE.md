@@ -1,6 +1,6 @@
 I'll create a comprehensive AWS CDK infrastructure solution that meets all your requirements. This will be a complete web application stack with VPC, EC2 Auto Scaling, RDS, CloudFront, S3, monitoring, and CI/CD pipeline.
 
-```typescript
+```ts
 // lib/infrastructure.ts
 
 import * as cdk from 'aws-cdk-lib';
@@ -1078,7 +1078,7 @@ export class TapStack extends cdk.Stack {
 
 Create an `app.ts` file to instantiate the stack:
 
-```typescript
+```ts
 // bin/app.ts
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

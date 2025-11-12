@@ -4,7 +4,7 @@ Here's the complete CDK TypeScript implementation for the retail database system
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkStack } from './network-stack';
@@ -54,7 +54,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/network-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -121,7 +121,7 @@ export class NetworkStack extends Construct {
 
 ## File: lib/database-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -235,7 +235,7 @@ export class DatabaseStack extends Construct {
 
 ## File: lib/backup-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
@@ -297,7 +297,7 @@ export class BackupStack extends Construct {
 
 ## File: lib/monitoring-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as rds from 'aws-cdk-lib/aws-rds';

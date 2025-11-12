@@ -14,7 +14,7 @@ BadRequestException: CloudWatch Logs role ARN must be set in account settings to
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Create IAM role for API Gateway CloudWatch logging
 const apiGatewayLoggingRole = new aws.iam.Role(
   `api-logging-role-${args.environmentSuffix}`,
@@ -71,13 +71,13 @@ const stage = new aws.apigateway.Stage(
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: The apiEndpoint output returned an execution ARN instead of the actual HTTPS URL:
-```typescript
+```ts
 this.apiEndpoint = pulumi.interpolate`${this.api.executionArn}/${stage.stageName}/webhook`;
 // Output: arn:aws:execute-api:ap-southeast-2:342597974367:ga7u7di82j/prod/webhook
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 this.apiEndpoint = pulumi.interpolate`https://${this.api.id}.execute-api.ap-southeast-2.amazonaws.com/${stage.stageName}/webhook`;
 // Output: https://ga7u7di82j.execute-api.ap-southeast-2.amazonaws.com/prod/webhook
 ```
@@ -99,7 +99,7 @@ this.apiEndpoint = pulumi.interpolate`https://${this.api.id}.execute-api.ap-sout
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: The unit test file contains only generic placeholder tests that don't validate the actual infrastructure:
-```typescript
+```ts
 describe("TapStack Structure", () => {
   it("instantiates successfully", () => {
     expect(stack).toBeDefined();
@@ -134,7 +134,7 @@ describe("TapStack Structure", () => {
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: The integration test file contains only a failing placeholder:
-```typescript
+```ts
 describe('Turn Around Prompt API Integration Tests', () => {
   test('Dont forget!', async () => {
     expect(false).toBe(true);
@@ -172,7 +172,7 @@ describe('Turn Around Prompt API Integration Tests', () => {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: The S3 bucket uses deprecated inline properties that generate warnings:
-```typescript
+```ts
 bucket: aws.s3.Bucket(
   `reports-bucket-${args.environmentSuffix}`,
   {
@@ -191,7 +191,7 @@ warning: lifecycle_rule is deprecated. Use aws_s3_bucket_lifecycle_configuration
 ```
 
 **IDEAL_RESPONSE Fix**: Should use separate resources:
-```typescript
+```ts
 const bucket = new aws.s3.Bucket(`reports-bucket-${args.environmentSuffix}`, {
   bucket: `payment-reports-${args.environmentSuffix}`,
   tags: args.tags,
@@ -253,7 +253,7 @@ const lifecycle = new aws.s3.BucketLifecycleConfiguration(
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**: Several resources were created but not used, causing lint failures:
-```typescript
+```ts
 const lambdaPermission = new aws.lambda.Permission(...);  // Unused
 const reportScheduleTarget = new aws.cloudwatch.EventTarget(...);  // Unused
 const reportLambdaPermission = new aws.lambda.Permission(...);  // Unused
@@ -261,7 +261,7 @@ const methodSettings = new aws.apigateway.MethodSettings(...);  // Unused
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Ensure resources are created (prevent unused variable warnings)
 void lambdaPermission;
 void reportScheduleTarget;

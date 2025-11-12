@@ -11,7 +11,7 @@ This document analyzes the failures and issues in the MODEL_RESPONSE.md that req
 **MODEL_RESPONSE Issue**: The MODEL_RESPONSE provided only the lib/tap-stack.ts file but did not include the required bin/tap.ts entry point file that CDKTF needs to synthesize and deploy the stack.
 
 **IDEAL_RESPONSE Fix**: Created bin/tap.ts with proper CDKTF App initialization:
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import { App } from 'cdktf';
@@ -60,14 +60,14 @@ app.synth();
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: The code referenced a hardcoded VPC ID 'vpc-prod-123456':
-```typescript
+```ts
 const vpc = new DataAwsVpc(this, 'prodVpc', {
   id: 'vpc-prod-123456', // Hardcoded placeholder
 });
 ```
 
 **IDEAL_RESPONSE Fix**: Changed to discover the default VPC automatically:
-```typescript
+```ts
 const vpc = new DataAwsVpc(this, 'prodVpc', {
   default: true, // Discover default VPC
 });
@@ -86,7 +86,7 @@ const vpc = new DataAwsVpc(this, 'prodVpc', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: The subnet discovery was filtering for subnets tagged with `Type=private`:
-```typescript
+```ts
 const privateSubnets = new DataAwsSubnets(this, 'privateSubnets', {
   filter: [
     {
@@ -102,7 +102,7 @@ const privateSubnets = new DataAwsSubnets(this, 'privateSubnets', {
 ```
 
 **IDEAL_RESPONSE Fix**: Removed the overly restrictive tag filter:
-```typescript
+```ts
 const privateSubnets = new DataAwsSubnets(this, 'privateSubnets', {
   filter: [
     {
@@ -125,14 +125,14 @@ const privateSubnets = new DataAwsSubnets(this, 'privateSubnets', {
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: The RDS instance had deletion protection enabled:
-```typescript
+```ts
 deletionProtection: true,
 skipFinalSnapshot: false,
 finalSnapshotIdentifier: `${resourcePrefix}-final-snapshot`,
 ```
 
 **IDEAL_RESPONSE Fix**: Disabled deletion protection for CI/CD workflows:
-```typescript
+```ts
 deletionProtection: false,
 skipFinalSnapshot: true,
 // No finalSnapshotIdentifier needed
@@ -151,7 +151,7 @@ skipFinalSnapshot: true,
 **Impact Level**: High
 
 **MODEL_RESPONSE Issue**: Attempted to configure secret rotation without the required Lambda function:
-```typescript
+```ts
 new SecretsmanagerSecretRotation(this, 'dbSecretRotation', {
   secretId: dbSecret.id,
   rotationRules: {
@@ -163,7 +163,7 @@ new SecretsmanagerSecretRotation(this, 'dbSecretRotation', {
 ```
 
 **IDEAL_RESPONSE Fix**: Removed the incomplete rotation resource and added a comment:
-```typescript
+```ts
 // Note: Secret rotation requires a Lambda function implementation
 // For now, rotation is not configured to allow the stack to deploy successfully
 // In production, implement rotation using AWS Secrets Manager rotation Lambda
@@ -183,12 +183,12 @@ new SecretsmanagerSecretRotation(this, 'dbSecretRotation', {
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Specified PostgreSQL version 14.10:
-```typescript
+```ts
 engineVersion: '14.10',
 ```
 
 **IDEAL_RESPONSE Fix**: Updated to available version 14.15:
-```typescript
+```ts
 engineVersion: '14.15',
 ```
 
@@ -203,14 +203,14 @@ engineVersion: '14.15',
 **Impact Level**: Low
 
 **MODEL_RESPONSE Issue**: Imported `Fn` from 'cdktf' but never used it:
-```typescript
+```ts
 import { Fn, TerraformStack, TerraformOutput, S3Backend } from 'cdktf';
 ```
 
 Also imported `SecretsmanagerSecretRotation` but removed its usage.
 
 **IDEAL_RESPONSE Fix**: Removed unused imports:
-```typescript
+```ts
 import { TerraformStack, TerraformOutput, S3Backend } from 'cdktf';
 // SecretsmanagerSecretRotation import removed
 ```

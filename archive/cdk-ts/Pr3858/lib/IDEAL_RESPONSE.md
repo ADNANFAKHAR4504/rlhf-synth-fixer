@@ -14,7 +14,7 @@ The main stack file creates all the necessary resources with proper configuratio
 <details>
 <summary>View Complete Code</summary>
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

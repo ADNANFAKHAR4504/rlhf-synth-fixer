@@ -6,7 +6,7 @@ I need help implementing a comprehensive serverless infrastructure using AWS Clo
 
 Here's my existing TypeScript CloudFormation stack file (`lib/tap-stack.ts`):
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

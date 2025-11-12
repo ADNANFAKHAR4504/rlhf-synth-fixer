@@ -11,14 +11,14 @@ This document analyzes the gaps between the MODEL_RESPONSE and IDEAL_RESPONSE fo
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE used `architecture: 'arm64'` (singular string) for Lambda function configuration:
 
-```typescript
+```ts
 architecture: "arm64",
 ```
 
 **IDEAL_RESPONSE Fix**:
 The correct Pulumi AWS provider API uses `architectures: ['arm64']` (plural array):
 
-```typescript
+```ts
 architectures: ['arm64'],
 ```
 
@@ -75,14 +75,14 @@ main: lib/
 **MODEL_RESPONSE Issue**:
 The code imported `path` module but never used it:
 
-```typescript
+```ts
 import * as path from 'path';
 ```
 
 **IDEAL_RESPONSE Fix**:
 Removed the unused import:
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 // No path import
@@ -102,7 +102,7 @@ import * as aws from '@pulumi/aws';
 **MODEL_RESPONSE Issue**:
 Several resources were assigned to variables but never referenced:
 
-```typescript
+```ts
 const kmsKeyAlias = new aws.kms.Alias(...);
 const lambdaBasicExecution = new aws.iam.RolePolicyAttachment(...);
 const lambdaXRayAccess = new aws.iam.RolePolicyAttachment(...);
@@ -112,7 +112,7 @@ const xraySamplingRule = new aws.xray.SamplingRule(...);
 **IDEAL_RESPONSE Fix**:
 Changed to direct instantiation without variable assignment:
 
-```typescript
+```ts
 new aws.kms.Alias(...);
 new aws.iam.RolePolicyAttachment(...);
 new aws.iam.RolePolicyAttachment(...);

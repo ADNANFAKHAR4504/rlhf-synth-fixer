@@ -15,7 +15,7 @@ The KMS key was created without granting CloudWatch Logs service permissions to 
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Grant CloudWatch Logs permission to use the KMS key
 encryptionKey.addToResourcePolicy(
   new iam.PolicyStatement({
@@ -93,13 +93,13 @@ The model generated only the TypeScript code files but forgot to include the ess
 
 **MODEL_RESPONSE Issue**:
 The dashboard widget used deprecated or non-existent API Gateway metric methods:
-```typescript
+```ts
 api.metric4xxError()  // Does not exist
 api.metric5xxError()  // Does not exist
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 api.metricClientError()
 api.metricServer Error()
 ```
@@ -123,7 +123,7 @@ https://docs.aws.amazon.com/cdk/api/v2/docs/aws-cdk-lib.aws_apigateway.RestApi.h
 
 **MODEL_RESPONSE Issue**:
 The Lambda function code imported S3 client libraries but never used them:
-```typescript
+```ts
 import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 const s3Client = new S3Client({ region: process.env.AWS_REGION });
 const BUCKET_NAME = process.env.BUCKET_NAME!;
@@ -131,7 +131,7 @@ const BUCKET_NAME = process.env.BUCKET_NAME!;
 
 **IDEAL_RESPONSE Fix**:
 Removed unused imports and variables:
-```typescript
+```ts
 // Removed S3Client import and initialization
 // Removed BUCKET_NAME constant
 ```
@@ -154,7 +154,7 @@ The model included S3 functionality in the infrastructure (bucket creation) but 
 Lambda environment variables included `BUCKET_NAME` but the Lambda code was updated to not use S3, creating inconsistency. Also missing explicit `AWS_REGION` variable.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 environment: {
   TABLE_NAME: contentTable.tableName,
   ENVIRONMENT: environmentSuffix,
@@ -180,13 +180,13 @@ The model didn't maintain consistency between infrastructure definition and Lamb
 
 **MODEL_RESPONSE Issue**:
 Used deprecated `pointInTimeRecovery` property:
-```typescript
+```ts
 pointInTimeRecovery: true  // Deprecated
 ```
 
 **IDEAL_RESPONSE Fix**:
 Should use `pointInTimeRecoverySpecification` (though CDK handles backward compatibility):
-```typescript
+```ts
 pointInTimeRecovery: true  // Works but generates warnings
 ```
 

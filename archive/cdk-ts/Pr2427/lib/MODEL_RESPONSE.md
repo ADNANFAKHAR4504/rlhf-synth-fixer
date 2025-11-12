@@ -2,7 +2,7 @@ I'll help you implement a comprehensive CI/CD pipeline infrastructure using AWS 
 
 ## Updated `tap-stack.ts` Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
@@ -675,7 +675,7 @@ export class TapStack extends cdk.Stack {
 
 ## Usage Example
 
-```typescript
+```ts
 // In your main CDK app file
 import { TapStack } from './lib/tap-stack';
 

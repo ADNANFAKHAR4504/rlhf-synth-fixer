@@ -1,6 +1,6 @@
 Let's define the reusable modules with proper TypeScript interfaces and classes:
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 
@@ -1060,7 +1060,7 @@ Now, let's create the lib/tap-stack.ts file:
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

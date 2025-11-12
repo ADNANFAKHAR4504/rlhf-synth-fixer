@@ -1,6 +1,6 @@
 The error is because `Fn.base64` doesn't exist in CDKTF. We need to use the native JavaScript `Buffer.from().toString('base64')` method instead. Here's the corrected `main.ts` file:
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';

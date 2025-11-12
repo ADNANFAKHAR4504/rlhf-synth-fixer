@@ -848,7 +848,7 @@ resource "null_resource" "stop_cloudtrail_before_destroy" {
 - Actual CloudTrail log delivery verification
 
 **Current Tests:**
-```typescript
+```ts
 // Only checks if resources exist in state
 expect(stateList).toContain('aws_lb.app');
 ```
@@ -856,7 +856,7 @@ expect(stateList).toContain('aws_lb.app');
 **Impact:** Medium - Resources might exist but not function
 
 **Recommended Enhancement:**
-```typescript
+```ts
 describe('End-to-End Connectivity Tests', () => {
   it('should connect to ALB and receive HTTP response', async () => {
     const albDns = outputs.alb_dns_name.value;

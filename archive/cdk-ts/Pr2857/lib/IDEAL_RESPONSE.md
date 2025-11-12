@@ -46,7 +46,7 @@ Let me write this comprehensive implementation:
 
 I'll help you build a complete serverless application infrastructure using AWS CDK with TypeScript. Here's the implementation that meets all your requirements:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as lambda from 'aws-cdk-lib/aws-lambda';

@@ -17,7 +17,7 @@ This task provides HIGH training value due to:
 ### 1. PostgreSQL Version Mismatch (CRITICAL)
 
 **Issue**: MODEL_RESPONSE.md specified PostgreSQL version 14.10
-```typescript
+```ts
 // MODEL_RESPONSE.md (INCORRECT)
 engineVersion: "14.10",
 ```
@@ -28,7 +28,7 @@ engineVersion: "14.10",
 - Deployment would fail with "Invalid engine version" error
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (CORRECTED)
 engineVersion: '14.19',  // Latest available PostgreSQL 14.x version
 ```
@@ -51,7 +51,7 @@ aws rds describe-db-engine-versions \
 ### 2. S3 Replication API Usage Error (CRITICAL)
 
 **Issue**: MODEL_RESPONSE.md used incorrect S3 replication resource type
-```typescript
+```ts
 // MODEL_RESPONSE.md (INCORRECT)
 const replicationConfig = new aws.s3.BucketReplicationConfigurationV2(...)
 ```
@@ -63,7 +63,7 @@ const replicationConfig = new aws.s3.BucketReplicationConfigurationV2(...)
 - Common confusion from AWS SDK v2/v3 naming conventions
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (CORRECTED)
 const replicationConfig = new aws.s3.BucketReplicationConfig(
   `dr-replication-config-${environmentSuffix}`,
@@ -93,7 +93,7 @@ pulumi plugin ls
 ### 3. Lambda Code Path Resolution Issues (CRITICAL)
 
 **Issue**: MODEL_RESPONSE.md used relative path without proper resolution
-```typescript
+```ts
 // MODEL_RESPONSE.md (INCORRECT)
 code: new pulumi.asset.AssetArchive({
   ".": new pulumi.asset.FileArchive("./lib/lambda/health-check"),
@@ -107,7 +107,7 @@ code: new pulumi.asset.AssetArchive({
 - Lambda would deploy with empty code or fail entirely
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (CORRECTED)
 import * as path from 'path';
 
@@ -125,7 +125,7 @@ code: new pulumi.asset.AssetArchive({
 - Teaches defensive programming for different deployment environments
 
 **How to Avoid**:
-```typescript
+```ts
 // ALWAYS use path.join with __dirname for file references
 import * as path from 'path';
 const lambdaPath = path.join(__dirname, 'relative', 'path');
@@ -136,7 +136,7 @@ const lambdaPath = path.join(__dirname, 'relative', 'path');
 ### 4. Provider Configuration Redundancy
 
 **Issue**: MODEL_RESPONSE.md created new Provider instances for each resource
-```typescript
+```ts
 // MODEL_RESPONSE.md (INEFFICIENT)
 const vpc = new aws.ec2.Vpc(
   `dr-vpc-${environmentSuffix}`,
@@ -151,7 +151,7 @@ const vpc = new aws.ec2.Vpc(
 - Potential for inconsistent configuration
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (OPTIMIZED)
 // Create ONE provider instance
 const provider = new aws.Provider(`provider-${region}`, { region });
@@ -173,7 +173,7 @@ const vpc = new aws.ec2.Vpc(
 ### 5. Missing Parent Resource References
 
 **Issue**: MODEL_RESPONSE.md resources not properly parented to ComponentResource
-```typescript
+```ts
 // MODEL_RESPONSE.md (INCOMPLETE)
 const vpc = new aws.ec2.Vpc(
   `dr-vpc-${environmentSuffix}`,
@@ -188,7 +188,7 @@ const vpc = new aws.ec2.Vpc(
 - Poor organization in Pulumi Console
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (CORRECTED)
 const vpc = new aws.ec2.Vpc(
   `dr-vpc-${environmentSuffix}`,
@@ -207,7 +207,7 @@ const vpc = new aws.ec2.Vpc(
 ### 6. TypeScript Import Organization
 
 **Issue**: MODEL_RESPONSE.md missing `path` import
-```typescript
+```ts
 // MODEL_RESPONSE.md (INCOMPLETE)
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
@@ -215,7 +215,7 @@ import * as fs from "fs";  // Not actually used
 ```
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (CORRECTED)
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
@@ -230,13 +230,13 @@ import * as path from 'path';  // Added for Lambda path resolution
 ### 7. Resource Suppression for Unused Variables
 
 **Issue**: TypeScript warnings for declared but unused resources
-```typescript
+```ts
 // Resources created for side effects but TypeScript complains
 const kmsAlias = new aws.kms.Alias(...);  // Warning: 'kmsAlias' is declared but never used
 ```
 
 **Fix Applied**:
-```typescript
+```ts
 // tap-stack.ts (CORRECTED)
 // At end of constructor
 void kmsAlias;

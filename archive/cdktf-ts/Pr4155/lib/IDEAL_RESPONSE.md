@@ -26,7 +26,7 @@ lib/
 
 ### Main Stack (tap-stack.ts)
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -188,7 +188,7 @@ export class TapStack extends TerraformStack {
 
 ### Reusable Modules (modules.ts)
 
-```typescript
+```ts
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
 import { RouteTable } from '@cdktf/provider-aws/lib/route-table';

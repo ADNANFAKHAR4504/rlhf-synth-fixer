@@ -45,7 +45,7 @@
 ### 4. **CloudTrail Implementation**
 
 **Ideal Response:**
-```typescript
+```ts
 this.cloudTrail = new cloudtrail.Cloudtrail(this, 'audit-trail', {
   name: `${config.environment}-audit-trail`,
   s3BucketName: this.s3Bucket.bucket,
@@ -77,7 +77,7 @@ this.cloudTrail = new cloudtrail.Cloudtrail(this, 'audit-trail', {
 ### 6. **State Management & Backend Configuration**
 
 **Ideal Response:**
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -99,7 +99,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 1. **Import Failures**
 
 #### **Failure: Incorrect CloudTrail Import**
-```typescript
+```ts
 // Model Response - INCORRECT
 import { CloudtrailTrail } from "@cdktf/provider-aws/lib/cloudtrail-trail";
 
@@ -111,7 +111,7 @@ import { CloudtrailTrail } from "@cdktf/provider-aws/lib/cloudtrail-trail";
 - Blocks entire infrastructure deployment
 
 #### **Failure: Deprecated WAF Import**
-```typescript
+```ts
 // Model Response - DEPRECATED
 import { WafWebAcl } from "@cdktf/provider-aws/lib/waf-web-acl";
 
@@ -127,7 +127,7 @@ import { Wafv2WebAcl } from "@cdktf/provider-aws/lib/wafv2-web-acl";
 ### 2. **S3 Configuration Failures**
 
 #### **Failure: Deprecated S3 Classes**
-```typescript
+```ts
 // Model Response - DEPRECATED
 import { S3BucketVersioning } from "@cdktf/provider-aws/lib/s3-bucket-versioning";
 import { S3BucketServerSideEncryptionConfiguration } from "@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration";
@@ -142,7 +142,7 @@ import { S3BucketServerSideEncryptionConfigurationA } from "@cdktf/provider-aws/
 - Inconsistent API behavior
 
 #### **Failure: Incomplete S3 Bucket Policy**
-```typescript
+```ts
 // Model Response - INCOMPLETE
 policy: JSON.stringify({
   Version: "2012-10-17",
@@ -171,7 +171,7 @@ policy: JSON.stringify({
 ### 3. **CloudTrail Configuration Failures**
 
 #### **Failure: Non-existent Constructor**
-```typescript
+```ts
 // Model Response - INCORRECT
 this.cloudTrail = new CloudtrailTrail(this, "audit-trail", {
   // This class doesn't exist
@@ -183,7 +183,7 @@ this.cloudTrail = new CloudtrailTrail(this, "audit-trail", {
 - Compliance framework violations
 
 #### **Failure: Complex Event Selectors**
-```typescript
+```ts
 // Model Response - RISKY
 eventSelector: [
   {
@@ -206,7 +206,7 @@ eventSelector: [
 ### 4. **EC2 Instance Configuration Issues**
 
 #### **Failure: Incorrect User Data Property**
-```typescript
+```ts
 // Model Response - INCORRECT
 userData: Buffer.from(`#!/bin/bash
   yum update -y
@@ -225,7 +225,7 @@ userDataBase64: Buffer.from(/*script*/).toString('base64'),
 ### 5. **Architectural Failures**
 
 #### **Failure: Mixed Concerns in Stack File**
-```typescript
+```ts
 // Model Response - POOR ARCHITECTURE
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string) {

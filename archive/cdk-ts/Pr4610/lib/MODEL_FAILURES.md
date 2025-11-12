@@ -13,7 +13,7 @@ The current stack uses `cdk.RemovalPolicy.RETAIN` for both S3 buckets, which cou
 **IDEAL_RESPONSE Fix**:
 For development and testing environments, resources should be destroyable to avoid resource conflicts. The removal policy should be conditional based on the environment:
 
-```typescript
+```ts
 removalPolicy: environmentSuffix.includes('prod') ? cdk.RemovalPolicy.RETAIN : cdk.RemovalPolicy.DESTROY,
 ```
 

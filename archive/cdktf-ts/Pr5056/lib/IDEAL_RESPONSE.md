@@ -1,4 +1,4 @@
-```typescript
+```ts
 import { Construct } from 'constructs';
 import {
   TerraformStack,

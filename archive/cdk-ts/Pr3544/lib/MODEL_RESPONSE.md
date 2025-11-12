@@ -23,7 +23,7 @@ Now I'll write the code for each component:
 
 First, I'll set up the entry point file:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -40,7 +40,7 @@ new LogisticsGpsStack(app, 'LogisticsGpsStack', {
 
 Now, let's create the main stack file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
@@ -328,7 +328,7 @@ Let me finalize the code based on these considerations:
 ### Answer 
 ---
 
-```typescript
+```ts
 // bin/logistics-gps.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -344,7 +344,7 @@ new LogisticsGpsStack(app, 'LogisticsGpsStack', {
 });
 ```
 
-```typescript
+```ts
 // lib/logistics-gps-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

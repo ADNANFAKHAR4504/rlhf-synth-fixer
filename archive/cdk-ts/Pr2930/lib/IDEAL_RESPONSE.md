@@ -18,7 +18,7 @@ Key architectural decisions:
 
 I'll create a production-ready, secure web application infrastructure on AWS using CDK TypeScript. This solution addresses all requirements while incorporating best practices for security, compliance, and high availability.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as autoscaling from 'aws-cdk-lib/aws-autoscaling';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';

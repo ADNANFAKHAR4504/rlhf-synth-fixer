@@ -67,7 +67,7 @@ I'll create a secure and scalable AWS environment using CDK for Terraform (CDKTF
 
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { 
   Vpc, 
@@ -932,7 +932,7 @@ export class MonitoringModule extends Construct {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws';

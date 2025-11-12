@@ -32,7 +32,7 @@ I'll help you build a complete serverless e-commerce backend using AWS CDK. Let 
 
 ### 1. Update `lib/tap-stack.ts` (Main Stack)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { Tags } from 'aws-cdk-lib';
@@ -88,7 +88,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Create `lib/constructs/user-profile-construct.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -303,7 +303,7 @@ export class UserProfileConstruct extends Construct {
 
 ### 3. Create Lambda Function `lib/lambda/user-profile/index.ts`
 
-```typescript
+```ts
 import {
   DynamoDBClient,
   PutItemCommand,

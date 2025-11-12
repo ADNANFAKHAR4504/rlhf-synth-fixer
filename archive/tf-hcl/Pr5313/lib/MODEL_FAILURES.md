@@ -246,7 +246,7 @@ When creating reusable modules, always include environment_suffix as a variable 
   * High availability across 3 AZs
 
 **Example End-to-End Test:**
-```typescript
+```ts
 describe('Cross-Region Connectivity Workflow', () => {
   test('should have Transit Gateway peering connections in available state', async () => {
     const ec2 = new AWS.EC2({ region: 'us-east-1' });

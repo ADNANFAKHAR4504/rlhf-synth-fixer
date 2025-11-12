@@ -19,7 +19,7 @@ The MODEL_RESPONSE generated infrastructure code that had three primary issues r
 **MODEL_RESPONSE Issue**:
 The MODEL_RESPONSE hardcoded availability zones for us-east-1 in the VPC configuration:
 
-```typescript
+```ts
 // From MODEL_RESPONSE (lines 39-40)
 const availabilityZones = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
 
@@ -35,7 +35,7 @@ This created a critical portability issue. The code explicitly specified us-east
 **IDEAL_RESPONSE Fix**:
 Removed the hardcoded availability zones array and the explicit `availabilityZones` property from the VPC constructor:
 
-```typescript
+```ts
 // From IDEAL_RESPONSE (lines 24-29)
 const vpc = new ec2.Vpc(this, `FinancialAppVpc${environmentSuffix}`, {
   vpcName: `financial-app-vpc-${environmentSuffix}`,
@@ -70,7 +70,7 @@ The model likely hardcoded the AZs because the PROMPT mentioned specific AZs: "S
 **MODEL_RESPONSE Issue**:
 Used the wrong construct for associating Network ACLs with subnets:
 
-```typescript
+```ts
 // From MODEL_RESPONSE (lines 199-204)
 publicSubnets.forEach((subnet, index) => {
   new ec2.NetworkAclAssociation(this, `PublicNaclAssoc${index}${environmentSuffix}`, {
@@ -85,7 +85,7 @@ The construct `ec2.NetworkAclAssociation` does not exist in the AWS CDK library.
 **IDEAL_RESPONSE Fix**:
 Used the correct CDK L2 construct:
 
-```typescript
+```ts
 // From IDEAL_RESPONSE (lines 233-242)
 publicSubnets.forEach((subnet, index) => {
   new ec2.SubnetNetworkAclAssociation(
@@ -122,7 +122,7 @@ The model used an incorrect or non-existent CDK construct name. This suggests in
 **MODEL_RESPONSE Issue**:
 Used the hardcoded availability zones array for outputs and tag generation instead of the actual AZ from the subnet:
 
-```typescript
+```ts
 // From MODEL_RESPONSE (lines 276-281)
 publicSubnets.forEach((subnet, index) => {
   new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
@@ -146,7 +146,7 @@ This approach:
 **IDEAL_RESPONSE Fix**:
 Used the actual availability zone from the subnet object:
 
-```typescript
+```ts
 // From IDEAL_RESPONSE (lines 330-336)
 publicSubnets.forEach((subnet, index) => {
   new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
@@ -163,7 +163,7 @@ const azSuffix = az.slice(-1); // Get 'a', 'b', or 'c'
 
 Additionally, the output for all AZs was changed from the hardcoded array to the actual VPC's availability zones:
 
-```typescript
+```ts
 // MODEL_RESPONSE (line 310)
 value: availabilityZones.join(','),
 

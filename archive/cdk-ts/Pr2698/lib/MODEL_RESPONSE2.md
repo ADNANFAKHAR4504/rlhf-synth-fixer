@@ -1,6 +1,6 @@
 You're right! The `tags` property doesn't exist directly on those resource props. In AWS CDK, tags are applied using the `Tags.of()` method after resource creation. Here's the corrected TypeScript file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

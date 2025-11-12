@@ -93,14 +93,14 @@ Complete 10 outputs including all integration testing requirements:
 **MODEL_RESPONSE Issue**:
 Integration tests relied on static file loading with hardcoded paths:
 
-```typescript
+```ts
 const stackOutputs = JSON.parse(fs.readFileSync('./cfn-outputs/flat-outputs.json', 'utf8'));
 ```
 
 **IDEAL_RESPONSE Fix**:
 Dynamic stack discovery using AWS SDK:
 
-```typescript
+```ts
 async function discoverStack(): Promise<string> {
   const cfnClient = new CloudFormationClient({});
   const command = new ListStacksCommand({
@@ -125,7 +125,7 @@ async function discoverStack(): Promise<string> {
 **MODEL_RESPONSE Issue**:
 Unit tests expected exactly 6 outputs when the template was later enhanced to have 10:
 
-```typescript
+```ts
 expect(template.Outputs).toBeDefined();
 expect(Object.keys(template.Outputs)).toHaveLength(6);
 ```
@@ -133,7 +133,7 @@ expect(Object.keys(template.Outputs)).toHaveLength(6);
 **IDEAL_RESPONSE Fix**:
 Updated test assertions to match the enhanced template:
 
-```typescript
+```ts
 expect(template.Outputs).toBeDefined();
 expect(Object.keys(template.Outputs)).toHaveLength(10);
 ```

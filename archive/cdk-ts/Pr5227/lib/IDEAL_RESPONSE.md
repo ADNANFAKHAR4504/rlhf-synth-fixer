@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -380,7 +380,7 @@ def handler(event: Dict[str, Any], context: LambdaContext) -> Dict[str, Any]:
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -820,7 +820,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import axios from 'axios';
 import { exec } from 'child_process';
 import * as fs from 'fs';
@@ -1116,7 +1116,7 @@ describe('TapStack Integration Tests - Live Resources', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

@@ -10,7 +10,7 @@ This analysis compares the MODEL_RESPONSE.md against the actual working implemen
 
 **MODEL_RESPONSE Issue**: The model generated a complete app definition with `new cdk.App()` and stack instantiation at the bottom of the file, mixing stack class definition with app bootstrapping code. This creates a circular dependency and deployment issues.
 
-```typescript
+```ts
 // MODEL_RESPONSE incorrectly included:
 const app = new cdk.App();
 new TapStack(app, 'TapStack-Primary', {
@@ -24,7 +24,7 @@ app.synth();
 
 **IDEAL_RESPONSE Fix**: Separate the stack class definition from app instantiation. The stack class should be exported for use in separate bin/ files.
 
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
   // Stack implementation only
 }
@@ -44,7 +44,7 @@ export class TapStack extends cdk.Stack {
 
 **MODEL_RESPONSE Issue**: All resource names were hardcoded without proper environment suffix integration, making multi-environment deployment impossible and causing resource naming conflicts.
 
-```typescript
+```ts
 // MODEL_RESPONSE used hardcoded names:
 const primaryBucket = new s3.Bucket(this, 'PrimaryAssetsBucket', {
   // No environment suffix in bucket name
@@ -53,7 +53,7 @@ const primaryBucket = new s3.Bucket(this, 'PrimaryAssetsBucket', {
 
 **IDEAL_RESPONSE Fix**: Implemented comprehensive resource naming convention with environment suffix:
 
-```typescript
+```ts
 const createResourceName = (resourceType: string, includeAccountId = false, maxLength?: number): string => {
   let parts = [serviceName, resourceType, primaryRegion, environmentSuffix];
   // ... proper naming logic
@@ -77,7 +77,7 @@ const primaryBucket = new s3.Bucket(this, 'PrimaryBucket', {
 
 **MODEL_RESPONSE Issue**: VPC peering was partially implemented with hardcoded assumptions about peer VPC existence, missing proper conditional logic and cross-region handling.
 
-```typescript
+```ts
 // MODEL_RESPONSE assumed peer VPC always exists:
 const peeringConnection = new ec2.CfnVPCPeeringConnection(this, 'VpcPeering', {
   vpcId: primaryVpc.vpcId,
@@ -88,7 +88,7 @@ const peeringConnection = new ec2.CfnVPCPeeringConnection(this, 'VpcPeering', {
 
 **IDEAL_RESPONSE Fix**: Proper conditional VPC peering with stack parameters:
 
-```typescript
+```ts
 if (props?.peerVpcId) {
   const peerVpcCidr = isPrimaryRegion ? '10.1.0.0/16' : '10.0.0.0/16';
   const vpcPeeringConnection = new ec2.CfnVPCPeeringConnection(this, 'VpcPeering', {
@@ -114,7 +114,7 @@ if (props?.peerVpcId) {
 
 **MODEL_RESPONSE Issue**: S3 replication configuration was embedded inline with invalid syntax and incorrect role permissions, preventing cross-region replication setup.
 
-```typescript
+```ts
 // MODEL_RESPONSE had invalid replication config:
 replicationConfiguration: {
   role: new iam.Role(...),  // Cannot inline role creation
@@ -128,7 +128,7 @@ replicationConfiguration: {
 
 **IDEAL_RESPONSE Fix**: Proper separation of role creation and replication configuration:
 
-```typescript
+```ts
 const replicationRole = new iam.Role(this, 'ReplicationRole', {
   assumedBy: new iam.ServicePrincipal('s3.amazonaws.com'),
   inlinePolicies: {
@@ -159,7 +159,7 @@ cfnBucket.replicationConfiguration = {
 
 **MODEL_RESPONSE Issue**: Cross-region RDS replica was created without required binary logging configuration and proper dependency management.
 
-```typescript
+```ts
 // MODEL_RESPONSE missing parameter group for binary logging:
 const dbCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
   // Missing parameterGroup with binlog_format: 'ROW'
@@ -168,7 +168,7 @@ const dbCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
 
 **IDEAL_RESPONSE Fix**: Proper parameter group configuration and dependency management:
 
-```typescript
+```ts
 const dbClusterParameterGroup = new rds.ParameterGroup(this, 'DbClusterParameterGroup', {
   engine: rds.DatabaseClusterEngine.auroraMysql({
     version: rds.AuroraMysqlEngineVersion.VER_3_04_0,
@@ -198,7 +198,7 @@ const dbCluster = new rds.DatabaseCluster(this, 'AuroraCluster', {
 
 **MODEL_RESPONSE Issue**: Health checks were configured with unrealistic thresholds and missing proper circuit breaker implementation in Lambda functions.
 
-```typescript
+```ts
 // MODEL_RESPONSE had placeholder circuit breaker code with syntax errors:
 class CircuitBreaker {
   // Incomplete implementation with logical errors
@@ -238,7 +238,7 @@ def handler(event, context):
 
 **IDEAL_RESPONSE Fix**: Comprehensive TapStackProps interface with proper conditional deployment logic:
 
-```typescript
+```ts
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   serviceName?: string;

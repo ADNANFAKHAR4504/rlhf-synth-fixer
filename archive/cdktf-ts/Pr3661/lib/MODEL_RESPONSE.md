@@ -34,7 +34,7 @@ Now let's implement each file:
 
 First, I'll start by defining the necessary imports and module structures for CDKTF:
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformOutput } from "cdktf";
 import {
@@ -786,7 +786,7 @@ export class KmsModule extends Construct {
 
 Now let's implement the `tap-stack.ts` file, which will put all of these modules together:
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";
@@ -985,7 +985,7 @@ I've created a comprehensive AWS infrastructure using CDK for Terraform (CDKTF) 
 
 This file contains modular, reusable components for each AWS service:
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -1730,7 +1730,7 @@ export class KmsModule extends Construct {
 
 This file orchestrates all modules into a complete infrastructure stack:
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws";

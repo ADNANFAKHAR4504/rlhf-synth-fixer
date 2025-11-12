@@ -28,7 +28,7 @@ I'll create a comprehensive Pulumi TypeScript infrastructure for your multi-envi
 
 ### lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";
@@ -1222,7 +1222,7 @@ export const ecrRepositoryUrl = stack.ecrRepositoryUrl;
 
 ### test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import { 
     createResourceName, 
@@ -1733,7 +1733,7 @@ describe("PaymentProcessor Stack Unit Tests", () => {
 
 ### test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import { 

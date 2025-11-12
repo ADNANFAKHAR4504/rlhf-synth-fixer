@@ -4,7 +4,7 @@ This implementation provides a production-ready three-tier AWS environment for a
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * TapStack - Three-tier AWS environment for payment processing application
  *
@@ -533,7 +533,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

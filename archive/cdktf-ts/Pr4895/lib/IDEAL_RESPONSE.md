@@ -53,7 +53,7 @@ The solution creates a complete infrastructure with the following components:
 
 ### lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -636,7 +636,7 @@ export class TapStack extends TerraformStack {
 
 Comprehensive unit tests validate basic stack functionality and configuration handling:
 
-```typescript
+```ts
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
@@ -713,7 +713,7 @@ describe('Stack Structure', () => {
 
 Real infrastructure validation tests without mocking ensure complete functionality:
 
-```typescript
+```ts
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 

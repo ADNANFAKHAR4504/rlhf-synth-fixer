@@ -5,7 +5,7 @@
 **Description**: Model failed to implement ALB access logs, which are required for security monitoring and compliance.
 
 **Model Generated Code**:
-```typescript
+```ts
 this.loadBalancer = new aws.lb.LoadBalancer(`alb-${environment}`, {
     loadBalancerType: "application",
     subnets: this.publicSubnets.map(subnet => subnet.id),
@@ -18,7 +18,7 @@ this.loadBalancer = new aws.lb.LoadBalancer(`alb-${environment}`, {
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 this.loadBalancer = new aws.lb.LoadBalancer(
   `alb-${environment}`,
   {
@@ -44,7 +44,7 @@ this.loadBalancer = new aws.lb.LoadBalancer(
 **Description**: Model failed to implement server-side encryption for S3 buckets, violating security best practices.
 
 **Model Generated Code**:
-```typescript
+```ts
 this.s3Bucket = new aws.s3.Bucket(`static-content-${environment}`, {
     tags: resourceTags.apply(t => ({
         ...t,
@@ -54,7 +54,7 @@ this.s3Bucket = new aws.s3.Bucket(`static-content-${environment}`, {
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 new aws.s3.BucketServerSideEncryptionConfiguration(
   `static-content-encryption-${environment}`,
   {
@@ -76,7 +76,7 @@ new aws.s3.BucketServerSideEncryptionConfiguration(
 **Description**: Model used deprecated `BucketVersioningV2` resource instead of the correct `BucketVersioning` resource.
 
 **Model Generated Code**:
-```typescript
+```ts
 new aws.s3.BucketVersioningV2(`static-content-versioning-${environment}`, {
     bucket: this.s3Bucket.id,
     versioningConfiguration: {
@@ -86,7 +86,7 @@ new aws.s3.BucketVersioningV2(`static-content-versioning-${environment}`, {
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 new aws.s3.BucketVersioning(
   `static-content-versioning-${environment}`,
   {
@@ -104,7 +104,7 @@ new aws.s3.BucketVersioning(
 **Description**: Model failed to implement CloudFront access logging, which is required for security monitoring.
 
 **Model Generated Code**:
-```typescript
+```ts
 this.cloudFrontDistribution = new aws.cloudfront.Distribution(`cdn-${environment}`, {
     // ... other config
     enabled: true,
@@ -115,7 +115,7 @@ this.cloudFrontDistribution = new aws.cloudfront.Distribution(`cdn-${environment
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 this.cloudFrontDistribution = new aws.cloudfront.Distribution(
   `cdn-${environment}`,
   {
@@ -141,7 +141,7 @@ this.cloudFrontDistribution = new aws.cloudfront.Distribution(
 **Model Generated Code**: Not implemented
 
 **Correct Implementation**:
-```typescript
+```ts
 // VPC Flow Logs
 const flowLogRole = new aws.iam.Role(
   `vpc-flow-log-role-${environment}`,
@@ -182,7 +182,7 @@ new aws.ec2.FlowLog(
 **Model Generated Code**: Not implemented
 
 **Correct Implementation**:
-```typescript
+```ts
 new aws.cloudtrail.Trail(
   `cloudtrail-${environment}`,
   {
@@ -203,7 +203,7 @@ new aws.cloudtrail.Trail(
 **Model Generated Code**: Not implemented
 
 **Correct Implementation**:
-```typescript
+```ts
 export function getAlbServiceAccountId(region: string): string {
   const albAccounts: Record<string, string> = {
     'us-east-1': '127311923021',
@@ -222,7 +222,7 @@ export function getAlbServiceAccountId(region: string): string {
 **Description**: Model created security groups with unnecessary HTTPS (443) access when only HTTP (80) was needed.
 
 **Model Generated Code**:
-```typescript
+```ts
 ingress: [
     {
         protocol: "tcp",
@@ -240,7 +240,7 @@ ingress: [
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 ingress: [
   {
     protocol: 'tcp',
@@ -256,7 +256,7 @@ ingress: [
 **Description**: Model failed to implement scale-in protection for the Auto Scaling Group.
 
 **Model Generated Code**:
-```typescript
+```ts
 this.autoScalingGroup = new aws.autoscaling.Group(`asg-${environment}`, {
     // ... other config
     minSize: 1,
@@ -267,7 +267,7 @@ this.autoScalingGroup = new aws.autoscaling.Group(`asg-${environment}`, {
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 this.autoScalingGroup = new aws.autoscaling.Group(
   `asg-${environment}`,
   {
@@ -287,12 +287,12 @@ this.autoScalingGroup = new aws.autoscaling.Group(
 **Description**: Model used template literals with Pulumi Outputs causing "toString() not supported" errors.
 
 **Model Generated Code**:
-```typescript
+```ts
 rotationLambdaArn: `arn:aws:lambda:${region}:${this.caller.apply(c => c.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 rotationLambdaArn: pulumi.interpolate`arn:aws:lambda:${region}:${this.caller.apply(c => c.accountId)}:function:SecretsManagerRDSMySQLRotationSingleUser`,
 ```
 
@@ -301,7 +301,7 @@ rotationLambdaArn: pulumi.interpolate`arn:aws:lambda:${region}:${this.caller.app
 **Description**: Model used local variables in outputs that were not accessible outside their scope.
 
 **Model Generated Code**:
-```typescript
+```ts
 // Local variable in constructor
 const cloudTrailBucket = new aws.s3.Bucket(...);
 
@@ -310,7 +310,7 @@ cloudTrailBucketName: cloudTrailBucket.id, // Error: not accessible
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 // Class property
 public readonly cloudTrailBucket: aws.s3.Bucket;
 
@@ -326,7 +326,7 @@ cloudTrailBucketName: this.cloudTrailBucket.id,
 **Description**: Model created KMS key policy that would prevent future key management operations.
 
 **Model Generated Code**:
-```typescript
+```ts
 Action: [
   'kms:Encrypt',
   'kms:Decrypt',
@@ -340,7 +340,7 @@ Action: [
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 Action: 'kms:*',
 ```
 
@@ -349,7 +349,7 @@ Action: 'kms:*',
 **Description**: Model attempted to set S3 bucket ACLs when modern buckets have ACLs disabled by default.
 
 **Model Generated Code**:
-```typescript
+```ts
 new aws.s3.BucketAcl(
   `cloudfront-logs-acl-${environment}`,
   {
@@ -367,12 +367,12 @@ new aws.s3.BucketAcl(
 **Description**: Model used hardcoded or generated passwords instead of AWS managed passwords for RDS.
 
 **Model Generated Code**:
-```typescript
+```ts
 password: dbPassword.result,
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 manageMasterUserPassword: true,
 ```
 
@@ -381,11 +381,11 @@ manageMasterUserPassword: true,
 **Description**: Model set CloudTrail as multi-region when single-region was sufficient and caused deployment issues.
 
 **Model Generated Code**:
-```typescript
+```ts
 isMultiRegionTrail: true,
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 isMultiRegionTrail: false,
 ```

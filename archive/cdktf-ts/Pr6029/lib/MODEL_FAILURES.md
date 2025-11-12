@@ -11,7 +11,7 @@ The model-generated infrastructure code was functionally correct and met all cor
 **MODEL_RESPONSE Issue**:
 The model used S3Backend for state management, which requires pre-existing AWS infrastructure and specific S3 bucket configuration:
 
-```typescript
+```ts
 // From MODEL_RESPONSE.md - Lines 412-421
 new S3Backend(this, {
   bucket: stateBucket,
@@ -30,7 +30,7 @@ This configuration assumes:
 - Ability to create/modify state files in that bucket
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Use LocalBackend for self-contained deployments
 new LocalBackend(this, {
   path: `terraform.${environmentSuffix}.tfstate`,
@@ -65,7 +65,7 @@ The model prioritized enterprise-grade state management (S3 with locking) over d
 **MODEL_RESPONSE Issue**:
 The model declared and assigned `stateBucket` and `stateBucketRegion` variables that were used by S3Backend:
 
-```typescript
+```ts
 // From MODEL_RESPONSE.md - Lines 401-402
 const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
 const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
@@ -74,7 +74,7 @@ const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
 **IDEAL_RESPONSE Fix**:
 Removed these unused variables since LocalBackend doesn't need them:
 
-```typescript
+```ts
 // Only keep what's actually used
 const environmentSuffix = props?.environmentSuffix || 'dev';
 const awsRegion = AWS_REGION_OVERRIDE ? AWS_REGION_OVERRIDE : props?.awsRegion || 'us-east-1';

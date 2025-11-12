@@ -76,7 +76,7 @@ The infrastructure consists of the following AWS components:
 
 ### lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

@@ -18,7 +18,7 @@ The model provided a comprehensive architectural design but failed to deliver a 
 **Multiple Critical Issues:**
 
 #### Incorrect S3 Bucket Configuration Import Names
-```typescript
+```ts
 // Model attempted (incorrect):
 import { S3BucketServerSideEncryptionConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
 import { S3BucketVersioning } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -29,7 +29,7 @@ import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versionin
 ```
 
 #### Wrong AutoScaling Import Paths
-```typescript
+```ts
 // Model attempted (incorrect):
 import { ApplicationAutoScalingTarget } from '@cdktf/provider-aws/lib/applicationautoscaling-target';
 
@@ -38,7 +38,7 @@ import { AppautoscalingTarget } from '@cdktf/provider-aws/lib/appautoscaling-tar
 ```
 
 #### RDS Property Name Typo
-```typescript
+```ts
 // Model implemented (incorrect):
 managesMasterUserPassword: true,
 
@@ -50,7 +50,7 @@ manageMasterUserPassword: true,
 
 #### ECS Cluster Configuration
 **Issue**: Used deprecated/non-existent properties
-```typescript
+```ts
 // Model attempted:
 capacityProviders: ['FARGATE', 'FARGATE_SPOT'],
 defaultCapacityProviderStrategy: [...]
@@ -60,7 +60,7 @@ defaultCapacityProviderStrategy: [...]
 
 #### WAF Web ACL Rule Structure
 **Issue**: Incorrect nested statement structure
-```typescript
+```ts
 // Model attempted (incorrect syntax):
 statement: {
   managedRuleGroupStatement: {
@@ -76,7 +76,7 @@ statement: {
 
 #### Filter Property Structure
 **Issue**: Multiple attempts at incorrect syntax
-```typescript
+```ts
 // Attempt 1 (failed - missing required filter):
 noncurrentVersionExpiration: [{ noncurrentDays: 30 }]
 
@@ -120,7 +120,7 @@ Error: AccessDeniedException: The specified KMS key does not exist or is not all
 ### 8. **PostgreSQL Version Incompatibility**
 
 **Issue**: Specified non-existent engine version
-```typescript
+```ts
 // Model specified:
 engineVersion: '15.3',
 

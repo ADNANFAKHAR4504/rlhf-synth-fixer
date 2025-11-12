@@ -136,7 +136,7 @@ The infrastructure meets HIPAA requirements through:
 
 The unit tests validate basic stack functionality:
 
-```typescript
+```ts
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 
@@ -213,7 +213,7 @@ describe('Stack Structure', () => {
 
 The integration tests validate real infrastructure synthesis without mocking:
 
-```typescript
+```ts
 import { App, Testing } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
 

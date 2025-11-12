@@ -38,7 +38,7 @@ I'll create a comprehensive CI/CD pipeline that meets all 14 requirements using 
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

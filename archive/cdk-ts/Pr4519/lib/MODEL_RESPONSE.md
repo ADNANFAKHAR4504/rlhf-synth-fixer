@@ -43,7 +43,7 @@ I'll create a production-ready CI/CD pipeline with AWS CDK that meets all your r
 
 ## **main.ts**
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -83,7 +83,7 @@ app.synth();
 
 ## **cicd-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

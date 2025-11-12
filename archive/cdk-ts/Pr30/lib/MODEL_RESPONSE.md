@@ -4,7 +4,7 @@ I'll design a serverless, event-driven architecture using AWS CDK with TypeScrip
 
 ## Architecture Overview
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as s3 from 'aws-cdk-lib/aws-s3';

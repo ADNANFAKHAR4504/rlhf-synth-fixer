@@ -4,7 +4,7 @@ This is the production-ready implementation of the automated backup verification
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -142,7 +142,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: lib/kms-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -273,7 +273,7 @@ export class KMSStack extends pulumi.ComponentResource {
 
 ## File: lib/vpc-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -543,7 +543,7 @@ export class VPCStack extends pulumi.ComponentResource {
 
 ## File: lib/rds-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as random from '@pulumi/random';

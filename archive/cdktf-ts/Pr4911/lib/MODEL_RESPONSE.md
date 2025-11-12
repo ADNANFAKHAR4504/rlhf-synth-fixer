@@ -28,7 +28,7 @@ The infrastructure implements a secure, HIPAA-compliant system with the followin
 
 ### File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

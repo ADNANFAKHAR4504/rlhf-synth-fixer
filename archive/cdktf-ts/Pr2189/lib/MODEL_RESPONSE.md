@@ -97,7 +97,7 @@
 ```
 
 ### `main.ts`
-```typescript
+```ts
 import { App } from "cdktf";
 import { TapStack } from "./lib/tap-stack";
 
@@ -109,7 +109,7 @@ app.synth();
 ## Core Implementation Files
 
 ### `lib/modules.ts`
-```typescript
+```ts
 import { Construct } from "constructs";
 import {
   AwsProvider,
@@ -583,7 +583,7 @@ echo "<h1>Error Page</h1>" > /var/www/html/error.html
 ```
 
 ### `lib/tap-stack.ts`
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput } from "cdktf";
 import { AwsProvider, DataAwsAvailabilityZones } from "@cdktf/provider-aws";

@@ -8,7 +8,7 @@ So basically, I need to set up a serverless application that can handle POST req
 
 I've got a CDK project already set up with a basic stack file at `/iac-test-automations/lib/tap-stack.ts`. Here's what's in there right now:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

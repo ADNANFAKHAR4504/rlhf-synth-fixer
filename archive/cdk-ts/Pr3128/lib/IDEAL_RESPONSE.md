@@ -16,7 +16,7 @@ The solution consists of:
 
 ### 1. Main Stack Entry Point (lib/tap-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { StaticWebsiteStack } from './static-website-stack';
@@ -52,7 +52,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Static Website Stack (lib/static-website-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';

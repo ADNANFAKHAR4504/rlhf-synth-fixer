@@ -3,14 +3,14 @@
 
 ### 1. **Correct CDKTF Import Structure**
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 ```
 
 **MODEL_RESPONSE Issues:**
-```typescript
+```ts
 import { 
   AwsProvider,
   DataAwsAvailabilityZones,
@@ -26,7 +26,7 @@ import {
 
 #### VPC Flow Logs Implementation
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Creates dedicated role with proper permissions
 this.flowLogsRole = new IamRole(this, 'flow-logs-role', {
   name: `${config.companyName}-${config.environment}-flow-logs-role`,
@@ -55,7 +55,7 @@ this.flowLogs = new FlowLog(this, 'vpc-flow-logs-config', {
 ```
 
 **MODEL_RESPONSE Issues:**
-```typescript
+```ts
 // Missing proper IAM role for flow logs
 // Uses incorrect property names
 this.flowLogs = new FlowLog(this, 'vpc-flow-logs-config', {
@@ -73,7 +73,7 @@ this.flowLogs = new FlowLog(this, 'vpc-flow-logs-config', {
 ### 3. **WAF Implementation (Critical Security Failure)**
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Uses modern WAFv2 with correct syntax
 import { Wafv2WebAcl } from '@cdktf/provider-aws/lib/wafv2-web-acl';
 import { Wafv2WebAclAssociation } from '@cdktf/provider-aws/lib/wafv2-web-acl-association';
@@ -93,7 +93,7 @@ this.wafAcl = new Wafv2WebAcl(this, 'waf-acl', {
 ```
 
 **MODEL_RESPONSE Issues:**
-```typescript
+```ts
 // Uses deprecated WAF Classic syntax
 import { WafwebAcl } from '@cdktf/provider-aws';
 
@@ -120,7 +120,7 @@ this.wafAcl = new WafwebAcl(this, 'waf-acl', {
 ### 4. **S3 Bucket Configuration**
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Uses versioned S3 resource names
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 import { S3BucketServerSideEncryptionConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-server-side-encryption-configuration';
@@ -134,7 +134,7 @@ new S3BucketVersioningA(this, 'bucket-versioning', {
 ```
 
 **MODEL_RESPONSE Issues:**
-```typescript
+```ts
 // Uses deprecated resource names
 new S3BucketVersioning(this, 'bucket-versioning', {
   bucket: this.bucket.id,

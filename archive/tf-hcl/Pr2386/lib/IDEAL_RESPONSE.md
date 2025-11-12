@@ -93,7 +93,7 @@ resource "aws_db_instance" "main" {
 
 #### Example Test Structure:
 
-```typescript
+```ts
 describe('Infrastructure Validation', () => {
   test('Terraform configuration is valid', () => {
     // Setup
@@ -175,7 +175,7 @@ The timeout error occurred because:
 ## Immediate Actions
 
 1. **Increase Timeout** (if needed):
-   ```typescript
+   ```ts
    execSync('terraform validate', {
      timeout: 120000, // 2 minutes
      cwd: libPath
@@ -205,7 +205,7 @@ If timeouts persist, consider:
 - **Error Scenarios**: Test failure conditions
 
 #### Example Test Coverage:
-```typescript
+```ts
 describe('Complete Infrastructure Validation', () => {
   // Terraform Configuration
   describe('Terraform Configuration', () => {

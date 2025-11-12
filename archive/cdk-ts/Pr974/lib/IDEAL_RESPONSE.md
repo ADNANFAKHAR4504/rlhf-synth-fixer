@@ -33,7 +33,7 @@ multi-region-app/
 
 ### `bin/multi-region-app.ts`
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -102,7 +102,7 @@ try {
 
 ### `lib/interfaces/stack-config.ts`
 
-```typescript
+```ts
 /**
  * Enhanced configuration interface for multi-region stack deployment
  * Addresses all configuration gaps identified in MODEL_FAILURES.md
@@ -397,7 +397,7 @@ export const REGION_CONFIGS: { [region: string]: Partial<StackConfig> } = {
 
 ### `lib/stacks/region-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { VpcConstruct } from '../constructs/vpc-construct';
@@ -749,7 +749,7 @@ export class RegionStack extends cdk.Stack {
 
 ### `lib/utils/environment-validator.ts`
 
-```typescript
+```ts
 /**
  * Enhanced environment validation utility
  * Addresses environment management issues identified in MODEL_FAILURES.md
@@ -831,7 +831,7 @@ export class EnvironmentValidator {
 
 ### `lib/utils/error-handler.ts`
 
-```typescript
+```ts
 /**
  * Comprehensive error handling utility
  * Addresses error handling gaps identified in MODEL_FAILURES.md

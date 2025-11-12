@@ -91,7 +91,7 @@ collectCoverageFrom: [
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: The integration test file contained only a placeholder:
-```typescript
+```ts
 describe('Turn Around Prompt API Integration Tests', () => {
   describe('Write Integration TESTS', () => {
     test('Dont forget!', async () => {

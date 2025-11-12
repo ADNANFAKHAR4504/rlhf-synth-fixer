@@ -10,7 +10,7 @@ The initial model response had several critical issues that prevented successful
 
 **Problem**: The original code used concrete `Subnet` type where `ISubnet` interface was required.
 
-```typescript
+```ts
 // Original (incorrect)
 public readonly publicSubnet: ec2.Subnet;
 public readonly privateSubnet: ec2.Subnet;
@@ -18,7 +18,7 @@ public readonly privateSubnet: ec2.Subnet;
 
 **Fix**: Changed to use the proper interface type for flexibility.
 
-```typescript
+```ts
 // Fixed
 public readonly publicSubnet: ec2.ISubnet;
 public readonly privateSubnet: ec2.ISubnet;
@@ -30,7 +30,7 @@ public readonly privateSubnet: ec2.ISubnet;
 
 **Problem**: The original code attempted to use `cidrBlock` property in subnet configuration, which doesn't exist in CDK.
 
-```typescript
+```ts
 // Original (incorrect)
 subnetConfiguration: [
   {
@@ -44,7 +44,7 @@ subnetConfiguration: [
 
 **Fix**: Removed the invalid property. CDK automatically calculates CIDR blocks based on VPC CIDR and cidrMask.
 
-```typescript
+```ts
 // Fixed
 subnetConfiguration: [
   {
@@ -59,7 +59,7 @@ subnetConfiguration: [
 
 **Problem**: While environment suffix was passed as a prop, it wasn't actually used in resource naming, leading to deployment conflicts.
 
-```typescript
+```ts
 // Original (incomplete)
 const keyPair = new ec2.KeyPair(this, 'keyPairBasic', {
   keyPairName: 'keyPairBasic', // No suffix
@@ -68,7 +68,7 @@ const keyPair = new ec2.KeyPair(this, 'keyPairBasic', {
 
 **Fix**: Added environment suffix to all resource names to prevent conflicts.
 
-```typescript
+```ts
 // Fixed
 const environmentSuffix = props.environmentSuffix || 'dev';
 const keyPair = new ec2.KeyPair(this, 'keyPairBasic', {
@@ -80,7 +80,7 @@ const keyPair = new ec2.KeyPair(this, 'keyPairBasic', {
 
 **Problem**: Name tags didn't include environment suffix while resource names did, creating inconsistency.
 
-```typescript
+```ts
 // Original (inconsistent)
 cdk.Tags.of(this.publicInstance).add('Name', 'instancePublic');
 // But instanceName property had suffix
@@ -89,7 +89,7 @@ instanceName: `instancePublic${environmentSuffix}`,
 
 **Fix**: Applied environment suffix consistently to both resource names and Name tags.
 
-```typescript
+```ts
 // Fixed
 cdk.Tags.of(this.publicInstance).add('Name', `instancePublic${environmentSuffix}`);
 ```
@@ -100,7 +100,7 @@ cdk.Tags.of(this.publicInstance).add('Name', `instancePublic${environmentSuffix}
 
 **Fix**: Added `securityGroupName` property with environment suffix.
 
-```typescript
+```ts
 // Fixed
 this.securityGroupPublic = new ec2.SecurityGroup(this, 'securityGroupPublic', {
   vpc: props.vpc,

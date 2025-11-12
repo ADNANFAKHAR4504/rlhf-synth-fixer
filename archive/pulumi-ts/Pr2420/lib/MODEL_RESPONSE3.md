@@ -1,6 +1,6 @@
 Here's the corrected Pulumi TypeScript implementation that fixes the deployment errors:
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -537,7 +537,7 @@ export class SecureCloudEnvironment {
 
 If you need to dynamically get the MySQL version, you can replace the hardcoded version with this approach:
 
-```typescript
+```ts
 // Alternative: Get available MySQL versions without preferred versions
 const mysqlVersion = aws.rds.getEngineVersion(
   {

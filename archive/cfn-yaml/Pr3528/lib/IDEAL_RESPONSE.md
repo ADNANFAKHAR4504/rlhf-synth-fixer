@@ -1912,7 +1912,7 @@ Outputs:
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import {
   DynamoDBClient,
   DescribeTableCommand,
@@ -2341,7 +2341,7 @@ describe('TAP Stack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import fs from 'fs';
 import path from 'path';
 

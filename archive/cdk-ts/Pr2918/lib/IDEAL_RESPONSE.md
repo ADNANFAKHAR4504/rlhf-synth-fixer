@@ -37,7 +37,7 @@ This solution implements a multi-layered security architecture in AWS using CDK 
 
 ## Infrastructure Code
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as config from 'aws-cdk-lib/aws-config';

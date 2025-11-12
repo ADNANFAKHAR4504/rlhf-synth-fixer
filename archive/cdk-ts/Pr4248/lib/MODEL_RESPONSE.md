@@ -34,7 +34,7 @@ The implementation is organized into modular constructs:
 
 ### lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { KmsStack } from './kms-stack';
@@ -172,7 +172,7 @@ export class TapStack extends cdk.Stack {
 
 ### lib/kms-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import { Construct } from 'constructs';
@@ -236,7 +236,7 @@ export class KmsStack extends Construct {
 
 ### lib/network-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -380,7 +380,7 @@ export class NetworkStack extends Construct {
 
 ### lib/secrets-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -444,7 +444,7 @@ export class SecretsStack extends Construct {
 
 ### lib/database-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -522,7 +522,7 @@ export class DatabaseStack extends Construct {
 
 ### lib/cache-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -611,7 +611,7 @@ export class CacheStack extends Construct {
 
 ### lib/storage-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as efs from 'aws-cdk-lib/aws-efs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -657,7 +657,7 @@ export class StorageStack extends Construct {
 
 ### lib/compute-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -944,7 +944,7 @@ export class ComputeStack extends Construct {
 
 ### lib/api-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
@@ -1138,7 +1138,7 @@ export class ApiStack extends Construct {
 
 ### lib/streaming-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -1181,7 +1181,7 @@ export class StreamingStack extends Construct {
 
 ### lib/monitoring-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ecs from 'aws-cdk-lib/aws-ecs';

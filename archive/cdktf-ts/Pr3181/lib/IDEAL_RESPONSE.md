@@ -1,6 +1,6 @@
 **lib/modules.ts**
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 
 // KMS
@@ -602,7 +602,7 @@ export function createLeastPrivilegeIamRoles(
 
 **lib/tap-stack.ts**
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

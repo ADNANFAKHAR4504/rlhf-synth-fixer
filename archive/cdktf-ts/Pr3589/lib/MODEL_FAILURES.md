@@ -5,7 +5,7 @@
 ### 1. Correct Import Statements
 
 **Ideal Response:**
-```typescript
+```ts
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -13,7 +13,7 @@ import { cloudtrail } from '@cdktf/provider-aws';
 ```
 
 **Model Response:**
-```typescript
+```ts
 import {
   Vpc, Subnet, InternetGateway, // ... all in one line
   S3BucketVersioning, // Wrong class name
@@ -30,7 +30,7 @@ import {
 ### 2. Proper EIP Configuration
 
 **Ideal Response:**
-```typescript
+```ts
 const eip = new Eip(this, 'nat-eip', {
   domain: 'vpc',
   tags: { ...props.tags, Name: `${id}-nat-eip` },
@@ -38,7 +38,7 @@ const eip = new Eip(this, 'nat-eip', {
 ```
 
 **Model Response:**
-```typescript
+```ts
 const eip = new Eip(this, "nat-eip", {
   vpc: true,  // INCORRECT PROPERTY
   tags: { ...props.tags, Name: `${id}-nat-eip` }
@@ -53,7 +53,7 @@ const eip = new Eip(this, "nat-eip", {
 ### 3. CloudTrail Configuration
 
 **Ideal Response:**
-```typescript
+```ts
 const trail = new cloudtrail.Cloudtrail(this, 'trail', {
   name: props.trailName,
   s3BucketName: props.s3BucketName,
@@ -67,7 +67,7 @@ const trail = new cloudtrail.Cloudtrail(this, 'trail', {
 ```
 
 **Model Response:**
-```typescript
+```ts
 const trail = new CloudtrailTrail(this, "trail", {
   name: props.trailName,
   s3BucketName: props.s3BucketName,
@@ -88,7 +88,7 @@ const trail = new CloudtrailTrail(this, "trail", {
 ### 4. S3 Bucket Policy for CloudTrail
 
 **Ideal Response:**
-```typescript
+```ts
 // In S3BucketModule with allowCloudTrailAccess
 if (props.allowCloudTrailAccess) {
   policyStatements.push({
@@ -111,7 +111,7 @@ if (props.allowCloudTrailAccess) {
 ```
 
 **Model Response:**
-```typescript
+```ts
 // Missing CloudTrail-specific bucket policy
 // Only has generic deny policy for non-SSL
 ```
@@ -125,7 +125,7 @@ if (props.allowCloudTrailAccess) {
 ### 5. KMS Key Policy
 
 **Ideal Response:**
-```typescript
+```ts
 policy: JSON.stringify({
   Version: '2012-10-17',
   Statement: [
@@ -148,7 +148,7 @@ policy: JSON.stringify({
 ```
 
 **Model Response:**
-```typescript
+```ts
 policy: JSON.stringify({
   Version: "2012-10-17",
   Statement: [
@@ -176,7 +176,7 @@ policy: JSON.stringify({
 ### 6. Stack Configuration and Backend
 
 **Ideal Response:**
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -187,7 +187,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
 **Model Response:**
-```typescript
+```ts
 // Missing backend configuration entirely
 // No state management setup
 ```
@@ -201,7 +201,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 7. Module Interface Design
 
 **Ideal Response:**
-```typescript
+```ts
 export interface S3BucketModuleProps {
   bucketName: string;
   kmsKeyId: string;
@@ -215,7 +215,7 @@ export interface S3BucketModuleProps {
 ```
 
 **Model Response:**
-```typescript
+```ts
 export interface S3BucketModuleProps {
   bucketName: string;
   kmsKeyId: string;
@@ -240,7 +240,7 @@ export interface S3BucketModuleProps {
 **Location:** Beginning of `modules.ts`
 
 **Issue:**
-```typescript
+```ts
 import {
   AwsProvider,
   Vpc, Subnet, InternetGateway, RouteTable, Route, // ...
@@ -260,7 +260,7 @@ import {
 - Requires complete rewrite of import statements
 
 **Correct Approach:**
-```typescript
+```ts
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 ```
@@ -270,7 +270,7 @@ import { Subnet } from '@cdktf/provider-aws/lib/subnet';
 **Location:** `S3BucketModule` constructor
 
 **Issue:**
-```typescript
+```ts
 new S3BucketVersioning(this, "versioning", {
   bucket: bucket.id,
   versioningConfiguration: {
@@ -292,7 +292,7 @@ new S3BucketVersioning(this, "versioning", {
 - Data loss risk without versioning
 
 **Correct Approach:**
-```typescript
+```ts
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
 
 new S3BucketVersioningA(this, 'versioning', {
@@ -306,7 +306,7 @@ new S3BucketVersioningA(this, 'versioning', {
 **Location:** `S3BucketModule` constructor
 
 **Issue:**
-```typescript
+```ts
 new S3BucketLogging(this, "logging", {
   bucket: bucket.id,
   targetBucket: props.loggingBucket,
@@ -327,7 +327,7 @@ new S3BucketLogging(this, "logging", {
 - Compliance requirement failure
 
 **Correct Approach:**
-```typescript
+```ts
 import { S3BucketLoggingA } from '@cdktf/provider-aws/lib/s3-bucket-logging';
 
 new S3BucketLoggingA(this, 'logging', {
@@ -342,7 +342,7 @@ new S3BucketLoggingA(this, 'logging', {
 **Location:** `VpcModule` constructor
 
 **Issue:**
-```typescript
+```ts
 const eip = new Eip(this, "nat-eip", {
   vpc: true,  // WRONG PROPERTY
   tags: { ...props.tags, Name: `${id}-nat-eip` }
@@ -363,7 +363,7 @@ const eip = new Eip(this, "nat-eip", {
 - Application functionality severely impacted
 
 **Correct Approach:**
-```typescript
+```ts
 const eip = new Eip(this, 'nat-eip', {
   domain: 'vpc',
   tags: { ...props.tags, Name: `${id}-nat-eip` }
@@ -375,7 +375,7 @@ const eip = new Eip(this, 'nat-eip', {
 **Location:** CloudTrail module
 
 **Issue:**
-```typescript
+```ts
 import { CloudtrailTrail } from "@cdktf/provider-aws";
 
 const trail = new CloudtrailTrail(this, "trail", {
@@ -397,7 +397,7 @@ const trail = new CloudtrailTrail(this, "trail", {
 - Critical compliance violation
 
 **Correct Approach:**
-```typescript
+```ts
 import { cloudtrail } from '@cdktf/provider-aws';
 
 const trail = new cloudtrail.Cloudtrail(this, 'trail', {
@@ -410,7 +410,7 @@ const trail = new cloudtrail.Cloudtrail(this, 'trail', {
 **Location:** `KmsModule` constructor
 
 **Issue:**
-```typescript
+```ts
 Principal: {
   AWS: "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
 }
@@ -431,7 +431,7 @@ Principal: {
 - Data protection compromised
 
 **Correct Approach:**
-```typescript
+```ts
 Principal: {
   AWS: '*'  // In key policy context, resolves to account root
 }
@@ -443,7 +443,7 @@ Principal: {
 **Location:** `S3BucketModule` - bucket policy section
 
 **Issue:**
-```typescript
+```ts
 // Only has deny policy for non-SSL
 // Missing CloudTrail service principal permissions
 ```
@@ -464,7 +464,7 @@ Principal: {
 - Security incidents undetected
 
 **Required Permissions:**
-```typescript
+```ts
 {
   Effect: 'Allow',
   Principal: { Service: 'cloudtrail.amazonaws.com' },
@@ -487,7 +487,7 @@ Principal: {
 **Location:** `tap-stack.ts`
 
 **Issue:**
-```typescript
+```ts
 // No S3Backend configuration present
 // No state management setup
 ```
@@ -508,7 +508,7 @@ Principal: {
 - Production deployment risk extreme
 
 **Correct Approach:**
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -523,7 +523,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 **Location:** `CloudTrailModule`
 
 **Issue:**
-```typescript
+```ts
 const trail = new CloudtrailTrail(this, "trail", {
   // ...
   isMultiRegionTrail: true,  // Inconsistent with single-region stack
@@ -546,7 +546,7 @@ const trail = new CloudtrailTrail(this, "trail", {
 - Not wrong but inefficient
 
 **Better Approach:**
-```typescript
+```ts
 isMultiRegionTrail: false,  // Match single-region architecture
 ```
 
@@ -555,7 +555,7 @@ isMultiRegionTrail: false,  // Match single-region architecture
 **Location:** `S3BucketModule`
 
 **Issue:**
-```typescript
+```ts
 const bucket = new S3Bucket(this, "bucket", {
   bucket: props.bucketName,
   blockPublicAcls: true,
@@ -579,7 +579,7 @@ const bucket = new S3Bucket(this, "bucket", {
 - Audit tools may flag as non-compliant
 
 **Better Approach:**
-```typescript
+```ts
 const bucket = new S3Bucket(this, 'bucket', { /* ... */ });
 
 new S3BucketPublicAccessBlock(this, 'public-access-block', {
@@ -596,7 +596,7 @@ new S3BucketPublicAccessBlock(this, 'public-access-block', {
 **Location:** `AwsConfigModule`
 
 **Issue:**
-```typescript
+```ts
 new AwsConfigConfigRule(this, "encrypted-volumes", {
   name: "encrypted-volumes",
   source: { /* ... */ },
@@ -617,7 +617,7 @@ new AwsConfigConfigRule(this, "encrypted-volumes", {
 - Rules may show as non-compliant initially
 
 **Correct Approach:**
-```typescript
+```ts
 new AwsConfigConfigRule(this, "encrypted-volumes", {
   name: "encrypted-volumes",
   source: { /* ... */ },
@@ -630,7 +630,7 @@ new AwsConfigConfigRule(this, "encrypted-volumes", {
 **Location:** `IamRoleModule`
 
 **Issue:**
-```typescript
+```ts
 new IamPolicyAttachment(this, `policy-attachment-${index}`, {
   roles: [role.name],
   policyArn
@@ -652,7 +652,7 @@ new IamPolicyAttachment(this, `policy-attachment-${index}`, {
 - Access denied errors in runtime
 
 **Correct Approach:**
-```typescript
+```ts
 new IamPolicyAttachment(this, `policy-attachment-${index}`, {
   name: `${props.roleName}-policy-attachment-${index}`,
   roles: [role.name],

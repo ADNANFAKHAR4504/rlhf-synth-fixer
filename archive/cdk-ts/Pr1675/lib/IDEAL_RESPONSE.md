@@ -192,7 +192,7 @@ Set environment variables for deployment:
 
 This implementation provides a robust, secure, and maintainable infrastructure foundation that can be confidently deployed across multiple environments with proper isolation and monitoring capabilities.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

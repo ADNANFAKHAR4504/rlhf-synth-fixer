@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { KmsKey } from '@cdktf/provider-aws/lib/kms-key';
 import { KmsAlias } from '@cdktf/provider-aws/lib/kms-alias';
@@ -677,7 +677,7 @@ export class RdsModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

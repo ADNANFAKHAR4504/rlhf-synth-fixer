@@ -4,7 +4,7 @@ I'll help you create a comprehensive HIPAA-compliant disaster recovery solution 
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { BackupPlan } from '@cdktf/provider-aws/lib/backup-plan';
 import { BackupSelection } from '@cdktf/provider-aws/lib/backup-selection';
 import { BackupVault } from '@cdktf/provider-aws/lib/backup-vault';
@@ -1205,7 +1205,7 @@ This comprehensive implementation includes:
 
 ### test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import { App, Testing } from 'cdktf';
 import * as fs from 'fs';
 import * as path from 'path';

@@ -8,7 +8,7 @@ The **Model Response** uses a single, combined import for multiple resources fro
 
 **Evidence of Model Failure:**
 
-```typescript
+```ts
 // From uploaded:MODEL_RESPONSE.md (modules.ts)
 import {
   ec2,
@@ -23,7 +23,7 @@ The **Ideal Response** correctly imports each resource by its full module path, 
 
 **Evidence of Ideal Implementation:**
 
-```typescript
+```ts
 // From uploaded:IDEAL_RESPONSE.md (modules.ts)
 import { Vpc } from '@cdktf/provider-aws/lib/vpc'; // Correct modular import
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role'; // Correct modular import
@@ -42,7 +42,7 @@ The **Model Response** attempts to apply default tags using an array of objects 
 
 **Evidence of Model Failure:**
 
-```typescript
+```ts
 // From uploaded:MODEL_RESPONSE.md (taps-stack.ts)
 // defaultTags expects an object, not an array of objects
 defaultTags: [
@@ -61,7 +61,7 @@ The **Ideal Response** correctly configures the `defaultTags` property of the `A
 
 **Evidence of Ideal Implementation:**
 
-```typescript
+```ts
 // From uploaded:IDEAL_RESPONSE.md (TapStackProps interface in taps-stack.ts)
 // Defines the correct expected type for defaultTags
 import { AwsProviderDefaultTags } from '@cdktf/provider-aws/lib/provider';
@@ -89,7 +89,7 @@ The **Ideal Response** hardcodes the EC2 instance type to `'t3.medium'` within t
 **Evidence of Model Failure:**
 *The **Ideal Response** fails the user requirement by hardcoding the value.*
 
-```typescript
+```ts
 // From uploaded:IDEAL_RESPONSE.md (taps-stack.ts)
 // Hardcoded instance type - Fails the variable requirement.
 const secureComputeModule = new SecureComputeConstruct(this, 'secure-compute', {
@@ -103,7 +103,7 @@ The **Model Response** correctly defines and uses a `TerraformVariable` for the 
 
 **Evidence of Ideal Implementation (Model Response is better here):**
 
-```typescript
+```ts
 // From uploaded:MODEL_RESPONSE.md (taps-stack.ts)
 // Correctly uses a TerraformVariable
 const instanceTypeVariable = new TerraformVariable(this, "ec2_instance_type", {
@@ -123,7 +123,7 @@ In the IAM policy for accessing Secrets Manager, the **Model Response** allows t
 
 **Evidence of Model Failure:**
 
-```typescript
+```ts
 // From uploaded:MODEL_RESPONSE.md (modules.ts - SecureComputeConstruct)
 {
   Effect: "Allow",
@@ -146,7 +146,7 @@ The **Model Response** uses a data source filter that is too broad (`"amzn2-ami-
 
 **Evidence of Model Failure:**
 
-```typescript
+```ts
 // From uploaded:MODEL_RESPONSE.md (modules.ts - SecureComputeConstruct)
 filter: [
   {
@@ -168,7 +168,7 @@ In the **Model Response**, the `NatGateway` depends on the `natEip` for its `all
 
 **Evidence of Model Failure:**
 
-```typescript
+```ts
 // From uploaded:MODEL_RESPONSE.md (modules.ts - NetworkingConstruct)
 // No explicit dependency is set, relying on implicit graph resolution.
 const natEip = new ec2.Eip(this, "nat-eip", { ... });

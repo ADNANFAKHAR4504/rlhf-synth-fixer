@@ -256,7 +256,7 @@ You must modify and output code ONLY for these three files:
 
 #### 3. Tagging Strategy
 Apply to all resources:
-```typescript
+```ts
 Tags.of(resource).add('Environment', 'dev');
 Tags.of(resource).add('Project', 'freelancer-platform');
 Tags.of(resource).add('ManagedBy', 'CDK');
@@ -357,19 +357,19 @@ The infrastructure implementation will be considered successful when:
 Provide your response in the following format:
 
 ### File 1: lib/tap-stack.ts
-```typescript
+```ts
 // Complete stack implementation with all resources
 // Include imports, class definition, and all AWS resources
 ```
 
 ### File 2: tests/tap-stack.unit.test.ts
-```typescript
+```ts
 // Comprehensive unit tests
 // Test resource creation, properties, and configurations
 ```
 
 ### File 3: tests/tap-stack.int.test.ts
-```typescript
+```ts
 // Integration tests
 // Test cross-service interactions and workflows
 ```

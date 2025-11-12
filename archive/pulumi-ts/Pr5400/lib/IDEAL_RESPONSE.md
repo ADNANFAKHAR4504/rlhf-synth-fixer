@@ -19,7 +19,7 @@ The infrastructure consists of three independently deployable stacks (dev, stagi
 
 Defines TypeScript interfaces for consistent resource configurations across all environments.
 
-```typescript
+```ts
 export interface EnvironmentConfig {
   environment: string;
   environmentSuffix: string;
@@ -65,7 +65,7 @@ export interface ReplicationResult {
 
 Implements a reusable Pulumi ComponentResource that creates all infrastructure for a single environment.
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { EnvironmentConfig } from './types';
@@ -428,7 +428,7 @@ export class DataPipelineEnvironment extends pulumi.ComponentResource {
 
 Creates and configures the environment infrastructure using the ComponentResource pattern.
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { DataPipelineEnvironment } from './environment-component';
 
@@ -483,7 +483,7 @@ export const eventRuleName = pipelineEnv.eventRule?.name;
 
 Implements the replication logic for copying production changes to dev and staging environments.
 
-```typescript
+```ts
 import {
   S3Client,
   GetObjectCommand,

@@ -9,12 +9,12 @@ This document captures the specific failures observed in AI model responses when
 **Description**: Model incorrectly used `dynamodb.BillingMode.ON_DEMAND` instead of `dynamodb.BillingMode.PAY_PER_REQUEST`
 
 **Model Response (Incorrect)**:
-```typescript
+```ts
 billingMode: dynamodb.BillingMode.ON_DEMAND,
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
 ```
 
@@ -27,7 +27,7 @@ billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
 **Description**: Model used incorrect method chaining for CloudWatch alarm metrics
 
 **Model Response (Incorrect)**:
-```typescript
+```ts
 metric: apiLambda.metricErrors({
   statistic: 'Sum',
   period: cdk.Duration.minutes(5),
@@ -47,7 +47,7 @@ metric: apiLambda.metricErrors({
 ```
 
 **Correct Implementation**:
-```typescript
+```ts
 metric: new cloudwatch.MathExpression({
   expression: '(errors / invocations) * 100',
   usingMetrics: {

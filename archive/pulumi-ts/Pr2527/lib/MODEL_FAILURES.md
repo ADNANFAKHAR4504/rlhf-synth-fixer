@@ -9,12 +9,12 @@ This document analyzes the differences between the model-generated code (MODEL_R
 **Type**: Security Vulnerability - Critical
 **Description**: Model exposed database credentials in plain text within the code
 **Model Code**:
-```typescript
+```ts
 username: "admin",
 password: "ChangeMe123!",
 ```
 **Correct Code**:
-```typescript
+```ts
 manageMasterUserPassword: true,
 masterUserSecretKmsKeyId: this.masterKey.arn,
 username: 'admin',
@@ -26,7 +26,7 @@ username: 'admin',
 **Description**: Model failed to implement KMS encryption for RDS and Secrets Manager
 **Model Code**: No KMS key implementation
 **Correct Code**:
-```typescript
+```ts
 private createKMSKey(): aws.kms.Key {
   return new aws.kms.Key(`master-key-${this.environment}`, {
     description: `Master key for RDS and SecretsManager - ${this.environment}`,
@@ -41,11 +41,11 @@ private createKMSKey(): aws.kms.Key {
 **Type**: Security Vulnerability - High
 **Description**: Model's IAM policies lack proper resource restrictions and account-based conditions
 **Model Code**:
-```typescript
+```ts
 Resource: `arn:aws:secretsmanager:${this.region}:*:secret:app-secrets-${this.environment}-*`
 ```
 **Correct Code**:
-```typescript
+```ts
 Resource: `arn:aws:secretsmanager:${this.region}:${c.accountId}:secret:api-keys-${this.environment}-*`
 ```
 **Impact**: Overly permissive policies violate principle of least privilege
@@ -55,7 +55,7 @@ Resource: `arn:aws:secretsmanager:${this.region}:${c.accountId}:secret:api-keys-
 **Description**: Model did not implement VPC endpoints for secure AWS service communication
 **Model Code**: No VPC endpoints implemented
 **Correct Code**:
-```typescript
+```ts
 private createVPCEndpoints(): void {
   // S3 VPC Endpoint
   new aws.ec2.VpcEndpoint(`s3-endpoint-${this.environment}`, {
@@ -72,7 +72,7 @@ private createVPCEndpoints(): void {
 **Type**: Security Vulnerability - High
 **Description**: Model stored database credentials in Secrets Manager instead of using RDS managed passwords
 **Model Code**:
-```typescript
+```ts
 secretString: JSON.stringify({
   username: "admin",
   password: "ChangeMe123!",
@@ -80,7 +80,7 @@ secretString: JSON.stringify({
 })
 ```
 **Correct Code**:
-```typescript
+```ts
 // RDS manages its own credentials automatically
 manageMasterUserPassword: true,
 masterUserSecretKmsKeyId: this.masterKey.arn,
@@ -92,7 +92,7 @@ masterUserSecretKmsKeyId: this.masterKey.arn,
 **Description**: Model did not implement Application Load Balancer for high availability
 **Model Code**: Direct Auto Scaling Group without load balancer
 **Correct Code**:
-```typescript
+```ts
 const alb = new aws.lb.LoadBalancer(`web-alb-${this.environment}`, {
   name: `web-alb-${this.environment}`,
   loadBalancerType: 'application',
@@ -106,12 +106,12 @@ const alb = new aws.lb.LoadBalancer(`web-alb-${this.environment}`, {
 **Type**: Implementation Error - Medium
 **Description**: Model used incorrect property names for VPC Flow Logs
 **Model Code**:
-```typescript
+```ts
 resourceId: this.vpc.id,
 resourceType: "VPC",
 ```
 **Correct Code**:
-```typescript
+```ts
 vpcId: this.vpc.id,
 trafficType: 'ALL',
 ```
@@ -122,7 +122,7 @@ trafficType: 'ALL',
 **Description**: Model did not create dedicated security group for VPC endpoints
 **Model Code**: No VPC endpoint security group
 **Correct Code**:
-```typescript
+```ts
 const vpceSecurityGroup = new aws.ec2.SecurityGroup(`vpce-sg-${this.environment}`, {
   name: `vpce-sg-${this.environment}`,
   description: 'Security group for VPC endpoints',
@@ -136,7 +136,7 @@ const vpceSecurityGroup = new aws.ec2.SecurityGroup(`vpce-sg-${this.environment}
 **Description**: Model did not implement S3 lifecycle policies for log retention
 **Model Code**: No lifecycle configuration
 **Correct Code**:
-```typescript
+```ts
 new aws.s3.BucketLifecycleConfiguration(`logs-bucket-lifecycle-${this.environment}`, {
   bucket: logsBucket.id,
   rules: [{
@@ -153,7 +153,7 @@ new aws.s3.BucketLifecycleConfiguration(`logs-bucket-lifecycle-${this.environmen
 **Description**: Model did not implement S3 access logging for audit trails
 **Model Code**: No S3 access logging
 **Correct Code**:
-```typescript
+```ts
 new aws.s3.BucketLogging(`app-bucket-logging-${this.environment}`, {
   bucket: appBucket.id,
   targetBucket: logsBucket.id,
@@ -166,11 +166,11 @@ new aws.s3.BucketLogging(`app-bucket-logging-${this.environment}`, {
 **Type**: Implementation Error - Medium
 **Description**: Model used incorrect property references for CloudFront origins
 **Model Code**:
-```typescript
+```ts
 domainName: pulumi.interpolate`${this.appBucket.bucketDomainName}`,
 ```
 **Correct Code**:
-```typescript
+```ts
 domainName: this.appBucket.bucketDomainName,
 ```
 **Impact**: Potential runtime errors in CloudFront configuration
@@ -179,13 +179,13 @@ domainName: this.appBucket.bucketDomainName,
 **Type**: Implementation Error - Medium
 **Description**: Model used name instead of ARN for IAM instance profile
 **Model Code**:
-```typescript
+```ts
 iamInstanceProfile: {
   name: `ec2-instance-profile-${this.environment}`
 }
 ```
 **Correct Code**:
-```typescript
+```ts
 iamInstanceProfile: {
   arn: this.instanceProfile.arn,
 }
@@ -197,7 +197,7 @@ iamInstanceProfile: {
 **Description**: Model did not expose important resource identifiers as public outputs
 **Model Code**: No public outputs defined
 **Correct Code**:
-```typescript
+```ts
 public readonly vpcId: pulumi.Output<string>;
 public readonly appBucketName: pulumi.Output<string>;
 public readonly dbEndpoint: pulumi.Output<string>;
@@ -209,11 +209,11 @@ public readonly dbEndpoint: pulumi.Output<string>;
 **Type**: Security Configuration - Medium
 **Description**: Model used AWS managed policy instead of custom restrictive policy
 **Model Code**:
-```typescript
+```ts
 policyArn: "arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy"
 ```
 **Correct Code**:
-```typescript
+```ts
 new aws.iam.RolePolicy(`flow-logs-policy-${this.environment}`, {
   role: flowLogsRole.id,
   policy: // Custom restrictive policy with specific resource ARNs
@@ -226,7 +226,7 @@ new aws.iam.RolePolicy(`flow-logs-policy-${this.environment}`, {
 **Description**: Model did not implement proper S3 bucket policy for CloudFront OAI access
 **Model Code**: No bucket policy for CloudFront access
 **Correct Code**:
-```typescript
+```ts
 new aws.s3.BucketPolicy(`app-bucket-policy-${this.environment}`, {
   bucket: this.appBucket.id,
   policy: // Proper OAI-based access policy

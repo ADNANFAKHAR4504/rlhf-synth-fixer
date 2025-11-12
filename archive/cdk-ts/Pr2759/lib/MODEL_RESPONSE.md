@@ -191,7 +191,7 @@ module.exports = {
 ## 2. CDK Application Entry Point
 
 ### bin/tap.ts
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -224,7 +224,7 @@ new TapStack(app, `${projectName}-${environment}-security-stack`, {
 ## 3. Main Stack Implementation
 
 ### lib/tapstack.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -914,7 +914,7 @@ def remediate_ec2_instance(instance_id):
 ## 4. Test Files
 
 ### test/utils/test-utils.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 
@@ -941,7 +941,7 @@ beforeEach(() => {
 ```
 
 ### test/tapstack.test.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tapstack';
@@ -1325,7 +1325,7 @@ describe('TapStack', () => {
 ```
 
 ### test/integration/stack-integration.test.ts
-```typescript
+```ts
 import * as AWS from 'aws-sdk';
 import { TapStack } from '../../lib/tapstack';
 import * as cdk from 'aws-cdk-lib';

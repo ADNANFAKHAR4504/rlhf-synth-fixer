@@ -51,7 +51,7 @@ The AWS account has a restriction on creating Elastic Load Balancers. This is ty
 **File:** `test/tap-stack.unit.test.ts:205`
 
 **Issue:**
-```typescript
+```ts
 // Before (incorrect)
 expect(name).toContain('dev');  // Hardcoded 'dev'
 ```
@@ -60,7 +60,7 @@ expect(name).toContain('dev');  // Hardcoded 'dev'
 Test would fail when running in staging or other environments because it expected 'dev' in resource names.
 
 **Fix:**
-```typescript
+```ts
 // After (correct)
 expect(name).toContain(environmentSuffix);  // Uses variable
 ```
@@ -105,7 +105,7 @@ ComputeStackdevNestedStackComputeStackdevNestedStackResourceC57BB8A3, ...]
 
 **Fix:**
 Added inline policy to EC2InstanceRole in SecurityStack with wildcard permission for secrets:
-```typescript
+```ts
 {
   PolicyName: 'SecretsAccess',
   PolicyDocument: {
@@ -140,7 +140,7 @@ MySQL version 8.0.35 not available in ap-northeast-1 region.
 **File:** `lib/stacks/database-stack.ts:51`
 
 **Fix:**
-```typescript
+```ts
 // Before
 version: rds.MysqlEngineVersion.VER_8_0_35
 
@@ -165,7 +165,7 @@ Incorrect IAM managed policy name for AWS Config service role.
 **File:** `lib/stacks/monitoring-stack.ts:46`
 
 **Fix:**
-```typescript
+```ts
 // Before
 iam.ManagedPolicy.fromAwsManagedPolicyName('ConfigRole')
 
@@ -191,7 +191,7 @@ Config Rules were being created before the Configuration Recorder and Delivery C
 
 **Fix:**
 Added explicit node dependencies:
-```typescript
+```ts
 const requiredTagsRule = new config.ManagedRule(this, 'RequiredTagsRule', {
   identifier: config.ManagedRuleIdentifiers.REQUIRED_TAGS,
   inputParameters: { tag1Key: 'iac-rlhf-amazon' },

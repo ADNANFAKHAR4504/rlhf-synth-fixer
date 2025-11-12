@@ -1,6 +1,6 @@
 ## modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import * as aws from '@cdktf/provider-aws';
 import { TerraformAsset, AssetType } from 'cdktf';
@@ -902,7 +902,7 @@ export class MonitoringModule extends Construct {
 
 ## tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

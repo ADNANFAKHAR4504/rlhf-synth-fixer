@@ -41,7 +41,7 @@ I'll design a comprehensive CDKTF application that meets all your security and h
 
 ## `lib/modules.ts`
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import * as aws from "@cdktf/provider-aws";
 import { TerraformOutput } from "cdktf";
@@ -1251,7 +1251,7 @@ export class MonitoringModule extends Construct {
 
 ## `lib/tap-stack.ts`
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, RemoteBackend, TerraformOutput } from "cdktf";
 import * as aws from "@cdktf/provider-aws";
@@ -1700,7 +1700,7 @@ Create a `package.json`:
 
 Create `main.ts`:
 
-```typescript
+```ts
 import { App } from "cdktf";
 import { TapStack } from "./lib/tap-stack";
 

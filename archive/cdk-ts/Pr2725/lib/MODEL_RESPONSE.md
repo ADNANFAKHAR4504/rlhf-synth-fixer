@@ -1,6 +1,6 @@
 I'll implement a secure AWS infrastructure using CDK with TypeScript that meets all your requirements. Here's the complete implementation for your `./lib/tap-stack.ts` file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

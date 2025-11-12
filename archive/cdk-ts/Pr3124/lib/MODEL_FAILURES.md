@@ -59,19 +59,19 @@ PipelineEncryptionKey7CFF899D -> CodeBuildRole728CBADE -> PipelineArtifacts4A9B2
 
 ### ❌ Bad: Hardcoded Resource Names
 
-```typescript
+```ts
 bucketName: 'my-pipeline-bucket';
 ```
 
 ### ✅ Good: Parameterized Naming
 
-```typescript
+```ts
 bucketName: `${createResourceName('artifacts')}-${this.account}-${this.region}`;
 ```
 
 ### ❌ Bad: Circular KMS Dependencies
 
-```typescript
+```ts
 // S3 bucket uses KMS key
 encryption: s3.BucketEncryption.KMS,
 encryptionKey: kmsKey,
@@ -85,7 +85,7 @@ principals: [codeBuildRole.roleArn]
 
 ### ✅ Good: Separated Encryption Concerns
 
-```typescript
+```ts
 // S3 uses AWS managed encryption
 encryption: s3.BucketEncryption.S3_MANAGED,
 

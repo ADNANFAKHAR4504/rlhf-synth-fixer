@@ -8,12 +8,12 @@ This document outlines the critical issues found in the original MODEL_RESPONSE.
 ### 1. Missing Import Statement
 **Issue**: The import for `S3BucketObjectLockConfiguration` was incorrect.
 **Original Code**:
-```typescript
+```ts
 import { S3BucketObjectLockConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-object-lock-configuration';
 ```
 **Root Cause**: The CDKTF AWS provider uses a different naming convention with 'A' suffix for certain resources.
 **Fix Applied**:
-```typescript
+```ts
 import { S3BucketObjectLockConfigurationA } from '@cdktf/provider-aws/lib/s3-bucket-object-lock-configuration';
 ```
 **Verification**: Build succeeded after fix.
@@ -21,7 +21,7 @@ import { S3BucketObjectLockConfigurationA } from '@cdktf/provider-aws/lib/s3-buc
 ### 2. Missing Environment Suffix in Resource Names
 **Issue**: Resource names did not include environment suffix, causing potential conflicts in multi-environment deployments.
 **Original Code**:
-```typescript
+```ts
 const backupBucket = new S3Bucket(this, 'backup-bucket', {
   bucket: `backup-storage-${Date.now()}`,
   // ...
@@ -29,7 +29,7 @@ const backupBucket = new S3Bucket(this, 'backup-bucket', {
 ```
 **Root Cause**: Missing environment suffix parameter propagation to child stack.
 **Fix Applied**:
-```typescript
+```ts
 // Added environmentSuffix to props
 interface BackupInfrastructureStackProps {
   region: string;
@@ -48,7 +48,7 @@ const backupBucket = new S3Bucket(this, 'backup-bucket', {
 **Issue**: No proper AWS region handling for CI/CD vs test environments.
 **Root Cause**: Missing environment-specific region configuration logic.
 **Fix Applied**:
-```typescript
+```ts
 // Added proper region override logic
 const AWS_REGION_OVERRIDE = process.env.NODE_ENV === 'test' ? '' : 'us-east-1';
 const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
@@ -58,12 +58,12 @@ const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
 ### 4. S3 Bucket Naming Conflicts
 **Issue**: Used `Date.now()` directly causing deployment failures with existing buckets.
 **Original Code**:
-```typescript
+```ts
 bucket: `backup-storage-${environmentSuffix}-${Date.now()}`,
 ```
 **Root Cause**: Global S3 bucket namespace conflicts and missing unique identifier strategy.
 **Fix Applied**:
-```typescript
+```ts
 const timestampSuffix = Date.now();
 const s3UniqueSuffix = `${environmentSuffix}-useast1-${timestampSuffix}`;
 bucket: `backup-storage-${s3UniqueSuffix}`,
@@ -73,7 +73,7 @@ bucket: `backup-storage-${s3UniqueSuffix}`,
 ### 5. Missing S3 Lifecycle Rule Filter
 **Issue**: S3 lifecycle configurations missing required filter parameter.
 **Original Code**:
-```typescript
+```ts
 rule: [{
   id: 'transition-to-glacier',
   status: 'Enabled',
@@ -82,7 +82,7 @@ rule: [{
 ```
 **Root Cause**: AWS S3 lifecycle rules require explicit filter configuration.
 **Fix Applied**:
-```typescript
+```ts
 rule: [{
   id: 'transition-to-glacier', 
   status: 'Enabled',
@@ -102,7 +102,7 @@ rule: [{
 **Issue**: Missing cross-region AWS provider for disaster recovery.
 **Root Cause**: Backup cross-region functionality requires separate provider instance.
 **Fix Applied**:
-```typescript
+```ts
 const crossRegionProvider = new AwsProvider(this, 'aws-cross-region', {
   alias: 'cross-region',
   region: 'us-west-2',
@@ -114,7 +114,7 @@ const crossRegionProvider = new AwsProvider(this, 'aws-cross-region', {
 **Issue**: Single IAM role causing conflicts in multi-tenant setup.
 **Root Cause**: Missing client-specific role generation.
 **Fix Applied**:
-```typescript
+```ts
 // Generate 10 client-specific roles
 for (let clientId = 1; clientId <= 10; clientId++) {
   new IamRole(this, `backup-service-role-client-${clientId}`, {
@@ -128,12 +128,12 @@ for (let clientId = 1; clientId <= 10; clientId++) {
 ### 9. Integration Tests with AWS SDK Issues
 **Issue**: Integration tests using AWS SDK v3 with credential provider problems.
 **Original Approach**: Direct AWS SDK calls in tests
-```typescript
+```ts
 const response = await s3Client.send(new ListBucketsCommand({}));
 ```
 **Root Cause**: AWS SDK v3 credential resolution issues and ESM module conflicts.
 **Fix Applied**: **Replaced with configuration validation tests** without AWS SDK dependencies.
-```typescript
+```ts
 test('Deployment outputs contain expected resource references', () => {
   // Validate naming conventions and configurations without AWS calls
   expectedBuckets.forEach(bucketName => {
@@ -148,7 +148,7 @@ test('Deployment outputs contain expected resource references', () => {
 **Issue**: Resource name conflicts across multiple deployments.
 **Root Cause**: No systematic approach to ensuring unique resource names.
 **Fix Applied**:
-```typescript
+```ts
 const timestampSuffix = Date.now();
 const uniqueSuffix = `${environmentSuffix.replace(/-/g, '_')}_useast1_${timestampSuffix}`;
 const s3UniqueSuffix = `${environmentSuffix}-useast1-${timestampSuffix}`;
@@ -159,7 +159,7 @@ const s3UniqueSuffix = `${environmentSuffix}-useast1-${timestampSuffix}`;
 **Issue**: Backup plan rules missing required parameters and copy actions configuration.
 **Root Cause**: Incomplete backup plan rule specifications.
 **Fix Applied**: Complete backup plan with all required parameters:
-```typescript
+```ts
 rule: [{
   ruleName: `backup-rule-daily-${uniqueSuffix}`,
   targetBackupVault: primaryVault.name,
@@ -184,7 +184,7 @@ rule: [{
 ### 12. Invalid Terraform Backend Configuration
 **Issue**: Used non-existent `use_lockfile` property in S3 backend.
 **Original Code**:
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -195,7 +195,7 @@ new S3Backend(this, {
 ```
 **Root Cause**: S3 backend doesn't support `use_lockfile` parameter.
 **Fix Applied**:
-```typescript
+```ts
 new S3Backend(this, {
   bucket: stateBucket,
   key: `${environmentSuffix}/${id}.tfstate`,
@@ -209,14 +209,14 @@ new S3Backend(this, {
 ### 13. Missing Proper Test Structure
 **Issue**: Integration tests were placeholder tests with no real infrastructure validation.
 **Original Code**:
-```typescript
+```ts
 test('Stack deployment configuration is valid', () => {
   expect(true).toBe(true); // ❌ PLACEHOLDER TEST
 });
 ```
 **Root Cause**: No actual testing of deployed infrastructure or configuration validation.
 **Fix Applied**: **Comprehensive real infrastructure testing**:
-```typescript
+```ts
 test('Deployment outputs contain expected resource references', () => {
   const expectedBuckets = [
     `backup-storage-backup-infrastructure-${environmentSuffix}`,
@@ -263,7 +263,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 **Root Cause**: Confusion between backend properties; S3 backend uses DynamoDB for locking.
 **Fix Applied**:
-```typescript
+```ts
 this.addOverride('terraform.backend.s3.dynamodb_table', `terraform-state-lock-${environmentSuffix}`);
 ```
 **Verification**: Terraform init succeeded with proper state locking.
@@ -271,7 +271,7 @@ this.addOverride('terraform.backend.s3.dynamodb_table', `terraform-state-lock-${
 ### 4. Missing Lambda Deployment Package
 **Issue**: Lambda function referenced a non-existent lambda.zip file.
 **Original Code**:
-```typescript
+```ts
 const verificationLambda = new LambdaFunction(this, 'backup-verification', {
   filename: 'lambda.zip',
   // ...
@@ -331,7 +331,7 @@ const verificationLambda = new LambdaFunction(this, 'backup-verification', {
 ### 9. Variable Declaration Order Error
 **Issue**: `crossRegionVault` was used before its declaration.
 **Original Code**:
-```typescript
+```ts
 // Lambda function using crossRegionVault
 environment: {
   variables: {
@@ -347,11 +347,11 @@ const crossRegionVault = new BackupVault(...);
 ### 10. Invalid Provider Reference Type
 **Issue**: Provider property expected TerraformProvider object but received string.
 **Original Code**:
-```typescript
+```ts
 provider: 'aws.west2',
 ```
 **Fix Applied**:
-```typescript
+```ts
 const westProvider = new AwsProvider(this, 'aws-west-2', {
   alias: 'west2',
   region: 'us-west-2',
@@ -364,13 +364,13 @@ provider: westProvider,
 ### 11. Invalid BackupFramework Control Scope Property
 **Issue**: Used `resourceTypes` instead of `complianceResourceTypes` in scope.
 **Original Code**:
-```typescript
+```ts
 scope: {
   resourceTypes: ['S3', 'DynamoDB'],
 }
 ```
 **Fix Applied**:
-```typescript
+```ts
 scope: {
   complianceResourceTypes: ['S3', 'DynamoDB'],
 }

@@ -12,7 +12,7 @@ This document analyzes the infrastructure code generation failures between the M
 
 The model generated S3 bucket lifecycle configuration with incorrect TypeScript type structure for the `filter` and `expiration` properties:
 
-```typescript
+```ts
 // Lines 262-273 in MODEL_RESPONSE.md
 new S3BucketLifecycleConfiguration(this, "flow-logs-lifecycle", {
   bucket: flowLogsBucket.id,
@@ -30,7 +30,7 @@ new S3BucketLifecycleConfiguration(this, "flow-logs-lifecycle", {
 
 **IDEAL_RESPONSE Fix**:
 
-```typescript
+```ts
 // Lines 266-280 in IDEAL_RESPONSE.md (lib/tap-stack.ts lines 266-280)
 new S3BucketLifecycleConfiguration(this, "flow-logs-lifecycle", {
   bucket: flowLogsBucket.id,
@@ -101,7 +101,7 @@ error TS2322: Type '{ days: number; }' is not assignable to type 'S3BucketLifecy
 
 The model likely drew from AWS CDK patterns where `S3BucketLifecycleRule` properties are defined as objects:
 
-```typescript
+```ts
 // AWS CDK pattern (CloudFormation-based)
 new s3.Bucket(this, 'Bucket', {
   lifecycleRules: [{
@@ -112,7 +112,7 @@ new s3.Bucket(this, 'Bucket', {
 
 However, CDKTF follows Terraform's schema where nested blocks are always arrays:
 
-```typescript
+```ts
 // CDKTF pattern (Terraform-based)
 new S3BucketLifecycleConfiguration(this, 'lifecycle', {
   rule: [{

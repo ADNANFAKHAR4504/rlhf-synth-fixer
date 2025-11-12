@@ -9,7 +9,7 @@ ValidationError: You must supply at least 2 intervals for autoscaling
 
 The issue is in the ScaleDownPolicy StepScalingPolicy configuration. Currently it only has one scaling step:
 
-```typescript
+```ts
 scalingSteps: [{ upper: 30, change: -1 }]
 ```
 

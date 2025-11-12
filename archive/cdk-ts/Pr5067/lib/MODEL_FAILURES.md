@@ -17,7 +17,7 @@ This document compares the prompt requirements with the AI model's response and 
 Created separate independent `cdk.Stack` classes instead of `cdk.NestedStack`.
 
 **Model's wrong approach:**
-```typescript
+```ts
 class NetworkStack extends cdk.Stack {  // WRONG
   constructor(scope: cdk.App, id: string, props?: cdk.StackProps) {
     super(scope, id, { ...props, env });
@@ -27,7 +27,7 @@ class NetworkStack extends cdk.Stack {  // WRONG
 ```
 
 **Correct implementation (from working tap-stack.ts):**
-```typescript
+```ts
 class NetworkStack extends cdk.NestedStack {  //  CORRECT
   constructor(scope: Construct, id: string, props?: cdk.NestedStackProps) {
     super(scope, id, props);
@@ -49,7 +49,7 @@ class NetworkStack extends cdk.NestedStack {  //  CORRECT
 Used `nodejs.NodejsFunction` with external TypeScript files that don't exist.
 
 **Model's wrong approach:**
-```typescript
+```ts
 this.glueTriggerFunction = new nodejs.NodejsFunction(this, 'GlueTriggerFunction', {
   entry: 'lambda/glue-trigger/index.ts', //  File doesn't exist
   handler: 'handler',
@@ -58,7 +58,7 @@ this.glueTriggerFunction = new nodejs.NodejsFunction(this, 'GlueTriggerFunction'
 ```
 
 **Correct implementation:**
-```typescript
+```ts
 this.glueTriggerFunction = new lambda.Function(this, 'GlueTriggerFunction', {
   runtime: lambda.Runtime.PYTHON_3_12,  //  Python as specified
   handler: 'index.handler',
@@ -90,7 +90,7 @@ def handler(event, context):
 Used direct S3 Lambda notifications, which was explicitly NOT requested.
 
 **Model's wrong approach:**
-```typescript
+```ts
 props.dataBucket.addEventNotification(
   s3.EventType.OBJECT_CREATED,
   new s3n.LambdaDestination(this.glueTriggerFunction)  // WRONG
@@ -98,7 +98,7 @@ props.dataBucket.addEventNotification(
 ```
 
 **Correct implementation:**
-```typescript
+```ts
 // In StorageStack - enable EventBridge
 this.dataBucket = new s3.Bucket(this, 'MigrationDataBucket', {
   eventBridgeEnabled: true,  //  Enable EventBridge
@@ -133,7 +133,7 @@ s3ToLambdaRule.addTarget(new targets.LambdaFunction(lambdaStack.glueTriggerFunct
 Created a placeholder `CfnLocationSMB` with hardcoded fake ARNs that would never work.
 
 **Model's wrong approach:**
-```typescript
+```ts
 const sourceLocation = new datasync.CfnLocationSMB(this, 'SourceLocation', {
   agentArns: ['arn:aws:datasync:us-west-2:123456789012:agent/agent-id'], // Fake ARN
   serverHostname: 'onprem.example.com', //  Placeholder
@@ -142,7 +142,7 @@ const sourceLocation = new datasync.CfnLocationSMB(this, 'SourceLocation', {
 ```
 
 **Correct implementation:**
-```typescript
+```ts
 // Launch actual EC2 instance with DataSync AMI
 const agentInstance = new ec2.Instance(this, 'DataSyncAgentEC2', {
   instanceType: ec2.InstanceType.of(ec2.InstanceClass.M5, ec2.InstanceSize.LARGE),
@@ -184,14 +184,14 @@ const activationFunction = new lambda.Function(this, 'AgentActivatorFunction', {
 Used Aurora MySQL 3.05.2
 
 **Model's wrong version:**
-```typescript
+```ts
 engine: rds.DatabaseClusterEngine.auroraMysql({
   version: rds.AuroraMysqlEngineVersion.VER_3_05_2,  //  Wrong version
 }),
 ```
 
 **Correct version:**
-```typescript
+```ts
 engine: rds.DatabaseClusterEngine.auroraMysql({
   version: rds.AuroraMysqlEngineVersion.VER_3_09_0,  //  As specified
 }),
@@ -208,7 +208,7 @@ engine: rds.DatabaseClusterEngine.auroraMysql({
 Only created PUBLIC and PRIVATE_WITH_EGRESS (missing PRIVATE_ISOLATED)
 
 **Model's incomplete config:**
-```typescript
+```ts
 subnetConfiguration: [
   { name: 'public', subnetType: ec2.SubnetType.PUBLIC },
   { name: 'private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -217,7 +217,7 @@ subnetConfiguration: [
 ```
 
 **Correct configuration:**
-```typescript
+```ts
 subnetConfiguration: [
   { cidrMask: 24, name: 'Public', subnetType: ec2.SubnetType.PUBLIC },
   { cidrMask: 24, name: 'Private', subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -238,7 +238,7 @@ subnetConfiguration: [
 2 nodes with r6g.large.search, 100GB volume (more expensive than needed)
 
 **Model's overprovisioned config:**
-```typescript
+```ts
 capacity: {
   dataNodes: 2,  //  Should be 1
   dataNodeInstanceType: 'r6g.large.search',  //  Should be t3.small.search
@@ -249,7 +249,7 @@ ebs: {
 ```
 
 **Correct configuration:**
-```typescript
+```ts
 capacity: {
   dataNodeInstanceType: 't3.small.search',  // 
   dataNodes: 1,  // 
@@ -273,7 +273,7 @@ zoneAwareness: { enabled: false },  // Single AZ
 Only start task and wait 30 seconds, no status checking or retry loop
 
 **Model's incomplete implementation:**
-```typescript
+```ts
 const definition = startDmsTask
   .next(new sfn.Wait(this, 'WaitForCompletion', {
     time: sfn.WaitTime.duration(Duration.seconds(30)),  // 30s not 5min
@@ -282,7 +282,7 @@ const definition = startDmsTask
 ```
 
 **Correct implementation:**
-```typescript
+```ts
 const waitForReplication = new sfn.Wait(this, 'WaitForReplication', {
   time: sfn.WaitTime.duration(Duration.minutes(5)),  //  5 minutes
 });
@@ -306,7 +306,7 @@ const isComplete = new sfn.Choice(this, 'IsReplicationComplete?')
 **What the model did:**
 Created circular dependencies by instantiating stacks in wrong order, then tried to "fix" it with type assertions:
 
-```typescript
+```ts
 const glueStack = new GlueStack(app, 'MigrationGlueStack', {
   validationTopicArn: '', //  Empty string, will be "updated" later
 });
@@ -318,7 +318,7 @@ const glueStack = new GlueStack(app, 'MigrationGlueStack', {
 **Correct approach:**
 Pass resources in correct order through constructor props:
 
-```typescript
+```ts
 // Create messaging stack first
 const messagingStack = new MessagingStack(this, 'MigrationMessagingStack', {
   ...stackProps,
@@ -340,7 +340,7 @@ const glueStack = new GlueStack(this, 'MigrationGlueStack', {
 ### 10. Security Group Configuration - SECURITY FAILURE
 
 **Model's approach:**
-```typescript
+```ts
 this.dbSecurityGroup.addIngressRule(
   ec2.Peer.anyIpv4(),  //  WIDE OPEN TO INTERNET
   ec2.Port.tcp(3306),
@@ -349,7 +349,7 @@ this.dbSecurityGroup.addIngressRule(
 ```
 
 **Correct approach:**
-```typescript
+```ts
 // Allow ONLY DMS to connect to Aurora
 this.dbSecurityGroup.addIngressRule(
   this.dmsSecurityGroup,  //  Specific security group
@@ -366,7 +366,7 @@ this.dbSecurityGroup.addIngressRule(
 
 ###  1. Proper Nested Stack Structure
 
-```typescript
+```ts
 // Main stack
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
@@ -388,7 +388,7 @@ class NetworkStack extends cdk.NestedStack {  // Extends NestedStack
 
 ###  2. Environment Suffix Pattern
 
-```typescript
+```ts
 const environmentSuffix = props?.environmentSuffix || 
   this.node.tryGetContext('environmentSuffix') || 'dev';
 
@@ -401,7 +401,7 @@ removalPolicy: environmentSuffix === 'prod'
 
 ###  3. Lifecycle Rules on S3
 
-```typescript
+```ts
 lifecycleRules: [{
   id: 'DeleteOldVersions',
   noncurrentVersionExpiration: Duration.days(90),
@@ -413,7 +413,7 @@ The model didn't include any lifecycle rules at all.
 
 ###  4. Comprehensive CloudWatch Logs Export
 
-```typescript
+```ts
 cloudwatchLogsExports: ['error', 'general', 'slowquery', 'audit'],
 ```
 
@@ -421,7 +421,7 @@ The model didn't specify which log types to export.
 
 ###  5. Proper Dependency Management
 
-```typescript
+```ts
 // Explicit dependencies prevent race conditions
 storageStack.addDependency(networkStack);
 databaseStack.addDependency(networkStack);
@@ -433,7 +433,7 @@ The model had dependencies but in wrong order due to circular references.
 
 ###  6. State Machine Logging
 
-```typescript
+```ts
 const logGroup = new logs.LogGroup(this, 'StateMachineLogGroup', {
   logGroupName: `/aws/vendedlogs/states/migration-orchestration-${environmentSuffix}`,
   retention: logs.RetentionDays.ONE_MONTH,
@@ -452,7 +452,7 @@ The model didn't configure state machine logging at all.
 
 ###  7. Glue Job Configuration
 
-```typescript
+```ts
 defaultArguments: {
   '--TempDir': `s3://${props.scriptBucket.bucketName}/temp/`,
   '--job-bookmark-option': 'job-bookmark-enable',
@@ -467,7 +467,7 @@ The model had minimal Glue configuration with no job bookmarks or Spark UI.
 
 ###  8. DMS Task Settings
 
-```typescript
+```ts
 replicationTaskSettings: JSON.stringify({
   TargetMetadata: {
     SupportLobs: true,

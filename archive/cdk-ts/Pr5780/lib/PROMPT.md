@@ -126,7 +126,7 @@
   11. **Environment Logic**: Conditional resources based on dev/prod environment
 
   ### Environment Differentiation Example
-  ```typescript
+  ```ts
   // In the stack constructor
   const environment = this.node.tryGetContext('environment') || 'dev';
   const isProd = environment === 'prod';

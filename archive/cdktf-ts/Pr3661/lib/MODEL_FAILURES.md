@@ -6,7 +6,7 @@
 
 **Issue**: The MODEL_RESPONSE uses incorrect and non-existent imports from the AWS provider.
 
-```typescript
+```ts
 // MODEL_RESPONSE (Incorrect)
 import {
   AwsProvider,
@@ -23,7 +23,7 @@ import {
 - Requires complete rewrite of imports
 
 **IDEAL_RESPONSE Advantage**:
-```typescript
+```ts
 // Correct namespaced imports
 import {
   vpc,
@@ -41,7 +41,7 @@ import {
 - Incorrect S3 destination configuration
 - Missing bucket policy for log delivery
 
-```typescript
+```ts
 // MODEL_RESPONSE (Incomplete)
 const flowLog = new flowLog.FlowLog(this, "flow-log", {
   logDestination: config.flowLogBucketArn,
@@ -52,7 +52,7 @@ const flowLog = new flowLog.FlowLog(this, "flow-log", {
 ```
 
 **IDEAL_RESPONSE Implementation**:
-```typescript
+```ts
 // Complete Flow Logs setup with IAM role
 const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
   assumeRolePolicy: JSON.stringify({
@@ -85,7 +85,7 @@ const flowLogRole = new iamRole.IamRole(this, 'flow-log-role', {
 - Incorrect logging configuration
 - No proper bucket policy for service permissions
 
-```typescript
+```ts
 // MODEL_RESPONSE (Vulnerable)
 this.logBucket = new s3Bucket.S3Bucket(this, "log-bucket", {
   bucket: config.logBucketName,
@@ -94,7 +94,7 @@ this.logBucket = new s3Bucket.S3Bucket(this, "log-bucket", {
 ```
 
 **IDEAL_RESPONSE Security**:
-```typescript
+```ts
 // Proper ownership controls and policies
 new s3BucketOwnershipControls.S3BucketOwnershipControls(this, 'log-bucket-ownership', {
   bucket: this.logBucket.id,
@@ -127,7 +127,7 @@ this.logBucketPolicy = new s3BucketPolicy.S3BucketPolicy(this, 'log-bucket-polic
 - Overly permissive security group egress
 - Missing proper Auto Scaling Group tag configuration
 
-```typescript
+```ts
 // MODEL_RESPONSE (Hardcoded AMI)
 imageId: "ami-0989fb15ce71ba39e", // Will fail in other regions or accounts
 
@@ -141,7 +141,7 @@ new securityGroupRule.SecurityGroupRule(this, "all-egress", {
 ```
 
 **IDEAL_RESPONSE Best Practices**:
-```typescript
+```ts
 // Dynamic AMI lookup
 const ami = new dataAwsAmi.DataAwsAmi(this, 'amazon-linux-2', {
   mostRecent: true,
@@ -170,7 +170,7 @@ new securityGroupRule.SecurityGroupRule(this, 'https-egress', {
 - Missing proper KMS key ARN reference
 - Incomplete security group configuration
 
-```typescript
+```ts
 // MODEL_RESPONSE (Deprecated property)
 name: config.dbName, // Should be 'dbName'
 ```
@@ -178,7 +178,7 @@ name: config.dbName, // Should be 'dbName'
 ### 6. KMS Key Policy Security Flaw
 
 **MODEL_RESPONSE Critical Security Issue**:
-```typescript
+```ts
 // Overly permissive KMS policy
 Principal: { AWS: "*" }, // Allows anyone in the account
 Action: "kms:*",
@@ -186,7 +186,7 @@ Resource: "*",
 ```
 
 **IDEAL_RESPONSE Secure Implementation**:
-```typescript
+```ts
 Principal: { AWS: `arn:aws:iam::${currentAccount.accountId}:root` },
 // Properly scoped to account root only
 ```
@@ -196,7 +196,7 @@ Principal: { AWS: `arn:aws:iam::${currentAccount.accountId}:root` },
 **MODEL_RESPONSE**: The Config module is implemented but won't work without proper IAM permissions and S3 bucket policies for Config service access.
 
 **IDEAL_RESPONSE**: Properly handles the case where Config is not needed:
-```typescript
+```ts
 export class ConfigModule extends Construct {
   constructor(scope: Construct, id: string, _config: ConfigModuleConfig) {
     super(scope, id);
@@ -216,7 +216,7 @@ export class ConfigModule extends Construct {
 5. Hardcoded password in plain text
 
 **IDEAL_RESPONSE Advantages**:
-```typescript
+```ts
 // Proper S3 backend with state locking
 new S3Backend(this, {
   bucket: stateBucket,

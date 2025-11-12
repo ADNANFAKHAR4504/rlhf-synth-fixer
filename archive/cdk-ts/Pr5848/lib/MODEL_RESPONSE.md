@@ -33,7 +33,7 @@ The implementation uses AWS CDK with TypeScript to deploy CloudFormation-based i
 
 ### `bin/tap-stack.ts` (App Entry Point)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -57,7 +57,7 @@ app.synth();
 
 ### `lib/tap-stack.ts` (Complete Infrastructure)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';

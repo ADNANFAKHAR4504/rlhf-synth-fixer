@@ -32,7 +32,7 @@ For certificate validation, I should either use different email addresses or use
 
 I'll fix these remaining TypeScript errors. The issues are with duplicate object keys in the certificate validation and incorrect health check property names.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -416,7 +416,7 @@ new ProductionInfrastructureStack(app, 'ProductionInfrastructureStack', {
 
 ### 🔧 **Certificate Validation (Lines 154-155)**:
 
-```typescript
+```ts
 // ❌ Before - Duplicate keys not allowed
 validation: certificatemanager.CertificateValidation.fromEmail({
   'admin@example.com': 'example.com',
@@ -432,7 +432,7 @@ validation: certificatemanager.CertificateValidation.fromEmail({
 
 ### 🔧 **Health Check Properties (Line 236)**:
 
-```typescript
+```ts
 // ❌ Before - Wrong property names
 healthCheck: {
   intervalSeconds: 30,        // ERROR: Should be 'interval'
@@ -455,7 +455,7 @@ healthCheck: {
 
 ### **Option 1: DNS Validation (Recommended for Production)**
 
-```typescript
+```ts
 const certificate = new certificatemanager.Certificate(this, 'SSLCertificate', {
   domainName: 'example.com',
   subjectAlternativeNames: ['*.example.com'],
@@ -465,7 +465,7 @@ const certificate = new certificatemanager.Certificate(this, 'SSLCertificate', {
 
 ### **Option 2: Skip HTTPS for Testing**
 
-```typescript
+```ts
 // Comment out the certificate and HTTPS listener for initial testing
 // const certificate = ...
 // const httpsListener = ...

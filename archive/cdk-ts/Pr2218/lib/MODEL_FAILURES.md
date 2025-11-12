@@ -13,7 +13,7 @@ error TS2339: Property 'variable' does not exist on type 'typeof CodeBuildAction
 ```
 
 This error occurred in the pipeline Build Stage when trying to use:
-```typescript
+```ts
 codepipeline_actions.CodeBuildAction.variable('CODEBUILD_BUILD_NUMBER')
 ```
 
@@ -23,12 +23,12 @@ codepipeline_actions.CodeBuildAction.variable('CODEBUILD_BUILD_NUMBER')
 **Issue**: The model used `CicdPipelineStack` as the class name instead of the required `TapStack`.
 
 **Failed Code**:
-```typescript
+```ts
 export class CicdPipelineStack extends cdk.Stack {
 ```
 
 **Required Fix**: Must use `TapStack` to match the project naming conventions:
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
 ```
 
@@ -36,12 +36,12 @@ export class TapStack extends cdk.Stack {
 **Issue**: The model failed to implement the critical environment suffix pattern required by the QA pipeline for resource naming conflicts avoidance.
 
 **Failed Pattern**: Hard-coded resource names without environment suffix support
-```typescript
+```ts
 bucketName: `nova-model-pipeline-artifacts-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
 ```
 
 **Required Fix**: All resource names must include environment suffix:
-```typescript
+```ts
 bucketName: `nova-model-pipeline-artifacts-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
 ```
 
@@ -49,7 +49,7 @@ bucketName: `nova-model-pipeline-artifacts-${environmentSuffix}-${cdk.Aws.ACCOUN
 **Issue**: The model still used CodeCommit repository configuration, which was the root cause of the original deployment failures.
 
 **Failed Code**:
-```typescript
+```ts
 const repository = new codecommit.Repository(this, 'NovaModelRepository', {
   repositoryName: 'nova-model-breaking',
   description: 'Repository for IaC - AWS Nova Model Breaking project',
@@ -57,7 +57,7 @@ const repository = new codecommit.Repository(this, 'NovaModelRepository', {
 ```
 
 **Required Fix**: Must use S3-based source to avoid CodeCommit permission issues:
-```typescript
+```ts
 const sourceBucket = new s3.Bucket(this, 'SourceCodeBucket', {
   bucketName: `nova-model-source-${environmentSuffix}-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`,
   // ... proper S3 configuration
@@ -68,7 +68,7 @@ const sourceBucket = new s3.Bucket(this, 'SourceCodeBucket', {
 **Issue**: The model did not implement the required `TapStackProps` interface for proper TypeScript typing and environment suffix handling.
 
 **Missing Code**:
-```typescript
+```ts
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -78,12 +78,12 @@ interface TapStackProps extends cdk.StackProps {
 **Issue**: The model failed to implement the correct trust policy for the CloudFormation deployment role to allow CodePipeline role assumption.
 
 **Failed Code**: Only allowed CloudFormation service principal
-```typescript
+```ts
 assumedBy: new iam.ServicePrincipal('cloudformation.amazonaws.com')
 ```
 
 **Required Fix**: Must include proper role assumption policy:
-```typescript
+```ts
 deploymentRole.assumeRolePolicy?.addStatements(
   new iam.PolicyStatement({
     effect: iam.Effect.ALLOW,
@@ -107,7 +107,7 @@ deploymentRole.assumeRolePolicy?.addStatements(
 **Issue**: The model failed to add the necessary IAM policies for the S3 source bucket access.
 
 **Missing Policies**:
-```typescript
+```ts
 pipelineRole.addToPolicy(
   new iam.PolicyStatement({
     effect: iam.Effect.ALLOW,
@@ -125,7 +125,7 @@ pipelineRole.addToPolicy(
 **Issue**: The model continued using `CodeCommitSourceAction` instead of transitioning to `S3SourceAction` for the new architecture.
 
 **Failed Code**:
-```typescript
+```ts
 new codepipeline_actions.CodeCommitSourceAction({
   actionName: 'Source',
   repository: repository,
@@ -135,7 +135,7 @@ new codepipeline_actions.CodeCommitSourceAction({
 ```
 
 **Required Fix**: Must use S3 source action:
-```typescript
+```ts
 new codepipeline_actions.S3SourceAction({
   actionName: 'Source',
   bucket: sourceBucket,
@@ -148,12 +148,12 @@ new codepipeline_actions.S3SourceAction({
 **Issue**: The model failed to include environment suffix in deployment stack names, which would cause conflicts in multi-environment deployments.
 
 **Failed Code**:
-```typescript
+```ts
 stackName: 'nova-model-stack-us-east-1'
 ```
 
 **Required Fix**:
-```typescript
+```ts
 stackName: `nova-model-stack-${environmentSuffix}-us-east-1`
 ```
 

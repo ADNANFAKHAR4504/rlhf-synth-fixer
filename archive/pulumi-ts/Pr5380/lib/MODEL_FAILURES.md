@@ -19,7 +19,7 @@ This document analyzes the infrastructure code quality and identifies issues fou
 
 **MODEL_RESPONSE Issue**: The generated code contained a hardcoded `'production'` value in the Environment tag instead of using the dynamic `environmentSuffix` parameter.
 
-```typescript
+```ts
 // INCORRECT - in original MODEL_RESPONSE
 const baseTags = {
   Environment: 'production',  // ❌ Hardcoded value
@@ -30,7 +30,7 @@ const baseTags = {
 
 **IDEAL_RESPONSE Fix**: Use dynamic environmentSuffix for the Environment tag.
 
-```typescript
+```ts
 // CORRECT - in IDEAL_RESPONSE
 const baseTags = {
   Environment: environmentSuffix,  // ✅ Dynamic value
@@ -56,7 +56,7 @@ const baseTags = {
 
 **MODEL_RESPONSE Issue**: Code uses deprecated Pulumi AWS resources (`BucketV2`, `BucketVersioningV2`) that generate warnings.
 
-```typescript
+```ts
 // DEPRECATED - in MODEL_RESPONSE
 const s3Bucket = new aws.s3.BucketV2(...);
 new aws.s3.BucketVersioningV2(...);
@@ -64,7 +64,7 @@ new aws.s3.BucketVersioningV2(...);
 
 **IDEAL_RESPONSE Fix**: Should use current resource types.
 
-```typescript
+```ts
 // RECOMMENDED
 const s3Bucket = new aws.s3.Bucket(...);
 new aws.s3.BucketVersioning(...);
@@ -92,7 +92,7 @@ new aws.s3.BucketVersioning(...);
 
 **MODEL_RESPONSE Issue**: Unit tests expect Pulumi Output objects to resolve as primitive types directly, causing test failures.
 
-```typescript
+```ts
 // FAILING TEST - incorrect expectation
 const vpcId = await stack.vpcId;
 expect(typeof vpcId).toBe('string');  // ❌ Fails - vpcId is Output<string>
@@ -100,7 +100,7 @@ expect(typeof vpcId).toBe('string');  // ❌ Fails - vpcId is Output<string>
 
 **IDEAL_RESPONSE Fix**: Tests should handle Pulumi Output objects correctly.
 
-```typescript
+```ts
 // CORRECT - handle Pulumi Outputs
 const vpcId = await stack.vpcId;
 expect(vpcId).toBeDefined();
@@ -160,14 +160,14 @@ TypeError: A dynamic import callback was invoked without --experimental-vm-modul
 
 **MODEL_RESPONSE Issue**: Region is hard-coded to 'ap-southeast-2' instead of reading from AWS_REGION file.
 
-```typescript
+```ts
 // CURRENT - hard-coded
 region: 'ap-southeast-2',
 ```
 
 **IDEAL_RESPONSE Fix**: Read from configuration.
 
-```typescript
+```ts
 // BETTER - read from config/file
 region: process.env.AWS_REGION || fs.readFileSync('../lib/AWS_REGION', 'utf8').trim() || 'ap-southeast-2',
 ```

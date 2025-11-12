@@ -39,7 +39,7 @@ GitHub → CodePipeline → CodeBuild → ECR → Manual Approval
 
 Main orchestration stack that instantiates the CI/CD pipeline component.
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -142,7 +142,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 Complete CI/CD pipeline implementation with all AWS resources, IAM policies, and monitoring.
 
-```typescript
+```ts
 /**
  * cicd-pipeline-stack.ts
  *
@@ -760,7 +760,7 @@ Integration tests validate deployed AWS resources:
 **Cause**: Pulumi Outputs not properly resolved in policy JSON
 
 **Solution**: Ensure all Outputs used in `JSON.stringify()` are included in `pulumi.all()`:
-```typescript
+```ts
 policy: pulumi
   .all([output1, output2, output3])
   .apply(([value1, value2, value3]) => JSON.stringify({...}))

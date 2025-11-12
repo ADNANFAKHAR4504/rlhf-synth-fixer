@@ -144,7 +144,7 @@ output "ticket_purchase_lambda_arn" {
 
 **MODEL_RESPONSE Issue**: Placeholder integration tests with no actual validation:
 
-```typescript
+```ts
 test('Dont forget!', async () => {
   expect(false).toBe(true);
 });
@@ -168,13 +168,13 @@ test('Dont forget!', async () => {
 
 **MODEL_RESPONSE Issue**: Test files referenced incorrect filenames (`tap_stack.tf` vs `tap-stack.tf`):
 
-```typescript
+```ts
 const STACK_REL = "../lib/tap_stack.tf";
 ```
 
 **IDEAL_RESPONSE Fix**: Corrected file references and improved test structure:
 
-```typescript
+```ts
 const STACK_PATH = path.resolve(__dirname, "../lib/tap-stack.tf");
 const PROVIDER_PATH = path.resolve(__dirname, "../lib/provider.tf");
 ```

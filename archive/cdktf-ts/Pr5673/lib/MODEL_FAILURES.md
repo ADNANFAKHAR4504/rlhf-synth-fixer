@@ -10,14 +10,14 @@ This document details the critical fixes required to transform the initial MODEL
 
 **MODEL_RESPONSE Issue**: 
 The generated code incorrectly configured `serverSideEncryption` as an array instead of an object:
-```typescript
+```ts
 serverSideEncryption: [{
   enabled: true,
 }],
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 serverSideEncryption: {
   enabled: true,
 },
@@ -37,7 +37,7 @@ serverSideEncryption: {
 
 **MODEL_RESPONSE Issue**:
 The model attempted to configure stage-level throttling by creating an invalid API Gateway method with `httpMethod: "*"`:
-```typescript
+```ts
 new ApiGatewayMethod(this, 'api_method_settings', {
   restApiId: api.id,
   resourceId: api.rootResourceId,
@@ -48,7 +48,7 @@ new ApiGatewayMethod(this, 'api_method_settings', {
 
 **IDEAL_RESPONSE Fix**:
 Removed the invalid method entirely. Throttling is correctly configured through the Usage Plan resource (for production only):
-```typescript
+```ts
 const usagePlan = new ApiGatewayUsagePlan(this, 'usage_plan', {
   throttleSettings: {
     rateLimit: throttleRate,
@@ -76,7 +76,7 @@ const usagePlan = new ApiGatewayUsagePlan(this, 'usage_plan', {
 
 **MODEL_RESPONSE Issue**:
 While the Lambda environment variables were configured, the model didn't explicitly configure KMS encryption as mentioned in the requirements:
-```typescript
+```ts
 environment: {
   variables: {
     TABLE_NAME: dynamoTable.name,

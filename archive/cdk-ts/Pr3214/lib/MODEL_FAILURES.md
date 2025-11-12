@@ -14,7 +14,7 @@
 
 **Fix Applied**: Updated S3 bucket naming to include both environment suffix and region:
 
-```typescript
+```ts
 bucketName: `community-static-${environmentSuffix}-${this.account}-${this.region}`;
 ```
 

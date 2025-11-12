@@ -2,7 +2,7 @@ You're absolutely right! Let me provide the complete, corrected code. I notice I
 
 ## Complete main.ts
 
-```typescript
+```ts
 // main.ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';

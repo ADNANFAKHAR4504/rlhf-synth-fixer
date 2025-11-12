@@ -8,7 +8,7 @@
 
 
 ### 1. **Architecture Mismatches**
-```typescript
+```ts
 // Lambda configuration shows:
 architecture: lambda.Architecture.ARM_64, // The fix for the architecture mismatch
 code: lambda.Code.fromAsset('lambda', {
@@ -46,7 +46,7 @@ my-serverless-app/
 
 
 ### 2. **Consistent Architecture Decisions**
-```typescript
+```ts
 // Either use ARM64 consistently:
 architecture: lambda.Architecture.ARM_64,
 bundling: {
@@ -64,7 +64,7 @@ bundling: {
 
 
 ### 3. **Production-Ready Configuration**
-```typescript
+```ts
 // Missing critical production configurations:
 - CloudWatch alarms and monitoring
 - Lambda dead letter queues
@@ -84,7 +84,7 @@ The Lambda function lacks comprehensive error handling for:
 
 
 ### 5. **Security Hardening**
-```typescript
+```ts
 // Missing security configurations:
 - S3 bucket should not have public read access by default
 - API Gateway should have request validation
@@ -97,7 +97,7 @@ The Lambda function lacks comprehensive error handling for:
 
 
 ### 1. **Deprecated Patterns**
-```typescript
+```ts
 // Uses older CDK patterns instead of:
 import { aws_lambda as lambda } from 'aws-cdk-lib';
 import { aws_apigateway as apigateway } from 'aws-cdk-lib';

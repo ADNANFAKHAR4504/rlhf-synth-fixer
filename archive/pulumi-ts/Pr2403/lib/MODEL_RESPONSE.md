@@ -1,6 +1,6 @@
 I'll create a comprehensive Pulumi TypeScript implementation that meets all your requirements. Here's the complete infrastructure code in a single file:
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as awsx from "@pulumi/awsx";

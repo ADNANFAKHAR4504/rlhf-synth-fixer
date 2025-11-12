@@ -22,7 +22,7 @@ Let's break down the requirements for the AWS CDK TypeScript program we need to 
 
 Let's create the CDK TypeScript program. I'll structure it as a complete, deployable application:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -220,7 +220,7 @@ export class NovaModelBreakingStack extends cdk.Stack {
 
 Now, let's create the main app file to deploy the stack:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -281,7 +281,7 @@ Let's make those adjustments:
 
 Updated Stack code:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -481,7 +481,7 @@ export class NovaModelBreakingStack extends cdk.Stack {
 
 Updated main app code:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -527,7 +527,7 @@ new NovaModelBreakingStack(app, 'NovaModelBreakingStack', {
 
 Let's add a sample Lambda function code stub:
 
-```typescript
+```ts
 // Lambda function code (to be placed in ./lambda/index.js)
 exports.handler = async (event) => {
   console.log('Received event:', JSON.stringify(event, null, 2));
@@ -573,7 +573,7 @@ Let's make one final review of the requirements:
 
 The implementation looks good. Let's update the code one more time to make it clearer and more straightforward:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -794,7 +794,7 @@ export class IaCNovaModelBreakingStack extends cdk.Stack {
 
 And updated app.ts:
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -869,7 +869,7 @@ The solution consists of two TypeScript files:
 
 ### iac-nova-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -1115,7 +1115,7 @@ export class IacNovaStack extends cdk.Stack {
 
 ### app.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

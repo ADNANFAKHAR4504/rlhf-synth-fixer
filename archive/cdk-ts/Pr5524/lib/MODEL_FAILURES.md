@@ -24,7 +24,7 @@ language: TypeScript
 **Impact:** Complete incompatibility - code could not be used at all
 
 **Fix:** Complete rewrite using AWS CDK v2 with TypeScript:
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 ```
@@ -42,7 +42,7 @@ import { Construct } from 'constructs';
 ```
 
 **Fix:** Implemented Lambda functions using Node.js 22.x runtime with proper TypeScript handlers:
-```typescript
+```ts
 const s3RemediationFunction = new NodejsFunction(this, 'S3RemediationFunction', {
   entry: path.join(__dirname, 'lambda/s3-remediation.ts'),
   runtime: lambda.Runtime.NODEJS_22_X,
@@ -67,7 +67,7 @@ const s3RemediationFunction = new NodejsFunction(this, 'S3RemediationFunction', 
 > "Implement S3 bucket policies that enforce encryption-at-rest using specific KMS keys based on object tags"
 
 **Fix:** Implemented comprehensive tagging in Lambda remediation function:
-```typescript
+```ts
 const REQUIRED_TAGS: RequiredTags = {
   DataClassification: ['PII', 'FINANCIAL', 'OPERATIONAL', 'PUBLIC'],
   Compliance: 'PCI-DSS',
@@ -100,7 +100,7 @@ const KMS_KEY_MAPPING: KMSKeyMapping = {
 - CloudWatch Logs service permissions
 - Proper condition keys for security
 
-```typescript
+```ts
 const piiKmsKey = new kms.Key(this, 'PiiKmsKey', {
   enableKeyRotation: true,
   multiRegion: true,
@@ -150,7 +150,7 @@ const piiKmsKey = new kms.Key(this, 'PiiKmsKey', {
 > "S3 buckets must block all public access and require TLS 1.2 minimum"
 
 **Fix:** Implemented explicit TLS 1.2 enforcement in bucket policies:
-```typescript
+```ts
 piiDataBucket.addToResourcePolicy(
   new iam.PolicyStatement({
     sid: 'EnforceTLS12',
@@ -178,7 +178,7 @@ piiDataBucket.addToResourcePolicy(
 **Problem:** MODEL_RESPONSE.md had incorrect or missing assume role policies
 
 **Fix:** Implemented proper trust policies for all roles:
-```typescript
+```ts
 const appServicesRole = new iam.Role(this, 'AppServicesRole', {
   roleName: `app-services-role-${environmentSuffix}`,
   assumedBy: new iam.CompositePrincipal(
@@ -198,13 +198,13 @@ const appServicesRole = new iam.Role(this, 'AppServicesRole', {
 **Problem:** Initial implementation had incorrect metric names that wouldn't match actual CloudWatch metrics
 
 **Initial (Incorrect) Code:**
-```typescript
+```ts
 metricName: 'IAMPolicyChanges'  // Wrong
 metricName: 'FailedLoginAttempts'  // Wrong
 ```
 
 **Fix:** Corrected metric names to match AWS CloudWatch conventions:
-```typescript
+```ts
 new cloudwatch.Alarm(this, 'FailedAuthenticationAlarm', {
   alarmName: `failed-authentication-${environmentSuffix}`,
   metric: new cloudwatch.Metric({
@@ -225,13 +225,13 @@ new cloudwatch.Alarm(this, 'FailedAuthenticationAlarm', {
 **Problem:** Initial EventBridge rule names didn't follow consistent naming convention
 
 **Initial (Incorrect) Code:**
-```typescript
+```ts
 ruleName: 's3-remediation-trigger-dev'  // Inconsistent
 ruleName: 'kms-rotation-events-dev'  // Inconsistent
 ```
 
 **Fix:** Standardized naming convention:
-```typescript
+```ts
 const s3RemediationRule = new events.Rule(this, 'S3RemediationRule', {
   ruleName: `s3-object-remediation-${environmentSuffix}`,
   description: 'Trigger S3 remediation on object creation',
@@ -264,7 +264,7 @@ const kmsRotationEventRule = new events.Rule(this, 'KmsRotationEventRule', {
 **Problem:** Initial timeout values were not optimal for function complexity
 
 **Fix:** Adjusted timeouts based on function complexity:
-```typescript
+```ts
 const s3RemediationFunction = new NodejsFunction(this, 'S3RemediationFunction', {
   timeout: cdk.Duration.seconds(300),  // 5 minutes for S3 operations
   memorySize: 512,
@@ -284,12 +284,12 @@ const keyRotationMonitorFunction = new NodejsFunction(this, 'KeyRotationMonitorF
 **Problem:** Resources initially used RETAIN policy, preventing proper cleanup during stack destruction
 
 **Initial (Incorrect) Code:**
-```typescript
+```ts
 removalPolicy: cdk.RemovalPolicy.RETAIN,  // Wrong for synthetic tasks
 ```
 
 **Fix:** Changed all resources to use DESTROY policy:
-```typescript
+```ts
 const piiKmsKey = new kms.Key(this, 'PiiKmsKey', {
   enableKeyRotation: true,
   multiRegion: true,
@@ -350,7 +350,7 @@ Lines        : 100%
 **Addition:** Added 18 comprehensive stack outputs for external integration
 
 **Outputs Added:**
-```typescript
+```ts
 new cdk.CfnOutput(this, 'PiiKmsKeyArnOutput', {
   value: piiKmsKey.keyArn,
   description: 'ARN of the PII KMS encryption key',
@@ -393,7 +393,7 @@ new cdk.CfnOutput(this, 'PiiDataBucketOutput', {
 ### 3. Environment Configuration
 **Addition:** Implemented flexible environment configuration with context and props
 
-```typescript
+```ts
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
   externalSecurityAccountId?: string;
@@ -420,7 +420,7 @@ export class TapStack extends cdk.Stack {
 ### 4. Cross-Account Security Role
 **Addition:** Implemented optional cross-account IAM role for external security tools
 
-```typescript
+```ts
 if (props?.externalSecurityAccountId) {
   const crossAccountSecurityRole = new iam.Role(this, 'CrossAccountSecurityRole', {
     roleName: `cross-account-security-scanner-${environmentSuffix}`,
@@ -454,7 +454,7 @@ if (props?.externalSecurityAccountId) {
 ### 5. Compliance Report Output
 **Addition:** Generated structured compliance report as stack output
 
-```typescript
+```ts
 const complianceReport = {
   encryption_at_rest: {
     requirement: 'Encryption at Rest',

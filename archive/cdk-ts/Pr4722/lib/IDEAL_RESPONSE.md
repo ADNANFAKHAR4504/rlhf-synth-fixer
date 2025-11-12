@@ -21,7 +21,7 @@ The architecture includes:
 
 ### Main Webhook Stack - lib/webhook.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -749,7 +749,7 @@ export class WebhookStack extends cdk.Stack {
 
 ### Main Orchestration Stack - lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { WebhookStack } from './webhook';

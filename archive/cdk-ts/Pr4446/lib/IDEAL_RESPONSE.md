@@ -4,7 +4,7 @@ Here is the complete CDK TypeScript infrastructure code for the food delivery ap
 
 ## Main Stack Implementation
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -211,7 +211,7 @@ export class TapStack extends cdk.Stack {
 
 ## VPC Construct
 
-```typescript
+```ts
 // lib/vpc-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -259,7 +259,7 @@ export class VpcConstruct extends Construct {
 
 ## ECS Cluster Construct
 
-```typescript
+```ts
 // lib/ecs-cluster-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -299,7 +299,7 @@ export class EcsClusterConstruct extends Construct {
 
 ## Service Connect Construct
 
-```typescript
+```ts
 // lib/service-connect-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -350,7 +350,7 @@ export class ServiceConnectConstruct extends Construct {
 
 ## Application Load Balancer Construct
 
-```typescript
+```ts
 // lib/alb-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -429,7 +429,7 @@ export class AlbConstruct extends Construct {
 
 ## Orders API Construct
 
-```typescript
+```ts
 // lib/orders-api-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -584,7 +584,7 @@ export class OrdersApiConstruct extends Construct {
 
 ## Restaurants API Construct
 
-```typescript
+```ts
 // lib/restaurants-api-construct.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

@@ -1,6 +1,6 @@
 Here's a complete TypeScript CDK file that provisions a secure and scalable infrastructure with all the requested components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

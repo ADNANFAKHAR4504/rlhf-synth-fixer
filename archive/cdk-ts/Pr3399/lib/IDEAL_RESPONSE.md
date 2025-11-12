@@ -25,7 +25,7 @@ Below is a complete, production-ready CDK application that implements all specif
 
 ### **Complete CDK Stack Implementation**
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
@@ -398,7 +398,7 @@ export class TapStack extends cdk.Stack {
 
 ### **BIN/APP FILE - Application Entry Point**
 
-```typescript
+```ts
 // bin/tap.ts
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

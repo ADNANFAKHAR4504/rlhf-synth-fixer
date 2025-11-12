@@ -29,7 +29,7 @@ These issues demonstrate the importance of:
 
 **Issue:**
 
-```typescript
+```ts
 // MODEL (VULNERABLE):
 const contentBucket = new s3.Bucket(
   this,
@@ -56,7 +56,7 @@ const contentBucket = new s3.Bucket(
 
 **Fix:**
 
-```typescript
+```ts
 // IDEAL (SECURE):
 const contentBucket = new s3.Bucket(
   this,
@@ -121,7 +121,7 @@ contentBucket.addToResourcePolicy(
 
 **Issue:**
 
-```typescript
+```ts
 // MODEL (FAILED):
 runtime: lambda.Runtime.NODEJS_18_X,  // FAILED: GLIBC compatibility issue
 
@@ -148,7 +148,7 @@ runtime: lambda.Runtime.NODEJS_18_X,  // FAILED: GLIBC compatibility issue
 
 **Fix:**
 
-```typescript
+```ts
 // IDEAL (CORRECT):
 runtime: lambda.Runtime.NODEJS_22_X,  // CORRECT: Node.js 22 has better GLIBC compatibility
 
@@ -180,7 +180,7 @@ runtime: lambda.Runtime.NODEJS_22_X,  // CORRECT: Node.js 22 has better GLIBC co
 
 **Issue:**
 
-```typescript
+```ts
 // MODEL (FAILED):
 // No KMS permissions for EC2 role
 const ec2Role = this.createEc2Role(); // Missing KMS key parameter
@@ -226,7 +226,7 @@ Client.InvalidKMSKey.InvalidState: The KMS key provided is in an incorrect state
 
 **Fix:**
 
-```typescript
+```ts
 // IDEAL (CORRECT):
 // 1. Use AWS managed EBS key for EBS encryption (SIMPLER & MORE RELIABLE)
 blockDevices: [{

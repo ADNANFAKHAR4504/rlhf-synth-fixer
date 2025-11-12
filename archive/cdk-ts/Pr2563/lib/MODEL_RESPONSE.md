@@ -4,7 +4,7 @@ This document contains the complete implementation of the secure VPC stack in AW
 
 ## Secure VPC Stack Implementation
 
-```typescript
+```ts
 // lib/secure-vpc-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

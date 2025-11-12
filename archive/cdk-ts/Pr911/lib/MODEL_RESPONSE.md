@@ -1,6 +1,6 @@
 I'll create a comprehensive, production-ready CDK stack that meets all your security requirements. This stack demonstrates secure communication patterns and follows AWS security best practices.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

@@ -47,7 +47,7 @@ I'll implement a production-grade multi-region CI/CD pipeline using Pulumi with 
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 

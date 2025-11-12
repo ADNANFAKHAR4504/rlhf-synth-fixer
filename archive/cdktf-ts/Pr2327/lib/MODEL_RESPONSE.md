@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
@@ -384,7 +384,7 @@ rm -rf aws awscliv2.zip
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";
@@ -508,7 +508,7 @@ export class TapStack extends TerraformStack {
 3. **Replace the generated files** with the code above
 
 4. **Update your main.ts** to use TapStack:
-   ```typescript
+   ```ts
    import { App } from "cdktf";
    import { TapStack } from "./lib/tap-stack";
 

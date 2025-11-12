@@ -6,7 +6,7 @@
 
 #### ❌ Circular Dependency in KMS/S3/CodeBuild
 
-```typescript
+```ts
 // This created a circular dependency
 const encryptionKey = new kms.Key(this, 'PipelineEncryptionKey', {
   alias: createResourceName('pipeline-key'),
@@ -46,7 +46,7 @@ const codeBuildRole = new iam.Role(this, 'CodeBuildRole', {
 
 #### ❌ TypeScript Compilation Errors
 
-```typescript
+```ts
 // Error 1: encryptionKey property doesn't exist on Pipeline
 const pipeline = new codepipeline.Pipeline(this, 'CICDPipeline', {
   encryptionKey: encryptionKey, // ❌ Property doesn't exist
@@ -67,7 +67,7 @@ const metric = new cloudwatch.Metric({
 
 ### Failed Test Structure
 
-```typescript
+```ts
 // This test failed due to circular dependencies
 describe('Resource dependencies are properly defined', () => {
   test('Template can be synthesized without circular dependencies', () => {
@@ -104,7 +104,7 @@ The original implementation didn't map out resource dependencies, leading to:
 
 ### ✅ Successful Architecture
 
-```typescript
+```ts
 // Separated concerns - KMS only for Secrets Manager
 const encryptionKey = new kms.Key(this, 'PipelineEncryptionKey', {
   enableKeyRotation: true,
@@ -150,7 +150,7 @@ const buildProject = new codebuild.PipelineProject(this, 'BuildProject', {
 
 ### ✅ Fixed Property Names
 
-```typescript
+```ts
 // Correct CloudFormation capabilities
 const deployAction =
   new codepipeline_actions.CloudFormationCreateUpdateStackAction({
@@ -165,7 +165,7 @@ const deployAction =
 
 ### ✅ Working Cost Monitoring
 
-```typescript
+```ts
 // Complete CloudWatch metric implementation
 const buildCostMetric = new cloudwatch.Metric({
   namespace: 'Custom/CostMonitoring',

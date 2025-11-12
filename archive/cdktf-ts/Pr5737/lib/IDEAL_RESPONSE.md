@@ -131,7 +131,7 @@ cdktf destroy
 ```
 
 Programmatic usage example:
-```typescript
+```ts
 import { App } from 'cdktf';
 import { TapStack } from './lib/tap-stack';
 

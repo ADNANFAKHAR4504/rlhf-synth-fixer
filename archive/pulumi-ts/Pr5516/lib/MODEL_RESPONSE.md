@@ -15,7 +15,7 @@ The solution deploys:
 
 ## File: lib/network-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -172,7 +172,7 @@ export class NetworkStack extends pulumi.ComponentResource {
 
 ## File: lib/security-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -269,7 +269,7 @@ export class SecurityStack extends pulumi.ComponentResource {
 
 ## File: lib/compute-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -471,7 +471,7 @@ yum install -y amazon-cloudwatch-agent
 
 ## File: lib/loadbalancer-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -554,7 +554,7 @@ export class LoadBalancerStack extends pulumi.ComponentResource {
 
 ## File: lib/monitoring-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -728,7 +728,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
 
 ## File: lib/route53-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -803,7 +803,7 @@ export class Route53Stack extends pulumi.ComponentResource {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *
@@ -959,7 +959,7 @@ export class TapStack extends pulumi.ComponentResource {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 /**
  * Pulumi application entry point for the TAP (Test Automation Platform) infrastructure.
  *

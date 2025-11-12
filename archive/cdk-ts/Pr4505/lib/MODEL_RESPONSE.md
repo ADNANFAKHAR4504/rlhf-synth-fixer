@@ -31,7 +31,7 @@ Let's start by creating each file:
 #### 1. bin/tap.ts
 This is the entry point for the CDK app. It should import the stack and create a new instance of it.
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -49,7 +49,7 @@ new TapStack(app, 'TapStack', {
 #### 2. lib/tap-stack.ts
 This is the main stack definition. It will contain all the resources for our hybrid cloud setup.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -420,7 +420,7 @@ Everything looks good now. Let me present the final code for the three files wit
 ### Answer 
 ---
 
-```typescript
+```ts
 // bin/tap.ts
 #!/usr/bin/env node
 import 'source-map-support/register';
@@ -436,7 +436,7 @@ new TapStack(app, 'TapStack', {
 });
 ```
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

@@ -17,7 +17,7 @@ The solution implements a secure content delivery network using:
 
 ## Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';

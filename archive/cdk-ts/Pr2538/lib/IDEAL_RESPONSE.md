@@ -24,7 +24,7 @@ This document demonstrates the ideal response pattern for infrastructure as code
 ## Code Structure Analysis
 
 ### Resource Organization
-```typescript
+```ts
 // 1. Security Foundation (KMS, IAM)
 // 2. Network Infrastructure (VPC, Security Groups)
 // 3. Compute Resources (EC2, Auto Scaling)
@@ -37,7 +37,7 @@ This document demonstrates the ideal response pattern for infrastructure as code
 ### Best Practices Implemented
 
 #### KMS Key Management
-```typescript
+```ts
 const kmsKey = new kms.Key(this, `TapKmsKey${kmsKeySuffix}`, {
   alias: `alias/tap-${kmsKeySuffix}`,
   description: 'KMS key for TAP infrastructure encryption',
@@ -55,7 +55,7 @@ const kmsKey = new kms.Key(this, `TapKmsKey${kmsKeySuffix}`, {
 - Clear description for operational teams
 
 #### VPC Configuration
-```typescript
+```ts
 const vpc = new ec2.Vpc(this, 'TapVpc', {
   vpcName: `tap-vpc-${environmentSuffix}`,
   ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
@@ -84,7 +84,7 @@ const vpc = new ec2.Vpc(this, 'TapVpc', {
 - Multi-AZ deployment for high availability
 
 #### Security Group Configuration
-```typescript
+```ts
 // Restricted SSH access
 allowedSshCidrs.forEach(cidr => {
   ec2SecurityGroup.addIngressRule(
@@ -101,7 +101,7 @@ allowedSshCidrs.forEach(cidr => {
 - Restricted access for security compliance
 
 #### IAM Role with Least Privilege
-```typescript
+```ts
 const ec2Role = new iam.Role(this, 'Ec2Role', {
   assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
   description: 'IAM role for EC2 instances with minimal required permissions',
@@ -119,7 +119,7 @@ const ec2Role = new iam.Role(this, 'Ec2Role', {
 - SSM integration for secure access
 
 #### Auto Scaling with Health Checks
-```typescript
+```ts
 const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'TapAsg', {
   vpc,
   launchTemplate,
@@ -140,7 +140,7 @@ const autoScalingGroup = new autoscaling.AutoScalingGroup(this, 'TapAsg', {
 - Health check integration
 
 #### S3 Bucket Security
-```typescript
+```ts
 const s3Bucket = new s3.Bucket(this, 'TapS3Bucket', {
   bucketName: `tap-secure-bucket-${environmentSuffix}-${this.account}-${s3Timestamp}`,
   encryption: s3.BucketEncryption.KMS,
@@ -169,7 +169,7 @@ const s3Bucket = new s3.Bucket(this, 'TapS3Bucket', {
 ## Configuration Management
 
 ### Environment-Specific Configuration
-```typescript
+```ts
 const environmentSuffix = 
   props?.environmentSuffix ||
   this.node.tryGetContext('environmentSuffix') ||
@@ -182,7 +182,7 @@ const environmentSuffix =
 - Environment-specific resource naming
 
 ### Resource Naming Convention
-```typescript
+```ts
 // Consistent pattern: tap-{resource}-{environment}-{unique-suffix}
 `tap-vpc-${environmentSuffix}`
 `tap-alb-${environmentSuffix}`
@@ -197,7 +197,7 @@ const environmentSuffix =
 ## Error Handling and Validation
 
 ### Resource Dependencies
-```typescript
+```ts
 // Grant the Auto Scaling Group permission to use the KMS key
 kmsKey.grantEncryptDecrypt(autoScalingGroup.role);
 ```
@@ -208,7 +208,7 @@ kmsKey.grantEncryptDecrypt(autoScalingGroup.role);
 - Proper IAM policy management
 
 ### Health Check Configuration
-```typescript
+```ts
 healthCheck: {
   enabled: true,
   path: '/',
@@ -228,7 +228,7 @@ healthCheck: {
 ## Monitoring and Observability
 
 ### CloudTrail Integration
-```typescript
+```ts
 const trail = new cloudtrail.Trail(this, 'TapCloudTrail', {
   trailName: `tap-cloudtrail-${environmentSuffix}-${timestamp}`,
   bucket: cloudTrailBucket,
@@ -247,7 +247,7 @@ const trail = new cloudtrail.Trail(this, 'TapCloudTrail', {
 - Separate S3 bucket for log storage
 
 ### Lambda Function Monitoring
-```typescript
+```ts
 const lambdaFunction = new lambda.Function(this, 'TapLambdaFunction', {
   runtime: lambda.Runtime.NODEJS_18_X,
   handler: 'index.handler',
@@ -269,7 +269,7 @@ const lambdaFunction = new lambda.Function(this, 'TapLambdaFunction', {
 ## Outputs and Exports
 
 ### Resource Information
-```typescript
+```ts
 new cdk.CfnOutput(this, 'VpcId', {
   value: vpc.vpcId,
   description: 'VPC ID',

@@ -1,6 +1,6 @@
 Here's the complete infrastructure code for the loyalty program system using CDKTF with TypeScript:
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import {
   AwsProvider,
@@ -52,7 +52,7 @@ export class TapStack extends TerraformStack {
 }
 ```
 
-```typescript
+```ts
 // lib/loyalty-program-stack.ts
 import { Construct } from 'constructs';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';

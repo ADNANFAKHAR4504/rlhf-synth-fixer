@@ -1,6 +1,6 @@
 You're absolutely right! The `throttleSettings` property doesn't exist directly in `StageOptions`. Here's the corrected TypeScript CDK file with the proper throttling configuration:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

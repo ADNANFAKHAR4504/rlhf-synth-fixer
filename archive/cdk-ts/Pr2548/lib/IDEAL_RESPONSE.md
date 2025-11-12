@@ -6,7 +6,7 @@ This CDK TypeScript template provisions a secure, production-ready infrastructur
 
 ## Code Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

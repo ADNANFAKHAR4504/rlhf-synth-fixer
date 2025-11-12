@@ -1,4 +1,4 @@
-```typescript:Payment API CDK Stack:lib/tap-stack.ts
+```ts:Payment API CDK Stack:lib/tap-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

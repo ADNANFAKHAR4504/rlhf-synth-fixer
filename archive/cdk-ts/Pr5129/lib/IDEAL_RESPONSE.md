@@ -11,7 +11,7 @@ Notes about the implementation
 - The Lambda uses an asset under `lib/lambda/api-handler` (javascript handler) so the TypeScript stack references local runnable code during deployment.
 
 File: `lib/serverless-infrastructure-stack.ts`
-```typescript
+```ts
 import * as path from 'path';
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';

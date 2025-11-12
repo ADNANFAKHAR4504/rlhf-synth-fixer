@@ -4,7 +4,7 @@ Here's the complete CDK TypeScript infrastructure code for your blog platform:
 
 ## Main Stack File - lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { BlogInfrastructureStack } from './blog-infrastructure-stack';
@@ -31,7 +31,7 @@ export class TapStack extends cdk.Stack {
 
 ## Blog Infrastructure Stack - lib/blog-infrastructure-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';

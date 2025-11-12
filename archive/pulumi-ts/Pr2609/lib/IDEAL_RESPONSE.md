@@ -2,7 +2,7 @@
 
 ## File: webappinfra.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { EnvironmentMigrationStack } from './environmentMigrationStack';
 
@@ -65,7 +65,7 @@ export class WebAppInfra extends pulumi.ComponentResource {
 ```
 
 ## File: environmentMigrationStack.ts
-```typescript
+```ts
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';

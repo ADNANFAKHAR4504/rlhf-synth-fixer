@@ -6,7 +6,7 @@ This document contains the complete implementation of the Three-tier Application
 
 ### Main Stack File (lib/tap-stack.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -321,7 +321,7 @@ export class TapStack extends cdk.Stack {
 
 ### Application Entry Point (bin/tap.ts)
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';

@@ -21,7 +21,7 @@ Here's the complete CDKTF TypeScript implementation structured into separate mod
 
 ### File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -127,7 +127,7 @@ export class TapStack extends TerraformStack {
 
 ### File: lib/networking-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -357,7 +357,7 @@ export class NetworkingModule extends Construct {
 
 ### File: lib/security-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { SecretsmanagerSecret } from '@cdktf/provider-aws/lib/secretsmanager-secret';
 import { SecretsmanagerSecretVersion } from '@cdktf/provider-aws/lib/secretsmanager-secret-version';
@@ -442,7 +442,7 @@ export class SecurityModule extends Construct {
 
 ### File: lib/data-ingestion-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { KinesisStream } from '@cdktf/provider-aws/lib/kinesis-stream';
 import { TerraformOutput } from 'cdktf';
@@ -493,7 +493,7 @@ export class DataIngestionModule extends Construct {
 
 ### File: lib/data-storage-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -741,7 +741,7 @@ export class DataStorageModule extends Construct {
 
 ### File: lib/data-processing-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { EcsCluster } from '@cdktf/provider-aws/lib/ecs-cluster';
 import { EcsTaskDefinition } from '@cdktf/provider-aws/lib/ecs-task-definition';
@@ -1011,7 +1011,7 @@ export class DataProcessingModule extends Construct {
 
 ### File: lib/api-gateway-module.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Apigatewayv2Api } from '@cdktf/provider-aws/lib/apigatewayv2-api';
 import { Apigatewayv2Stage } from '@cdktf/provider-aws/lib/apigatewayv2-stage';

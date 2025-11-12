@@ -4,7 +4,7 @@ I'll create a comprehensive, security-focused AWS CDK stack that meets all your 
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

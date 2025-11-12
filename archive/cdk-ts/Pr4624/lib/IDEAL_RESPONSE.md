@@ -18,7 +18,7 @@ The solution implements a centralized monitoring system for managing 10,000+ dai
 
 The main stack orchestrates all monitoring components with proper dependency management:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { AlarmsConstruct } from './constructs/alarms-construct';
@@ -101,7 +101,7 @@ export class TapStack extends cdk.Stack {
 
 ### CloudWatch Dashboard (lib/constructs/dashboard-construct.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cw from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
@@ -394,7 +394,7 @@ export class DashboardConstruct extends Construct {
 
 ### CloudWatch Alarms (lib/constructs/alarms-construct.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cw from 'aws-cdk-lib/aws-cloudwatch';
 import * as cw_actions from 'aws-cdk-lib/aws-cloudwatch-actions';
@@ -586,7 +586,7 @@ export class AlarmsConstruct extends Construct {
 
 ### SNS Alerting System (lib/constructs/alerting-construct.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -716,7 +716,7 @@ export class AlertingConstruct extends Construct {
 
 ### DynamoDB Audit Table (lib/constructs/audit-construct.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import { Construct } from 'constructs';
@@ -796,7 +796,7 @@ export class AuditConstruct extends Construct {
 
 ### EventBridge Scheduling (lib/constructs/scheduling-construct.ts)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';

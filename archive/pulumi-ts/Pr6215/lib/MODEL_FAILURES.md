@@ -17,7 +17,7 @@ This document outlines the issues found in the initial MODEL_RESPONSE and the co
 - No automatic recovery from deadlocks or hung processes
 
 **Fix Applied**:
-```typescript
+```ts
 livenessProbe: {
     httpGet: {
         path: "/health",
@@ -53,7 +53,7 @@ readinessProbe: {
 - Services will experience connection failures
 
 **Fix Applied**:
-```typescript
+```ts
 egress: [{
     // ... existing rules ...
 }, {
@@ -72,7 +72,7 @@ egress: [{
 ```
 
 Also added UDP DNS (port 53) in addition to TCP:
-```typescript
+```ts
 ports: [{
     protocol: "TCP",
     port: 53,
@@ -95,7 +95,7 @@ ports: [{
 - Potential service disruption during aggressive scaling
 
 **Fix Applied**:
-```typescript
+```ts
 behavior: {
     scaleDown: {
         stabilizationWindowSeconds: 300,  // 5 min cooldown
@@ -130,7 +130,7 @@ behavior: {
 **Issue**: ConfigMap values used template strings instead of Pulumi interpolate for service URLs.
 
 **Before**:
-```typescript
+```ts
 data: {
     FRAUD_DETECTOR_URL: `http://fraud-detector-service-${environmentSuffix}:8080`,
 }
@@ -142,7 +142,7 @@ data: {
 - DNS resolution issues in some cluster configurations
 
 **Fix Applied**:
-```typescript
+```ts
 data: {
     FRAUD_DETECTOR_URL: pulumi.interpolate`http://fraud-detector-service-${environmentSuffix}.${namespace.metadata.name}.svc.cluster.local:8080`,
 }
@@ -155,7 +155,7 @@ data: {
 **Issue**: Istio DestinationRule `host` fields referenced service names without FQDN.
 
 **Before**:
-```typescript
+```ts
 spec: {
     host: paymentApiService.metadata.name,
 }
@@ -167,7 +167,7 @@ spec: {
 - Potential routing issues with service mesh
 
 **Fix Applied**:
-```typescript
+```ts
 spec: {
     host: pulumi.interpolate`${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
 }
@@ -186,7 +186,7 @@ spec: {
 - Potential cascading failures
 
 **Fix Applied**:
-```typescript
+```ts
 trafficPolicy: {
     tls: {
         mode: "ISTIO_MUTUAL",
@@ -217,7 +217,7 @@ trafficPolicy: {
 - No resilience to network issues
 
 **Fix Applied**:
-```typescript
+```ts
 http: [{
     // ... route configuration ...
     timeout: "30s",
@@ -236,7 +236,7 @@ http: [{
 **Issue**: The HPA status export attempted to access `.status` field which may not be available at deployment time.
 
 **Before**:
-```typescript
+```ts
 export const hpaStatus = pulumi.all([
     paymentApiHpa.status,
     fraudDetectorHpa.status,
@@ -254,7 +254,7 @@ export const hpaStatus = pulumi.all([
 - Difficult to reference HPAs in tests
 
 **Fix Applied**:
-```typescript
+```ts
 export const hpaStatus = pulumi.all([
     paymentApiHpa.metadata.name,
     fraudDetectorHpa.metadata.name,
@@ -280,7 +280,7 @@ export const hpaStatus = pulumi.all([
 - Not following Kubernetes labeling best practices
 
 **Fix Applied**:
-```typescript
+```ts
 metadata: {
     name: `payment-api-${environmentSuffix}`,
     namespace: namespace.metadata.name,
@@ -304,7 +304,7 @@ metadata: {
 - Easier troubleshooting with explicit annotations
 
 **Fix Applied**:
-```typescript
+```ts
 template: {
     metadata: {
         labels: { /* ... */ },
@@ -322,7 +322,7 @@ template: {
 **Issue**: Container port definitions lacked name and protocol fields.
 
 **Before**:
-```typescript
+```ts
 ports: [{
     containerPort: 8080,
 }]
@@ -334,7 +334,7 @@ ports: [{
 - Protocol should be explicit
 
 **Fix Applied**:
-```typescript
+```ts
 ports: [{
     containerPort: 8080,
     name: "http",
@@ -349,7 +349,7 @@ ports: [{
 **Issue**: Kubernetes Services lacked labels in metadata.
 
 **Fix Applied**:
-```typescript
+```ts
 metadata: {
     name: `payment-api-service-${environmentSuffix}`,
     namespace: namespace.metadata.name,
@@ -366,7 +366,7 @@ metadata: {
 **Issue**: VirtualService route destination lacked explicit weight field.
 
 **Fix Applied**:
-```typescript
+```ts
 route: [{
     destination: {
         host: pulumi.interpolate`${paymentApiService.metadata.name}.${namespace.metadata.name}.svc.cluster.local`,
@@ -385,12 +385,12 @@ route: [{
 **Issue**: VirtualService gateway reference used direct metadata.name instead of interpolate.
 
 **Before**:
-```typescript
+```ts
 gateways: [gateway.metadata.name]
 ```
 
 **Fix Applied**:
-```typescript
+```ts
 gateways: [pulumi.interpolate`${gateway.metadata.name}`]
 ```
 

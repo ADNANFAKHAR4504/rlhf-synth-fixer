@@ -1,4 +1,4 @@
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as logs from 'aws-cdk-lib/aws-logs';

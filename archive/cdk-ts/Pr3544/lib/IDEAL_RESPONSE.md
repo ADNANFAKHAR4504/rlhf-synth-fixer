@@ -1,4 +1,4 @@
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kinesis from 'aws-cdk-lib/aws-kinesis';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -514,7 +514,7 @@ exports.handler = async (event) => {
 }
 ```
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

@@ -10,7 +10,7 @@ This solution implements a scalable email notification system for e-commerce ord
 -  **Long Polling**: Configured SQS with 20-second receive message wait time for efficiency
 -  **Batch Processing**: Lambda processes up to 10 SQS messages simultaneously with 5-second batching window
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'EmailDeadLetterQueueUrl', {
   value: emailNotificationStack.emailDeadLetterQueue.queueUrl,
   description: 'SQS dead letter queue URL for failed email processing',
@@ -69,7 +69,7 @@ The system consists of four main TypeScript CDK stack files in the `lib/` direct
 
 **tap-stack.ts** - The main orchestration stack that coordinates all components:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { EmailNotificationStack } from './email-notification-stack';

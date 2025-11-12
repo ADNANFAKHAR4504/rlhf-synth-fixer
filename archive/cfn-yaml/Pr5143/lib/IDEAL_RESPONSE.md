@@ -197,7 +197,7 @@ aws cloudformation deploy \
 - No Retain deletion policies (100% destroyable)
 
 **Key Test Examples**:
-```typescript
+```ts
 // Encryption validation
 test('RDS should have encryption enabled', () => {
   const rds = template.Resources.RDSInstance;
@@ -230,7 +230,7 @@ test('RDS instance should include environmentSuffix in identifier', () => {
 **File**: `test/streamflix-dr-primary.int.test.ts`
 
 **Validation Approach**:
-```typescript
+```ts
 // Load outputs from actual deployment
 let outputs: any = {};
 try {
@@ -527,7 +527,7 @@ AutoMinorVersionUpgrade: true  # Security patches
 - **Symptom**: YAML parser error in Jest tests
 - **Cause**: js-yaml doesn't support CloudFormation intrinsic functions
 - **Resolution**: Use `yaml-cfn` library instead
-  ```typescript
+  ```ts
   import { yamlParse } from 'yaml-cfn';
   template = yamlParse(templateContent);  // Instead of yaml.load()
   ```

@@ -25,7 +25,7 @@ I'll create a comprehensive CDKTF solution with modular, production-grade AWS in
 
 ## `modules.ts` - Infrastructure Modules
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import * as aws from "@cdktf/provider-aws";
 
@@ -832,7 +832,7 @@ export class CloudFrontModule extends Construct {
 
 ## `tap-stack.ts` - Main Stack Composition
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { App, TerraformStack, TerraformOutput } from "cdktf";
 import * as aws from "@cdktf/provider-aws";

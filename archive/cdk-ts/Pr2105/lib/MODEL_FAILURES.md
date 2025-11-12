@@ -13,7 +13,7 @@ This document outlines the critical infrastructure changes and improvements made
 - Updated all region-specific configurations to use the correct US regions
 - Ensured compliance with the requirement for us-east-1 (primary) and us-west-1 (secondary)
 
-```typescript
+```ts
 // Before: Incorrect region
 const secondaryRegion = 'eu-west-1';
 
@@ -33,7 +33,7 @@ const secondaryStack = new TapStack(app, `TapStackSecondary${environmentSuffix}`
 - Added environment variables support for repository and commit author tracking
 - Applied consistent naming patterns across all resources
 
-```typescript
+```ts
 // Before: Static naming
 const app = new cdk.App();
 new TapStack(app, 'TapStack-Primary', { ... });
@@ -56,7 +56,7 @@ const primaryStack = new TapStack(app, `TapStackPrimary${environmentSuffix}`, {
 - Modified security group rules to use correct MySQL port
 - Updated CloudWatch log exports for MySQL engine
 
-```typescript
+```ts
 // Before: PostgreSQL engine
 engine: rds.DatabaseInstanceEngine.postgres({
   version: rds.PostgresEngineVersion.VER_15_4
@@ -81,7 +81,7 @@ engine: rds.DatabaseInstanceEngine.mysql({
 - Configured dual NAT gateways for high availability
 - Added proper subnet sizing with /26 CIDR blocks
 
-```typescript
+```ts
 // Before: Default VPC configuration
 const vpc = new ec2.Vpc(this, 'TapVpc', {
   maxAzs: 2,
@@ -123,7 +123,7 @@ const vpc = new ec2.Vpc(this, 'TapVpc', {
 - Added conditional logic for production vs. development environment configurations
 - Ensured S3 buckets can be properly emptied and deleted
 
-```typescript
+```ts
 // Before: Deletion protection enabled
 deletionProtection: true,
 
@@ -142,7 +142,7 @@ deletionProtection: false, // Allow cleanup in CI/CD
 - Added stack outputs for integration with external systems
 - Enabled proper resource referencing between primary and secondary stacks
 
-```typescript
+```ts
 // Before: No resource exports
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: TapStackProps) {
@@ -173,7 +173,7 @@ export class TapStack extends cdk.Stack {
 - Added proper public access blocking configuration
 - Enhanced bucket encryption with customer-managed KMS keys
 
-```typescript
+```ts
 // Before: Basic bucket configuration
 const bucket = new s3.Bucket(this, 'TapBucket', {
   versioned: true,
@@ -219,7 +219,7 @@ bucket.addToResourcePolicy(
 - Scoped CloudWatch Logs permissions to specific Lambda log groups
 - Added proper service principals and trust relationships
 
-```typescript
+```ts
 // Before: Wildcard permissions
 new iam.PolicyStatement({
   effect: iam.Effect.ALLOW,
@@ -245,7 +245,7 @@ new iam.PolicyStatement({
 - Fixed cross-dependencies between resources
 - Added explicit versioning configuration for S3 buckets
 
-```typescript
+```ts
 // Before: ec2Role referenced undefined bucket
 const ec2Role = new iam.Role(this, 'Ec2Role', {
   // ... references bucket that doesn't exist yet
@@ -269,7 +269,7 @@ const ec2Role = new iam.Role(this, 'Ec2Role', {
 - Implemented consistent tagging across all resources
 - Added repository and commit author tags from environment variables
 
-```typescript
+```ts
 // Before: Hardcoded environment
 const commonTags = {
   Environment: 'production', // Static value
@@ -295,7 +295,7 @@ const commonTags = {
 - Implemented structured logging with correlation IDs
 - Added timeout configuration and proper environment variable handling
 
-```typescript
+```ts
 // Before: Basic Lambda with AWS SDK v2
 code: lambda.Code.fromInline(`
   const AWS = require('aws-sdk');

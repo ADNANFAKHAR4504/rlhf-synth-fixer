@@ -6,7 +6,7 @@ The user is getting an error related to the AmazonLinux2ImageSsmParameterProps. 
 
 In the code I provided, I have this line:
 
-```typescript
+```ts
 const ami = ec2.MachineImage.latestAmazonLinux2({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
 });
@@ -29,7 +29,7 @@ You're right! The error occurs because `ec2.MachineImage.latestAmazonLinux2()` d
 
 Replace the AMI section in **lib/secure-cloud-stack.ts**:
 
-```typescript
+```ts
 // Get latest Amazon Linux AMI - CORRECTED VERSION
 const ami = ec2.MachineImage.latestAmazonLinux2();
 
@@ -43,7 +43,7 @@ const ami = ec2.MachineImage.latestAmazonLinux2();
 
 Here's the corrected section around line 180-200 in the stack file:
 
-```typescript
+```ts
 // User data script for EC2 instance
 const userData = ec2.UserData.forLinux();
 userData.addCommands(
@@ -113,7 +113,7 @@ If you want more control over the AMI selection, here are other valid approaches
 
 ### Option 1: Latest Amazon Linux (any generation)
 
-```typescript
+```ts
 const ami = ec2.MachineImage.latestAmazonLinux({
   generation: ec2.AmazonLinuxGeneration.AMAZON_LINUX_2,
 });
@@ -121,7 +121,7 @@ const ami = ec2.MachineImage.latestAmazonLinux({
 
 ### Option 2: Amazon Linux 2023 (recommended for new deployments)
 
-```typescript
+```ts
 const ami = ec2.MachineImage.latestAmazonLinux2023({
   cpuType: ec2.AmazonLinuxCpuType.X86_64,
 });
@@ -129,7 +129,7 @@ const ami = ec2.MachineImage.latestAmazonLinux2023({
 
 ### Option 3: Specific AMI lookup
 
-```typescript
+```ts
 const ami = ec2.MachineImage.lookup({
   name: 'amzn2-ami-hvm-*-x86_64-gp2',
   owners: ['amazon'],

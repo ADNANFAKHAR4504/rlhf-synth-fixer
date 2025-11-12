@@ -4,7 +4,7 @@ However, looking at the actual synthesized output in the test failure, I can see
 
 Let me update the code to match what the tests are expecting:
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { App, TerraformStack, TerraformOutput } from 'cdktf';
 import { AwsProvider } from '@cdktf/provider-aws/lib/provider';
@@ -818,7 +818,7 @@ app.synth();
 
 However, I notice there's a missing resource for the random ID. Let me add that and also add the missing import for the Random provider:
 
-```typescript
+```ts
 // Add this import at the top
 import { RandomProvider } from '@cdktf/provider-random/lib/provider';
 import { Id } from '@cdktf/provider-random/lib/id';

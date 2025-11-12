@@ -1,4 +1,4 @@
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -44,7 +44,7 @@ const targetStack = new TapStack(app, `TapStack-${targetRegion}-${environmentSuf
 targetStack.addDependency(sourceStack);
 ```
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';

@@ -2,7 +2,7 @@ The issue is likely caused by the CloudFormation signaling configuration and pot
 
 **bin/tap.ts**
 
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -18,7 +18,7 @@ new TapStack(app, 'TapStack', {
 
 **lib/tap-stack.ts**
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';

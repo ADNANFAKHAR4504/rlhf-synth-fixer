@@ -17,7 +17,7 @@ The infrastructure creates:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -108,7 +108,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/networking-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -530,7 +530,7 @@ chmod +x /etc/rc.local
 
 ## File: lib/security-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
 import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
@@ -689,7 +689,7 @@ export class SecurityConstruct extends Construct {
 
 ## File: lib/endpoints-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { VpcEndpoint } from '@cdktf/provider-aws/lib/vpc-endpoint';
 import { VpcEndpointRouteTableAssociation } from '@cdktf/provider-aws/lib/vpc-endpoint-route-table-association';
@@ -768,7 +768,7 @@ export class EndpointsConstruct extends Construct {
 
 ## File: lib/transit-gateway-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Ec2TransitGateway } from '@cdktf/provider-aws/lib/ec2-transit-gateway';
 import { Ec2TransitGatewayVpcAttachment } from '@cdktf/provider-aws/lib/ec2-transit-gateway-vpc-attachment';
@@ -836,7 +836,7 @@ export class TransitGatewayConstruct extends Construct {
 
 ## File: lib/flow-logs-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketLifecycleConfiguration } from '@cdktf/provider-aws/lib/s3-bucket-lifecycle-configuration';

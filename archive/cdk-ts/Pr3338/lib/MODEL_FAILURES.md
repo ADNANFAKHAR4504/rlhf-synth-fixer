@@ -71,7 +71,7 @@ This document details the infrastructure issues found in the original CDK implem
 **Problem**: Stack didn't properly handle environment suffix from different sources (props, context, defaults).
 
 **Fix**: Implemented proper fallback chain:
-```typescript
+```ts
 const environmentSuffix = 
   props?.environmentSuffix ||
   this.node.tryGetContext('environmentSuffix') ||

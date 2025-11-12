@@ -14,7 +14,7 @@ The infrastructure is organized into modular stacks for better maintainability:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { NetworkStack } from './network-stack';
@@ -159,7 +159,7 @@ export class TapStack extends cdk.Stack {
 
 ## File: lib/network-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -218,7 +218,7 @@ export class NetworkStack extends cdk.NestedStack {
 
 ## File: lib/security-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -274,7 +274,7 @@ export class SecurityStack extends cdk.NestedStack {
 
 ## File: lib/database-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -398,7 +398,7 @@ export class DatabaseStack extends cdk.NestedStack {
 
 ## File: lib/cache-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -478,7 +478,7 @@ export class CacheStack extends cdk.NestedStack {
 
 ## File: lib/storage-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as efs from 'aws-cdk-lib/aws-efs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -544,7 +544,7 @@ export class StorageStack extends cdk.NestedStack {
 
 ## File: lib/compute-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';

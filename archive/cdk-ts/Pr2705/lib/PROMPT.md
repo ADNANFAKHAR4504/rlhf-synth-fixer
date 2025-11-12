@@ -8,7 +8,7 @@ I have an existing AWS CDK project with a main stack file at `lib/tap-stack.ts`.
 ## Current Code Structure
 Here's my existing `lib/tap-stack.ts` file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

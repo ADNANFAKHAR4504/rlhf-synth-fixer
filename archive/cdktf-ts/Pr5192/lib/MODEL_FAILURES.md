@@ -30,7 +30,7 @@ The IDEAL_RESPONSE is significantly superior to the MODEL_RESPONSE due to better
 ### 2. Account ID Management
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
   this,
   'caller-identity'
@@ -42,7 +42,7 @@ const accountId = callerIdentity.accountId;
 - No hardcoded values
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 environmentVariable: [
   {
     name: 'AWS_ACCOUNT_ID',
@@ -64,7 +64,7 @@ environmentVariable: [
 ### 3. RDS Password Management
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
   // ... other config
   username: 'dbadmin',
@@ -92,7 +92,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'ecs-secrets-policy', {
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
   // ... other config
   username: 'dbadmin',
@@ -114,7 +114,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
 ### 4. ALB Access Logging Configuration
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Get ALB service account for the region
 const albServiceAccount = this.getAlbServiceAccount(props.awsRegion);
 
@@ -166,7 +166,7 @@ this.alb = new aws.lb.Lb(this, 'alb', {
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 // Incomplete bucket policy - missing ALB permissions
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
   bucket: this.bucket.id,
@@ -212,7 +212,7 @@ new aws.lbAccessLogs.LbAccessLogs(this, 'alb-logs', {
 ### 5. ECS Service Dependencies
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Listener passed as dependency
 constructor(scope: Construct, id: string, props: {
   // ... other props
@@ -235,7 +235,7 @@ const ecsModule = new EcsModule(this, 'ecs', {
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 // No listener dependency
 constructor(scope: Construct, id: string, props: {
   // ... other props
@@ -263,7 +263,7 @@ constructor(scope: Construct, id: string, props: {
 ### 6. ECS AMI Selection
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Get ECS-optimized AMI dynamically
 const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'ami', {
   mostRecent: true,
@@ -291,7 +291,7 @@ const launchTemplate = new aws.launchTemplate.LaunchTemplate(
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 // Hardcoded AMI ID
 const launchTemplate = new aws.launchTemplate.LaunchTemplate(this, 'ecs-lt', {
   imageId: 'ami-0c5d61202c3b9c33e', // Hardcoded, region-specific, may be outdated
@@ -311,14 +311,14 @@ const launchTemplate = new aws.launchTemplate.LaunchTemplate(this, 'ecs-lt', {
 ### 7. ECS User Data Configuration
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 userData: btoa(`#!/bin/bash
 echo ECS_CLUSTER=${this.cluster.name} >> /etc/ecs/ecs.config
 echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config`),
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 userData: btoa(`#!/bin/bash
 echo ECS_CLUSTER=${this.cluster.name} >> /etc/ecs/ecs.config
 echo ECS_BACKEND_HOST= >> /etc/ecs/ecs.config`),
@@ -335,7 +335,7 @@ echo ECS_BACKEND_HOST= >> /etc/ecs/ecs.config`),
 ### 8. RDS PostgreSQL Version
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
   engine: 'postgres',
   // No engineVersion specified - uses latest compatible version
@@ -343,7 +343,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
   engine: 'postgres',
   engineVersion: '14.7', // Hardcoded version
@@ -361,7 +361,7 @@ this.dbInstance = new aws.dbInstance.DbInstance(this, 'postgres-db', {
 ### 9. CloudWatch Log Group Management
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Create log group before task definition
 new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-log-group', {
   name: '/ecs/multi-tier-app',
@@ -392,7 +392,7 @@ this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 // Task Definition created first
 this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(this, 'task-def', {
   containerDefinitions: JSON.stringify([{
@@ -425,7 +425,7 @@ new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-log-group', {
 ### 10. S3 Backend Configuration with State Locking
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -439,7 +439,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 // No backend configuration provided
 // No state management implementation
 ```
@@ -456,7 +456,7 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 ### 11. Provider Default Tags
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 new AwsProvider(this, 'aws', {
   region: awsRegion,
   defaultTags: [
@@ -473,7 +473,7 @@ new AwsProvider(this, 'aws', {
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 new aws.provider.AwsProvider(this, 'aws', {
   region: 'us-west-2',
   defaultTags: [{
@@ -499,7 +499,7 @@ new aws.provider.AwsProvider(this, 'aws', {
 ### 12. Module Constructor Signatures
 
 **IDEAL_RESPONSE:**
-```typescript
+```ts
 // Consistent, well-structured props
 export class VpcModule extends Construct {
   constructor(scope: Construct, id: string, props: { awsRegion: string }) {
@@ -519,7 +519,7 @@ export class S3Module extends Construct {
 ```
 
 **MODEL_RESPONSE:**
-```typescript
+```ts
 // Inconsistent props structure
 export class VpcModule extends Construct {
   constructor(scope: Construct, id: string) {
@@ -548,7 +548,7 @@ export class S3Module extends Construct {
 
 **Location:** `modules.ts`, VpcModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 const azs = ['us-west-2a', 'us-west-2b'];
 ```
@@ -569,7 +569,7 @@ const azs = ['us-west-2a', 'us-west-2b'];
 - Cannot use infrastructure as code in multiple regions
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 const availabilityZones = [`${props.awsRegion}a`, `${props.awsRegion}b`];
 ```
 
@@ -579,7 +579,7 @@ const availabilityZones = [`${props.awsRegion}a`, `${props.awsRegion}b`];
 
 **Location:** `modules.ts`, CicdModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 environmentVariable: [
   {
@@ -607,7 +607,7 @@ environmentVariable: [
 - Error-prone deployment process
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 const callerIdentity = new aws.dataAwsCallerIdentity.DataAwsCallerIdentity(
   this,
   'caller-identity'
@@ -629,7 +629,7 @@ environmentVariable: [
 
 **Location:** `modules.ts`, RdsModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 password: 'Ch@ngeM3N0w!', // In production, use Secrets Manager
 ```
@@ -655,7 +655,7 @@ password: 'Ch@ngeM3N0w!', // In production, use Secrets Manager
 - No audit trail for credential access
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 manageMasterUserPassword: true, // AWS manages password in Secrets Manager
 
 // Plus IAM policy for ECS to retrieve password
@@ -681,7 +681,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'ecs-secrets-policy', {
 
 **Location:** `modules.ts`, S3Module constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 new aws.s3BucketPolicy.S3BucketPolicy(this, 'bucket-policy', {
   bucket: this.bucket.id,
@@ -730,7 +730,7 @@ Request ID: ...
 ```
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 const albServiceAccount = this.getAlbServiceAccount(props.awsRegion);
 
 this.bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
@@ -778,7 +778,7 @@ this.bucketPolicy = new aws.s3BucketPolicy.S3BucketPolicy(
 
 **Location:** `modules.ts`, AlbModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 // Enable access logging
 new aws.lbAccessLogs.LbAccessLogs(this, 'alb-logs', {
@@ -804,12 +804,12 @@ new aws.lbAccessLogs.LbAccessLogs(this, 'alb-logs', {
 - TypeScript error: "Property 'lbAccessLogs' does not exist"
 
 **Error Message:**
-```typescript
+```ts
 Error: Property 'lbAccessLogs' does not exist on type 'typeof aws'
 ```
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 this.alb = new aws.lb.Lb(this, 'alb', {
   // ... other config
   accessLogs: {
@@ -826,7 +826,7 @@ this.alb = new aws.lb.Lb(this, 'alb', {
 
 **Location:** `modules.ts`, EcsModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 this.service = new aws.ecsService.EcsService(this, 'service', {
   name: 'multi-tier-service',
@@ -866,7 +866,7 @@ arn:aws:elasticloadbalancing:... does not have an associated load balancer
 ```
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // In EcsModule constructor signature
 constructor(scope: Construct, id: string, props: {
   // ... other props
@@ -887,7 +887,7 @@ constructor(scope: Construct, id: string, props: {
 
 **Location:** `modules.ts`, EcsModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 imageId: 'ami-0c5d61202c3b9c33e', // ECS-optimized AMI for us-west-2
 ```
@@ -916,7 +916,7 @@ does not exist
 ```
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 const ami = new aws.dataAwsAmi.DataAwsAmi(this, 'ami', {
   mostRecent: true,
   owners: ['amazon'],
@@ -947,7 +947,7 @@ const launchTemplate = new aws.launchTemplate.LaunchTemplate(
 
 **Location:** `modules.ts`, EcsModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 userData: btoa(`#!/bin/bash
 echo ECS_CLUSTER=${this.cluster.name} >> /etc/ecs/ecs.config
@@ -970,7 +970,7 @@ echo ECS_BACKEND_HOST= >> /etc/ecs/ecs.config`),
 - Debugging difficulties
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 userData: btoa(`#!/bin/bash
 echo ECS_CLUSTER=${this.cluster.name} >> /etc/ecs/ecs.config
 echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config`),
@@ -982,7 +982,7 @@ echo ECS_ENABLE_CONTAINER_METADATA=true >> /etc/ecs/ecs.config`),
 
 **Location:** `modules.ts`, RdsModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 engineVersion: '14.7',
 ```
@@ -1004,7 +1004,7 @@ engineVersion: '14.7',
 - Potential deployment failures if version unavailable
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // Let AWS choose compatible version
 engine: 'postgres',
 // No engineVersion specified
@@ -1016,7 +1016,7 @@ engine: 'postgres',
 
 **Location:** `modules.ts`, EcsModule constructor
 
-```typescript
+```ts
 // MODEL_RESPONSE
 // Task Definition created FIRST
 this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(this, 'task-def', {
@@ -1055,7 +1055,7 @@ new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-log-group', {
 - Deployment inconsistencies
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // Create log group FIRST
 new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'ecs-log-group', {
   name: '/ecs/multi-tier-app',
@@ -1085,7 +1085,7 @@ this.taskDefinition = new aws.ecsTaskDefinition.EcsTaskDefinition(
 
 **Location:** `tap-stack.ts`, AwsProvider configuration
 
-```typescript
+```ts
 // MODEL_RESPONSE
 new aws.provider.AwsProvider(this, 'aws', {
   region: 'us-west-2',
@@ -1133,7 +1133,7 @@ Terraform will perform the following actions:
 ```
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 new AwsProvider(this, 'aws', {
   region: awsRegion,
   defaultTags: [
@@ -1156,7 +1156,7 @@ new AwsProvider(this, 'aws', {
 
 **Location:** `tap-stack.ts`
 
-```typescript
+```ts
 // MODEL_RESPONSE
 export class MultiTierStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
@@ -1196,7 +1196,7 @@ export class MultiTierStack extends TerraformStack {
 6. Result: **Corrupted state, infrastructure inconsistency**
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // Configure S3 Backend with native state locking
 new S3Backend(this, {
   bucket: stateBucket,
@@ -1216,25 +1216,25 @@ this.addOverride('terraform.backend.s3.use_lockfile', true);
 **Problem Locations:**
 
 1. **VPC Module:**
-```typescript
+```ts
 // MODEL_RESPONSE
 const azs = ['us-west-2a', 'us-west-2b'];
 ```
 
 2. **IAM Module:**
-```typescript
+```ts
 // MODEL_RESPONSE
 Resource: 'arn:aws:logs:us-west-2:*:*'
 ```
 
 3. **ECS Module:**
-```typescript
+```ts
 // MODEL_RESPONSE
 'awslogs-region': 'us-west-2'
 ```
 
 4. **CI/CD Module:**
-```typescript
+```ts
 // MODEL_RESPONSE
 environmentVariable: [
   {
@@ -1245,13 +1245,13 @@ environmentVariable: [
 ```
 
 5. **Monitoring Module:**
-```typescript
+```ts
 // MODEL_RESPONSE
 region: 'us-west-2'
 ```
 
 6. **Provider Configuration:**
-```typescript
+```ts
 // MODEL_RESPONSE
 new aws.provider.AwsProvider(this, 'aws', {
   region: 'us-west-2'
@@ -1287,7 +1287,7 @@ To change from us-west-2 to eu-west-1 in MODEL_RESPONSE:
 6. Risk of missing occurrences
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // Single source of truth for region
 const awsRegion = props?.awsRegion || 'us-east-1';
 
@@ -1310,7 +1310,7 @@ To change regions:
 
 **Location:** `modules.ts`, IamModule
 
-```typescript
+```ts
 // MODEL_RESPONSE
 export class IamModule extends Construct {
   constructor(scope: Construct, id: string) {
@@ -1350,7 +1350,7 @@ arn:aws:secretsmanager:us-west-2:123456789012:secret:rds!...
 ```
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // Add policy for Secrets Manager access
 new aws.iamRolePolicy.IamRolePolicy(this, 'ecs-secrets-policy', {
   role: this.ecsTaskRole.id,
@@ -1385,7 +1385,7 @@ new aws.iamRolePolicy.IamRolePolicy(this, 'ecs-secrets-policy', {
 
 **Examples:**
 
-```typescript
+```ts
 // MODEL_RESPONSE - No validation
 constructor(scope: Construct, id: string) {
   // Directly uses hardcoded values - no checks
@@ -1404,7 +1404,7 @@ constructor(scope: Construct, id: string) {
 - Time wasted troubleshooting obvious problems
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 constructor(scope: Construct, id: string, props: { awsRegion: string }) {
   super(scope, id);
   
@@ -1427,7 +1427,7 @@ constructor(scope: Construct, id: string, props: { awsRegion: string }) {
 
 **Location:** `tap-stack.ts`
 
-```typescript
+```ts
 // MODEL_RESPONSE
 export class MultiTierStack extends TerraformStack {
   constructor(scope: Construct, id: string) {
@@ -1462,7 +1462,7 @@ app.synth();
 - Poor separation of configuration from code
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 interface TapStackProps {
   environmentSuffix?: string;
   stateBucket?: string;
@@ -1489,7 +1489,7 @@ export class TapStack extends TerraformStack {
 
 **Location:** `modules.ts`, AlbModule
 
-```typescript
+```ts
 // MODEL_RESPONSE
 export class AlbModule extends Construct {
   constructor(scope: Construct, id: string, props: {
@@ -1529,7 +1529,7 @@ export class AlbModule extends Construct {
 - Inconsistent deployment behavior
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 export class AlbModule extends Construct {
   constructor(scope: Construct, id: string, props: {
     vpc: aws.vpc.Vpc,
@@ -1557,7 +1557,7 @@ export class AlbModule extends Construct {
 
 **Examples:**
 
-```typescript
+```ts
 // MODEL_RESPONSE - No explanation
 this.ecsSecurityGroup = new aws.securityGroup.SecurityGroup(this, 'ecs-sg', {
   name: 'multi-tier-ecs-sg',
@@ -1593,7 +1593,7 @@ new aws.securityGroupRule.SecurityGroupRule(this, 'ecs-from-alb', {
 - Poor code reviews
 
 **Proper Solution (IDEAL):**
-```typescript
+```ts
 // ECS Security Group - Allows traffic from ALB only
 this.ecsSecurityGroup = new aws.securityGroup.SecurityGroup(this, 'ecs-sg', {
   name: 'multi-tier-ecs-sg',

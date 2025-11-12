@@ -12,7 +12,7 @@ This document analyzes the shortcomings in MODEL_RESPONSE.md compared to the req
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/tap-stack.ts (lines 330-389)
 // Creates event bus stack but no secondary event bus stack
 const eventBusStack = new EventBusStack(this, 'EventBusStack', {
@@ -23,7 +23,7 @@ const eventBusStack = new EventBusStack(this, 'EventBusStack', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // Creates secondary event bus in us-west-2 with same name
 const secondaryEventBusStack = new SecondaryEventBusStack(
   this,
@@ -50,7 +50,7 @@ const secondaryEventBusStack = new SecondaryEventBusStack(
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/global-endpoint-stack.ts (lines 51-73)
 this.globalEndpoint = new events.CfnEndpoint(this, 'TradingGlobalEndpoint', {
   routingConfig: {
@@ -70,7 +70,7 @@ this.globalEndpoint = new events.CfnEndpoint(this, 'TradingGlobalEndpoint', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // Creates CloudWatch alarm monitoring event bus invocations
 const healthAlarm = new cloudwatch.Alarm(this, 'PrimaryRegionHealthAlarm', {
   metric: new cloudwatch.Metric({
@@ -116,7 +116,7 @@ healthCheck: cdk.Arn.format({
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/global-endpoint-stack.ts (lines 51-73)
 this.globalEndpoint = new events.CfnEndpoint(this, 'TradingGlobalEndpoint', {
   // Missing roleArn and replicationConfig
@@ -130,7 +130,7 @@ this.globalEndpoint = new events.CfnEndpoint(this, 'TradingGlobalEndpoint', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // Creates explicit IAM role for replication
 const replicationRole = new iam.Role(this, 'ReplicationRole', {
   roleName: `eventbridge-replication-role-${suffix}`,
@@ -178,7 +178,7 @@ this.globalEndpoint = new events.CfnEndpoint(this, 'TradingGlobalEndpoint', {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/event-bus-stack.ts (lines 107-109)
 this.eventBus = new events.EventBus(this, 'TradingEventBus', {
   eventBusName: 'trading-event-bus', // Hardcoded, no suffix
@@ -192,7 +192,7 @@ this.globalTable = new dynamodb.Table(this, 'TradingGlobalTable', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // All stacks accept environmentSuffix prop
 export interface EventBusStackProps extends cdk.StackProps {
   processingLambda: lambda.IFunction;
@@ -221,7 +221,7 @@ this.globalTable = new dynamodb.Table(this, 'TradingGlobalTable', {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/event-bus-stack.ts (lines 137-142)
 // Only 1 output for entire event bus stack
 new cdk.CfnOutput(this, 'EventBusArn', {
@@ -232,7 +232,7 @@ new cdk.CfnOutput(this, 'EventBusArn', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/event-bus-stack.ts has 12 comprehensive outputs
 new cdk.CfnOutput(this, 'EventBusArn', {
   value: this.eventBus.eventBusArn,
@@ -265,7 +265,7 @@ new cdk.CfnOutput(this, 'DLQUrl', {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/processing-lambda-stack.ts (lines 207-224)
 this.processingLambda = new lambda.Function(this, 'ProcessingLambda', {
   // ...
@@ -276,7 +276,7 @@ this.processingLambda = new lambda.Function(this, 'ProcessingLambda', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/processing-lambda-stack.ts
 // Creates log group explicitly before Lambda
 const logGroup = new logs.LogGroup(this, 'ProcessingLambdaLogGroup', {
@@ -303,7 +303,7 @@ this.processingLambda = new lambda.Function(this, 'ProcessingLambda', {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/tap-stack.ts (lines 330-389)
 // Creates all stacks but no explicit dependencies defined
 const dynamoDBStack = new DynamoDBStack(this, 'DynamoDBStack', {
@@ -318,7 +318,7 @@ const lambdaStack = new ProcessingLambdaStack(this, 'ProcessingLambdaStack', {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/tap-stack.ts
 // Explicit dependency chain at end of constructor
 lambdaStack.addDependency(dynamoDBStack);
@@ -342,14 +342,14 @@ monitoringStack.addDependency(eventBusStack);
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/tap-stack.ts would try to reference secondary bus ARN directly
 // This pattern is not shown but implied by the structure
 ```
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/tap-stack.ts
 // Constructs ARN manually to avoid cross-region reference
 const secondaryEventBusArn = `arn:aws:events:${secondaryRegion}:${this.account}:event-bus/${eventBusStack.eventBus.eventBusName}`;
@@ -377,14 +377,14 @@ const globalEndpointStack = new GlobalEndpointStack(
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/processing-lambda-stack.ts (line 211)
 code: lambda.Code.fromAsset('lambda'), // Requires external directory
 ```
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/processing-lambda-stack.ts
 code: lambda.Code.fromInline(`
 exports.handler = async (event) => {
@@ -406,7 +406,7 @@ exports.handler = async (event) => {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/tap-stack.ts (line 346)
 const alertEmail = 'alerts@example.com'; // Replace with actual email
 
@@ -418,7 +418,7 @@ alertTopic.addSubscription(
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // Creates SNS topic without email subscription
 this.alertTopic = new sns.Topic(this, 'TradingAlertTopic', {
   topicName: `trading-alerts-${suffix}`,
@@ -439,7 +439,7 @@ this.alertTopic = new sns.Topic(this, 'TradingAlertTopic', {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/global-endpoint-stack.ts (lines 38-42)
 export interface GlobalEndpointStackProps extends cdk.StackProps {
   primaryRegion: string;
@@ -451,7 +451,7 @@ export interface GlobalEndpointStackProps extends cdk.StackProps {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 export interface GlobalEndpointStackProps extends cdk.StackProps {
   primaryRegion: string;
   secondaryRegion: string;
@@ -472,7 +472,7 @@ export interface GlobalEndpointStackProps extends cdk.StackProps {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/processing-lambda-stack.ts (lines 216-221)
 environment: {
   POWERTOOLS_SERVICE_NAME: 'trading-event-processor',
@@ -486,7 +486,7 @@ environment: {
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // Sets Powertools environment variables
 environment: {
   POWERTOOLS_SERVICE_NAME: 'trading-event-processor',
@@ -514,14 +514,14 @@ exports.handler = async (event) => {
 
 **Evidence from MODEL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/dynamodb-stack.ts (line 256)
 removalPolicy: cdk.RemovalPolicy.RETAIN, // Protects data but causes issues
 ```
 
 **Correct Implementation in IDEAL_RESPONSE.md**:
 
-```typescript
+```ts
 // lib/dynamodb-stack.ts
 removalPolicy: cdk.RemovalPolicy.DESTROY, // Consistent with other resources
 ```

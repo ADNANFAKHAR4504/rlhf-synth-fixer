@@ -24,7 +24,7 @@ I'll implement a production-grade multi-region Aurora Global Database disaster r
 
 ## 1. lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -752,7 +752,7 @@ export const handler = async (event: any): Promise<any> => {
 
 ## 2. test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import * as cdk from 'aws-cdk-lib';
 import { TapStack, MultiRegionDRStackProps } from '../lib/tap-stack';
@@ -1337,7 +1337,7 @@ describe('TapStack Unit Tests', () => {
 
 ## 3. test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import { STSClient, GetCallerIdentityCommand } from '@aws-sdk/client-sts';
 import { RDSClient, DescribeGlobalClustersCommand, DescribeDBClustersCommand } from '@aws-sdk/client-rds';
 import { EC2Client, DescribeVpcsCommand, DescribeVpcPeeringConnectionsCommand } from '@aws-sdk/client-ec2';

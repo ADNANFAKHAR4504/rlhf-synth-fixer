@@ -17,7 +17,7 @@ All specified requirements have been successfully implemented with production-re
 - Optimized Lambda evaluators with proper error handling and timeouts
 - Real-time change detection with sub-15-minute evaluation guarantee
 
-```typescript
+```ts
 const configRecorder = new config.CfnConfigurationRecorder(
   this,
   'ConfigRecorder',
@@ -41,7 +41,7 @@ const configRecorder = new config.CfnConfigurationRecorder(
 - Precise 7-year retention (2555 days) with automatic expiration
 - Versioning and encryption enabled for data integrity
 
-```typescript
+```ts
 lifecycleRules: [{
   id: 'SevenYearComplianceRetention',
   enabled: true,
@@ -333,7 +333,7 @@ The implementation uses a sophisticated nested stack architecture:
   - `tap-remediation-workflow-eu-west-1-staging`
 
 **Resource Tagging Strategy**:
-```typescript
+```ts
 cdk.Tags.of(this).add('Project', 'InfrastructureGuardrails');
 cdk.Tags.of(this).add('Environment', environmentSuffix);
 cdk.Tags.of(this).add('CostCenter', 'Security');
@@ -344,7 +344,7 @@ cdk.Tags.of(this).add('Compliance', 'Required');
 ### Business Integration and Extensibility
 
 #### 1. Configuration-Driven Customization
-```typescript
+```ts
 interface GuardrailsConfig {
   autoRemediation: {
     enabled: boolean;
@@ -386,7 +386,7 @@ def execute_remediation_workflow(violation_event, config):
 ```
 
 #### 3. Multi-Account and Cross-Region Support
-```typescript
+```ts
 // Cross-account compliance monitoring
 const crossAccountRole = new iam.Role(this, 'CrossAccountConfigRole', {
   assumedBy: new iam.AccountPrincipal(managementAccountId),
@@ -436,7 +436,7 @@ jobs:
 ```
 
 #### 2. Infrastructure Testing
-```typescript
+```ts
 // test/tap-stack.unit.test.ts
 describe('TapStack', () => {
   test('creates all required resources', () => {
@@ -471,7 +471,7 @@ describe('TapStack', () => {
 ```
 
 #### 3. Integration Testing
-```typescript
+```ts
 // test/tap-stack.integration.test.ts
 describe('TapStack Integration Tests', () => {
   test('Lambda timeout evaluation works end-to-end', async () => {
@@ -495,7 +495,7 @@ describe('TapStack Integration Tests', () => {
 ### Monitoring and Operations Excellence
 
 #### 1. Comprehensive Metrics and Alarms
-```typescript
+```ts
 // CloudWatch alarms for system health
 const evaluationFailureAlarm = new cloudwatch.Alarm(this, 'EvaluationFailures', {
   metric: new cloudwatch.Metric({
@@ -518,7 +518,7 @@ evaluationFailureAlarm.addAlarmAction(
 ```
 
 #### 2. Operational Dashboards
-```typescript
+```ts
 const operationalDashboard = new cloudwatch.Dashboard(this, 'GuardrailsDashboard', {
   dashboardName: `tap-guardrails-${environmentSuffix}`,
   widgets: [

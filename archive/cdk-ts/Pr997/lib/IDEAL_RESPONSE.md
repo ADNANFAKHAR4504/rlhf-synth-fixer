@@ -32,7 +32,7 @@ test/
 
 ## lib/constructs/vpc.ts
 
-```typescript
+```ts
 import { aws_ec2 as ec2, Tags } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -67,7 +67,7 @@ export class WebVpc extends Construct {
 
 ## lib/constructs/security-groups.ts
 
-```typescript
+```ts
 import { aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -110,7 +110,7 @@ export class WebSecurityGroups extends Construct {
 
 ## lib/constructs/launch-template.ts
 
-```typescript
+```ts
 import { aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -147,7 +147,7 @@ export class WebLaunchTemplate extends Construct {
 
 ## lib/constructs/asg.ts
 
-```typescript
+```ts
 import { aws_autoscaling as autoscaling, aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -175,7 +175,7 @@ export class WebAsg extends Construct {
 
 ## lib/constructs/alb.ts
 
-```typescript
+```ts
 import {
   aws_ec2 as ec2,
   aws_elasticloadbalancingv2 as elbv2,
@@ -218,7 +218,7 @@ export class WebAlb extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Stack, StackProps, Tags } from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { WebAlb } from './constructs/alb';
@@ -269,7 +269,7 @@ export class TapStack extends Stack {
 
 ## bin/tap.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { TapStack } from '../lib/tap-stack';
 
@@ -301,7 +301,7 @@ new TapStack(app, `${stackName}-Usw2`, {
 
 ## test/vpc.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { WebVpc } from '../lib/constructs/vpc';
@@ -327,7 +327,7 @@ describe('WebVpc', () => {
 
 ## test/vpc.int.test.ts
 
-```typescript
+```ts
 // Configuration for integration tests (outputs loading disabled for local/dev)
 // const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
@@ -396,7 +396,7 @@ describe('TapStack Integration', () => {
 
 ## test/security-groups.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -430,7 +430,7 @@ describe('WebSecurityGroups', () => {
 
 ## test/security-groups.int.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { WebSecurityGroups } from '../lib/constructs/security-groups';
@@ -450,7 +450,7 @@ describe('WebSecurityGroups Integration', () => {
 
 ## test/launch-template.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -474,7 +474,7 @@ describe('WebLaunchTemplate', () => {
 
 ## test/launch-template.int.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { WebLaunchTemplate } from '../lib/constructs/launch-template';
@@ -502,7 +502,7 @@ describe('WebLaunchTemplate Integration', () => {
 
 ## test/asg.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -527,7 +527,7 @@ describe('WebAsg', () => {
 
 ## test/asg.int.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { WebAsg } from '../lib/constructs/asg';
@@ -557,7 +557,7 @@ describe('WebAsg Integration', () => {
 
 ## test/alb.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { aws_ec2 as ec2 } from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
@@ -639,7 +639,7 @@ describe('WebAlb', () => {
 
 ## test/alb.int.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { WebAlb } from '../lib/constructs/alb';
@@ -680,7 +680,7 @@ describe('WebAlb Integration', () => {
 
 ## test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
@@ -773,7 +773,7 @@ describe('TapStack', () => {
 
 ## test/tap-stack.int.test.ts
 
-```typescript
+```ts
 // Configuration for integration tests (outputs loading disabled for local/dev)
 // const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 

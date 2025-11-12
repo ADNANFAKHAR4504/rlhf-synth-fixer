@@ -22,7 +22,7 @@ operation error S3: HeadObject, https response error StatusCode: 403, RequestID:
 
 **Root Cause**: Fixed S3Backend configuration without flexibility for local deployments
 **Solution Implemented**:
-```typescript
+```ts
 // Configure S3 Backend - temporarily disabled for local deployment
 // Only use S3 backend if ENABLE_S3_BACKEND is set
 if (process.env.ENABLE_S3_BACKEND === 'true') {
@@ -55,7 +55,7 @@ api error InvalidRequest: ReplicationTime cannot be used for this version of the
 
 **Root Cause**: Attempted to use ReplicationTime with Metrics eventThreshold
 **Original Failing Code**:
-```typescript
+```ts
 metrics: {
   status: 'Enabled',
   eventThreshold: {
@@ -71,7 +71,7 @@ replicationTime: {
 ```
 
 **Solution Implemented**: Removed incompatible ReplicationTime and Metrics configurations:
-```typescript
+```ts
 destination: {
   bucket: dataBucketDr.arn,
   storageClass: 'STANDARD',
@@ -93,7 +93,7 @@ destination: {
 
 **Root Cause**: Inadequate resource versioning and lifecycle management for CI/CD
 **Solution Implemented**: V6 versioning strategy with complete resource replacement:
-```typescript
+```ts
 // Add version suffix to force complete resource replacement in CI/CD
 const deployVersion = 'v6';
 
@@ -118,7 +118,7 @@ kmsKey.overrideLogicalId(`kms-key-${deployVersion}`);
 
 **Problem**: Tests only validated CDKTF synthesis, not actual deployed AWS infrastructure
 **Original Mock Tests**:
-```typescript
+```ts
 test('should synthesize stack without errors', async () => {
   const synthesized = Testing.synth(stack);
   expect(synthesized).toBeDefined();
@@ -126,7 +126,7 @@ test('should synthesize stack without errors', async () => {
 ```
 
 **Solution Implemented**: Real AWS infrastructure validation tests:
-```typescript
+```ts
 test('should validate deployed VPC exists and is configured correctly', async () => {
   const ec2Client = new EC2Client(awsConfig);
   
@@ -183,7 +183,7 @@ test('should validate deployed VPC exists and is configured correctly', async ()
 **Issue**: MODEL_RESPONSE does not implement RDS Global Cluster for cross-region database replication.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 const globalCluster = new RdsGlobalCluster(this, 'aurora-global', {
   globalClusterIdentifier: `hipaa-aurora-global-${environmentSuffix}`,
   engine: 'aurora-postgresql',
@@ -194,7 +194,7 @@ const globalCluster = new RdsGlobalCluster(this, 'aurora-global', {
 ```
 
 Then linking the cluster:
-```typescript
+```ts
 globalClusterIdentifier: globalCluster.id,
 ```
 
@@ -224,7 +224,7 @@ globalClusterIdentifier: globalCluster.id,
 **Issue**: MODEL_RESPONSE does not implement lifecycle policies for archiving old versions to meet the 7-year compliance requirement.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 new S3BucketLifecycleConfiguration(this, 'data-bucket-lifecycle', {
   rule: [
     {
@@ -261,7 +261,7 @@ new S3BucketLifecycleConfiguration(this, 'data-bucket-lifecycle', {
 **Issue**: MODEL_RESPONSE does not configure data event logging for S3 and RDS.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 eventSelector: [
   {
     readWriteType: 'All',
@@ -298,7 +298,7 @@ eventSelector: [
 **Issue**: MODEL_RESPONSE only creates S3 endpoint via inline routes. It's missing explicit VPC endpoint resources and the Secrets Manager endpoint requested in the prompt.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 new VpcEndpoint(this, 's3-endpoint', {
   vpcId: vpc.id,
   serviceName: `com.amazonaws.${awsRegion}.s3`,
@@ -318,7 +318,7 @@ new VpcEndpoint(this, 's3-endpoint', {
 **Issue**: MODEL_RESPONSE does not implement proper KMS key policy allowing CloudWatch Logs and CloudTrail to use the key.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 const kmsKeyPolicyDoc = new DataAwsIamPolicyDocument(this, 'kms-key-policy', {
   statement: [
     { sid: 'Enable IAM User Permissions', ... },
@@ -356,7 +356,7 @@ const kmsKeyPolicyDoc = new DataAwsIamPolicyDocument(this, 'kms-key-policy', {
 **Issue**: MODEL_RESPONSE defines routes inline in RouteTable resource. Best practice in CDKTF is to use separate Route resources.
 
 **MODEL_RESPONSE**:
-```typescript
+```ts
 const publicRouteTable = new RouteTable(this, 'public-rt', {
   vpcId: vpc.id,
   route: [{ cidrBlock: '0.0.0.0/0', gatewayId: igw.id }],
@@ -364,7 +364,7 @@ const publicRouteTable = new RouteTable(this, 'public-rt', {
 ```
 
 **IDEAL_RESPONSE**:
-```typescript
+```ts
 const publicRouteTable = new RouteTable(this, 'public-rt', {
   vpcId: vpc.id,
 });
@@ -386,7 +386,7 @@ new Route(this, 'public-route', {
 **Issue**: MODEL_RESPONSE defines security group rules inline. CDKTF best practice is to use SecurityGroupRule resources for better dependency management.
 
 **IDEAL_RESPONSE uses**:
-```typescript
+```ts
 new SecurityGroupRule(this, 'db-sg-ingress', {
   type: 'ingress',
   fromPort: 5432,
@@ -409,7 +409,7 @@ new SecurityGroupRule(this, 'db-sg-ingress', {
 **Issue**: MODEL_RESPONSE doesn't properly set up provider aliases for multi-region or use DataAwsCallerIdentity for KMS policy.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 const primaryProvider = new AwsProvider(this, 'aws', {
   region: awsRegion,
   defaultTags: defaultTags,
@@ -436,7 +436,7 @@ const callerIdentity = new DataAwsCallerIdentity(this, 'current');
 **Issue**: MODEL_RESPONSE doesn't enable S3 bucket keys, which reduces KMS API calls and costs.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 bucketKeyEnabled: true,
 ```
 
@@ -451,7 +451,7 @@ bucketKeyEnabled: true,
 **Issue**: MODEL_RESPONSE doesn't enable Performance Insights for Aurora instances.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 performanceInsightsEnabled: true,
 performanceInsightsKmsKeyId: kmsKey.arn,
 performanceInsightsRetentionPeriod: 7,
@@ -479,7 +479,7 @@ monitoringInterval: 60,
 **Issue**: MODEL_RESPONSE doesn't set recoveryWindowInDays for Secrets Manager.
 
 **Missing in MODEL_RESPONSE**:
-```typescript
+```ts
 recoveryWindowInDays: 30,
 ```
 

@@ -22,7 +22,7 @@ The solution deploys 34 AWS resources across 8 services:
 
 **Critical Fix**: Pulumi requires separate Deployment and Stage resources:
 
-```typescript
+```ts
 // API Gateway Deployment (without stageName)
 const deployment = new aws.apigateway.Deployment(
   `api-deployment-${environmentSuffix}`,
@@ -104,7 +104,7 @@ const stage = new aws.apigateway.Stage(
 
 ### Stack Exports
 
-```typescript
+```ts
 export const apiUrl = pulumi.interpolate`${api.executionArn}/prod`;
 export const apiEndpoint = pulumi.interpolate`https://${api.id}.execute-api.${region}.amazonaws.com/prod/transactions`;
 export const queueUrl = transactionQueue.url;

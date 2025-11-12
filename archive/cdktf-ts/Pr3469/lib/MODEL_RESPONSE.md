@@ -4,7 +4,7 @@ Here is the complete infrastructure code for the referral management system:
 
 ## Main Stack File
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import { Construct } from "constructs";
 import { TerraformStack } from "cdktf";

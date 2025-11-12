@@ -15,7 +15,7 @@ The infrastructure consists of:
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts
  *

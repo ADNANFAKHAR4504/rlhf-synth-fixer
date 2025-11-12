@@ -19,7 +19,7 @@ The implementation uses two deprecated CDK APIs:
 1. `Map#iterator()` - deprecated in favor of `itemProcessor`
 2. `StateMachineProps#definition` - deprecated in favor of `definitionBody: DefinitionBody.fromChainable()`
 
-```typescript
+```ts
 // Current implementation (deprecated)
 mapState.iterator(processingChain);
 
@@ -30,7 +30,7 @@ const stateMachine = new sfn.StateMachine(this, 'TransactionProcessorStateMachin
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 // Updated implementation (recommended)
 const mapState = new sfn.Map(this, 'ProcessTransactionBatch', {
   maxConcurrency: 10,

@@ -496,7 +496,7 @@ npm run test:integration # Validate deployed resources
 ### 14. ❌ Tests That Don't Actually Test
 **Problem**: Weak or meaningless tests
 
-```typescript
+```ts
 // WRONG - Useless test
 test('VPC exists', () => {
   expect(true).toBe(true);  // Always passes!
@@ -510,7 +510,7 @@ test('subnets created', () => {
 ```
 
 **Correct Approach**:
-```typescript
+```ts
 // RIGHT - Meaningful validation
 test('VPC has correct CIDR block', () => {
   const content = fs.readFileSync('tap_stack.tf', 'utf8');
@@ -533,7 +533,7 @@ test('should have NAT Gateways in each AZ', async () => {
 ### 15. ❌ Integration Tests That Break CI/CD
 **Problem**: Tests that fail when infrastructure isn't deployed
 
-```typescript
+```ts
 // WRONG - Fails if not deployed
 test('VPC should exist', async () => {
   const response = await ec2Client.send(new DescribeVpcsCommand({
@@ -544,7 +544,7 @@ test('VPC should exist', async () => {
 ```
 
 **Correct Approach**:
-```typescript
+```ts
 // RIGHT - Gracefully skip when not deployed
 test('VPC should exist', async () => {
   if (!infrastructureDeployed || !outputs.vpc_id?.value) {

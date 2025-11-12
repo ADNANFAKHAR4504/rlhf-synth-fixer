@@ -33,7 +33,7 @@ The infrastructure implements a secure, multi-tier architecture with the followi
 
 ### bin/tap.ts - CDK Application Entry Point
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -77,7 +77,7 @@ new TapStack(app, stackName, {
 
 ### lib/tap-stack.ts - Main Infrastructure Stack
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';

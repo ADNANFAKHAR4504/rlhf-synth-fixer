@@ -10,7 +10,7 @@ A comprehensive multi-region CDN deployment that serves millions of users with l
 
 ## Updated lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';

@@ -30,7 +30,7 @@ This document outlines the critical fixes and improvements made to transform the
 - Defaults to "dev" configuration for unrecognized suffixes
 - Maintains backward compatibility with standard environment names
 
-```typescript
+```ts
 // Before: Strict validation
 if (!EnvironmentConfigs.validateEnvironment(environmentSuffix)) {
   throw new Error(`Invalid environment: ${environmentSuffix}`);
@@ -54,7 +54,7 @@ const environmentConfig = EnvironmentConfigs.getConfig(baseEnvironment);
 
 **Fix**: Changed all nested stack instantiations to use the parent stack (`this`) as scope instead of the app scope:
 
-```typescript
+```ts
 // Before: Incorrect scope
 const s3Stack = new S3Stack(scope, `S3Stack${environmentSuffix}`, props);
 
@@ -70,7 +70,7 @@ const s3Stack = new S3Stack(this, 'S3Stack', props);
 
 **Fix**: Implemented consistent naming pattern for all resources:
 
-```typescript
+```ts
 // Pattern: tap-{environmentSuffix}-{resourceType}-{accountId}-{region}
 bucketName: `tap-${environmentSuffix}-data-${cdk.Aws.ACCOUNT_ID}-${cdk.Aws.REGION}`
 functionName: `tap-${environmentSuffix}-api-function`
@@ -84,7 +84,7 @@ functionName: `tap-${environmentSuffix}-api-function`
 
 **Fix**: Ensured expiration is always after the longest transition period:
 
-```typescript
+```ts
 // Before: Could fail with short retention periods
 expiration: cdk.Duration.days(environmentConfig.s3BucketRetentionDays)
 
@@ -100,7 +100,7 @@ expiration: cdk.Duration.days(Math.max(environmentConfig.s3BucketRetentionDays, 
 
 **Fix**: Renamed to DEPLOYMENT_REGION:
 
-```typescript
+```ts
 // Before: Reserved variable
 environment: {
   AWS_REGION: cdk.Aws.REGION
@@ -120,7 +120,7 @@ environment: {
 
 **Fix**: Enforced DESTROY policy and autoDeleteObjects for all resources:
 
-```typescript
+```ts
 removalPolicy: cdk.RemovalPolicy.DESTROY,
 autoDeleteObjects: true
 ```
@@ -133,7 +133,7 @@ autoDeleteObjects: true
 
 **Fix**: Added comprehensive outputs to all stacks:
 
-```typescript
+```ts
 new cdk.CfnOutput(this, 'ApiFunctionName', {
   value: this.apiFunction.functionName,
   description: 'API Lambda function name',
@@ -148,7 +148,7 @@ new cdk.CfnOutput(this, 'ApiFunctionName', {
 
 **Fix**: Added inline policies to Lambda execution role:
 
-```typescript
+```ts
 inlinePolicies: {
   S3Access: new iam.PolicyDocument({
     statements: [
@@ -170,7 +170,7 @@ inlinePolicies: {
 
 **Fix**: Added consistent tagging to all stacks:
 
-```typescript
+```ts
 cdk.Tags.of(this).add('Environment', environmentConfig.environmentName);
 cdk.Tags.of(this).add('EnvironmentSuffix', environmentSuffix);
 cdk.Tags.of(this).add('Component', 'ComponentName');
@@ -184,7 +184,7 @@ cdk.Tags.of(this).add('Component', 'ComponentName');
 
 **Fix**: Properly implemented Lambda response streaming with awslambda.streamifyResponse:
 
-```typescript
+```ts
 exports.handler = awslambda.streamifyResponse(async (event, responseStream, context) => {
   responseStream = awslambda.HttpResponseStream.from(responseStream, metadata);
   responseStream.write(JSON.stringify(data));

@@ -31,7 +31,7 @@ I'll help you build a comprehensive serverless application infrastructure using 
 
 First, let's update your main `lib/tap-stack.ts` file:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 
@@ -128,7 +128,7 @@ Now, let's create the separate stack files in the `lib/stacks/` directory:
 
 ### 1. VPC Stack (`lib/stacks/vpc-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import { Construct } from 'constructs';
@@ -180,7 +180,7 @@ export class VpcStack extends cdk.Stack {
 
 ### 2. Storage Stack (`lib/stacks/storage-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
@@ -262,7 +262,7 @@ export class StorageStack extends cdk.Stack {
 
 ### 3. Secrets Stack (`lib/stacks/secrets-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
 import { Construct } from 'constructs';
@@ -304,7 +304,7 @@ export class SecretsStack extends cdk.Stack {
 
 ### 4. Lambda Stack (`lib/stacks/lambda-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -467,7 +467,7 @@ export class LambdaStack extends cdk.Stack {
 
 ### 5. API Gateway Stack (`lib/stacks/api-gateway-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -661,7 +661,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
 ### 6. Security Stack (`lib/stacks/security-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as wafv2 from 'aws-cdk-lib/aws-wafv2';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
@@ -829,7 +829,7 @@ export class SecurityStack extends cdk.Stack {
 
 ### 7. Monitoring Stack (`lib/stacks/monitoring-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';

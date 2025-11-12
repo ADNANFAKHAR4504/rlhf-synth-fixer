@@ -4,7 +4,7 @@ This is the baseline CDK implementation that was enhanced to create the ideal re
 
 ## Implementation
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';

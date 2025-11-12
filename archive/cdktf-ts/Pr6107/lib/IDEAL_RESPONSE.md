@@ -40,7 +40,7 @@ test/
 
 ### File: lib/networking-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -272,7 +272,7 @@ export class NetworkingStack extends Construct {
 
 ### File: lib/iam-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamPolicy } from '@cdktf/provider-aws/lib/iam-policy';
@@ -466,7 +466,7 @@ export class IamStack extends Construct {
 
 ### File: lib/storage-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -666,7 +666,7 @@ export class StorageStack extends Construct {
 
 ### File: lib/database-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { RdsGlobalCluster } from '@cdktf/provider-aws/lib/rds-global-cluster';
 import { RdsCluster } from '@cdktf/provider-aws/lib/rds-cluster';
@@ -919,7 +919,7 @@ export class DatabaseStack extends Construct {
 
 ### File: lib/compute-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { LaunchTemplate } from '@cdktf/provider-aws/lib/launch-template';
 import { AutoscalingGroup } from '@cdktf/provider-aws/lib/autoscaling-group';
@@ -1135,7 +1135,7 @@ echo "<p>DR Role: ${drRole}</p>" >> /var/www/html/index.html
 
 ### File: lib/loadbalancer-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Lb } from '@cdktf/provider-aws/lib/lb';
 import { LbTargetGroup } from '@cdktf/provider-aws/lib/lb-target-group';
@@ -1287,7 +1287,7 @@ export class LoadBalancerStack extends Construct {
 
 ### File: lib/monitoring-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
@@ -1548,7 +1548,7 @@ export class MonitoringStack extends Construct {
 
 ### File: lib/dns-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Route53HealthCheck } from '@cdktf/provider-aws/lib/route53-health-check';
 import { Route53Record } from '@cdktf/provider-aws/lib/route53-record';
@@ -1676,7 +1676,7 @@ export class DnsStack extends Construct {
 
 ### File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

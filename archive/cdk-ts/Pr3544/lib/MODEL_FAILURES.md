@@ -9,7 +9,7 @@ Analysis of the model's response in `MODEL_RESPONSE.md` compared to the ideal im
 
 ### 1.  **Wrong Stack Name**
 **Issue**: Model used `LogisticsGpsStack` instead of `TapStack`
-```typescript
+```ts
 // Model's Response (WRONG)
 export class LogisticsGpsStack extends cdk.Stack
 
@@ -22,7 +22,7 @@ export class TapStack extends cdk.Stack
 
 **Issue**: Model used `RETAIN` instead of `DESTROY` for test resources
 
-```typescript
+```ts
 // Model's Response (WRONG)
 const rawDataBucket = new s3.Bucket(this, 'RawGpsDataBucket', {
   removalPolicy: cdk.RemovalPolicy.DESTROY,
@@ -70,7 +70,7 @@ const gpsProcessorLambda = new lambda.Function(this, 'GpsProcessorFunction', {
 ---
 {{ ... }}
 **Issue**: Log groups created but no removal policy
-```typescript
+```ts
 // Model's Response (WRONG)
 const gpsProcessorLogGroup = new logs.LogGroup(this, 'GpsProcessorLogGroup', {
   retention: logs.RetentionDays.ONE_WEEK,
@@ -97,7 +97,7 @@ lambdaErrorAlarm.addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
 ```
 **Impact**: Alarms fire but no one gets notified.
 **Issue**: S3 lifecycle only has expiration, missing transitions
-```typescript
+```ts
 // Model's Response (WRONG)
 lifecycleRules: [
   {
@@ -128,7 +128,7 @@ lifecycleRules: [
 
 ### 18.  **Missing EventBridge Rule for Delays**
 **Issue**: No event-driven delay handling
-```typescript
+```ts
 // Model's Response (WRONG)
 // Only has scheduled rule, no event pattern rule
 

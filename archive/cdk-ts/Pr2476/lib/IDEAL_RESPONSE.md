@@ -44,7 +44,7 @@
 ## Ideal Implementation Structure
 
 ### 1. Proper Imports and Dependencies
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -58,7 +58,7 @@ import { Construct } from 'constructs';
 ```
 
 ### 2. Proper Interface and Validation
-```typescript
+```ts
 export interface TapStackProps extends cdk.StackProps {
   readonly domainName?: string;
   readonly notificationEmail?: string;
@@ -80,7 +80,7 @@ export class TapStack extends cdk.Stack {
 ```
 
 ### 3. Security-First Implementation
-```typescript
+```ts
 private createSecurityGroups(vpc: ec2.Vpc): SecurityGroups {
   // ALB Security Group - minimal inbound rules
   const albSg = new ec2.SecurityGroup(this, 'ALBSecurityGroup', {
@@ -118,7 +118,7 @@ private createSecurityGroups(vpc: ec2.Vpc): SecurityGroups {
 ```
 
 ### 4. Proper IAM Implementation
-```typescript
+```ts
 private createIamRoles(logsBucket: s3.Bucket): IamRoles {
   // EC2 Role with minimal permissions
   const ec2Role = new iam.Role(this, 'EC2Role', {
@@ -142,7 +142,7 @@ private createIamRoles(logsBucket: s3.Bucket): IamRoles {
 ```
 
 ### 5. Comprehensive Monitoring
-```typescript
+```ts
 private createMonitoringAndAlarms(
   instances: ec2.Instance[],
   notificationEmail: string
@@ -189,7 +189,7 @@ private createMonitoringAndAlarms(
 ```
 
 ### 6. Proper Resource Tagging
-```typescript
+```ts
 private applyCommonTags(resource: cdk.IResource): void {
   const commonTags = {
     Environment: 'production',
@@ -205,7 +205,7 @@ private applyCommonTags(resource: cdk.IResource): void {
 ```
 
 ### 7. Comprehensive Outputs
-```typescript
+```ts
 private createOutputs(
   vpc: ec2.Vpc,
   alb: elbv2.ApplicationLoadBalancer,

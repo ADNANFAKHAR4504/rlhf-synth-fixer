@@ -15,7 +15,7 @@ Instead of the originally requested multi-region setup (Singapore and Sydney), t
 
 ## File: lib/simplified-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as rds from 'aws-cdk-lib/aws-rds';
@@ -273,7 +273,7 @@ Manages EFS file system configuration and mount targets. Part of unused nested s
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';

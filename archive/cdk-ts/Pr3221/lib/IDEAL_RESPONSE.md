@@ -42,7 +42,7 @@ The infrastructure includes:
 ## Infrastructure Components
 
 ### VPC and Networking
-```typescript
+```ts
 const vpc = new ec2.Vpc(this, `ProductionVpc${environmentSuffix}`, {
   maxAzs: 2,
   natGateways: 2,
@@ -58,7 +58,7 @@ const vpc = new ec2.Vpc(this, `ProductionVpc${environmentSuffix}`, {
 ```
 
 ### EC2 Instances
-```typescript
+```ts
 const ec2Instance1 = new ec2.Instance(this, `Ec2Instance1${environmentSuffix}`, {
   instanceType: ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MICRO),
   machineImage: ec2.MachineImage.latestAmazonLinux2(),
@@ -69,7 +69,7 @@ const ec2Instance1 = new ec2.Instance(this, `Ec2Instance1${environmentSuffix}`, 
 ```
 
 ### Application Load Balancer
-```typescript
+```ts
 const alb = new elbv2.ApplicationLoadBalancer(this, `ApplicationLoadBalancer${environmentSuffix}`, {
   vpc,
   internetFacing: true,
@@ -81,7 +81,7 @@ alb.logAccessLogs(albLogsBucket, 'alb-access-logs');
 ```
 
 ### RDS Database
-```typescript
+```ts
 const rdsInstance = new rds.DatabaseInstance(this, `RdsInstance${environmentSuffix}`, {
   engine: rds.DatabaseInstanceEngine.mysql({ version: rds.MysqlEngineVersion.VER_8_0 }),
   instanceType: ec2.InstanceType.of(ec2.InstanceClass.BURSTABLE3, ec2.InstanceSize.MICRO),
@@ -92,7 +92,7 @@ const rdsInstance = new rds.DatabaseInstance(this, `RdsInstance${environmentSuff
 ```
 
 ### S3 Buckets
-```typescript
+```ts
 const appDataBucket = new s3.Bucket(this, `AppDataBucket${environmentSuffix}`, {
   encryption: s3.BucketEncryption.S3_MANAGED, // AES-256 SSE-S3
   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -101,7 +101,7 @@ const appDataBucket = new s3.Bucket(this, `AppDataBucket${environmentSuffix}`, {
 ```
 
 ### IAM Roles
-```typescript
+```ts
 const ec2Role = new iam.Role(this, `Ec2Role${environmentSuffix}`, {
   assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
   roleName: `tap-${environmentSuffix.toLowerCase()}-ec2-role`

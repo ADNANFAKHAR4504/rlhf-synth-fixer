@@ -8,7 +8,7 @@ This document outlines the failures and issues found in the MODEL_RESPONSE.md co
 **Location:** `lib/constructs/lambda-construct.ts` lines 720-727
 
 **Issue:**
-```typescript
+```ts
 // MODEL (FAILED):
 new lambda.CfnCodeSigningConfig(this, `${functionConfig.name}CodeSigning`, {
   allowedPublishers: {
@@ -47,7 +47,7 @@ CloudWatch Logs role ARN must be set in account settings to enable logging
 
 **Fix:**
 Created `ApiGatewayAccountConstruct` to programmatically set up the CloudWatch Logs role:
-```typescript
+```ts
 export class ApiGatewayAccountConstruct extends Construct {
   public readonly cloudWatchRole: iam.Role;
   
@@ -80,7 +80,7 @@ export class ApiGatewayAccountConstruct extends Construct {
 **Location:** `lib/constructs/dynamodb-construct.ts` line 556
 
 **Issue:**
-```typescript
+```ts
 // MODEL (DEPRECATED):
 pointInTimeRecovery: props.environment === 'production',  // DEPRECATED
 
@@ -104,7 +104,7 @@ use `pointInTimeRecoverySpecification` instead
 **Location:** Multiple files - `lib/constructs/lambda-construct.ts` line 651, `lib/constructs/api-gateway-construct.ts` line 775
 
 **Issue:**
-```typescript
+```ts
 // MODEL (INVALID):
 retention: logs.RetentionDays.THIRTY_DAYS  // INVALID: Property doesn't exist
 
@@ -113,7 +113,7 @@ retention: logs.RetentionDays.ONE_MONTH
 ```
 
 **Error:**
-```typescript
+```ts
 error TS2339: Property 'THIRTY_DAYS' does not exist on type 'typeof RetentionDays'.
 ```
 
@@ -145,7 +145,7 @@ Created complete TypeScript Lambda handler (`lib/lambda/user-handler.ts`) with:
 **Location:** `lib/config/environment-config.ts` line 395-401
 
 **Issue:**
-```typescript
+```ts
 // MODEL (FAILS FOR UNKNOWN ENVIRONMENTS):
 static getConfig(environment: string): IEnvironmentConfig {
   const config = this.configs[environment];
@@ -178,7 +178,7 @@ static getConfig(environment: string): IEnvironmentConfig {
 **Location:** `lib/constructs/lambda-construct.ts` line 682
 
 **Issue:**
-```typescript
+```ts
 // MODEL (BASIC):
 const fn = new lambda.Function(this, functionConfig.name, {
   runtime: new lambda.Runtime(functionConfig.runtime),
@@ -217,7 +217,7 @@ const fn = new NodejsFunction(this, functionConfig.name, {
 MODEL did not specify encryption configuration for DynamoDB.
 
 **Fix:**
-```typescript
+```ts
 encryption: dynamodb.TableEncryption.AWS_MANAGED,
 ```
 
@@ -229,7 +229,7 @@ encryption: dynamodb.TableEncryption.AWS_MANAGED,
 **Location:** `lib/constructs/api-gateway-construct.ts` lines 747-748
 
 **Issue:**
-```typescript
+```ts
 // MODEL (UNUSED):
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';

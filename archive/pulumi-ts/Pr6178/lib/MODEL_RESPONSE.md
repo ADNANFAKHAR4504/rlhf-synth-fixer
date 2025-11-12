@@ -4,7 +4,7 @@ This implementation creates a serverless transaction processing pipeline using P
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 /**
  * tap-stack.ts - Transaction processing pipeline infrastructure
  */
@@ -525,7 +525,7 @@ exports.handler = async (event) => {
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import { TapStack } from '../lib/tap-stack';
 

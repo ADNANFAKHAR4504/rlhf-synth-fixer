@@ -9,7 +9,7 @@ I already have a basic stack structure started in `lib/tap-stack.ts`, and I want
 Here's the existing code I'm working with:
 
 **Current Implementation (lib/tap-stack.ts):**
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

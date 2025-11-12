@@ -202,7 +202,7 @@ AWS SDK v2 (`aws-sdk`) is only bundled with Lambda runtimes up to Node.js 16. No
 
 **Resolution:**
 Changed Lambda runtime from `NODEJS_22_X` to `NODEJS_20_X`:
-```typescript
+```ts
 runtime: lambda.Runtime.NODEJS_20_X,
 ```
 
@@ -228,7 +228,7 @@ Misunderstanding of blue/green vs rolling deployment strategies. `HALF_AT_A_TIME
 
 **Resolution:**
 Changed deployment config to `ALL_AT_ONCE` for true blue/green:
-```typescript
+```ts
 deploymentConfig: codedeploy.ServerDeploymentConfig.ALL_AT_ONCE,
 ```
 Removed unused `EcsDeploymentConfig` (ECS config for Server application).
@@ -248,7 +248,7 @@ CodeDeploy IAM role granted wildcard permissions (`*`) for multiple services, vi
 
 **Issue in Code:**
 - **lib/tap-stack.ts (lines 280-282):**
-```typescript
+```ts
 actions: [
   'autoscaling:*',
   'ec2:*',
@@ -290,7 +290,7 @@ The deployment failure alarm references the deployment group to monitor its metr
 
 **Initial Attempted Fix:**
 Used CDK escape hatch to add alarm after deployment group creation:
-```typescript
+```ts
 const cfnDeploymentGroup = deploymentGroup.node.defaultChild as codedeploy.CfnDeploymentGroup;
 cfnDeploymentGroup.addPropertyOverride('AlarmConfiguration', {
   Enabled: true,

@@ -120,7 +120,7 @@ serverless-api/
 ```
 
 ### bin/serverless-api.ts
-```typescript
+```ts
 #!/usr/bin/env node
 import 'source-map-support/register';
 import * as cdk from 'aws-cdk-lib';
@@ -142,7 +142,7 @@ new ServerlessApiStack(app, 'ServerlessApiStack', {
 ```
 
 ### lib/serverless-api-stack.ts
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';

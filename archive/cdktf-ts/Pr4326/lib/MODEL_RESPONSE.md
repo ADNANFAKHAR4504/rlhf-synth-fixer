@@ -4,7 +4,7 @@ This implementation uses CDKTF with TypeScript to create a HIPAA-compliant healt
 
 ## File: lib/healthcare-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack } from 'cdktf';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
@@ -568,7 +568,7 @@ export class HealthcareStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

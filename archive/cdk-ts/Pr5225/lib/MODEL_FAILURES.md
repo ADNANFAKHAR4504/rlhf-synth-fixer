@@ -9,7 +9,7 @@ This document analyzes the critical security vulnerabilities and compliance fail
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: 
-```typescript
+```ts
 const permissionBoundary = new iam.ManagedPolicy(this, 'PermissionBoundary', {
   statements: [
     new iam.PolicyStatement({
@@ -22,7 +22,7 @@ const permissionBoundary = new iam.ManagedPolicy(this, 'PermissionBoundary', {
 ```
 
 **IDEAL_RESPONSE Fix**: Permission boundary must explicitly deny privilege escalation actions:
-```typescript
+```ts
 new iam.PolicyStatement({
   sid: 'DenyPrivilegeEscalation',
   effect: iam.Effect.DENY,
@@ -48,7 +48,7 @@ new iam.PolicyStatement({
 **Impact Level**: Critical
 
 **MODEL_RESPONSE Issue**: 
-```typescript
+```ts
 const developerRole = new iam.Role(this, 'DeveloperRole', {
   assumedBy: new iam.AccountPrincipal(this.account),
   managedPolicies: [
@@ -58,7 +58,7 @@ const developerRole = new iam.Role(this, 'DeveloperRole', {
 ```
 
 **IDEAL_RESPONSE Fix**: Least-privilege role with permission boundary:
-```typescript
+```ts
 const developerRole = new iam.Role(this, 'DeveloperRole', {
   assumedBy: new iam.ServicePrincipal('ec2.amazonaws.com'),
   permissionsBoundary: permissionBoundary,
@@ -81,7 +81,7 @@ const developerRole = new iam.Role(this, 'DeveloperRole', {
 **MODEL_RESPONSE Issue**: KMS key created without explicit key policy restricting usage to specific AWS services.
 
 **IDEAL_RESPONSE Fix**: Explicit key policies for each service:
-```typescript
+```ts
 kmsKey.addToResourcePolicy(
   new iam.PolicyStatement({
     sid: 'AllowCloudWatchLogs',
@@ -104,7 +104,7 @@ kmsKey.addToResourcePolicy(
 **MODEL_RESPONSE Issue**: Secret created without specifying KMS encryption key.
 
 **IDEAL_RESPONSE Fix**: 
-```typescript
+```ts
 const rotationSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
   encryptionKey: kmsKey,
   // ... other properties
@@ -124,7 +124,7 @@ const rotationSecret = new secretsmanager.Secret(this, 'DatabaseSecret', {
 **MODEL_RESPONSE Issue**: Lambda function deployed in default VPC with potential internet access.
 
 **IDEAL_RESPONSE Fix**: Lambda deployed in isolated private subnets:
-```typescript
+```ts
 const rotationLambda = new lambda.Function(this, 'RotationLambda', {
   vpc: auditVpc,
   vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED }
@@ -144,7 +144,7 @@ const rotationLambda = new lambda.Function(this, 'RotationLambda', {
 **MODEL_RESPONSE Issue**: Basic CloudTrail without encryption, multi-region support, or file validation.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const cloudTrail = new cloudtrail.Trail(this, 'SecurityAuditTrail', {
   bucket: auditBucket,
   encryptionKey: kmsKey,
@@ -169,7 +169,7 @@ const cloudTrail = new cloudtrail.Trail(this, 'SecurityAuditTrail', {
 **MODEL_RESPONSE Issue**: S3 bucket created without encryption, public access blocks, or lifecycle policies.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const auditBucket = new s3.Bucket(this, 'AuditLogsBucket', {
   encryptionKey: kmsKey,
   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
@@ -192,7 +192,7 @@ const auditBucket = new s3.Bucket(this, 'AuditLogsBucket', {
 **MODEL_RESPONSE Issue**: Log group created without encryption or retention policy.
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 const logGroup = new logs.LogGroup(this, 'ApplicationLogs', {
   retention: logs.RetentionDays.ONE_YEAR,
   encryptionKey: kmsKey
@@ -212,7 +212,7 @@ const logGroup = new logs.LogGroup(this, 'ApplicationLogs', {
 **MODEL_RESPONSE Issue**: No mandatory compliance tags applied to resources.
 
 **IDEAL_RESPONSE Fix**: Comprehensive tagging strategy:
-```typescript
+```ts
 cdk.Tags.of(this).add('ComplianceLevel', 'PCI-DSS');
 cdk.Tags.of(this).add('DataClassification', 'Sensitive');
 cdk.Tags.of(this).add('Environment', environmentSuffix);

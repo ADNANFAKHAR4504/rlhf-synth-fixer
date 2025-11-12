@@ -4,7 +4,7 @@ This implementation provides a production-ready multi-tier VPC architecture span
 
 ## File: lib/networking-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { Vpc } from '@cdktf/provider-aws/lib/vpc';
 import { Subnet } from '@cdktf/provider-aws/lib/subnet';
@@ -368,7 +368,7 @@ export class NetworkingStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -137,7 +137,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -433,7 +433,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./lib/lambda/processTransaction/index.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
@@ -523,7 +523,7 @@ export const handler = async (
 
 ## ./lib/lambda/auditTransaction/index.ts
 
-```typescript
+```ts
 import { SQSEvent } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -563,7 +563,7 @@ export const handler = async (event: SQSEvent): Promise<void> => {
 
 ## ./lib/lambda/dailySummary/index.ts
 
-```typescript
+```ts
 import { DynamoDBClient, ScanCommand } from '@aws-sdk/client-dynamodb';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -621,7 +621,7 @@ export const handler = async (): Promise<void> => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
@@ -1626,7 +1626,7 @@ describe('Lambda Function Unit Tests', () => {
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import fs from 'fs';
 import path from 'path';
 import {

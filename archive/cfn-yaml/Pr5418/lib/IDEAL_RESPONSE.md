@@ -8,7 +8,7 @@ The solution includes robust integration tests that validate real AWS resources 
 
 ### Dynamic Integration Tests
 
-```typescript
+```ts
 import { spawn } from 'child_process';
 import fs from 'fs';
 

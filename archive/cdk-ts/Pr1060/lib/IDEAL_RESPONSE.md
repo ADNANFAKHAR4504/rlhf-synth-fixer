@@ -8,7 +8,7 @@ This solution implements a robust multi-environment infrastructure using AWS CDK
 
 ### 1. Main Orchestration Stack (`lib/tap-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { LambdaStack } from './lambda-stack';
@@ -107,7 +107,7 @@ export class TapStack extends cdk.Stack {
 
 ### 2. Environment Configuration System (`lib/environment-config.ts`)
 
-```typescript
+```ts
 export interface EnvironmentConfig {
   environmentName: string;
   lambdaMemorySize: number;
@@ -173,7 +173,7 @@ export class EnvironmentConfigs {
 
 ### 3. S3 Stack with Parameterized Naming (`lib/s3-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as iam from 'aws-cdk-lib/aws-iam';
@@ -270,7 +270,7 @@ export class S3Stack extends cdk.Stack {
 
 ### 4. Lambda Stack with Response Streaming (`lib/lambda-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -400,7 +400,7 @@ export class LambdaStack extends cdk.Stack {
 
 ### 5. API Gateway Stack with Routing Rules (`lib/api-gateway-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as apigateway from 'aws-cdk-lib/aws-apigateway';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -524,7 +524,7 @@ export class ApiGatewayStack extends cdk.Stack {
 
 ### 6. Validation Stack (`lib/validation-stack.ts`)
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as events from 'aws-cdk-lib/aws-events';

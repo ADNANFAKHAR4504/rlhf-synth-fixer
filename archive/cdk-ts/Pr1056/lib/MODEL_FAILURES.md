@@ -11,7 +11,7 @@ The initial MODEL_RESPONSE implementation had several critical issues that preve
 The original implementation used incorrect property names for several CDK constructs, causing compilation failures.
 
 **Original (Incorrect):**
-```typescript
+```ts
 const vpcFlowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
   encryption: logs.LogGroupEncryption.KMS,  // Wrong property name
   kmsKey: new kms.Key(...)  // Wrong property name
@@ -19,7 +19,7 @@ const vpcFlowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
 ```
 
 **Fixed:**
-```typescript
+```ts
 const vpcFlowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
   encryptionKey: new kms.Key(...)  // Correct property name
 });
@@ -31,7 +31,7 @@ const vpcFlowLogGroup = new logs.LogGroup(this, 'VPCFlowLogGroup', {
 The Network ACL entries used incorrect enum values for traffic direction.
 
 **Original (Incorrect):**
-```typescript
+```ts
 productionPrivateNetworkAcl.addEntry('DenyAllOutbound', {
   direction: ec2.TrafficDirection.OUTBOUND,  // Invalid enum
   protocol: ec2.AclProtocol.ALL,  // Unnecessary property
@@ -39,7 +39,7 @@ productionPrivateNetworkAcl.addEntry('DenyAllOutbound', {
 ```
 
 **Fixed:**
-```typescript
+```ts
 productionPrivateNetworkAcl.addEntry('DenyAllOutbound', {
   direction: ec2.TrafficDirection.EGRESS,  // Correct enum
   // Removed unnecessary protocol property
@@ -52,7 +52,7 @@ productionPrivateNetworkAcl.addEntry('DenyAllOutbound', {
 The implementation referenced AWS managed policy ARNs that don't exist in the correct format.
 
 **Original (Incorrect):**
-```typescript
+```ts
 managedPolicies: [
   iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/VPCFlowLogsDeliveryRolePolicy'),
   iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/ConfigRole'),
@@ -60,7 +60,7 @@ managedPolicies: [
 ```
 
 **Fixed:**
-```typescript
+```ts
 // For VPC Flow Logs - use inline policy instead
 const flowLogRole = new iam.Role(this, 'FlowLogRole', {
   assumedBy: new iam.ServicePrincipal('vpc-flow-logs.amazonaws.com'),
@@ -81,14 +81,14 @@ configRole.addToPolicy(new iam.PolicyStatement({
 S3 bucket configuration included a non-existent property.
 
 **Original (Incorrect):**
-```typescript
+```ts
 const configBucket = new s3.Bucket(this, 'ConfigBucket', {
   publicWriteAccess: false,  // Property doesn't exist
 });
 ```
 
 **Fixed:**
-```typescript
+```ts
 const configBucket = new s3.Bucket(this, 'ConfigBucket', {
   publicReadAccess: false,  // Only this property exists
   blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,  // Use this for complete blocking
@@ -101,7 +101,7 @@ const configBucket = new s3.Bucket(this, 'ConfigBucket', {
 The KMS key for CloudWatch Logs encryption lacked necessary permissions, causing deployment failures.
 
 **Original (Missing):**
-```typescript
+```ts
 const logGroupKmsKey = new kms.Key(this, 'LogGroupKmsKey', {
   description: 'KMS key for CloudWatch Logs encryption',
   enableKeyRotation: true,
@@ -110,7 +110,7 @@ const logGroupKmsKey = new kms.Key(this, 'LogGroupKmsKey', {
 ```
 
 **Fixed:**
-```typescript
+```ts
 const logGroupKmsKey = new kms.Key(this, 'LogGroupKmsKey', {
   description: 'KMS key for CloudWatch Logs encryption',
   enableKeyRotation: true,
@@ -149,14 +149,14 @@ logGroupKmsKey.addToResourcePolicy(
 Resources lacked proper environment suffix implementation, risking conflicts in multi-environment deployments.
 
 **Original (Incorrect):**
-```typescript
+```ts
 const productionVpc = new ec2.Vpc(this, 'ProductionVPC', {
   vpcName: 'ProductionVPC',  // No environment suffix
 });
 ```
 
 **Fixed:**
-```typescript
+```ts
 const productionVpc = new ec2.Vpc(this, 'ProductionVPC', {
   vpcName: `ProductionVPC-${environmentSuffix}`,  // Include environment suffix
 });
@@ -168,7 +168,7 @@ const productionVpc = new ec2.Vpc(this, 'ProductionVPC', {
 Resources were created with default RETAIN deletion policy, preventing proper cleanup.
 
 **Original (Incorrect):**
-```typescript
+```ts
 const s3KmsKey = new kms.Key(this, 'S3EncryptionKey', {
   description: 'Customer-managed KMS key',
   enableKeyRotation: true,
@@ -177,7 +177,7 @@ const s3KmsKey = new kms.Key(this, 'S3EncryptionKey', {
 ```
 
 **Fixed:**
-```typescript
+```ts
 const s3KmsKey = new kms.Key(this, 'S3EncryptionKey', {
   description: 'Customer-managed KMS key',
   enableKeyRotation: true,
@@ -193,7 +193,7 @@ AWS Config configuration recorder would hang during deployment due to missing de
 **Resolution:**
 Temporarily disabled AWS Config components to ensure core infrastructure deploys successfully. Config can be enabled separately after main infrastructure is stable.
 
-```typescript
+```ts
 // AWS Config components temporarily disabled for simpler deployment
 // Will be enabled after core infrastructure is deployed
 /*
@@ -208,7 +208,7 @@ const deliveryChannel = new config.CfnDeliveryChannel(...);
 The original implementation didn't properly export resource identifiers needed for integration testing and cross-stack references.
 
 **Fixed:**
-```typescript
+```ts
 // Added comprehensive outputs
 new cdk.CfnOutput(this, 'ProductionVpcId', {
   value: productionVpc.vpcId,
@@ -228,14 +228,14 @@ new cdk.CfnOutput(this, 'ApplicationBucketName', {
 Resources were created as local variables but needed to be accessible as class properties.
 
 **Original (Incorrect):**
-```typescript
+```ts
 const ec2InstanceRole = new iam.Role(this, 'EC2InstanceRole', {...});
 const applicationBucket = new s3.Bucket(this, 'ApplicationBucket', {...});
 // ESLint error: variables assigned but never used
 ```
 
 **Fixed:**
-```typescript
+```ts
 export class TapStack extends cdk.Stack {
   public readonly ec2InstanceRole: iam.Role;
   public readonly applicationBucket: s3.Bucket;

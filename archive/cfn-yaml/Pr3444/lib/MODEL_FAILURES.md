@@ -175,7 +175,7 @@ CloudFrontDistribution:
 **Issue**: CloudFront with default certificate uses TLSv1, not TLSv1.2_2021 as specified in template.
 
 **Test Fix**:
-```typescript
+```ts
 // Original expectation
 expect(viewerCert?.MinimumProtocolVersion).toBe('TLSv1.2_2021');
 
@@ -187,7 +187,7 @@ expect(viewerCert?.MinimumProtocolVersion).toBe('TLSv1');
 **Issue**: CloudFront returns 403 instead of 404 when error.html doesn't exist or hasn't propagated.
 
 **Test Fix**:
-```typescript
+```ts
 // Original
 expect(response.status).toBe(404);
 

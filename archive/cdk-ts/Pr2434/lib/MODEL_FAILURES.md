@@ -15,7 +15,7 @@ Error: bin/tap.ts(21,3): error TS2353: Object literal may only specify known pro
 
 **Fix Applied**: Created a custom `TapStackProps` interface that extends `cdk.StackProps` to include the `environmentSuffix` property:
 
-```typescript
+```ts
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
 }
@@ -30,7 +30,7 @@ Error: lib/tap-stack.ts(27,7): error TS2561: Object literal may only specify kno
 
 **Fix Applied**: Changed all KMS key configurations from `keyPolicy` to `policy`:
 
-```typescript
+```ts
 const s3KmsKey = new kms.Key(this, 'S3KMSKey', {
   description: 'KMS Key for S3 bucket encryption',
   enableKeyRotation: true,
@@ -49,7 +49,7 @@ Error: lib/tap-stack.ts(269,7): error TS2561: Object literal may only specify kn
 
 **Fix Applied**: Corrected the property name and disabled performance insights as per requirements:
 
-```typescript
+```ts
 const dbInstance = new rds.DatabaseInstance(this, 'SecureDatabase', {
   // Other properties...
   enablePerformanceInsights: false, // Disabled per requirements
@@ -65,7 +65,7 @@ Error: lib/tap-stack.ts(503,7): error TS2353: Object literal may only specify kn
 
 **Fix Applied**: Properly structured the health check configuration:
 
-```typescript
+```ts
 const healthCheck = new route53.CfnHealthCheck(this, 'HealthCheck', {
   healthCheckConfig: {
     type: 'HTTP',
@@ -89,7 +89,7 @@ Resource handler returned message: "Invalid request provided: Insufficient permi
 
 **Fix Applied**: Added comprehensive CloudTrail permissions to both KMS key policy and S3 bucket policy:
 
-```typescript
+```ts
 // KMS Key Policy Addition
 {
   sid: 'Allow CloudTrail to encrypt logs',
@@ -166,7 +166,7 @@ Received: undefined
 
 **Fix Applied**: Implemented randomized resource naming with environment suffix:
 
-```typescript
+```ts
 const randomSuffix = Math.random().toString(36).substring(2, 8);
 const bucketName = `secure-app-bucket-${environmentSuffix}-${randomSuffix}-${account}-${region}`;
 ```

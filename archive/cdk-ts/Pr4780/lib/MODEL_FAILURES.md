@@ -21,7 +21,7 @@ Policy arn:aws:iam::aws:policy/AWSCodePipelineFullAccess does not exist or is no
 - Ensured region-agnostic deployment capability
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 pipelineRole.addManagedPolicy(
   iam.ManagedPolicy.fromAwsManagedPolicyName('AWSCodePipelineFullAccess')
@@ -59,7 +59,7 @@ Webhook could not be registered with GitHub. Error cause: Not found [StatusCode:
 - Maintained automatic pipeline triggering through S3 events
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 new codepipeline_actions.GitHubSourceAction({
   actionName: 'GitHubSource',
@@ -97,7 +97,7 @@ The bucket you tried to delete is not empty. You must delete all versions in the
 - Simplified bucket cleanup process
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 this.artifactBucket = new s3.Bucket(this, `bucket-${environment}-artifacts`, {
   versioned: true,
@@ -135,7 +135,7 @@ Invalid cache: location must be a valid S3 bucket
 - Maintained build functionality without caching
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 this.buildProject = new codebuild.PipelineProject(this, `build-${environment}-webapp`, {
   cache: codebuild.Cache.bucket(this.artifactBucket, {
@@ -174,7 +174,7 @@ Value (sg-pr4607-codebuild) for parameter GroupName is invalid. Group names may 
 - Maintained consistent naming pattern
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 const appSecurityGroup = new ec2.SecurityGroup(this, 'sg-prod-application', {
   securityGroupName: `sg-${environment}-application`,
@@ -203,7 +203,7 @@ Policy arn:aws:iam::aws:policy/AWSCodeDeployRole does not exist or is not attach
 - Ensured all necessary CodeDeploy permissions are granted
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 const deployRole = new iam.Role(this, `role-${environment}-codedeploy`, {
   managedPolicies: [
@@ -245,7 +245,7 @@ The auto-rollback setting 'deploymentInAlarm' does not have any effect unless yo
 - Maintained rollback functionality without alarm dependency
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Failed)
 autoRollback: {
   failedDeployment: true,
@@ -273,7 +273,7 @@ autoRollback: {
 - Made resource names environment-specific
 
 **Code Changes**:
-```typescript
+```ts
 // BEFORE (Inconsistent)
 this.vpc = new ec2.Vpc(this, 'vpc-prod-cicd', {
   vpcName: `vpc-${environment}-cicd`,

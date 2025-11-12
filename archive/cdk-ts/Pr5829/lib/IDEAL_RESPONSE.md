@@ -4,7 +4,7 @@ Please find solution files below.
 
 ## ./bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
 import { Tags } from 'aws-cdk-lib';
@@ -36,7 +36,7 @@ new TapStack(app, stackName, {
 
 ## ./lib/lambda/required-tags-checker.ts
 
-```typescript
+```ts
 interface ConfigEvent {
   configurationItem: string;
 }
@@ -135,7 +135,7 @@ function resourceSupportsTagging(resourceType: string): boolean {
 
 ## ./lib/lambda/secrets-rotation.ts
 
-```typescript
+```ts
 // eslint-disable-next-line import/no-extraneous-dependencies
 import {
   SecretsManagerClient,
@@ -399,7 +399,7 @@ function generateSecureApiKey(length: number): string {
 
 ## ./lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as cloudtrail from 'aws-cdk-lib/aws-cloudtrail';
 import * as events from 'aws-cdk-lib/aws-events';
@@ -1511,7 +1511,7 @@ export class TapStack extends cdk.Stack {
 
 ## ./test/tap-stack.int.test.ts
 
-```typescript
+```ts
 import * as fs from 'fs';
 import * as path from 'path';
 import { KMS } from 'aws-sdk';
@@ -1928,7 +1928,7 @@ describe('TAP Stack Integration Tests', () => {
 
 ## ./test/tap-stack.unit.test.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';

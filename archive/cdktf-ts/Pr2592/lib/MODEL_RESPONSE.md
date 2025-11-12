@@ -33,7 +33,7 @@ First, let's set up the project structure and dependencies:
 
 This file contains all the reusable, modular components:
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import {
   AwsProvider,
@@ -640,7 +640,7 @@ export class SecurityGroupModule extends Construct {
 
 This file contains the main CDKTF stack that orchestrates all components:
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformStack, CloudBackend, NamedCloudWorkspace } from 'cdktf';
 import {
@@ -778,7 +778,7 @@ export class TapStack extends TerraformStack {
 
 The entry point for the CDKTF application:
 
-```typescript
+```ts
 import { App } from 'cdktf';
 import { TapStack } from './lib/tap-stack';
 

@@ -23,7 +23,7 @@ The implementation required multiple iterations to achieve full compliance with 
 **The fix:**
 - Switched from `lambda.Function` to `NodejsFunction` construct from `aws-cdk-lib/aws-lambda-nodejs`
 - Added esbuild configuration with explicit bundling settings:
-  ```typescript
+  ```ts
   bundling: {
     minify: true,
     sourceMap: false,
@@ -76,7 +76,7 @@ The implementation required multiple iterations to achieve full compliance with 
 
 **The fix:**
 - Updated DynamoDB table configuration:
-  ```typescript
+  ```ts
   pointInTimeRecoverySpecification: {
     pointInTimeRecoveryEnabled: true,
   }
@@ -98,7 +98,7 @@ The implementation required multiple iterations to achieve full compliance with 
 
 **The fix:**
 - Read outputs from `cfn-outputs/flat-outputs.json`:
-  ```typescript
+  ```ts
   const outputs = JSON.parse(
     fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
   );
@@ -106,7 +106,7 @@ The implementation required multiple iterations to achieve full compliance with 
   const bucketName = outputs.LogBucketName;
   ```
 - Use environment variables for dynamic configuration:
-  ```typescript
+  ```ts
   const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
   const region = process.env.AWS_REGION || 'ap-northeast-1';
   ```
@@ -170,7 +170,7 @@ The implementation required multiple iterations to achieve full compliance with 
 
 **The fix:**
 - Changed to verify permissions exist without strict ordering:
-  ```typescript
+  ```ts
   const hasDB = policies.some((policy: any) =>
     policy.Properties.PolicyDocument.Statement.some((stmt: any) =>
       stmt.Action.some((action: string) =>
@@ -216,7 +216,7 @@ The implementation required multiple iterations to achieve full compliance with 
 
 **The fix:**
 - Established clear priority in TapStack constructor:
-  ```typescript
+  ```ts
   const environmentSuffix =
     props?.environmentSuffix ||
     this.node.tryGetContext('environmentSuffix') ||
@@ -241,7 +241,7 @@ The implementation required multiple iterations to achieve full compliance with 
 
 **The fix:**
 - Added tags to all resources:
-  ```typescript
+  ```ts
   cdk.Tags.of(dynamoTable).add('iac-rlhf-amazon', 'true');
   cdk.Tags.of(logBucket).add('iac-rlhf-amazon', 'true');
   cdk.Tags.of(apiLambda).add('iac-rlhf-amazon', 'true');

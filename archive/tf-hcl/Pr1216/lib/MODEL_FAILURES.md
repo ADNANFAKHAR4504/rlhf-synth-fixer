@@ -29,7 +29,7 @@
 ### 3. Integration Test Placeholders
 
 **Problem**: Integration tests contained only a placeholder that would always fail:
-```typescript
+```ts
 test('Dont forget!', async () => {
   expect(false).toBe(true);
 });

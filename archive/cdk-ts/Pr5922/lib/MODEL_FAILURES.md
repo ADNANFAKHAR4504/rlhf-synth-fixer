@@ -23,7 +23,7 @@ The MODEL_RESPONSE provided a solid foundation but had several issues that neede
 **Impact Level**: Medium
 
 **MODEL_RESPONSE Issue**: Used deprecated `logRetention` property directly in Lambda function configuration, which generates warnings during build and synth:
-```typescript
+```ts
 logRetention: logs.RetentionDays.ONE_MONTH
 ```
 
@@ -116,7 +116,7 @@ logRetention: logs.RetentionDays.ONE_MONTH
 **MODEL_RESPONSE Issue**: TransactionProcessingStack was created as a nested construct but not following CDK's recommended pattern for child stack naming with parent prefix.
 
 **IDEAL_RESPONSE Fix**: Verified child stack is correctly instantiated with `this` scope in TapStack constructor:
-```typescript
+```ts
 new TransactionProcessingStack(this, 'TransactionProcessing', { environmentSuffix });
 ```
 

@@ -8,7 +8,7 @@ This configuration management system now includes:
 
 ## File: lib/config-management-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as appconfig from 'aws-cdk-lib/aws-appconfig';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
@@ -335,7 +335,7 @@ exports.handler = async (event) => {
 
 ## File: lib/appconfig-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as appconfig from 'aws-cdk-lib/aws-appconfig';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
@@ -475,7 +475,7 @@ export class AppConfigStack extends cdk.Stack {
 
 ## File: lib/parameter-secrets-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
@@ -653,7 +653,7 @@ export class ParameterSecretsStack extends cdk.Stack {
 
 ## File: lib/stepfunctions-orchestration-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as stepfunctions from 'aws-cdk-lib/aws-stepfunctions';
 import * as stepfunctionsTasks from 'aws-cdk-lib/aws-stepfunctions-tasks';
@@ -896,7 +896,7 @@ exports.handler = async (event) => {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import { ConfigManagementStack } from './config-management-stack';

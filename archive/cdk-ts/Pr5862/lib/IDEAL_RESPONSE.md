@@ -50,7 +50,7 @@ This implementation provides a complete production-grade CDK stack for the finte
 
 The complete CDK TypeScript implementation is provided in the `lib/tap-stack.ts` file with all components properly configured for production use.
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as backup from 'aws-cdk-lib/aws-backup';
 import * as acm from 'aws-cdk-lib/aws-certificatemanager';

@@ -11,7 +11,7 @@ I need you to help me implement a CDK (AWS Cloud Development Kit) program in Typ
 ## Existing Code Structure
 Here's what I currently have in `lib/tap-stack.ts`:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

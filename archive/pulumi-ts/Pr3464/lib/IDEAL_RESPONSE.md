@@ -18,7 +18,7 @@ The infrastructure implements:
 
 ### lib/tap-stack.ts
 
-```typescript
+```ts
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 
@@ -651,7 +651,7 @@ exports.handler = async (event) => {
 
 ### lib/mediaconvert-templates.ts
 
-```typescript
+```ts
 // MediaConvert templates for audio transcoding
 
 export interface AudioTranscodingPreset {

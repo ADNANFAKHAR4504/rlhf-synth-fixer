@@ -24,7 +24,7 @@ Here's what I need to accomplish:
 **Current Code Structure:**
 I already have a basic CDK stack file at `lib/tap-stack.ts` that needs to be updated. Here's the current content:
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 

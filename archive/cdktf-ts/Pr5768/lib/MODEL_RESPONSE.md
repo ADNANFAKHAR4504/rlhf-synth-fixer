@@ -4,7 +4,7 @@ This implementation creates consistent infrastructure across dev, staging, and p
 
 ## File: lib/environment-config.ts
 
-```typescript
+```ts
 export interface EnvironmentConfig {
   environment: string;
   bucketLifecycleDays: number;
@@ -100,7 +100,7 @@ export function validateEnvironmentConfig(config: EnvironmentConfig): void {
 
 ## File: lib/s3-bucket-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { S3Bucket } from '@cdktf/provider-aws/lib/s3-bucket';
 import { S3BucketVersioningA } from '@cdktf/provider-aws/lib/s3-bucket-versioning';
@@ -328,7 +328,7 @@ export class S3BucketConstruct extends Construct {
 
 ## File: lib/dynamodb-table-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { DynamodbTable } from '@cdktf/provider-aws/lib/dynamodb-table';
 import { EnvironmentConfig } from './environment-config';
@@ -410,7 +410,7 @@ export class DynamodbTableConstruct extends Construct {
 
 ## File: lib/monitoring-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { CloudwatchMetricAlarm } from '@cdktf/provider-aws/lib/cloudwatch-metric-alarm';
 import { SnsTopic } from '@cdktf/provider-aws/lib/sns-topic';
@@ -534,7 +534,7 @@ export class MonitoringConstruct extends Construct {
 
 ## File: lib/iam-construct.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { IamRole } from '@cdktf/provider-aws/lib/iam-role';
 import { IamRolePolicy } from '@cdktf/provider-aws/lib/iam-role-policy';
@@ -650,7 +650,7 @@ export class IamConstruct extends Construct {
 
 ## File: lib/infrastructure-stack.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 import { TerraformOutput } from 'cdktf';
 import {
@@ -758,7 +758,7 @@ export class InfrastructureStack extends Construct {
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,

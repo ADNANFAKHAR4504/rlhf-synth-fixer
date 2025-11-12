@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformOutput } from "cdktf";
 import { Vpc } from "@cdktf/provider-aws/lib/vpc";
@@ -345,7 +345,7 @@ export class RdsModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 import { Construct } from "constructs";
 import { TerraformStack, TerraformOutput, TerraformVariable, TerraformVariableConfig } from "cdktf";
 import { AwsProvider } from "@cdktf/provider-aws/lib/provider";

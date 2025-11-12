@@ -2,7 +2,7 @@ I'll help you implement a comprehensive CI/CD pipeline by updating your existing
 
 ## Updated `lib/tap-stack.ts`
 
-```typescript
+```ts
 import * as cdk from 'aws-cdk-lib';
 import * as codepipeline from 'aws-cdk-lib/aws-codepipeline';
 import * as codepipeline_actions from 'aws-cdk-lib/aws-codepipeline-actions';

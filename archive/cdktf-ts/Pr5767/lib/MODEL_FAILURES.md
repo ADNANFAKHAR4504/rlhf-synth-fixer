@@ -9,7 +9,7 @@ This document analyzes the failures in the MODEL_RESPONSE.md and documents the c
 **Impact Level**: Critical (Deployment Blocker)
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/constructs/data-pipeline-construct.ts (line 92-96)
 new S3BucketLifecycleConfiguration(this, 'DataBucketLifecycle', {
   bucket: this.dataBucket.id,
@@ -24,7 +24,7 @@ new S3BucketLifecycleConfiguration(this, 'DataBucketLifecycle', {
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
 new S3BucketLifecycleConfiguration(this, 'DataBucketLifecycle', {
   bucket: this.dataBucket.id,
   rule: [{
@@ -108,7 +108,7 @@ The model used `DataArchiveFile` from `@cdktf/provider-archive` to package Lambd
 **Impact Level**: Low (Documentation Quality)
 
 **MODEL_RESPONSE Issue**:
-```typescript
+```ts
 // In lib/data-pipeline-stack.ts (line 30)
     // CloudFormation Outputs  // ❌ INCORRECT: This is CDKTF/Terraform, not CDK/CloudFormation
     new TerraformOutput(this, 'S3BucketName', {
@@ -118,7 +118,7 @@ The model used `DataArchiveFile` from `@cdktf/provider-archive` to package Lambd
 ```
 
 **IDEAL_RESPONSE Fix**:
-```typescript
+```ts
     // Terraform Outputs  // ✅ CORRECT: Using TerraformOutput, not CloudFormation
     new TerraformOutput(this, 'S3BucketName', {
       value: pipeline.dataBucket.bucket,

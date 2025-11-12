@@ -1,6 +1,6 @@
 ## lib/modules.ts
 
-```typescript
+```ts
 import { Construct } from 'constructs';
 
 // VPC
@@ -1096,7 +1096,7 @@ export class CloudWatchDashboardModule extends Construct {
 
 ## lib/tap-stack.ts
 
-```typescript
+```ts
 // lib/tap-stack.ts
 import {
   AwsProvider,

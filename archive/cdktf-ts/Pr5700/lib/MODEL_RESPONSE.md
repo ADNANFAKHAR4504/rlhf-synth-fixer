@@ -4,7 +4,7 @@ This document contains the complete CDKTF TypeScript implementation for the serv
 
 ## File: bin/tap.ts
 
-```typescript
+```ts
 #!/usr/bin/env node
 import { App } from 'cdktf';
 import { TapStack } from '../lib/tap-stack';
@@ -49,7 +49,7 @@ app.synth();
 
 ## File: lib/tap-stack.ts
 
-```typescript
+```ts
 import {
   AwsProvider,
   AwsProviderDefaultTags,
@@ -562,7 +562,7 @@ export class TapStack extends TerraformStack {
 
 ## File: lib/lambda/validator/index.ts
 
-```typescript
+```ts
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { DynamoDBClient, PutItemCommand, GetItemCommand } from '@aws-sdk/client-dynamodb';
 import { SQSClient, SendMessageCommand } from '@aws-sdk/client-sqs';
@@ -717,7 +717,7 @@ export const handler = async (
 
 ## File: lib/lambda/processor/index.ts
 
-```typescript
+```ts
 import { SQSEvent } from 'aws-lambda';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { DynamoDBClient, UpdateItemCommand } from '@aws-sdk/client-dynamodb';
