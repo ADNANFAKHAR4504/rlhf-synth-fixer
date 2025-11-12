@@ -99,17 +99,6 @@ Parameters:
     Default: 'tapstack-assets'
     Description: "Prefix for static assets bucket. Final name will be <prefix>-<environment-suffix>-<8charSuffix>. Ensure global uniqueness."
 
-  # ----- New: Lambda code locations for production deployment (no inline code) -----
-  LambdaCodeBucket:
-    Type: String
-    Default: ''
-    Description: "S3 bucket containing Lambda deployment package (required when EnableAsyncHandlers=true)."
-
-  LambdaCodeKey:
-    Type: String
-    Default: ''
-    Description: "S3 key for Lambda deployment package zip (required when EnableAsyncHandlers=true)."
-
 # =====================================================================================
 # MAPPINGS
 # =====================================================================================
@@ -139,30 +128,15 @@ Conditions:
   UseKeyPair: !Not [ !Equals [ !Ref KeyPairName, '' ] ]
   EnableAsync: !Equals [ !Ref EnableAsyncHandlers, 'true' ]
   CreateLogsBucket: !Equals [ !Ref CreateAccessLogsBucket, 'true' ]
-  HasLambdaCode: !And
-    - !Not [ !Equals [ !Ref LambdaCodeBucket, '' ] ]
-    - !Not [ !Equals [ !Ref LambdaCodeKey, '' ] ]
-  HasAsyncLambda: !And [ !Condition EnableAsync, !Condition HasLambdaCode ]
-
-# (Optional) Early validation to guide operators
-Rules:
-  RequireLambdaCodeWhenAsync:
-    Assertions:
-      - Assert: !Or
-          - !Equals [ !Ref EnableAsyncHandlers, 'false' ]
-          - !And
-            - !Not [ !Equals [ !Ref LambdaCodeBucket, '' ] ]
-            - !Not [ !Equals [ !Ref LambdaCodeKey, '' ] ]
-        AssertDescription: "When EnableAsyncHandlers=true, provide LambdaCodeBucket and LambdaCodeKey."
 
 # =====================================================================================
 # RESOURCES
 # =====================================================================================
-Resources:
 
-  # --------------------------
-  # Networking: VPC & Subnets
-  # --------------------------
+# --------------------------
+# Networking: VPC & Subnets
+# --------------------------
+Resources:
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -225,13 +199,14 @@ Resources:
       DestinationCidrBlock: '0.0.0.0/0'
       GatewayId: !Ref InternetGateway
 
+  # ---------- NAT Gateways (Multi-AZ) ----------
   NatEip:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
       Tags:
         - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip'
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip-a'
         - Key: Project
           Value: !Ref ProjectTag
         - Key: Owner
@@ -248,7 +223,7 @@ Resources:
       SubnetId: !Ref PublicSubnetA
       Tags:
         - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat'
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-a'
         - Key: Project
           Value: !Ref ProjectTag
         - Key: Owner
@@ -258,13 +233,80 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  NatEipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip-b'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatGatewayB:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipB.AllocationId
+      SubnetId: !Ref PublicSubnetB
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-b'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatEipC:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-eip-c'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatGatewayC:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEipC.AllocationId
+      SubnetId: !Ref PublicSubnetC
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-nat-c'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # ---------- Private Route Tables per AZ ----------
   PrivateRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
       VpcId: !Ref VPC
       Tags:
         - Key: Name
-          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt'
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt-a'
         - Key: Project
           Value: !Ref ProjectTag
         - Key: Owner
@@ -280,6 +322,52 @@ Resources:
       RouteTableId: !Ref PrivateRouteTable
       DestinationCidrBlock: '0.0.0.0/0'
       NatGatewayId: !Ref NatGateway
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt-b'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteDefaultB:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayB
+
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'tapstack-${EnvironmentSuffix}-private-rt-c'
+        - Key: Project
+          Value: !Ref ProjectTag
+        - Key: Owner
+          Value: !Ref OwnerTag
+        - Key: CostCenter
+          Value: !Ref CostCenterTag
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRouteDefaultC:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGatewayC
 
   # Public subnets (3)
   PublicSubnetA:
@@ -426,13 +514,13 @@ Resources:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnetB
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTableB
 
   PrivateSubnetCRouteAssoc:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PrivateSubnetC
-      RouteTableId: !Ref PrivateRouteTable
+      RouteTableId: !Ref PrivateRouteTableC
 
   # --------------------------
   # Consolidated Security Groups
@@ -552,9 +640,6 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-
-
-
   AlbTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -639,7 +724,7 @@ Resources:
                 Value: !Ref EnvironmentSuffix
 
   # --------------------------
-  # ASG pattern (3 exemplars using mappings)
+  # ASGs (standardized to web-standard)
   # --------------------------
   WebAsgA:
     Type: AWS::AutoScaling::AutoScalingGroup
@@ -678,9 +763,9 @@ Resources:
     Properties:
       AutoScalingGroupName: !Sub 'tapstack-${EnvironmentSuffix}-web-b'
       VPCZoneIdentifier: [ !Ref PrivateSubnetB ]
-      MinSize: !FindInMap [ AsgProfiles, web-small, Min ]
-      MaxSize: !FindInMap [ AsgProfiles, web-small, Max ]
-      DesiredCapacity: !FindInMap [ AsgProfiles, web-small, Desired ]
+      MinSize: !FindInMap [ AsgProfiles, web-standard, Min ]
+      MaxSize: !FindInMap [ AsgProfiles, web-standard, Max ]
+      DesiredCapacity: !FindInMap [ AsgProfiles, web-standard, Desired ]
       HealthCheckType: ELB
       TargetGroupARNs: [ !Ref AlbTargetGroup ]
       LaunchTemplate:
@@ -710,9 +795,9 @@ Resources:
     Properties:
       AutoScalingGroupName: !Sub 'tapstack-${EnvironmentSuffix}-web-c'
       VPCZoneIdentifier: [ !Ref PrivateSubnetC ]
-      MinSize: !FindInMap [ AsgProfiles, web-large, Min ]
-      MaxSize: !FindInMap [ AsgProfiles, web-large, Max ]
-      DesiredCapacity: !FindInMap [ AsgProfiles, web-large, Desired ]
+      MinSize: !FindInMap [ AsgProfiles, web-standard, Min ]
+      MaxSize: !FindInMap [ AsgProfiles, web-standard, Max ]
+      DesiredCapacity: !FindInMap [ AsgProfiles, web-standard, Desired ]
       HealthCheckType: ELB
       TargetGroupARNs: [ !Ref AlbTargetGroup ]
       LaunchTemplate:
@@ -738,7 +823,7 @@ Resources:
           PropagateAtLaunch: true
 
   # --------------------------
-  # S3 Buckets (assets + optional access logs) with unique names
+  # S3 Buckets (assets + optional access logs)
   # --------------------------
   AccessLogsBucket:
     Condition: CreateLogsBucket
@@ -763,7 +848,7 @@ Resources:
                     - !Ref "AWS::StackId"
       OwnershipControls:
         Rules:
-          - ObjectOwnership: BucketOwnerPreferred
+          - ObjectOwnership: BucketOwnerEnforced
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -787,6 +872,34 @@ Resources:
           Value: !Ref CostCenterTag
         - Key: Environment
           Value: !Ref EnvironmentSuffix
+
+  # Allow ELB log delivery to the logs bucket
+  AccessLogsBucketPolicy:
+    Condition: CreateLogsBucket
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref AccessLogsBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryCheck
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action:
+              - s3:GetBucketAcl
+              - s3:ListBucket
+            Resource: !Sub 'arn:${AWS::Partition}:s3:::${AccessLogsBucket}'
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logdelivery.elasticloadbalancing.amazonaws.com
+            Action: s3:PutObject
+            Resource:
+              - !Sub 'arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
 
   AssetsBucket:
     Type: AWS::S3::Bucket
@@ -820,7 +933,7 @@ Resources:
       LoggingConfiguration:
         Fn::If:
           - CreateLogsBucket
-          - { DestinationBucketName: !Ref AccessLogsBucket, LogFilePrefix: !Sub 's3-logs-${EnvironmentSuffix}' } # no trailing slash
+          - { DestinationBucketName: !Ref AccessLogsBucket, LogFilePrefix: !Sub 's3-logs/${EnvironmentSuffix}/' }
           - !Ref 'AWS::NoValue'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
@@ -838,7 +951,6 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # Shared bucket policy (no legacy AccessControl)
   AssetsBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Properties:
@@ -856,35 +968,6 @@ Resources:
             Condition:
               Bool:
                 aws:SecureTransport: 'false'
-  AccessLogsBucketPolicy:
-    Condition: CreateLogsBucket
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref AccessLogsBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSLogDeliveryCheck
-            Effect: Allow
-            Principal:
-              Service: logdelivery.elasticloadbalancing.amazonaws.com
-            Action:
-              - s3:GetBucketAcl
-              - s3:ListBucket
-            Resource: !Sub 'arn:${AWS::Partition}:s3:::${AccessLogsBucket}'
-
-          - Sid: AWSLogDeliveryWrite
-            Effect: Allow
-            Principal:
-              Service: logdelivery.elasticloadbalancing.amazonaws.com
-            Action: s3:PutObject
-            Resource:
-              - !Sub 'arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*'
-            Condition:
-              StringEquals:
-                aws:SourceAccount: !Ref AWS::AccountId
-
-
 
   # --------------------------
   # Aurora MySQL Cluster (stateful; protected)
@@ -930,12 +1013,11 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
-  # Enhanced Monitoring Role with correct trust principal
   RdsMonitoringRole:
     Type: AWS::IAM::Role
     Properties:
-      Path: "/"
-      RoleName: !Sub "tapstack-${EnvironmentSuffix}-rds-monitoring-role-${AWS::StackName}"
+      # safe, unique, valid chars
+      RoleName: !Sub 'tapstack-${EnvironmentSuffix}-rds-monitoring-role-${AWS::StackName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -945,6 +1027,7 @@ Resources:
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole
+      Path: "/"
       Tags:
         - Key: Name
           Value: !Sub 'tapstack-${EnvironmentSuffix}-rds-monitoring-role'
@@ -1036,7 +1119,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   # --------------------------
-  # Optional Async Handlers (IAM role consolidated for all Lambdas)
+  # Optional Async Handlers (consolidated role)
   # --------------------------
   LambdaSharedRole:
     Condition: EnableAsync
@@ -1134,7 +1217,7 @@ Resources:
           Value: !Ref EnvironmentSuffix
 
   OrdersFunctionLogGroup:
-    Condition: HasAsyncLambda
+    Condition: EnableAsync
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/lambda/tapstack-${EnvironmentSuffix}-orders'
@@ -1143,7 +1226,7 @@ Resources:
     UpdateReplacePolicy: Retain
 
   OrdersFunction:
-    Condition: HasAsyncLambda
+    Condition: EnableAsync
     Type: AWS::Lambda::Function
     Properties:
       FunctionName: !Sub 'tapstack-${EnvironmentSuffix}-orders'
@@ -1159,8 +1242,17 @@ Resources:
           TOPIC_ARN: !Ref OrdersTopic
           ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
       Code:
-        S3Bucket: !Ref LambdaCodeBucket
-        S3Key: !Ref LambdaCodeKey
+        ZipFile: |
+          import os, json, boto3
+          sqs = boto3.client('sqs')
+          sns = boto3.client('sns')
+          def handler(event, context):
+              msg = json.dumps({"ok": True, "env": os.environ.get("ENVIRONMENT_SUFFIX")})
+              if os.environ.get("QUEUE_URL"):
+                  sqs.send_message(QueueUrl=os.environ["QUEUE_URL"], MessageBody=msg)
+              if os.environ.get("TOPIC_ARN"):
+                  sns.publish(TopicArn=os.environ["TOPIC_ARN"], Message=msg, Subject="order")
+              return {"statusCode": 200, "body": msg}
       Tags:
         - Key: Name
           Value: !Sub 'tapstack-${EnvironmentSuffix}-orders'
@@ -1218,3 +1310,13 @@ Outputs:
   AssetsBucketName:
     Description: "Name of the S3 bucket for static assets"
     Value: !Ref AssetsBucket
+
+  OrdersQueueUrl:
+    Condition: EnableAsync
+    Description: "URL for the orders SQS queue (optional async handlers)"
+    Value: !Ref OrdersQueue
+
+  OrdersTopicArn:
+    Condition: EnableAsync
+    Description: "ARN for the orders SNS topic (optional async handlers)"
+    Value: !Ref OrdersTopic

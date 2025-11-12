@@ -96,16 +96,6 @@
             "Type": "String",
             "Default": "tapstack-assets",
             "Description": "Prefix for static assets bucket. Final name will be <prefix>-<environment-suffix>-<8charSuffix>. Ensure global uniqueness."
-        },
-        "LambdaCodeBucket": {
-            "Type": "String",
-            "Default": "",
-            "Description": "S3 bucket containing Lambda deployment package (required when EnableAsyncHandlers=true)."
-        },
-        "LambdaCodeKey": {
-            "Type": "String",
-            "Default": "",
-            "Description": "S3 key for Lambda deployment package zip (required when EnableAsyncHandlers=true)."
         }
     },
     "Mappings": {
@@ -169,93 +159,6 @@
                     "Ref": "CreateAccessLogsBucket"
                 },
                 "true"
-            ]
-        },
-        "HasLambdaCode": {
-            "Fn::And": [
-                {
-                    "Fn::Not": [
-                        {
-                            "Fn::Equals": [
-                                {
-                                    "Ref": "LambdaCodeBucket"
-                                },
-                                ""
-                            ]
-                        }
-                    ]
-                },
-                {
-                    "Fn::Not": [
-                        {
-                            "Fn::Equals": [
-                                {
-                                    "Ref": "LambdaCodeKey"
-                                },
-                                ""
-                            ]
-                        }
-                    ]
-                }
-            ]
-        },
-        "HasAsyncLambda": {
-            "Fn::And": [
-                {
-                    "Condition": "EnableAsync"
-                },
-                {
-                    "Condition": "HasLambdaCode"
-                }
-            ]
-        }
-    },
-    "Rules": {
-        "RequireLambdaCodeWhenAsync": {
-            "Assertions": [
-                {
-                    "Assert": {
-                        "Fn::Or": [
-                            {
-                                "Fn::Equals": [
-                                    {
-                                        "Ref": "EnableAsyncHandlers"
-                                    },
-                                    "false"
-                                ]
-                            },
-                            {
-                                "Fn::And": [
-                                    {
-                                        "Fn::Not": [
-                                            {
-                                                "Fn::Equals": [
-                                                    {
-                                                        "Ref": "LambdaCodeBucket"
-                                                    },
-                                                    ""
-                                                ]
-                                            }
-                                        ]
-                                    },
-                                    {
-                                        "Fn::Not": [
-                                            {
-                                                "Fn::Equals": [
-                                                    {
-                                                        "Ref": "LambdaCodeKey"
-                                                    },
-                                                    ""
-                                                ]
-                                            }
-                                        ]
-                                    }
-                                ]
-                            }
-                        ]
-                    },
-                    "AssertDescription": "When EnableAsyncHandlers=true, provide LambdaCodeBucket and LambdaCodeKey."
-                }
             ]
         }
     },
@@ -410,7 +313,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-eip"
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-eip-a"
                         }
                     },
                     {
@@ -456,7 +359,175 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat"
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-a"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectTag"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenterTag"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatEipB": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-eip-b"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectTag"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenterTag"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGatewayB": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipB",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetB"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-b"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectTag"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenterTag"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatEipC": {
+            "Type": "AWS::EC2::EIP",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-eip-c"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectTag"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenterTag"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "NatGatewayC": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatEipC",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnetC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-nat-c"
                         }
                     },
                     {
@@ -496,7 +567,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-private-rt"
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-private-rt-a"
                         }
                     },
                     {
@@ -535,6 +606,110 @@
                 "DestinationCidrBlock": "0.0.0.0/0",
                 "NatGatewayId": {
                     "Ref": "NatGateway"
+                }
+            }
+        },
+        "PrivateRouteTableB": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-private-rt-b"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectTag"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenterTag"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteDefaultB": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableB"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayB"
+                }
+            }
+        },
+        "PrivateRouteTableC": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "tapstack-${EnvironmentSuffix}-private-rt-c"
+                        }
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": {
+                            "Ref": "ProjectTag"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": {
+                            "Ref": "CostCenterTag"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "PrivateRouteDefaultC": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTableC"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGatewayC"
                 }
             }
         },
@@ -931,7 +1106,7 @@
                     "Ref": "PrivateSubnetB"
                 },
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
+                    "Ref": "PrivateRouteTableB"
                 }
             }
         },
@@ -942,7 +1117,7 @@
                     "Ref": "PrivateSubnetC"
                 },
                 "RouteTableId": {
-                    "Ref": "PrivateRouteTable"
+                    "Ref": "PrivateRouteTableC"
                 }
             }
         },
@@ -1494,21 +1669,21 @@
                 "MinSize": {
                     "Fn::FindInMap": [
                         "AsgProfiles",
-                        "web-small",
+                        "web-standard",
                         "Min"
                     ]
                 },
                 "MaxSize": {
                     "Fn::FindInMap": [
                         "AsgProfiles",
-                        "web-small",
+                        "web-standard",
                         "Max"
                     ]
                 },
                 "DesiredCapacity": {
                     "Fn::FindInMap": [
                         "AsgProfiles",
-                        "web-small",
+                        "web-standard",
                         "Desired"
                     ]
                 },
@@ -1587,21 +1762,21 @@
                 "MinSize": {
                     "Fn::FindInMap": [
                         "AsgProfiles",
-                        "web-large",
+                        "web-standard",
                         "Min"
                     ]
                 },
                 "MaxSize": {
                     "Fn::FindInMap": [
                         "AsgProfiles",
-                        "web-large",
+                        "web-standard",
                         "Max"
                     ]
                 },
                 "DesiredCapacity": {
                     "Fn::FindInMap": [
                         "AsgProfiles",
-                        "web-large",
+                        "web-standard",
                         "Desired"
                     ]
                 },
@@ -1712,7 +1887,7 @@
                 "OwnershipControls": {
                     "Rules": [
                         {
-                            "ObjectOwnership": "BucketOwnerPreferred"
+                            "ObjectOwnership": "BucketOwnerEnforced"
                         }
                     ]
                 },
@@ -1768,6 +1943,54 @@
                         }
                     }
                 ]
+            }
+        },
+        "AccessLogsBucketPolicy": {
+            "Condition": "CreateLogsBucket",
+            "Type": "AWS::S3::BucketPolicy",
+            "Properties": {
+                "Bucket": {
+                    "Ref": "AccessLogsBucket"
+                },
+                "PolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "AWSLogDeliveryCheck",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
+                            },
+                            "Action": [
+                                "s3:GetBucketAcl",
+                                "s3:ListBucket"
+                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}"
+                            }
+                        },
+                        {
+                            "Sid": "AWSLogDeliveryWrite",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
+                            },
+                            "Action": "s3:PutObject",
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*"
+                                }
+                            ],
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:SourceAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
             }
         },
         "AssetsBucket": {
@@ -1835,7 +2058,7 @@
                                 "Ref": "AccessLogsBucket"
                             },
                             "LogFilePrefix": {
-                                "Fn::Sub": "s3-logs-${EnvironmentSuffix}"
+                                "Fn::Sub": "s3-logs/${EnvironmentSuffix}/"
                             }
                         },
                         {
@@ -1911,54 +2134,6 @@
                             "Condition": {
                                 "Bool": {
                                     "aws:SecureTransport": "false"
-                                }
-                            }
-                        }
-                    ]
-                }
-            }
-        },
-        "AccessLogsBucketPolicy": {
-            "Condition": "CreateLogsBucket",
-            "Type": "AWS::S3::BucketPolicy",
-            "Properties": {
-                "Bucket": {
-                    "Ref": "AccessLogsBucket"
-                },
-                "PolicyDocument": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Sid": "AWSLogDeliveryCheck",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
-                            },
-                            "Action": [
-                                "s3:GetBucketAcl",
-                                "s3:ListBucket"
-                            ],
-                            "Resource": {
-                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}"
-                            }
-                        },
-                        {
-                            "Sid": "AWSLogDeliveryWrite",
-                            "Effect": "Allow",
-                            "Principal": {
-                                "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
-                            },
-                            "Action": "s3:PutObject",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*"
-                                }
-                            ],
-                            "Condition": {
-                                "StringEquals": {
-                                    "aws:SourceAccount": {
-                                        "Ref": "AWS::AccountId"
-                                    }
                                 }
                             }
                         }
@@ -2066,9 +2241,8 @@
         "RdsMonitoringRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "Path": "/",
                 "RoleName": {
-                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-rds-monitoring-role"
+                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-rds-monitoring-role-${AWS::StackName}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -2085,6 +2259,7 @@
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
                 ],
+                "Path": "/",
                 "Tags": [
                     {
                         "Key": "Name",
@@ -2497,7 +2672,7 @@
             }
         },
         "OrdersFunctionLogGroup": {
-            "Condition": "HasAsyncLambda",
+            "Condition": "EnableAsync",
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
@@ -2509,7 +2684,7 @@
             "UpdateReplacePolicy": "Retain"
         },
         "OrdersFunction": {
-            "Condition": "HasAsyncLambda",
+            "Condition": "EnableAsync",
             "Type": "AWS::Lambda::Function",
             "Properties": {
                 "FunctionName": {
@@ -2541,12 +2716,7 @@
                     }
                 },
                 "Code": {
-                    "S3Bucket": {
-                        "Ref": "LambdaCodeBucket"
-                    },
-                    "S3Key": {
-                        "Ref": "LambdaCodeKey"
-                    }
+                    "ZipFile": "import os, json, boto3\nsqs = boto3.client('sqs')\nsns = boto3.client('sns')\ndef handler(event, context):\n    msg = json.dumps({\"ok\": True, \"env\": os.environ.get(\"ENVIRONMENT_SUFFIX\")})\n    if os.environ.get(\"QUEUE_URL\"):\n        sqs.send_message(QueueUrl=os.environ[\"QUEUE_URL\"], MessageBody=msg)\n    if os.environ.get(\"TOPIC_ARN\"):\n        sns.publish(TopicArn=os.environ[\"TOPIC_ARN\"], Message=msg, Subject=\"order\")\n    return {\"statusCode\": 200, \"body\": msg}\n"
                 },
                 "Tags": [
                     {
@@ -2656,6 +2826,20 @@
             "Description": "Name of the S3 bucket for static assets",
             "Value": {
                 "Ref": "AssetsBucket"
+            }
+        },
+        "OrdersQueueUrl": {
+            "Condition": "EnableAsync",
+            "Description": "URL for the orders SQS queue (optional async handlers)",
+            "Value": {
+                "Ref": "OrdersQueue"
+            }
+        },
+        "OrdersTopicArn": {
+            "Condition": "EnableAsync",
+            "Description": "ARN for the orders SNS topic (optional async handlers)",
+            "Value": {
+                "Ref": "OrdersTopic"
             }
         }
     }
