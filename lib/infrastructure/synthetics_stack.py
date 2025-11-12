@@ -6,7 +6,7 @@ BUG #25: Missing canary alarm configuration
 import json
 import pulumi
 import pulumi_aws as aws
-from pulumi import Output, ResourceOptions
+from pulumi import Output, ResourceOptions, AssetArchive, StringAsset
 from typing import Optional
 
 
@@ -130,16 +130,19 @@ def handler(event, context):
     }
 """
 
+        # Create canary code as zip archive
+        canary_zip = AssetArchive({
+            "handler.py": StringAsset(python_canary_script)
+        })
+
         # Primary region canary
         self.primary_canary = aws.synthetics.Canary(
             f"trading-api-canary-primary-{environment_suffix}",
             name=f"trading-canary-primary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-primary"),
             execution_role_arn=self.canary_role.arn,
-            code={
-                "handler": "handler.handler",
-                "script": python_canary_script,
-            },
+            handler="handler.handler",
+            zip_file=canary_zip,
             runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
@@ -160,10 +163,8 @@ def handler(event, context):
             name=f"trading-canary-secondary-{environment_suffix}",
             artifact_s3_location=pulumi.Output.concat("s3://", self.canary_bucket.bucket, "/canary-secondary"),
             execution_role_arn=self.canary_role.arn,
-            code={
-                "handler": "handler.handler",
-                "script": python_canary_script,
-            },
+            handler="handler.handler",
+            zip_file=canary_zip,
             runtime_version="syn-python-selenium-1.0",
             schedule=aws.synthetics.CanaryScheduleArgs(
                 expression="rate(5 minutes)"
