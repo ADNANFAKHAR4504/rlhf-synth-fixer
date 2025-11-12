@@ -61,6 +61,9 @@ class TapMocks(pulumi.runtime.Mocks):
             outputs.setdefault("replicationInstanceArn", f"arn:aws:dms:mock:123456789012:{args.name}")
         elif typ == "random:index/randomString:RandomString":
             outputs.setdefault("result", "abc123")
+        elif typ == "aws:ssm/parameter:Parameter":
+            outputs.setdefault("name", args.inputs.get("name", f"/migration/{args.name}"))
+            outputs.setdefault("arn", f"arn:aws:ssm:mock:123456789012:parameter{args.inputs.get('name', f'/migration/{args.name}')}")
 
         return [f"{args.name}-id", outputs]
 

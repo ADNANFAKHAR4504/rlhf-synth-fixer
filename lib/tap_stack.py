@@ -265,49 +265,46 @@ class TapStack(pulumi.ComponentResource):
             )
         )
 
-        # Register stack outputs
-        self.register_outputs({
-            # Network outputs
-            'production_vpc_id': self.network_stack.production_vpc.id,
-            'migration_vpc_id': self.network_stack.migration_vpc.id,
-            'transit_gateway_id': self.network_stack.transit_gateway.id,
+        # Register stack outputs using pulumi.export()
+        # Network outputs
+        pulumi.export('production_vpc_id', self.network_stack.production_vpc.id)
+        pulumi.export('migration_vpc_id', self.network_stack.migration_vpc.id)
+        pulumi.export('transit_gateway_id', self.network_stack.transit_gateway.id)
 
-            # Database outputs
-            'production_db_endpoint': self.database_stack.production_cluster.endpoint,
-            'production_db_reader_endpoint': self.database_stack.production_cluster.reader_endpoint,
-            'migration_db_endpoint': self.database_stack.migration_cluster.endpoint,
-            'migration_db_reader_endpoint': self.database_stack.migration_cluster.reader_endpoint,
+        # Database outputs
+        pulumi.export('production_db_endpoint', self.database_stack.production_cluster.endpoint)
+        pulumi.export('production_db_reader_endpoint', self.database_stack.production_cluster.reader_endpoint)
+        pulumi.export('migration_db_endpoint', self.database_stack.migration_cluster.endpoint)
+        pulumi.export('migration_db_reader_endpoint', self.database_stack.migration_cluster.reader_endpoint)
 
-            # DMS outputs
-            'dms_replication_instance_arn': self.dms_stack.replication_instance.replication_instance_arn,
-            'dms_replication_task_arn': self.dms_stack.replication_task.replication_task_arn,
+        # DMS outputs
+        pulumi.export('dms_replication_instance_arn', self.dms_stack.replication_instance.replication_instance_arn)
+        pulumi.export('dms_replication_task_arn', self.dms_stack.replication_task.replication_task_arn)
 
-            # Lambda outputs
-            'validation_lambda_arn': self.lambda_stack.validation_lambda.arn,
-            'authorizer_lambda_arn': self.lambda_stack.authorizer_lambda.arn,
+        # Lambda outputs
+        pulumi.export('validation_lambda_arn', self.lambda_stack.validation_lambda.arn)
+        pulumi.export('authorizer_lambda_arn', self.lambda_stack.authorizer_lambda.arn)
 
-            # API Gateway outputs
-            'api_gateway_endpoint': self.api_gateway_stack.api_endpoint,
-            'api_gateway_id': self.api_gateway_stack.rest_api.id,
+        # API Gateway outputs
+        pulumi.export('api_gateway_endpoint', self.api_gateway_stack.api_endpoint)
+        pulumi.export('api_gateway_id', self.api_gateway_stack.rest_api.id)
 
-            # Step Functions outputs
-            'migration_state_machine_arn': self.stepfunctions_stack.migration_state_machine.arn,
-            'rollback_state_machine_arn': self.stepfunctions_stack.rollback_state_machine.arn,
+        # Step Functions outputs
+        pulumi.export('migration_state_machine_arn', self.stepfunctions_stack.migration_state_machine.arn)
+        pulumi.export('rollback_state_machine_arn', self.stepfunctions_stack.rollback_state_machine.arn)
 
-            # Storage outputs
-            'checkpoints_bucket_name': self.storage_stack.checkpoints_bucket.bucket,
-            'rollback_bucket_name': self.storage_stack.rollback_bucket.bucket,
+        # Storage outputs
+        pulumi.export('checkpoints_bucket_name', self.storage_stack.checkpoints_bucket.bucket)
+        pulumi.export('rollback_bucket_name', self.storage_stack.rollback_bucket.bucket)
 
-            # Monitoring outputs
-            'dashboard_name': self.monitoring_stack.dashboard.dashboard_name,
-            'dashboard_arn': self.monitoring_stack.dashboard.dashboard_arn,
+        # Monitoring outputs
+        pulumi.export('dashboard_name', self.monitoring_stack.dashboard.dashboard_name)
+        pulumi.export('dashboard_arn', self.monitoring_stack.dashboard.dashboard_arn)
 
-            # SNS outputs
-            'migration_status_topic_arn': self.notification_stack.migration_status_topic.arn,
-            'error_alerts_topic_arn': self.notification_stack.error_alerts_topic.arn,
+        # SNS outputs
+        pulumi.export('migration_status_topic_arn', self.notification_stack.migration_status_topic.arn)
+        pulumi.export('error_alerts_topic_arn', self.notification_stack.error_alerts_topic.arn)
 
-            # Parameter Store outputs
-            'parameter_namespace': self.parameter_store_stack.prod_db_endpoint_param.name.apply(
-                lambda name: '/'.join(name.split('/')[:3])
-            )
-        })
+        # Parameter Store outputs
+        # Use environment_suffix directly to avoid NoneType errors in tests
+        pulumi.export('parameter_namespace', pulumi.Output.from_input(f"/migration/{self.environment_suffix}"))
