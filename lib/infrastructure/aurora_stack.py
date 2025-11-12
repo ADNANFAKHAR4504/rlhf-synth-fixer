@@ -184,6 +184,7 @@ class AuroraStack(pulumi.ComponentResource):
             kms_key_id=secondary_kms.arn,
             storage_encrypted=True,
             backup_retention_period=7,
+            skip_final_snapshot=True,  # Skip snapshot when deleting for replacement
             tags={**tags, 'Name': f"trading-cluster-secondary-{environment_suffix}"},
             opts=ResourceOptions(
                 parent=self,
