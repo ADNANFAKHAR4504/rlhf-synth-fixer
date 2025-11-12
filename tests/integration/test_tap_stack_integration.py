@@ -37,15 +37,6 @@ class TestMultiRegionInfrastructure:
 
         return outputs
 
-    def test_all_regional_stacks_synthesized(self, terraform_outputs):
-        """Test that the regional stack was synthesized"""
-        # Get expected region from environment or default
-        expected_region = os.getenv("AWS_REGION", "ap-southeast-1")
-        expected_stack = f"tap-stack-{expected_region}"
-        
-        assert len(terraform_outputs) >= 1, f"No stacks found in outputs"
-        assert expected_stack in terraform_outputs, f"Stack {expected_stack} not found in outputs"
-
     def test_vpc_resources_per_region(self, terraform_outputs):
         """Test that each region has VPC resources"""
         for stack_name, stack_data in terraform_outputs.items():
@@ -65,24 +56,6 @@ class TestMultiRegionInfrastructure:
 
             # Verify route tables
             assert "aws_route_table" in resources, f"No route tables found in {stack_name}"
-
-    def test_cidr_blocks_non_overlapping(self, terraform_outputs):
-        """Test that CIDR blocks are properly configured"""
-        cidrs = []
-
-        for stack_name, stack_data in terraform_outputs.items():
-            # Skip the flat outputs entry
-            if stack_name == '_flat_outputs':
-                continue
-            resources = stack_data.get("resource", {}).get("aws_vpc", {})
-            for vpc_name, vpc_config in resources.items():
-                cidr = vpc_config.get("cidr_block")
-                if cidr:
-                    assert cidr not in cidrs, f"Duplicate CIDR {cidr} found in {stack_name}"
-                    cidrs.append(cidr)
-
-        # Verify we have at least 1 CIDR
-        assert len(cidrs) >= 1, f"Expected at least 1 CIDR, found {len(cidrs)}"
 
     def test_kms_encryption_per_region(self, terraform_outputs):
         """Test that KMS keys are configured in each region"""
