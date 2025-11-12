@@ -110,16 +110,20 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
   });
 
   afterAll(async () => {
-    // Cleanup clients
-    if (ec2Client) ec2Client.destroy();
-    if (rdsClient) rdsClient.destroy();
-    if (ecsClient) ecsClient.destroy();
-    if (elbClient) elbClient.destroy();
-    if (ecrClient) ecrClient.destroy();
-    if (s3Client) s3Client.destroy();
-    if (cloudwatchClient) cloudwatchClient.destroy();
-    if (iamClient) iamClient.destroy();
-    if (ssmClient) ssmClient.destroy();
+    // Cleanup clients - call destroy() to release resources
+    try {
+      if (ec2Client) await ec2Client.destroy();
+      if (rdsClient) await rdsClient.destroy();
+      if (ecsClient) await ecsClient.destroy();
+      if (elbClient) await elbClient.destroy();
+      if (ecrClient) await ecrClient.destroy();
+      if (s3Client) await s3Client.destroy();
+      if (cloudwatchClient) await cloudwatchClient.destroy();
+      if (iamClient) await iamClient.destroy();
+      if (ssmClient) await ssmClient.destroy();
+    } catch (error) {
+      // Ignore cleanup errors
+    }
   });
 
   describe('VPC Resources', () => {
@@ -425,26 +429,30 @@ describe('Multi-Environment Infrastructure Integration Tests', () => {
       expect(egressAllTraffic).toBeDefined();
     });
 
-    test('should verify master password is stored in SSM Parameter Store', async () => {
-      if (!fs.existsSync(outputsPath)) {
-        console.warn('Skipping test - outputs file not found');
-        return;
-      }
+    test(
+      'should verify master password is stored in SSM Parameter Store',
+      async () => {
+        if (!fs.existsSync(outputsPath)) {
+          console.warn('Skipping test - outputs file not found');
+          return;
+        }
 
-      const envSuffix = outputs.environment_suffix;
-      const parameterName = `/${envSuffix}/aurora/master-password`;
+        const envSuffix = outputs.environment_suffix;
+        const parameterName = `/${envSuffix}/aurora/master-password`;
 
-      const response = await ssmClient.send(
-        new GetParameterCommand({
-          Name: parameterName,
-          WithDecryption: false,
-        }),
-      );
+        const response = await ssmClient.send(
+          new GetParameterCommand({
+            Name: parameterName,
+            WithDecryption: false,
+          }),
+        );
 
-      expect(response.Parameter).toBeDefined();
-      expect(response.Parameter!.Name).toBe(parameterName);
-      expect(response.Parameter!.Type).toBe('SecureString');
-    });
+        expect(response.Parameter).toBeDefined();
+        expect(response.Parameter!.Name).toBe(parameterName);
+        expect(response.Parameter!.Type).toBe('SecureString');
+      },
+      60000,
+    );
   });
 
   describe('ECS Resources', () => {

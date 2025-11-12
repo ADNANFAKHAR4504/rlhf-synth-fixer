@@ -18,6 +18,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags[];
+  certificateArn?: string; // Optional ACM certificate ARN for HTTPS
 }
 
 // Environment configuration interface
@@ -165,7 +166,7 @@ export class TapStack extends TerraformStack {
       cpu: envConfig.ecs.cpu,
       memory: envConfig.ecs.memory,
       environmentSuffix,
-      certificateArn: envConfig.certificateArn, // Optional HTTPS certificate
+      certificateArn: props?.certificateArn || envConfig.certificateArn, // Optional HTTPS certificate
     });
 
     // Create S3 bucket for static assets

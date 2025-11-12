@@ -284,6 +284,35 @@ describe('TapStack Unit Tests', () => {
       expect(synthesized).toContain('"port": 80');
     });
 
+    test('creates HTTPS listener when certificate ARN is provided', () => {
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+        certificateArn: 'arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012',
+      });
+
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toContain('aws_lb_listener');
+      expect(synthesized).toContain('"port": 443');
+      expect(synthesized).toContain('"protocol": "HTTPS"');
+      expect(synthesized).toContain('ELBSecurityPolicy-TLS-1-2-2017-01');
+      expect(synthesized).toContain('arn:aws:acm:us-east-1:123456789012:certificate/12345678-1234-1234-1234-123456789012');
+      // HTTP listener should redirect to HTTPS
+      expect(synthesized).toContain('"type": "redirect"');
+      expect(synthesized).toContain('HTTP_301');
+    });
+
+    test('HTTP listener forwards directly when no certificate is provided', () => {
+      const stack = new TapStack(app, 'TestStack', {
+        environmentSuffix: 'test',
+      });
+
+      const synthesized = Testing.synth(stack);
+      expect(synthesized).toContain('"type": "forward"');
+      // Should not have redirect when no certificate
+      const redirectCount = (synthesized.match(/"type": "redirect"/g) || []).length;
+      expect(redirectCount).toBe(0);
+    });
+
     test('creates IAM roles for ECS tasks', () => {
       const stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'test',
