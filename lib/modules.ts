@@ -229,7 +229,6 @@ export class IamModule extends Construct {
       policyArn: 'arn:aws:iam::aws:policy/AmazonEKSVPCResourceController',
     });
 
-    // EKS Node IAM Role
     const nodeAssumeRolePolicy = new DataAwsIamPolicyDocument(
       this,
       'node-assume-role',
