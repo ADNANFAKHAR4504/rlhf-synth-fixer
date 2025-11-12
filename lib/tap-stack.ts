@@ -465,7 +465,8 @@ const albSecurityGroup = new aws.ec2.SecurityGroup(
   }
 );
 
-// Note: name omitted to allow AWS to generate unique name and avoid conflicts
+// Application Load Balancer
+// Note: Name field omitted to allow AWS to auto-generate unique names
 const alb = new aws.lb.LoadBalancer(`payment-alb-${environmentSuffix}`, {
   internal: false,
   loadBalancerType: 'application',
@@ -476,7 +477,7 @@ const alb = new aws.lb.LoadBalancer(`payment-alb-${environmentSuffix}`, {
 });
 
 // Target Group
-// Note: name omitted to allow AWS to generate unique name and avoid conflicts
+// Note: Name field omitted to allow AWS to auto-generate unique names
 const targetGroup = new aws.lb.TargetGroup(`payment-tg-${environmentSuffix}`, {
   port: 8080,
   protocol: 'HTTP',
@@ -495,26 +496,14 @@ const targetGroup = new aws.lb.TargetGroup(`payment-tg-${environmentSuffix}`, {
   tags: tags,
 });
 
-// ACM Certificate (assuming it exists or will be created manually)
-// For production, you would create this with proper DNS validation
-const certificate = new aws.acm.Certificate(
-  `payment-cert-${environmentSuffix}`,
-  {
-    domainName: `payment-${environmentSuffix}.example.com`,
-    validationMethod: 'DNS',
-    tags: tags,
-  }
-);
-
-// ALB HTTPS Listener
-const httpsListener = new aws.lb.Listener(
-  `https-listener-${environmentSuffix}`,
+// ALB HTTP Listener
+// Note: Using HTTP for simplicity. For production, use HTTPS with a valid ACM certificate
+const httpListener = new aws.lb.Listener(
+  `http-listener-${environmentSuffix}`,
   {
     loadBalancerArn: alb.arn,
-    port: 443,
-    protocol: 'HTTPS',
-    sslPolicy: 'ELBSecurityPolicy-TLS-1-2-2017-01',
-    certificateArn: certificate.arn,
+    port: 80,
+    protocol: 'HTTP',
     defaultActions: [
       {
         type: 'forward',
@@ -599,7 +588,7 @@ const ecsService = new aws.ecs.Service(
     healthCheckGracePeriodSeconds: 60,
     tags: tags,
   },
-  { dependsOn: [httpsListener] }
+  { dependsOn: [httpListener] }
 );
 
 // Auto Scaling for ECS Service
