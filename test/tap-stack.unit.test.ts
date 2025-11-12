@@ -37,12 +37,13 @@ function tryLoadYamlSafely(): CFN | undefined {
 }
 
 const cfnJson = tryLoadJson();
-const cfnYaml = cfnJson ? tryLoadYamlSafely() : tryLoadYamlSafely(); // optional; won't throw
+const cfnYaml = tryLoadYamlSafely();
+
 if (!cfnJson && !cfnYaml) {
   throw new Error("Neither '../lib/TapStack.json' nor '../lib/TapStack.yml' was found.");
 }
 
-// -------------------- Helpers --------------------
+// -------------------- Access helpers --------------------
 /** Get the first defined value from JSON, then YAML */
 const get = <T = any>(selector: (t: CFN) => T | undefined): T | undefined => {
   if (cfnJson) {
@@ -56,12 +57,24 @@ const get = <T = any>(selector: (t: CFN) => T | undefined): T | undefined => {
   return undefined;
 };
 
-/** Must-have getter with helpful error messages (no invalid expect signature) */
+/** Must-have getter with helpful error messages */
 const must = <T = any>(selector: (t: CFN) => T | undefined, msg: string): T => {
   const v = get(selector);
   if (v === undefined) throw new Error(msg);
   return v as T;
 };
+
+// -------------------- Action helpers --------------------
+/** Accepts either a literal { Type: 'redirect', ... } or an intrinsic { "Fn::If": [cond, {Type:'redirect'}, {...}] } */
+function isRedirectAction(action: any): boolean {
+  if (!action) return false;
+  if (action.Type === 'redirect') return true;
+  if (action['Fn::If'] && Array.isArray(action['Fn::If']) && action['Fn::If'].length === 3) {
+    const thenBranch = action['Fn::If'][1];
+    return !!thenBranch && thenBranch.Type === 'redirect';
+  }
+  return false;
+}
 
 // -------------------- Tests --------------------
 describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML fallback per-field)', () => {
@@ -123,9 +136,10 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
   // 8
   test('Route table associations present for all subnets', () => {
     const r = must(t => t.Resources, 'Resources missing');
-    ['PublicSubnetARouteAssoc','PublicSubnetBRouteAssoc','PublicSubnetCRouteAssoc',
-     'PrivateSubnetARouteAssoc','PrivateSubnetBRouteAssoc','PrivateSubnetCRouteAssoc']
-      .forEach(name => expect(r[name]).toBeDefined());
+    [
+      'PublicSubnetARouteAssoc', 'PublicSubnetBRouteAssoc', 'PublicSubnetCRouteAssoc',
+      'PrivateSubnetARouteAssoc', 'PrivateSubnetBRouteAssoc', 'PrivateSubnetCRouteAssoc'
+    ].forEach(name => expect(r[name]).toBeDefined());
   });
 
   // 9
@@ -155,14 +169,21 @@ describe('TapStack CloudFormation Template — Unit Tests (JSON preferred; YAML 
   });
 
   // 12
-  test('ALB, TargetGroup, and HTTP->HTTPS redirect listener exist', () => {
-    const r = must(t => t.Resources, 'Resources missing');
-    expect(r.Alb).toBeDefined();
-    expect(r.AlbTargetGroup).toBeDefined();
-    const http = r.AlbListenerHttp;
-    expect(http).toBeDefined();
+  it('ALB, TargetGroup, and HTTP->HTTPS redirect listener exist', () => {
+    const alb = must(t => t.Resources?.Alb, 'Alb missing');
+    expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+
+    const tg = must(t => t.Resources?.AlbTargetGroup, 'AlbTargetGroup missing');
+    expect(tg.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
+
+    const http = must(t => t.Resources?.AlbListenerHttp, 'AlbListenerHttp missing');
+    expect(http.Type).toBe('AWS::ElasticLoadBalancingV2::Listener');
+
     const defaultActions = http.Properties?.DefaultActions || [];
-    const hasRedirect = defaultActions.some((a: any) => a.Type === 'redirect');
+    expect(Array.isArray(defaultActions)).toBe(true);
+
+    // Pass if either: (a) literal redirect, or (b) Fn::If with redirect in then-branch
+    const hasRedirect = defaultActions.some(isRedirectAction);
     expect(hasRedirect).toBe(true);
   });
 

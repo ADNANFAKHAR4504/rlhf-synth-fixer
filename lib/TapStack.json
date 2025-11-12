@@ -1343,7 +1343,7 @@
                             {
                                 "Key": "access_logs.s3.prefix",
                                 "Value": {
-                                    "Fn::Sub": "alb-logs-${EnvironmentSuffix}"
+                                    "Fn::Sub": "alb-logs/${EnvironmentSuffix}"
                                 }
                             },
                             {
@@ -1444,12 +1444,23 @@
                 "Protocol": "HTTP",
                 "DefaultActions": [
                     {
-                        "Type": "redirect",
-                        "RedirectConfig": {
-                            "Protocol": "HTTPS",
-                            "Port": "443",
-                            "StatusCode": "HTTP_301"
-                        }
+                        "Fn::If": [
+                            "UseAlbHttps",
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            },
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "AlbTargetGroup"
+                                }
+                            }
+                        ]
                     }
                 ]
             }
@@ -1976,11 +1987,9 @@
                                 "Service": "logdelivery.elasticloadbalancing.amazonaws.com"
                             },
                             "Action": "s3:PutObject",
-                            "Resource": [
-                                {
-                                    "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs-${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*"
-                                }
-                            ],
+                            "Resource": {
+                                "Fn::Sub": "arn:${AWS::Partition}:s3:::${AccessLogsBucket}/alb-logs/${EnvironmentSuffix}/AWSLogs/${AWS::AccountId}/*"
+                            },
                             "Condition": {
                                 "StringEquals": {
                                     "aws:SourceAccount": {
@@ -2241,9 +2250,7 @@
         "RdsMonitoringRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": {
-                    "Fn::Sub": "tapstack-${EnvironmentSuffix}-rds-monitoring-role-${AWS::StackName}"
-                },
+                "Path": "/",
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -2259,7 +2266,6 @@
                 "ManagedPolicyArns": [
                     "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
                 ],
-                "Path": "/",
                 "Tags": [
                     {
                         "Key": "Name",
