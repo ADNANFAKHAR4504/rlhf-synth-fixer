@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000306",
+  "team": "3",
+  "startedAt": "2025-10-31T04:44:51.593Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "IAM",
+    "KMS",
+    "S3",
+    "EC2",
+    "Lambda",
+    "ECS",
+    "RDS",
+    "EBS",
+    "Systems Manager",
+    "Secrets Manager",
+    "CloudWatch",
+    "AWS Config",
+    "AWS Organizations"
+  ],
+  "training_quality": 9,
+  "background": "Build a self-contained, production-grade security baseline in us-east-1 using a single TapStack.yml CloudFormation template. The stack must provision from scratch with zero external dependencies and enforce a zero-trust posture across IAM (least privilege, permission boundaries, cross-account access with ExternalId), KMS CMKs (automatic rotation, MFA-guarded administration) for S3/RDS/EBS, encrypted S3 buckets with TLS-only and unencrypted-upload denials, Secrets Manager with 30-day rotation plus SSM Parameter Store dynamic references, CloudWatch log groups encrypted with KMS and 365-day retention, and AWS Config compliance rules bootstrapped idempotently. Include clearly parameterized environment suffixing for all resource names, regional guardrails (us-east-1/us-west-2), comprehensive tagging for audit/compliance, and outputs for key ARNs/IDs to support downstream integration and automated tests.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

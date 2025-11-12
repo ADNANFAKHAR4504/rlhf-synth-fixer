@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350106",
+  "team": "3",
+  "startedAt": "2025-11-07T07:22:19.716Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "ALB",
+    "RDS Aurora",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "Config",
+    "SNS",
+    "Secrets Manager"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

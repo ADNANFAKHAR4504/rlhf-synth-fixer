@@ -110,6 +110,7 @@ build
 .claude/tasks.csv.backup
 .claude/*.csv.backup
 .claude/tasks.csv.lock/
+.claude/PR.csv
 .sherlock/data
 .sherlock/reports
 
