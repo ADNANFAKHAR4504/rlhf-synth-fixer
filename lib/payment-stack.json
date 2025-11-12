@@ -164,7 +164,7 @@
         "DBInstanceIdentifier": {"Fn::Sub": "payment-db-${Environment}-${EnvironmentSuffix}"},
         "DBInstanceClass": {"Fn::FindInMap": ["EnvironmentConfig", {"Ref": "Environment"}, "RDSInstanceClass"]},
         "Engine": "postgres",
-        "EngineVersion": "15.8",
+        "EngineVersion": "15.10",
         "MasterUsername": "dbadmin",
         "MasterUserPassword": {"Fn::Sub": "{{resolve:secretsmanager:${DBPassword}:SecretString:password}}"},
         "AllocatedStorage": "20",
