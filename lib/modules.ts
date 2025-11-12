@@ -18,7 +18,7 @@ export class S3Module extends Construct {
 
     // Create S3 bucket with encryption
     this.bucket = new aws.s3Bucket.S3Bucket(this, 'etl-bucket', {
-      bucket: 'etl-pipeline-bucket',
+      bucket: 'etl-pipeline-bucket-ts123',
       tags: commonTags,
       serverSideEncryptionConfiguration: {
         rule: {
