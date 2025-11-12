@@ -472,10 +472,18 @@ class TapStack(pulumi.ComponentResource):
             opts=pulumi.ResourceOptions(parent=self)
         )
         
+        # Generate cryptographically secure password
+        import secrets
+        import string
+        db_password = ''.join(
+            secrets.choice(string.ascii_letters + string.digits + string.punctuation)
+            for _ in range(32)
+        )
+        
         db_secret_version = aws.secretsmanager.SecretVersion(
             f"flask-api-db-secret-version-{self.environment_suffix}",
             secret_id=db_secret.id,
-            secret_string="ChangeMe123!",  # Should be generated securely in production
+            secret_string=db_password,
             opts=pulumi.ResourceOptions(parent=db_secret)
         )
         

@@ -296,9 +296,12 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Generate and store a random password
-        import random
+        import secrets
         import string
-        db_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+        db_password = ''.join(
+            secrets.choice(string.ascii_letters + string.digits + string.punctuation)
+            for _ in range(32)
+        )
 
         db_password_version = aws.secretsmanager.SecretVersion(
             f"flask-api-db-password-version-{self.environment_suffix}",
@@ -525,7 +528,7 @@ class TapStack(pulumi.ComponentResource):
                     "logDriver": "awslogs",
                     "options": {
                         "awslogs-group": args[1],
-                        "awslogs-region": "us-east-1",
+                        "awslogs-region": "eu-south-1",
                         "awslogs-stream-prefix": "flask-api"
                     }
                 }

@@ -26,12 +26,16 @@ commit_author = os.getenv('COMMIT_AUTHOR', 'unknown')
 
 # Create a resource options object with default tags
 default_tags = {
-    'Environment': environment_suffix,
+    'Environment': 'production',
+    'Project': 'ecommerce-api',
     'Repository': repository_name,
     'Author': commit_author,
 }
 
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=default_tags
+    ),
 )

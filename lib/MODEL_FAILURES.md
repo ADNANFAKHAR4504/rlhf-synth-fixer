@@ -329,11 +329,139 @@ This infrastructure is configured for deployment to **eu-south-1** (Milan).
 3. **Configuration File**: Region is stored in `lib/AWS_REGION` for consistency across deployments
 ```
 
-**Training Value**: Medium - Documentation must include operational considerations like regional service variations.
+**Training Value**: Low - Mock data should reflect target deployment environment for consistency.
 
 ---
 
-### 8. Hardcoded us-east-1 in Unit Test Mocks
+### 8. Insecure Password Generation
+
+**Impact Level**: High - Security
+
+**MODEL_RESPONSE Issue**:
+Used non-cryptographic `random` module for password generation:
+
+```python
+import random
+import string
+db_password = ''.join(random.choices(string.ascii_letters + string.digits, k=32))
+```
+
+**Problems**:
+- `random` module is not cryptographically secure (uses predictable PRNG)
+- No special characters, reducing password entropy
+- Password generated during Pulumi execution could change on updates
+
+**IDEAL_RESPONSE Fix**:
+Use `secrets` module for cryptographically secure generation:
+
+```python
+import secrets
+import string
+db_password = ''.join(
+    secrets.choice(string.ascii_letters + string.digits + string.punctuation)
+    for _ in range(32)
+)
+```
+
+**Root Cause**:
+The model chose convenience over security. The `secrets` module is specifically designed for generating cryptographically strong random values suitable for passwords.
+
+**Training Value**: High - Security-critical operations like password generation must use cryptographically secure methods.
+
+---
+
+### 9. Hardcoded CloudWatch Logs Region
+
+**Impact Level**: Critical - Deployment Blocker
+
+**MODEL_RESPONSE Issue**:
+CloudWatch logs region hardcoded to us-east-1 in ECS task definition:
+
+```python
+"logConfiguration": {
+    "logDriver": "awslogs",
+    "options": {
+        "awslogs-group": args[1],
+        "awslogs-region": "us-east-1",  # ❌ Wrong region for eu-south-1 deployment
+        "awslogs-stream-prefix": "flask-api"
+    }
+}
+```
+
+**IDEAL_RESPONSE Fix**:
+Changed to match deployment region:
+
+```python
+"logConfiguration": {
+    "logDriver": "awslogs",
+    "options": {
+        "awslogs-group": args[1],
+        "awslogs-region": "eu-south-1",  # ✅ Correct region
+        "awslogs-stream-prefix": "flask-api"
+    }
+}
+```
+
+**Deployment Impact**:
+```
+Error: ResourceInitializationError: unable to pull secrets or registry auth: 
+execution resource retrieval failed: unable to retrieve logs from CloudWatch
+```
+
+**Root Cause**:
+The model didn't ensure region consistency across all AWS service references within the code.
+
+**Training Value**: High - All region-specific configurations must be consistent with the target deployment region.
+
+---
+
+### 10. Missing Required Tags
+
+**Impact Level**: Critical - Requirements Non-Compliance
+
+**MODEL_RESPONSE Issue**:
+Tags didn't match requirements specification:
+
+```python
+# MODEL used:
+default_tags = {
+    'Environment': environment_suffix,  # ❌ Uses 'dev' not 'production'
+    'Repository': repository_name,
+    'Author': commit_author,
+}
+```
+
+Requirements specified:
+- `Environment='production'`
+- `Project='ecommerce-api'`
+
+**IDEAL_RESPONSE Fix**:
+```python
+default_tags = {
+    'Environment': 'production',  # ✅ Correct value
+    'Project': 'ecommerce-api',   # ✅ Added required tag
+    'Repository': repository_name,
+    'Author': commit_author,
+}
+
+# Pass tags to stack
+stack = TapStack(
+    name="pulumi-infra",
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        tags=default_tags
+    ),
+)
+```
+
+**Root Cause**:
+The model used generic tag values instead of reading the specific requirements.
+
+**Training Value**: Critical - Must strictly follow requirements specification for mandatory metadata like tags.
+
+---
+
+### 11. Hardcoded us-east-1 in Unit Test Mocks
 
 **Impact Level**: Low - Test Accuracy
 
@@ -378,18 +506,24 @@ def mock_aws_resource(self, args):
 | Secrets Manager API parameter | Medium | 15 minutes | 1 line |
 | VPC DNS attribute testing | Low | 10 minutes | 10 lines |
 | Region documentation | Medium | 30 minutes | +50 lines |
+| Insecure password generation | High | 15 minutes | 5 lines |
+| Hardcoded CloudWatch logs region | Critical | 5 minutes | 1 line |
+| Missing required tags | Critical | 10 minutes | 5 lines |
 | Mock ARN regions | Low | 20 minutes | ~20 lines |
 
-**Total QA Effort**: ~5.5 hours to transform MODEL_RESPONSE into production-ready IDEAL_RESPONSE
+**Total QA Effort**: ~6.5 hours to transform MODEL_RESPONSE into production-ready IDEAL_RESPONSE
 
 ---
 
 ## Key Learnings for Model Training
 
 1. **Regional Awareness**: Always validate service versions and availability in target region
-2. **Dynamic Testing**: Integration tests must discover resources dynamically, not rely on static files
-3. **API Knowledge**: Understand AWS API structure - some attributes require dedicated API calls (VPC DNS settings, Secrets Manager SecretId parameter)
-4. **API Parameter Knowledge**: Know the exact parameter names for AWS API calls (SecretId vs Name, describe_vpc_attribute vs describe_vpcs)
+2. **Region Consistency**: Ensure ALL region-specific configurations (CloudWatch logs, RDS engine versions, etc.) match the target deployment region
+3. **Dynamic Testing**: Integration tests must discover resources dynamically, not rely on static files
+4. **API Knowledge**: Understand AWS API structure - some attributes require dedicated API calls (VPC DNS settings via describe_vpc_attribute)
+5. **API Parameter Knowledge**: Know the exact parameter names for AWS API calls (SecretId vs Name for Secrets Manager)
+6. **Security Best Practices**: Use `secrets` module (not `random`) for cryptographically secure password generation
+7. **Requirements Compliance**: Strictly follow specification for mandatory metadata like tags (`Environment='production'`, `Project='ecommerce-api'`)
 4. **Project Structure**: Respect framework conventions (Pulumi.yaml main entry point)
 5. **Configuration Management**: Provide explicit configuration files for regional settings
 6. **Documentation Completeness**: Include operational notes about regional considerations

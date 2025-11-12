@@ -29,6 +29,8 @@
     "Secrets Manager",
     "ACM"
   ],
-  "startedAt": "2025-11-12T08:19:17.429997",
+  "region": "eu-west-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 10
 }
