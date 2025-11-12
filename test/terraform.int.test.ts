@@ -15,6 +15,7 @@ import {
 import {
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
   DescribeVpcEndpointsCommand,
   DescribeVpcsCommand,
   EC2Client
@@ -179,8 +180,21 @@ describe("Zero-Trust Security Infrastructure Integration Tests", () => {
 
       const vpc = response.Vpcs![0];
       expect(vpc.State).toBe("available");
-      expect(vpc.EnableDnsHostnames).toBe(true);
-      expect(vpc.EnableDnsSupport).toBe(true);
+
+      // Check VPC DNS attributes using separate describe call since they're not in the main VPC response
+      const dnsCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId,
+        Attribute: "enableDnsHostnames"
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpc.VpcId,
+        Attribute: "enableDnsSupport"
+      });
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
 
       if (!skipIfMissing("vpc_cidr_block", outputs)) {
         expect(isValidCidr(outputs.vpc_cidr_block)).toBe(true);
