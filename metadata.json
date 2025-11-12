@@ -1,6 +1,6 @@
 {
-  "platform": "CloudFormation",
-  "language": "JSON",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
