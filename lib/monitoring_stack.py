@@ -99,7 +99,7 @@ class MonitoringStack(pulumi.ComponentResource):
             args.migration_cluster_id,
             args.validation_lambda_name,
             args.api_gateway_id,
-            aws.get_region().name
+            Output.from_input(aws.get_region().name or "us-east-1")
         ).apply(lambda vals: json.dumps({
             "widgets": [
                 {
