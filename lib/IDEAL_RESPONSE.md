@@ -78,13 +78,12 @@ variables:
   - az login --service-principal --tenant "$AZURE_TENANT_ID" --username "$AZURE_CLIENT_ID" --federated-token "$CI_JOB_JWT_V2"
   - az account set --subscription "$AZURE_SUBSCRIPTION_ID"
 
-.acr_docker_login: &acr_docker_login
-  - TOKEN="$(az acr login -n "$ACR_REGISTRY" --expose-token -o tsv --query accessToken)"
-  - docker login "$ACR_REGISTRY.azurecr.io" -u 00000000-0000-0000-0000-000000000000 -p "$TOKEN"
-
 .helm_kube_ctx: &helm_kube_ctx
   - az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing
   - helm version && kubectl version --client
+
+.create_report_dirs: &create_report_dirs
+  - mkdir -p "$SECURITY_DIR" "$CHAOS_DIR" "$REPORT_DIR" "$PERF_DIR" "$LOADTEST_DIR" "$E2E_DIR"
 
 # ---------- Validate ----------
 lint_and_validate:
@@ -142,9 +141,8 @@ docker_build_push_game:
   variables: { DOCKER_DRIVER: overlay2 }
   script:
     - *wif_login_az
-    - *acr_docker_login
-    - docker build -f docker/game-server.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA" .
-    - docker push "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA"
+    - TOKEN="$(az acr login -n "$ACR_REGISTRY" --expose-token -o tsv --query accessToken)" && docker login "$ACR_REGISTRY.azurecr.io" -u 00000000-0000-0000-0000-000000000000 -p "$TOKEN"
+    - docker build -f docker/game-server.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA" . && docker push "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA"
     - echo "$ACR_REGISTRY.azurecr.io/game-platform/game-server:$CI_COMMIT_SHA" > dist/game-server.image
   artifacts:
     paths: [dist/game-server.image]
@@ -157,9 +155,8 @@ docker_build_push_lobby:
   variables: { DOCKER_DRIVER: overlay2 }
   script:
     - *wif_login_az
-    - *acr_docker_login
-    - docker build -f docker/lobby.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA" .
-    - docker push "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA"
+    - TOKEN="$(az acr login -n "$ACR_REGISTRY" --expose-token -o tsv --query accessToken)" && docker login "$ACR_REGISTRY.azurecr.io" -u 00000000-0000-0000-0000-000000000000 -p "$TOKEN"
+    - docker build -f docker/lobby.Dockerfile -t "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA" . && docker push "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA"
     - echo "$ACR_REGISTRY.azurecr.io/game-platform/lobby:$CI_COMMIT_SHA" > dist/lobby.image
   artifacts:
     paths: [dist/lobby.image]
@@ -178,7 +175,9 @@ unit_tests:
   artifacts:
     reports:
       junit: $REPORT_DIR/junit.xml
-      coverage_report: { coverage_format: cobertura, path: "$COVERAGE_DIR/cobertura-coverage.xml" }
+      coverage_report:
+        coverage_format: cobertura
+        path: "$COVERAGE_DIR/cobertura-coverage.xml"
     paths: [$COVERAGE_DIR]
 
 load_tests_artillery:
@@ -198,10 +197,7 @@ chaos_tests_mesh:
   image: mcr.microsoft.com/azure-cli:2.63.0
   needs: [docker_build_push_game]
   script:
-    - *wif_login_az
-    - RG="$RG_STG_EASTUS" AKS="$AKS_STG_EASTUS" && az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing
-    - kubectl get ns chaos-mesh || echo "assume pre-installed"
-    - kubectl get pod -n chaos-mesh > "$CHAOS_DIR/pods.txt"
+    - bash ./lib/scripts/run-chaos-tests.sh
   artifacts:
     paths: [$CHAOS_DIR/pods.txt]
 
@@ -210,9 +206,7 @@ latency_smoke_multi_region:
   image: mcr.microsoft.com/azure-cli:2.63.0
   needs: [docker_build_push_game]
   script:
-    - *wif_login_az
-    - echo '{"regions":["eastus","westeurope","southeastasia"],"p95":45}' > "$REPORT_DIR/latency-baseline.json"
-    - cat "$REPORT_DIR/latency-baseline.json" | jq '.p95 <= 80'
+    - bash ./lib/scripts/validate-global-latency.sh
   artifacts:
     paths: [$REPORT_DIR/latency-baseline.json]
 
@@ -242,9 +236,7 @@ net_guardrails:
   stage: security
   image: mcr.microsoft.com/azure-cli:2.63.0
   script:
-    - *wif_login_az
-    - echo "Validate NSG/DDOS posture (assumed pre-provisioned)" > "$SECURITY_DIR/network.txt"
-    - cat "$SECURITY_DIR/network.txt"
+    - bash ./lib/scripts/net-guardrails.sh
   artifacts:
     paths: [$SECURITY_DIR/network.txt]
 
@@ -305,11 +297,7 @@ deploy_dev_eastus:
     deployment_tier: development
     url: "https://portal.azure.com/#view/HubsExtension/BrowseResource/resourceType/Microsoft.ContainerService%2FmanagedClusters"
   script:
-    - *wif_login_az
-    - RG="$RG_DEV_EASTUS" AKS="$AKS_DEV_EASTUS" && az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing
-    - az functionapp deployment source config-zip -g "$RG" -n "dev-functions-app" --src "$FUNCTIONS_OUT_DIR/matchmaking.zip"
-    - helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set image.tag="$CI_COMMIT_SHA" --set image.registry="$ACR_REGISTRY.azurecr.io"
-    - echo "dev release OK" > "$HELM_OUT_DIR/release-notes-dev.txt"
+    - bash ./lib/scripts/deploy-aks.sh
   artifacts:
     paths: ["$HELM_OUT_DIR/release-notes-dev.txt"]
 
@@ -322,10 +310,7 @@ canary_staging_eastus_westeu:
     name: staging/canary
     deployment_tier: testing
   script:
-    - *wif_login_az
-    - for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU"; do IFS=: read -r RG AKS<<<"$R"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set canary.enabled=true --set image.registry="$ACR_REGISTRY.azurecr.io" --set image.tag="$CI_COMMIT_SHA"; done
-    - echo '{"progress":[10,25,50,100]}' > "$REPORT_DIR/flagger.json"
-    - cat "$REPORT_DIR/flagger.json"
+    - bash ./lib/scripts/deploy-canary-flagger.sh
   artifacts:
     paths: ["$REPORT_DIR/flagger.json"]
 
@@ -352,10 +337,7 @@ deploy_staging_blue_green:
     deployment_tier: staging
   when: manual
   script:
-    - *wif_login_az
-    - for R in "$RG_STG_EASTUS:$AKS_STG_EASTUS" "$RG_STG_WESTEU:$AKS_STG_WESTEU" "$RG_STG_SEASIA:$AKS_STG_SEASIA"; do IFS=: read -r RG AKS<<<"$R"; az aks get-credentials -g "$RG" -n "$AKS" --overwrite-existing; helm upgrade --install game "$HELM_OUT_DIR/game-server-*.tgz" --set blueGreen.enabled=true --set image.registry="$ACR_REGISTRY.azurecr.io" --set image.tag="$CI_COMMIT_SHA"; done
-    - echo "staging bg OK" > "$HELM_OUT_DIR/release-notes-staging.txt"
-    - cat "$HELM_OUT_DIR/release-notes-staging.txt"
+    - bash ./lib/scripts/deploy-bluegreen-linkerd.sh
   artifacts:
     paths: ["$HELM_OUT_DIR/release-notes-staging.txt"]
 
@@ -365,10 +347,7 @@ acceptance_k6:
   image: grafana/k6:0.51.0
   needs: [deploy_staging_blue_green]
   script:
-    - echo 'import http from "k6/http"; export default function(){ http.get("https://example.com"); }' > k6.js
-    - k6 run k6.js --vus 100000 --duration 30s --out json="$PERF_DIR/k6.json"
-    - test -s "$PERF_DIR/k6.json"
-    - echo "k6 OK"
+    - bash ./lib/scripts/synthetic-players.sh
   artifacts:
     paths: ["$PERF_DIR/k6.json"]
 
@@ -434,10 +413,7 @@ monitoring_and_alerts:
   image: mcr.microsoft.com/azure-cli:2.63.0
   needs: [deploy_prod_brazilsouth]
   script:
-    - *wif_login_az
-    - echo '{"appInsights":"wired","grafana":"ok","alerts":"ok"}' > "$REPORT_DIR/monitoring.json"
-    - if [ -n "$PAGERDUTY_ROUTING_KEY" ]; then curl -s -X POST https://events.pagerduty.com/v2/enqueue -H 'Content-Type: application/json' -d "{\"routing_key\":\"$PAGERDUTY_ROUTING_KEY\",\"event_action\":\"trigger\",\"payload\":{\"summary\":\"Deploy ${CI_COMMIT_SHORT_SHA} complete\",\"source\":\"gitlab-ci\",\"severity\":\"info\"}}"; fi
-    - cat "$REPORT_DIR/monitoring.json"
+    - bash ./lib/scripts/configure-monitoring.sh
   artifacts:
     paths:
       - "$REPORT_DIR/monitoring.json"
@@ -447,5 +423,4 @@ monitoring_and_alerts:
       - "$SECURITY_DIR/**/*"
       - "$HELM_OUT_DIR/*.tgz"
       - "dist/*.image"
-
 ```
