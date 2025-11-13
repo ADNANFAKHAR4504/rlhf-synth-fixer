@@ -65,14 +65,17 @@ class TapStack(TerraformStack):
             default_tags=[{"tags": all_tags}],
         )
 
-        # Configure S3 Backend (commented out for local testing)
-        # S3Backend(
-        #     self,
-        #     bucket=state_bucket,
-        #     key=f"{environment_suffix}/{construct_id}.tfstate",
-        #     region=state_bucket_region,
-        #     encrypt=True,
-        # )
+        # Configure S3 Backend with native state locking
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+        )
+
+        # Add S3 state locking using escape hatch
+        self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Get availability zones
         azs = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
