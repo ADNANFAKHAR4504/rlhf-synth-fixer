@@ -35,3 +35,17 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+
+# CI/CD Pipeline outputs (if CI/CD infrastructure is created)
+if hasattr(stack, 'pipeline') and stack.pipeline is not None:
+    pulumi.export("ecrRepositoryUrl", stack.ecr_repository.repository_url)
+    pulumi.export("ecsClusterName", stack.ecs_cluster.name)
+    pulumi.export("ecsClusterArn", stack.ecs_cluster.arn)
+    pulumi.export("pipelineName", stack.pipeline.name)
+    pulumi.export("pipelineArn", stack.pipeline.arn)
+    pulumi.export("codeBuildProjectName", stack.build_project.name)
+    pulumi.export("codeDeployAppName", stack.deploy_app.name)
+    pulumi.export("kmsKeyId", stack.kms_key.id)
+    pulumi.export("kmsKeyArn", stack.kms_key.arn)
+    pulumi.export("artifactBucketName", stack.artifact_bucket.bucket)

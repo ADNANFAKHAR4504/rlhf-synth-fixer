@@ -85,17 +85,8 @@ class TapStack(pulumi.ComponentResource):
         # Create CodePipeline
         self.pipeline = self._create_codepipeline(child_opts)
 
-        # Export outputs using pulumi.export (from __main__.py)
-        pulumi.export("ecrRepositoryUrl", self.ecr_repository.repository_url)
-        pulumi.export("ecsClusterName", self.ecs_cluster.name)
-        pulumi.export("ecsClusterArn", self.ecs_cluster.arn)
-        pulumi.export("pipelineName", self.pipeline.name)
-        pulumi.export("pipelineArn", self.pipeline.arn)
-        pulumi.export("codeBuildProjectName", self.build_project.name)
-        pulumi.export("codeDeployAppName", self.deploy_app.name)
-        pulumi.export("kmsKeyId", self.kms_key.id)
-        pulumi.export("kmsKeyArn", self.kms_key.arn)
-        pulumi.export("artifactBucketName", self.artifact_bucket.bucket)
+        # Note: Exports are done in tap.py at the stack level, not here
+        # pulumi.export() can only be called at the stack level, not inside component resources
 
     def _create_kms_key(self, opts: pulumi.ResourceOptions) -> aws.kms.Key:
         """Create KMS key for encryption at rest."""
@@ -971,3 +962,5 @@ artifacts:
             },
             opts=opts
         )
+
+        return pipeline
