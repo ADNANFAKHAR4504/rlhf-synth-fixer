@@ -7,6 +7,7 @@ import { Construct } from 'constructs';
 
 interface MonitoringStackProps extends cdk.StackProps {
   environmentSuffix: string;
+  alertEmails?: string[];
 }
 
 export class MonitoringStack extends cdk.Stack {
@@ -15,19 +16,15 @@ export class MonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: MonitoringStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix } = props;
+    const { environmentSuffix, alertEmails = [] } = props;
 
     this.alarmTopic = new sns.Topic(this, `AlarmTopic-${environmentSuffix}`, {
       topicName: `dr-alarms-${environmentSuffix}-${this.region}`,
       displayName: `DR Alarms ${environmentSuffix}`,
     });
 
-    const emailEndpoints = [
-      cdk.Fn.ref('AlertEmail1'),
-      cdk.Fn.ref('AlertEmail2'),
-    ];
-
-    emailEndpoints.forEach(email => {
+    // Add email subscriptions if provided
+    alertEmails.forEach((email, index) => {
       this.alarmTopic.addSubscription(
         new subscriptions.EmailSubscription(email)
       );
