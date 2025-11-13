@@ -162,7 +162,7 @@ Conditions:
 Resources:
   # ===== KMS KEYS =====
   
-  # Primary KMS key for data encryption with automatic rotation
+  # Primary KMS key for data encryption with automatic rotation 
   DataEncryptionKey:
     Type: AWS::KMS::Key
     Properties:
@@ -192,6 +192,21 @@ Resources:
             Condition:
               StringEquals:
                 'kms:CallerAccount': !Ref AWS::AccountId
+          # Allow IAM principals with permissions to use the key via S3
+          - Sid: Allow use of the key for S3
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
+                'kms:CallerAccount': !Ref AWS::AccountId
           - Sid: Allow Lambda Service Only
             Effect: Allow
             Principal:
@@ -217,7 +232,11 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
-                'kms:EncryptionContext:aws:s3:arn': !Sub 'arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}'
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
+              StringLike:
+                'kms:EncryptionContext:aws:s3:arn':
+                  - !Sub 'arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}/*'
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
@@ -380,29 +399,60 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
   
-  # Add egress rule for S3 prefix list (needed for S3 Gateway endpoint)
-  LambdaSecurityGroupEgressS3:
+  # Allow Lambda to communicate with VPC Endpoints (Interface endpoints)
+  LambdaSecurityGroupEgressHTTPS:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       GroupId: !Ref LambdaSecurityGroup
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-      DestinationPrefixListId: !Sub 'pl-${AWS::Partition}s3'
-      Description: HTTPS to S3 via Gateway endpoint
+      DestinationSecurityGroupId: !Ref VPCEndpointSecurityGroup
+      Description: HTTPS to VPC Interface endpoints (Lambda, CloudWatch Logs, KMS, SQS)
   
-  # Add egress rule for VPC CIDR (for Interface endpoints)
-  LambdaSecurityGroupEgressVPC:
+  LambdaSecurityGroupEgressS3Gateway:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       GroupId: !Ref LambdaSecurityGroup
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-      CidrIp: !Ref VPCCidr
-      Description: HTTPS to VPC endpoints
+      CidrIp: 0.0.0.0/0  # Allow HTTPS egress (S3 traffic will be routed through Gateway endpoint by route table)
+      Description: HTTPS egress (routed through S3 Gateway endpoint by route table)
   
-  # VPC Endpoint for S3
+  # Security Group for VPC Endpoints
+  VPCEndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub '${ProjectName}-vpc-endpoint-sg-${EnvironmentName}'
+      GroupDescription: Security group for VPC endpoints
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${ProjectName}-vpc-endpoint-sg-${EnvironmentName}'
+        - Key: CostCenter
+          Value: !Ref CostCenter
+        - Key: DataClassification
+          Value: !Ref DataClassification
+        - Key: Owner
+          Value: !Ref Owner
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+        - Key: Environment
+          Value: !Ref EnvironmentName
+  
+  # Allow VPC Endpoints to receive traffic from Lambda
+  VPCEndpointSecurityGroupIngressFromLambda:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref VPCEndpointSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: HTTPS from Lambda functions
+  
+  # VPC Endpoint for S3 - UPDATED with PutObjectTagging permission
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
     Properties:
@@ -418,6 +468,8 @@ Resources:
             Action:
               - 's3:GetObject'
               - 's3:PutObject'
+              - 's3:PutObjectTagging'
+              - 's3:GetObjectTagging'
               - 's3:ListBucket'
               - 's3:GetBucketLocation'
               - 's3:GetObjectVersion'
@@ -440,7 +492,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref VPCEndpointSecurityGroup
   
   # VPC Endpoint for CloudWatch Logs
   CloudWatchLogsVPCEndpoint:
@@ -454,7 +506,7 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref VPCEndpointSecurityGroup
   
   # VPC Endpoint for KMS
   KMSVPCEndpoint:
@@ -468,7 +520,21 @@ Resources:
         - !Ref PrivateSubnet1
         - !Ref PrivateSubnet2
       SecurityGroupIds:
-        - !Ref LambdaSecurityGroup
+        - !Ref VPCEndpointSecurityGroup
+  
+  # VPC Endpoint for SQS
+  SQSVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.sqs'
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
 
   # ===== S3 BUCKET WITH ENCRYPTION =====
   
@@ -603,12 +669,11 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
 
-  # ===== IAM ROLES WITH LEAST PRIVILEGE =====
+  # ===== IAM ROLES WITH LEAST PRIVILEGE - UPDATED =====
   
   ProcessingLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-processing-lambda-role-${EnvironmentName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -623,18 +688,29 @@ Resources:
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Effect: Allow
+              - Sid: S3ReadAccess
+                Effect: Allow
                 Action:
                   - 's3:GetObject'
                   - 's3:GetObjectVersion'
+                Resource: !Sub '${DataBucket.Arn}/*'
+              - Sid: S3WriteAccessWithEncryption
+                Effect: Allow
+                Action:
                   - 's3:PutObject'
-                  - 's3:PutObjectTagging'
                 Resource: !Sub '${DataBucket.Arn}/*'
                 Condition:
                   StringEquals:
                     's3:x-amz-server-side-encryption': 'aws:kms'
                     's3:x-amz-server-side-encryption-aws-kms-key-id': !GetAtt DataEncryptionKey.Arn
-              - Effect: Allow
+              - Sid: S3TaggingAccess
+                Effect: Allow
+                Action:
+                  - 's3:PutObjectTagging'
+                  - 's3:GetObjectTagging'
+                Resource: !Sub '${DataBucket.Arn}/*'
+              - Sid: S3ListAccess
+                Effect: Allow
                 Action:
                   - 's3:ListBucket'
                   - 's3:GetBucketLocation'
@@ -647,6 +723,7 @@ Resources:
                 Action:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
+                  - 'kms:DescribeKey'
                 Resource: !GetAtt DataEncryptionKey.Arn
                 Condition:
                   StringEquals:
@@ -663,31 +740,6 @@ Resources:
                   - 'sqs:SendMessage'
                   - 'sqs:GetQueueAttributes'
                 Resource: !GetAtt ProcessingDLQ.Arn
-        - PolicyName: !Sub '${ProjectName}-ExplicitDenyUnnecessaryActions-${EnvironmentName}'
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Deny
-                NotAction:
-                  - 's3:GetObject'
-                  - 's3:GetObjectVersion'
-                  - 's3:PutObject'
-                  - 's3:PutObjectTagging'
-                  - 's3:ListBucket'
-                  - 's3:GetBucketLocation'
-                  - 'kms:Decrypt'
-                  - 'kms:GenerateDataKey'
-                  - 'sqs:SendMessage'
-                  - 'sqs:GetQueueAttributes'
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                  - 'ec2:CreateNetworkInterface'
-                  - 'ec2:DescribeNetworkInterfaces'
-                  - 'ec2:DeleteNetworkInterface'
-                  - 'ec2:AssignPrivateIpAddresses'
-                  - 'ec2:UnassignPrivateIpAddresses'
-                Resource: '*'
       Tags:
         - Key: CostCenter
           Value: !Ref CostCenter
@@ -703,7 +755,6 @@ Resources:
   AuthorizerLambdaRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${ProjectName}-authorizer-lambda-role-${EnvironmentName}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -716,7 +767,7 @@ Resources:
       ManagedPolicyArns:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
-        - PolicyName: CertificateValidationAccess
+        - PolicyName: !Sub '${ProjectName}-CertificateValidationAccess-${EnvironmentName}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -735,7 +786,7 @@ Resources:
                 Condition:
                   StringEquals:
                     'kms:ViaService': !Sub 'lambda.${AWS::Region}.amazonaws.com'
-        - PolicyName: ExplicitDenyAllOther
+        - PolicyName: !Sub '${ProjectName}-ExplicitDenyAllOther-${EnvironmentName}'
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
@@ -827,6 +878,7 @@ Resources:
       Role: !GetAtt AuthorizerLambdaRole.Arn
       Timeout: 10
       MemorySize: 256
+      ReservedConcurrentExecutions: 10  # Prevent cold starts
       Code:
         ZipFile: |
           import json
@@ -1012,13 +1064,16 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentName
   
+  # UPDATED ProcessingLambdaFunction
   ProcessingLambdaFunction:
     Type: AWS::Lambda::Function
     DependsOn: 
       - ProcessingLambdaLogGroup
+      - S3VPCEndpoint
       - LambdaVPCEndpoint
       - CloudWatchLogsVPCEndpoint
       - KMSVPCEndpoint
+      - SQSVPCEndpoint
     Properties:
       FunctionName: !Sub '${ProjectName}-processing-${EnvironmentName}'
       Runtime: python3.11
@@ -1026,6 +1081,7 @@ Resources:
       Role: !GetAtt ProcessingLambdaRole.Arn
       Timeout: !Ref LambdaTimeout
       MemorySize: !Ref LambdaMemorySize
+      ReservedConcurrentExecutions: 50
       DeadLetterConfig:
         TargetArn: !GetAtt ProcessingDLQ.Arn
       VpcConfig:
@@ -1037,9 +1093,10 @@ Resources:
       Environment:
         Variables:
           BUCKET_NAME: !Ref DataBucket
-          KMS_KEY_ID: !Ref DataEncryptionKey
+          KMS_KEY_ARN: !GetAtt DataEncryptionKey.Arn  # Changed to use ARN
           ENVIRONMENT: !Ref EnvironmentName
           LOG_LEVEL: !If [IsProduction, 'WARNING', 'INFO']
+          # Note: AWS_REGION is automatically provided by Lambda runtime, no need to set it explicitly
       Code:
         ZipFile: |
           import json
@@ -1054,12 +1111,31 @@ Resources:
           logger = logging.getLogger()
           logger.setLevel(os.environ.get('LOG_LEVEL', 'INFO'))
           
-          # Initialize AWS clients
-          s3_client = boto3.client('s3')
+          # Initialize AWS clients with timeout configuration
+          # Force path-style addressing for VPC Gateway endpoint compatibility
+          # Gateway endpoints require path-style URLs (s3.region.amazonaws.com/bucket/key)
+          # instead of virtual-hosted style (bucket.s3.region.amazonaws.com/key)
+          from botocore.config import Config
+          # Get region from Lambda environment (AWS_REGION is automatically provided by Lambda runtime)
+          aws_region = os.environ.get('AWS_REGION') or boto3.Session().region_name or 'us-east-1'
+          s3_config = Config(
+              region_name=aws_region,
+              connect_timeout=10,
+              read_timeout=30,
+              retries={'max_attempts': 2},
+              s3={
+                  'addressing_style': 'path'  # Force path-style for VPC Gateway endpoint
+              }
+          )
+          # Explicitly set endpoint URL to force path-style addressing
+          # This ensures traffic routes through the VPC Gateway endpoint
+          # Using path-style endpoint format: s3.region.amazonaws.com
+          s3_endpoint_url = f'https://s3.{aws_region}.amazonaws.com'
+          s3_client = boto3.client('s3', config=s3_config, endpoint_url=s3_endpoint_url, use_ssl=True)
           
           # Environment variables
           bucket_name = os.environ['BUCKET_NAME']
-          kms_key_id = os.environ['KMS_KEY_ID']
+          kms_key_arn = os.environ['KMS_KEY_ARN']  # Changed to use ARN
           environment = os.environ['ENVIRONMENT']
           
           def validate_input(body):
@@ -1129,22 +1205,31 @@ Resources:
               tag_string = '&'.join([f"{k}={v}" for k, v in tags.items()])
               
               # Store to S3 with encryption
-              s3_client.put_object(
-                  Bucket=bucket_name,
-                  Key=key,
-                  Body=json.dumps(processed_data, indent=2),
-                  ServerSideEncryption='aws:kms',
-                  SSEKMSKeyId=kms_key_id,
-                  ContentType='application/json',
-                  Tagging=tag_string,
-                  Metadata={
-                      'transaction-id': transaction_id,
-                      'processed-by': 'lambda-processor',
-                      'version': '2.0'
-                  }
-              )
-              
-              return key
+              try:
+                  logger.info(f"Attempting to store object to S3: s3://{bucket_name}/{key}")
+                  logger.info(f"S3 endpoint URL: {s3_endpoint_url}, Region: {aws_region}")
+                  logger.info(f"S3 client config addressing_style: {s3_config.s3.get('addressing_style', 'default')}")
+                  
+                  s3_client.put_object(
+                      Bucket=bucket_name,
+                      Key=key,
+                      Body=json.dumps(processed_data, indent=2),
+                      ServerSideEncryption='aws:kms',
+                      SSEKMSKeyId=kms_key_arn,  # Using ARN now
+                      ContentType='application/json',
+                      Tagging=tag_string,
+                      Metadata={
+                          'transaction-id': transaction_id,
+                          'processed-by': 'lambda-processor',
+                          'version': '2.0'
+                      }
+                  )
+                  logger.info(f"Successfully stored object to S3: s3://{bucket_name}/{key}")
+                  return key
+              except Exception as s3_error:
+                  error_msg = f"S3 storage failed: {str(s3_error)}"
+                  logger.error(error_msg, exc_info=True)
+                  raise Exception(error_msg) from s3_error
           
           def handler(event, context):
               """Main Lambda handler for processing financial data"""
@@ -1195,13 +1280,16 @@ Resources:
                   }
                   
               except Exception as e:
-                  logger.error(f"Processing error: {str(e)}", exc_info=True)
+                  error_type = type(e).__name__
+                  error_message = str(e)
+                  logger.error(f"Processing error [{error_type}]: {error_message}", exc_info=True)
                   return {
                       'statusCode': 500,
                       'headers': {'Content-Type': 'application/json'},
                       'body': json.dumps({
                           'error': 'Processing failed',
-                          'message': 'An internal error occurred',
+                          'message': error_message,
+                          'errorType': error_type,
                           'requestId': request_id
                       })
                   }
