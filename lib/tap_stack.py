@@ -278,7 +278,7 @@ class TapStack(TerraformStack):
             f"queue_high_{environment_suffix}",
             name=f"transaction-queue-high-{environment_suffix}",
             message_retention_seconds=86400,  # 1 day
-            visibility_timeout_seconds=360,  # 6x Lambda timeout (300s) + buffer
+            visibility_timeout_seconds=30,  # High priority: 30 seconds per PROMPT
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_high.arn,
                 "maxReceiveCount": 3
@@ -291,7 +291,7 @@ class TapStack(TerraformStack):
             f"queue_medium_{environment_suffix}",
             name=f"transaction-queue-medium-{environment_suffix}",
             message_retention_seconds=259200,  # 3 days
-            visibility_timeout_seconds=360,  # 6x Lambda timeout (300s) + buffer
+            visibility_timeout_seconds=60,  # Medium priority: 60 seconds per PROMPT
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_medium.arn,
                 "maxReceiveCount": 3
@@ -304,7 +304,7 @@ class TapStack(TerraformStack):
             f"queue_low_{environment_suffix}",
             name=f"transaction-queue-low-{environment_suffix}",
             message_retention_seconds=604800,  # 7 days
-            visibility_timeout_seconds=360,  # 6x Lambda timeout (300s) + buffer
+            visibility_timeout_seconds=120,  # Low priority: 120 seconds per PROMPT
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_low.arn,
                 "maxReceiveCount": 3
@@ -471,7 +471,7 @@ class TapStack(TerraformStack):
                 handler="lambda_function.handler",
                 role=lambda_role.arn,
                 filename=lambda_zip_path,
-                timeout=300,
+                timeout=20,  # Must be less than min visibility timeout (30s)
                 memory_size=512,
                 reserved_concurrent_executions=concurrency_limits[priority],
                 vpc_config={

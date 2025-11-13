@@ -143,8 +143,12 @@ class TestTapStackStructure:
         # Should have 6 queues: 3 main + 3 DLQ (high, medium, low)
         assert len(sqs_resources) == 6
 
-        # Verify visibility timeout configuration
-        queue_names = list(sqs_resources.keys())
+        # Verify visibility timeout configuration per PROMPT requirements
+        expected_visibility_timeouts = {
+            "high": 30,
+            "medium": 60,
+            "low": 120
+        }
         
         # Check that all queues have appropriate visibility timeout
         for queue_key, queue_config in sqs_resources.items():
@@ -152,8 +156,16 @@ class TestTapStackStructure:
                 # DLQ should have longer retention
                 assert queue_config["message_retention_seconds"] == 1209600  # 14 days
             else:
-                # Main queues should have visibility timeout >= 360 seconds
-                assert queue_config["visibility_timeout_seconds"] >= 360
+                # Main queues should have visibility timeout per priority (PROMPT requirement)
+                priority = None
+                for p in ["high", "medium", "low"]:
+                    if p in queue_key:
+                        priority = p
+                        break
+                assert priority is not None, f"Could not determine priority for queue {queue_key}"
+                expected_timeout = expected_visibility_timeouts[priority]
+                assert queue_config["visibility_timeout_seconds"] == expected_timeout, \
+                    f"{priority} queue should have {expected_timeout}s visibility timeout"
 
     def test_stack_creates_dynamodb_table_with_proper_configuration(self):
         """Test that stack creates DynamoDB table with correct settings."""
@@ -197,7 +209,7 @@ class TestTapStackStructure:
             assert lambda_config["handler"] == "lambda_function.handler"
             
             # Check timeout and memory
-            assert lambda_config["timeout"] == 300
+            assert lambda_config["timeout"] == 20
             assert lambda_config["memory_size"] == 512
             
             # Check VPC configuration
