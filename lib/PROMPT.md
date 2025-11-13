@@ -49,7 +49,7 @@ Create an infrastructure compliance analysis and validation system using **Cloud
 - Use **IAM roles** with least privilege permissions
 - Resource names must include **EnvironmentSuffix** parameter for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **us-east-1** region
+- Deploy to **eu-central-1** region
 
 ### Constraints
 

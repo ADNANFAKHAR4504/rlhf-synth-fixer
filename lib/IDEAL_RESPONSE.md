@@ -562,7 +562,7 @@ All resources use the EnvironmentSuffix parameter for uniqueness:
 2. **Email confirmation**: SNS subscription requires email confirmation
 3. **Evaluation timing**: Initial compliance evaluation may take several minutes
 4. **Destroyable resources**: All resources can be safely deleted (no Retain policies)
-5. **Region**: Designed for us-east-1 but adaptable to other regions
+5. **Region**: Designed for eu-central-1 but adaptable to other regions
 
 ### Testing Strategy
 

@@ -647,7 +647,7 @@ All resources use the EnvironmentSuffix parameter:
 2. Email subscription requires confirmation via email
 3. Initial compliance evaluation may take several minutes
 4. All resources are fully destroyable (no Retain policies)
-5. Deploy to us-east-1 as specified
+5. Deploy to eu-central-1 as specified
 
 ### Testing the Solution
 
