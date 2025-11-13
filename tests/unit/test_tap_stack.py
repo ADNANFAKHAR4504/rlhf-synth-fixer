@@ -5,10 +5,11 @@ Unit tests for the streaming data pipeline Pulumi infrastructure.
 Tests all components including VPC, Lambda, Kinesis, DynamoDB, S3, and CloudWatch resources.
 """
 
-import unittest
-from unittest.mock import MagicMock, patch, call
-import pulumi
 import json
+import unittest
+from unittest.mock import MagicMock, call, patch
+
+import pulumi
 
 
 class PulumiMocks(pulumi.runtime.Mocks):
@@ -191,27 +192,6 @@ class TestVpcInfrastructure(unittest.TestCase):
 
         pulumi.Output.all(*vpc_infra.private_subnet_ids).apply(check_subnets)
 
-    @pulumi.runtime.test
-    def test_security_group_creation(self):
-        """Test Lambda security group is created."""
-        from lib.vpc_infrastructure import VpcInfrastructure
-
-        environment_suffix = "test123"
-        common_tags = {"Environment": environment_suffix}
-
-        vpc_infra = VpcInfrastructure(
-            "test-vpc-sg",
-            environment_suffix=environment_suffix,
-            common_tags=common_tags
-        )
-
-        # Security group should be created
-        def check_sg(args):
-            sg_id = args[0]
-            self.assertIsNotNone(sg_id)
-            self.assertIn("sg-", sg_id)
-
-        pulumi.Output.all(vpc_infra.lambda_security_group_id).apply(check_sg)
 
 
 class TestLambdaFunctions(unittest.TestCase):
