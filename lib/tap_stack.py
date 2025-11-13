@@ -278,7 +278,7 @@ class TapStack(TerraformStack):
             f"queue_high_{environment_suffix}",
             name=f"transaction-queue-high-{environment_suffix}",
             message_retention_seconds=86400,  # 1 day
-            visibility_timeout_seconds=30,
+            visibility_timeout_seconds=360,  # 6x Lambda timeout (300s) + buffer
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_high.arn,
                 "maxReceiveCount": 3
@@ -291,7 +291,7 @@ class TapStack(TerraformStack):
             f"queue_medium_{environment_suffix}",
             name=f"transaction-queue-medium-{environment_suffix}",
             message_retention_seconds=259200,  # 3 days
-            visibility_timeout_seconds=60,
+            visibility_timeout_seconds=360,  # 6x Lambda timeout (300s) + buffer
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_medium.arn,
                 "maxReceiveCount": 3
@@ -304,7 +304,7 @@ class TapStack(TerraformStack):
             f"queue_low_{environment_suffix}",
             name=f"transaction-queue-low-{environment_suffix}",
             message_retention_seconds=604800,  # 7 days
-            visibility_timeout_seconds=120,
+            visibility_timeout_seconds=360,  # 6x Lambda timeout (300s) + buffer
             redrive_policy=json.dumps({
                 "deadLetterTargetArn": dlq_low.arn,
                 "maxReceiveCount": 3
@@ -951,11 +951,7 @@ class TapStack(TerraformStack):
                     "Error": "ApprovalTimeout"
                 },
                 "TransactionApproved": {
-                    "Type": "Succeed",
-                    "Result": {
-                        "status": "approved",
-                        "message": "Transaction successfully validated and approved"
-                    }
+                    "Type": "Succeed"
                 },
                 "TransactionRejected": {
                     "Type": "Fail",
