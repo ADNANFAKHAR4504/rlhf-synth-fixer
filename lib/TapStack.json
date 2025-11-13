@@ -9,10 +9,6 @@
             "AllowedPattern": "^[a-z0-9-]+$",
             "ConstraintDescription": "Must contain only lowercase letters, numbers, and hyphens"
         },
-        "VpcId": {
-            "Type": "AWS::EC2::VPC::Id",
-            "Description": "VPC ID where EKS cluster will be deployed"
-        },
         "PrivateSubnetIds": {
             "Type": "List<AWS::EC2::Subnet::Id>",
             "Description": "List of private subnet IDs for EKS cluster (minimum 2 AZs)"
@@ -119,6 +115,7 @@
         "EKSCluster": {
             "Type": "AWS::EKS::Cluster",
             "DeletionPolicy": "Retain",
+            "UpdateReplacePolicy": "Retain",
             "DependsOn": "EKSClusterLogGroup",
             "Properties": {
                 "Name": {
@@ -226,7 +223,6 @@
         },
         "EKSNodeGroup": {
             "Type": "AWS::EKS::Nodegroup",
-            "DependsOn": "EKSCluster",
             "Properties": {
                 "NodegroupName": {
                     "Fn::Sub": "eks-nodegroup-payment-${EnvironmentSuffix}"

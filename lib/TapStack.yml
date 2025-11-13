@@ -10,12 +10,44 @@ Parameters:
     ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
 
   VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: VPC ID where EKS cluster will be deployed
+    Type: String
+    Description: >-
+      Provide an existing VPC ID (vpc-xxxxxxxx) or leave as NEW to let this stack
+      create the networking components automatically.
+    Default: NEW
+    AllowedPattern: '^NEW$|^vpc-[0-9a-f]+$'
 
   PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: List of private subnet IDs for EKS cluster (minimum 2 AZs)
+    Type: CommaDelimitedList
+    Description: >-
+      Comma separated list of private subnet IDs (minimum two) when supplying an
+      existing VPC. Leave as NEW when the stack should create private subnets.
+    Default: NEW
+
+  VpcCidr:
+    Type: String
+    Description: CIDR block for the managed VPC (only used when VpcId is NEW)
+    Default: 10.0.0.0/16
+
+  PrivateSubnet1Cidr:
+    Type: String
+    Description: CIDR block for private subnet A (used when VpcId is NEW)
+    Default: 10.0.1.0/24
+
+  PrivateSubnet2Cidr:
+    Type: String
+    Description: CIDR block for private subnet B (used when VpcId is NEW)
+    Default: 10.0.2.0/24
+
+  PublicSubnet1Cidr:
+    Type: String
+    Description: CIDR block for public subnet A (used when VpcId is NEW)
+    Default: 10.0.100.0/24
+
+  PublicSubnet2Cidr:
+    Type: String
+    Description: CIDR block for public subnet B (used when VpcId is NEW)
+    Default: 10.0.101.0/24
 
   ClusterVersion:
     Type: String
@@ -54,7 +86,198 @@ Parameters:
     Description: Second instance type for Spot node group
     Default: t3a.medium
 
+Rules:
+  RequireSubnetsForExistingVpc:
+    RuleCondition: !Not [!Equals [!Ref VpcId, 'NEW']]
+    Assertions:
+      - Assert: !Not [!Equals [!Select [0, !Ref PrivateSubnetIds], 'NEW']]
+        AssertDescription: Provide PrivateSubnetIds when supplying an existing VpcId.
+
+Conditions:
+  CreateNetworkResources: !Equals [!Ref VpcId, 'NEW']
+
 Resources:
+  # Managed VPC and networking (optional when VpcId == NEW)
+  NetworkVpc:
+    Type: AWS::EC2::VPC
+    Condition: CreateNetworkResources
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NetworkInternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateNetworkResources
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      InternetGatewayId: !Ref NetworkInternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-a-${EnvironmentSuffix}'
+        - Key: Network
+          Value: public
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-b-${EnvironmentSuffix}'
+        - Key: Network
+          Value: public
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-a-${EnvironmentSuffix}'
+        - Key: Network
+          Value: private
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-b-${EnvironmentSuffix}'
+        - Key: Network
+          Value: private
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Condition: CreateNetworkResources
+    Properties:
+      Domain: vpc
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNetworkResources
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-nat-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateNetworkResources
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref NetworkInternetGateway
+
+  PublicSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNetworkResources
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetA
+
+  PublicSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNetworkResources
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      SubnetId: !Ref PublicSubnetB
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateNetworkResources
+    Properties:
+      VpcId: !Ref NetworkVpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateNetworkResources
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNetworkResources
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetA
+
+  PrivateSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNetworkResources
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      SubnetId: !Ref PrivateSubnetB
+
   # CloudWatch Log Group for EKS Control Plane Logs
   EKSClusterLogGroup:
     Type: AWS::Logs::LogGroup
@@ -100,13 +323,17 @@ Resources:
   EKSCluster:
     Type: AWS::EKS::Cluster
     DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
     DependsOn: EKSClusterLogGroup
     Properties:
       Name: !Sub 'eks-cluster-${EnvironmentSuffix}'
       Version: !Ref ClusterVersion
       RoleArn: !GetAtt EKSClusterRole.Arn
       ResourcesVpcConfig:
-        SubnetIds: !Ref PrivateSubnetIds
+        SubnetIds: !If
+          - CreateNetworkResources
+          - !Split [",", !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]]
+          - !Ref PrivateSubnetIds
         EndpointPrivateAccess: true
         EndpointPublicAccess: false
       Logging:
@@ -155,12 +382,14 @@ Resources:
   # Managed Node Group with Spot Instances
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
-    DependsOn: EKSCluster
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-payment-${EnvironmentSuffix}'
       ClusterName: !Ref EKSCluster
       NodeRole: !GetAtt EKSNodeRole.Arn
-      Subnets: !Ref PrivateSubnetIds
+      Subnets: !If
+        - CreateNetworkResources
+        - !Split [",", !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]]
+        - !Ref PrivateSubnetIds
       ScalingConfig:
         MinSize: !Ref NodeGroupMinSize
         MaxSize: !Ref NodeGroupMaxSize
@@ -198,41 +427,19 @@ Outputs:
   ClusterEndpoint:
     Description: EKS Cluster API Endpoint
     Value: !GetAtt EKSCluster.Endpoint
-    Export:
-      Name: !Sub '${AWS::StackName}-ClusterEndpoint'
-
-  ClusterSecurityGroupId:
-    Description: Security Group ID for the cluster control plane
-    Value: !GetAtt EKSCluster.ClusterSecurityGroupId
-    Export:
-      Name: !Sub '${AWS::StackName}-SecurityGroupId'
 
   OIDCProviderArn:
-    Description: ARN of the OIDC Provider for IRSA
+    Description: IAM OIDC provider ARN
     Value: !Ref EKSOIDCProvider
-    Export:
-      Name: !Sub '${AWS::StackName}-OIDCProviderArn'
 
-  OIDCProviderUrl:
-    Description: URL of the OIDC Provider
-    Value: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
-    Export:
-      Name: !Sub '${AWS::StackName}-OIDCProviderUrl'
+  NetworkVpcId:
+    Condition: CreateNetworkResources
+    Description: Managed VPC ID when the stack provisions networking
+    Value: !Ref NetworkVpc
 
-  NodeGroupName:
-    Description: Name of the EKS Node Group
-    Value: !Ref EKSNodeGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-NodeGroupName'
-
-  NodeRoleArn:
-    Description: ARN of the Node IAM Role
-    Value: !GetAtt EKSNodeRole.Arn
-    Export:
-      Name: !Sub '${AWS::StackName}-NodeRoleArn'
-
-  LogGroupName:
-    Description: CloudWatch Log Group Name
-    Value: !Ref EKSClusterLogGroup
-    Export:
-      Name: !Sub '${AWS::StackName}-LogGroupName'
+  ManagedPrivateSubnets:
+    Description: Comma-separated list of private subnet IDs used by the cluster
+    Value: !If
+      - CreateNetworkResources
+      - !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
+      - !Join [",", !Ref PrivateSubnetIds]
