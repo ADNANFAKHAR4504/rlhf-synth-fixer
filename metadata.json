@@ -1,0 +1,21 @@
+{
+  "platform": "pulumi",
+  "language": "go",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "9898998",
+  "team": "6",
+  "startedAt": "2025-11-13T14:30:45.954Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC"
+  ]
+}
