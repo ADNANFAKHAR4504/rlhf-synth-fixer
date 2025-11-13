@@ -322,16 +322,48 @@ class TapStack(pulumi.ComponentResource):
     def _create_aurora_global_database(self) -> Dict[str, Any]:
         """Create Aurora Global Database with primary in us-east-1 and secondary in us-east-2"""
 
-        # Get default VPC and subnets for primary region
-        primary_vpc = aws.ec2.get_vpc(default=True)
-        primary_subnets = aws.ec2.get_subnets(
-            filters=[{"name": "vpc-id", "values": [primary_vpc.id]}]
+        # Create VPC for primary region
+        primary_vpc = aws.ec2.Vpc(
+            f"payment-primary-vpc-{self.environment_suffix}",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={
+                **self.common_tags,
+                "Name": f"payment-primary-vpc-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create subnets in different AZs for primary region
+        primary_subnet_1 = aws.ec2.Subnet(
+            f"payment-primary-subnet-1-{self.environment_suffix}",
+            vpc_id=primary_vpc.id,
+            cidr_block="10.0.1.0/24",
+            availability_zone=f"{self.primary_region}a",
+            tags={
+                **self.common_tags,
+                "Name": f"payment-primary-subnet-1-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=primary_vpc)
+        )
+
+        primary_subnet_2 = aws.ec2.Subnet(
+            f"payment-primary-subnet-2-{self.environment_suffix}",
+            vpc_id=primary_vpc.id,
+            cidr_block="10.0.2.0/24",
+            availability_zone=f"{self.primary_region}b",
+            tags={
+                **self.common_tags,
+                "Name": f"payment-primary-subnet-2-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=primary_vpc)
         )
 
         # Create DB subnet group for primary region
         primary_subnet_group = aws.rds.SubnetGroup(
             f"payment-primary-subnet-group-{self.environment_suffix}",
-            subnet_ids=primary_subnets.ids,
+            subnet_ids=[primary_subnet_1.id, primary_subnet_2.id],
             tags={
                 **self.common_tags,
                 "Name": f"payment-primary-subnet-group-{self.environment_suffix}"
@@ -339,17 +371,48 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get default VPC and subnets for DR region
-        dr_vpc = aws.ec2.get_vpc(default=True, opts=ResourceOptions(provider=self.dr_provider))
-        dr_subnets = aws.ec2.get_subnets(
-            filters=[{"name": "vpc-id", "values": [dr_vpc.id]}],
-            opts=ResourceOptions(provider=self.dr_provider)
+        # Create VPC for DR region
+        dr_vpc = aws.ec2.Vpc(
+            f"payment-dr-vpc-{self.environment_suffix}",
+            cidr_block="10.1.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={
+                **self.common_tags,
+                "Name": f"payment-dr-vpc-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=self, provider=self.dr_provider)
+        )
+
+        # Create subnets in different AZs for DR region
+        dr_subnet_1 = aws.ec2.Subnet(
+            f"payment-dr-subnet-1-{self.environment_suffix}",
+            vpc_id=dr_vpc.id,
+            cidr_block="10.1.1.0/24",
+            availability_zone=f"{self.dr_region}a",
+            tags={
+                **self.common_tags,
+                "Name": f"payment-dr-subnet-1-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=dr_vpc, provider=self.dr_provider)
+        )
+
+        dr_subnet_2 = aws.ec2.Subnet(
+            f"payment-dr-subnet-2-{self.environment_suffix}",
+            vpc_id=dr_vpc.id,
+            cidr_block="10.1.2.0/24",
+            availability_zone=f"{self.dr_region}b",
+            tags={
+                **self.common_tags,
+                "Name": f"payment-dr-subnet-2-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=dr_vpc, provider=self.dr_provider)
         )
 
         # Create DB subnet group for DR region
         dr_subnet_group = aws.rds.SubnetGroup(
             f"payment-dr-subnet-group-{self.environment_suffix}",
-            subnet_ids=dr_subnets.ids,
+            subnet_ids=[dr_subnet_1.id, dr_subnet_2.id],
             tags={
                 **self.common_tags,
                 "Name": f"payment-dr-subnet-group-{self.environment_suffix}"
