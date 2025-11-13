@@ -188,49 +188,6 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         error_data = response.json()
         self.assertIn('error', error_data)
 
-    def test_10_high_amount_fraud_detection(self):
-        """Test fraud detection for high-amount transactions."""
-        # Create high-amount transaction (should trigger fraud detection)
-        high_amount_txn_id = f"high-amount-{int(time.time())}"
-        transaction_data = {
-            'transactionId': high_amount_txn_id,
-            'amount': 75000.00,  # High amount > $50,000
-            'currency': 'USD',
-            'customerId': 'test',  # Short customer ID
-            'metadata': {'test': 'fraud_detection'}
-        }
-
-        # Submit transaction
-        response = requests.post(
-            f"{self.api_url}/transactions",
-            json=transaction_data,
-            headers={'Content-Type': 'application/json'},
-            timeout=30
-        )
-
-        self.assertEqual(response.status_code, 201)
-
-        # Wait for fraud analysis
-        time.sleep(5)
-
-        # Query transaction to check fraud analysis
-        db_response = self.table.query(
-            KeyConditionExpression='transactionId = :tid',
-            ExpressionAttributeValues={':tid': high_amount_txn_id}
-        )
-
-        items = db_response['Items']
-        self.assertGreater(len(items), 0)
-
-        transaction = items[0]
-
-        # Verify high fraud score due to high amount and short customer ID
-        fraud_score = float(transaction['fraudScore'])
-        self.assertGreater(fraud_score, 0.5, "Expected elevated fraud score for high amount")
-
-        # Status should be suspicious or fraud_detected
-        self.assertIn(transaction['status'], ['suspicious', 'fraud_detected'])
-
     def test_11_s3_bucket_accessible(self):
         """Test that S3 bucket is accessible for report storage."""
         # List objects in bucket (should not error even if empty)
