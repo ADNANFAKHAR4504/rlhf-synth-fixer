@@ -15,7 +15,14 @@ def stack_outputs():
         pytest.skip("Stack outputs not found - deployment required")
 
     with open(outputs_file, "r", encoding="utf-8") as f:
-        return json.load(f)
+        all_outputs = json.load(f)
+        # Extract outputs from nested stack structure
+        # Structure is: {"TapStackpr6460": {"vpc_id": "...", ...}}
+        # We need to get the first (and only) stack's outputs
+        if all_outputs:
+            stack_key = list(all_outputs.keys())[0]
+            return all_outputs[stack_key]
+        return all_outputs
 
 
 @pytest.fixture(scope="module")
