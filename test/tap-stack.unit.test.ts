@@ -1,6 +1,11 @@
 import fs from 'fs';
 import path from 'path';
 
+// Load region configuration
+const regionConfig = JSON.parse(
+  fs.readFileSync(path.join(__dirname, '../lib/AWS_REGION'), 'utf8')
+);
+
 describe('Secure VPC Foundation CloudFormation Template', () => {
   let template: any;
 
@@ -20,13 +25,24 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
       expect(template.Description).toBe(
-        'Secure VPC Foundation for Fintech Payment Processing Platform - PCI DSS Compliant'
+        'Secure VPC Foundation for Fintech Payment Processing Platform - PCI DSS Compliant - Deployed in Europe (Spain) region'
       );
     });
 
     test('should have metadata section', () => {
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    });
+
+    test('should have region configuration in metadata', () => {
+      expect(template.Metadata.Region).toBeDefined();
+      expect(template.Metadata.Region.TargetRegion).toBe('eu-south-2');
+      expect(template.Metadata.Region.RegionName).toBe('Europe (Spain)');
+    });
+
+    test('region config file should specify eu-south-2', () => {
+      expect(regionConfig.region).toBe('eu-south-2');
+      expect(regionConfig.regionName).toBe('Europe (Spain)');
     });
   });
 
@@ -54,7 +70,7 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
 
     test('should have exactly four parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(4);
+      expect(parameterCount).toBe(5);
     });
   });
 
@@ -161,9 +177,10 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
   });
 
   describe('VPC Endpoint', () => {
-    test('should have S3 VPC Endpoint', () => {
+    test('should have S3 VPC Endpoint resource defined (conditionally created)', () => {
       expect(template.Resources.S3VPCEndpoint).toBeDefined();
       expect(template.Resources.S3VPCEndpoint.Type).toBe('AWS::EC2::VPCEndpoint');
+      expect(template.Resources.S3VPCEndpoint.Condition).toBe('ShouldCreateS3Endpoint');
     });
   });
 
@@ -223,6 +240,16 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
       expect(tagKeys).toContain('Environment');
       expect(tagKeys).toContain('Project');
       expect(tagKeys).toContain('ManagedBy');
+      expect(tagKeys).toContain('Region');
+      expect(tagKeys).toContain('TargetRegion');
+    });
+
+    test('VPC should have target region tag for Spain', () => {
+      const vpc = template.Resources.VPC;
+      const tags = vpc.Properties.Tags;
+      const targetRegionTag = tags.find((t: any) => t.Key === 'TargetRegion');
+      expect(targetRegionTag).toBeDefined();
+      expect(targetRegionTag.Value).toBe('eu-south-2');
     });
 
     test('export names should follow naming convention', () => {

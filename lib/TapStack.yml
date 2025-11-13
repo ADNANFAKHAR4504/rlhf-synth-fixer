@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Secure VPC Foundation for Fintech Payment Processing Platform - PCI DSS Compliant'
+Description: 'Secure VPC Foundation for Fintech Payment Processing Platform - PCI DSS Compliant - Deployed in Europe (Spain) region'
 
 Parameters:
   EnvironmentSuffix:
@@ -29,6 +29,17 @@ Parameters:
       - staging
       - production
 
+  CreateS3Endpoint:
+    Type: String
+    Default: 'false'
+    Description: 'Whether to create S3 VPC Gateway Endpoint (may hit service limits)'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  ShouldCreateS3Endpoint: !Equals [!Ref CreateS3Endpoint, 'true']
+
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -42,6 +53,10 @@ Metadata:
           default: 'Network Configuration'
         Parameters:
           - VpcCidr
+  Region:
+    TargetRegion: 'eu-south-2'
+    RegionName: 'Europe (Spain)'
+    ConfigFile: 'lib/AWS_REGION'
 
 Resources:
   # ===========================================
@@ -63,6 +78,10 @@ Resources:
           Value: !Ref ProjectName
         - Key: ManagedBy
           Value: CloudFormation
+        - Key: Region
+          Value: !Ref 'AWS::Region'
+        - Key: TargetRegion
+          Value: 'eu-south-2'
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -616,6 +635,7 @@ Resources:
 
   S3VPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
+    Condition: ShouldCreateS3Endpoint
     Properties:
       VpcEndpointType: Gateway
       VpcId: !Ref VPC
@@ -730,7 +750,8 @@ Outputs:
       Name: !Sub '${AWS::StackName}-FlowLogsBucket'
 
   S3VPCEndpointId:
-    Description: 'S3 VPC Endpoint ID'
+    Description: 'S3 VPC Endpoint ID (if created)'
+    Condition: ShouldCreateS3Endpoint
     Value: !Ref S3VPCEndpoint
     Export:
       Name: !Sub '${AWS::StackName}-S3VPCEndpoint'
