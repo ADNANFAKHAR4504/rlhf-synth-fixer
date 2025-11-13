@@ -1,0 +1,26 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912497",
+  "team": "synth",
+  "startedAt": "2025-11-13T04:29:24.261018+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "security-configuration-as-code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Lambda",
+    "S3",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 9
+}
