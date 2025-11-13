@@ -566,11 +566,15 @@ class TapStack(pulumi.ComponentResource):
                     "storage_class": "STANDARD",
                     "replication_time": {
                         "status": "Enabled",
-                        "minutes": 15
+                        "time": {
+                            "minutes": 15
+                        }
                     },
                     "metrics": {
                         "status": "Enabled",
-                        "minutes": 15
+                        "event_threshold": {
+                            "minutes": 15
+                        }
                     }
                 },
                 "delete_marker_replication": {"status": "Enabled"}
