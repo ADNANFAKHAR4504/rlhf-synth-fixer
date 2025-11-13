@@ -3,15 +3,11 @@
   "language": "py",
   "complexity": "hard",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-1",
   "startedAt": "2025-11-13T06:30:08+00:00",
   "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
-    "codepipeline",
-    "codebuild",
-    "codedeploy",
-    "ecr",
-    "ecs"
+    "CI/CD Pipeline"
   ],
   "po_id": "101912481",
   "aws_services": [
@@ -28,5 +24,7 @@
     "ALB"
   ],
   "region": "ap-southeast-1",
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }

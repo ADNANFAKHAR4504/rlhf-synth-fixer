@@ -1,5 +1,0 @@
-config:
-  aws:region: ap-southeast-1
-  tap:environmentSuffix: synth101912481
-  tap:region: ap-southeast-1
-encryptionsalt: v1:w5zXwLgt8cQ=:v1:uqiX4yD7YKbIFte6:fmnD/sp3mBR/vJKPqULe/0/doCi/bA==

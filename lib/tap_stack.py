@@ -3,22 +3,44 @@ import json
 import pulumi
 import pulumi_aws as aws
 from typing import Optional
+from pulumi import ResourceOptions
 
 
-class CICDPipeline(pulumi.ComponentResource):
+class TapStackArgs:
+    """
+    TapStackArgs defines the input arguments for the TapStack Pulumi component.
+
+    Args:
+        environment_suffix (Optional[str]): An optional suffix for identifying the deployment environment (e.g., 'dev', 'prod').
+        tags (Optional[dict]): Optional default tags to apply to resources.
+        aws_region (Optional[str]): AWS region for deployment (defaults to 'ap-southeast-1').
+    """
+
+    def __init__(
+        self,
+        environment_suffix: Optional[str] = None,
+        tags: Optional[dict] = None,
+        aws_region: Optional[str] = None
+    ):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.tags = tags or {}
+        self.aws_region = aws_region or 'ap-southeast-1'
+
+
+class TapStack(pulumi.ComponentResource):
     """Complete CI/CD Pipeline infrastructure for containerized applications."""
 
     def __init__(
         self,
         name: str,
-        environment_suffix: str,
-        aws_region: str,
-        opts: Optional[pulumi.ResourceOptions] = None
+        args: TapStackArgs,
+        opts: Optional[ResourceOptions] = None
     ):
-        super().__init__("custom:cicd:Pipeline", name, {}, opts)
+        super().__init__("tap:stack:TapStack", name, {}, opts)
 
-        self.environment_suffix = environment_suffix
-        self.aws_region = aws_region
+        self.environment_suffix = args.environment_suffix
+        self.aws_region = args.aws_region
+        self.tags = args.tags
 
         # Resource options for all child resources
         child_opts = pulumi.ResourceOptions(parent=self)
@@ -62,13 +84,6 @@ class CICDPipeline(pulumi.ComponentResource):
 
         # Create CodePipeline
         self.pipeline = self._create_codepipeline(child_opts)
-
-        self.register_outputs({
-            "ecr_repository_url": self.ecr_repository.repository_url,
-            "ecs_cluster_name": self.ecs_cluster.name,
-            "pipeline_name": self.pipeline.name,
-            "kms_key_id": self.kms_key.id
-        })
 
     def _create_kms_key(self, opts: pulumi.ResourceOptions) -> aws.kms.Key:
         """Create KMS key for encryption at rest."""
@@ -945,4 +960,14 @@ artifacts:
             opts=opts
         )
 
-        return pipeline
+    # Export outputs using pulumi.export (from __main__.py)
+    pulumi.export("ecrRepositoryUrl", self.ecr_repository.repository_url)
+    pulumi.export("ecsClusterName", self.ecs_cluster.name)
+    pulumi.export("ecsClusterArn", self.ecs_cluster.arn)
+    pulumi.export("pipelineName", self.pipeline.name)
+    pulumi.export("pipelineArn", self.pipeline.arn)
+    pulumi.export("codeBuildProjectName", self.build_project.name)
+    pulumi.export("codeDeployAppName", self.deploy_app.name)
+    pulumi.export("kmsKeyId", self.kms_key.id)
+    pulumi.export("kmsKeyArn", self.kms_key.arn)
+    pulumi.export("artifactBucketName", self.artifact_bucket.bucket)
