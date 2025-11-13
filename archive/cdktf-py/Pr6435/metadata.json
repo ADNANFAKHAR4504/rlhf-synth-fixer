@@ -6,13 +6,7 @@
   "team": "synth",
   "startedAt": "2025-11-13T02:29:00+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [
-    "web-application",
-    "payment-processing",
-    "multi-tier-architecture",
-    "pci-compliance",
-    "high-availability"
-  ],
+  "subject_labels": ["Web Application Deployment"],
   "po_id": "q74j8p",
   "aws_services": [
     "VPC",
