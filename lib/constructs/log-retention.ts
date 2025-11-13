@@ -19,10 +19,13 @@ export class LogRetentionConstruct extends Construct {
       process.env.ENVIRONMENT_SUFFIX ||
       'dev';
 
-    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    // Sanitize envSuffix to handle bash syntax and invalid characters, then convert to lowercase
+    // Handle bash variable syntax ${VAR:-default} by extracting the default value
     envSuffix = envSuffix
-      .replace(/[\${}:-]/g, '')
-      .replace(/[^a-zA-Z0-9-]/g, '')
+      .replace(/\$\{[^:]+:-(.+?)\}/g, '$1') // Extract default value from ${VAR:-default}
+      .replace(/\$\{[^}]+\}/g, '') // Remove any remaining ${VAR} patterns without defaults
+      .replace(/:/g, '') // Remove colons
+      .replace(/[^a-zA-Z0-9-]/g, '') // Remove other invalid chars, keep hyphens
       .toLowerCase();
 
     // Ensure we have a valid suffix
@@ -30,8 +33,11 @@ export class LogRetentionConstruct extends Construct {
       envSuffix = 'dev';
     }
 
-    const stackName = `tapstack-${envSuffix}`;
-    const bucketName = `payment-logs-archive-${stackName}`;
+    // Get unique resource suffix to prevent conflicts
+    const uniqueResourceSuffix = stack.node.tryGetContext('uniqueResourceSuffix') || 'default';
+
+    const stackName = `tapstack-${envSuffix}-${uniqueResourceSuffix}`;
+    const bucketName = `logs-${stackName}`;
 
     const logArchiveBucket = new s3.Bucket(this, 'LogArchiveBucket', {
       bucketName,
@@ -80,7 +86,7 @@ export class LogRetentionConstruct extends Construct {
 
     // Lambda function for automated log export (simplified for example)
     const exportFunction = new lambda.Function(this, 'LogExporter', {
-      functionName: `payment-log-exporter-${stackName}`,
+      functionName: `log-exporter-${uniqueResourceSuffix}`,
       runtime: lambda.Runtime.PYTHON_3_11,
       architecture: lambda.Architecture.ARM_64,
       handler: 'index.handler',

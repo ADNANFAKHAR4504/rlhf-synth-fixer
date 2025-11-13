@@ -9,7 +9,10 @@ import * as logs from 'aws-cdk-lib/aws-logs';
 
 export class PaymentMonitoringStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: cdk.StackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      terminationProtection: false,
+    });
 
     // SNS Topics for notifications
     const notifications = new NotificationsConstruct(this, 'Notifications');
@@ -37,10 +40,11 @@ export class PaymentMonitoringStack extends cdk.Stack {
       metricValue: '1',
     });
 
-    // CloudWatch Alarms
+    // CloudWatch Alarms (exclude API Gateway alarms as they're in dedicated stack)
     const alarms = new AlarmsConstruct(this, 'Alarms', {
       operationalTopic: notifications.operationalTopic,
       securityTopic: notifications.securityTopic,
+      excludeApiGatewayAlarms: true,
     });
 
     // CloudWatch Dashboards

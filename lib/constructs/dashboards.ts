@@ -17,10 +17,13 @@ export class DashboardsConstruct extends Construct {
       process.env.ENVIRONMENT_SUFFIX ||
       'dev';
 
-    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    // Sanitize envSuffix to handle bash syntax and invalid characters, then convert to lowercase
+    // Handle bash variable syntax ${VAR:-default} by extracting the default value
     envSuffix = envSuffix
-      .replace(/[\${}:-]/g, '')
-      .replace(/[^a-zA-Z0-9-]/g, '')
+      .replace(/\$\{[^:]+:-(.+?)\}/g, '$1') // Extract default value from ${VAR:-default}
+      .replace(/\$\{[^}]+\}/g, '') // Remove any remaining ${VAR} patterns without defaults
+      .replace(/:/g, '') // Remove colons
+      .replace(/[^a-zA-Z0-9-]/g, '') // Remove other invalid chars, keep hyphens
       .toLowerCase();
 
     // Ensure we have a valid suffix
@@ -28,7 +31,10 @@ export class DashboardsConstruct extends Construct {
       envSuffix = 'dev';
     }
 
-    const stackName = `tapstack-${envSuffix}`;
+    // Get unique resource suffix to prevent conflicts
+    const uniqueResourceSuffix = stack.node.tryGetContext('uniqueResourceSuffix') || 'default';
+
+    const stackName = `tapstack-${envSuffix}-${uniqueResourceSuffix}`;
 
     // Keep a relative start window ("last 3 hours"); do NOT also set defaultInterval.
     const dashboard = new cloudwatch.Dashboard(

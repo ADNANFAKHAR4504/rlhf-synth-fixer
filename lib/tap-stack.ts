@@ -14,9 +14,19 @@ function firstNonNullish<T>(...vals: Array<T | null | undefined>): T {
   return hit as T;
 }
 
+function generateUniqueSuffix(): string {
+  // Generate a highly unique suffix using crypto-random bytes for maximum uniqueness
+  const crypto = require('crypto');
+  const randomBytes = crypto.randomBytes(4).toString('hex'); // 8 chars, cryptographically secure
+  return randomBytes; // 8 hex chars, extremely unlikely to collide
+}
+
 export class TapStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      terminationProtection: false,
+    });
 
     const environmentSuffix = firstNonNullish<string>(
       props?.environmentSuffix,
@@ -35,12 +45,17 @@ export class TapStack extends cdk.Stack {
         ? projectName
         : `payment-${projectName}`;
 
+    // Get or generate a unique identifier for all resources to prevent conflicts
+    // Use existing context value (for tests) or generate new one
+    const uniqueResourceSuffix = this.node.tryGetContext('uniqueResourceSuffix') || generateUniqueSuffix();
+
     cdk.Tags.of(this).add('Project', projectName);
     cdk.Tags.of(this).add('Environment', environmentSuffix);
 
     // Set context on this stack before creating child stacks
     this.node.setContext('environmentSuffix', environmentSuffix);
     this.node.setContext('projectName', projectName);
+    this.node.setContext('uniqueResourceSuffix', uniqueResourceSuffix);
 
     // Create PaymentMonitoringStack
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -48,10 +63,7 @@ export class TapStack extends cdk.Stack {
       this,
       `PaymentMonitoringStack-${environmentSuffix}`,
       {
-        stackName: `${normalizedProjectName.replace(
-          /^payment-/,
-          ''
-        )}-monitoring-${environmentSuffix}`,
+        stackName: `tapstackstack-${environmentSuffix}`,
         description: `Payment monitoring infrastructure for ${projectName} (${environmentSuffix}).`,
       }
     );

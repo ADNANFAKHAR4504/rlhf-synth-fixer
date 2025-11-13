@@ -14,7 +14,10 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
     id: string,
     props?: ApiGatewayMonitoringStackProps
   ) {
-    super(scope, id, props);
+    super(scope, id, {
+      ...props,
+      terminationProtection: false,
+    });
 
     const apiName = props?.apiGatewayName ?? 'payment-api';
 
@@ -25,10 +28,13 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
       process.env.ENVIRONMENT_SUFFIX ||
       'dev';
 
-    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    // Sanitize envSuffix to handle bash syntax and invalid characters, then convert to lowercase
+    // Handle bash variable syntax ${VAR:-default} by extracting the default value
     envSuffix = envSuffix
-      .replace(/[\${}:-]/g, '')
-      .replace(/[^a-zA-Z0-9-]/g, '')
+      .replace(/\$\{[^:]+:-(.+?)\}/g, '$1') // Extract default value from ${VAR:-default}
+      .replace(/\$\{[^}]+\}/g, '') // Remove any remaining ${VAR} patterns without defaults
+      .replace(/:/g, '') // Remove colons
+      .replace(/[^a-zA-Z0-9-]/g, '') // Remove other invalid chars, keep hyphens
       .toLowerCase();
 
     // Ensure we have a valid suffix
@@ -36,7 +42,10 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
       envSuffix = 'dev';
     }
 
-    const stackName = `tapstack-${envSuffix}`;
+    // Get unique resource suffix to prevent conflicts
+    const uniqueResourceSuffix = this.node.tryGetContext('uniqueResourceSuffix') || 'default';
+
+    const stackName = `tapstack-${envSuffix}-${uniqueResourceSuffix}`;
 
     const latency = new cloudwatch.Metric({
       namespace: 'AWS/ApiGateway',

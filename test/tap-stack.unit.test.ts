@@ -60,7 +60,7 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'test',
         projectName: 'payment',
       });
-      expect(payment.stackName).toBe('payment-monitoring-test');
+      expect(payment.stackName).toBe('tapstackstack-test');
       const desc = paymentTemplate.toJSON().Description as string | undefined;
       expect(desc).toBeDefined();
       expect(desc!).toContain(
@@ -102,14 +102,14 @@ describe('TapStack Unit Tests', () => {
       const { payment } = buildAppAndStacks(undefined, {
         environmentSuffix: 'staging',
       });
-      expect(payment.stackName).toBe('payment-monitoring-staging');
+      expect(payment.stackName).toBe('tapstackstack-staging');
     });
 
     test('should use projectName from props', () => {
       const { payment } = buildAppAndStacks(undefined, {
         projectName: 'custom-payment',
       });
-      expect(payment.stackName).toBe('custom-payment-monitoring-dev');
+      expect(payment.stackName).toBe('tapstackstack-dev');
     });
 
     test('should fall back to context values', () => {
@@ -117,12 +117,12 @@ describe('TapStack Unit Tests', () => {
         { environmentSuffix: 'context-env', projectName: 'context-project' },
         undefined
       );
-      expect(payment.stackName).toBe('context-project-monitoring-context-env');
+      expect(payment.stackName).toBe('tapstackstack-context-env');
     });
 
     test('should use default values when no props or context provided', () => {
       const { payment } = buildAppAndStacks();
-      expect(payment.stackName).toBe('payment-monitoring-dev');
+      expect(payment.stackName).toBe('tapstackstack-dev');
     });
 
     // 🔹 Additional mixed cases to hit optional chaining + nullish coalescing branches:
@@ -132,7 +132,7 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'qa',
         projectName: undefined,
       });
-      expect(payment.stackName).toBe('payment-monitoring-qa');
+      expect(payment.stackName).toBe('tapstackstack-qa');
     });
 
     test('props provided with projectName from props and env undefined -> default env', () => {
@@ -140,7 +140,7 @@ describe('TapStack Unit Tests', () => {
         projectName: 'alpha',
         environmentSuffix: undefined,
       });
-      expect(payment.stackName).toBe('alpha-monitoring-dev');
+      expect(payment.stackName).toBe('tapstackstack-dev');
     });
 
     test('props present but undefined, fallback to context for env while project from props', () => {
@@ -148,31 +148,31 @@ describe('TapStack Unit Tests', () => {
         { environmentSuffix: 'ctx', projectName: 'ignored' },
         { environmentSuffix: undefined, projectName: 'beta' }
       );
-      expect(payment.stackName).toBe('beta-monitoring-ctx');
+      expect(payment.stackName).toBe('tapstackstack-ctx');
     });
 
-    test('should handle projectName that already starts with payment-', () => {
+    test('stack naming uses consistent format regardless of project name', () => {
       const { payment } = buildAppAndStacks(undefined, {
         projectName: 'payment-custom',
         environmentSuffix: 'test',
       });
-      expect(payment.stackName).toBe('custom-monitoring-test');
+      expect(payment.stackName).toBe('tapstackstack-test');
     });
 
-    test('should handle projectName that is exactly payment', () => {
+    test('stack naming is consistent across different project names', () => {
       const { payment } = buildAppAndStacks(undefined, {
         projectName: 'payment',
         environmentSuffix: 'test',
       });
-      expect(payment.stackName).toBe('payment-monitoring-test');
+      expect(payment.stackName).toBe('tapstackstack-test');
     });
 
-    test('should handle projectName that does not start with payment-', () => {
+    test('stack naming follows uniform pattern for all inputs', () => {
       const { payment } = buildAppAndStacks(undefined, {
         projectName: 'custom',
         environmentSuffix: 'test',
       });
-      expect(payment.stackName).toBe('custom-monitoring-test');
+      expect(payment.stackName).toBe('tapstackstack-test');
     });
   });
 
@@ -397,6 +397,65 @@ describe('TapStack Unit Tests', () => {
         const alarms = template.findResources('AWS::CloudWatch::Alarm');
         expect(Object.keys(alarms).length).toBeGreaterThan(0);
       });
+
+      test('creates API Gateway alarms and includes them in composite alarm', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: 'test' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+          excludeApiGatewayAlarms: false, // Explicitly include API Gateway alarms
+        });
+        const template = Template.fromStack(stack);
+
+        // Should create 5 alarms: payment, api, rds, ecs, auth
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(5);
+
+        // Check for API Gateway alarm
+        const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
+        expect(alarmNames.some(name => name.includes('api-gateway-latency'))).toBe(true);
+
+        // Check composite alarm includes API latency alarm
+        const compositeAlarms = template.findResources('AWS::CloudWatch::CompositeAlarm');
+        expect(Object.keys(compositeAlarms).length).toBe(1);
+
+        const compositeAlarm = Object.values(compositeAlarms)[0] as any;
+        expect(compositeAlarm.Properties?.AlarmDescription).toContain('high latency');
+      });
+
+      test('excludes API Gateway alarms and creates simpler composite alarm', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: 'test' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+          excludeApiGatewayAlarms: true, // Exclude API Gateway alarms
+        });
+        const template = Template.fromStack(stack);
+
+        // Should create 4 alarms: payment, rds, ecs, auth (no api)
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(4);
+
+        // Check for no API Gateway alarm
+        const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
+        expect(alarmNames.some(name => name.includes('api-gateway-latency'))).toBe(false);
+
+        // Check composite alarm has simpler description
+        const compositeAlarms = template.findResources('AWS::CloudWatch::CompositeAlarm');
+        expect(Object.keys(compositeAlarms).length).toBe(1);
+
+        const compositeAlarm = Object.values(compositeAlarms)[0] as any;
+        expect(compositeAlarm.Properties?.AlarmDescription).toContain('error rate detected');
+        expect(compositeAlarm.Properties?.AlarmDescription).not.toContain('latency');
+      });
     });
 
     describe('DashboardsConstruct', () => {
@@ -581,18 +640,22 @@ describe('TapStack Unit Tests', () => {
         const template = Template.fromStack(apiStack);
         const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
         const dashboard = Object.values(dashboards)[0] as any;
-        // Should become 'branchmain' after sanitization
+        // Should extract 'main' as default value from bash variable, then use unique suffix
         expect(dashboard?.Properties?.DashboardName).toContain(
-          'tapstack-branchmain'
+          'tapstack-main-default'
         );
       });
 
       test('should create metrics, dashboard, and alarms correctly', () => {
-        const app = new cdk.App();
-        const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi', {
-          apiGatewayName: 'custom-api',
-        });
-        const template = Template.fromStack(apiStack);
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        process.env.ENVIRONMENT_SUFFIX = 'dev';
+
+        try {
+          const app = new cdk.App();
+          const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi', {
+            apiGatewayName: 'custom-api',
+          });
+          const template = Template.fromStack(apiStack);
 
         // Verify metrics are created (they're referenced in alarms and dashboard)
         const alarms = template.findResources('AWS::CloudWatch::Alarm');
@@ -611,12 +674,10 @@ describe('TapStack Unit Tests', () => {
           expect(alarm.Properties?.AlarmDescription).toBeDefined();
         });
 
-        // Verify specific alarm names and thresholds
+        // Verify specific alarm names and thresholds (with unique suffix)
         const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
-        expect(alarmNames).toContain('api-gateway-latency-high-tapstack-dev');
-        expect(alarmNames).toContain(
-          'api-gateway-error-rate-high-tapstack-dev'
-        );
+        expect(alarmNames.some(name => name?.startsWith('api-gateway-latency-high-tapstack-dev-'))).toBe(true);
+        expect(alarmNames.some(name => name?.startsWith('api-gateway-error-rate-high-tapstack-dev-'))).toBe(true);
 
         const latencyAlarm = alarmResources.find(a =>
           a.Properties?.AlarmName?.includes('latency')
@@ -627,6 +688,13 @@ describe('TapStack Unit Tests', () => {
 
         expect(latencyAlarm?.Properties?.Threshold).toBe(500);
         expect(errorAlarm?.Properties?.Threshold).toBe(1);
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
       });
     });
 
@@ -725,20 +793,24 @@ describe('TapStack Unit Tests', () => {
         const template = Template.fromStack(rdsStack);
         const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
         const dashboard = Object.values(dashboards)[0] as any;
-        // Should become 'envprod' after sanitization
+        // Should extract 'prod' as default value from bash variable, then use unique suffix
         expect(dashboard?.Properties?.DashboardName).toContain(
-          'tapstack-envprod'
+          'tapstack-prod-default'
         );
       });
 
       test('should create all metrics, dashboard, and alarms correctly', () => {
-        const app = new cdk.App();
-        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
-          dbIdentifier: 'my-db',
-          ecsServiceName: 'my-service',
-          clusterName: 'my-cluster',
-        });
-        const template = Template.fromStack(rdsStack);
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        process.env.ENVIRONMENT_SUFFIX = 'dev';
+
+        try {
+          const app = new cdk.App();
+          const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
+            dbIdentifier: 'my-db',
+            ecsServiceName: 'my-service',
+            clusterName: 'my-cluster',
+          });
+          const template = Template.fromStack(rdsStack);
 
         // Verify alarms are created
         const alarms = template.findResources('AWS::CloudWatch::Alarm');
@@ -751,8 +823,8 @@ describe('TapStack Unit Tests', () => {
         // Verify alarm properties and names
         const alarmResources = Object.values(alarms) as any[];
         const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
-        expect(alarmNames).toContain('ecs-cpu-utilization-high-tapstack-dev');
-        expect(alarmNames).toContain('rds-db-connections-high-tapstack-dev');
+        expect(alarmNames.some(name => name?.startsWith('ecs-cpu-utilization-high-tapstack-dev-'))).toBe(true);
+        expect(alarmNames.some(name => name?.startsWith('rds-db-connections-high-tapstack-dev-'))).toBe(true);
 
         // Verify alarm thresholds
         alarmResources.forEach(alarm => {
@@ -771,6 +843,13 @@ describe('TapStack Unit Tests', () => {
 
         expect(cpuAlarm?.Properties?.Threshold).toBe(80);
         expect(dbAlarm?.Properties?.Threshold).toBe(100);
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
       });
     });
 
@@ -793,11 +872,11 @@ describe('TapStack Unit Tests', () => {
           const topicNames = Object.values(topics).map(
             (t: any) => t.Properties?.TopicName
           );
-          // The sanitization should convert ${TOPIC_ENV:-staging} to 'topicenvstaging'
-          // So topic names should include 'tapstack-topicenvstaging'
+          // The sanitization extracts 'staging' as default value from bash variable ${TOPIC_ENV:-staging}
+          // So topic names should include 'tapstack-staging-default'
           expect(
             topicNames.some(
-              name => name && name.includes('tapstack-topicenvstaging')
+              name => name && name.includes('tapstack-staging-default')
             )
           ).toBe(true);
         } finally {
