@@ -106,8 +106,12 @@ class TapStack(pulumi.ComponentResource):
 
         # Register outputs
         self.register_outputs({
-            'api_endpoint': self.api_gateway.execution_arn.apply(
-                lambda arn: f"https://{self.api_gateway.id}.execute-api.{self.region}.amazonaws.com/{self.stage_name}"
+            'api_endpoint': pulumi.Output.all(
+                self.api_gateway.id,
+                self.region,
+                self.stage_name
+            ).apply(
+                lambda args: f"https://{args[0]}.execute-api.{args[1]}.amazonaws.com/{args[2]}"
             ),
             'dashboard_url': self.dashboard.dashboard_name.apply(
                 lambda name: (
@@ -119,6 +123,9 @@ class TapStack(pulumi.ComponentResource):
             'transaction_table_name': self.transaction_table.name,
             'queue_url': self.transaction_queue.url,
             'sns_topic_arn': self.fraud_alert_topic.arn,
+            'validation_lambda_arn': self.validation_lambda.arn,
+            'fraud_detection_lambda_arn': self.fraud_detection_lambda.arn,
+            'failed_transaction_lambda_arn': self.failed_transaction_lambda.arn,
         })
 
     def _create_kms_key(self):
