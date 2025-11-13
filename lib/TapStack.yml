@@ -218,7 +218,9 @@ Resources:
               StringEquals:
                 'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
               StringLike:
-                'kms:EncryptionContext:aws:s3:arn': !Sub 'arn:aws:s3:::${ProjectName}-data-*'
+                'kms:EncryptionContext:aws:s3:arn':
+                  - !Sub 'arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}'
+                  - !Sub 'arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}/*'
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:

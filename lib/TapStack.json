@@ -293,9 +293,14 @@
                                     }
                                 },
                                 "StringLike": {
-                                    "kms:EncryptionContext:aws:s3:arn": {
-                                        "Fn::Sub": "arn:aws:s3:::${ProjectName}-data-*"
-                                    }
+                                    "kms:EncryptionContext:aws:s3:arn": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}/*"
+                                        }
+                                    ]
                                 }
                             }
                         },
