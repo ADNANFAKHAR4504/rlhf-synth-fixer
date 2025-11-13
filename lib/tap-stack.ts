@@ -4,7 +4,6 @@ import * as rds from 'aws-cdk-lib/aws-rds';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as cloudwatchActions from 'aws-cdk-lib/aws-cloudwatch-actions';
 import * as sns from 'aws-cdk-lib/aws-sns';
@@ -25,8 +24,6 @@ export class PrimaryStack extends cdk.Stack {
   public readonly vpcId: cdk.CfnOutput;
   public readonly vpcCidr: cdk.CfnOutput;
   public readonly globalDatabaseId: cdk.CfnOutput;
-  public readonly hostedZoneId: cdk.CfnOutput;
-  public readonly hostedZoneName: cdk.CfnOutput;
   public readonly lambdaUrl: cdk.CfnOutput;
   public readonly bucketArn: cdk.CfnOutput;
 
@@ -93,12 +90,12 @@ export class PrimaryStack extends cdk.Stack {
       `AuroraCluster-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_15_4,
+          version: rds.AuroraPostgresEngineVersion.VER_15_12,
         }),
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
             ec2.InstanceClass.T3,
-            ec2.InstanceSize.SMALL
+            ec2.InstanceSize.MEDIUM
           ),
         }),
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -147,9 +144,6 @@ def handler(event, context):
     const lambdaUrl = paymentLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
-
-    // Extract Lambda URL domain for health check
-    const lambdaUrlDomain = lambdaUrl.url.replace('https://', '').split('/')[0];
 
     // 🔹 DynamoDB Global Table
     const sessionTable = new dynamodb.Table(
@@ -213,47 +207,6 @@ def handler(event, context):
       })
     );
 
-    // 🔹 Route 53 Hosted Zone
-    const hostedZone = new route53.HostedZone(
-      this,
-      `HostedZone-${environmentSuffix}`,
-      {
-        zoneName: props.config.domainName,
-      }
-    );
-
-    // 🔹 Route 53 Health Check for Primary Region
-    const healthCheck = new route53.CfnHealthCheck(
-      this,
-      `PrimaryHealthCheck-${environmentSuffix}`,
-      {
-        healthCheckConfig: {
-          type: 'HTTPS',
-          resourcePath: '/',
-          fullyQualifiedDomainName: lambdaUrlDomain,
-          port: 443,
-          requestInterval: 30,
-          failureThreshold: 3,
-        },
-      }
-    );
-
-    // 🔹 Route 53 Primary Failover Record
-    new route53.CfnRecordSet(
-      this,
-      `PrimaryFailoverRecord-${environmentSuffix}`,
-      {
-        hostedZoneId: hostedZone.hostedZoneId,
-        name: props.config.domainName,
-        type: 'CNAME',
-        setIdentifier: 'primary',
-        failover: 'PRIMARY',
-        healthCheckId: healthCheck.attrHealthCheckId,
-        resourceRecords: [lambdaUrlDomain],
-        ttl: '60',
-      }
-    );
-
     // 🔹 SNS Topic
     const alertTopic = new sns.Topic(this, `AlertTopic-${environmentSuffix}`, {
       displayName: 'Payment DR Alerts',
@@ -288,23 +241,36 @@ def handler(event, context):
     }).addAlarmAction(new cloudwatchActions.SnsAction(alertTopic));
 
     // 🔹 AWS Backup
+    const primaryBackupVault = new backup.BackupVault(
+      this,
+      `PrimaryBackupVault-${environmentSuffix}`,
+      {
+        backupVaultName: `payment-dr-primary-vault-${environmentSuffix}`,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    const secondaryBackupVault = new backup.BackupVault(
+      this,
+      `SecondaryBackupVault-${environmentSuffix}`,
+      {
+        backupVaultName: `payment-dr-secondary-vault-${environmentSuffix}`,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
     const backupPlan = new backup.BackupPlan(
       this,
       `BackupPlan-${environmentSuffix}`,
       {
+        backupVault: primaryBackupVault,
         backupPlanRules: [
           new backup.BackupPlanRule({
             ruleName: `DailyBackup-${environmentSuffix}`,
             deleteAfter: cdk.Duration.days(7),
             copyActions: [
               {
-                destinationBackupVault: new backup.BackupVault(
-                  this,
-                  `SecondaryBackupVault-${environmentSuffix}`,
-                  {
-                    backupVaultName: `secondary-region-vault-${environmentSuffix}`,
-                  }
-                ),
+                destinationBackupVault: secondaryBackupVault,
                 moveToColdStorageAfter: cdk.Duration.days(1),
               },
             ],
@@ -329,14 +295,6 @@ def handler(event, context):
     this.globalDatabaseId = new cdk.CfnOutput(this, 'GlobalDatabaseId', {
       value: cluster.clusterIdentifier,
       exportName: `${this.stackName}-GlobalDatabaseId`,
-    });
-    this.hostedZoneId = new cdk.CfnOutput(this, 'HostedZoneId', {
-      value: hostedZone.hostedZoneId,
-      exportName: `${this.stackName}-HostedZoneId`,
-    });
-    this.hostedZoneName = new cdk.CfnOutput(this, 'HostedZoneName', {
-      value: hostedZone.zoneName,
-      exportName: `${this.stackName}-HostedZoneName`,
     });
     this.lambdaUrl = new cdk.CfnOutput(this, 'LambdaUrl', {
       value: lambdaUrl.url,
@@ -366,8 +324,6 @@ export class SecondaryStack extends cdk.Stack {
       primaryVpcId: cdk.CfnOutput;
       primaryVpcCidr: cdk.CfnOutput;
       globalDatabaseId: cdk.CfnOutput;
-      hostedZoneId: cdk.CfnOutput;
-      hostedZoneName: cdk.CfnOutput;
       primaryLambdaUrl: cdk.CfnOutput;
       primaryBucketArn: cdk.CfnOutput;
     }
@@ -426,12 +382,12 @@ export class SecondaryStack extends cdk.Stack {
       `SecondaryCluster-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_15_4,
+          version: rds.AuroraPostgresEngineVersion.VER_15_12,
         }),
         writer: rds.ClusterInstance.provisioned('writer', {
           instanceType: ec2.InstanceType.of(
             ec2.InstanceClass.T3,
-            ec2.InstanceSize.SMALL
+            ec2.InstanceSize.MEDIUM
           ),
         }),
         vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
@@ -477,12 +433,9 @@ def handler(event, context):
       })
     );
 
-    const lambdaUrl = paymentLambda.addFunctionUrl({
+    paymentLambda.addFunctionUrl({
       authType: lambda.FunctionUrlAuthType.NONE,
     });
-
-    // Extract Lambda URL domain for health check
-    const lambdaUrlDomain = lambdaUrl.url.replace('https://', '').split('/')[0];
 
     // 🔹 DynamoDB Global Table (replicated from primary)
     const sessionTable = new dynamodb.Table(
@@ -522,48 +475,6 @@ def handler(event, context):
         versioned: true,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: false,
-      }
-    );
-
-    // 🔹 Route 53 Health Check for Secondary Region
-    const secondaryHealthCheck = new route53.CfnHealthCheck(
-      this,
-      `SecondaryHealthCheck-${environmentSuffix}`,
-      {
-        healthCheckConfig: {
-          type: 'HTTPS',
-          resourcePath: '/',
-          fullyQualifiedDomainName: lambdaUrlDomain,
-          port: 443,
-          requestInterval: 30,
-          failureThreshold: 3,
-        },
-      }
-    );
-
-    // 🔹 Route 53 Failover Records
-    const hostedZone = route53.HostedZone.fromHostedZoneAttributes(
-      this,
-      'HostedZone',
-      {
-        hostedZoneId: props.hostedZoneId.importValue,
-        zoneName: props.hostedZoneName.importValue,
-      }
-    );
-
-    // 🔹 Route 53 Secondary Failover Record
-    new route53.CfnRecordSet(
-      this,
-      `SecondaryFailoverRecord-${environmentSuffix}`,
-      {
-        hostedZoneId: hostedZone.hostedZoneId,
-        name: props.config.domainName,
-        type: 'CNAME',
-        setIdentifier: 'secondary',
-        failover: 'SECONDARY',
-        healthCheckId: secondaryHealthCheck.attrHealthCheckId,
-        resourceRecords: [lambdaUrlDomain],
-        ttl: '60',
       }
     );
 

@@ -23,8 +23,14 @@ const secondaryRegion =
 
 // 🔹 Shared Configuration
 const sharedConfig: SharedConfig = {
-  domainName: 'payments.example.com',
-  alertEmail: 'ops-team@example.com',
+  domainName:
+    app.node.tryGetContext('domainName') ||
+    process.env.DOMAIN_NAME ||
+    `payment-dr-${environmentSuffix}.example.com`,
+  alertEmail:
+    app.node.tryGetContext('alertEmail') ||
+    process.env.ALERT_EMAIL ||
+    'ops-team@example.com',
   tags: {
     Environment: 'Production',
     'DR-Tier': 'Critical',
@@ -65,8 +71,6 @@ const secondaryStack = new SecondaryStack(app, `${stackName}-Secondary`, {
   primaryVpcId: primaryStack.vpcId,
   primaryVpcCidr: primaryStack.vpcCidr,
   globalDatabaseId: primaryStack.globalDatabaseId,
-  hostedZoneId: primaryStack.hostedZoneId,
-  hostedZoneName: primaryStack.hostedZoneName,
   primaryLambdaUrl: primaryStack.lambdaUrl,
   primaryBucketArn: primaryStack.bucketArn,
 });
