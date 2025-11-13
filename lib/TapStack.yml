@@ -1688,17 +1688,22 @@ Resources:
           - Sid: AllowALBAccessLogs
             Effect: Allow
             Principal:
-              Service: 'delivery.logs.amazonaws.com'
+              Service:
+                - 'delivery.logs.amazonaws.com'
+                - 'logdelivery.elasticloadbalancing.amazonaws.com'
             Action:
               - 's3:PutObject'
             Resource: !Sub '${ALBAccessLogsBucket.Arn}/*'
             Condition:
               StringEquals:
                 's3:x-amz-acl': 'bucket-owner-full-control'
+                'aws:SourceAccount': !Ref AWS::AccountId
           - Sid: AllowALBBucketCheck
             Effect: Allow
             Principal:
-              Service: 'delivery.logs.amazonaws.com'
+              Service:
+                - 'delivery.logs.amazonaws.com'
+                - 'logdelivery.elasticloadbalancing.amazonaws.com'
             Action:
               - 's3:GetBucketAcl'
               - 's3:PutBucketAcl'
