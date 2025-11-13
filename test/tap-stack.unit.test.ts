@@ -13,6 +13,9 @@ describe('TapStack', () => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', { environmentSuffix });
     template = Template.fromStack(stack);
+
+    // Synthesize the app to ensure all stacks are created
+    app.synth();
   });
 
   describe('Disaster Recovery Solution Tests', () => {
@@ -20,10 +23,12 @@ describe('TapStack', () => {
       expect(template).toBeDefined();
     });
 
-    test('Stack creates nested stacks for multi-region deployment', () => {
-      // Verify nested stacks are created
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      expect(Object.keys(nestedStacks).length).toBeGreaterThan(0);
+    test('TapStack creates multiple child stacks for multi-region deployment', () => {
+      // Verify child stacks are created within the TapStack
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      expect(childStacks.length).toBeGreaterThan(1);
     });
 
     test('Environment suffix is properly passed to resources', () => {
@@ -35,52 +40,82 @@ describe('TapStack', () => {
 
   describe('Component Stack Integration', () => {
     test('Creates KMS stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const kmsStacks = Object.keys(nestedStacks).filter((key) => key.includes('Kms'));
-      expect(kmsStacks.length).toBeGreaterThanOrEqual(1);
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const kmsStacks = childStacks.filter((s) =>
+        s.node.id.includes('Kms')
+      );
+      expect(kmsStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Network stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const networkStacks = Object.keys(nestedStacks).filter((key) => key.includes('Network'));
-      expect(networkStacks.length).toBeGreaterThanOrEqual(1);
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const networkStacks = childStacks.filter((s) =>
+        s.node.id.includes('Network')
+      );
+      expect(networkStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Database stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const databaseStacks = Object.keys(nestedStacks).filter((key) => key.includes('Database'));
-      expect(databaseStacks.length).toBeGreaterThanOrEqual(1);
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const databaseStacks = childStacks.filter((s) =>
+        s.node.id.includes('Database')
+      );
+      expect(databaseStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Storage stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const storageStacks = Object.keys(nestedStacks).filter((key) => key.includes('Storage'));
-      expect(storageStacks.length).toBeGreaterThanOrEqual(1);
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const storageStacks = childStacks.filter((s) =>
+        s.node.id.includes('Storage')
+      );
+      expect(storageStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Compute stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const computeStacks = Object.keys(nestedStacks).filter((key) => key.includes('Compute'));
-      expect(computeStacks.length).toBeGreaterThanOrEqual(1);
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const computeStacks = childStacks.filter((s) =>
+        s.node.id.includes('Compute')
+      );
+      expect(computeStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Monitoring stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const monitoringStacks = Object.keys(nestedStacks).filter((key) =>
-        key.includes('Monitoring')
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
       );
-      expect(monitoringStacks.length).toBeGreaterThanOrEqual(1);
+      const monitoringStacks = childStacks.filter((s) =>
+        s.node.id.includes('Monitoring')
+      );
+      expect(monitoringStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Backup stacks for both regions', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const backupStacks = Object.keys(nestedStacks).filter((key) => key.includes('Backup'));
-      expect(backupStacks.length).toBeGreaterThanOrEqual(1);
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const backupStacks = childStacks.filter((s) =>
+        s.node.id.includes('Backup')
+      );
+      expect(backupStacks.length).toBeGreaterThanOrEqual(2);
     });
 
     test('Creates Failover stack', () => {
-      const nestedStacks = template.findResources('AWS::CloudFormation::Stack');
-      const failoverStacks = Object.keys(nestedStacks).filter((key) => key.includes('Failover'));
+      const childStacks = stack.node.children.filter(
+        (child) => child instanceof cdk.Stack
+      );
+      const failoverStacks = childStacks.filter((s) =>
+        s.node.id.includes('Failover')
+      );
       expect(failoverStacks.length).toBeGreaterThanOrEqual(1);
     });
   });

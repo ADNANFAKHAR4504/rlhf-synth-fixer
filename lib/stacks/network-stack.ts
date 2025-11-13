@@ -4,6 +4,7 @@ import { Construct } from 'constructs';
 
 interface NetworkStackProps extends cdk.StackProps {
   environmentSuffix: string;
+  createVpcEndpoints?: boolean;
 }
 
 export class NetworkStack extends cdk.Stack {
@@ -12,7 +13,7 @@ export class NetworkStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: NetworkStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix } = props;
+    const { environmentSuffix, createVpcEndpoints = false } = props;
 
     this.vpc = new ec2.Vpc(this, `VPC-${environmentSuffix}`, {
       vpcName: `dr-vpc-${environmentSuffix}-${this.region}`,
@@ -32,25 +33,29 @@ export class NetworkStack extends cdk.Stack {
       ],
     });
 
-    this.vpc.addGatewayEndpoint(`S3Endpoint-${environmentSuffix}`, {
-      service: ec2.GatewayVpcEndpointAwsService.S3,
-    });
+    // VPC endpoints are optional to avoid hitting AWS service limits
+    // In production, these should be created separately or limits should be increased
+    if (createVpcEndpoints) {
+      this.vpc.addGatewayEndpoint(`S3Endpoint-${environmentSuffix}`, {
+        service: ec2.GatewayVpcEndpointAwsService.S3,
+      });
 
-    this.vpc.addGatewayEndpoint(`DynamoDBEndpoint-${environmentSuffix}`, {
-      service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
-    });
+      this.vpc.addGatewayEndpoint(`DynamoDBEndpoint-${environmentSuffix}`, {
+        service: ec2.GatewayVpcEndpointAwsService.DYNAMODB,
+      });
 
-    this.vpc.addInterfaceEndpoint(`ECREndpoint-${environmentSuffix}`, {
-      service: ec2.InterfaceVpcEndpointAwsService.ECR,
-    });
+      this.vpc.addInterfaceEndpoint(`ECREndpoint-${environmentSuffix}`, {
+        service: ec2.InterfaceVpcEndpointAwsService.ECR,
+      });
 
-    this.vpc.addInterfaceEndpoint(`ECRDockerEndpoint-${environmentSuffix}`, {
-      service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
-    });
+      this.vpc.addInterfaceEndpoint(`ECRDockerEndpoint-${environmentSuffix}`, {
+        service: ec2.InterfaceVpcEndpointAwsService.ECR_DOCKER,
+      });
 
-    this.vpc.addInterfaceEndpoint(`LogsEndpoint-${environmentSuffix}`, {
-      service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
-    });
+      this.vpc.addInterfaceEndpoint(`LogsEndpoint-${environmentSuffix}`, {
+        service: ec2.InterfaceVpcEndpointAwsService.CLOUDWATCH_LOGS,
+      });
+    }
 
     cdk.Tags.of(this.vpc).add('Name', `dr-vpc-${environmentSuffix}`);
     cdk.Tags.of(this.vpc).add('Environment', environmentSuffix);
