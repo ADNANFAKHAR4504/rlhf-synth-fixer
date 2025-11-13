@@ -96,7 +96,6 @@ export class TapStack extends TerraformStack {
       environmentVariables: {
         SNS_TOPIC_ARN: snsModule.topic.arn,
         BUCKET_NAME: tempBucketName,
-        STATE_MACHINE_ARN: 'PLACEHOLDER', // Will be updated
       },
       iamStatements: [
         // These will be updated after S3 creation
@@ -146,6 +145,23 @@ export class TapStack extends TerraformStack {
       principal: 's3.amazonaws.com',
       sourceArn: s3Module.bucket.arn,
     });
+
+    // After Step Functions creation, use SSM Parameter Store to store the ARN:
+    const ssmParameter = new aws.ssmParameter.SsmParameter(
+      this,
+      'state-machine-arn-param',
+      {
+        name: '/etl-pipeline/state-machine-arn',
+        type: 'String',
+        value: stepFunctions.stateMachine.arn,
+      }
+    );
+
+    // Update Lambda environment to reference SSM parameter name instead:
+    validationLambda.function.addOverride(
+      'environment.variables.STATE_MACHINE_PARAM_NAME',
+      ssmParameter.name
+    );
 
     // After creating resources, update environment variables properly
     validationLambda.function.addOverride(
@@ -197,6 +213,10 @@ export class TapStack extends TerraformStack {
             {
               actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
               resources: [validationLambda.dlq.arn],
+            },
+            {
+              actions: ['ssm:GetParameter'],
+              resources: [ssmParameter.arn],
             },
           ],
         }
