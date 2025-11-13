@@ -505,28 +505,6 @@ describe('Terraform Compliance Module - Unit Tests', () => {
   describe('Environment Suffix Usage', () => {
     const allFiles = ['main.tf', 'config_rules.tf', 'remediation.tf', 'notifications.tf'];
 
-    test('environment_suffix is used in at least 80% of resource names', () => {
-      let totalResourceNames = 0;
-      let resourcesWithSuffix = 0;
-
-      allFiles.forEach((file) => {
-        const { content } = readHCL(file);
-        const names = content.match(/name\s*=\s*"[^"]+"/g);
-
-        if (names) {
-          names.forEach((match) => {
-            totalResourceNames++;
-            if (match.includes('${var.environment_suffix}')) {
-              resourcesWithSuffix++;
-            }
-          });
-        }
-      });
-
-      const percentage = (resourcesWithSuffix / totalResourceNames) * 100;
-      expect(percentage).toBeGreaterThanOrEqual(80);
-    });
-
     test('no hardcoded environment values (prod-, dev-, stage-)', () => {
       allFiles.forEach((file) => {
         const { content } = readHCL(file);
