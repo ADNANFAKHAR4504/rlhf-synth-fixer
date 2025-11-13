@@ -8,10 +8,10 @@
 const fs = require('fs');
 const path = require('path');
 
-let template;
+let template: any;
 
 beforeAll(() => {
-  const templatePath = path.join(__dirname, '..', 'lib', 'template.json');
+  const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
   const templateContent = fs.readFileSync(templatePath, 'utf8');
   template = JSON.parse(templateContent);
 });
@@ -351,7 +351,7 @@ describe('Optimization 6: Function Modernization (Fn::Sub)', () => {
 
       // Check various name properties
       const nameKeys = ['ManagedPolicyName', 'RoleName', 'GroupName', 'DBSubnetGroupName',
-                        'DBInstanceIdentifier', 'TableName', 'FunctionName', 'LogGroupName'];
+        'DBInstanceIdentifier', 'TableName', 'FunctionName', 'LogGroupName'];
 
       nameKeys.forEach(key => {
         if (props && props[key] && props[key]['Fn::Sub']) {
@@ -374,7 +374,7 @@ describe('Optimization 6: Function Modernization (Fn::Sub)', () => {
       if (!props) return;
 
       const nameKeys = ['ManagedPolicyName', 'RoleName', 'GroupName', 'DBSubnetGroupName',
-                        'DBInstanceIdentifier', 'TableName', 'FunctionName', 'LogGroupName'];
+        'DBInstanceIdentifier', 'TableName', 'FunctionName', 'LogGroupName'];
 
       nameKeys.forEach(key => {
         if (props[key] && props[key]['Fn::Sub']) {
