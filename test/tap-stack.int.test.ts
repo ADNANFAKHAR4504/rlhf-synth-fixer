@@ -330,7 +330,7 @@ describe('TAP Stack Integration Tests', () => {
       const response = await iam.listRoles({}).promise();
 
       const executionRole = response.Roles.find(r =>
-        r.RoleName.includes(`task-execution-role-${environmentSuffix}`)
+        r.RoleName.includes(`ecs-task-execution-role-${environmentSuffix}`)
       );
 
       expect(executionRole).toBeDefined();
