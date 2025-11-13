@@ -12,14 +12,17 @@ if [ ! -f "metadata.json" ]; then
 fi
 
 # Read and validate metadata
-PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
-LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
-PO_ID=$(jq -r '.po_id // empty' metadata.json)
-TEAM=$(jq -r '.team // "unknown"' metadata.json)
-STARTED_AT=$(jq -r '.startedAt // "unknown"' metadata.json)
-COMPLEXITY=$(jq -r '.complexity // "unknown"' metadata.json)
-SUBTASK=$(jq -r '.subtask // empty' metadata.json)
-SUBJECT_LABELS=$(jq -c '.subject_labels // empty' metadata.json)
+eval "$(jq -r '@sh "
+  PLATFORM=\(.platform // "unknown")
+  LANGUAGE=\(.language // "unknown")
+  PO_ID=\(.po_id // "")
+  TEAM=\(.team // "unknown")
+  STARTED_AT=\(.startedAt // "unknown")
+  COMPLEXITY=\(.complexity // "unknown")
+  SUBTASK=\(.subtask // "")
+  TURN_TYPE=\(.turn_type // "")
+  SUBJECT_LABELS=\(.subject_labels // [] | tojson)
+  SUBJECT_LABELS_LENGTH=\(.subject_labels // [] | length)"' metadata.json)"
 
 echo "Detected metadata:"
 echo "  Platform: $PLATFORM"
@@ -29,46 +32,46 @@ echo "  Team: $TEAM"
 echo "  Started At: $STARTED_AT"
 echo "  Complexity: $COMPLEXITY"
 echo "  Subtask: $SUBTASK"
+echo "  Turn Type: $TURN_TYPE"
 echo "  Subject Labels: $SUBJECT_LABELS"
 
-# Validation checks
-ERROR_COUNT=0
+# Validation function for cleaner error handling
+validate_required_field() {
+  # shellcheck disable=SC2034
+  local field_name="$1"
+  local field_value="$2"
+  local error_msg="$3"
 
-# If team or started_at is unknown, fail the job
-if [ "$TEAM" == "unknown" ] || [ "$STARTED_AT" == "unknown" ]; then
-  echo "❌ Missing required metadata: team or started_at"
-  ((ERROR_COUNT++))
-fi
-
-# If PO_ID is empty, raise error
-if [ -z "$PO_ID" ]; then
-  echo "❌ PO_ID is required but not found in metadata.json"
-  ((ERROR_COUNT++))
-fi
-
-# If complexity is unknown, raise error
-if [ "$COMPLEXITY" == "unknown" ]; then
-  echo "❌ Complexity is required but not found in metadata.json"
-  ((ERROR_COUNT++))
-fi
-
-# If subtask is empty, raise error
-if [ -z "$SUBTASK" ]; then
-  echo "❌ Subtask is required but not found in metadata.json"
-  ((ERROR_COUNT++))
-fi
-
-# If subject_labels is empty or not an array, raise error
-if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" == "null" ]; then
-  echo "❌ subject_labels is required but not found in metadata.json"
-  ((ERROR_COUNT++))
-else
-  # Check if subject_labels is a non-empty array
-  SUBJECT_LABELS_LENGTH=$(jq -r '.subject_labels | length' metadata.json 2>/dev/null || echo "0")
-  if [ "$SUBJECT_LABELS_LENGTH" == "0" ] || [ "$SUBJECT_LABELS_LENGTH" == "null" ]; then
-    echo "❌ subject_labels must be a non-empty array in metadata.json"
-    ((ERROR_COUNT++))
+  if [ -z "$field_value" ] || [ "$field_value" == "unknown" ] || [ "$field_value" == "null" ]; then
+    echo "❌ $error_msg"
+    return 1
   fi
+  return 0
+}
+
+# Validation checks
+ERRORS=()
+
+# Validate required fields
+validate_required_field "team" "$TEAM" "Team is required but not found in metadata.json" || ERRORS+=("team")
+validate_required_field "started_at" "$STARTED_AT" "Started At is required but not found in metadata.json" || ERRORS+=("started_at")
+validate_required_field "po_id" "$PO_ID" "PO_ID is required but not found in metadata.json" || ERRORS+=("po_id")
+validate_required_field "complexity" "$COMPLEXITY" "Complexity is required but not found in metadata.json" || ERRORS+=("complexity")
+validate_required_field "subtask" "$SUBTASK" "Subtask is required but not found in metadata.json" || ERRORS+=("subtask")
+
+# Validate type_type field (must be "single" or "multi")
+if [ -z "$TURN_TYPE" ]; then
+  echo "❌ type_type is required but not found in metadata.json"
+  ERRORS+=("type_type")
+elif [ "$TURN_TYPE" != "single" ] && [ "$TURN_TYPE" != "multi" ]; then
+  echo "❌ type_type must be either 'single' or 'multi', found: '$TURN_TYPE'"
+  ERRORS+=("type_type")
+fi
+
+# Validate subject_labels array
+if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" == "null" ] || [ "$SUBJECT_LABELS" == "[]" ] || [ "$SUBJECT_LABELS_LENGTH" == "0" ]; then
+  echo "❌ subject_labels must be a non-empty array in metadata.json"
+  ERRORS+=("subject_labels")
 fi
 
 # Synthetic task specific validations (only for team="synth")
@@ -76,37 +79,30 @@ if [ "$TEAM" == "synth" ]; then
   echo "🔍 Detected synthetic task, performing additional validations..."
   
   # Check for required documentation files
-  echo "🔍 Checking for required documentation files..."
-  
-  if [ ! -f "lib/PROMPT.md" ]; then
-    echo "❌ lib/PROMPT.md not found"
-    ((ERROR_COUNT++))
-  fi
-  
-  if [ ! -f "lib/MODEL_RESPONSE.md" ]; then
-    echo "❌ lib/MODEL_RESPONSE.md not found"
-    ((ERROR_COUNT++))
-  fi
-  
-  # Additional documentation files that may be required by some workflows
-  if [ -f "lib/IDEAL_RESPONSE.md" ]; then
-    echo "✅ lib/IDEAL_RESPONSE.md found"
-  else
-    echo "ℹ️ lib/IDEAL_RESPONSE.md not found (may not be required for all workflows)"
-  fi
-  
-  if [ -f "lib/MODEL_FAILURES.md" ]; then
-    echo "✅ lib/MODEL_FAILURES.md found"
-  else
-    echo "ℹ️ lib/MODEL_FAILURES.md not found (may not be required for all workflows)"
-  fi
+  REQUIRED_DOCS=("lib/PROMPT.md" "lib/MODEL_RESPONSE.md")
+  for doc in "${REQUIRED_DOCS[@]}"; do
+    if [ ! -f "$doc" ]; then
+      echo "❌ $doc not found"
+      ERRORS+=("$doc")
+    fi
+  done
+
+  # Optional documentation files
+  OPTIONAL_DOCS=("lib/IDEAL_RESPONSE.md" "lib/MODEL_FAILURES.md")
+  for doc in "${OPTIONAL_DOCS[@]}"; do
+    if [ -f "$doc" ]; then
+      echo "✅ $doc found"
+    else
+      echo "ℹ️ $doc not found (may not be required for all workflows)"
+    fi
+  done
 else
   echo "ℹ️ Non-synthetic task detected (team=$TEAM), skipping background and documentation file checks"
 fi
 
 # Exit with error if any validation failed
-if [ $ERROR_COUNT -gt 0 ]; then
-  echo "❌ Metadata validation failed with $ERROR_COUNT errors"
+if [ ${#ERRORS[@]} -gt 0 ]; then
+  echo "❌ Metadata validation failed with ${#ERRORS[@]} error(s)"
   exit 1
 fi
 
