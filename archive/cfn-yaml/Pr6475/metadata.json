@@ -29,5 +29,10 @@
     "Internet Gateway",
     "DynamoDB"
   ],
-  "training_quality": 8.5
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
