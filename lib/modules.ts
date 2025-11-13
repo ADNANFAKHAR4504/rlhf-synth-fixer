@@ -96,21 +96,25 @@ export class NetworkModule extends Construct {
     });
 
     // Create inline policy for VPC Flow Logs instead of attaching non-existent managed policy
-    const flowLogsPolicyDocument = new DataAwsIamPolicyDocument(this, 'vpc-flow-logs-policy-doc', {
-      statement: [
-        {
-          effect: 'Allow',
-          actions: [
-            'logs:CreateLogGroup',
-            'logs:CreateLogStream',
-            'logs:PutLogEvents',
-            'logs:DescribeLogGroups',
-            'logs:DescribeLogStreams',
-          ],
-          resources: ['*'],
-        },
-      ],
-    });
+    const flowLogsPolicyDocument = new DataAwsIamPolicyDocument(
+      this,
+      'vpc-flow-logs-policy-doc',
+      {
+        statement: [
+          {
+            effect: 'Allow',
+            actions: [
+              'logs:CreateLogGroup',
+              'logs:CreateLogStream',
+              'logs:PutLogEvents',
+              'logs:DescribeLogGroups',
+              'logs:DescribeLogStreams',
+            ],
+            resources: ['*'],
+          },
+        ],
+      }
+    );
 
     new IamPolicy(this, 'vpc-flow-logs-inline-policy', {
       name: `${config.tags.Environment}-vpc-flow-logs-policy`,
@@ -125,11 +129,15 @@ export class NetworkModule extends Construct {
       }).arn,
     });
 
-    const vpcFlowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'vpc-flow-logs', {
-      name: `/aws/vpc/flowlogs/${config.tags.Environment}`,
-      retentionInDays: 14,
-      tags: config.tags,
-    });
+    const vpcFlowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(
+      this,
+      'vpc-flow-logs',
+      {
+        name: `/aws/vpc/flowlogs/${config.tags.Environment}`,
+        retentionInDays: 14,
+        tags: config.tags,
+      }
+    );
 
     new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
       vpcId: this.vpc.id,
@@ -503,7 +511,8 @@ export class WorkloadRoleModule extends Construct {
 
 // Helper function to generate network policy YAML manifests
 export function generateNetworkPolicyManifests(namespaces: string[]): string {
-  const policies = namespaces.map(namespace => `---
+  const policies = namespaces.map(
+    namespace => `---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -538,7 +547,8 @@ spec:
     - protocol: TCP
       port: 443
     - protocol: TCP
-      port: 80`);
-  
+      port: 80`
+  );
+
   return policies.join('\n\n');
 }

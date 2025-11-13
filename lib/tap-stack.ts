@@ -164,23 +164,27 @@ export class TapStack extends TerraformStack {
     ];
 
     const nodeGroups: EksNodeGroup[] = [];
-    nodeGroupConfigs.forEach((config, index) => {
-      const nodeGroup = new EksNodeGroup(this, `node-group-${config.labels!.size}`, {
-        clusterName: eksCluster.name,
-        nodeGroupName: config.name,
-        nodeRoleArn: iamModule.eksNodeRole.arn,
-        subnetIds: networkModule.privateSubnets.map(subnet => subnet.id),
-        scalingConfig: {
-          minSize: config.minSize,
-          maxSize: config.maxSize,
-          desiredSize: config.desiredSize,
-        },
-        instanceTypes: config.instanceTypes,
-        diskSize: config.diskSize,
-        labels: config.labels,
-        tags: commonTags,
-        dependsOn: [eksCluster],
-      });
+    nodeGroupConfigs.forEach(config => {
+      const nodeGroup = new EksNodeGroup(
+        this,
+        `node-group-${config.labels!.size}`,
+        {
+          clusterName: eksCluster.name,
+          nodeGroupName: config.name,
+          nodeRoleArn: iamModule.eksNodeRole.arn,
+          subnetIds: networkModule.privateSubnets.map(subnet => subnet.id),
+          scalingConfig: {
+            minSize: config.minSize,
+            maxSize: config.maxSize,
+            desiredSize: config.desiredSize,
+          },
+          instanceTypes: config.instanceTypes,
+          diskSize: config.diskSize,
+          labels: config.labels,
+          tags: commonTags,
+          dependsOn: [eksCluster],
+        }
+      );
       nodeGroups.push(nodeGroup);
     });
 
@@ -271,13 +275,8 @@ export class TapStack extends TerraformStack {
         },
         {
           Effect: 'Allow',
-          Action: [
-            'ec2:CreateTags',
-          ],
-          Resource: [
-            'arn:aws:ec2:*:*:volume/*',
-            'arn:aws:ec2:*:*:snapshot/*',
-          ],
+          Action: ['ec2:CreateTags'],
+          Resource: ['arn:aws:ec2:*:*:volume/*', 'arn:aws:ec2:*:*:snapshot/*'],
           Condition: {
             StringEquals: {
               'ec2:CreateAction': ['CreateVolume', 'CreateSnapshot'],
@@ -286,19 +285,12 @@ export class TapStack extends TerraformStack {
         },
         {
           Effect: 'Allow',
-          Action: [
-            'ec2:DeleteTags',
-          ],
-          Resource: [
-            'arn:aws:ec2:*:*:volume/*',
-            'arn:aws:ec2:*:*:snapshot/*',
-          ],
+          Action: ['ec2:DeleteTags'],
+          Resource: ['arn:aws:ec2:*:*:volume/*', 'arn:aws:ec2:*:*:snapshot/*'],
         },
         {
           Effect: 'Allow',
-          Action: [
-            'ec2:CreateVolume',
-          ],
+          Action: ['ec2:CreateVolume'],
           Resource: '*',
           Condition: {
             StringLike: {
@@ -308,9 +300,7 @@ export class TapStack extends TerraformStack {
         },
         {
           Effect: 'Allow',
-          Action: [
-            'ec2:DeleteVolume',
-          ],
+          Action: ['ec2:DeleteVolume'],
           Resource: '*',
           Condition: {
             StringLike: {
@@ -320,9 +310,7 @@ export class TapStack extends TerraformStack {
         },
         {
           Effect: 'Allow',
-          Action: [
-            'ec2:DeleteSnapshot',
-          ],
+          Action: ['ec2:DeleteSnapshot'],
           Resource: '*',
           Condition: {
             StringLike: {
@@ -388,10 +376,7 @@ export class TapStack extends TerraformStack {
       Statement: [
         {
           Effect: 'Allow',
-          Action: [
-            'cloudfront:CreateInvalidation',
-            's3:GetObject',
-          ],
+          Action: ['cloudfront:CreateInvalidation', 's3:GetObject'],
           Resource: '*',
         },
       ],
