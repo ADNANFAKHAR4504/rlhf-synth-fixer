@@ -1,0 +1,21 @@
+{
+  "name": "failover-test",
+  "version": "1.0.0",
+  "description": "Lambda function to test failover readiness",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds": "^3.490.0",
+    "@aws-sdk/client-route-53": "^3.490.0",
+    "@aws-sdk/client-dynamodb": "^3.490.0",
+    "@aws-sdk/client-s3": "^3.490.0",
+    "@aws-sdk/client-cloudwatch": "^3.490.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.131",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

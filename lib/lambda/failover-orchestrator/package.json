@@ -1,0 +1,19 @@
+{
+  "name": "failover-orchestrator",
+  "version": "1.0.0",
+  "description": "Lambda function to orchestrate multi-region failover",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-rds": "^3.490.0",
+    "@aws-sdk/client-route-53": "^3.490.0",
+    "@aws-sdk/client-sns": "^3.490.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.131",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
