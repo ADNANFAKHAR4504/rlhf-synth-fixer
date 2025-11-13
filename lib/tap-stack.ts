@@ -487,10 +487,10 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secrets Manager Secrets
     const dbSecret = new aws.secretsmanager.Secret(
-      `db-credentials-${environmentSuffix}`,
+      `db-credentials-${environmentSuffix}-v1`,
       {
         description: 'Database connection credentials',
-        tags: { ...tags, Name: `db-credentials-${environmentSuffix}` },
+        tags: { ...tags, Name: `db-credentials-${environmentSuffix}-v1` },
       },
       { parent: this }
     );
@@ -510,10 +510,10 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const apiKeySecret = new aws.secretsmanager.Secret(
-      `api-keys-${environmentSuffix}`,
+      `api-keys-${environmentSuffix}-v1`,
       {
         description: 'Third-party API keys',
-        tags: { ...tags, Name: `api-keys-${environmentSuffix}` },
+        tags: { ...tags, Name: `api-keys-${environmentSuffix}-v1` },
       },
       { parent: this }
     );
@@ -531,10 +531,10 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const jwtSecret = new aws.secretsmanager.Secret(
-      `jwt-signing-key-${environmentSuffix}`,
+      `jwt-signing-key-${environmentSuffix}-v1`,
       {
         description: 'JWT signing key for authentication',
-        tags: { ...tags, Name: `jwt-signing-key-${environmentSuffix}` },
+        tags: { ...tags, Name: `jwt-signing-key-${environmentSuffix}-v1` },
       },
       { parent: this }
     );
