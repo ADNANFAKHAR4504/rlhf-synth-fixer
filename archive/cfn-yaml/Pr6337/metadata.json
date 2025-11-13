@@ -27,5 +27,10 @@
     "Subnet"
   ],
   "training_quality": 10,
-  "author": "mikiaszerihun"
+  "author": "mikiaszerihun",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
