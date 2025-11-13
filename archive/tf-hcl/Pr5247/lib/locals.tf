@@ -28,15 +28,15 @@ locals {
   # Private subnets: /24 (256 IPs each) - 10.0.1.0/24, 10.0.2.0/24, 10.0.3.0/24
 
   public_subnet_cidrs = [
-    cidrsubnet(var.vpc_cidr, 6, 0),   # 10.0.0.0/26
-    cidrsubnet(var.vpc_cidr, 6, 1),   # 10.0.0.64/26
-    cidrsubnet(var.vpc_cidr, 6, 2),   # 10.0.0.128/26
+    cidrsubnet(var.vpc_cidr, 6, 0), # 10.0.0.0/26
+    cidrsubnet(var.vpc_cidr, 6, 1), # 10.0.0.64/26
+    cidrsubnet(var.vpc_cidr, 6, 2), # 10.0.0.128/26
   ]
 
   private_subnet_cidrs = [
-    cidrsubnet(var.vpc_cidr, 4, 1),   # 10.0.1.0/24
-    cidrsubnet(var.vpc_cidr, 4, 2),   # 10.0.2.0/24
-    cidrsubnet(var.vpc_cidr, 4, 3),   # 10.0.3.0/24
+    cidrsubnet(var.vpc_cidr, 4, 1), # 10.0.1.0/24
+    cidrsubnet(var.vpc_cidr, 4, 2), # 10.0.2.0/24
+    cidrsubnet(var.vpc_cidr, 4, 3), # 10.0.3.0/24
   ]
 
   # Subnet names
@@ -56,7 +56,7 @@ locals {
   nat_eip_name     = "${local.name_prefix}-nat-eip"
 
   # Route table names
-  public_route_table_name  = "${local.name_prefix}-public-rt"
+  public_route_table_name = "${local.name_prefix}-public-rt"
   private_route_table_names = [
     for i in range(local.az_count) : "${local.name_prefix}-${var.private_subnet_suffix}-rt-${i + 1}"
   ]

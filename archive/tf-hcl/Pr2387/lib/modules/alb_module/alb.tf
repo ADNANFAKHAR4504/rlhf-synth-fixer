@@ -9,8 +9,8 @@ resource "aws_lb" "main" {
   subnets            = var.public_subnet_ids
 
   enable_deletion_protection = var.enable_deletion_protection
-  enable_http2              = true
-  idle_timeout              = var.idle_timeout
+  enable_http2               = true
+  idle_timeout               = var.idle_timeout
 
   # Access logs configuration
   dynamic "access_logs" {
@@ -23,8 +23,8 @@ resource "aws_lb" "main" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-alb"
-    Type = "application-load-balancer"
+    Name      = "${var.environment}-${var.project_name}-alb"
+    Type      = "application-load-balancer"
     Component = "alb"
   })
 }
@@ -60,8 +60,8 @@ resource "aws_lb_target_group" "web" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-web-tg"
-    Type = "target-group"
+    Name      = "${var.environment}-${var.project_name}-web-tg"
+    Type      = "target-group"
     Component = "alb"
   })
 
@@ -76,13 +76,13 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-      type             = "forward"
-      target_group_arn = aws_lb_target_group.web.arn
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web.arn
+  }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-http-listener"
-    Type = "alb-listener"
+    Name      = "${var.environment}-${var.project_name}-http-listener"
+    Type      = "alb-listener"
     Component = "alb"
   })
 }
@@ -108,8 +108,8 @@ resource "aws_cloudwatch_metric_alarm" "alb_target_response_time" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-alb-response-time-alarm"
-    Type = "cloudwatch-alarm"
+    Name      = "${var.environment}-${var.project_name}-alb-response-time-alarm"
+    Type      = "cloudwatch-alarm"
     Component = "alb"
   })
 }
@@ -134,8 +134,8 @@ resource "aws_cloudwatch_metric_alarm" "alb_unhealthy_hosts" {
   }
 
   tags = merge(var.common_tags, {
-    Name = "${var.environment}-${var.project_name}-alb-unhealthy-hosts-alarm"
-    Type = "cloudwatch-alarm"
+    Name      = "${var.environment}-${var.project_name}-alb-unhealthy-hosts-alarm"
+    Type      = "cloudwatch-alarm"
     Component = "alb"
   })
 }

@@ -56,7 +56,7 @@ data "aws_availability_zones" "available" {
 
 locals {
   name_prefix = "${var.proj_name}-${var.env}"
-  
+
   common_tags = {
     Environment = var.env
     Project     = var.proj_name

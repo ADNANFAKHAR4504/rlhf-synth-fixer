@@ -33,17 +33,17 @@ enable_https_redirect = true
 allowed_cidr_blocks = ["0.0.0.0/0"]
 
 # Enable WAF for additional protection (recommended for production)
-enable_waf       = false
-waf_rate_limit   = 2000
+enable_waf     = false
+waf_rate_limit = 2000
 
 # ================================
 # MONITORING CONFIGURATION
 # ================================
 
-log_retention_days       = 30
+log_retention_days        = 30
 enable_container_insights = true
-enable_execute_command   = true
-enable_xray_tracing     = true
+enable_execute_command    = true
+enable_xray_tracing       = true
 
 # ================================
 # DATABASE CONFIGURATION
@@ -51,7 +51,7 @@ enable_xray_tracing     = true
 
 enable_performance_insights = true
 enable_enhanced_monitoring  = true
-secrets_rotation_days      = 30
+secrets_rotation_days       = 30
 
 # ================================
 # ENVIRONMENT-SPECIFIC OVERRIDES

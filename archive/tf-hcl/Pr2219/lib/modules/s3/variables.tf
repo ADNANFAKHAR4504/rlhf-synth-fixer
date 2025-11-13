@@ -15,5 +15,5 @@ variable "bucket_name" {
 
 variable "bucket_policy" {
   description = "S3 bucket policy"
-  type = string
+  type        = string
 }

@@ -72,11 +72,11 @@ resource "aws_acm_certificate" "main" {
 }
 
 resource "aws_lb" "main" {
-  name               = "${lower(var.environment_tag)}-alb-${random_id.deployment.hex}"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  name                       = "${lower(var.environment_tag)}-alb-${random_id.deployment.hex}"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb.id]
+  subnets                    = aws_subnet.public[*].id
   enable_deletion_protection = false
   access_logs {
     bucket  = aws_s3_bucket.access_logs.id

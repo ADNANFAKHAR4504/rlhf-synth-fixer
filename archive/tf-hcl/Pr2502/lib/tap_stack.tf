@@ -332,7 +332,7 @@ resource "aws_iam_role" "ec2_role" {
 # FIXED: Conditional IAM Policy for S3 access (only if bucket is specified)
 resource "aws_iam_policy" "s3_access" {
   count = var.app_config_bucket != "" ? 1 : 0
-  
+
   name        = "${var.environment}-s3-access-${local.random_suffix}"
   description = "Policy for S3 access to app config bucket"
 
@@ -363,7 +363,7 @@ resource "aws_iam_policy" "s3_access" {
 # FIXED: Conditional attachment of S3 policy
 resource "aws_iam_role_policy_attachment" "s3_access" {
   count = var.app_config_bucket != "" ? 1 : 0
-  
+
   role       = aws_iam_role.ec2_role.name
   policy_arn = aws_iam_policy.s3_access[0].arn
 }

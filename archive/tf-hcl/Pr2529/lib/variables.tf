@@ -38,7 +38,7 @@ variable "key_pair_name" {
   description = "EC2 Key Pair name"
   type        = string
   default     = ""
-} 
+}
 
 variable "environment" {
   description = "Environment name (used as suffix for resources)"

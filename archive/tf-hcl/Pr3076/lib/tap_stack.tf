@@ -44,10 +44,10 @@ locals {
     ManagedBy   = "Terraform"
     Stack       = "tap-stack"
   }
-  
+
   # Generate unique 4-byte suffix
   resource_suffix = "tap4"
-  
+
   # Subnet calculations
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
@@ -334,7 +334,7 @@ resource "aws_s3_bucket_public_access_block" "main_bucket_pab" {
 
 resource "aws_s3_bucket_versioning" "main_bucket_versioning" {
   bucket = aws_s3_bucket.main_bucket.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -540,10 +540,10 @@ resource "aws_db_instance" "main_db" {
   engine_version = "8.0"
   instance_class = var.rds_instance_class
 
-  allocated_storage     = 20
-  storage_type          = "gp2"
-  storage_encrypted     = true
-  
+  allocated_storage = 20
+  storage_type      = "gp2"
+  storage_encrypted = true
+
   db_name  = "maindb"
   username = "${random_string.rds_username_prefix.result}${random_string.rds_username.result}"
   password = random_password.rds_password.result
@@ -551,15 +551,15 @@ resource "aws_db_instance" "main_db" {
   vpc_security_group_ids = [aws_security_group.rds_sg.id]
   db_subnet_group_name   = aws_db_subnet_group.rds_subnet_group.name
 
-  multi_az                    = true
-  publicly_accessible         = false
-  auto_minor_version_upgrade  = true
-  skip_final_snapshot         = true
-  deletion_protection         = false
+  multi_az                   = true
+  publicly_accessible        = false
+  auto_minor_version_upgrade = true
+  skip_final_snapshot        = true
+  deletion_protection        = false
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
@@ -671,7 +671,7 @@ resource "aws_cloudfront_distribution" "cdn" {
   enabled             = true
   is_ipv6_enabled     = true
   default_root_object = "index.html"
-  
+
   # Cost optimization - using PriceClass_100 for lowest cost
   price_class = "PriceClass_100"
 

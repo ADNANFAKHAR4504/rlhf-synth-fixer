@@ -193,12 +193,12 @@ resource "aws_dynamodb_table" "workout_logs" {
 
   # Global Secondary Index for querying by date
   global_secondary_index {
-    name               = "WorkoutDateIndex"
-    hash_key           = "UserId"
-    range_key          = "WorkoutDate"
-    write_capacity     = var.dynamodb_write_capacity
-    read_capacity      = var.dynamodb_read_capacity
-    projection_type    = "ALL"
+    name            = "WorkoutDateIndex"
+    hash_key        = "UserId"
+    range_key       = "WorkoutDate"
+    write_capacity  = var.dynamodb_write_capacity
+    read_capacity   = var.dynamodb_read_capacity
+    projection_type = "ALL"
   }
 
   # Enable Point-in-Time Recovery for data protection
@@ -1135,7 +1135,7 @@ resource "aws_cloudwatch_dashboard" "fitness_app_dashboard" {
 
 output "api_url" {
   description = "Base URL of the deployed API Gateway"
-  value       = "${aws_api_gateway_stage.api_stage.invoke_url}"
+  value       = aws_api_gateway_stage.api_stage.invoke_url
 }
 
 output "api_endpoint_get_workouts" {
@@ -1161,10 +1161,10 @@ output "dynamodb_table_arn" {
 output "lambda_functions" {
   description = "Names of all Lambda functions"
   value = {
-    get_workouts    = aws_lambda_function.get_workouts.function_name
-    create_workout  = aws_lambda_function.create_workout.function_name
-    update_workout  = aws_lambda_function.update_workout.function_name
-    delete_workout  = aws_lambda_function.delete_workout.function_name
+    get_workouts   = aws_lambda_function.get_workouts.function_name
+    create_workout = aws_lambda_function.create_workout.function_name
+    update_workout = aws_lambda_function.update_workout.function_name
+    delete_workout = aws_lambda_function.delete_workout.function_name
   }
 }
 

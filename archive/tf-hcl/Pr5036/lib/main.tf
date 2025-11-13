@@ -25,18 +25,18 @@ locals {
     Environment = var.environment
     ManagedBy   = "Terraform"
   }
-  
+
   vpc_cidr = "10.0.0.0/16"
   public_subnet_cidrs = {
     az1 = "10.0.1.0/24"
     az2 = "10.0.2.0/24"
   }
-  
+
   # Auto Scaling Configuration
   asg_min_size     = 2
   asg_max_size     = 6
   asg_desired_size = 2
-  
+
   # CloudWatch Alarm Thresholds
   cpu_scale_out_threshold = 70
   cpu_scale_in_threshold  = 30
@@ -58,7 +58,7 @@ resource "aws_vpc" "main" {
   cidr_block           = local.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-vpc-${random_string.suffix.result}"
   })
@@ -72,7 +72,7 @@ resource "aws_subnet" "public_az1" {
   cidr_block              = local.public_subnet_cidrs.az1
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-public-subnet-az1-${random_string.suffix.result}"
     Type = "public"
@@ -85,7 +85,7 @@ resource "aws_subnet" "public_az2" {
   cidr_block              = local.public_subnet_cidrs.az2
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-public-subnet-az2-${random_string.suffix.result}"
     Type = "public"
@@ -98,7 +98,7 @@ resource "aws_subnet" "public_az2" {
 # ============================================================================
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-igw-${random_string.suffix.result}"
   })
@@ -109,12 +109,12 @@ resource "aws_internet_gateway" "main" {
 # ============================================================================
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-public-rt-${random_string.suffix.result}"
     Type = "public"
@@ -140,7 +140,7 @@ resource "aws_security_group" "alb" {
   name_prefix = "blog-alb-sg-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Application Load Balancer"
-  
+
   ingress {
     description = "Allow HTTP from anywhere"
     from_port   = 80
@@ -148,7 +148,7 @@ resource "aws_security_group" "alb" {
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   egress {
     description     = "Allow traffic to EC2 instances"
     from_port       = 80
@@ -156,11 +156,11 @@ resource "aws_security_group" "alb" {
     protocol        = "tcp"
     security_groups = [aws_security_group.ec2.id]
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-alb-sg-${random_string.suffix.result}"
   })
@@ -171,11 +171,11 @@ resource "aws_security_group" "ec2" {
   name_prefix = "blog-ec2-sg-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances"
-  
+
   lifecycle {
     create_before_destroy = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-ec2-sg-${random_string.suffix.result}"
   })
@@ -207,7 +207,7 @@ resource "aws_security_group_rule" "ec2_egress_all" {
 # ============================================================================
 resource "aws_iam_role" "ec2" {
   name_prefix = "blog-ec2-role-"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -220,7 +220,7 @@ resource "aws_iam_role" "ec2" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-ec2-role-${random_string.suffix.result}"
   })
@@ -230,7 +230,7 @@ resource "aws_iam_role" "ec2" {
 resource "aws_iam_role_policy" "ec2_cloudwatch" {
   name_prefix = "cloudwatch-"
   role        = aws_iam_role.ec2.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -261,7 +261,7 @@ resource "aws_iam_role_policy_attachment" "ssm_managed_instance_core" {
 resource "aws_iam_instance_profile" "ec2" {
   name_prefix = "blog-ec2-profile-"
   role        = aws_iam_role.ec2.name
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-ec2-profile-${random_string.suffix.result}"
   })
@@ -274,13 +274,13 @@ resource "aws_launch_template" "blog" {
   name_prefix   = "blog-lt-"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = "t3.micro"
-  
+
   iam_instance_profile {
     arn = aws_iam_instance_profile.ec2.arn
   }
-  
+
   vpc_security_group_ids = [aws_security_group.ec2.id]
-  
+
   user_data = base64encode(<<-EOF
     #!/bin/bash
     yum update -y
@@ -306,7 +306,7 @@ resource "aws_launch_template" "blog" {
     rpm -U ./amazon-cloudwatch-agent.rpm
   EOF
   )
-  
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
@@ -315,17 +315,17 @@ resource "aws_launch_template" "blog" {
       ASG         = "blog-asg-${random_string.suffix.result}"
     })
   }
-  
+
   metadata_options {
     http_endpoint               = "enabled"
     http_tokens                 = "optional"
     http_put_response_hop_limit = 1
   }
-  
+
   monitoring {
     enabled = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-lt-${random_string.suffix.result}"
   })
@@ -335,12 +335,12 @@ resource "aws_launch_template" "blog" {
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-  
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -356,10 +356,10 @@ resource "aws_lb" "blog" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
   subnets            = [aws_subnet.public_az1.id, aws_subnet.public_az2.id]
-  
+
   enable_deletion_protection = false
   enable_http2               = true
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-alb-${random_string.suffix.result}"
   })
@@ -370,7 +370,7 @@ resource "aws_lb_target_group" "blog" {
   port        = 80
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -380,9 +380,9 @@ resource "aws_lb_target_group" "blog" {
     path                = "/"
     matcher             = "200"
   }
-  
+
   deregistration_delay = 300
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-tg-${random_string.suffix.result}"
   })
@@ -392,7 +392,7 @@ resource "aws_lb_listener" "blog" {
   load_balancer_arn = aws_lb.blog.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.blog.arn
@@ -405,21 +405,21 @@ resource "aws_lb_listener" "blog" {
 resource "aws_autoscaling_group" "blog" {
   name_prefix         = "blog-asg-"
   vpc_zone_identifier = [aws_subnet.public_az1.id, aws_subnet.public_az2.id]
-  
+
   min_size         = local.asg_min_size
   max_size         = local.asg_max_size
   desired_capacity = local.asg_desired_size
-  
+
   health_check_type         = "ELB"
   health_check_grace_period = 300
-  
+
   launch_template {
     id      = aws_launch_template.blog.id
     version = "$Latest"
   }
-  
+
   target_group_arns = [aws_lb_target_group.blog.arn]
-  
+
   enabled_metrics = [
     "GroupMinSize",
     "GroupMaxSize",
@@ -430,25 +430,25 @@ resource "aws_autoscaling_group" "blog" {
     "GroupTerminatingInstances",
     "GroupTotalInstances"
   ]
-  
+
   tag {
     key                 = "Name"
     value               = "blog-asg-instance-${random_string.suffix.result}"
     propagate_at_launch = true
   }
-  
+
   tag {
     key                 = "Environment"
     value               = var.environment
     propagate_at_launch = true
   }
-  
+
   tag {
     key                 = "AutoScalingGroup"
     value               = "blog-asg-${random_string.suffix.result}"
     propagate_at_launch = true
   }
-  
+
   lifecycle {
     create_before_destroy = true
   }
@@ -486,13 +486,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   period              = 300
   statistic           = "Average"
   threshold           = local.cpu_scale_out_threshold
-  
+
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.blog.name
   }
-  
+
   alarm_actions = [aws_autoscaling_policy.scale_out.arn]
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-cpu-high-alarm-${random_string.suffix.result}"
   })
@@ -509,13 +509,13 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   period              = 600
   statistic           = "Average"
   threshold           = local.cpu_scale_in_threshold
-  
+
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.blog.name
   }
-  
+
   alarm_actions = [aws_autoscaling_policy.scale_in.arn]
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-cpu-low-alarm-${random_string.suffix.result}"
   })
@@ -532,13 +532,13 @@ resource "aws_cloudwatch_metric_alarm" "request_count_high" {
   period              = 60
   statistic           = "Sum"
   threshold           = local.request_count_threshold
-  
+
   dimensions = {
     LoadBalancer = aws_lb.blog.arn_suffix
   }
-  
+
   alarm_actions = [aws_autoscaling_policy.scale_out.arn]
-  
+
   tags = merge(local.common_tags, {
     Name = "blog-request-count-alarm-${random_string.suffix.result}"
   })
@@ -581,8 +581,8 @@ output "asg_name" {
 output "cloudwatch_alarm_arns" {
   description = "ARNs of the CloudWatch alarms"
   value = {
-    cpu_high         = aws_cloudwatch_metric_alarm.cpu_high.arn
-    cpu_low          = aws_cloudwatch_metric_alarm.cpu_low.arn
+    cpu_high           = aws_cloudwatch_metric_alarm.cpu_high.arn
+    cpu_low            = aws_cloudwatch_metric_alarm.cpu_low.arn
     request_count_high = aws_cloudwatch_metric_alarm.request_count_high.arn
   }
 }

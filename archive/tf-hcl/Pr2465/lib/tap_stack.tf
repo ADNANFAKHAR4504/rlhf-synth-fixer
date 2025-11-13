@@ -56,7 +56,7 @@ locals {
     Owner       = var.owner
     ManagedBy   = "terraform"
   }
-  
+
   name_prefix = "${var.project_name}-${var.environment}"
 }
 
@@ -157,9 +157,9 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "lambda_function.zip"
-  
+
   source {
-    content = <<EOF
+    content  = <<EOF
 const AWS = require('aws-sdk');
 const dynamodb = new AWS.DynamoDB.DocumentClient();
 
@@ -273,11 +273,11 @@ EOF
 resource "aws_lambda_function" "api_handler" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "${local.name_prefix}-api-handler"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "nodejs18.x"
-  timeout         = 30
-  memory_size     = 256
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs18.x"
+  timeout          = 30
+  memory_size      = 256
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 
   depends_on = [
@@ -288,8 +288,8 @@ resource "aws_lambda_function" "api_handler" {
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.main_table.name
-      ENVIRONMENT        = var.environment
-      PROJECT_NAME       = var.project_name
+      ENVIRONMENT         = var.environment
+      PROJECT_NAME        = var.project_name
     }
   }
 
@@ -350,8 +350,8 @@ resource "aws_api_gateway_integration" "get_integration" {
   http_method = aws_api_gateway_method.get_method.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.api_handler.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api_handler.invoke_arn
 }
 
 # Lambda Integration - POST
@@ -361,8 +361,8 @@ resource "aws_api_gateway_integration" "post_integration" {
   http_method = aws_api_gateway_method.post_method.http_method
 
   integration_http_method = "POST"
-  type                   = "AWS_PROXY"
-  uri                    = aws_lambda_function.api_handler.invoke_arn
+  type                    = "AWS_PROXY"
+  uri                     = aws_lambda_function.api_handler.invoke_arn
 }
 
 # CORS Integration - OPTIONS
@@ -372,7 +372,7 @@ resource "aws_api_gateway_integration" "options_integration" {
   http_method = aws_api_gateway_method.options_method.http_method
 
   type = "MOCK"
-  
+
   request_templates = {
     "application/json" = jsonencode({
       statusCode = 200
@@ -454,14 +454,14 @@ resource "aws_api_gateway_stage" "dev_stage" {
     destination_arn = aws_cloudwatch_log_group.api_gateway_logs.arn
     format = jsonencode({
       requestId      = "$context.requestId"
-      ip            = "$context.identity.sourceIp"
-      caller        = "$context.identity.caller"
-      user          = "$context.identity.user"
-      requestTime   = "$context.requestTime"
-      httpMethod    = "$context.httpMethod"
-      resourcePath  = "$context.resourcePath"
-      status        = "$context.status"
-      protocol      = "$context.protocol"
+      ip             = "$context.identity.sourceIp"
+      caller         = "$context.identity.caller"
+      user           = "$context.identity.user"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      resourcePath   = "$context.resourcePath"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
       responseLength = "$context.responseLength"
     })
   }
@@ -481,14 +481,14 @@ resource "aws_api_gateway_stage" "prod_stage" {
     destination_arn = aws_cloudwatch_log_group.api_gateway_logs.arn
     format = jsonencode({
       requestId      = "$context.requestId"
-      ip            = "$context.identity.sourceIp"
-      caller        = "$context.identity.caller"
-      user          = "$context.identity.user"
-      requestTime   = "$context.requestTime"
-      httpMethod    = "$context.httpMethod"
-      resourcePath  = "$context.resourcePath"
-      status        = "$context.status"
-      protocol      = "$context.protocol"
+      ip             = "$context.identity.sourceIp"
+      caller         = "$context.identity.caller"
+      user           = "$context.identity.user"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      resourcePath   = "$context.resourcePath"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
       responseLength = "$context.responseLength"
     })
   }

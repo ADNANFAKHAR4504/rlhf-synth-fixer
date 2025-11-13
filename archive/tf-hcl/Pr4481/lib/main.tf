@@ -29,7 +29,7 @@ locals {
     Environment = var.environment
     Project     = var.project_name
   }
-  
+
   bucket_prefix = "${var.project_name}-${var.environment}"
   account_id    = data.aws_caller_identity.current.account_id
   region        = data.aws_region.current.id
@@ -179,8 +179,8 @@ resource "aws_s3_bucket_policy" "static_assets" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "PublicReadForPublicFolder"
-        Effect = "Allow"
+        Sid       = "PublicReadForPublicFolder"
+        Effect    = "Allow"
         Principal = "*"
         Action = [
           "s3:GetObject"
@@ -257,7 +257,7 @@ resource "aws_s3_bucket_logging" "static_assets" {
 
 resource "aws_iam_role" "ec2_s3_upload" {
   name = "${local.bucket_prefix}-ec2-s3-upload-role-${random_string.bucket_suffix.result}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [

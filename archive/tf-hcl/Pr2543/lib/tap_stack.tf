@@ -47,23 +47,23 @@ variable "db_instance_class" {
 locals {
   # Common tags for all resources
   common_tags = {
-    Environment    = "Production"
-    ownership      = "self"
-    departmental   = "businessunit"
-    ManagedBy      = "Terraform"
+    Environment  = "Production"
+    ownership    = "self"
+    departmental = "businessunit"
+    ManagedBy    = "Terraform"
   }
 
   # Naming convention
   project_name = "tap-stack"
-  
+
   # VPC CIDR blocks
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-  
+
   # Subnet CIDR blocks for primary region (us-east-2)
   primary_public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-  
+
   # Subnet CIDR blocks for secondary region (us-west-1)
   secondary_public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnet_cidrs = ["10.1.10.0/24", "10.1.20.0/24"]
@@ -443,10 +443,10 @@ resource "aws_security_group" "primary_ec2" {
   }
 
   ingress {
-    description = "HTTP from ALB"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    description     = "HTTP from ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.primary_alb.id]
   }
 
@@ -486,10 +486,10 @@ resource "aws_security_group" "secondary_ec2" {
   }
 
   ingress {
-    description = "HTTP from ALB"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    description     = "HTTP from ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.secondary_alb.id]
   }
 
@@ -777,28 +777,28 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS instance for primary region
 resource "aws_db_instance" "primary" {
-  provider               = aws.us_east_2
-  identifier             = "${local.project_name}-primary-db"
-  allocated_storage      = 20
-  max_allocated_storage  = 100
-  storage_type           = "gp2"
-  engine                 = "mysql"
-  engine_version         = "8.0"
-  instance_class         = var.db_instance_class
-  db_name                = "primarydb"
-  username               = random_string.primary_db_username.result
-  password               = random_password.primary_db_password.result
-  parameter_group_name   = "default.mysql8.0"
-  db_subnet_group_name   = aws_db_subnet_group.primary.name
-  vpc_security_group_ids = [aws_security_group.primary_rds.id]
-  multi_az               = true
-  publicly_accessible    = false
-  storage_encrypted      = true
+  provider                = aws.us_east_2
+  identifier              = "${local.project_name}-primary-db"
+  allocated_storage       = 20
+  max_allocated_storage   = 100
+  storage_type            = "gp2"
+  engine                  = "mysql"
+  engine_version          = "8.0"
+  instance_class          = var.db_instance_class
+  db_name                 = "primarydb"
+  username                = random_string.primary_db_username.result
+  password                = random_password.primary_db_password.result
+  parameter_group_name    = "default.mysql8.0"
+  db_subnet_group_name    = aws_db_subnet_group.primary.name
+  vpc_security_group_ids  = [aws_security_group.primary_rds.id]
+  multi_az                = true
+  publicly_accessible     = false
+  storage_encrypted       = true
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+  skip_final_snapshot     = true
+  deletion_protection     = false
 
   tags = merge(local.common_tags, {
     Name = "${local.project_name}-primary-db"
@@ -809,28 +809,28 @@ resource "aws_db_instance" "primary" {
 
 # RDS instance for secondary region
 resource "aws_db_instance" "secondary" {
-  provider               = aws.us_west_1
-  identifier             = "${local.project_name}-secondary-db"
-  allocated_storage      = 20
-  max_allocated_storage  = 100
-  storage_type           = "gp2"
-  engine                 = "mysql"
-  engine_version         = "8.0"
-  instance_class         = var.db_instance_class
-  db_name                = "secondarydb"
-  username               = random_string.secondary_db_username.result
-  password               = random_password.secondary_db_password.result
-  parameter_group_name   = "default.mysql8.0"
-  db_subnet_group_name   = aws_db_subnet_group.secondary.name
-  vpc_security_group_ids = [aws_security_group.secondary_rds.id]
-  multi_az               = true
-  publicly_accessible    = false
-  storage_encrypted      = true
+  provider                = aws.us_west_1
+  identifier              = "${local.project_name}-secondary-db"
+  allocated_storage       = 20
+  max_allocated_storage   = 100
+  storage_type            = "gp2"
+  engine                  = "mysql"
+  engine_version          = "8.0"
+  instance_class          = var.db_instance_class
+  db_name                 = "secondarydb"
+  username                = random_string.secondary_db_username.result
+  password                = random_password.secondary_db_password.result
+  parameter_group_name    = "default.mysql8.0"
+  db_subnet_group_name    = aws_db_subnet_group.secondary.name
+  vpc_security_group_ids  = [aws_security_group.secondary_rds.id]
+  multi_az                = true
+  publicly_accessible     = false
+  storage_encrypted       = true
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+  skip_final_snapshot     = true
+  deletion_protection     = false
 
   tags = merge(local.common_tags, {
     Name = "${local.project_name}-secondary-db"
@@ -1343,11 +1343,11 @@ resource "aws_lb_listener" "secondary" {
 
 # Auto Scaling Group for primary region
 resource "aws_autoscaling_group" "primary" {
-  provider            = aws.us_east_2
-  name                = "${local.project_name}-primary-asg"
-  vpc_zone_identifier = aws_subnet.primary_private[*].id
-  target_group_arns   = [aws_lb_target_group.primary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_east_2
+  name                      = "${local.project_name}-primary-asg"
+  vpc_zone_identifier       = aws_subnet.primary_private[*].id
+  target_group_arns         = [aws_lb_target_group.primary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -1379,11 +1379,11 @@ resource "aws_autoscaling_group" "primary" {
 
 # Auto Scaling Group for secondary region
 resource "aws_autoscaling_group" "secondary" {
-  provider            = aws.us_west_1
-  name                = "${local.project_name}-secondary-asg"
-  vpc_zone_identifier = aws_subnet.secondary_private[*].id
-  target_group_arns   = [aws_lb_target_group.secondary.arn]
-  health_check_type   = "ELB"
+  provider                  = aws.us_west_1
+  name                      = "${local.project_name}-secondary-asg"
+  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
+  target_group_arns         = [aws_lb_target_group.secondary.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -1513,41 +1513,41 @@ resource "aws_cloudwatch_metric_alarm" "secondary_rds_cpu" {
 
 # Scale up policy for primary ASG
 resource "aws_autoscaling_policy" "primary_scale_up" {
-  provider           = aws.us_east_2
-  name               = "${local.project_name}-primary-scale-up"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_east_2
+  name                   = "${local.project_name}-primary-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Scale down policy for primary ASG
 resource "aws_autoscaling_policy" "primary_scale_down" {
-  provider           = aws.us_east_2
-  name               = "${local.project_name}-primary-scale-down"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_east_2
+  name                   = "${local.project_name}-primary-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.primary.name
 }
 
 # Scale up policy for secondary ASG
 resource "aws_autoscaling_policy" "secondary_scale_up" {
-  provider           = aws.us_west_1
-  name               = "${local.project_name}-secondary-scale-up"
-  scaling_adjustment = 1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_west_1
+  name                   = "${local.project_name}-secondary-scale-up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
 # Scale down policy for secondary ASG
 resource "aws_autoscaling_policy" "secondary_scale_down" {
-  provider           = aws.us_west_1
-  name               = "${local.project_name}-secondary-scale-down"
-  scaling_adjustment = -1
-  adjustment_type    = "ChangeInCapacity"
-  cooldown           = 300
+  provider               = aws.us_west_1
+  name                   = "${local.project_name}-secondary-scale-down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.secondary.name
 }
 
@@ -1734,10 +1734,10 @@ resource "aws_s3_bucket_policy" "config_secondary" {
 
 # AWS Config delivery channel for primary region
 resource "aws_config_delivery_channel" "primary" {
-  provider           = aws.us_east_2
-  name               = "${local.project_name}-primary-config-delivery-channel"
-  s3_bucket_name     = aws_s3_bucket.config_primary.bucket
-  s3_key_prefix      = "config"
+  provider       = aws.us_east_2
+  name           = "${local.project_name}-primary-config-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.config_primary.bucket
+  s3_key_prefix  = "config"
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"
   }
@@ -1747,10 +1747,10 @@ resource "aws_config_delivery_channel" "primary" {
 
 # AWS Config delivery channel for secondary region
 resource "aws_config_delivery_channel" "secondary" {
-  provider           = aws.us_west_1
-  name               = "${local.project_name}-secondary-config-delivery-channel"
-  s3_bucket_name     = aws_s3_bucket.config_secondary.bucket
-  s3_key_prefix      = "config"
+  provider       = aws.us_west_1
+  name           = "${local.project_name}-secondary-config-delivery-channel"
+  s3_bucket_name = aws_s3_bucket.config_secondary.bucket
+  s3_key_prefix  = "config"
   snapshot_delivery_properties {
     delivery_frequency = "TwentyFour_Hours"
   }

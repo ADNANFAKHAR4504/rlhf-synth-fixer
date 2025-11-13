@@ -48,7 +48,7 @@ data "aws_caller_identity" "current" {}
 locals {
   # Generate unique 4-byte suffix for resources
   suffix = "k9x2"
-  
+
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
@@ -56,11 +56,11 @@ locals {
     ManagedBy   = "Terraform"
     Region      = var.aws_region
   }
-  
+
   # Network configuration
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 2)
-  
+
   # Subnet CIDRs
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
@@ -459,9 +459,9 @@ resource "aws_db_instance" "main_rds" {
   instance_class = "db.t3.micro"
 
   # Storage configuration
-  allocated_storage     = 20
-  storage_type          = "gp3"
-  storage_encrypted     = true
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
 
   # Database configuration
   db_name  = "tapstackdb"
@@ -478,8 +478,8 @@ resource "aws_db_instance" "main_rds" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # Security and maintenance
   auto_minor_version_upgrade = true
@@ -501,7 +501,7 @@ resource "aws_lb" "main_alb" {
   subnets            = aws_subnet.public_subnets[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = merge(local.common_tags, {
     Name = "alb-${local.suffix}"
@@ -576,9 +576,9 @@ resource "aws_launch_template" "app_lt" {
 # ==================== AUTO SCALING ====================
 # Auto Scaling Group
 resource "aws_autoscaling_group" "app_asg" {
-  name               = "asg-${local.suffix}"
+  name                = "asg-${local.suffix}"
   vpc_zone_identifier = aws_subnet.private_subnets[*].id
-  target_group_arns  = [aws_lb_target_group.main_tg.arn]
+  target_group_arns   = [aws_lb_target_group.main_tg.arn]
 
   min_size         = 2
   max_size         = 6

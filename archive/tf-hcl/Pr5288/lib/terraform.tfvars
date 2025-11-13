@@ -25,21 +25,21 @@ desired_capacity = 1
 # DATABASE CONFIGURATION
 # ================================
 
-db_engine                   = "postgres"
-db_engine_version          = "15.10"
-db_instance_class          = "db.t3.micro"
-db_allocated_storage       = 20
-db_max_allocated_storage   = 50
+db_engine                = "postgres"
+db_engine_version        = "15.10"
+db_instance_class        = "db.t3.micro"
+db_allocated_storage     = 20
+db_max_allocated_storage = 50
 # backup_retention_period is handled by locals based on environment
-db_backup_window           = "03:00-04:00"
-db_maintenance_window      = "sun:04:00-sun:05:00"
+db_backup_window      = "03:00-04:00"
+db_maintenance_window = "sun:04:00-sun:05:00"
 # enable_deletion_protection is handled by locals based on environment
 
 # ================================
 # SECURITY CONFIGURATION
 # ================================
 
-allowed_cidr_blocks = ["0.0.0.0/0"]  # Restrict this in production
+allowed_cidr_blocks  = ["0.0.0.0/0"] # Restrict this in production
 enable_vpc_flow_logs = true
 
 # ================================

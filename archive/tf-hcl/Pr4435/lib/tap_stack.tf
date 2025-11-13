@@ -246,7 +246,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = merge(local.base_tags, { "Name" = "${local.unique_prefix}-vpc" })
+  tags                 = merge(local.base_tags, { "Name" = "${local.unique_prefix}-vpc" })
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -259,7 +259,7 @@ resource "aws_subnet" "public_a" {
   cidr_block              = var.public_subnet_cidrs[0]
   availability_zone       = data.aws_availability_zones.available.names[0]
   map_public_ip_on_launch = true
-  tags = merge(local.base_tags, { "Name" = "${local.unique_prefix}-public-a", "Tier" = "public" })
+  tags                    = merge(local.base_tags, { "Name" = "${local.unique_prefix}-public-a", "Tier" = "public" })
 }
 
 resource "aws_subnet" "public_b" {
@@ -267,7 +267,7 @@ resource "aws_subnet" "public_b" {
   cidr_block              = var.public_subnet_cidrs[1]
   availability_zone       = data.aws_availability_zones.available.names[1]
   map_public_ip_on_launch = true
-  tags = merge(local.base_tags, { "Name" = "${local.unique_prefix}-public-b", "Tier" = "public" })
+  tags                    = merge(local.base_tags, { "Name" = "${local.unique_prefix}-public-b", "Tier" = "public" })
 }
 
 resource "aws_subnet" "private_a" {
@@ -468,9 +468,9 @@ resource "aws_iam_role" "cloudtrail_to_cwl" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "cloudtrail.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = local.base_tags
@@ -482,11 +482,11 @@ resource "aws_iam_role_policy" "cloudtrail_to_cwl" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
-      { "Effect": "Allow", "Action": ["logs:CreateLogGroup","logs:DescribeLogGroups"], "Resource": "*" },
+      { "Effect" : "Allow", "Action" : ["logs:CreateLogGroup", "logs:DescribeLogGroups"], "Resource" : "*" },
       {
-        "Effect": "Allow",
-        "Action": ["logs:CreateLogStream","logs:PutLogEvents"],
-        "Resource": [
+        "Effect" : "Allow",
+        "Action" : ["logs:CreateLogStream", "logs:PutLogEvents"],
+        "Resource" : [
           "${aws_cloudwatch_log_group.trail.arn}:*",
           "${aws_cloudwatch_log_group.trail.arn}:log-stream:*"
         ]
@@ -551,9 +551,9 @@ resource "aws_iam_role" "ip_restricted_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { AWS = "arn:${data.aws_partition.current.partition}:iam::${data.aws_caller_identity.current.account_id}:root" },
-      Action = "sts:AssumeRole",
+      Action    = "sts:AssumeRole",
       Condition = { IpAddress = { "aws:SourceIp" : var.ip_allowlist } }
     }]
   })
@@ -566,9 +566,9 @@ resource "aws_iam_role_policy" "ip_restricted_policy" {
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
-      Action = ["s3:GetObject","s3:ListBucket"],
-      Resource = [aws_s3_bucket.trail.arn, "${aws_s3_bucket.trail.arn}/*"],
+      Effect    = "Allow",
+      Action    = ["s3:GetObject", "s3:ListBucket"],
+      Resource  = [aws_s3_bucket.trail.arn, "${aws_s3_bucket.trail.arn}/*"],
       Condition = { IpAddress = { "aws:SourceIp" : var.ip_allowlist } }
     }]
   })
@@ -672,9 +672,9 @@ resource "aws_iam_role" "ec2_ssm_role" {
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [{
-      Effect = "Allow",
+      Effect    = "Allow",
       Principal = { Service = "ec2.amazonaws.com" },
-      Action = "sts:AssumeRole"
+      Action    = "sts:AssumeRole"
     }]
   })
   tags = local.base_tags
@@ -873,7 +873,7 @@ EOF
 resource "aws_iam_role" "lambda_exec" {
   name = "${local.unique_prefix}-lambda-exec-role"
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" }, Action = "sts:AssumeRole" }]
   })
   tags = local.base_tags
@@ -919,12 +919,12 @@ resource "aws_iam_role_policy_attachment" "lambda_extra_attach" {
 }
 
 resource "aws_lambda_function" "heartbeat" {
-  function_name                  = "${local.unique_prefix}-heartbeat"
-  role                           = aws_iam_role.lambda_exec.arn
-  handler                        = "app.handler"
-  runtime                        = "python3.12"
-  filename                       = data.archive_file.lambda_zip.output_path
-  timeout                        = 20
+  function_name = "${local.unique_prefix}-heartbeat"
+  role          = aws_iam_role.lambda_exec.arn
+  handler       = "app.handler"
+  runtime       = "python3.12"
+  filename      = data.archive_file.lambda_zip.output_path
+  timeout       = 20
 
   vpc_config {
     subnet_ids         = [aws_subnet.private_a.id, aws_subnet.private_b.id]
@@ -1053,7 +1053,7 @@ resource "aws_wafv2_web_acl_association" "api_stage" {
 }
 
 resource "aws_wafv2_web_acl_logging_configuration" "api" {
-  count = local.waf_logging_enabled ? 1 : 0
+  count                   = local.waf_logging_enabled ? 1 : 0
   resource_arn            = aws_wafv2_web_acl.api.arn
   log_destination_configs = [var.waf_firehose_arn]
   redacted_fields {
@@ -1068,12 +1068,12 @@ resource "aws_wafv2_web_acl_logging_configuration" "api" {
 #############################################
 
 resource "aws_cloudfront_origin_access_control" "oac" {
-  count                              = var.enable_cloudfront ? 1 : 0
-  name                               = "${local.unique_prefix}-oac"
-  description                        = "OAC for ${local.unique_prefix}"
-  origin_access_control_origin_type  = "s3"
-  signing_behavior                   = "always"
-  signing_protocol                   = "sigv4"
+  count                             = var.enable_cloudfront ? 1 : 0
+  name                              = "${local.unique_prefix}-oac"
+  description                       = "OAC for ${local.unique_prefix}"
+  origin_access_control_origin_type = "s3"
+  signing_behavior                  = "always"
+  signing_protocol                  = "sigv4"
 }
 
 resource "aws_cloudfront_distribution" "cdn" {
@@ -1137,7 +1137,7 @@ output "private_subnet_ids" {
 
 output "subnet_azs" {
   description = "AZs used for the subnets."
-  value       = [
+  value = [
     aws_subnet.public_a.availability_zone,
     aws_subnet.public_b.availability_zone
   ]

@@ -198,17 +198,17 @@ output "logs_bucket_arn" {
 
 output "logs_bucket_versioning_enabled" {
   description = "S3 bucket versioning status"
-  value       = true  # Set by aws_s3_bucket_versioning resource
+  value       = true # Set by aws_s3_bucket_versioning resource
 }
 
 output "logs_bucket_encryption_enabled" {
   description = "S3 bucket encryption status"
-  value       = true  # Set by aws_s3_bucket_server_side_encryption_configuration resource
+  value       = true # Set by aws_s3_bucket_server_side_encryption_configuration resource
 }
 
 output "logs_bucket_public_access_blocked" {
   description = "S3 bucket public access block status"
-  value       = true  # Set by aws_s3_bucket_public_access_block resource
+  value       = true # Set by aws_s3_bucket_public_access_block resource
 }
 
 # ===========================
@@ -430,14 +430,14 @@ output "pci_dss_requirements_implemented" {
 output "security_controls_summary" {
   description = "Summary of implemented security controls"
   value = {
-    network_segmentation = "4-tier architecture (DMZ, App, DB, Management)"
-    encryption_keys      = "5 separate KMS keys with automatic rotation"
-    high_availability    = "Multi-AZ deployment across 3 availability zones"
-    access_control       = "Zero SSH - Session Manager only"
-    audit_trail          = "CloudTrail + VPC Flow Logs + CloudWatch"
-    threat_detection     = "GuardDuty + Security Hub + Macie + Config"
-    backup_strategy      = "35-day retention with cross-region replication"
-    secret_rotation      = "Automatic 30-day rotation via Secrets Manager"
+    network_segmentation  = "4-tier architecture (DMZ, App, DB, Management)"
+    encryption_keys       = "5 separate KMS keys with automatic rotation"
+    high_availability     = "Multi-AZ deployment across 3 availability zones"
+    access_control        = "Zero SSH - Session Manager only"
+    audit_trail           = "CloudTrail + VPC Flow Logs + CloudWatch"
+    threat_detection      = "GuardDuty + Security Hub + Macie + Config"
+    backup_strategy       = "35-day retention with cross-region replication"
+    secret_rotation       = "Automatic 30-day rotation via Secrets Manager"
     compliance_monitoring = "Continuous compliance with automated remediation"
   }
 }

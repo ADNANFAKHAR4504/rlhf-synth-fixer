@@ -186,7 +186,7 @@ resource "aws_iam_role" "lambda_execution_role" {
 }
 
 resource "aws_iam_role_policy" "lambda_policy" {
-  provider = aws.primary
+  provider   = aws.primary
   depends_on = [aws_iam_role.lambda_execution_role]
 
   name = "${local.app_name}-lambda-policy-${var.environment_suffix}"
@@ -528,7 +528,7 @@ EOF
 }
 
 resource "aws_lambda_function" "ticket_purchase" {
-  provider = aws.primary
+  provider   = aws.primary
   depends_on = [aws_iam_role_policy.lambda_policy, aws_iam_role_policy_attachment.lambda_vpc_execution]
 
   filename                       = data.archive_file.ticket_purchase_zip.output_path
@@ -729,7 +729,7 @@ EOF
 }
 
 resource "aws_lambda_function" "inventory_verifier" {
-  provider = aws.primary
+  provider   = aws.primary
   depends_on = [aws_iam_role_policy.lambda_policy, aws_iam_role_policy_attachment.lambda_vpc_execution]
 
   filename         = data.archive_file.inventory_verifier_zip.output_path
@@ -843,7 +843,7 @@ EOF
 }
 
 resource "aws_lambda_function" "kinesis_processor" {
-  provider = aws.primary
+  provider   = aws.primary
   depends_on = [aws_iam_role_policy.lambda_policy, aws_iam_role_policy_attachment.lambda_vpc_execution]
 
   filename         = data.archive_file.kinesis_processor_zip.output_path
@@ -1159,7 +1159,7 @@ resource "aws_sfn_state_machine" "inventory_verification" {
         Type = "Pass"
         Result = {
           "audit_completed" = true
-          "timestamp.$" = "$$.State.EnteredTime"
+          "timestamp.$"     = "$$.State.EnteredTime"
         }
         End = true
       }

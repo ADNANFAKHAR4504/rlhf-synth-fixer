@@ -119,11 +119,11 @@ resource "aws_eip" "nat" {
     Name = "${var.project_name}-nat-eip-${count.index + 1}"
   })
 
-   depends_on = [aws_internet_gateway.main, aws_vpc.main]
+  depends_on = [aws_internet_gateway.main, aws_vpc.main]
 }
 
 output "eip_ids" {
-  value = aws_eip.nat[*].id
+  value       = aws_eip.nat[*].id
   description = "Elastic IP allocation IDs"
 }
 
@@ -447,7 +447,7 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-alb"
@@ -523,10 +523,10 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = "${var.project_name}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   min_size         = 2
@@ -559,7 +559,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -567,7 +567,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -626,15 +626,15 @@ resource "aws_db_subnet_group" "main" {
 
 # Generate random password
 resource "random_password" "rds_password" {
-  length  = 16
-  special = true
+  length           = 16
+  special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
 # Store password in Secrets Manager
 resource "aws_secretsmanager_secret" "rds_password" {
   description = "RDS Master Password for ${var.project_name}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-password"
   })
@@ -659,25 +659,25 @@ resource "aws_db_instance" "main" {
   engine_version = "8.0"
   instance_class = "db.t3.micro"
 
-  allocated_storage     = 20
-  storage_encrypted     = true
-  storage_type          = "gp3"
+  allocated_storage = 20
+  storage_encrypted = true
+  storage_type      = "gp3"
 
   db_name  = "proddb"
   username = "admin"
-  password = random_password.rds_password.result 
+  password = random_password.rds_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
-  multi_az               = true
-  publicly_accessible    = false
-  skip_final_snapshot    = true
-  deletion_protection    = false
+  multi_az            = true
+  publicly_accessible = false
+  skip_final_snapshot = true
+  deletion_protection = false
 
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
@@ -692,7 +692,7 @@ data "archive_file" "rds_backup_zip" {
   output_path = "/tmp/rds_backup_function.zip"
 
   source {
-    content = <<-EOF
+    content  = <<-EOF
 import json
 import boto3
 import os
@@ -759,12 +759,12 @@ EOF
 
 # Lambda for RDS Backup
 resource "aws_lambda_function" "rds_backup" {
-  function_name    = "${var.project_name}-rds-backup"
-  role            = aws_iam_role.lambda_backup.arn
-  handler         = "index.handler"
-  runtime         = "python3.9"
-  timeout         = 60
-  
+  function_name = "${var.project_name}-rds-backup"
+  role          = aws_iam_role.lambda_backup.arn
+  handler       = "index.handler"
+  runtime       = "python3.9"
+  timeout       = 60
+
   # Use the dynamically created zip file
   filename         = data.archive_file.rds_backup_zip.output_path
   source_code_hash = data.archive_file.rds_backup_zip.output_base64sha256
@@ -993,14 +993,14 @@ resource "aws_cloudtrail" "main" {
   s3_bucket_name                = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
   is_multi_region_trail         = true
-  enable_logging               = true
+  enable_logging                = true
 
   event_selector {
     read_write_type           = "All"
     include_management_events = true
 
     data_resource {
-      type   = "AWS::S3::Object"
+      type = "AWS::S3::Object"
       values = [
         "${aws_s3_bucket.main.arn}/",
         "${aws_s3_bucket.main.arn}/*",

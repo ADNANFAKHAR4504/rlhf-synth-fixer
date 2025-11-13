@@ -747,7 +747,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 resource "aws_iam_user" "admin_user" {
   name = "${var.project_name}-admin-${local.name_suffix}"
   tags = local.common_tags
-  
+
   lifecycle {
     ignore_changes = [name]
   }

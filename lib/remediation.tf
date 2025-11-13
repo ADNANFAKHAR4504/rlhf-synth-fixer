@@ -2,7 +2,7 @@
 resource "aws_sqs_queue" "lambda_dlq" {
   name = "compliance-lambda-dlq-${var.environment_suffix}"
 
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds  = 1209600 # 14 days
   visibility_timeout_seconds = 300
 
   tags = {
@@ -210,7 +210,7 @@ resource "aws_cloudwatch_event_target" "lambda_remediation" {
 resource "aws_sqs_queue" "eventbridge_dlq" {
   name = "compliance-eventbridge-dlq-${var.environment_suffix}"
 
-  message_retention_seconds = 1209600  # 14 days
+  message_retention_seconds  = 1209600 # 14 days
   visibility_timeout_seconds = 300
 
   tags = {

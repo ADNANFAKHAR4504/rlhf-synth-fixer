@@ -22,7 +22,7 @@ variable "vpc_id" {
   description = "VPC ID for resources (will use default VPC if not provided)"
   type        = string
   default     = ""
-  
+
   validation {
     condition     = can(regex("^(vpc-[a-f0-9]+)?$", var.vpc_id))
     error_message = "VPC ID must be empty or start with 'vpc-'."
@@ -33,7 +33,7 @@ variable "private_subnet_ids" {
   description = "List of private subnet IDs for RDS and Lambda (will use available subnets if not provided)"
   type        = list(string)
   default     = []
-  
+
   validation {
     condition     = alltrue([for s in var.private_subnet_ids : can(regex("^subnet-[a-f0-9]+$", s))])
     error_message = "All subnet IDs must start with 'subnet-'."

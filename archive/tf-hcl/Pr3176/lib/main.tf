@@ -53,18 +53,18 @@ variable "db_master_password" {
 
 locals {
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   common_tags = {
     Environment = var.environment
     Owner       = "CloudEngineering"
     ManagedBy   = "Terraform"
     Project     = var.project_name
   }
-  
+
   azs = data.aws_availability_zones.available.names
-  
+
   # Subnet CIDR calculations
-  public_subnet_cidrs    = ["10.0.1.0/24", "10.0.2.0/24"]
+  public_subnet_cidrs      = ["10.0.1.0/24", "10.0.2.0/24"]
   private_app_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
   private_db_subnet_cidrs  = ["10.0.20.0/24", "10.0.21.0/24"]
 }
@@ -84,17 +84,17 @@ data "aws_elb_service_account" "main" {}
 data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
-  
+
   filter {
     name   = "name"
     values = ["al2023-ami-*-x86_64"]
   }
-  
+
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
   }
-  
+
   filter {
     name   = "architecture"
     values = ["x86_64"]
@@ -109,7 +109,7 @@ resource "aws_kms_key" "main" {
   description             = "${local.name_prefix}-cmk"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -157,7 +157,7 @@ resource "aws_kms_key" "main" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-cmk"
   })
@@ -176,7 +176,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
@@ -188,7 +188,7 @@ resource "aws_vpc" "main" {
 
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
   })
@@ -200,12 +200,12 @@ resource "aws_internet_gateway" "main" {
 
 resource "aws_subnet" "public" {
   count = 2
-  
+
   vpc_id                  = aws_vpc.main.id
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
     Type = "Public"
@@ -218,11 +218,11 @@ resource "aws_subnet" "public" {
 
 resource "aws_subnet" "private_app" {
   count = 2
-  
+
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_app_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-app-subnet-${count.index + 1}"
     Type = "Private-App"
@@ -235,11 +235,11 @@ resource "aws_subnet" "private_app" {
 
 resource "aws_subnet" "private_db" {
   count = 2
-  
+
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_db_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-db-subnet-${count.index + 1}"
     Type = "Private-DB"
@@ -253,11 +253,11 @@ resource "aws_subnet" "private_db" {
 resource "aws_eip" "nat" {
   count  = 2
   domain = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -267,14 +267,14 @@ resource "aws_eip" "nat" {
 
 resource "aws_nat_gateway" "main" {
   count = 2
-  
+
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-${count.index + 1}"
   })
-  
+
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -284,12 +284,12 @@ resource "aws_nat_gateway" "main" {
 
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-rt"
   })
@@ -298,12 +298,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private_app" {
   count  = 2
   vpc_id = aws_vpc.main.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-app-rt-${count.index + 1}"
   })
@@ -311,7 +311,7 @@ resource "aws_route_table" "private_app" {
 
 resource "aws_route_table" "private_db" {
   vpc_id = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-db-rt"
   })
@@ -323,21 +323,21 @@ resource "aws_route_table" "private_db" {
 
 resource "aws_route_table_association" "public" {
   count = 2
-  
+
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
 
 resource "aws_route_table_association" "private_app" {
   count = 2
-  
+
   subnet_id      = aws_subnet.private_app[count.index].id
   route_table_id = aws_route_table.private_app[count.index].id
 }
 
 resource "aws_route_table_association" "private_db" {
   count = 2
-  
+
   subnet_id      = aws_subnet.private_db[count.index].id
   route_table_id = aws_route_table.private_db.id
 }
@@ -350,7 +350,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
   name              = "/aws/vpc/${local.name_prefix}-flow-logs"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-logs"
   })
@@ -358,7 +358,7 @@ resource "aws_cloudwatch_log_group" "vpc_flow_logs" {
 
 resource "aws_iam_role" "vpc_flow_logs" {
   name = "${local.name_prefix}-vpc-flow-logs-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -369,14 +369,14 @@ resource "aws_iam_role" "vpc_flow_logs" {
       }
     }]
   })
-  
+
   tags = local.common_tags
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
   name = "${local.name_prefix}-vpc-flow-logs-policy"
   role = aws_iam_role.vpc_flow_logs.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -399,7 +399,7 @@ resource "aws_flow_log" "main" {
   log_destination_type = "cloud-watch-logs"
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.main.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc-flow-log"
   })
@@ -413,7 +413,7 @@ resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-alb-sg"
   description = "Security group for Application Load Balancer"
   vpc_id      = aws_vpc.main.id
-  
+
   dynamic "ingress" {
     for_each = [80, 443]
     content {
@@ -424,7 +424,7 @@ resource "aws_security_group" "alb" {
       description = "Allow HTTP${ingress.value == 443 ? "S" : ""} from allowlist"
     }
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -432,7 +432,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-sg"
   })
@@ -442,7 +442,7 @@ resource "aws_security_group" "app" {
   name        = "${local.name_prefix}-app-sg"
   description = "Security group for application instances"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = 443
     to_port         = 443
@@ -450,7 +450,7 @@ resource "aws_security_group" "app" {
     security_groups = [aws_security_group.alb.id]
     description     = "Allow HTTPS from ALB"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -458,7 +458,7 @@ resource "aws_security_group" "app" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-sg"
   })
@@ -468,7 +468,7 @@ resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-rds-sg"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
-  
+
   ingress {
     from_port       = 5432
     to_port         = 5432
@@ -476,7 +476,7 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.app.id]
     description     = "Allow PostgreSQL from app instances"
   }
-  
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -484,7 +484,7 @@ resource "aws_security_group" "rds" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-sg"
   })
@@ -496,7 +496,7 @@ resource "aws_security_group" "rds" {
 
 resource "aws_s3_bucket" "logs" {
   bucket = "${local.name_prefix}-logs-${data.aws_caller_identity.current.account_id}"
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-logs"
   })
@@ -504,7 +504,7 @@ resource "aws_s3_bucket" "logs" {
 
 resource "aws_s3_bucket_versioning" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -512,7 +512,7 @@ resource "aws_s3_bucket_versioning" "logs" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -522,7 +522,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
 
 resource "aws_s3_bucket_public_access_block" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
+
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -531,7 +531,7 @@ resource "aws_s3_bucket_public_access_block" "logs" {
 
 resource "aws_s3_bucket_policy" "logs" {
   bucket = aws_s3_bucket.logs.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -555,7 +555,7 @@ resource "aws_s3_bucket_policy" "logs" {
       }
     ]
   })
-  
+
   depends_on = [
     aws_s3_bucket_public_access_block.logs
   ]
@@ -570,22 +570,22 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets           = aws_subnet.public[*].id
-  
-  enable_deletion_protection = false
-  enable_http2              = true
+  subnets            = aws_subnet.public[*].id
+
+  enable_deletion_protection       = false
+  enable_http2                     = true
   enable_cross_zone_load_balancing = true
-  
+
   access_logs {
     bucket  = aws_s3_bucket.logs.bucket
     prefix  = "alb-logs"
     enabled = true
   }
-  
+
   depends_on = [
     aws_s3_bucket_policy.logs
   ]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
   })
@@ -596,7 +596,7 @@ resource "aws_lb_target_group" "app" {
   port     = 443
   protocol = "HTTPS"
   vpc_id   = aws_vpc.main.id
-  
+
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -607,7 +607,7 @@ resource "aws_lb_target_group" "app" {
     matcher             = "200"
     protocol            = "HTTPS"
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-tg"
   })
@@ -617,12 +617,12 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-  
+
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.app.arn
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-http-listener"
   })
@@ -635,83 +635,83 @@ resource "aws_lb_listener" "http" {
 resource "aws_wafv2_web_acl" "main" {
   name  = "${local.name_prefix}-waf"
   scope = "REGIONAL"
-  
+
   default_action {
     allow {}
   }
-  
+
   rule {
     name     = "AWSManagedRulesCommonRuleSet"
     priority = 1
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesCommonRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-common-rules"
+      metric_name                = "${local.name_prefix}-common-rules"
       sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "AWSManagedRulesKnownBadInputsRuleSet"
     priority = 2
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesKnownBadInputsRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-bad-inputs"
+      metric_name                = "${local.name_prefix}-bad-inputs"
       sampled_requests_enabled   = true
     }
   }
-  
+
   rule {
     name     = "AWSManagedRulesSQLiRuleSet"
     priority = 3
-    
+
     override_action {
       none {}
     }
-    
+
     statement {
       managed_rule_group_statement {
         name        = "AWSManagedRulesSQLiRuleSet"
         vendor_name = "AWS"
       }
     }
-    
+
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name               = "${local.name_prefix}-sqli-rules"
+      metric_name                = "${local.name_prefix}-sqli-rules"
       sampled_requests_enabled   = true
     }
   }
-  
+
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name               = "${local.name_prefix}-waf"
+    metric_name                = "${local.name_prefix}-waf"
     sampled_requests_enabled   = true
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-waf"
   })
@@ -730,7 +730,7 @@ resource "aws_cloudwatch_log_group" "app" {
   name              = "/app/web"
   retention_in_days = 30
   kms_key_id        = aws_kms_key.main.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-app-logs"
   })
@@ -742,7 +742,7 @@ resource "aws_cloudwatch_log_group" "app" {
 
 resource "aws_iam_role" "ec2" {
   name = "${local.name_prefix}-ec2-role"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -753,14 +753,14 @@ resource "aws_iam_role" "ec2" {
       }
     }]
   })
-  
+
   tags = local.common_tags
 }
 
 resource "aws_iam_role_policy" "ec2_cloudwatch" {
   name = "${local.name_prefix}-ec2-cloudwatch-policy"
   role = aws_iam_role.ec2.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -784,7 +784,7 @@ resource "aws_iam_role_policy" "ec2_cloudwatch" {
 resource "aws_iam_instance_profile" "ec2" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2.name
-  
+
   tags = local.common_tags
 }
 
@@ -796,25 +796,25 @@ resource "aws_launch_template" "app" {
   name_prefix   = "${local.name_prefix}-lt-"
   image_id      = data.aws_ami.amazon_linux_2023.id
   instance_type = "t3.micro"
-  
+
   vpc_security_group_ids = [aws_security_group.app.id]
-  
+
   iam_instance_profile {
     name = aws_iam_instance_profile.ec2.name
   }
-  
+
   block_device_mappings {
     device_name = "/dev/xvda"
-    
+
     ebs {
       volume_size           = 30
       volume_type           = "gp3"
-      encrypted            = true
-      kms_key_id           = aws_kms_key.main.arn
+      encrypted             = true
+      kms_key_id            = aws_kms_key.main.arn
       delete_on_termination = true
     }
   }
-  
+
   user_data = base64encode(<<-EOT
     #!/bin/bash
     yum update -y
@@ -878,14 +878,14 @@ resource "aws_launch_template" "app" {
       -a fetch-config -m ec2 -s -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json
   EOT
   )
-  
+
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
       Name = "${local.name_prefix}-app-instance"
     })
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-launch-template"
   })
@@ -898,7 +898,7 @@ resource "aws_launch_template" "app" {
 resource "aws_db_subnet_group" "main" {
   name       = "${local.name_prefix}-db-subnet-group"
   subnet_ids = aws_subnet.private_db[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group"
   })
@@ -913,32 +913,32 @@ resource "aws_db_instance" "postgres" {
   engine         = "postgres"
   engine_version = "15"
   instance_class = "db.t3.micro"
-  
+
   allocated_storage     = 20
   max_allocated_storage = 100
-  storage_type         = "gp3"
-  storage_encrypted    = true
-  kms_key_id          = aws_kms_key.main.arn
-  
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id            = aws_kms_key.main.arn
+
   db_name  = "appdb"
   username = "dbadmin"
   password = var.db_master_password
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  
-  multi_az               = true
-  publicly_accessible    = false
+
+  multi_az                = true
+  publicly_accessible     = false
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
-  deletion_protection = true
-  skip_final_snapshot = false
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
+  deletion_protection       = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name_prefix}-postgres-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   enabled_cloudwatch_logs_exports = ["postgresql"]
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-postgres"
   })

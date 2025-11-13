@@ -473,10 +473,10 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
   parameter_group_name   = aws_db_parameter_group.main.name
 
-  multi_az            = var.multi_az
-  publicly_accessible = false
-  deletion_protection = var.deletion_protection
-  skip_final_snapshot = false
+  multi_az                  = var.multi_az
+  publicly_accessible       = false
+  deletion_protection       = var.deletion_protection
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${var.db_identifier}-final-snapshot-${local.env_suffix}-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   backup_retention_period = var.backup_retention_period

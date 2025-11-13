@@ -70,7 +70,7 @@ variable "application_name" {
 
 variable "solution_stack_name" {
   description = "Elastic Beanstalk solution stack"
-  type        = string  
+  type        = string
   default     = "64bit Amazon Linux 2023 v6.6.4 running Node.js 22"
 }
 

@@ -65,7 +65,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = "${aws_s3_bucket.cloudtrail.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"  = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:aws:cloudtrail:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:trail/${var.project_name}-CloudTrail-${var.environment}"
           }
         }
@@ -176,7 +176,7 @@ resource "aws_cloudwatch_metric_alarm" "excessive_login_attempts" {
   evaluation_periods  = "1"
   metric_name         = "FailedLoginAttempts"
   namespace           = "Security/Authentication"
-  period              = "300"  # 5 minutes
+  period              = "300" # 5 minutes
   statistic           = "Sum"
   threshold           = "10"
   alarm_description   = "This metric monitors failed login attempts"
@@ -286,7 +286,7 @@ resource "aws_s3_bucket_policy" "config" {
         Resource = "${aws_s3_bucket.config.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl" = "bucket-owner-full-control"
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
             "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
           }
         }
@@ -336,8 +336,8 @@ resource "aws_iam_role_policy" "config_s3" {
         Resource = aws_s3_bucket.config.arn
       },
       {
-        Effect = "Allow"
-        Action = "s3:PutObject"
+        Effect   = "Allow"
+        Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.config.arn}/*"
         Condition = {
           StringEquals = {
@@ -346,8 +346,8 @@ resource "aws_iam_role_policy" "config_s3" {
         }
       },
       {
-        Effect = "Allow"
-        Action = "s3:GetObject"
+        Effect   = "Allow"
+        Action   = "s3:GetObject"
         Resource = "${aws_s3_bucket.config.arn}/*"
       }
     ]
@@ -465,22 +465,22 @@ resource "aws_config_config_rule" "mfa_enabled_for_iam_console_access" {
 resource "aws_config_remediation_configuration" "s3_encryption_remediation" {
   config_rule_name = aws_config_config_rule.s3_bucket_server_side_encryption_enabled.name
 
-  resource_type    = "AWS::S3::Bucket"
-  target_type      = "SSM_DOCUMENT"
-  target_id        = "AWS-PublishSNSNotification"
-  target_version   = "1"
+  resource_type  = "AWS::S3::Bucket"
+  target_type    = "SSM_DOCUMENT"
+  target_id      = "AWS-PublishSNSNotification"
+  target_version = "1"
 
   parameter {
-    name           = "TopicArn"
-    static_value   = aws_sns_topic.security_alerts.arn
+    name         = "TopicArn"
+    static_value = aws_sns_topic.security_alerts.arn
   }
 
   parameter {
-    name           = "Message"
-    static_value   = "S3 bucket encryption compliance violation detected"
+    name         = "Message"
+    static_value = "S3 bucket encryption compliance violation detected"
   }
 
-  automatic                = false
+  automatic                  = false
   maximum_automatic_attempts = 1
 
   depends_on = [aws_config_config_rule.s3_bucket_server_side_encryption_enabled]

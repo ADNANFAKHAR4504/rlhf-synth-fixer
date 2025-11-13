@@ -92,11 +92,11 @@ data "aws_caller_identity" "current" {}
 locals {
   vpc_cidr = "10.0.0.0/16"
   azs      = slice(data.aws_availability_zones.available.names, 0, 3)
-  
+
   # Subnet CIDR calculations
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
-  
+
   common_tags = {
     Environment = var.environment
     ManagedBy   = "terraform"
@@ -572,10 +572,10 @@ resource "aws_db_instance" "main" {
   engine_version = var.rds_engine_version
   instance_class = var.rds_instance_class
 
-  allocated_storage     = var.rds_allocated_storage
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  
+  allocated_storage = var.rds_allocated_storage
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = "tapdb"
   username = "a${random_string.rds_username.result}"
   password = random_password.rds_password.result
@@ -583,13 +583,13 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az               = true
-  publicly_accessible    = false
+  multi_az                   = true
+  publicly_accessible        = false
   auto_minor_version_upgrade = true
 
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
@@ -633,16 +633,16 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 # ==========================================
 
 resource "aws_dynamodb_table" "main" {
-  name           = "tap-dynamodb-table"
-  billing_mode   = "PAY_PER_REQUEST"
-  hash_key       = "id"
-  range_key      = "timestamp"
-  
+  name         = "tap-dynamodb-table"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "id"
+  range_key    = "timestamp"
+
   attribute {
     name = "id"
     type = "S"
   }
-  
+
   attribute {
     name = "timestamp"
     type = "N"

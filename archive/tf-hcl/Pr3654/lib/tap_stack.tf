@@ -134,7 +134,7 @@ resource "aws_route_table_association" "public" {
 
 resource "aws_eip" "nat" {
   domain = "vpc"
-  tags = merge(local.common_tags, { Name = "${local.name_prefix}nat-eip" })
+  tags   = merge(local.common_tags, { Name = "${local.name_prefix}nat-eip" })
 }
 
 resource "aws_nat_gateway" "this" {
@@ -306,18 +306,18 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
     Version = "2012-10-17",
     Statement = [
       {
-        Sid      = "AWSCloudTrailAclCheck",
-        Effect   = "Allow",
+        Sid       = "AWSCloudTrailAclCheck",
+        Effect    = "Allow",
         Principal = { Service = "cloudtrail.amazonaws.com" },
-        Action   = "s3:GetBucketAcl",
-        Resource = "arn:aws:s3:::${local.cloudtrail_bucket_name}"
+        Action    = "s3:GetBucketAcl",
+        Resource  = "arn:aws:s3:::${local.cloudtrail_bucket_name}"
       },
       {
-        Sid      = "AWSCloudTrailWrite",
-        Effect   = "Allow",
+        Sid       = "AWSCloudTrailWrite",
+        Effect    = "Allow",
         Principal = { Service = "cloudtrail.amazonaws.com" },
-        Action   = "s3:PutObject",
-        Resource = "arn:aws:s3:::${local.cloudtrail_bucket_name}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
+        Action    = "s3:PutObject",
+        Resource  = "arn:aws:s3:::${local.cloudtrail_bucket_name}/AWSLogs/${data.aws_caller_identity.current.account_id}/*",
         Condition = { StringEquals = { "s3:x-amz-acl" = "bucket-owner-full-control" } }
       }
     ]
@@ -332,7 +332,7 @@ resource "aws_iam_role" "ec2_role" {
   name = "${local.name_prefix}ec2-s3-access-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "ec2.amazonaws.com" } }]
   })
 
@@ -367,7 +367,7 @@ resource "aws_iam_role" "lambda_role" {
   name = "${local.name_prefix}lambda-s3-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "lambda.amazonaws.com" } }]
   })
 
@@ -402,7 +402,7 @@ resource "aws_iam_role" "config_role" {
   name = "${local.name_prefix}aws-config-role"
 
   assume_role_policy = jsonencode({
-    Version = "2012-10-17",
+    Version   = "2012-10-17",
     Statement = [{ Action = "sts:AssumeRole", Effect = "Allow", Principal = { Service = "config.amazonaws.com" } }]
   })
 
@@ -488,14 +488,14 @@ resource "aws_db_instance" "postgres" {
 # =============================================================================
 
 resource "aws_lb" "app" {
-  name                        = "${local.name_prefix}app-lb"
-  internal                    = false
-  load_balancer_type          = "application"
-  security_groups             = [aws_security_group.alb.id]
-  subnets                     = aws_subnet.public.*.id
-  enable_deletion_protection  = true
-  drop_invalid_header_fields  = true
-  tags                        = local.common_tags
+  name                       = "${local.name_prefix}app-lb"
+  internal                   = false
+  load_balancer_type         = "application"
+  security_groups            = [aws_security_group.alb.id]
+  subnets                    = aws_subnet.public.*.id
+  enable_deletion_protection = true
+  drop_invalid_header_fields = true
+  tags                       = local.common_tags
 }
 
 resource "aws_lb_target_group" "app" {
@@ -702,13 +702,13 @@ data "archive_file" "inline_lambda" {
 }
 
 resource "aws_lambda_function" "app" {
-  function_name   = "${local.name_prefix}${var.lambda_name}"
-  role            = aws_iam_role.lambda_role.arn
-  handler         = "index.handler"
-  runtime         = "nodejs16.x"
-  filename        = data.archive_file.inline_lambda.output_path
+  function_name    = "${local.name_prefix}${var.lambda_name}"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "index.handler"
+  runtime          = "nodejs16.x"
+  filename         = data.archive_file.inline_lambda.output_path
   source_code_hash = data.archive_file.inline_lambda.output_base64sha256
-  depends_on      = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
+  depends_on       = [aws_cloudwatch_log_group.lambda, aws_iam_role_policy_attachment.lambda_logs]
 
   environment {
     variables = {
@@ -806,7 +806,7 @@ resource "aws_api_gateway_integration" "lambda" {
 }
 
 resource "aws_api_gateway_deployment" "app" {
-  depends_on = [aws_api_gateway_integration.lambda]
+  depends_on  = [aws_api_gateway_integration.lambda]
   rest_api_id = aws_api_gateway_rest_api.app.id
 
   lifecycle { create_before_destroy = true }

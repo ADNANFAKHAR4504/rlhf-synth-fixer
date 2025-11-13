@@ -69,33 +69,33 @@ variable "backtrack_window" {
 
 locals {
   common_tags = {
-    Environment  = var.environment
-    Project      = var.project_name
-    ManagedBy    = "Terraform"
-    CreatedDate  = timestamp()
-    Purpose      = "RDS Migration"
-    SLA          = "99.99"
-    Compliance   = "Financial Services"
+    Environment = var.environment
+    Project     = var.project_name
+    ManagedBy   = "Terraform"
+    CreatedDate = timestamp()
+    Purpose     = "RDS Migration"
+    SLA         = "99.99"
+    Compliance  = "Financial Services"
   }
 
   # Consistent naming pattern: {environment}-{service}-{resource_type}-slmr
   vpc_name_primary   = "${var.environment}-vpc-primary-slmr"
   vpc_name_secondary = "${var.environment}-vpc-secondary-slmr"
-  
+
   db_cluster_identifier = "${var.environment}-aurora-cluster-slmr"
-  db_name              = "finservdb"
-  db_port              = 5432
-  
-  s3_bucket_primary    = "${var.environment}-rds-backup-primary-slmr"
-  s3_bucket_secondary  = "${var.environment}-rds-backup-secondary-slmr"
-  
-  route53_zone_name    = "rdsmigration.com"
-  
+  db_name               = "finservdb"
+  db_port               = 5432
+
+  s3_bucket_primary   = "${var.environment}-rds-backup-primary-slmr"
+  s3_bucket_secondary = "${var.environment}-rds-backup-secondary-slmr"
+
+  route53_zone_name = "rdsmigration.com"
+
   lambda_function_name = "${var.environment}-failover-orchestrator-slmr"
-  
+
   dms_replication_instance = "${var.environment}-dms-instance-slmr"
-  
-  alarm_topic_name     = "${var.environment}-aurora-alarms-slmr"
+
+  alarm_topic_name = "${var.environment}-aurora-alarms-slmr"
 }
 
 # ============================================================================
@@ -145,7 +145,7 @@ resource "aws_kms_key" "aurora_primary" {
   description             = "KMS key for Aurora encryption - Primary Region"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-kms-aurora-primary-slmr"
   })
@@ -162,7 +162,7 @@ resource "aws_kms_key" "aurora_secondary" {
   description             = "KMS key for Aurora encryption - Secondary Region"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-kms-aurora-secondary-slmr"
   })
@@ -184,7 +184,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name   = local.vpc_name_primary
     Region = var.primary_region
@@ -195,7 +195,7 @@ resource "aws_vpc" "primary" {
 resource "aws_internet_gateway" "primary" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-igw-primary-slmr"
   })
@@ -209,7 +209,7 @@ resource "aws_subnet" "primary_public" {
   cidr_block              = "10.0.${count.index + 1}.0/24"
   availability_zone       = data.aws_availability_zones.primary.names[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-subnet-public-${count.index + 1}-primary-slmr"
     Type = "Public"
@@ -223,7 +223,7 @@ resource "aws_subnet" "primary_private" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = "10.0.${count.index + 3}.0/24"
   availability_zone = data.aws_availability_zones.primary.names[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-subnet-private-${count.index + 1}-primary-slmr"
     Type = "Private"
@@ -234,7 +234,7 @@ resource "aws_subnet" "primary_private" {
 resource "aws_eip" "primary_nat" {
   provider = aws.us_east_1
   domain   = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-eip-nat-primary-slmr"
   })
@@ -245,11 +245,11 @@ resource "aws_nat_gateway" "primary" {
   provider      = aws.us_east_1
   allocation_id = aws_eip.primary_nat.id
   subnet_id     = aws_subnet.primary_public[0].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-nat-primary-slmr"
   })
-  
+
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -257,12 +257,12 @@ resource "aws_nat_gateway" "primary" {
 resource "aws_route_table" "primary_public" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-rt-public-primary-slmr"
     Type = "Public"
@@ -273,12 +273,12 @@ resource "aws_route_table" "primary_public" {
 resource "aws_route_table" "primary_private" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-rt-private-primary-slmr"
     Type = "Private"
@@ -311,7 +311,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = "10.1.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name   = local.vpc_name_secondary
     Region = var.secondary_region
@@ -322,7 +322,7 @@ resource "aws_vpc" "secondary" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-igw-secondary-slmr"
   })
@@ -336,7 +336,7 @@ resource "aws_subnet" "secondary_public" {
   cidr_block              = "10.1.${count.index + 1}.0/24"
   availability_zone       = data.aws_availability_zones.secondary.names[count.index]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-subnet-public-${count.index + 1}-secondary-slmr"
     Type = "Public"
@@ -350,7 +350,7 @@ resource "aws_subnet" "secondary_private" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = "10.1.${count.index + 3}.0/24"
   availability_zone = data.aws_availability_zones.secondary.names[count.index]
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-subnet-private-${count.index + 1}-secondary-slmr"
     Type = "Private"
@@ -361,7 +361,7 @@ resource "aws_subnet" "secondary_private" {
 resource "aws_eip" "secondary_nat" {
   provider = aws.us_west_2
   domain   = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-eip-nat-secondary-slmr"
   })
@@ -372,11 +372,11 @@ resource "aws_nat_gateway" "secondary" {
   provider      = aws.us_west_2
   allocation_id = aws_eip.secondary_nat.id
   subnet_id     = aws_subnet.secondary_public[0].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-nat-secondary-slmr"
   })
-  
+
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -384,12 +384,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "secondary_public" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-rt-public-secondary-slmr"
     Type = "Public"
@@ -400,12 +400,12 @@ resource "aws_route_table" "secondary_public" {
 resource "aws_route_table" "secondary_private" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-rt-private-secondary-slmr"
     Type = "Private"
@@ -434,12 +434,12 @@ resource "aws_route_table_association" "secondary_private" {
 
 # VPC Peering Connection Request
 resource "aws_vpc_peering_connection" "primary_to_secondary" {
-  provider      = aws.us_east_1
-  vpc_id        = aws_vpc.primary.id
-  peer_vpc_id   = aws_vpc.secondary.id
-  peer_region   = var.secondary_region
-  auto_accept   = false
-  
+  provider    = aws.us_east_1
+  vpc_id      = aws_vpc.primary.id
+  peer_vpc_id = aws_vpc.secondary.id
+  peer_region = var.secondary_region
+  auto_accept = false
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-peering-primary-secondary-slmr"
     Side = "Requester"
@@ -451,7 +451,7 @@ resource "aws_vpc_peering_connection_accepter" "secondary" {
   provider                  = aws.us_west_2
   vpc_peering_connection_id = aws_vpc_peering_connection.primary_to_secondary.id
   auto_accept               = true
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-peering-accepter-slmr"
     Side = "Accepter"
@@ -462,7 +462,7 @@ resource "aws_vpc_peering_connection_accepter" "secondary" {
 resource "aws_vpc_peering_connection_options" "primary" {
   provider                  = aws.us_east_1
   vpc_peering_connection_id = aws_vpc_peering_connection_accepter.secondary.id
-  
+
   requester {
     allow_remote_vpc_dns_resolution = true
   }
@@ -472,7 +472,7 @@ resource "aws_vpc_peering_connection_options" "primary" {
 resource "aws_vpc_peering_connection_options" "secondary" {
   provider                  = aws.us_west_2
   vpc_peering_connection_id = aws_vpc_peering_connection_accepter.secondary.id
-  
+
   accepter {
     allow_remote_vpc_dns_resolution = true
   }
@@ -506,7 +506,7 @@ resource "aws_security_group" "aurora_primary" {
   name        = "${var.environment}-sg-aurora-primary-slmr"
   description = "Security group for Aurora cluster in primary region"
   vpc_id      = aws_vpc.primary.id
-  
+
   ingress {
     description = "PostgreSQL from VPC"
     from_port   = local.db_port
@@ -514,7 +514,7 @@ resource "aws_security_group" "aurora_primary" {
     protocol    = "tcp"
     cidr_blocks = [aws_vpc.primary.cidr_block]
   }
-  
+
   ingress {
     description = "PostgreSQL from Secondary VPC"
     from_port   = local.db_port
@@ -522,7 +522,7 @@ resource "aws_security_group" "aurora_primary" {
     protocol    = "tcp"
     cidr_blocks = [aws_vpc.secondary.cidr_block]
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -530,7 +530,7 @@ resource "aws_security_group" "aurora_primary" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-sg-aurora-primary-slmr"
   })
@@ -542,7 +542,7 @@ resource "aws_security_group" "aurora_secondary" {
   name        = "${var.environment}-sg-aurora-secondary-slmr"
   description = "Security group for Aurora cluster in secondary region"
   vpc_id      = aws_vpc.secondary.id
-  
+
   ingress {
     description = "PostgreSQL from VPC"
     from_port   = local.db_port
@@ -550,7 +550,7 @@ resource "aws_security_group" "aurora_secondary" {
     protocol    = "tcp"
     cidr_blocks = [aws_vpc.secondary.cidr_block]
   }
-  
+
   ingress {
     description = "PostgreSQL from Primary VPC"
     from_port   = local.db_port
@@ -558,7 +558,7 @@ resource "aws_security_group" "aurora_secondary" {
     protocol    = "tcp"
     cidr_blocks = [aws_vpc.primary.cidr_block]
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -566,7 +566,7 @@ resource "aws_security_group" "aurora_secondary" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-sg-aurora-secondary-slmr"
   })
@@ -578,7 +578,7 @@ resource "aws_security_group" "dms" {
   name        = "${var.environment}-sg-dms-slmr"
   description = "Security group for DMS replication instance"
   vpc_id      = aws_vpc.primary.id
-  
+
   ingress {
     description = "Allow from self"
     from_port   = 0
@@ -586,7 +586,7 @@ resource "aws_security_group" "dms" {
     protocol    = "tcp"
     self        = true
   }
-  
+
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -594,7 +594,7 @@ resource "aws_security_group" "dms" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-sg-dms-slmr"
   })
@@ -610,7 +610,7 @@ resource "aws_db_subnet_group" "primary" {
   name        = "${var.environment}-db-subnet-group-primary-slmr"
   description = "Database subnet group for primary region"
   subnet_ids  = aws_subnet.primary_private[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-db-subnet-group-primary-slmr"
   })
@@ -622,7 +622,7 @@ resource "aws_db_subnet_group" "secondary" {
   name        = "${var.environment}-db-subnet-group-secondary-slmr"
   description = "Database subnet group for secondary region"
   subnet_ids  = aws_subnet.secondary_private[*].id
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-db-subnet-group-secondary-slmr"
   })
@@ -663,13 +663,13 @@ resource "aws_rds_cluster" "primary" {
   deletion_protection             = true
   skip_final_snapshot             = false
   final_snapshot_identifier       = "${local.db_cluster_identifier}-primary-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.db_cluster_identifier}-primary"
     Region = var.primary_region
     Role   = "Primary"
   })
-  
+
   lifecycle {
     ignore_changes = [master_password]
   }
@@ -688,7 +688,7 @@ resource "aws_rds_cluster_instance" "primary_writer" {
   performance_insights_enabled = true
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.aurora_monitoring.arn
-  depends_on = [aws_rds_cluster.primary]
+  depends_on                   = [aws_rds_cluster.primary]
   tags = merge(local.common_tags, {
     Name = "${local.db_cluster_identifier}-primary-writer-slmr"
     Role = "Writer"
@@ -707,7 +707,7 @@ resource "aws_rds_cluster_instance" "primary_reader" {
   performance_insights_enabled = true
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.aurora_monitoring.arn
-  
+
   tags = merge(local.common_tags, {
     Name = "${local.db_cluster_identifier}-primary-reader-slmr"
     Role = "Reader"
@@ -732,13 +732,13 @@ resource "aws_rds_cluster" "secondary" {
   deletion_protection             = false
   skip_final_snapshot             = false
   final_snapshot_identifier       = "${local.db_cluster_identifier}-secondary-final-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.db_cluster_identifier}-secondary-n"
     Region = var.secondary_region
     Role   = "Secondary"
   })
-  
+
   depends_on = [aws_rds_cluster_instance.primary_writer]
 }
 
@@ -755,7 +755,7 @@ resource "aws_rds_cluster_instance" "secondary" {
   performance_insights_enabled = true
   monitoring_interval          = 60
   monitoring_role_arn          = aws_iam_role.aurora_monitoring_secondary.arn
-  depends_on = [aws_rds_cluster.secondary]
+  depends_on                   = [aws_rds_cluster.secondary]
   tags = merge(local.common_tags, {
     Name = "${local.db_cluster_identifier}-secondary-${count.index + 1}-slmr"
     Role = count.index == 0 ? "Secondary-Writer" : "Secondary-Reader"
@@ -770,7 +770,7 @@ resource "aws_rds_cluster_instance" "secondary" {
 resource "aws_iam_role" "aurora_monitoring" {
   provider = aws.us_east_1
   name     = "${var.environment}-aurora-monitoring-primary-slmr"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -783,7 +783,7 @@ resource "aws_iam_role" "aurora_monitoring" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-aurora-monitoring-primary-slmr"
   })
@@ -800,7 +800,7 @@ resource "aws_iam_role_policy_attachment" "aurora_monitoring" {
 resource "aws_iam_role" "aurora_monitoring_secondary" {
   provider = aws.us_west_2
   name     = "${var.environment}-aurora-monitoring-secondary-slmr"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -813,7 +813,7 @@ resource "aws_iam_role" "aurora_monitoring_secondary" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-aurora-monitoring-secondary-slmr"
   })
@@ -830,7 +830,7 @@ resource "aws_iam_role_policy_attachment" "aurora_monitoring_secondary" {
 resource "aws_iam_role" "lambda_failover" {
   provider = aws.us_east_1
   name     = "${var.environment}-lambda-failover-role-slmr"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -843,7 +843,7 @@ resource "aws_iam_role" "lambda_failover" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-lambda-failover-role-slmr"
   })
@@ -854,7 +854,7 @@ resource "aws_iam_role_policy" "lambda_failover" {
   provider = aws.us_east_1
   name     = "${var.environment}-lambda-failover-policy-slmr"
   role     = aws_iam_role.lambda_failover.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -891,7 +891,7 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 resource "aws_iam_role" "dms" {
   provider = aws.us_east_1
   name     = "${var.environment}-dms-role-slmr"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -904,7 +904,7 @@ resource "aws_iam_role" "dms" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-dms-role-slmr"
   })
@@ -915,7 +915,7 @@ resource "aws_iam_role_policy" "dms" {
   provider = aws.us_east_1
   name     = "${var.environment}-dms-policy-slmr"
   role     = aws_iam_role.dms.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -944,7 +944,7 @@ resource "aws_iam_role_policy" "dms" {
 resource "aws_s3_bucket" "backup_primary" {
   provider = aws.us_east_1
   bucket   = local.s3_bucket_primary
-  
+
   tags = merge(local.common_tags, {
     Name = local.s3_bucket_primary
   })
@@ -954,7 +954,7 @@ resource "aws_s3_bucket" "backup_primary" {
 resource "aws_s3_bucket_versioning" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -964,7 +964,7 @@ resource "aws_s3_bucket_versioning" "backup_primary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
@@ -977,16 +977,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "backup_primary" {
 resource "aws_s3_bucket_lifecycle_configuration" "backup_primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   rule {
     id     = "transition-old-backups"
     status = "Enabled"
-    
+
     transition {
       days          = 30
       storage_class = "GLACIER"
     }
-    
+
     expiration {
       days = 365
     }
@@ -997,7 +997,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup_primary" {
 resource "aws_s3_bucket" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = local.s3_bucket_secondary
-  
+
   tags = merge(local.common_tags, {
     Name = local.s3_bucket_secondary
   })
@@ -1007,7 +1007,7 @@ resource "aws_s3_bucket" "backup_secondary" {
 resource "aws_s3_bucket_versioning" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.backup_secondary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -1017,7 +1017,7 @@ resource "aws_s3_bucket_versioning" "backup_secondary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "backup_secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.backup_secondary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
@@ -1030,7 +1030,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "backup_secondary"
 resource "aws_iam_role" "s3_replication" {
   provider = aws.us_east_1
   name     = "${var.environment}-s3-replication-role-slmr"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1043,7 +1043,7 @@ resource "aws_iam_role" "s3_replication" {
       }
     ]
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-s3-replication-role-slmr"
   })
@@ -1054,7 +1054,7 @@ resource "aws_iam_role_policy" "s3_replication" {
   provider = aws.us_east_1
   name     = "${var.environment}-s3-replication-policy-slmr"
   role     = aws_iam_role.s3_replication.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1091,20 +1091,20 @@ resource "aws_s3_bucket_replication_configuration" "backup_replication" {
   provider = aws.us_east_1
   role     = aws_iam_role.s3_replication.arn
   bucket   = aws_s3_bucket.backup_primary.id
-  
+
   rule {
     id     = "replicate-to-secondary"
     status = "Enabled"
-    
+
     destination {
       bucket        = aws_s3_bucket.backup_secondary.arn
       storage_class = "STANDARD_IA"
     }
   }
- depends_on = [
+  depends_on = [
     aws_s3_bucket_versioning.backup_primary,
     aws_s3_bucket_versioning.backup_secondary
-  ] 
+  ]
 }
 
 # ============================================================================
@@ -1115,7 +1115,7 @@ resource "aws_s3_bucket_replication_configuration" "backup_replication" {
 resource "aws_route53_zone" "main" {
   provider = aws.us_east_1
   name     = local.route53_zone_name
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-route53-zone-slmr"
   })
@@ -1129,7 +1129,7 @@ resource "aws_route53_health_check" "primary" {
   type              = "TCP"
   failure_threshold = "3"
   request_interval  = "30"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-healthcheck-primary-slmr"
   })
@@ -1143,7 +1143,7 @@ resource "aws_route53_health_check" "secondary" {
   type              = "TCP"
   failure_threshold = "3"
   request_interval  = "30"
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-healthcheck-secondary-slmr"
   })
@@ -1156,13 +1156,13 @@ resource "aws_route53_record" "db_primary" {
   name     = "db.${local.route53_zone_name}"
   type     = "CNAME"
   ttl      = "60"
-  
+
   weighted_routing_policy {
     weight = 100
   }
-  
-  set_identifier = "Primary"
-  records        = [aws_rds_cluster.primary.endpoint]
+
+  set_identifier  = "Primary"
+  records         = [aws_rds_cluster.primary.endpoint]
   health_check_id = aws_route53_health_check.primary.id
 }
 
@@ -1173,13 +1173,13 @@ resource "aws_route53_record" "db_secondary" {
   name     = "db.${local.route53_zone_name}"
   type     = "CNAME"
   ttl      = "60"
-  
+
   weighted_routing_policy {
     weight = 0
   }
-  
-  set_identifier = "Secondary"
-  records        = [aws_rds_cluster.secondary.endpoint]
+
+  set_identifier  = "Secondary"
+  records         = [aws_rds_cluster.secondary.endpoint]
   health_check_id = aws_route53_health_check.secondary.id
 }
 
@@ -1192,8 +1192,8 @@ resource "aws_dms_replication_subnet_group" "main" {
   provider                             = aws.us_east_1
   replication_subnet_group_id          = "${var.environment}-dms-subnet-group-slmr"
   replication_subnet_group_description = "DMS subnet group for RDS migration"
-  subnet_ids                            = aws_subnet.primary_private[*].id
-  
+  subnet_ids                           = aws_subnet.primary_private[*].id
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-dms-subnet-group-slmr"
   })
@@ -1201,17 +1201,17 @@ resource "aws_dms_replication_subnet_group" "main" {
 
 # DMS Replication Instance
 resource "aws_dms_replication_instance" "main" {
-  provider                     = aws.us_east_1
-  replication_instance_id      = local.dms_replication_instance
-  replication_instance_class   = "dms.c5.xlarge"
-  allocated_storage            = 100
-  vpc_security_group_ids       = [aws_security_group.dms.id]
-  replication_subnet_group_id  = aws_dms_replication_subnet_group.main.id
-  multi_az                     = true
-  publicly_accessible          = false
-  auto_minor_version_upgrade   = true
-  apply_immediately            = true
-  
+  provider                    = aws.us_east_1
+  replication_instance_id     = local.dms_replication_instance
+  replication_instance_class  = "dms.c5.xlarge"
+  allocated_storage           = 100
+  vpc_security_group_ids      = [aws_security_group.dms.id]
+  replication_subnet_group_id = aws_dms_replication_subnet_group.main.id
+  multi_az                    = true
+  publicly_accessible         = false
+  auto_minor_version_upgrade  = true
+  apply_immediately           = true
+
   tags = merge(local.common_tags, {
     Name = local.dms_replication_instance
   })
@@ -1219,17 +1219,17 @@ resource "aws_dms_replication_instance" "main" {
 
 # DMS Source Endpoint
 resource "aws_dms_endpoint" "source" {
-  provider                = aws.us_east_1
-  endpoint_id             = "${var.environment}-dms-source-endpoint-slmr"
-  endpoint_type           = "source"
-  engine_name             = "aurora-postgresql"
-  server_name             = aws_rds_cluster.primary.endpoint
-  port                    = local.db_port
-  database_name           = local.db_name
-  username                = "dbadmin"
-  password                = random_password.aurora_master.result
-  ssl_mode                = "require"
-  
+  provider      = aws.us_east_1
+  endpoint_id   = "${var.environment}-dms-source-endpoint-slmr"
+  endpoint_type = "source"
+  engine_name   = "aurora-postgresql"
+  server_name   = aws_rds_cluster.primary.endpoint
+  port          = local.db_port
+  database_name = local.db_name
+  username      = "dbadmin"
+  password      = random_password.aurora_master.result
+  ssl_mode      = "require"
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-dms-source-endpoint-slmr"
   })
@@ -1237,17 +1237,17 @@ resource "aws_dms_endpoint" "source" {
 
 # DMS Target Endpoint
 resource "aws_dms_endpoint" "target" {
-  provider                = aws.us_east_1
-  endpoint_id             = "${var.environment}-dms-target-endpoint-slmr"
-  endpoint_type           = "target"
-  engine_name             = "aurora-postgresql"
-  server_name             = aws_rds_cluster.secondary.endpoint
-  port                    = local.db_port
-  database_name           = local.db_name
-  username                = "dbadmin"
-  password                = random_password.aurora_master.result
-  ssl_mode                = "require"
-  
+  provider      = aws.us_east_1
+  endpoint_id   = "${var.environment}-dms-target-endpoint-slmr"
+  endpoint_type = "target"
+  engine_name   = "aurora-postgresql"
+  server_name   = aws_rds_cluster.secondary.endpoint
+  port          = local.db_port
+  database_name = local.db_name
+  username      = "dbadmin"
+  password      = random_password.aurora_master.result
+  ssl_mode      = "require"
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-dms-target-endpoint-slmr"
   })
@@ -1255,13 +1255,13 @@ resource "aws_dms_endpoint" "target" {
 
 # DMS Replication Task
 resource "aws_dms_replication_task" "main" {
-  provider                  = aws.us_east_1
-  migration_type            = "full-load-and-cdc"
-  replication_instance_arn  = aws_dms_replication_instance.main.replication_instance_arn
-  replication_task_id       = "${var.environment}-dms-task-slmr"
-  source_endpoint_arn       = aws_dms_endpoint.source.endpoint_arn
-  target_endpoint_arn       = aws_dms_endpoint.target.endpoint_arn
-  table_mappings           = jsonencode({
+  provider                 = aws.us_east_1
+  migration_type           = "full-load-and-cdc"
+  replication_instance_arn = aws_dms_replication_instance.main.replication_instance_arn
+  replication_task_id      = "${var.environment}-dms-task-slmr"
+  source_endpoint_arn      = aws_dms_endpoint.source.endpoint_arn
+  target_endpoint_arn      = aws_dms_endpoint.target.endpoint_arn
+  table_mappings = jsonencode({
     rules = [
       {
         rule-type = "selection"
@@ -1275,52 +1275,52 @@ resource "aws_dms_replication_task" "main" {
       }
     ]
   })
-  
+
   replication_task_settings = jsonencode({
     TargetMetadata = {
-      FullLobMode = false
+      FullLobMode  = false
       LobChunkSize = 64
-      LobMaxSize = 32
+      LobMaxSize   = 32
     }
     FullLoadSettings = {
-      MaxFullLoadSubTasks = 8
+      MaxFullLoadSubTasks           = 8
       TransactionConsistencyTimeout = 600
-      CommitRate = 10000
+      CommitRate                    = 10000
     }
     Logging = {
       EnableLogging = true
       LogComponents = [
         {
-          Id = "SOURCE_CAPTURE"
+          Id       = "SOURCE_CAPTURE"
           Severity = "LOGGER_SEVERITY_DEFAULT"
         },
         {
-          Id = "TARGET_APPLY"
+          Id       = "TARGET_APPLY"
           Severity = "LOGGER_SEVERITY_DEFAULT"
         }
       ]
     }
     ControlTablesSettings = {
-      ControlSchema = "dms_control"
-      HistoryTimeslotInMinutes = 5
-      HistoryTableEnabled = true
+      ControlSchema               = "dms_control"
+      HistoryTimeslotInMinutes    = 5
+      HistoryTableEnabled         = true
       SuspendedTablesTableEnabled = true
-      StatusTableEnabled = true
+      StatusTableEnabled          = true
     }
     ChangeProcessingTuning = {
-      BatchApplyEnabled = true
-      BatchApplyTimeoutMin = 1
-      BatchApplyTimeoutMax = 30
+      BatchApplyEnabled     = true
+      BatchApplyTimeoutMin  = 1
+      BatchApplyTimeoutMax  = 30
       BatchApplyMemoryLimit = 500
-      BatchSplitSize = 0
-      MinTransactionSize = 1000
-      CommitTimeout = 1
-      MemoryLimitTotal = 1024
-      MemoryKeepTime = 60
-      StatementCacheSize = 50
+      BatchSplitSize        = 0
+      MinTransactionSize    = 1000
+      CommitTimeout         = 1
+      MemoryLimitTotal      = 1024
+      MemoryKeepTime        = 60
+      StatementCacheSize    = 50
     }
   })
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-dms-task-slmr"
   })
@@ -1334,7 +1334,7 @@ resource "aws_dms_replication_task" "main" {
 resource "aws_sns_topic" "alarms" {
   provider = aws.us_east_1
   name     = local.alarm_topic_name
-  
+
   tags = merge(local.common_tags, {
     Name = local.alarm_topic_name
   })
@@ -1365,11 +1365,11 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu" {
   threshold           = "80"
   alarm_description   = "This metric monitors Aurora primary cluster CPU utilization"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     DBClusterIdentifier = aws_rds_cluster.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-aurora-primary-cpu-alarm-slmr"
   })
@@ -1388,11 +1388,11 @@ resource "aws_cloudwatch_metric_alarm" "primary_connections" {
   threshold           = "800"
   alarm_description   = "This metric monitors Aurora primary database connections"
   alarm_actions       = [aws_sns_topic.alarms.arn]
-  
+
   dimensions = {
     DBClusterIdentifier = aws_rds_cluster.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-aurora-primary-connections-alarm-slmr"
   })
@@ -1412,11 +1412,11 @@ resource "aws_cloudwatch_metric_alarm" "replication_lag" {
   alarm_description   = "Alert when replication lag exceeds 1 second"
   alarm_actions       = [aws_sns_topic.alarms.arn]
   treat_missing_data  = "breaching"
-  
+
   dimensions = {
     DBClusterIdentifier = aws_rds_cluster.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-aurora-replication-lag-alarm-slmr"
   })
@@ -1436,12 +1436,12 @@ resource "aws_cloudwatch_metric_alarm" "dms_task_failed" {
   alarm_description   = "Alert when DMS task fails"
   alarm_actions       = [aws_sns_topic.alarms.arn]
   treat_missing_data  = "breaching"
-  
+
   dimensions = {
     ReplicationInstanceIdentifier = aws_dms_replication_instance.main.replication_instance_id
     ReplicationTaskIdentifier     = aws_dms_replication_task.main.replication_task_id
   }
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-dms-task-failed-alarm-slmr"
   })
@@ -1460,7 +1460,7 @@ data "archive_file" "failover_orchestrator_code" {
   output_path = "/tmp/failover_orchestrator.zip"
 
   source {
-    content = <<-EOT
+    content  = <<-EOT
 import boto3
 import json
 import os
@@ -1678,10 +1678,10 @@ resource "aws_lambda_function" "failover_orchestrator" {
 
 # CloudWatch Log Group for Lambda
 resource "aws_cloudwatch_log_group" "lambda_failover" {
-  provider              = aws.us_east_1
-  name                  = "/aws/lambda/${local.lambda_function_name}"
-  retention_in_days     = 30
-  
+  provider          = aws.us_east_1
+  name              = "/aws/lambda/${local.lambda_function_name}"
+  retention_in_days = 30
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-lambda-logs-slmr"
   })
@@ -1692,9 +1692,9 @@ resource "aws_cloudwatch_event_rule" "failover_test" {
   provider            = aws.us_east_1
   name                = "${var.environment}-failover-test-schedule-slmr"
   description         = "Trigger failover test monthly"
-  schedule_expression = "cron(0 2 1 * ? *)"  # First day of each month at 2 AM UTC
-  is_enabled          = false  # Disabled by default, enable for testing
-  
+  schedule_expression = "cron(0 2 1 * ? *)" # First day of each month at 2 AM UTC
+  is_enabled          = false               # Disabled by default, enable for testing
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-failover-test-rule-slmr"
   })
@@ -1729,7 +1729,7 @@ resource "aws_ssm_parameter" "db_endpoint_primary" {
   description = "Primary database endpoint"
   type        = "String"
   value       = aws_rds_cluster.primary.endpoint
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-param-db-endpoint-primary-slmr"
   })
@@ -1741,7 +1741,7 @@ resource "aws_ssm_parameter" "db_endpoint_secondary" {
   description = "Secondary database endpoint"
   type        = "String"
   value       = aws_rds_cluster.secondary.endpoint
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-param-db-endpoint-secondary-slmr"
   })
@@ -1753,7 +1753,7 @@ resource "aws_ssm_parameter" "db_password" {
   description = "Master database password"
   type        = "SecureString"
   value       = random_password.aurora_master.result
-  
+
   tags = merge(local.common_tags, {
     Name = "${var.environment}-param-db-password-slmr"
   })
@@ -1927,12 +1927,12 @@ output "parameter_store_db_endpoint_secondary" {
   description = "Parameter Store Key for Secondary DB Endpoint"
   value       = aws_ssm_parameter.db_endpoint_secondary.name
 }
-output "aws_primary_region"{
+output "aws_primary_region" {
   description = "aws primary region"
   value       = var.primary_region
 }
 
-output "aws_secondary_region"{
+output "aws_secondary_region" {
   description = "aws secondary region"
   value       = var.secondary_region
 }

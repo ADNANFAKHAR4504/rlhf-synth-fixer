@@ -199,16 +199,16 @@ module "iam" {
 module "lambda" {
   source = "./modules/lambda"
 
-  project_name       = var.project_name
-  environment        = var.environment
-  lambda_role_arn    = module.iam.lambda_role_arn
-  global_cluster_id  = module.rds.global_cluster_id
-  primary_region     = var.aws_region
-  secondary_region   = var.secondary_region
-  sns_topic_arn      = aws_sns_topic.alerts_placeholder.arn
-  primary_alb_dns    = module.alb_primary.alb_dns_name
-  secondary_alb_dns  = module.alb_secondary.alb_dns_name
-  resource_suffix    = var.resource_suffix
+  project_name      = var.project_name
+  environment       = var.environment
+  lambda_role_arn   = module.iam.lambda_role_arn
+  global_cluster_id = module.rds.global_cluster_id
+  primary_region    = var.aws_region
+  secondary_region  = var.secondary_region
+  sns_topic_arn     = aws_sns_topic.alerts_placeholder.arn
+  primary_alb_dns   = module.alb_primary.alb_dns_name
+  secondary_alb_dns = module.alb_secondary.alb_dns_name
+  resource_suffix   = var.resource_suffix
 }
 
 # ============================================================================
@@ -313,8 +313,8 @@ module "waf_primary" {
 module "route53" {
   source = "./modules/route53"
 
-  project_name       = var.project_name
-  environment        = var.environment
-  primary_alb_dns    = module.alb_primary.alb_dns_name
-  secondary_alb_dns  = module.alb_secondary.alb_dns_name
+  project_name      = var.project_name
+  environment       = var.environment
+  primary_alb_dns   = module.alb_primary.alb_dns_name
+  secondary_alb_dns = module.alb_secondary.alb_dns_name
 }

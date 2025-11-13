@@ -1,7 +1,7 @@
 # Elastic IPs for EC2 instances
 resource "aws_eip" "vpc1_ec2_eip" {
   domain = "vpc"
-  
+
   tags = merge(var.common_tags, {
     Name = "vpc1-ec2-eip"
   })
@@ -9,7 +9,7 @@ resource "aws_eip" "vpc1_ec2_eip" {
 
 resource "aws_eip" "vpc2_ec2_eip" {
   domain = "vpc"
-  
+
   tags = merge(var.common_tags, {
     Name = "vpc2-ec2-eip"
   })

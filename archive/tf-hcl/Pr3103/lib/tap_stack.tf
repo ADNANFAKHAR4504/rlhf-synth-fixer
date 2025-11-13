@@ -89,26 +89,26 @@ data "aws_ami" "amazon_linux_2" {
 
 locals {
   name_prefix = "tap-stack"
-  
+
   common_tags = {
     Environment  = "Production"
     ownership    = "self"
     departmental = "businessunit"
   }
-  
+
   # Subnet CIDR calculations
   public_subnet_cidrs = [
     "10.0.1.0/24",
     "10.0.2.0/24",
     "10.0.3.0/24"
   ]
-  
+
   private_subnet_cidrs = [
     "10.0.10.0/24",
     "10.0.11.0/24",
     "10.0.12.0/24"
   ]
-  
+
   azs = slice(var.availability_zones, 0, 3)
 }
 
@@ -290,10 +290,10 @@ resource "aws_security_group" "ec2" {
   }
 
   ingress {
-    description = "HTTP from ALB"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
+    description     = "HTTP from ALB"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
     security_groups = [aws_security_group.alb.id]
   }
 
@@ -512,7 +512,7 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = merge(
     local.common_tags,
@@ -561,12 +561,12 @@ resource "aws_lb_listener" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                = "${local.name_prefix}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  min_size            = var.min_size
-  max_size            = var.max_size
-  desired_capacity    = var.desired_capacity
-  health_check_type   = "ELB"
+  name                      = "${local.name_prefix}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  min_size                  = var.min_size
+  max_size                  = var.max_size
+  desired_capacity          = var.desired_capacity
+  health_check_type         = "ELB"
   health_check_grace_period = 300
 
   launch_template {
@@ -623,28 +623,28 @@ resource "aws_db_instance" "postgres" {
   identifier     = "${local.name_prefix}-postgres-db"
   engine         = "postgres"
   engine_version = "14"
-  
-  instance_class        = var.rds_instance_class
-  allocated_storage     = 20
-  storage_type          = "gp3"
-  storage_encrypted     = true
-  
+
+  instance_class    = var.rds_instance_class
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   db_name  = "tapstackdb"
   username = "a${random_string.rds_username_suffix.result}"
   password = random_password.rds_password.result
-  
+
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-  
-  publicly_accessible          = false
-  multi_az                     = true
-  auto_minor_version_upgrade   = true
-  apply_immediately           = true
-  
+
+  publicly_accessible        = false
+  multi_az                   = true
+  auto_minor_version_upgrade = true
+  apply_immediately          = true
+
   backup_retention_period = 7
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
-  
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
+
   skip_final_snapshot = true
   deletion_protection = false
 

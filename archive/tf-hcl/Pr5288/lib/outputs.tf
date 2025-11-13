@@ -168,10 +168,10 @@ output "environment_config" {
   description = "Configuration summary for current environment"
   value = {
     environment         = var.environment
-    vpc_cidr           = local.current_config.vpc_cidr
-    instance_type      = local.current_config.instance_type
-    backup_retention   = local.current_config.backup_retention
+    vpc_cidr            = local.current_config.vpc_cidr
+    instance_type       = local.current_config.instance_type
+    backup_retention    = local.current_config.backup_retention
     deletion_protection = local.current_config.deletion_protection
-    workspace          = terraform.workspace
+    workspace           = terraform.workspace
   }
 }

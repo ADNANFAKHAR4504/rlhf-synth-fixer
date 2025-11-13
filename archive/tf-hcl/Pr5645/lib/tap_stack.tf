@@ -42,39 +42,39 @@ variable "alert_email" {
 locals {
   service_name = "fraud"
   suffix       = "slmr"
-  
+
   # Resource naming convention: {environment}-{service}-{resource_type}-{suffix}
   naming = {
-    vpc                = "${var.environment}-${local.service_name}-vpc-${local.suffix}"
-    igw                = "${var.environment}-${local.service_name}-igw-${local.suffix}"
-    nat                = "${var.environment}-${local.service_name}-nat-${local.suffix}"
-    eip                = "${var.environment}-${local.service_name}-eip-${local.suffix}"
-    subnet_public      = "${var.environment}-${local.service_name}-subnet-pub-${local.suffix}"
-    subnet_private     = "${var.environment}-${local.service_name}-subnet-priv-${local.suffix}"
-    rt_public          = "${var.environment}-${local.service_name}-rt-pub-${local.suffix}"
-    rt_private         = "${var.environment}-${local.service_name}-rt-priv-${local.suffix}"
-    lambda_ingestion   = "${var.environment}-${local.service_name}-lambda-ingestion-${local.suffix}"
-    lambda_scoring     = "${var.environment}-${local.service_name}-lambda-scoring-${local.suffix}"
-    lambda_alert       = "${var.environment}-${local.service_name}-lambda-alert-${local.suffix}"
-    role_ingestion     = "${var.environment}-${local.service_name}-role-ingestion-${local.suffix}"
-    role_scoring       = "${var.environment}-${local.service_name}-role-scoring-${local.suffix}"
-    role_alert         = "${var.environment}-${local.service_name}-role-alert-${local.suffix}"
-    sqs_ingestion      = "${var.environment}-${local.service_name}-sqs-ingestion-${local.suffix}"
-    sqs_scoring        = "${var.environment}-${local.service_name}-sqs-scoring-${local.suffix}"
-    sqs_alert          = "${var.environment}-${local.service_name}-sqs-alert-${local.suffix}"
-    dlq_ingestion      = "${var.environment}-${local.service_name}-dlq-ingestion-${local.suffix}"
-    dlq_scoring        = "${var.environment}-${local.service_name}-dlq-scoring-${local.suffix}"
-    dlq_alert          = "${var.environment}-${local.service_name}-dlq-alert-${local.suffix}"
-    eventbridge_bus    = "${var.environment}-${local.service_name}-bus-${local.suffix}"
-    eventbridge_rule   = "${var.environment}-${local.service_name}-rule-${local.suffix}"
-    dynamo_scores      = "${var.environment}-${local.service_name}-dynamo-scores-${local.suffix}"
-    dynamo_metadata    = "${var.environment}-${local.service_name}-dynamo-metadata-${local.suffix}"
-    s3_bucket          = "${var.environment}-${local.service_name}-bucket-${local.suffix}"
-    sns_topic          = "${var.environment}-${local.service_name}-sns-${local.suffix}"
-    cloudwatch_log     = "/aws/lambda/${var.environment}-${local.service_name}"
-    security_group     = "${var.environment}-${local.service_name}-sg-${local.suffix}"
+    vpc              = "${var.environment}-${local.service_name}-vpc-${local.suffix}"
+    igw              = "${var.environment}-${local.service_name}-igw-${local.suffix}"
+    nat              = "${var.environment}-${local.service_name}-nat-${local.suffix}"
+    eip              = "${var.environment}-${local.service_name}-eip-${local.suffix}"
+    subnet_public    = "${var.environment}-${local.service_name}-subnet-pub-${local.suffix}"
+    subnet_private   = "${var.environment}-${local.service_name}-subnet-priv-${local.suffix}"
+    rt_public        = "${var.environment}-${local.service_name}-rt-pub-${local.suffix}"
+    rt_private       = "${var.environment}-${local.service_name}-rt-priv-${local.suffix}"
+    lambda_ingestion = "${var.environment}-${local.service_name}-lambda-ingestion-${local.suffix}"
+    lambda_scoring   = "${var.environment}-${local.service_name}-lambda-scoring-${local.suffix}"
+    lambda_alert     = "${var.environment}-${local.service_name}-lambda-alert-${local.suffix}"
+    role_ingestion   = "${var.environment}-${local.service_name}-role-ingestion-${local.suffix}"
+    role_scoring     = "${var.environment}-${local.service_name}-role-scoring-${local.suffix}"
+    role_alert       = "${var.environment}-${local.service_name}-role-alert-${local.suffix}"
+    sqs_ingestion    = "${var.environment}-${local.service_name}-sqs-ingestion-${local.suffix}"
+    sqs_scoring      = "${var.environment}-${local.service_name}-sqs-scoring-${local.suffix}"
+    sqs_alert        = "${var.environment}-${local.service_name}-sqs-alert-${local.suffix}"
+    dlq_ingestion    = "${var.environment}-${local.service_name}-dlq-ingestion-${local.suffix}"
+    dlq_scoring      = "${var.environment}-${local.service_name}-dlq-scoring-${local.suffix}"
+    dlq_alert        = "${var.environment}-${local.service_name}-dlq-alert-${local.suffix}"
+    eventbridge_bus  = "${var.environment}-${local.service_name}-bus-${local.suffix}"
+    eventbridge_rule = "${var.environment}-${local.service_name}-rule-${local.suffix}"
+    dynamo_scores    = "${var.environment}-${local.service_name}-dynamo-scores-${local.suffix}"
+    dynamo_metadata  = "${var.environment}-${local.service_name}-dynamo-metadata-${local.suffix}"
+    s3_bucket        = "${var.environment}-${local.service_name}-bucket-${local.suffix}"
+    sns_topic        = "${var.environment}-${local.service_name}-sns-${local.suffix}"
+    cloudwatch_log   = "/aws/lambda/${var.environment}-${local.service_name}"
+    security_group   = "${var.environment}-${local.service_name}-sg-${local.suffix}"
   }
-  
+
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
@@ -82,13 +82,13 @@ locals {
     ManagedBy   = "terraform"
     Stack       = "tap-stack"
   }
-  
+
   # VPC CIDR blocks by region
   vpc_cidrs = {
     primary   = "10.0.0.0/16"
     secondary = "10.1.0.0/16"
   }
-  
+
   # Subnet CIDR blocks
   subnet_cidrs = {
     primary = {
@@ -135,7 +135,7 @@ resource "aws_vpc" "primary" {
   cidr_block           = local.vpc_cidrs.primary
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.vpc}-primary"
     Region = var.primary_region
@@ -146,7 +146,7 @@ resource "aws_vpc" "primary" {
 resource "aws_internet_gateway" "primary" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.igw}-primary"
     Region = var.primary_region
@@ -157,7 +157,7 @@ resource "aws_internet_gateway" "primary" {
 resource "aws_eip" "nat_primary" {
   provider = aws.us_east_1
   domain   = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.eip}-primary"
     Region = var.primary_region
@@ -171,7 +171,7 @@ resource "aws_subnet" "public_primary_1" {
   cidr_block              = local.subnet_cidrs.primary.public_1
   availability_zone       = data.aws_availability_zones.primary.names[0]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_public}-1-primary"
     Type   = "public"
@@ -185,7 +185,7 @@ resource "aws_subnet" "public_primary_2" {
   cidr_block              = local.subnet_cidrs.primary.public_2
   availability_zone       = data.aws_availability_zones.primary.names[1]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_public}-2-primary"
     Type   = "public"
@@ -199,7 +199,7 @@ resource "aws_subnet" "private_primary_1" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.subnet_cidrs.primary.private_1
   availability_zone = data.aws_availability_zones.primary.names[0]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_private}-1-primary"
     Type   = "private"
@@ -212,7 +212,7 @@ resource "aws_subnet" "private_primary_2" {
   vpc_id            = aws_vpc.primary.id
   cidr_block        = local.subnet_cidrs.primary.private_2
   availability_zone = data.aws_availability_zones.primary.names[1]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_private}-2-primary"
     Type   = "private"
@@ -225,12 +225,12 @@ resource "aws_nat_gateway" "primary" {
   provider      = aws.us_east_1
   allocation_id = aws_eip.nat_primary.id
   subnet_id     = aws_subnet.public_primary_1.id
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.nat}-primary"
     Region = var.primary_region
   })
-  
+
   depends_on = [aws_internet_gateway.primary]
 }
 
@@ -238,12 +238,12 @@ resource "aws_nat_gateway" "primary" {
 resource "aws_route_table" "public_primary" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.rt_public}-primary"
     Type   = "public"
@@ -254,12 +254,12 @@ resource "aws_route_table" "public_primary" {
 resource "aws_route_table" "private_primary" {
   provider = aws.us_east_1
   vpc_id   = aws_vpc.primary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.primary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.rt_private}-primary"
     Type   = "private"
@@ -298,14 +298,14 @@ resource "aws_security_group" "lambda_primary" {
   name        = "${local.naming.security_group}-lambda-primary"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.primary.id
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.security_group}-lambda-primary"
     Region = var.primary_region
@@ -322,7 +322,7 @@ resource "aws_vpc" "secondary" {
   cidr_block           = local.vpc_cidrs.secondary
   enable_dns_hostnames = true
   enable_dns_support   = true
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.vpc}-secondary"
     Region = var.secondary_region
@@ -333,7 +333,7 @@ resource "aws_vpc" "secondary" {
 resource "aws_internet_gateway" "secondary" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.igw}-secondary"
     Region = var.secondary_region
@@ -344,7 +344,7 @@ resource "aws_internet_gateway" "secondary" {
 resource "aws_eip" "nat_secondary" {
   provider = aws.us_west_2
   domain   = "vpc"
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.eip}-secondary"
     Region = var.secondary_region
@@ -358,7 +358,7 @@ resource "aws_subnet" "public_secondary_1" {
   cidr_block              = local.subnet_cidrs.secondary.public_1
   availability_zone       = data.aws_availability_zones.secondary.names[0]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_public}-1-secondary"
     Type   = "public"
@@ -372,7 +372,7 @@ resource "aws_subnet" "public_secondary_2" {
   cidr_block              = local.subnet_cidrs.secondary.public_2
   availability_zone       = data.aws_availability_zones.secondary.names[1]
   map_public_ip_on_launch = true
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_public}-2-secondary"
     Type   = "public"
@@ -386,7 +386,7 @@ resource "aws_subnet" "private_secondary_1" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.subnet_cidrs.secondary.private_1
   availability_zone = data.aws_availability_zones.secondary.names[0]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_private}-1-secondary"
     Type   = "private"
@@ -399,7 +399,7 @@ resource "aws_subnet" "private_secondary_2" {
   vpc_id            = aws_vpc.secondary.id
   cidr_block        = local.subnet_cidrs.secondary.private_2
   availability_zone = data.aws_availability_zones.secondary.names[1]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.subnet_private}-2-secondary"
     Type   = "private"
@@ -412,12 +412,12 @@ resource "aws_nat_gateway" "secondary" {
   provider      = aws.us_west_2
   allocation_id = aws_eip.nat_secondary.id
   subnet_id     = aws_subnet.public_secondary_1.id
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.nat}-secondary"
     Region = var.secondary_region
   })
-  
+
   depends_on = [aws_internet_gateway.secondary]
 }
 
@@ -425,12 +425,12 @@ resource "aws_nat_gateway" "secondary" {
 resource "aws_route_table" "public_secondary" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.secondary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.rt_public}-secondary"
     Type   = "public"
@@ -441,12 +441,12 @@ resource "aws_route_table" "public_secondary" {
 resource "aws_route_table" "private_secondary" {
   provider = aws.us_west_2
   vpc_id   = aws_vpc.secondary.id
-  
+
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.secondary.id
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.rt_private}-secondary"
     Type   = "private"
@@ -485,14 +485,14 @@ resource "aws_security_group" "lambda_secondary" {
   name        = "${local.naming.security_group}-lambda-secondary"
   description = "Security group for Lambda functions"
   vpc_id      = aws_vpc.secondary.id
-  
+
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.security_group}-lambda-secondary"
     Region = var.secondary_region
@@ -507,7 +507,7 @@ resource "aws_security_group" "lambda_secondary" {
 resource "aws_s3_bucket" "primary" {
   provider = aws.us_east_1
   bucket   = "${local.naming.s3_bucket}-${data.aws_caller_identity.current.account_id}-primary"
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.s3_bucket}-primary"
     Region = var.primary_region
@@ -518,7 +518,7 @@ resource "aws_s3_bucket" "primary" {
 resource "aws_s3_bucket_versioning" "primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.primary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -528,7 +528,7 @@ resource "aws_s3_bucket_versioning" "primary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.primary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -541,11 +541,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "primary" {
 resource "aws_s3_bucket_lifecycle_configuration" "primary" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.primary.id
-  
+
   rule {
     id     = "archive-to-glacier"
     status = "Enabled"
-    
+
     transition {
       days          = 90
       storage_class = "GLACIER"
@@ -557,7 +557,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary" {
 resource "aws_s3_bucket" "secondary" {
   provider = aws.us_west_2
   bucket   = "${local.naming.s3_bucket}-${data.aws_caller_identity.current.account_id}-secondary"
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.s3_bucket}-secondary"
     Region = var.secondary_region
@@ -568,7 +568,7 @@ resource "aws_s3_bucket" "secondary" {
 resource "aws_s3_bucket_versioning" "secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.secondary.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -578,7 +578,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.secondary.id
-  
+
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -591,11 +591,11 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "secondary" {
 resource "aws_s3_bucket_lifecycle_configuration" "secondary" {
   provider = aws.us_west_2
   bucket   = aws_s3_bucket.secondary.id
-  
+
   rule {
     id     = "archive-to-glacier"
     status = "Enabled"
-    
+
     transition {
       days          = 90
       storage_class = "GLACIER"
@@ -607,7 +607,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "secondary" {
 resource "aws_iam_role" "s3_replication" {
   provider = aws.us_east_1
   name     = "${var.environment}-${local.service_name}-s3-replication-role-${local.suffix}"
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -620,7 +620,7 @@ resource "aws_iam_role" "s3_replication" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -629,7 +629,7 @@ resource "aws_iam_role_policy" "s3_replication" {
   provider = aws.us_east_1
   name     = "${var.environment}-${local.service_name}-s3-replication-policy-${local.suffix}"
   role     = aws_iam_role.s3_replication.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -668,17 +668,17 @@ resource "aws_s3_bucket_replication_configuration" "primary" {
   provider = aws.us_east_1
   role     = aws_iam_role.s3_replication.arn
   bucket   = aws_s3_bucket.primary.id
-  
+
   rule {
     id     = "replicate-to-secondary"
     status = "Enabled"
-    
+
     destination {
       bucket        = aws_s3_bucket.secondary.arn
       storage_class = "STANDARD_IA"
     }
   }
-  
+
   depends_on = [aws_s3_bucket_versioning.primary]
 }
 
@@ -695,29 +695,29 @@ resource "aws_dynamodb_table" "fraud_scores_primary" {
   range_key        = "timestamp"
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
-  
+
   attribute {
     name = "transaction_id"
     type = "S"
   }
-  
+
   attribute {
     name = "timestamp"
     type = "N"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled = true
   }
-  
+
   replica {
     region_name = var.secondary_region
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dynamo_scores
     Region = var.primary_region
@@ -733,29 +733,29 @@ resource "aws_dynamodb_table" "transaction_metadata_primary" {
   range_key        = "timestamp"
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
-  
+
   attribute {
     name = "transaction_id"
     type = "S"
   }
-  
+
   attribute {
     name = "timestamp"
     type = "N"
   }
-  
+
   point_in_time_recovery {
     enabled = true
   }
-  
+
   server_side_encryption {
     enabled = true
   }
-  
+
   replica {
     region_name = var.secondary_region
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dynamo_metadata
     Region = var.primary_region
@@ -768,17 +768,17 @@ resource "aws_dynamodb_table" "transaction_metadata_primary" {
 
 # SQS Queue - Ingestion Lambda (Primary)
 resource "aws_sqs_queue" "ingestion_primary" {
-  provider                    = aws.us_east_1
-  name                        = "${local.naming.sqs_ingestion}"
-  message_retention_seconds   = 1209600  # 14 days
-  visibility_timeout_seconds  = 300
-  sqs_managed_sse_enabled     = true
-  
+  provider                   = aws.us_east_1
+  name                       = local.naming.sqs_ingestion
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 300
+  sqs_managed_sse_enabled    = true
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.ingestion_dlq_primary.arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sqs_ingestion
     Region = var.primary_region
@@ -787,11 +787,11 @@ resource "aws_sqs_queue" "ingestion_primary" {
 
 # DLQ - Ingestion Lambda (Primary)
 resource "aws_sqs_queue" "ingestion_dlq_primary" {
-  provider                    = aws.us_east_1
-  name                        = "${local.naming.dlq_ingestion}"
-  message_retention_seconds   = 1209600  # 14 days
-  sqs_managed_sse_enabled     = true
-  
+  provider                  = aws.us_east_1
+  name                      = local.naming.dlq_ingestion
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dlq_ingestion
     Region = var.primary_region
@@ -800,17 +800,17 @@ resource "aws_sqs_queue" "ingestion_dlq_primary" {
 
 # SQS Queue - Scoring Lambda (Primary)
 resource "aws_sqs_queue" "scoring_primary" {
-  provider                    = aws.us_east_1
-  name                        = "${local.naming.sqs_scoring}"
-  message_retention_seconds   = 1209600  # 14 days
-  visibility_timeout_seconds  = 300
-  sqs_managed_sse_enabled     = true
-  
+  provider                   = aws.us_east_1
+  name                       = local.naming.sqs_scoring
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 300
+  sqs_managed_sse_enabled    = true
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.scoring_dlq_primary.arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sqs_scoring
     Region = var.primary_region
@@ -819,11 +819,11 @@ resource "aws_sqs_queue" "scoring_primary" {
 
 # DLQ - Scoring Lambda (Primary)
 resource "aws_sqs_queue" "scoring_dlq_primary" {
-  provider                    = aws.us_east_1
-  name                        = "${local.naming.dlq_scoring}"
-  message_retention_seconds   = 1209600  # 14 days
-  sqs_managed_sse_enabled     = true
-  
+  provider                  = aws.us_east_1
+  name                      = local.naming.dlq_scoring
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dlq_scoring
     Region = var.primary_region
@@ -832,17 +832,17 @@ resource "aws_sqs_queue" "scoring_dlq_primary" {
 
 # SQS Queue - Alert Lambda (Primary)
 resource "aws_sqs_queue" "alert_primary" {
-  provider                    = aws.us_east_1
-  name                        = "${local.naming.sqs_alert}"
-  message_retention_seconds   = 1209600  # 14 days
-  visibility_timeout_seconds  = 300
-  sqs_managed_sse_enabled     = true
-  
+  provider                   = aws.us_east_1
+  name                       = local.naming.sqs_alert
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 300
+  sqs_managed_sse_enabled    = true
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.alert_dlq_primary.arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sqs_alert
     Region = var.primary_region
@@ -851,11 +851,11 @@ resource "aws_sqs_queue" "alert_primary" {
 
 # DLQ - Alert Lambda (Primary)
 resource "aws_sqs_queue" "alert_dlq_primary" {
-  provider                    = aws.us_east_1
-  name                        = "${local.naming.dlq_alert}"
-  message_retention_seconds   = 1209600  # 14 days
-  sqs_managed_sse_enabled     = true
-  
+  provider                  = aws.us_east_1
+  name                      = local.naming.dlq_alert
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dlq_alert
     Region = var.primary_region
@@ -868,17 +868,17 @@ resource "aws_sqs_queue" "alert_dlq_primary" {
 
 # SQS Queue - Ingestion Lambda (Secondary)
 resource "aws_sqs_queue" "ingestion_secondary" {
-  provider                    = aws.us_west_2
-  name                        = "${local.naming.sqs_ingestion}"
-  message_retention_seconds   = 1209600  # 14 days
-  visibility_timeout_seconds  = 300
-  sqs_managed_sse_enabled     = true
-  
+  provider                   = aws.us_west_2
+  name                       = local.naming.sqs_ingestion
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 300
+  sqs_managed_sse_enabled    = true
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.ingestion_dlq_secondary.arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sqs_ingestion
     Region = var.secondary_region
@@ -887,11 +887,11 @@ resource "aws_sqs_queue" "ingestion_secondary" {
 
 # DLQ - Ingestion Lambda (Secondary)
 resource "aws_sqs_queue" "ingestion_dlq_secondary" {
-  provider                    = aws.us_west_2
-  name                        = "${local.naming.dlq_ingestion}"
-  message_retention_seconds   = 1209600  # 14 days
-  sqs_managed_sse_enabled     = true
-  
+  provider                  = aws.us_west_2
+  name                      = local.naming.dlq_ingestion
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dlq_ingestion
     Region = var.secondary_region
@@ -900,17 +900,17 @@ resource "aws_sqs_queue" "ingestion_dlq_secondary" {
 
 # SQS Queue - Scoring Lambda (Secondary)
 resource "aws_sqs_queue" "scoring_secondary" {
-  provider                    = aws.us_west_2
-  name                        = "${local.naming.sqs_scoring}"
-  message_retention_seconds   = 1209600  # 14 days
-  visibility_timeout_seconds  = 300
-  sqs_managed_sse_enabled     = true
-  
+  provider                   = aws.us_west_2
+  name                       = local.naming.sqs_scoring
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 300
+  sqs_managed_sse_enabled    = true
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.scoring_dlq_secondary.arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sqs_scoring
     Region = var.secondary_region
@@ -919,11 +919,11 @@ resource "aws_sqs_queue" "scoring_secondary" {
 
 # DLQ - Scoring Lambda (Secondary)
 resource "aws_sqs_queue" "scoring_dlq_secondary" {
-  provider                    = aws.us_west_2
-  name                        = "${local.naming.dlq_scoring}"
-  message_retention_seconds   = 1209600  # 14 days
-  sqs_managed_sse_enabled     = true
-  
+  provider                  = aws.us_west_2
+  name                      = local.naming.dlq_scoring
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dlq_scoring
     Region = var.secondary_region
@@ -932,17 +932,17 @@ resource "aws_sqs_queue" "scoring_dlq_secondary" {
 
 # SQS Queue - Alert Lambda (Secondary)
 resource "aws_sqs_queue" "alert_secondary" {
-  provider                    = aws.us_west_2
-  name                        = "${local.naming.sqs_alert}"
-  message_retention_seconds   = 1209600  # 14 days
-  visibility_timeout_seconds  = 300
-  sqs_managed_sse_enabled     = true
-  
+  provider                   = aws.us_west_2
+  name                       = local.naming.sqs_alert
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 300
+  sqs_managed_sse_enabled    = true
+
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.alert_dlq_secondary.arn
     maxReceiveCount     = 3
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sqs_alert
     Region = var.secondary_region
@@ -951,11 +951,11 @@ resource "aws_sqs_queue" "alert_secondary" {
 
 # DLQ - Alert Lambda (Secondary)
 resource "aws_sqs_queue" "alert_dlq_secondary" {
-  provider                    = aws.us_west_2
-  name                        = "${local.naming.dlq_alert}"
-  message_retention_seconds   = 1209600  # 14 days
-  sqs_managed_sse_enabled     = true
-  
+  provider                  = aws.us_west_2
+  name                      = local.naming.dlq_alert
+  message_retention_seconds = 1209600 # 14 days
+  sqs_managed_sse_enabled   = true
+
   tags = merge(local.common_tags, {
     Name   = local.naming.dlq_alert
     Region = var.secondary_region
@@ -970,7 +970,7 @@ resource "aws_sqs_queue" "alert_dlq_secondary" {
 resource "aws_cloudwatch_event_bus" "primary" {
   provider = aws.us_east_1
   name     = local.naming.eventbridge_bus
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.eventbridge_bus
     Region = var.primary_region
@@ -979,11 +979,11 @@ resource "aws_cloudwatch_event_bus" "primary" {
 
 # EventBridge Rule - Fraud Scoring (Primary)
 resource "aws_cloudwatch_event_rule" "fraud_scoring_primary" {
-  provider    = aws.us_east_1
-  name        = "${local.naming.eventbridge_rule}-scoring"
-  description = "Route high-value transactions to fraud scoring"
+  provider       = aws.us_east_1
+  name           = "${local.naming.eventbridge_rule}-scoring"
+  description    = "Route high-value transactions to fraud scoring"
   event_bus_name = aws_cloudwatch_event_bus.primary.name
-  
+
   event_pattern = jsonencode({
     source = ["fraud.detection.ingestion"]
     detail = {
@@ -992,7 +992,7 @@ resource "aws_cloudwatch_event_rule" "fraud_scoring_primary" {
       }]
     }
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.eventbridge_rule}-scoring"
     Region = var.primary_region
@@ -1001,18 +1001,18 @@ resource "aws_cloudwatch_event_rule" "fraud_scoring_primary" {
 
 # EventBridge Rule - International Transactions (Primary)
 resource "aws_cloudwatch_event_rule" "international_primary" {
-  provider    = aws.us_east_1
-  name        = "${local.naming.eventbridge_rule}-international"
-  description = "Route international transactions to alert processor"
+  provider       = aws.us_east_1
+  name           = "${local.naming.eventbridge_rule}-international"
+  description    = "Route international transactions to alert processor"
   event_bus_name = aws_cloudwatch_event_bus.primary.name
-  
+
   event_pattern = jsonencode({
     source = ["fraud.detection.ingestion"]
     detail = {
       transaction_type = ["international"]
     }
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.eventbridge_rule}-international"
     Region = var.primary_region
@@ -1027,7 +1027,7 @@ resource "aws_cloudwatch_event_rule" "international_primary" {
 resource "aws_cloudwatch_event_bus" "secondary" {
   provider = aws.us_west_2
   name     = local.naming.eventbridge_bus
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.eventbridge_bus
     Region = var.secondary_region
@@ -1036,11 +1036,11 @@ resource "aws_cloudwatch_event_bus" "secondary" {
 
 # EventBridge Rule - Fraud Scoring (Secondary)
 resource "aws_cloudwatch_event_rule" "fraud_scoring_secondary" {
-  provider    = aws.us_west_2
-  name        = "${local.naming.eventbridge_rule}-scoring"
-  description = "Route high-value transactions to fraud scoring"
+  provider       = aws.us_west_2
+  name           = "${local.naming.eventbridge_rule}-scoring"
+  description    = "Route high-value transactions to fraud scoring"
   event_bus_name = aws_cloudwatch_event_bus.secondary.name
-  
+
   event_pattern = jsonencode({
     source = ["fraud.detection.ingestion"]
     detail = {
@@ -1049,7 +1049,7 @@ resource "aws_cloudwatch_event_rule" "fraud_scoring_secondary" {
       }]
     }
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.eventbridge_rule}-scoring"
     Region = var.secondary_region
@@ -1058,18 +1058,18 @@ resource "aws_cloudwatch_event_rule" "fraud_scoring_secondary" {
 
 # EventBridge Rule - International Transactions (Secondary)
 resource "aws_cloudwatch_event_rule" "international_secondary" {
-  provider    = aws.us_west_2
-  name        = "${local.naming.eventbridge_rule}-international"
-  description = "Route international transactions to alert processor"
+  provider       = aws.us_west_2
+  name           = "${local.naming.eventbridge_rule}-international"
+  description    = "Route international transactions to alert processor"
   event_bus_name = aws_cloudwatch_event_bus.secondary.name
-  
+
   event_pattern = jsonencode({
     source = ["fraud.detection.ingestion"]
     detail = {
       transaction_type = ["international"]
     }
   })
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.eventbridge_rule}-international"
     Region = var.secondary_region
@@ -1084,7 +1084,7 @@ resource "aws_cloudwatch_event_rule" "international_secondary" {
 resource "aws_iam_role" "ingestion_lambda" {
   provider = aws.us_east_1
   name     = local.naming.role_ingestion
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1097,7 +1097,7 @@ resource "aws_iam_role" "ingestion_lambda" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -1106,7 +1106,7 @@ resource "aws_iam_role_policy" "ingestion_lambda" {
   provider = aws.us_east_1
   name     = "${local.naming.role_ingestion}-policy"
   role     = aws_iam_role.ingestion_lambda.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1171,7 +1171,7 @@ resource "aws_iam_role_policy" "ingestion_lambda" {
 resource "aws_iam_role" "scoring_lambda" {
   provider = aws.us_east_1
   name     = local.naming.role_scoring
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1184,7 +1184,7 @@ resource "aws_iam_role" "scoring_lambda" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -1193,7 +1193,7 @@ resource "aws_iam_role_policy" "scoring_lambda" {
   provider = aws.us_east_1
   name     = "${local.naming.role_scoring}-policy"
   role     = aws_iam_role.scoring_lambda.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1262,7 +1262,7 @@ resource "aws_iam_role_policy" "scoring_lambda" {
 resource "aws_iam_role" "alert_lambda" {
   provider = aws.us_east_1
   name     = local.naming.role_alert
-  
+
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1275,7 +1275,7 @@ resource "aws_iam_role" "alert_lambda" {
       }
     ]
   })
-  
+
   tags = local.common_tags
 }
 
@@ -1284,7 +1284,7 @@ resource "aws_iam_role_policy" "alert_lambda" {
   provider = aws.us_east_1
   name     = "${local.naming.role_alert}-policy"
   role     = aws_iam_role.alert_lambda.id
-  
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1364,18 +1364,18 @@ resource "aws_iam_role_policy" "alert_lambda" {
 
 # Lambda Function - Ingestion (Primary)
 resource "aws_lambda_function" "ingestion_primary" {
-  provider         = aws.us_east_1
-  function_name    = local.naming.lambda_ingestion
-  role            = aws_iam_role.ingestion_lambda.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 60
-  memory_size     = 512
+  provider                       = aws.us_east_1
+  function_name                  = local.naming.lambda_ingestion
+  role                           = aws_iam_role.ingestion_lambda.arn
+  handler                        = "index.lambda_handler"
+  runtime                        = "python3.11"
+  timeout                        = 60
+  memory_size                    = 512
   reserved_concurrent_executions = 10
-  
+
   filename         = data.archive_file.ingestion_lambda_code.output_path
   source_code_hash = data.archive_file.ingestion_lambda_code.output_base64sha256
-  
+
   environment {
     variables = {
       EVENT_BUS_NAME = aws_cloudwatch_event_bus.primary.name
@@ -1383,20 +1383,20 @@ resource "aws_lambda_function" "ingestion_primary" {
       REGION         = var.primary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = [aws_subnet.private_primary_1.id, aws_subnet.private_primary_2.id]
     security_group_ids = [aws_security_group.lambda_primary.id]
   }
-  
+
   dead_letter_config {
     target_arn = aws_sqs_queue.ingestion_dlq_primary.arn
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.lambda_ingestion
     Region = var.primary_region
@@ -1405,18 +1405,18 @@ resource "aws_lambda_function" "ingestion_primary" {
 
 # Lambda Function - Scoring (Primary)
 resource "aws_lambda_function" "scoring_primary" {
-  provider         = aws.us_east_1
-  function_name    = local.naming.lambda_scoring
-  role            = aws_iam_role.scoring_lambda.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 60
-  memory_size     = 512
+  provider                       = aws.us_east_1
+  function_name                  = local.naming.lambda_scoring
+  role                           = aws_iam_role.scoring_lambda.arn
+  handler                        = "index.lambda_handler"
+  runtime                        = "python3.11"
+  timeout                        = 60
+  memory_size                    = 512
   reserved_concurrent_executions = 10
-  
+
   filename         = data.archive_file.scoring_lambda_code.output_path
   source_code_hash = data.archive_file.scoring_lambda_code.output_base64sha256
-  
+
   environment {
     variables = {
       DYNAMO_TABLE_NAME = aws_dynamodb_table.fraud_scores_primary.name
@@ -1424,20 +1424,20 @@ resource "aws_lambda_function" "scoring_primary" {
       REGION            = var.primary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = [aws_subnet.private_primary_1.id, aws_subnet.private_primary_2.id]
     security_group_ids = [aws_security_group.lambda_primary.id]
   }
-  
+
   dead_letter_config {
     target_arn = aws_sqs_queue.scoring_dlq_primary.arn
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.lambda_scoring
     Region = var.primary_region
@@ -1446,18 +1446,18 @@ resource "aws_lambda_function" "scoring_primary" {
 
 # Lambda Function - Alert (Primary)
 resource "aws_lambda_function" "alert_primary" {
-  provider         = aws.us_east_1
-  function_name    = local.naming.lambda_alert
-  role            = aws_iam_role.alert_lambda.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 60
-  memory_size     = 512
+  provider                       = aws.us_east_1
+  function_name                  = local.naming.lambda_alert
+  role                           = aws_iam_role.alert_lambda.arn
+  handler                        = "index.lambda_handler"
+  runtime                        = "python3.11"
+  timeout                        = 60
+  memory_size                    = 512
   reserved_concurrent_executions = 10
-  
+
   filename         = data.archive_file.alert_lambda_code.output_path
   source_code_hash = data.archive_file.alert_lambda_code.output_base64sha256
-  
+
   environment {
     variables = {
       S3_BUCKET_NAME = aws_s3_bucket.primary.id
@@ -1466,20 +1466,20 @@ resource "aws_lambda_function" "alert_primary" {
       REGION         = var.primary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = [aws_subnet.private_primary_1.id, aws_subnet.private_primary_2.id]
     security_group_ids = [aws_security_group.lambda_primary.id]
   }
-  
+
   dead_letter_config {
     target_arn = aws_sqs_queue.alert_dlq_primary.arn
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.lambda_alert
     Region = var.primary_region
@@ -1492,18 +1492,18 @@ resource "aws_lambda_function" "alert_primary" {
 
 # Lambda Function - Ingestion (Secondary)
 resource "aws_lambda_function" "ingestion_secondary" {
-  provider         = aws.us_west_2
-  function_name    = local.naming.lambda_ingestion
-  role            = aws_iam_role.ingestion_lambda.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 60
-  memory_size     = 512
+  provider                       = aws.us_west_2
+  function_name                  = local.naming.lambda_ingestion
+  role                           = aws_iam_role.ingestion_lambda.arn
+  handler                        = "index.lambda_handler"
+  runtime                        = "python3.11"
+  timeout                        = 60
+  memory_size                    = 512
   reserved_concurrent_executions = 10
-  
+
   filename         = data.archive_file.ingestion_lambda_code.output_path
   source_code_hash = data.archive_file.ingestion_lambda_code.output_base64sha256
-  
+
   environment {
     variables = {
       EVENT_BUS_NAME = aws_cloudwatch_event_bus.secondary.name
@@ -1511,20 +1511,20 @@ resource "aws_lambda_function" "ingestion_secondary" {
       REGION         = var.secondary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = [aws_subnet.private_secondary_1.id, aws_subnet.private_secondary_2.id]
     security_group_ids = [aws_security_group.lambda_secondary.id]
   }
-  
+
   dead_letter_config {
     target_arn = aws_sqs_queue.ingestion_dlq_secondary.arn
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.lambda_ingestion
     Region = var.secondary_region
@@ -1533,18 +1533,18 @@ resource "aws_lambda_function" "ingestion_secondary" {
 
 # Lambda Function - Scoring (Secondary)
 resource "aws_lambda_function" "scoring_secondary" {
-  provider         = aws.us_west_2
-  function_name    = local.naming.lambda_scoring
-  role            = aws_iam_role.scoring_lambda.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 60
-  memory_size     = 512
+  provider                       = aws.us_west_2
+  function_name                  = local.naming.lambda_scoring
+  role                           = aws_iam_role.scoring_lambda.arn
+  handler                        = "index.lambda_handler"
+  runtime                        = "python3.11"
+  timeout                        = 60
+  memory_size                    = 512
   reserved_concurrent_executions = 10
-  
+
   filename         = data.archive_file.scoring_lambda_code.output_path
   source_code_hash = data.archive_file.scoring_lambda_code.output_base64sha256
-  
+
   environment {
     variables = {
       DYNAMO_TABLE_NAME = aws_dynamodb_table.fraud_scores_primary.name
@@ -1552,20 +1552,20 @@ resource "aws_lambda_function" "scoring_secondary" {
       REGION            = var.secondary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = [aws_subnet.private_secondary_1.id, aws_subnet.private_secondary_2.id]
     security_group_ids = [aws_security_group.lambda_secondary.id]
   }
-  
+
   dead_letter_config {
     target_arn = aws_sqs_queue.scoring_dlq_secondary.arn
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.lambda_scoring
     Region = var.secondary_region
@@ -1574,18 +1574,18 @@ resource "aws_lambda_function" "scoring_secondary" {
 
 # Lambda Function - Alert (Secondary)
 resource "aws_lambda_function" "alert_secondary" {
-  provider         = aws.us_west_2
-  function_name    = local.naming.lambda_alert
-  role            = aws_iam_role.alert_lambda.arn
-  handler         = "index.lambda_handler"
-  runtime         = "python3.11"
-  timeout         = 60
-  memory_size     = 512
+  provider                       = aws.us_west_2
+  function_name                  = local.naming.lambda_alert
+  role                           = aws_iam_role.alert_lambda.arn
+  handler                        = "index.lambda_handler"
+  runtime                        = "python3.11"
+  timeout                        = 60
+  memory_size                    = 512
   reserved_concurrent_executions = 10
-  
+
   filename         = data.archive_file.alert_lambda_code.output_path
   source_code_hash = data.archive_file.alert_lambda_code.output_base64sha256
-  
+
   environment {
     variables = {
       S3_BUCKET_NAME = aws_s3_bucket.secondary.id
@@ -1594,20 +1594,20 @@ resource "aws_lambda_function" "alert_secondary" {
       REGION         = var.secondary_region
     }
   }
-  
+
   vpc_config {
     subnet_ids         = [aws_subnet.private_secondary_1.id, aws_subnet.private_secondary_2.id]
     security_group_ids = [aws_security_group.lambda_secondary.id]
   }
-  
+
   dead_letter_config {
     target_arn = aws_sqs_queue.alert_dlq_secondary.arn
   }
-  
+
   tracing_config {
     mode = "Active"
   }
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.lambda_alert
     Region = var.secondary_region
@@ -1622,7 +1622,7 @@ resource "aws_lambda_function" "alert_secondary" {
 data "archive_file" "ingestion_lambda_code" {
   type        = "zip"
   output_path = "/tmp/ingestion_lambda.zip"
-  
+
   source {
     content  = <<-EOT
 import json
@@ -1692,7 +1692,7 @@ EOT
 data "archive_file" "scoring_lambda_code" {
   type        = "zip"
   output_path = "/tmp/scoring_lambda.zip"
-  
+
   source {
     content  = <<-EOT
 import json
@@ -1788,7 +1788,7 @@ EOT
 data "archive_file" "alert_lambda_code" {
   type        = "zip"
   output_path = "/tmp/alert_lambda.zip"
-  
+
   source {
     content  = <<-EOT
 import json
@@ -1865,37 +1865,37 @@ EOT
 
 # EventBridge Target - Scoring Lambda (Primary)
 resource "aws_cloudwatch_event_target" "scoring_primary" {
-  provider  = aws.us_east_1
-  rule      = aws_cloudwatch_event_rule.fraud_scoring_primary.name
-  target_id = "scoring-lambda"
-  arn       = aws_lambda_function.scoring_primary.arn
+  provider       = aws.us_east_1
+  rule           = aws_cloudwatch_event_rule.fraud_scoring_primary.name
+  target_id      = "scoring-lambda"
+  arn            = aws_lambda_function.scoring_primary.arn
   event_bus_name = aws_cloudwatch_event_bus.primary.name
 }
 
 # EventBridge Target - Alert Lambda (Primary)
 resource "aws_cloudwatch_event_target" "alert_primary" {
-  provider  = aws.us_east_1
-  rule      = aws_cloudwatch_event_rule.international_primary.name
-  target_id = "alert-lambda"
-  arn       = aws_lambda_function.alert_primary.arn
+  provider       = aws.us_east_1
+  rule           = aws_cloudwatch_event_rule.international_primary.name
+  target_id      = "alert-lambda"
+  arn            = aws_lambda_function.alert_primary.arn
   event_bus_name = aws_cloudwatch_event_bus.primary.name
 }
 
 # EventBridge Target - Scoring Lambda (Secondary)
 resource "aws_cloudwatch_event_target" "scoring_secondary" {
-  provider  = aws.us_west_2
-  rule      = aws_cloudwatch_event_rule.fraud_scoring_secondary.name
-  target_id = "scoring-lambda"
-  arn       = aws_lambda_function.scoring_secondary.arn
+  provider       = aws.us_west_2
+  rule           = aws_cloudwatch_event_rule.fraud_scoring_secondary.name
+  target_id      = "scoring-lambda"
+  arn            = aws_lambda_function.scoring_secondary.arn
   event_bus_name = aws_cloudwatch_event_bus.secondary.name
 }
 
 # EventBridge Target - Alert Lambda (Secondary)
 resource "aws_cloudwatch_event_target" "alert_secondary" {
-  provider  = aws.us_west_2
-  rule      = aws_cloudwatch_event_rule.international_secondary.name
-  target_id = "alert-lambda"
-  arn       = aws_lambda_function.alert_secondary.arn
+  provider       = aws.us_west_2
+  rule           = aws_cloudwatch_event_rule.international_secondary.name
+  target_id      = "alert-lambda"
+  arn            = aws_lambda_function.alert_secondary.arn
   event_bus_name = aws_cloudwatch_event_bus.secondary.name
 }
 
@@ -1945,9 +1945,9 @@ resource "aws_lambda_permission" "allow_eventbridge_alert_secondary" {
 resource "aws_sns_topic" "alerts_primary" {
   provider = aws.us_east_1
   name     = local.naming.sns_topic
-  
+
   kms_master_key_id = "alias/aws/sns"
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sns_topic
     Region = var.primary_region
@@ -1966,9 +1966,9 @@ resource "aws_sns_topic_subscription" "alerts_email_primary" {
 resource "aws_sns_topic" "alerts_secondary" {
   provider = aws.us_west_2
   name     = local.naming.sns_topic
-  
+
   kms_master_key_id = "alias/aws/sns"
-  
+
   tags = merge(local.common_tags, {
     Name   = local.naming.sns_topic
     Region = var.secondary_region
@@ -1993,20 +1993,20 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors_ingestion_primary" {
   alarm_name          = "${local.naming.lambda_ingestion}-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "Errors"
-  namespace          = "AWS/Lambda"
-  period             = "300"
-  statistic          = "Sum"
-  threshold          = "10"
-  alarm_description  = "This metric monitors lambda errors"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "Errors"
+  namespace           = "AWS/Lambda"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "This metric monitors lambda errors"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     FunctionName = aws_lambda_function.ingestion_primary.function_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.lambda_ingestion}-errors"
     Region = var.primary_region
@@ -2019,20 +2019,20 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles_ingestion_primary" {
   alarm_name          = "${local.naming.lambda_ingestion}-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "Throttles"
-  namespace          = "AWS/Lambda"
-  period             = "300"
-  statistic          = "Sum"
-  threshold          = "5"
-  alarm_description  = "This metric monitors lambda throttles"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "Throttles"
+  namespace           = "AWS/Lambda"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "5"
+  alarm_description   = "This metric monitors lambda throttles"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     FunctionName = aws_lambda_function.ingestion_primary.function_name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.lambda_ingestion}-throttles"
     Region = var.primary_region
@@ -2045,20 +2045,20 @@ resource "aws_cloudwatch_metric_alarm" "dynamodb_throttles_primary" {
   alarm_name          = "${local.naming.dynamo_scores}-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "SystemErrors"
-  namespace          = "AWS/DynamoDB"
-  period             = "300"
-  statistic          = "Sum"
-  threshold          = "5"
-  alarm_description  = "This metric monitors DynamoDB throttles"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "SystemErrors"
+  namespace           = "AWS/DynamoDB"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "5"
+  alarm_description   = "This metric monitors DynamoDB throttles"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     TableName = aws_dynamodb_table.fraud_scores_primary.name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.dynamo_scores}-throttles"
     Region = var.primary_region
@@ -2071,20 +2071,20 @@ resource "aws_cloudwatch_metric_alarm" "sqs_message_age_primary" {
   alarm_name          = "${local.naming.sqs_ingestion}-message-age"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "ApproximateAgeOfOldestMessage"
-  namespace          = "AWS/SQS"
-  period             = "300"
-  statistic          = "Maximum"
-  threshold          = "300"
-  alarm_description  = "This metric monitors SQS message age"
-  treat_missing_data = "notBreaching"
-  
+  metric_name         = "ApproximateAgeOfOldestMessage"
+  namespace           = "AWS/SQS"
+  period              = "300"
+  statistic           = "Maximum"
+  threshold           = "300"
+  alarm_description   = "This metric monitors SQS message age"
+  treat_missing_data  = "notBreaching"
+
   dimensions = {
     QueueName = aws_sqs_queue.ingestion_primary.name
   }
-  
+
   alarm_actions = [aws_sns_topic.alerts_primary.arn]
-  
+
   tags = merge(local.common_tags, {
     Name   = "${local.naming.sqs_ingestion}-message-age"
     Region = var.primary_region
@@ -2100,7 +2100,7 @@ resource "aws_cloudwatch_log_group" "ingestion_primary" {
   provider          = aws.us_east_1
   name              = "/aws/lambda/${aws_lambda_function.ingestion_primary.function_name}"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name   = "/aws/lambda/${aws_lambda_function.ingestion_primary.function_name}"
     Region = var.primary_region
@@ -2112,7 +2112,7 @@ resource "aws_cloudwatch_log_group" "scoring_primary" {
   provider          = aws.us_east_1
   name              = "/aws/lambda/${aws_lambda_function.scoring_primary.function_name}"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name   = "/aws/lambda/${aws_lambda_function.scoring_primary.function_name}"
     Region = var.primary_region
@@ -2124,7 +2124,7 @@ resource "aws_cloudwatch_log_group" "alert_primary" {
   provider          = aws.us_east_1
   name              = "/aws/lambda/${aws_lambda_function.alert_primary.function_name}"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name   = "/aws/lambda/${aws_lambda_function.alert_primary.function_name}"
     Region = var.primary_region
@@ -2136,7 +2136,7 @@ resource "aws_cloudwatch_log_group" "ingestion_secondary" {
   provider          = aws.us_west_2
   name              = "/aws/lambda/${aws_lambda_function.ingestion_secondary.function_name}"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name   = "/aws/lambda/${aws_lambda_function.ingestion_secondary.function_name}"
     Region = var.secondary_region
@@ -2148,7 +2148,7 @@ resource "aws_cloudwatch_log_group" "scoring_secondary" {
   provider          = aws.us_west_2
   name              = "/aws/lambda/${aws_lambda_function.scoring_secondary.function_name}"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name   = "/aws/lambda/${aws_lambda_function.scoring_secondary.function_name}"
     Region = var.secondary_region
@@ -2160,7 +2160,7 @@ resource "aws_cloudwatch_log_group" "alert_secondary" {
   provider          = aws.us_west_2
   name              = "/aws/lambda/${aws_lambda_function.alert_secondary.function_name}"
   retention_in_days = 7
-  
+
   tags = merge(local.common_tags, {
     Name   = "/aws/lambda/${aws_lambda_function.alert_secondary.function_name}"
     Region = var.secondary_region
@@ -2423,12 +2423,12 @@ output "alarm_sqs_message_age_primary" {
   value       = aws_cloudwatch_metric_alarm.sqs_message_age_primary.alarm_name
 }
 
-output "aws_primary_region"{
+output "aws_primary_region" {
   description = "aws primary region"
   value       = var.primary_region
 }
 
-output "aws_secondary_region"{
+output "aws_secondary_region" {
   description = "aws secondary region"
   value       = var.secondary_region
 }

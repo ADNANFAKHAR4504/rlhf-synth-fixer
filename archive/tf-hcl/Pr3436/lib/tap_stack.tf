@@ -394,7 +394,7 @@ resource "aws_db_parameter_group" "healthcare_postgres_params" {
 resource "aws_db_subnet_group" "healthcare_db_subnet_group" {
   name        = "healthcare-db-subnet-group"
   description = "Subnet group for healthcare app RDS instance"
-  subnet_ids  = [
+  subnet_ids = [
     aws_subnet.private_subnet_1.id,
     aws_subnet.private_subnet_2.id
   ]
@@ -645,7 +645,7 @@ resource "aws_cloudwatch_metric_alarm" "healthcare_db_storage" {
   namespace           = "AWS/RDS"
   period              = 300
   statistic           = "Average"
-  threshold           = 21474836480  # 20GB in bytes (20 * 1024 * 1024 * 1024)
+  threshold           = 21474836480 # 20GB in bytes (20 * 1024 * 1024 * 1024)
   alarm_description   = "This alarm monitors RDS free storage space"
   alarm_actions       = [aws_sns_topic.healthcare_db_alerts.arn]
   ok_actions          = [aws_sns_topic.healthcare_db_alerts.arn]

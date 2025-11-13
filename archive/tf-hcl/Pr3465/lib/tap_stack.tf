@@ -9,7 +9,7 @@ terraform {
       version = "~> 5.0"
     }
   }
-  
+
   # Partial backend config: values are injected at `terraform init` time
   backend "s3" {}
 }
@@ -493,7 +493,7 @@ resource "aws_lb" "main" {
   # Current configuration: 1 public subnet (10.0.1.0/24) + 1 private subnet (10.0.3.0/24) per prompt requirements
   # Best practice recommendation: Use 2 public subnets instead (would require additional public subnet creation)
   # This configuration meets the prompt's specified subnet requirements while enabling Multi-AZ ALB deployment
-  subnets            = [aws_subnet.public.id, aws_subnet.private_secondary.id]
+  subnets = [aws_subnet.public.id, aws_subnet.private_secondary.id]
 
   enable_deletion_protection = false
   enable_http2               = true

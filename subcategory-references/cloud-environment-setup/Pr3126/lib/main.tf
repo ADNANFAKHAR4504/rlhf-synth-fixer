@@ -13,7 +13,7 @@ variable "aws_region" {
   description = "AWS region to deploy resources"
   type        = string
   default     = "us-east-1"
-  
+
   validation {
     condition     = can(regex("^[a-z]{2}-[a-z]+-[1-9]{1}$", var.aws_region))
     error_message = "AWS region must be in the format: aa-bbbb-#, e.g., us-east-1, eu-west-2, ap-southeast-1"
@@ -76,8 +76,8 @@ variable "db_max_allocated_storage" {
 variable "db_engine_version" {
   description = "MySQL engine version"
   type        = string
-  default     = "8.0"  # Latest stable version supported in RDS as of Sept 2025
-  
+  default     = "8.0" # Latest stable version supported in RDS as of Sept 2025
+
   validation {
     condition     = can(regex("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$", var.db_engine_version))
     error_message = "Engine version must be in format X.Y or X.Y.Z"
@@ -158,7 +158,7 @@ data "aws_availability_zones" "available" {
 
 locals {
   azs = slice(data.aws_availability_zones.available.names, 0, min(length(var.public_subnet_cidrs), length(data.aws_availability_zones.available.names)))
-  
+
   common_tags = merge(
     var.tags,
     {
@@ -442,7 +442,7 @@ resource "aws_db_instance" "mysql" {
   max_allocated_storage = var.db_max_allocated_storage > 0 ? var.db_max_allocated_storage : null
   storage_type          = var.db_storage_type
   storage_encrypted     = true
-  kms_key_id           = var.kms_key_id
+  kms_key_id            = var.kms_key_id
 
   # Database Configuration
   db_name  = "appdb"
@@ -457,24 +457,24 @@ resource "aws_db_instance" "mysql" {
 
   # Backup Configuration
   backup_retention_period = var.db_backup_retention_period
-  backup_window          = "03:00-04:00"
-  maintenance_window     = "sun:04:00-sun:05:00"
+  backup_window           = "03:00-04:00"
+  maintenance_window      = "sun:04:00-sun:05:00"
 
   # High Availability
   multi_az = var.db_multi_az
 
   # Monitoring
-  performance_insights_enabled = var.db_performance_insights_enabled
+  performance_insights_enabled    = var.db_performance_insights_enabled
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   # Protection
-  deletion_protection      = var.db_deletion_protection
-  skip_final_snapshot     = !var.db_snapshot_final
+  deletion_protection       = var.db_deletion_protection
+  skip_final_snapshot       = !var.db_snapshot_final
   final_snapshot_identifier = var.db_snapshot_final ? "${var.name_prefix}-mysql-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}" : null
 
   # Other Settings
   auto_minor_version_upgrade = true
-  copy_tags_to_snapshot     = true
+  copy_tags_to_snapshot      = true
 
   tags = merge(
     local.common_tags,

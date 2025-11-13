@@ -85,14 +85,14 @@ locals {
 
   # Naming conventions
   name_prefix = "${var.project_name}-${var.environment}"
-  
+
   # Network configuration
   azs = slice(data.aws_availability_zones.available.names, 0, 3)
-  
+
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
   private_subnet_cidrs = ["10.0.11.0/24", "10.0.12.0/24", "10.0.13.0/24"]
-  
+
   # Database configuration
   db_subnet_cidrs = ["10.0.21.0/24", "10.0.22.0/24", "10.0.23.0/24"]
 }
@@ -427,10 +427,10 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureConnections"
-        Effect = "Deny"
+        Sid       = "DenyInsecureConnections"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.main.arn,
           "${aws_s3_bucket.main.arn}/*"
@@ -689,35 +689,35 @@ resource "aws_db_instance" "main" {
   identifier = "${local.name_prefix}-rds-instance"
 
   # Database configuration
-  engine               = "mysql"
-  engine_version       = "8.0"
-  instance_class       = "db.t3.micro"
-  allocated_storage    = 20
-  storage_type         = "gp3"
-  storage_encrypted    = true
-  
+  engine            = "mysql"
+  engine_version    = "8.0"
+  instance_class    = "db.t3.micro"
+  allocated_storage = 20
+  storage_type      = "gp3"
+  storage_encrypted = true
+
   # Credentials
   username = "a${random_string.rds_username.result}"
   password = random_password.rds_password.result
-  
+
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
-  
+
   # High availability
   multi_az = true
-  
+
   # Maintenance and backup
   auto_minor_version_upgrade = true
   backup_retention_period    = 7
-  backup_window             = "03:00-04:00"
-  maintenance_window        = "sun:04:00-sun:05:00"
-  
+  backup_window              = "03:00-04:00"
+  maintenance_window         = "sun:04:00-sun:05:00"
+
   # Protection settings
   deletion_protection = false
   skip_final_snapshot = true
-  
+
   tags = merge(
     local.common_tags,
     {
@@ -772,7 +772,7 @@ resource "aws_lambda_function" "main" {
   }
 
   # Inline code
-  filename = data.archive_file.lambda_code.output_path
+  filename         = data.archive_file.lambda_code.output_path
   source_code_hash = data.archive_file.lambda_code.output_base64sha256
 
   environment {
@@ -794,7 +794,7 @@ resource "aws_lambda_function" "main" {
 data "archive_file" "lambda_code" {
   type        = "zip"
   output_path = "/tmp/lambda_function.zip"
-  
+
   source {
     content  = <<-EOT
 import json

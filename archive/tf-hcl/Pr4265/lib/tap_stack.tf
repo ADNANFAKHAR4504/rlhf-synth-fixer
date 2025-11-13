@@ -47,12 +47,12 @@ locals {
     "Project"         = "tap"
     "Environment"     = var.environment
   }
-  short_suffix = random_id.short.hex
+  short_suffix      = random_id.short.hex
   instance_type     = var.environment == "prod" ? "t3.small" : "t3.micro"
   nat_instance_type = var.environment == "prod" ? "t3.micro" : "t3.nano"
 
   # Option B scripts loaded from files
-  user_data        = templatefile("${path.module}/user_data/web.sh", {
+  user_data = templatefile("${path.module}/user_data/web.sh", {
     environment = var.environment
     bucket      = aws_s3_bucket.app.bucket
     log_level   = "info"
@@ -848,20 +848,20 @@ resource "aws_ebs_encryption_by_default" "this" {
 #############################################
 
 resource "aws_ssm_parameter" "env" {
-  name  = "/tap/environment"
-  type  = "String"
-  value = var.environment
-  overwrite  = true 
+  name      = "/tap/environment"
+  type      = "String"
+  value     = var.environment
+  overwrite = true
   tags = merge(local.tags, {
     Name = "tap-ssm-env-${var.environment}${var.environment_suffix}"
   })
 }
 
 resource "aws_ssm_parameter" "bucket" {
-  name  = "/tap/bucket"
-  type  = "String"
-  value = aws_s3_bucket.app.bucket
-  overwrite  = true 
+  name      = "/tap/bucket"
+  type      = "String"
+  value     = aws_s3_bucket.app.bucket
+  overwrite = true
   tags = merge(local.tags, {
     Name = "tap-ssm-bucket-${var.environment}${var.environment_suffix}"
   })

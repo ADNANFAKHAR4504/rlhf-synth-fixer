@@ -59,7 +59,7 @@ locals {
   }
 
   azs = ["${var.region}a", "${var.region}b"]
-  
+
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
 }
@@ -262,7 +262,7 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2              = true
+  enable_http2               = true
 
   tags = merge(local.common_tags, {
     Name = "${var.app_name}-alb"
@@ -355,14 +355,14 @@ resource "aws_launch_template" "main" {
 
 # ==================== AUTO SCALING GROUP ====================
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.app_name}-asg"
-  vpc_zone_identifier = aws_subnet.private[*].id
-  target_group_arns   = [aws_lb_target_group.main.arn]
-  health_check_type   = "ELB"
+  name                      = "${var.app_name}-asg"
+  vpc_zone_identifier       = aws_subnet.private[*].id
+  target_group_arns         = [aws_lb_target_group.main.arn]
+  health_check_type         = "ELB"
   health_check_grace_period = 300
-  min_size            = var.min_instances
-  max_size            = var.max_instances
-  desired_capacity    = var.desired_instances
+  min_size                  = var.min_instances
+  max_size                  = var.max_instances
+  desired_capacity          = var.desired_instances
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -398,7 +398,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.app_name}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -406,7 +406,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.app_name}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown              = 300
+  cooldown               = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -427,7 +427,7 @@ resource "random_string" "bucket_suffix" {
 
 resource "aws_s3_bucket_versioning" "static_assets" {
   bucket = aws_s3_bucket.static_assets.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -455,42 +455,42 @@ resource "aws_s3_bucket_public_access_block" "static_assets" {
 data "aws_iam_policy_document" "s3_bucket_policy" {
   statement {
     effect = "Allow"
-    
+
     principals {
       type        = "AWS"
       identifiers = ["*"]
     }
-    
+
     actions = [
       "s3:GetObject"
     ]
-    
+
     resources = [
       "${aws_s3_bucket.static_assets.arn}/*"
     ]
-    
+
     condition {
       test     = "StringEquals"
       variable = "aws:SourceVpc"
       values   = [aws_vpc.main.id]
     }
   }
-  
+
   statement {
     effect = "Deny"
-    
+
     principals {
       type        = "AWS"
       identifiers = ["*"]
     }
-    
+
     actions = ["*"]
-    
+
     resources = [
       aws_s3_bucket.static_assets.arn,
       "${aws_s3_bucket.static_assets.arn}/*"
     ]
-    
+
     condition {
       test     = "Bool"
       variable = "aws:SecureTransport"
@@ -561,10 +561,10 @@ resource "aws_cloudwatch_dashboard" "main" {
   dashboard_body = jsonencode({
     widgets = [
       {
-        type = "metric"
-        x    = 0
-        y    = 0
-        width = 12
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
         height = 6
         properties = {
           metrics = [
@@ -579,10 +579,10 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
       {
-        type = "metric"
-        x    = 12
-        y    = 0
-        width = 12
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
         height = 6
         properties = {
           metrics = [
@@ -597,10 +597,10 @@ resource "aws_cloudwatch_dashboard" "main" {
         }
       },
       {
-        type = "metric"
-        x    = 0
-        y    = 6
-        width = 12
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
         height = 6
         properties = {
           metrics = [
