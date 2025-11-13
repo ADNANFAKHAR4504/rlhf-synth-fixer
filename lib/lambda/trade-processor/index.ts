@@ -7,7 +7,6 @@ const s3 = new S3Client({});
 
 const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const REGION = process.env.REGION || 'us-east-1';
-const IS_PRIMARY = process.env.IS_PRIMARY === 'true';
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME || '';
 const CONFIG_BUCKET_NAME = process.env.CONFIG_BUCKET_NAME || '';
 
@@ -21,7 +20,7 @@ interface TradeOrder {
 }
 
 export const handler = async (event: SQSEvent): Promise<void> => {
-  console.log(`Processing trades in ${REGION} (Primary: ${IS_PRIMARY})`);
+  console.log(`Processing trades in ${REGION}`);
   console.log(`Event: ${JSON.stringify(event)}`);
 
   // Load configuration from S3

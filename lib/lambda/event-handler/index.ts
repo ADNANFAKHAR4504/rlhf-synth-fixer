@@ -1,18 +1,17 @@
 import { EventBridgeEvent } from 'aws-lambda';
 
-const REGION = process.env.REGION || 'us-east-2';
+const REGION = process.env.REGION || 'us-east-1';
 
 interface TradingEvent {
   eventType: string;
   data: Record<string, unknown>;
-  sourceRegion: string;
   timestamp: string;
 }
 
 export const handler = async (
   event: EventBridgeEvent<string, TradingEvent>
 ): Promise<void> => {
-  console.log(`Received cross-region event in ${REGION}`, event);
+  console.log(`Received platform event in ${REGION}`, event);
 
   const { 'detail-type': detailType, detail } = event;
 
@@ -20,8 +19,8 @@ export const handler = async (
     case 'Trade Executed':
       await handleTradeExecuted(detail);
       break;
-    case 'Failover Required':
-      await handleFailoverRequired(detail);
+    case 'System Alert':
+      await handleSystemAlert(detail);
       break;
     default:
       console.log(`Unknown event type: ${detailType}`);
@@ -32,7 +31,7 @@ async function handleTradeExecuted(detail: TradingEvent): Promise<void> {
   console.log('Handling Trade Executed event:', detail);
 
   // Log the event for audit purposes
-  console.log(`Trade from ${detail.sourceRegion} received in ${REGION}`);
+  console.log(`Trade executed in ${REGION} at ${detail.timestamp}`);
 
   // In a real implementation, you might:
   // - Update local cache
@@ -40,16 +39,14 @@ async function handleTradeExecuted(detail: TradingEvent): Promise<void> {
   // - Update metrics
 }
 
-async function handleFailoverRequired(detail: TradingEvent): Promise<void> {
-  console.log('Handling Failover Required event:', detail);
+async function handleSystemAlert(detail: TradingEvent): Promise<void> {
+  console.log('Handling System Alert event:', detail);
 
-  // Log critical failover event
-  console.error(
-    `CRITICAL: Failover required from ${detail.sourceRegion} to ${REGION}`
-  );
+  // Log critical system alert
+  console.warn(`ALERT: System event in ${REGION}`, detail);
 
   // In a real implementation, you might:
-  // - Trigger Step Functions state machine
   // - Send alerts to operations team
   // - Update status dashboards
+  // - Trigger automated remediation
 }

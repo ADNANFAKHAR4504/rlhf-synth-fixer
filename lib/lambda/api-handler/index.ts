@@ -12,7 +12,6 @@ const sqs = new SQSClient({});
 const REGION = process.env.REGION || 'us-east-1';
 const SESSION_TABLE_NAME = process.env.SESSION_TABLE_NAME || '';
 const TRADE_QUEUE_URL = process.env.TRADE_QUEUE_URL || '';
-const IS_PRIMARY = process.env.IS_PRIMARY || 'true';
 
 export const handler = async (
   event: APIGatewayProxyEvent
@@ -28,7 +27,6 @@ export const handler = async (
         body: JSON.stringify({
           status: 'healthy',
           region: REGION,
-          isPrimary: IS_PRIMARY,
           timestamp: new Date().toISOString(),
         }),
       };

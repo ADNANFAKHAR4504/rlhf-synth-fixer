@@ -1,17 +1,17 @@
 {
   "platform": "cdk",
   "language": "ts",
-  "complexity": "expert",
+  "complexity": "intermediate",
   "turn_type": "single",
   "po_id": "6z0im3",
   "team": "synth",
   "startedAt": "2025-11-12T21:34:21+00:00",
-  "subtask": "Failure Recovery and High Availability",
+  "subtask": "Trading Platform Single Region",
   "subject_labels": [
-    "Failure Recovery Automation"
+    "Microservices Architecture",
+    "Event-Driven Systems"
   ],
   "aws_services": [
-    "Route53",
     "RDS",
     "DynamoDB",
     "Lambda",
@@ -19,9 +19,9 @@
     "APIGateway",
     "S3",
     "CloudWatch",
-    "StepFunctions",
     "EventBridge",
-    "SystemsManager"
+    "SystemsManager",
+    "VPC"
   ],
   "training_quality": 8
 }

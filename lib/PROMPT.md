@@ -1,4 +1,4 @@
-# Multi-Region Disaster Recovery Solution for Trading Platform
+# Trading Platform Infrastructure
 
 ## Platform and Language
 
@@ -6,69 +6,66 @@ Create infrastructure using **AWS CDK with TypeScript**.
 
 ## Business Context
 
-A financial services company operates a critical trading platform that must maintain 99.99% uptime. After experiencing a regional outage that cost millions in lost trades, they need to implement a multi-region disaster recovery solution that can automatically failover within 60 seconds.
+A financial services company operates a trading platform that requires reliable infrastructure for processing trade orders. The platform needs robust architecture with proper monitoring, event handling, and data persistence in the us-east-1 region.
 
 ## Infrastructure Requirements
 
-Implement a multi-region disaster recovery solution spanning us-east-1 (primary) and us-east-2 (secondary) with the following components:
+Implement a single-region trading platform infrastructure in us-east-1 with the following components:
 
-### 1. DNS and Traffic Management
-- Set up Route 53 hosted zone with health checks monitoring endpoints in us-east-1 and us-east-2
-- Implement failover routing policy for automatic DNS failover
-- Configure health checks with appropriate thresholds for rapid failover detection
+### 1. Database Layer
+- Deploy Aurora PostgreSQL Serverless v2 cluster for trade data storage
+- Configure DynamoDB table for user session data with point-in-time recovery enabled
+- Enable encryption at rest and automated backups
 
-### 2. Database Layer
-- Deploy Aurora PostgreSQL global database with writer in us-east-1 and read replica in us-east-2
-- Implement cross-region RDS Aurora Global Database with automated promotion
-- Configure DynamoDB global tables for user session data with point-in-time recovery enabled
-- Ensure session state replication across regions
+### 2. Compute and Application Layer
+- Create Lambda functions processing trade orders from SQS queues
+- Deploy API Gateway REST API with endpoints for trade submission and health checks
+- Implement proper IAM roles and permissions following least privilege
 
-### 3. Compute and Application Layer
-- Create Lambda functions in both regions processing trade orders from SQS queues
-- Deploy Lambda functions in both regions using identical deployment packages
-- Deploy API Gateway REST APIs in both regions with custom domain names
-- Ensure all IAM roles support cross-region assume role capabilities
+### 3. Storage
+- Implement S3 bucket for application configurations and audit logs
+- Configure versioning and lifecycle policies
+- Enable encryption for data at rest
 
-### 4. Storage and Replication
-- Implement S3 buckets with cross-region replication for application configurations and audit logs
-- Use S3 cross-region replication for static assets and configuration files
-- Configure appropriate lifecycle policies and encryption
+### 4. Messaging and Events
+- Set up SQS queues for asynchronous trade order processing
+- Configure EventBridge for platform event handling
+- Implement dead letter queues for failed messages
 
 ### 5. Monitoring and Alerting
-- Set up CloudWatch alarms monitoring RDS lag, Lambda errors, and API Gateway latency
-- Implement CloudWatch cross-region alarms and SNS notifications
-- Configure EventBridge rules forwarding critical events between regions
+- Set up CloudWatch alarms monitoring RDS capacity, Lambda errors, and API Gateway latency
+- Implement SNS topics for alert notifications
+- Enable CloudWatch Logs for all Lambda functions
 
-### 6. Automated Failover
-- Create Step Functions state machine orchestrating failover process including RDS promotion and Route 53 updates
-- Implement automated failback procedures using Step Functions
-- Implement automated testing Lambda that validates failover readiness every hour
+### 6. Network Infrastructure
+- Deploy VPC with public and private subnets across multiple AZs
+- Configure security groups for Aurora access
+- Implement isolated subnets for database resources
 
 ### 7. Configuration Management
-- Use Systems Manager Parameter Store with region-specific configurations
-- Ensure configuration synchronization across regions
+- Use Systems Manager Parameter Store for application configurations
+- Store region-specific settings and resource references
 
 ## Technical Constraints
 
 ### AWS Services Required
-- Route 53 (DNS and health checks)
-- Aurora PostgreSQL Global Database
-- DynamoDB Global Tables
+- Aurora PostgreSQL Serverless v2
+- DynamoDB
 - Lambda
 - SQS
 - API Gateway
-- S3 with Cross-Region Replication
+- S3
 - CloudWatch
-- Step Functions
 - EventBridge
 - Systems Manager Parameter Store
+- VPC
 
 ### Architecture Requirements
 - CDK 2.x with TypeScript
-- AWS CLI configured with multi-region access
-- VPCs in both regions with private subnets
-- VPC peering for cross-region communication
-- CloudWatch cross-region monitoring with automated failover triggers via Step Functions
+- Single region deployment (us-east-1)
+- VPC with public and private subnets
+- Proper security group configuration
+- CloudWatch monitoring and alarms
 
 ### Compliance and Best Practices
 - All resources must include environmentSuffix for naming
@@ -76,25 +73,26 @@ Implement a multi-region disaster recovery solution spanning us-east-1 (primary)
 - Enable encryption at rest and in transit
 - Configure appropriate backup and retention policies
 - Ensure all resources are tagged appropriately
+- Use removal policies for easy cleanup
 
 ## Expected Output
 
 CDK application structure:
-- Separate stacks for primary region (us-east-1) and secondary region (us-east-2)
-- Shared constructs for cross-region resources (Route 53, global databases)
-- Deployment scripts that validate both regions are synchronized before completing
-- Health check and monitoring configurations
-- Automated failover orchestration via Step Functions
+- Single stack for us-east-1 region
+- Lambda functions for API handling, trade processing, and event handling
+- API Gateway with health check and trade endpoints
+- Monitoring and alerting via CloudWatch and SNS
+- Event-driven architecture using EventBridge
 
 ## Success Criteria
 
-1. Infrastructure deploys successfully in both regions
-2. Health checks correctly monitor endpoints in both regions
-3. Aurora Global Database replication is functional
-4. DynamoDB global tables replicate session data
-5. S3 cross-region replication is active
-6. CloudWatch alarms are properly configured and alerting
-7. Step Functions can orchestrate failover process
-8. API Gateway endpoints are accessible in both regions
-9. Automated testing Lambda validates failover readiness
-10. All resources follow naming conventions with environmentSuffix
+1. Infrastructure deploys successfully in us-east-1
+2. Aurora PostgreSQL cluster is accessible and functional
+3. DynamoDB table stores session data correctly
+4. Lambda functions process trade orders from SQS
+5. API Gateway endpoints are accessible and functional
+6. S3 bucket stores configurations
+7. CloudWatch alarms are properly configured and alerting
+8. EventBridge handles platform events correctly
+9. All resources follow naming conventions with environmentSuffix
+10. Health check endpoint returns proper status
