@@ -20,12 +20,18 @@ echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
+export PR_NUMBER=${PR_NUMBER:-"unknown"}
+export TEAM=${TEAM:-"unknown"}
 export AWS_REGION=${AWS_REGION:-us-east-1}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
 export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
 export PULUMI_BACKEND_URL=${PULUMI_BACKEND_URL:-}
 export PULUMI_ORG=${PULUMI_ORG:-organization}
 export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
+
+# Export Terraform variables for tagging
+export TF_VAR_pr_number=${PR_NUMBER:-"unknown"}
+export TF_VAR_team=${TEAM:-"unknown"}
 
 # Ensure non-interactive Terraform by providing defaults if not set by CI secrets
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}
@@ -337,6 +343,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+
+    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
     
     echo "Deploying infrastructure ..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
@@ -358,6 +366,8 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
+
+    pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
     
     echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then
