@@ -154,8 +154,6 @@ resource "aws_kms_key_policy" "logs_encryption" {
           "kms:DescribeKey"
         ]
         Resource = "*"
-        # ❌ REMOVE THE CONDITION BLOCK ENTIRELY
-        # The condition with aws:logs:arn is causing the AccessDeniedException
       },
       {
         Sid    = "Allow VPC Flow Logs to use the key"
@@ -606,16 +604,13 @@ resource "aws_iam_role_policy_attachment" "flow_logs" {
 # VPC Flow Logs
 resource "aws_flow_log" "main" {
   log_destination_type = "s3"
-  log_destination      = aws_s3_bucket.flow_logs.arn # ✅ CORRECT
+  log_destination      = aws_s3_bucket.flow_logs.arn
   traffic_type         = "ALL"
   vpc_id               = aws_vpc.main.id
+
   tags = {
     Name = "flow-log-vpc-${var.environment}"
   }
-  depends_on = [
-    aws_iam_role.flow_logs,
-    aws_iam_role_policy_attachment.flow_logs
-  ]
 }
 
 # ==================== SECURITY GROUPS ====================
@@ -1262,9 +1257,25 @@ resource "aws_sns_topic_policy" "security_alerts" {
         }
         Action   = "sns:Publish"
         Resource = aws_sns_topic.security_alerts.arn
+      },
+      {
+        Sid    = "AllowLambdaToPublish"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.security_alerts.arn
+      },
+      {
+        Sid    = "AllowRootAccount"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "sns:*"
+        Resource = aws_sns_topic.security_alerts.arn
       }
-      # REMOVE cloudwatch.amazonaws.com - it's not valid for SNS topic policies
-      # CloudWatch Alarms already publish through events.amazonaws.com
     ]
   })
 }
