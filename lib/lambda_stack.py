@@ -12,7 +12,7 @@ import os
 
 class LambdaStack(Stack):
     def __init__(self, scope: Construct, construct_id: str, vpc: ec2.Vpc,
-                 environment_suffix: str, dr_role: str, **kwargs) -> None:
+                 environment_suffix: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Lambda execution role
@@ -50,7 +50,7 @@ class LambdaStack(Stack):
         # Payment Validation Lambda
         self.payment_validation_fn = _lambda.Function(
             self, f"PaymentValidation-{environment_suffix}",
-            function_name=f"payment-validation-{dr_role}-{environment_suffix}",
+            function_name=f"payment-validation-{environment_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_asset("lib/lambda/payment_validation"),
@@ -60,17 +60,14 @@ class LambdaStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "ENVIRONMENT_SUFFIX": environment_suffix,
-                "DR_ROLE": dr_role
+                "ENVIRONMENT_SUFFIX": environment_suffix
             }
         )
-
-        Tags.of(self.payment_validation_fn).add("DR-Role", dr_role)
 
         # Transaction Processing Lambda
         self.transaction_processing_fn = _lambda.Function(
             self, f"TransactionProcessing-{environment_suffix}",
-            function_name=f"transaction-processing-{dr_role}-{environment_suffix}",
+            function_name=f"transaction-processing-{environment_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_asset("lib/lambda/transaction_processing"),
@@ -80,17 +77,14 @@ class LambdaStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "ENVIRONMENT_SUFFIX": environment_suffix,
-                "DR_ROLE": dr_role
+                "ENVIRONMENT_SUFFIX": environment_suffix
             }
         )
-
-        Tags.of(self.transaction_processing_fn).add("DR-Role", dr_role)
 
         # Notification Lambda
         self.notification_fn = _lambda.Function(
             self, f"Notification-{environment_suffix}",
-            function_name=f"notification-{dr_role}-{environment_suffix}",
+            function_name=f"notification-{environment_suffix}",
             runtime=_lambda.Runtime.PYTHON_3_11,
             handler="index.handler",
             code=_lambda.Code.from_asset("lib/lambda/notification"),
@@ -100,28 +94,25 @@ class LambdaStack(Stack):
             timeout=Duration.seconds(30),
             memory_size=256,
             environment={
-                "ENVIRONMENT_SUFFIX": environment_suffix,
-                "DR_ROLE": dr_role
+                "ENVIRONMENT_SUFFIX": environment_suffix
             }
         )
-
-        Tags.of(self.notification_fn).add("DR-Role", dr_role)
 
         # Outputs
         CfnOutput(
             self, "PaymentValidationFnArn",
             value=self.payment_validation_fn.function_arn,
-            export_name=f"{dr_role}-payment-validation-fn-{environment_suffix}"
+            export_name=f"payment-validation-fn-{environment_suffix}"
         )
 
         CfnOutput(
             self, "TransactionProcessingFnArn",
             value=self.transaction_processing_fn.function_arn,
-            export_name=f"{dr_role}-transaction-processing-fn-{environment_suffix}"
+            export_name=f"transaction-processing-fn-{environment_suffix}"
         )
 
         CfnOutput(
             self, "NotificationFnArn",
             value=self.notification_fn.function_arn,
-            export_name=f"{dr_role}-notification-fn-{environment_suffix}"
+            export_name=f"notification-fn-{environment_suffix}"
         )

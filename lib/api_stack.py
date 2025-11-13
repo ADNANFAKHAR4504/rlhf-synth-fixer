@@ -12,14 +12,14 @@ class ApiStack(Stack):
                  payment_validation_fn: _lambda.Function,
                  transaction_processing_fn: _lambda.Function,
                  notification_fn: _lambda.Function,
-                 environment_suffix: str, dr_role: str, **kwargs) -> None:
+                 environment_suffix: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Create API Gateway REST API
         self.api = apigw.RestApi(
             self, f"PaymentAPI-{environment_suffix}",
-            rest_api_name=f"payment-api-{dr_role}-{environment_suffix}",
-            description=f"Payment Processing API - {dr_role}",
+            rest_api_name=f"payment-api-{environment_suffix}",
+            description=f"Payment Processing API",
             deploy_options=apigw.StageOptions(
                 stage_name="prod",
                 throttling_burst_limit=10000,
@@ -27,8 +27,6 @@ class ApiStack(Stack):
             ),
             endpoint_types=[apigw.EndpointType.REGIONAL]
         )
-
-        Tags.of(self.api).add("DR-Role", dr_role)
 
         # Health check endpoint
         health = self.api.root.add_resource("health")
@@ -39,7 +37,7 @@ class ApiStack(Stack):
                     apigw.IntegrationResponse(
                         status_code="200",
                         response_templates={
-                            "application/json": '{"status": "healthy", "region": "' + dr_role + '"}'
+                            "application/json": '{"status": "healthy"}'
                         }
                     )
                 ],
@@ -95,11 +93,11 @@ class ApiStack(Stack):
         CfnOutput(
             self, "APIEndpoint",
             value=self.api.url,
-            export_name=f"{dr_role}-api-url-{environment_suffix}"
+            export_name=f"api-url-{environment_suffix}"
         )
 
         CfnOutput(
             self, "APIId",
             value=self.api.rest_api_id,
-            export_name=f"{dr_role}-api-id-{environment_suffix}"
+            export_name=f"api-id-{environment_suffix}"
         )

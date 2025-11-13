@@ -1,118 +1,101 @@
-# Multi-Region Disaster Recovery Infrastructure for Payment Processing
+# Single-Region Payment Processing Infrastructure
 
 Hey team,
 
-We need to build a comprehensive disaster recovery solution for a payment processing system that absolutely cannot go down. Our financial services client processes critical payment transactions 24/7, and they need the confidence that if their primary region has an outage, they can failover to a secondary region within 5 minutes without losing data or transactions.
+We need to build a robust payment processing infrastructure for a financial services client. The system processes critical payment transactions and needs to be highly available within a single region (us-east-1) with strong monitoring, security, and compliance capabilities.
 
-The business requirements are pretty clear here - they need full multi-region redundancy with automated failover capabilities. Their compliance team is also very strict about audit trails, monitoring, and ensuring zero data loss during failover scenarios. The payment processing system needs to handle high transaction volumes while maintaining low latency across both regions.
+The business requirements focus on building a scalable, secure payment processing system with comprehensive audit trails and monitoring. The client's compliance team requires strict controls around data access, encryption, and operational visibility. The payment processing system needs to handle high transaction volumes while maintaining low latency.
 
-We're talking about a warm standby configuration where the secondary region is always ready to take over. This includes maintaining synchronized databases, replicated Lambda functions, and active health monitoring with Route 53. The architecture needs to support cross-region replication for all stateful components like Aurora databases, DynamoDB tables, and S3 buckets.
+The architecture leverages AWS best practices for high availability within a single region, utilizing multiple availability zones for redundancy. All stateful components like Aurora databases, DynamoDB tables, and S3 buckets are configured for optimal performance and durability within us-east-1.
 
 ## What we need to build
 
-Create a multi-region disaster recovery infrastructure using **CDK with Python** that deploys payment processing capabilities across US East regions with automated failover.
+Create a single-region payment processing infrastructure using **CDK with Python** that deploys in us-east-1 with high availability across multiple availability zones.
 
 ### Core Requirements
 
 1. **Database Layer**
-   - Aurora PostgreSQL Global Database with primary cluster in us-east-1 and read-capable secondary in us-east-2
-   - DynamoDB Global Tables for session data with automatic bi-directional replication
-   - On-demand billing for DynamoDB with point-in-time recovery enabled
+   - Aurora PostgreSQL cluster in us-east-1 with Multi-AZ deployment for high availability
+   - DynamoDB table for session data with on-demand billing and point-in-time recovery enabled
    - Automated backups for Aurora with 7-day retention
+   - Database encryption at rest and in transit
 
 2. **Compute Layer**
-   - Three Lambda functions deployed identically in both regions: payment validation, transaction processing, and notification services
-   - API Gateway REST APIs in both regions with custom domain names
+   - Three Lambda functions in us-east-1: payment validation, transaction processing, and notification services
+   - API Gateway REST API with custom domain name
    - Request validation and throttling limits of 10,000 requests per second on API Gateway
-   - VPC configuration in each region with 3 availability zones
+   - VPC configuration in us-east-1 with 3 availability zones for high availability
 
-3. **Storage and Replication**
-   - S3 buckets in both regions with cross-region replication enabled
-   - Replication Time Control (RTC) for S3 to ensure predictable replication times
+3. **Storage**
+   - S3 bucket in us-east-1 with versioning enabled
    - Lifecycle policies to archive data to Glacier after 90 days
-   - Versioning enabled on all S3 buckets
+   - Server-side encryption with AWS managed keys
+   - Access logging enabled for audit trails
 
-4. **DNS and Traffic Management**
-   - Route 53 hosted zone with weighted routing policy (100% primary, 0% secondary initially)
-   - Health checks monitoring API Gateway endpoints in both regions
-   - Automated DNS failover based on health check results
-   - Custom domain names for API Gateway endpoints
-
-5. **Monitoring and Alerting**
-   - CloudWatch alarms for RDS replication lag (threshold: 10 seconds)
+4. **Monitoring and Alerting**
+   - CloudWatch alarms for RDS CPU utilization and connections (threshold: 80%)
    - CloudWatch alarms for Lambda errors (threshold: 5% error rate)
    - CloudWatch alarms for API Gateway 5XX errors (threshold: 1%)
-   - SNS topics for alarm notifications in both regions
-   - Cross-region CloudWatch dashboard showing unified metrics
+   - SNS topics for alarm notifications
+   - CloudWatch dashboard showing unified metrics for all services
 
-6. **Configuration Management**
+5. **Configuration Management**
    - Systems Manager Parameter Store for database endpoints, API URLs, and feature flags
-   - Parameter synchronization mechanism between regions
    - Secure string parameters for sensitive configuration
-
-7. **Automated Failover**
-   - Step Functions state machine coordinating failover process
-   - Lambda function to detect outages and trigger failover
-   - Automated Route 53 weight updates during failover
-   - RDS cluster promotion from secondary to primary
+   - Centralized configuration management for all services
 
 ### Technical Requirements
 
 - All infrastructure defined using **CDK with Python**
-- Use **Aurora PostgreSQL** for transactional database with global database configuration
-- Use **DynamoDB** global tables for session management
+- Use **Aurora PostgreSQL** for transactional database with Multi-AZ deployment
+- Use **DynamoDB** for session management with on-demand billing
 - Use **Lambda** for compute (payment validation, transaction processing, notifications)
-- Use **API Gateway** REST API with regional endpoints
-- Use **S3** with cross-region replication and lifecycle policies
-- Use **Route 53** for DNS with health checks and weighted routing
-- Use **CloudWatch** for monitoring with cross-region dashboards
+- Use **API Gateway** REST API with regional endpoint
+- Use **S3** with versioning and lifecycle policies
+- Use **CloudWatch** for monitoring with comprehensive dashboards
 - Use **SNS** for notifications
 - Use **Systems Manager Parameter Store** for configuration
-- Use **Step Functions** for failover orchestration
-- Use **VPC** with private and public subnets across 3 AZs in each region
+- Use **VPC** with private and public subnets across 3 AZs in us-east-1
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to **us-east-1** (primary) and **us-east-2** (secondary) regions
+- Deploy to **us-east-1** region only
 
 ### Constraints
 
-- All resources must be tagged with DR-Role indicating primary or secondary
-- CloudWatch dashboards must aggregate metrics from both regions
-- S3 replication must use RTC for consistent replication times
-- API Gateway must use custom domain names with regional endpoints
-- DynamoDB global tables must have bi-directional replication
-- Lambda functions must have identical configurations across regions
-- Aurora Global Database must support automated failover
+- All resources must be tagged appropriately with Environment and Project tags
+- CloudWatch dashboards must aggregate metrics from all services
+- API Gateway must use regional endpoint with throttling enabled
+- Lambda functions must be deployed in VPC with proper security groups
+- Aurora Database must be Multi-AZ for high availability
 - All resources must be destroyable (no Retain policies)
-- VPC in each region must have public subnets for NAT gateways
+- VPC must have public subnets for NAT gateways and private subnets for databases
 - RDS Aurora must be in private subnets with no public access
-- Lambda functions must have proper IAM roles for cross-region access
-- Health checks must monitor actual API functionality, not just endpoint availability
+- Lambda functions must have proper IAM roles with least privilege access
+- All data must be encrypted at rest and in transit
 
 ## Success Criteria
 
-- Functionality: Complete multi-region deployment with all services operational in both regions
-- Performance: API Gateway handles 10,000 requests per second, RDS replication lag under 10 seconds
-- Reliability: Automated failover completes within 5 minutes, zero data loss during failover
+- Functionality: Complete single-region deployment with all services operational in us-east-1
+- Performance: API Gateway handles 10,000 requests per second, database response time under 100ms
+- Reliability: Multi-AZ deployment for high availability, automated backups with 7-day retention
 - Security: All database resources in private subnets, encrypted at rest and in transit, no public endpoints
 - Resource Naming: All resources include environmentSuffix for multi-environment deployment
 - Code Quality: Python code following PEP 8 standards, comprehensive unit tests, inline documentation
-- Monitoring: Cross-region dashboard showing all critical metrics, alarms trigger notifications
+- Monitoring: CloudWatch dashboard showing all critical metrics, alarms trigger notifications
 
 ## What to deliver
 
-- Complete CDK Python implementation with multi-region stack configuration
-- Aurora PostgreSQL Global Database spanning us-east-1 and us-east-2
-- DynamoDB Global Tables with on-demand billing
-- Three Lambda functions (payment validation, transaction processing, notifications) in both regions
-- API Gateway REST APIs with custom domains in both regions
-- S3 buckets with cross-region replication and lifecycle policies
-- Route 53 hosted zone with health checks and weighted routing
-- CloudWatch alarms and cross-region dashboard
+- Complete CDK Python implementation for single-region deployment in us-east-1
+- Aurora PostgreSQL cluster with Multi-AZ deployment for high availability
+- DynamoDB table with on-demand billing and point-in-time recovery
+- Three Lambda functions (payment validation, transaction processing, notifications) in us-east-1
+- API Gateway REST API with regional endpoint
+- S3 bucket with versioning and lifecycle policies
+- CloudWatch alarms and comprehensive dashboard
 - SNS topics for notifications
 - Systems Manager parameters for configuration
-- Step Functions state machine for automated failover
-- VPC infrastructure in both regions with proper subnet configuration
-- IAM roles and policies for all services
+- VPC infrastructure in us-east-1 with proper subnet configuration across 3 AZs
+- IAM roles and policies for all services with least privilege access
 - Unit tests for all stack components
-- Documentation covering deployment, failover procedures, and monitoring
+- Integration tests validating end-to-end functionality
+- Documentation covering deployment and monitoring procedures

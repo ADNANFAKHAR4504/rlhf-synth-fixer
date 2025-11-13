@@ -7,7 +7,7 @@ from aws_cdk import (
 from constructs import Construct
 
 class VpcStack(Stack):
-    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, dr_role: str, **kwargs) -> None:
+    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, **kwargs) -> None:
         super().__init__(scope, construct_id, **kwargs)
 
         # Create VPC with 3 AZs
@@ -34,18 +34,9 @@ class VpcStack(Stack):
             ]
         )
 
-        # Add VPC endpoints for AWS services (Lambda optimization)
-        self.vpc.add_gateway_endpoint(
-            "S3Endpoint",
-            service=ec2.GatewayVpcEndpointAwsService.S3
-        )
+        # VPC endpoints removed due to account limit
+        # Lambdas will use NAT Gateway for S3 and DynamoDB access
 
-        self.vpc.add_gateway_endpoint(
-            "DynamoDBEndpoint",
-            service=ec2.GatewayVpcEndpointAwsService.DYNAMODB
-        )
-
-        Tags.of(self.vpc).add("DR-Role", dr_role)
         Tags.of(self.vpc).add("Name", f"payment-vpc-{environment_suffix}")
 
-        CfnOutput(self, "VpcId", value=self.vpc.vpc_id, export_name=f"{dr_role}-vpc-id-{environment_suffix}")
+        CfnOutput(self, "VpcId", value=self.vpc.vpc_id, export_name=f"vpc-id-{environment_suffix}")

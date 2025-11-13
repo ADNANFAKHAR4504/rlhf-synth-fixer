@@ -6,7 +6,9 @@
   "team": "synth",
   "startedAt": "2025-11-13T03:19:04+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "subject_labels": [],
+  "subject_labels": [
+    "Failure Recovery Automation"
+  ],
   "po_id": "b7i4a7",
   "aws_services": [
     "RDS",

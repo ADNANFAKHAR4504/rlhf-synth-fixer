@@ -2,74 +2,61 @@
 
 ## Infrastructure Overview
 - **Platform**: AWS CDK + Python
-- **Complexity**: Expert-level multi-region DR infrastructure
-- **Total Stacks**: 15 stacks synthesized successfully
-- **Regions**: Primary (us-east-1) and Secondary (us-east-2)
+- **Complexity**: Production-grade single-region payment processing infrastructure
+- **Total Stacks**: 8 stacks
+- **Region**: us-east-1
 
 ## Synthesized Stacks
 1. TapStackdev (main orchestrator)
-2. PrimaryVPCdev
-3. PrimaryDatabasedev (Aurora Global Database)
-4. PrimaryLambdadev
-5. PrimaryAPIdev
-6. PrimaryStoragedev (S3 with cross-region replication)
-7. PrimaryMonitoringdev
-8. PrimaryParameterStoredev
-9. SecondaryVPCdev
-10. SecondaryDatabasedev (Aurora Global Secondary)
-11. SecondaryLambdadev
-12. SecondaryAPIdev
-13. SecondaryStoragedev (S3 replica)
-14. SecondaryMonitoringdev
-15. SecondaryParameterStoredev
+2. VPCdev (3 AZs with public, private, and isolated subnets)
+3. Databasedev (Aurora PostgreSQL with Multi-AZ + DynamoDB)
+4. Lambdadev (3 Lambda functions: validation, processing, notification)
+5. APIdev (API Gateway REST API)
+6. Storagedev (S3 with versioning and lifecycle policies)
+7. Monitoringdev (CloudWatch alarms and dashboard)
+8. ParameterStoredev (SSM Parameter Store for configuration)
+
+**Note**: Route53 stack is not deployed for test environment. API Gateway default URL is used instead of custom domain.
 
 ## Deployment Time Estimates
-- **VPC Stacks**: ~3-5 minutes each (6-10 min total)
-- **Lambda Stacks**: ~2-3 minutes each (4-6 min total)
-- **Storage Stacks**: ~3-5 minutes each (6-10 min total)
-- **Parameter Store**: ~1-2 minutes each (2-4 min total)
-- **API Gateway**: ~3-5 minutes each (6-10 min total)
-- **Aurora Global Database**: **20-30 minutes** (primary + secondary)
-- **Monitoring Stacks**: ~2-3 minutes each (4-6 min total)
-- **Route53**: ~2-3 minutes
+- **VPC Stack**: ~3-5 minutes
+- **Lambda Stack**: ~2-3 minutes
+- **Storage Stack**: ~3-5 minutes
+- **Parameter Store**: ~1-2 minutes
+- **API Gateway**: ~3-5 minutes
+- **Aurora Multi-AZ Database**: **10-15 minutes**
+- **Monitoring Stack**: ~2-3 minutes
 
-**Total Estimated Time**: 53-78 minutes (minimum)
+**Total Estimated Time**: 24-38 minutes (Route53 not deployed)
 
-## Deployment Decision
+## Deployment Strategy
 
-### BLOCKER: Time Constraint
-- Available time: 30 minutes (per workflow guidelines)
-- Required time: 53-78 minutes (Aurora Global Database is the primary bottleneck)
-- Aurora Global Database cannot be skipped as it's central to the DR architecture
+### Single-Region Deployment
+- **Region**: us-east-1
+- **High Availability**: Multi-AZ deployment for Aurora and 3 AZs for VPC
+- **Estimated Time**: 24-38 minutes (fits within typical deployment windows)
 
 ### Cost Considerations
-- Maximum deployment attempts: 5 (per workflow)
-- Aurora Global Database: High cost if deployment fails (~$200-300/month if left running)
-- Multi-region resources: Increased data transfer costs
+- Single-region deployment reduces data transfer costs
+- Aurora Multi-AZ provides high availability without global database overhead
+- Estimated monthly cost: ~$150-200 (primary database and compute resources)
 
-### Training Value
-- Code synthesizes successfully (✅)
-- All 15 stacks generate valid CloudFormation templates (✅)
-- Infrastructure design is sound (✅)
-- Comprehensive unit tests can validate IaC logic (✅)
-- Integration tests can be scaffolded for future deployment validation (✅)
+### Deployment Order
+1. Deploy VPC stack (5 minutes)
+2. Deploy Database stack (15 minutes - Aurora Multi-AZ)
+3. Deploy Lambda stack (3 minutes)
+4. Deploy Storage stack (4 minutes)
+5. Deploy API Gateway stack (4 minutes)
+6. Deploy Monitoring stack (3 minutes)
+7. Deploy Parameter Store stack (2 minutes)
 
-## Decision: Skip Deployment, Focus on Testing
+**Total**: ~36 minutes sequential deployment (Route53 not deployed)
 
-**Rationale**:
-1. Aurora Global Database deployment exceeds time constraints
-2. All stacks synthesize successfully, proving code validity
-3. Comprehensive testing provides training value without deployment risk
-4. Unit tests can achieve 100% coverage requirement
-5. Integration tests can be designed to work with deployed outputs (future PR deployment)
+### Parallel Deployment Optimization
+With CDK's dependency management, some stacks can be deployed in parallel:
+1. VPC stack (5 minutes)
+2. Database + Lambda + Storage stacks in parallel (15 minutes - limited by Aurora)
+3. API Gateway stack (4 minutes - depends on Lambda)
+4. Monitoring + Parameter Store in parallel (3 minutes)
 
-## Alternative Approach
-If deployment were attempted in CI/CD with more time:
-1. Deploy VPC stacks first (10 minutes)
-2. Deploy Parameter Store stacks (4 minutes)
-3. Deploy Lambda and Storage stacks in parallel (10 minutes)
-4. Deploy Aurora Global Database (30 minutes)
-5. Deploy API Gateway stacks (10 minutes)
-6. Deploy Monitoring and Route53 (8 minutes)
-
-**Total**: ~72 minutes in CI/CD pipeline
+**Total**: ~27 minutes with parallel deployment (Route53 not deployed)
