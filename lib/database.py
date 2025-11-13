@@ -83,7 +83,7 @@ class DatabaseInfrastructure(Construct):
             "db_instance",
             identifier=f"payment-db-{environment_suffix}",
             engine="postgres",
-            engine_version="15.4",
+            engine_version="15.14",
             instance_class="db.t3.medium",
             allocated_storage=100,
             max_allocated_storage=1000,
