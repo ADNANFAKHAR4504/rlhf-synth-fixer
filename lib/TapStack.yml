@@ -11,13 +11,13 @@ Parameters:
       - staging
       - production
     Description: Environment type for resource tagging
-    
+
   CorporateIPRange:
     Type: String
     Default: '203.0.113.0/24'  # Replace with your corporate IP range
     Description: Corporate IP range for SSH access
     AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
-    
+
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
@@ -54,7 +54,7 @@ Resources:
   # ==========================================
   # VPC and Networking Configuration
   # ==========================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -66,7 +66,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-VPC'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   PublicSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,7 +79,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-PublicSubnet1'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   PublicSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -92,7 +92,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-PublicSubnet2'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   PrivateSubnet1:
     Type: AWS::EC2::Subnet
     Properties:
@@ -104,7 +104,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-PrivateSubnet1'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   PrivateSubnet2:
     Type: AWS::EC2::Subnet
     Properties:
@@ -116,7 +116,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-PrivateSubnet2'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -125,13 +125,13 @@ Resources:
           Value: !Sub '${AWS::StackName}-IGW'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   AttachGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref VPC
       InternetGatewayId: !Ref InternetGateway
-      
+
   PublicRouteTable:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -141,7 +141,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-PublicRT'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   PublicRoute:
     Type: AWS::EC2::Route
     DependsOn: AttachGateway
@@ -149,13 +149,13 @@ Resources:
       RouteTableId: !Ref PublicRouteTable
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
-      
+
   SubnetRouteTableAssociation1:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       SubnetId: !Ref PublicSubnet1
       RouteTableId: !Ref PublicRouteTable
-      
+
   SubnetRouteTableAssociation2:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -165,7 +165,7 @@ Resources:
   # ==========================================
   # VPC Flow Logs
   # ==========================================
-  
+
   VPCFlowLogRole:
     Type: AWS::IAM::Role
     Properties:
@@ -192,13 +192,13 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   VPCFlowLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub '/aws/vpc/${AWS::StackName}'
       RetentionInDays: 30
-      
+
   VPCFlowLog:
     Type: AWS::EC2::FlowLog
     Properties:
@@ -217,7 +217,7 @@ Resources:
   # ==========================================
   # Security Groups
   # ==========================================
-  
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -237,7 +237,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-ALB-SG'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   WebServerSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -262,7 +262,7 @@ Resources:
           Value: !Sub '${AWS::StackName}-WebServer-SG'
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -282,7 +282,7 @@ Resources:
   # ==========================================
   # IAM Roles and Policies
   # ==========================================
-  
+
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -321,13 +321,13 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   EC2InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
       Roles:
         - !Ref EC2InstanceRole
-        
+
   LambdaExecutionRole:
     Type: AWS::IAM::Role
     Properties:
@@ -357,7 +357,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   DeveloperUser:
     Type: AWS::IAM::User
     Properties:
@@ -476,7 +476,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   CloudTrailBucket:
     Type: AWS::S3::Bucket
     Condition: ShouldCreateCloudTrail
@@ -507,7 +507,7 @@ Resources:
     Properties:
       ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
       BucketName: !Ref CloudTrailBucket
-          
+
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
     Condition: ShouldCreateCloudTrail
@@ -535,7 +535,7 @@ Resources:
   # ==========================================
   # RDS Database with Encryption
   # ==========================================
-  
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -594,7 +594,7 @@ Resources:
   # ==========================================
   # CloudTrail for Auditing
   # ==========================================
-  
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
     Condition: ShouldCreateCloudTrail
@@ -620,7 +620,7 @@ Resources:
   # ==========================================
   # Application Load Balancer with SSL
   # ==========================================
-  
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -635,7 +635,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -652,7 +652,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   # Note: HTTPS listener requires ACM certificate - configure separately if needed
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
@@ -667,7 +667,7 @@ Resources:
   # ==========================================
   # EC2 Instances with Approved AMI
   # ==========================================
-  
+
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -692,7 +692,7 @@ Resources:
             # Install CloudWatch agent
             wget https://s3.amazonaws.com/amazoncloudwatch-agent/amazon_linux/amd64/latest/amazon-cloudwatch-agent.rpm
             rpm -U ./amazon-cloudwatch-agent.rpm
-            
+
             # Configure CloudWatch agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
@@ -714,7 +714,7 @@ Resources:
               }
             }
             EOF
-            
+
             # Start CloudWatch agent
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
@@ -747,7 +747,7 @@ Resources:
   # ==========================================
   # Lambda Function with Least Privilege
   # ==========================================
-  
+
   ApplicationTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -766,7 +766,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   ProcessingLambda:
     Type: AWS::Lambda::Function
     Properties:
@@ -779,12 +779,12 @@ Resources:
           import json
           import boto3
           import os
-          
+
           def handler(event, context):
               # Example Lambda function with least privilege access
               dynamodb = boto3.resource('dynamodb')
               table = dynamodb.Table(os.environ['TABLE_NAME'])
-              
+
               # Process event
               response = {
                   'statusCode': 200,
@@ -802,7 +802,7 @@ Resources:
   # ==========================================
   # CloudWatch Alarms and SNS Notifications
   # ==========================================
-  
+
   SecurityAlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -810,7 +810,7 @@ Resources:
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
-          
+
   UnauthorizedAPICallsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -826,7 +826,7 @@ Resources:
       AlarmActions:
         - !Ref SecurityAlarmTopic
       TreatMissingData: notBreaching
-        
+
   RootAccountUsageAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -842,7 +842,7 @@ Resources:
       AlarmActions:
         - !Ref SecurityAlarmTopic
       TreatMissingData: notBreaching
-        
+
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -861,7 +861,7 @@ Resources:
         - Name: AutoScalingGroupName
           Value: !Ref AutoScalingGroup
       TreatMissingData: breaching
-        
+
   DatabaseConnectionsAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -884,14 +884,14 @@ Resources:
   # ==========================================
   # CloudWatch Log Groups and Metric Filters
   # ==========================================
-  
+
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
     Condition: ShouldCreateCloudTrail
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
       RetentionInDays: 90
-      
+
   UnauthorizedAPICallsMetricFilter:
     Type: AWS::Logs::MetricFilter
     Condition: ShouldCreateCloudTrail
@@ -902,7 +902,7 @@ Resources:
         - MetricName: UnauthorizedAPICalls
           MetricNamespace: CloudTrailMetrics
           MetricValue: '1'
-          
+
   RootAccountUsageMetricFilter:
     Type: AWS::Logs::MetricFilter
     Condition: ShouldCreateCloudTrail
@@ -930,19 +930,19 @@ Outputs:
     Value: !Ref VPC
     Export:
       Name: !Sub '${AWS::StackName}-VPC-ID'
-      
+
   LoadBalancerURL:
     Description: Application Load Balancer URL
     Value: !GetAtt ApplicationLoadBalancer.DNSName
     Export:
       Name: !Sub '${AWS::StackName}-ALB-URL'
-      
+
   S3BucketName:
     Description: Application S3 Bucket Name
     Value: !Ref ApplicationBucket
     Export:
       Name: !Sub '${AWS::StackName}-S3-Bucket'
-      
+
   DatabaseEndpoint:
     Description: RDS Database Endpoint
     Value: !GetAtt RDSDatabase.Endpoint.Address
@@ -961,13 +961,13 @@ Outputs:
     Value: !GetAtt CloudTrail.Arn
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
-      
+
   SNSTopicArn:
     Description: SNS Topic for Security Alarms - Subscribe via AWS Console or CLI to receive notifications
     Value: !Ref SecurityAlarmTopic
     Export:
       Name: !Sub '${AWS::StackName}-SNS-Topic'
-      
+
   LambdaFunctionArn:
     Description: Processing Lambda Function ARN
     Value: !GetAtt ProcessingLambda.Arn
