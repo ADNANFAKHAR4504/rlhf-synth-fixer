@@ -362,24 +362,28 @@ describe('TapStack CloudFormation Template - Security Configuration as Code', ()
       expect(role.Properties.ManagedPolicyArns).toContain('arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy');
     });
 
-    test('should create WebServerRole with S3 read-only policy for ApplicationS3Bucket', () => {
+    test('should create WebServerRole with S3 read-write policy for ApplicationS3Bucket', () => {
       const role = template.Resources.WebServerRole;
-      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3ReadOnlyPolicy');
+      const s3Policy = role.Properties.Policies.find((p: any) => p.PolicyName === 'S3ReadWritePolicy');
 
       expect(s3Policy).toBeDefined();
       expect(s3Policy.PolicyDocument.Statement[0].Effect).toBe('Allow');
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:GetObject');
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:PutObject');
+      expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:DeleteObject');
       expect(s3Policy.PolicyDocument.Statement[0].Action).toContain('s3:ListBucket');
       expect(s3Policy.PolicyDocument.Statement[0].Resource).toHaveLength(2);
     });
 
-    test('should create WebServerRole with KMS decrypt policy', () => {
+    test('should create WebServerRole with KMS encrypt/decrypt policy', () => {
       const role = template.Resources.WebServerRole;
-      const kmsPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'KMSDecryptPolicy');
+      const kmsPolicy = role.Properties.Policies.find((p: any) => p.PolicyName === 'KMSEncryptDecryptPolicy');
 
       expect(kmsPolicy).toBeDefined();
       expect(kmsPolicy.PolicyDocument.Statement[0].Effect).toBe('Allow');
       expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain('kms:Decrypt');
+      expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain('kms:Encrypt');
+      expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain('kms:GenerateDataKey');
       expect(kmsPolicy.PolicyDocument.Statement[0].Action).toContain('kms:DescribeKey');
       expect(kmsPolicy.PolicyDocument.Statement[0].Resource).toEqual({
         'Fn::GetAtt': ['KMSKey', 'Arn']
