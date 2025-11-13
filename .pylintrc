@@ -21,6 +21,14 @@ disable=
     R0902, # too-many-instance-attributes
     W0621, # redefined-outer-name (for pytest fixtures)
     W0718, # broad-exception-caught
+    R0917, # too-many-positional-arguments
+    W0622, # redefined-builtin (id is acceptable as parameter name)
+    E0401, # import-error (for CDKTF generated providers)
+    W1309, # f-string-without-interpolation
+    C0207, # use-maxsplit-arg
+    C0413, # wrong-import-position (for test files)
+    R0801, # duplicate-code (acceptable for IaC)
+    C0305, # trailing-newlines
 
 [FORMAT]
 # Maximum number of characters on a single line
