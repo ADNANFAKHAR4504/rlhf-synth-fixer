@@ -21,7 +21,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
+from botocore.config import Config
 from jinja2 import Template
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -32,6 +33,7 @@ REGION = 'us-east-1'
 AUDIT_AGE_DAYS = 60
 LARGE_BUCKET_SIZE_GB = 100
 HIGH_OBJECT_COUNT = 1_000_000
+MAX_OBJECTS_TO_CHECK = 200  # Maximum objects to check when scanning bucket contents
 
 # Severity levels
 CRITICAL = 'CRITICAL'
@@ -62,8 +64,26 @@ class S3SecurityAuditor:
     
     def __init__(self, region: str = REGION):
         self.region = region
-        self.s3_client = boto3.client('s3', region_name=region)
-        self.cloudwatch_client = boto3.client('cloudwatch', region_name=region)
+        
+        # Configure timeouts for AWS API calls
+        config = Config(
+            connect_timeout=5,
+            read_timeout=30,
+            retries={'max_attempts': 3}
+        )
+        
+        try:
+            self.s3_client = boto3.client('s3', region_name=region, config=config)
+            self.cloudwatch_client = boto3.client('cloudwatch', region_name=region, config=config)
+            # Validate credentials with a simple call
+            self.s3_client.list_buckets(MaxBuckets=1)
+        except NoCredentialsError:
+            logger.error("AWS credentials not found. Please configure credentials.")
+            raise
+        except ClientError as e:
+            logger.error(f"Failed to initialize AWS clients: {e}")
+            raise
+        
         self.findings: List[Finding] = []
         self.bucket_cache: Dict[str, Dict] = {}
         
@@ -103,7 +123,15 @@ class S3SecurityAuditor:
         return self.findings, compliance_summary
     
     def _get_buckets_to_audit(self) -> List[Dict]:
-        """Get list of buckets that meet audit criteria"""
+        """Get list of buckets that meet audit criteria.
+        
+        Filters buckets based on age, naming patterns, and exclusion tags.
+        Only includes buckets older than AUDIT_AGE_DAYS that don't have
+        ExcludeFromAudit=true tag and aren't temp/test buckets.
+        
+        Returns:
+            List of bucket dictionaries from AWS API, or empty list on error
+        """
         try:
             response = self.s3_client.list_buckets()
             all_buckets = response['Buckets']
@@ -284,11 +312,7 @@ class S3SecurityAuditor:
     def _check_lifecycle_policies(self, bucket_name: str):
         """Check for lifecycle policies on large buckets"""
         try:
-            # Get bucket size from CloudWatch with timeout
-            import time
-            start_time = time.time()
-            timeout = 10  # 10 second timeout for CloudWatch calls
-            
+            # Get bucket size from CloudWatch
             metrics = self.cloudwatch_client.get_metric_statistics(
                 Namespace='AWS/S3',
                 MetricName='BucketSizeBytes',
@@ -301,10 +325,6 @@ class S3SecurityAuditor:
                 Period=86400,
                 Statistics=['Average']
             )
-            
-            if time.time() - start_time > timeout:
-                logger.warning(f"CloudWatch call timed out for bucket {bucket_name}")
-                return
             
             if metrics['Datapoints']:
                 size_bytes = metrics['Datapoints'][0]['Average']
@@ -452,10 +472,6 @@ class S3SecurityAuditor:
     def _check_access_logging_destination(self, bucket_name: str):
         """Check if high-traffic buckets log to themselves"""
         try:
-            import time
-            start_time = time.time()
-            timeout = 10  # 10 second timeout for CloudWatch calls
-            
             # Get object count metric
             metrics = self.cloudwatch_client.get_metric_statistics(
                 Namespace='AWS/S3',
@@ -469,10 +485,6 @@ class S3SecurityAuditor:
                 Period=86400,
                 Statistics=['Average']
             )
-            
-            if time.time() - start_time > timeout:
-                logger.warning(f"CloudWatch call timed out for bucket {bucket_name}")
-                return
             
             if metrics['Datapoints'] and metrics['Datapoints'][0]['Average'] > HIGH_OBJECT_COUNT:
                 # Check logging configuration
@@ -538,7 +550,7 @@ class S3SecurityAuditor:
             page_iterator = paginator.paginate(
                 Bucket=bucket_name, 
                 MaxKeys=50,  # Reduced from 100 for better performance
-                PaginationConfig={'MaxItems': 200}  # Limit total objects checked
+                PaginationConfig={'MaxItems': MAX_OBJECTS_TO_CHECK}  # Limit total objects checked
             )
             
             cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
@@ -666,10 +678,9 @@ class S3SecurityAuditor:
                     logger.info(f"Remediation:\n{finding.remediation_steps}")
                     logger.info('-'*40)
     
-    def save_json_report(self, filename: str = 's3_security_audit.json'):
+    def save_json_report(self, summary: Dict[str, Any], filename: str = 's3_security_audit.json'):
         """Save detailed findings to JSON file"""
         findings_data = [asdict(finding) for finding in self.findings]
-        _, summary = self.run_audit() if not hasattr(self, '_last_summary') else (None, self._last_summary)
         
         report = {
             'findings': findings_data,
@@ -691,6 +702,22 @@ class S3SecurityAuditor:
         
         # Load HTML template from file
         template_path = os.path.join(os.path.dirname(__file__), 's3_audit_report_template.html')
+        if not os.path.exists(template_path):
+            # Try alternate locations within the lib directory
+            script_dir = os.path.dirname(__file__)
+            alt_paths = [
+                os.path.join(script_dir, 'templates', 's3_audit_report_template.html'),
+                os.path.join(script_dir, 's3_audit_report_template.html'),  # This should be the same as template_path
+            ]
+            
+            for alt_path in alt_paths:
+                if os.path.exists(alt_path):
+                    template_path = alt_path
+                    break
+            else:
+                logger.error(f"HTML template file not found in lib directory: {template_path}")
+                return
+        
         try:
             with open(template_path, 'r') as f:
                 template_content = f.read()
@@ -715,7 +742,14 @@ class S3SecurityAuditor:
         logger.info(f"HTML report saved to {filename}")
     
     def _create_severity_chart(self, summary: Dict[str, Any]) -> str:
-        """Create severity distribution chart"""
+        """Create a bar chart showing the distribution of security findings by severity level.
+        
+        Args:
+            summary: Compliance summary dictionary containing findings_by_severity counts
+            
+        Returns:
+            HTML string containing the Plotly chart for embedding in reports
+        """
         severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
         counts = [summary['findings_by_severity'].get(s, 0) for s in severities]
         colors = ['#d32f2f', '#f57c00', '#fbc02d', '#388e3c']
@@ -739,7 +773,14 @@ class S3SecurityAuditor:
         return pio.to_html(fig, include_plotlyjs='cdn', div_id='severity-chart')
     
     def _create_compliance_chart(self, summary: Dict[str, Any]) -> str:
-        """Create compliance status chart"""
+        """Create a donut chart showing overall compliance status across all audited buckets.
+        
+        Args:
+            summary: Compliance summary dictionary containing compliant/non-compliant bucket counts
+            
+        Returns:
+            HTML string containing the Plotly chart for embedding in reports
+        """
         labels = ['Compliant', 'Non-Compliant']
         values = [summary['compliant_buckets'], summary['non_compliant_buckets']]
         colors = ['#4caf50', '#f44336']
@@ -765,7 +806,14 @@ class S3SecurityAuditor:
         return pio.to_html(fig, include_plotlyjs='cdn', div_id='compliance-chart')
     
     def _create_issue_type_chart(self, summary: Dict[str, Any]) -> str:
-        """Create issue type distribution chart"""
+        """Create a horizontal bar chart showing the distribution of findings by issue type.
+        
+        Args:
+            summary: Compliance summary dictionary containing findings_by_issue_type counts
+            
+        Returns:
+            HTML string containing the Plotly chart for embedding in reports
+        """
         issue_types = list(summary['findings_by_issue_type'].keys())
         counts = list(summary['findings_by_issue_type'].values())
         
@@ -805,7 +853,7 @@ def run_s3_security_audit():
         auditor.print_findings()
         
         # Save JSON report
-        auditor.save_json_report()
+        auditor.save_json_report(summary)
         
         # Save HTML report
         auditor.save_html_report(findings, summary)
@@ -831,6 +879,7 @@ def main():
 
 if __name__ == "__main__":
     exit(main())
+    
 ````
 
 
