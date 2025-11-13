@@ -326,10 +326,24 @@ describe('TAP Stack Integration Tests', () => {
   });
 
   describe('IAM Roles', () => {
-    it('should have task execution role created', async () => {
-      const response = await iam.listRoles({}).promise();
+    // Helper to get all roles with pagination
+    async function getAllRoles() {
+      let allRoles: AWS.IAM.Role[] = [];
+      let marker: string | undefined;
 
-      const executionRole = response.Roles.find(r =>
+      do {
+        const response = await iam.listRoles({ Marker: marker, MaxItems: 1000 }).promise();
+        allRoles = allRoles.concat(response.Roles);
+        marker = response.Marker;
+      } while (marker);
+
+      return allRoles;
+    }
+
+    it('should have task execution role created', async () => {
+      const allRoles = await getAllRoles();
+
+      const executionRole = allRoles.find(r =>
         r.RoleName.includes(`ecs-task-execution-role-${environmentSuffix}`)
       );
 
@@ -337,11 +351,11 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     it('should have task roles for each service', async () => {
-      const response = await iam.listRoles({}).promise();
+      const allRoles = await getAllRoles();
 
-      const frontendRole = response.Roles.find(r => r.RoleName.includes(`frontend-task-role-${environmentSuffix}`));
-      const apiRole = response.Roles.find(r => r.RoleName.includes(`api-gateway-task-role-${environmentSuffix}`));
-      const processingRole = response.Roles.find(r => r.RoleName.includes(`processing-task-role-${environmentSuffix}`));
+      const frontendRole = allRoles.find(r => r.RoleName.includes(`frontend-task-role-${environmentSuffix}`));
+      const apiRole = allRoles.find(r => r.RoleName.includes(`api-gateway-task-role-${environmentSuffix}`));
+      const processingRole = allRoles.find(r => r.RoleName.includes(`processing-task-role-${environmentSuffix}`));
 
       expect(frontendRole).toBeDefined();
       expect(apiRole).toBeDefined();
@@ -349,8 +363,8 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     it('should have least-privilege S3 policy for frontend role', async () => {
-      const response = await iam.listRoles({}).promise();
-      const frontendRole = response.Roles.find(r => r.RoleName.includes(`frontend-task-role-${environmentSuffix}`));
+      const allRoles = await getAllRoles();
+      const frontendRole = allRoles.find(r => r.RoleName.includes(`frontend-task-role-${environmentSuffix}`));
 
       if (frontendRole) {
         const policiesResponse = await iam.listRolePolicies({
