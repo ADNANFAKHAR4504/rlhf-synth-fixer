@@ -161,7 +161,7 @@ Conditions:
 Resources:
   # ===== KMS KEYS =====
   
-  # Primary KMS key for data encryption with automatic rotation
+  # Primary KMS key for data encryption with automatic rotation 
   DataEncryptionKey:
     Type: AWS::KMS::Key
     Properties:
@@ -190,6 +190,21 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
+                'kms:CallerAccount': !Ref AWS::AccountId
+          # Allow IAM principals with permissions to use the key via S3
+          - Sid: Allow use of the key for S3
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:CreateGrant'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
                 'kms:CallerAccount': !Ref AWS::AccountId
           - Sid: Allow Lambda Service Only
             Effect: Allow

@@ -248,6 +248,32 @@
                             }
                         },
                         {
+                            "Sid": "Allow use of the key for S3",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    },
+                                    "kms:CallerAccount": {
+                                        "Ref": "AWS::AccountId"
+                                    }
+                                }
+                            }
+                        },
+                        {
                             "Sid": "Allow Lambda Service Only",
                             "Effect": "Allow",
                             "Principal": {
