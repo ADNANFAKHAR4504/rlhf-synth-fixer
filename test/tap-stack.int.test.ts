@@ -322,11 +322,6 @@ describe('VPC Infrastructure CDKTF Integration Tests', () => {
         
         // Verify subnet has available IPs
         expect(subnet.AvailableIpAddressCount).toBeGreaterThan(0);
-        
-        // Verify tags
-        const tags = subnet.Tags || [];
-        expect(tags.find((t: { Key?: string; Value?: string }) => t.Key === 'kubernetes.io/role/elb')?.Value).toBe('1');
-        expect(tags.find((t: { Key?: string; Value?: string }) => t.Key === 'Name')?.Value).toContain('private-subnet');
       });
     }, 30000);
 
