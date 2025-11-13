@@ -128,9 +128,9 @@ export class TapStack extends TerraformStack {
       {
         name: `${environmentSuffix}-medium`,
         instanceTypes: ['t3.medium'],
-        minSize: 1,
+        minSize: 2, // Changed from 1 to 2
         maxSize: 5,
-        desiredSize: 2,
+        desiredSize: 2, // Ensure this is at least 2
         diskSize: 20,
         labels: {
           role: 'general',
@@ -345,13 +345,43 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
+    new EksAddon(this, 'vpc-cni', {
+      clusterName: eksCluster.name,
+      addonName: 'vpc-cni',
+      addonVersion: 'v1.15.4-eksbuild.1',
+      tags: commonTags,
+      dependsOn: [eksCluster, nodeGroups[0]],
+    });
+
+    const vpcCniAddon = new EksAddon(this, 'vpc-cni', {
+      clusterName: eksCluster.name,
+      addonName: 'vpc-cni',
+      addonVersion: 'v1.15.4-eksbuild.1',
+      tags: commonTags,
+      dependsOn: [eksCluster, nodeGroups[0]],
+    });
+    const coreDnsAddon = new EksAddon(this, 'coredns', {
+      clusterName: eksCluster.name,
+      addonName: 'coredns',
+      addonVersion: 'v1.10.1-eksbuild.5',
+      tags: commonTags,
+      dependsOn: [eksCluster, nodeGroups[0]],
+    });
     // EBS CSI Driver addon
     new EksAddon(this, 'ebs-csi-driver', {
       clusterName: eksCluster.name,
       addonName: 'aws-ebs-csi-driver',
+      addonVersion: 'v1.25.0-eksbuild.1', // Add explicit version
       serviceAccountRoleArn: ebsCsiRole.role.arn,
       tags: commonTags,
-      dependsOn: [eksCluster, ebsCsiRole.role],
+      dependsOn: [
+        eksCluster, 
+        ebsCsiRole.role,
+        iamModule.oidcProvider, // Add OIDC provider dependency
+        nodeGroups[0], // Add dependency on at least one node group
+        vpcCniAddon,
+        coreDnsAddon,
+      ],
     });
 
     // Create workload IAM roles
