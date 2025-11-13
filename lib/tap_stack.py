@@ -573,41 +573,6 @@ class TapStack(cdk.Stack):
             ],
         )
         
-        # REMOVED: AWS Load Balancer Controller EKS Add-on
-        # The add-on is not supported in Kubernetes 1.29
-        # Instead, deploy it via Helm chart or Kubernetes manifests
-        
-        # Apply pod security standards
-        pod_security_policy = cluster.add_manifest(
-            f"PodSecurityPolicy-{environment_suffix}",
-            {
-                "apiVersion": "policy/v1beta1",
-                "kind": "PodSecurityPolicy",
-                "metadata": {"name": "restricted"},
-                "spec": {
-                    "privileged": False,
-                    "allowPrivilegeEscalation": False,
-                    "requiredDropCapabilities": ["ALL"],
-                    "volumes": [
-                        "configMap",
-                        "emptyDir",
-                        "projected",
-                        "secret",
-                        "downwardAPI",
-                        "persistentVolumeClaim",
-                    ],
-                    "hostNetwork": False,
-                    "hostIPC": False,
-                    "hostPID": False,
-                    "runAsUser": {"rule": "MustRunAsNonRoot"},
-                    "seLinux": {"rule": "RunAsAny"},
-                    "supplementalGroups": {"rule": "RunAsAny"},
-                    "fsGroup": {"rule": "RunAsAny"},
-                    "readOnlyRootFilesystem": False,
-                },
-            },
-        )
-        
         # Create CloudWatch dashboard for cluster metrics
         dashboard = cloudwatch.Dashboard(
             self,
