@@ -3,8 +3,8 @@
 /* eslint-disable @typescript-eslint/quotes */
 /* eslint-disable prettier/prettier */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as crypto from 'crypto';
 
 interface TapStackProps {
@@ -721,13 +721,16 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // DR Cluster - important fix: globalClusterIdentifier set only for creation as secondary
+    // DR Cluster - must include masterUsername and masterPassword even for secondary clusters
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
         clusterIdentifier: `trading-aurora-dr-${this.props.environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
+        masterUsername: 'dbadmin',
+        masterPassword: secretVersion.secretString.apply(s => this.validateSecretPassword(s ?? '')),
+        globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
         storageEncrypted: true,
