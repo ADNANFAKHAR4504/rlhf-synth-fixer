@@ -60,14 +60,18 @@ class TestStackConfiguration(unittest.TestCase):
 class TestMainProgram(unittest.TestCase):
     """Test main Pulumi program."""
 
-    def test_main_program_exists(self):
-        """Test main program file exists."""
+    def test_entry_point_exists(self):
+        """Test entry point file exists."""
         self.assertTrue(os.path.exists("__main__.py"))
 
-    def test_main_program_imports(self):
-        """Test main program can import required modules."""
-        # Read __main__.py to verify imports
-        with open("__main__.py", 'r') as f:
+    def test_tap_stack_exists(self):
+        """Test TapStack class exists in lib folder."""
+        self.assertTrue(os.path.exists("lib/tap_stack.py"))
+
+    def test_tap_stack_imports(self):
+        """Test TapStack imports required modules."""
+        # Read lib/tap_stack.py to verify imports
+        with open("lib/tap_stack.py", 'r') as f:
             content = f.read()
 
         # Check for required imports
