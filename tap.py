@@ -8,13 +8,15 @@ Demonstrates advanced Pulumi patterns for deployment optimization:
 - Resource tagging with loops
 """
 
+import json
+from typing import Dict, List
+
 import pulumi
 import pulumi_aws as aws
-from typing import Dict, List
-import json
+
+from lib.lambda_functions import LambdaFunctionsComponent
 from lib.streaming_pipeline_component import StreamingPipelineComponent
 from lib.vpc_infrastructure import VpcInfrastructure
-from lib.lambda_functions import LambdaFunctionsComponent
 
 # Get configuration
 config = pulumi.Config()
@@ -57,45 +59,70 @@ vpc_infra = VpcInfrastructure(
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
-# Step 2: Create S3 bucket for data archival
+# Step 2: Create S3 bucket for data archival (Pulumi AWS v7+ compatible)
 # Independent resource - can be created in parallel
-archive_bucket = aws.s3.Bucket(
-    f"archive-bucket-{environment_suffix}",
-    bucket=f"streaming-archive-{environment_suffix}",
-    server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-        rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+
+# Ensure environment suffix is lowercase (S3 bucket names must be lowercase)
+safe_suffix = environment_suffix.lower()
+bucket_name = f"streaming-archive-{safe_suffix}"
+
+archive_bucket = aws.s3.BucketV2(
+    f"archive-bucket-{safe_suffix}",
+    bucket=bucket_name,
+    tags={**common_tags, "Name": f"archive-bucket-{safe_suffix}"},
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
+
+# Apply versioning (new resource type)
+archive_bucket_versioning = aws.s3.BucketVersioningV2(
+    f"archive-bucket-versioning-{safe_suffix}",
+    bucket=archive_bucket.id,
+    versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+        status="Enabled"
+    ),
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
+
+# Apply server-side encryption (new resource type)
+archive_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+    f"archive-bucket-encryption-{safe_suffix}",
+    bucket=archive_bucket.id,
+    rules=[
+        aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+            apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
                 sse_algorithm="AES256"
-            ),
-            bucket_key_enabled=True
+            )
         )
-    ),
-    versioning=aws.s3.BucketVersioningArgs(
-        enabled=True
-    ),
-    lifecycle_rules=[
-        aws.s3.BucketLifecycleRuleArgs(
+    ],
+    opts=pulumi.ResourceOptions(provider=aws_provider)
+)
+
+# Apply lifecycle configuration (new resource type)
+archive_bucket_lifecycle = aws.s3.BucketLifecycleConfigurationV2(
+    f"archive-bucket-lifecycle-{safe_suffix}",
+    bucket=archive_bucket.id,
+    rules=[
+        aws.s3.BucketLifecycleConfigurationV2RuleArgs(
             id="transition-to-ia",
-            enabled=True,
+            status="Enabled",
             transitions=[
-                aws.s3.BucketLifecycleRuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
                     days=30,
                     storage_class="STANDARD_IA"
                 ),
-                aws.s3.BucketLifecycleRuleTransitionArgs(
+                aws.s3.BucketLifecycleConfigurationV2RuleTransitionArgs(
                     days=90,
                     storage_class="GLACIER"
                 )
             ]
         )
     ],
-    tags={**common_tags, "Name": f"archive-bucket-{environment_suffix}"},
     opts=pulumi.ResourceOptions(provider=aws_provider)
 )
 
 # Block public access to archive bucket
 archive_bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
-    f"archive-bucket-public-access-block-{environment_suffix}",
+    f"archive-bucket-public-access-block-{safe_suffix}",
     bucket=archive_bucket.id,
     block_public_acls=True,
     block_public_policy=True,
