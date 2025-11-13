@@ -139,7 +139,6 @@ Resources:
   # Database Nested Stack
   DatabaseStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: VPCStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/database.yml'
       Parameters:
@@ -173,9 +172,6 @@ Resources:
   # Compute Nested Stack
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - VPCStack
-      - DatabaseStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/compute.yml'
       Parameters:
