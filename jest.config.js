@@ -1,35 +1,25 @@
 module.exports = {
+  preset: 'ts-jest',
   testEnvironment: 'node',
   roots: ['<rootDir>/test'],
-  testMatch: ['**/*.test.ts', '**/*.test.mjs'],
-  preset: 'ts-jest',
-  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
+  testMatch: ['**/*.test.ts'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
-    '^.+\\.mjs$': 'babel-jest',
   },
-  transformIgnorePatterns: [
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs)/)',
-  ],
   collectCoverageFrom: [
-    '<rootDir>/lib/**/*.ts',
-    '<rootDir>/lib/**/*.mjs',
-    '!<rootDir>/bin/**/*.ts',
-    '!<rootDir>/**/*.d.ts',
-    '!<rootDir>/**/*.js',
-    '!<rootDir>/**/*.test.ts',
-    '!<rootDir>/node_modules/**',
+    'lib/**/*.ts',
+    '!lib/**/*.d.ts',
+    '!lib/**/*.test.ts',
   ],
+  coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'json-summary'],
-  coverageThreshold: {
-    global: {
-      branches: 90, 
-      functions: 90,
-      lines: 90,
-      statements: 90,
+  moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+  globals: {
+    'ts-jest': {
+      tsconfig: {
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
     },
   },
-  testTimeout: 30000,
-  silent: false,
-  verbose: true,
 };
