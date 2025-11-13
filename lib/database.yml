@@ -52,7 +52,6 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref EnvironmentType, 'prod']
   IsStaging: !Equals [!Ref EnvironmentType, 'staging']
-  IsDevelopment: !Equals [!Ref EnvironmentType, 'dev']
   CreateSecondInstance: !Or
     - !Equals [!Ref RDSInstanceCount, 2]
     - !Equals [!Ref RDSInstanceCount, 3]
@@ -199,7 +198,7 @@ Resources:
     UpdateReplacePolicy: !If [IsProduction, Retain, !If [IsStaging, Snapshot, Delete]]
     Properties:
       Engine: aurora-postgresql
-      EngineVersion: '15.4'
+      EngineVersion: '15.8'
       DatabaseName: payments
       MasterUsername: paymentadmin
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBMasterPassword}:SecretString:password}}'

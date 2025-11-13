@@ -115,32 +115,6 @@
             }
         }
     },
-    "Conditions": {
-        "IsProduction": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentType"
-                },
-                "prod"
-            ]
-        },
-        "IsStaging": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentType"
-                },
-                "staging"
-            ]
-        },
-        "IsDevelopment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentType"
-                },
-                "dev"
-            ]
-        }
-    },
     "Resources": {
         "VPCStack": {
             "Type": "AWS::CloudFormation::Stack",
@@ -243,7 +217,6 @@
         },
         "DatabaseStack": {
             "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": "VPCStack",
             "Properties": {
                 "TemplateURL": {
                     "Fn::Sub": "https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/database.yml"
@@ -337,10 +310,6 @@
         },
         "ComputeStack": {
             "Type": "AWS::CloudFormation::Stack",
-            "DependsOn": [
-                "VPCStack",
-                "DatabaseStack"
-            ],
             "Properties": {
                 "TemplateURL": {
                     "Fn::Sub": "https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/compute.yml"

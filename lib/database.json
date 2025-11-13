@@ -68,14 +68,6 @@
                 "staging"
             ]
         },
-        "IsDevelopment": {
-            "Fn::Equals": [
-                {
-                    "Ref": "EnvironmentType"
-                },
-                "dev"
-            ]
-        },
         "CreateSecondInstance": {
             "Fn::Or": [
                 {
@@ -396,7 +388,7 @@
             },
             "Properties": {
                 "Engine": "aurora-postgresql",
-                "EngineVersion": "15.4",
+                "EngineVersion": "15.8",
                 "DatabaseName": "payments",
                 "MasterUsername": "paymentadmin",
                 "MasterUserPassword": {

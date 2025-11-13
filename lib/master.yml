@@ -99,11 +99,6 @@ Mappings:
       AlarmRDSCPUThreshold: 70
       AlarmRDSConnectionsThreshold: 100
 
-Conditions:
-  IsProduction: !Equals [!Ref EnvironmentType, 'prod']
-  IsStaging: !Equals [!Ref EnvironmentType, 'staging']
-  IsDevelopment: !Equals [!Ref EnvironmentType, 'dev']
-
 Resources:
   # VPC Nested Stack
   VPCStack:
@@ -133,7 +128,6 @@ Resources:
   # Database Nested Stack
   DatabaseStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: VPCStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/database.yml'
       Parameters:
@@ -159,9 +153,6 @@ Resources:
   # Compute Nested Stack
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - VPCStack
-      - DatabaseStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/compute.yml'
       Parameters:
