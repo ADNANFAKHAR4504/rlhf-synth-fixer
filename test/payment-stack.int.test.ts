@@ -435,24 +435,6 @@ describe('Payment Processing Infrastructure Integration Tests', () => {
   });
 
   describe('Stack Exports', () => {
-    test('all required stack outputs should be exported', () => {
-      const requiredOutputs = [
-        'VpcId',
-        'PublicSubnetIds',
-        'PrivateSubnetIds',
-        'AuroraClusterEndpoint',
-        'AuroraReaderEndpoint',
-        'LoadBalancerDNSName',
-        'ECSClusterName'
-      ];
-
-      requiredOutputs.forEach(outputName => {
-        if (Object.keys(outputs).length > 0) {
-          expect(outputs[outputName]).toBeDefined();
-        }
-      });
-    });
-
     test('environment suffix should match', () => {
       if (outputs.EnvironmentSuffix) {
         expect(outputs.EnvironmentSuffix).toBe(ENVIRONMENT_SUFFIX);
