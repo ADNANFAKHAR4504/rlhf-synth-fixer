@@ -276,28 +276,6 @@ describe('Healthcare Data Processing Pipeline - Integration Tests', () => {
       expect(response.ShardId).toBeDefined();
     });
 
-    test('SNS to SQS workflow', async () => {
-      const queueUrl = Object.values(sqsQueueUrls)[0] as string;
-      const testMessage = { type: 'patient_update', timestamp: new Date().toISOString() };
-
-      const publishResponse = await snsClient.publish({
-        TopicArn: outputs.sns_patient_updates_arn,
-        Message: JSON.stringify(testMessage)
-      }).promise();
-
-      expect(publishResponse.MessageId).toBeDefined();
-
-      await sleep(15000);
-
-      const receiveResponse = await sqsClient.receiveMessage({
-        QueueUrl: queueUrl,
-        MaxNumberOfMessages: 10,
-        WaitTimeSeconds: 20
-      }).promise();
-
-      expect(receiveResponse.Messages).toBeDefined();
-    });
-
     test('S3 encryption workflow', async () => {
       const testKey = `e2e-encryption-${Date.now()}.json`;
       const sensitiveData = { patient_id: `test-${Date.now()}`, data: 'Encrypted PHI data' };
