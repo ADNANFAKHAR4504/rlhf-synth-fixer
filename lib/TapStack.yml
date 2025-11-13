@@ -225,7 +225,6 @@ Resources:
                 TransitionInDays: !Ref GlacierTransitionDays
             NoncurrentVersionExpiration:
               NoncurrentDays: !Ref ExpirationDays
-      # Replication only when this is the primary region deployment
       ReplicationConfiguration: !If
         - IsPrimary
         - Role: !GetAtt ReplicationRole.Arn
@@ -290,7 +289,7 @@ Resources:
               StringNotLikeIfExists:
                 s3:x-amz-server-side-encryption-aws-kms-key-id: !GetAtt DocsKmsKey.Arn
           # Deny access that is NOT from allowed VPC endpoints,
-          # but do NOT deny if the caller is the replication role
+          # but do NOT deny if the caller is the specific replication role
           - Sid: DenyRequestsNotFromAllowedVpcEndpoints
             Effect: Deny
             Principal: '*'
@@ -308,10 +307,8 @@ Resources:
             Condition:
               StringNotEquals:
                 aws:SourceVpce: !Ref VpcEndpointIds
-              StringNotLikeIfExists:
-                aws:PrincipalArn:
-                  - !Sub 'arn:aws:iam::${AWS::AccountId}:role/s3-replication-${EnvironmentSuffix}-*'
-
+              StringNotEqualsIfExists:
+                aws:PrincipalArn: !GetAtt ReplicationRole.Arn
 
   ###########################################################
   # Monitoring (optional) — SNS + Alarms + Dashboard
