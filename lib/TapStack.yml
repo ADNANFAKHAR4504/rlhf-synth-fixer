@@ -18,11 +18,14 @@ Parameters:
     AllowedPattern: '^NEW$|^vpc-[0-9a-f]+$'
 
   PrivateSubnetIds:
-    Type: CommaDelimitedList
+    Type: String
     Description: >-
-      Comma separated list of private subnet IDs (minimum two) when supplying an
-      existing VPC. Leave as NEW when the stack should create private subnets.
-    Default: NEW
+      Comma-separated list of private subnet IDs (minimum two) when supplying an
+      existing VPC. Leave the default placeholder when the stack should create
+      private subnets automatically.
+    Default: 'subnet-00000000000000000,subnet-11111111111111111'
+    AllowedPattern: '^subnet-(([0-9A-Fa-f]{8})|([0-9A-Fa-f]{17}))(,subnet-(([0-9A-Fa-f]{8})|([0-9A-Fa-f]{17})))+$'
+    ConstraintDescription: Must be a comma-separated list of subnet-xxxxxxxx IDs.
 
   VpcCidr:
     Type: String
@@ -90,7 +93,7 @@ Rules:
   RequireSubnetsForExistingVpc:
     RuleCondition: !Not [!Equals [!Ref VpcId, 'NEW']]
     Assertions:
-      - Assert: !Not [!Equals [!Select [0, !Ref PrivateSubnetIds], 'NEW']]
+      - Assert: !Not [!Equals [!Ref PrivateSubnetIds, 'subnet-00000000000000000,subnet-11111111111111111']]
         AssertDescription: Provide PrivateSubnetIds when supplying an existing VpcId.
 
 Conditions:
@@ -333,7 +336,7 @@ Resources:
         SubnetIds: !If
           - CreateNetworkResources
           - !Split [",", !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]]
-          - !Ref PrivateSubnetIds
+          - !Split [",", !Ref PrivateSubnetIds]
         EndpointPrivateAccess: true
         EndpointPublicAccess: false
       Logging:
@@ -389,7 +392,7 @@ Resources:
       Subnets: !If
         - CreateNetworkResources
         - !Split [",", !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]]
-        - !Ref PrivateSubnetIds
+        - !Split [",", !Ref PrivateSubnetIds]
       ScalingConfig:
         MinSize: !Ref NodeGroupMinSize
         MaxSize: !Ref NodeGroupMaxSize
@@ -442,4 +445,4 @@ Outputs:
     Value: !If
       - CreateNetworkResources
       - !Join [",", [!Ref PrivateSubnetA, !Ref PrivateSubnetB]]
-      - !Join [",", !Ref PrivateSubnetIds]
+      - !Ref PrivateSubnetIds
