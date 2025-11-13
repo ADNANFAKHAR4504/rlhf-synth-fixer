@@ -43,7 +43,8 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
     }
 
     // Get unique resource suffix to prevent conflicts
-    const uniqueResourceSuffix = this.node.tryGetContext('uniqueResourceSuffix') || 'default';
+    const uniqueResourceSuffix =
+      this.node.tryGetContext('uniqueResourceSuffix') || 'default';
 
     const stackName = `tapstack-${envSuffix}-${uniqueResourceSuffix}`;
 

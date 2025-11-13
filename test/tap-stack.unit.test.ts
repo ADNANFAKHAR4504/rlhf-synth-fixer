@@ -416,15 +416,23 @@ describe('TapStack Unit Tests', () => {
         expect(Object.keys(alarms).length).toBe(5);
 
         // Check for API Gateway alarm
-        const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
-        expect(alarmNames.some(name => name.includes('api-gateway-latency'))).toBe(true);
+        const alarmNames = Object.values(alarms).map(
+          (a: any) => a.Properties?.AlarmName
+        );
+        expect(
+          alarmNames.some(name => name.includes('api-gateway-latency'))
+        ).toBe(true);
 
         // Check composite alarm includes API latency alarm
-        const compositeAlarms = template.findResources('AWS::CloudWatch::CompositeAlarm');
+        const compositeAlarms = template.findResources(
+          'AWS::CloudWatch::CompositeAlarm'
+        );
         expect(Object.keys(compositeAlarms).length).toBe(1);
 
         const compositeAlarm = Object.values(compositeAlarms)[0] as any;
-        expect(compositeAlarm.Properties?.AlarmDescription).toContain('high latency');
+        expect(compositeAlarm.Properties?.AlarmDescription).toContain(
+          'high latency'
+        );
       });
 
       test('excludes API Gateway alarms and creates simpler composite alarm', () => {
@@ -445,16 +453,26 @@ describe('TapStack Unit Tests', () => {
         expect(Object.keys(alarms).length).toBe(4);
 
         // Check for no API Gateway alarm
-        const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
-        expect(alarmNames.some(name => name.includes('api-gateway-latency'))).toBe(false);
+        const alarmNames = Object.values(alarms).map(
+          (a: any) => a.Properties?.AlarmName
+        );
+        expect(
+          alarmNames.some(name => name.includes('api-gateway-latency'))
+        ).toBe(false);
 
         // Check composite alarm has simpler description
-        const compositeAlarms = template.findResources('AWS::CloudWatch::CompositeAlarm');
+        const compositeAlarms = template.findResources(
+          'AWS::CloudWatch::CompositeAlarm'
+        );
         expect(Object.keys(compositeAlarms).length).toBe(1);
 
         const compositeAlarm = Object.values(compositeAlarms)[0] as any;
-        expect(compositeAlarm.Properties?.AlarmDescription).toContain('error rate detected');
-        expect(compositeAlarm.Properties?.AlarmDescription).not.toContain('latency');
+        expect(compositeAlarm.Properties?.AlarmDescription).toContain(
+          'error rate detected'
+        );
+        expect(compositeAlarm.Properties?.AlarmDescription).not.toContain(
+          'latency'
+        );
       });
     });
 
@@ -657,37 +675,47 @@ describe('TapStack Unit Tests', () => {
           });
           const template = Template.fromStack(apiStack);
 
-        // Verify metrics are created (they're referenced in alarms and dashboard)
-        const alarms = template.findResources('AWS::CloudWatch::Alarm');
-        expect(Object.keys(alarms).length).toBe(2);
+          // Verify metrics are created (they're referenced in alarms and dashboard)
+          const alarms = template.findResources('AWS::CloudWatch::Alarm');
+          expect(Object.keys(alarms).length).toBe(2);
 
-        // Verify dashboard is created with widgets
-        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
-        expect(Object.keys(dashboards).length).toBe(1);
+          // Verify dashboard is created with widgets
+          const dashboards = template.findResources(
+            'AWS::CloudWatch::Dashboard'
+          );
+          expect(Object.keys(dashboards).length).toBe(1);
 
-        // Verify alarm properties
-        const alarmResources = Object.values(alarms) as any[];
-        alarmResources.forEach(alarm => {
-          expect(alarm.Properties?.Threshold).toBeDefined();
-          expect(alarm.Properties?.EvaluationPeriods).toBe(2);
-          expect(alarm.Properties?.ComparisonOperator).toBeDefined();
-          expect(alarm.Properties?.AlarmDescription).toBeDefined();
-        });
+          // Verify alarm properties
+          const alarmResources = Object.values(alarms) as any[];
+          alarmResources.forEach(alarm => {
+            expect(alarm.Properties?.Threshold).toBeDefined();
+            expect(alarm.Properties?.EvaluationPeriods).toBe(2);
+            expect(alarm.Properties?.ComparisonOperator).toBeDefined();
+            expect(alarm.Properties?.AlarmDescription).toBeDefined();
+          });
 
-        // Verify specific alarm names and thresholds (with unique suffix)
-        const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
-        expect(alarmNames.some(name => name?.startsWith('api-gateway-latency-high-tapstack-dev-'))).toBe(true);
-        expect(alarmNames.some(name => name?.startsWith('api-gateway-error-rate-high-tapstack-dev-'))).toBe(true);
+          // Verify specific alarm names and thresholds (with unique suffix)
+          const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
+          expect(
+            alarmNames.some(name =>
+              name?.startsWith('api-gateway-latency-high-tapstack-dev-')
+            )
+          ).toBe(true);
+          expect(
+            alarmNames.some(name =>
+              name?.startsWith('api-gateway-error-rate-high-tapstack-dev-')
+            )
+          ).toBe(true);
 
-        const latencyAlarm = alarmResources.find(a =>
-          a.Properties?.AlarmName?.includes('latency')
-        );
-        const errorAlarm = alarmResources.find(a =>
-          a.Properties?.AlarmName?.includes('error-rate')
-        );
+          const latencyAlarm = alarmResources.find(a =>
+            a.Properties?.AlarmName?.includes('latency')
+          );
+          const errorAlarm = alarmResources.find(a =>
+            a.Properties?.AlarmName?.includes('error-rate')
+          );
 
-        expect(latencyAlarm?.Properties?.Threshold).toBe(500);
-        expect(errorAlarm?.Properties?.Threshold).toBe(1);
+          expect(latencyAlarm?.Properties?.Threshold).toBe(500);
+          expect(errorAlarm?.Properties?.Threshold).toBe(1);
         } finally {
           if (originalEnv === undefined) {
             delete process.env.ENVIRONMENT_SUFFIX;
@@ -812,37 +840,47 @@ describe('TapStack Unit Tests', () => {
           });
           const template = Template.fromStack(rdsStack);
 
-        // Verify alarms are created
-        const alarms = template.findResources('AWS::CloudWatch::Alarm');
-        expect(Object.keys(alarms).length).toBe(2);
+          // Verify alarms are created
+          const alarms = template.findResources('AWS::CloudWatch::Alarm');
+          expect(Object.keys(alarms).length).toBe(2);
 
-        // Verify dashboard is created
-        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
-        expect(Object.keys(dashboards).length).toBe(1);
+          // Verify dashboard is created
+          const dashboards = template.findResources(
+            'AWS::CloudWatch::Dashboard'
+          );
+          expect(Object.keys(dashboards).length).toBe(1);
 
-        // Verify alarm properties and names
-        const alarmResources = Object.values(alarms) as any[];
-        const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
-        expect(alarmNames.some(name => name?.startsWith('ecs-cpu-utilization-high-tapstack-dev-'))).toBe(true);
-        expect(alarmNames.some(name => name?.startsWith('rds-db-connections-high-tapstack-dev-'))).toBe(true);
+          // Verify alarm properties and names
+          const alarmResources = Object.values(alarms) as any[];
+          const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
+          expect(
+            alarmNames.some(name =>
+              name?.startsWith('ecs-cpu-utilization-high-tapstack-dev-')
+            )
+          ).toBe(true);
+          expect(
+            alarmNames.some(name =>
+              name?.startsWith('rds-db-connections-high-tapstack-dev-')
+            )
+          ).toBe(true);
 
-        // Verify alarm thresholds
-        alarmResources.forEach(alarm => {
-          expect(alarm.Properties?.Threshold).toBeDefined();
-          expect(alarm.Properties?.EvaluationPeriods).toBe(2);
-          expect(alarm.Properties?.ComparisonOperator).toBeDefined();
-          expect(alarm.Properties?.AlarmDescription).toBeDefined();
-        });
+          // Verify alarm thresholds
+          alarmResources.forEach(alarm => {
+            expect(alarm.Properties?.Threshold).toBeDefined();
+            expect(alarm.Properties?.EvaluationPeriods).toBe(2);
+            expect(alarm.Properties?.ComparisonOperator).toBeDefined();
+            expect(alarm.Properties?.AlarmDescription).toBeDefined();
+          });
 
-        const cpuAlarm = alarmResources.find(a =>
-          a.Properties?.AlarmName?.includes('ecs-cpu')
-        );
-        const dbAlarm = alarmResources.find(a =>
-          a.Properties?.AlarmName?.includes('rds-db')
-        );
+          const cpuAlarm = alarmResources.find(a =>
+            a.Properties?.AlarmName?.includes('ecs-cpu')
+          );
+          const dbAlarm = alarmResources.find(a =>
+            a.Properties?.AlarmName?.includes('rds-db')
+          );
 
-        expect(cpuAlarm?.Properties?.Threshold).toBe(80);
-        expect(dbAlarm?.Properties?.Threshold).toBe(100);
+          expect(cpuAlarm?.Properties?.Threshold).toBe(80);
+          expect(dbAlarm?.Properties?.Threshold).toBe(100);
         } finally {
           if (originalEnv === undefined) {
             delete process.env.ENVIRONMENT_SUFFIX;

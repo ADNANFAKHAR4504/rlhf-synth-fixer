@@ -47,7 +47,8 @@ export class TapStack extends cdk.Stack {
 
     // Get or generate a unique identifier for all resources to prevent conflicts
     // Use existing context value (for tests) or generate new one
-    const uniqueResourceSuffix = this.node.tryGetContext('uniqueResourceSuffix') || generateUniqueSuffix();
+    const uniqueResourceSuffix =
+      this.node.tryGetContext('uniqueResourceSuffix') || generateUniqueSuffix();
 
     cdk.Tags.of(this).add('Project', projectName);
     cdk.Tags.of(this).add('Environment', environmentSuffix);

@@ -6,7 +6,11 @@ import { NotificationsConstruct } from '../lib/constructs/notifications';
 import { TapStack, TapStackProps } from '../lib/tap-stack';
 
 function build(ctx?: Record<string, any>, props?: TapStackProps) {
-  const app = new cdk.App(ctx ? { context: { ...ctx, uniqueResourceSuffix: 'test' } } : { context: { uniqueResourceSuffix: 'test' } });
+  const app = new cdk.App(
+    ctx
+      ? { context: { ...ctx, uniqueResourceSuffix: 'test' } }
+      : { context: { uniqueResourceSuffix: 'test' } }
+  );
   const tap = new TapStack(app, 'TestTapStack', props as any);
 
   const childStacks = tap.node.children.filter(c => {
@@ -563,7 +567,9 @@ describe('TapStack Integration Tests', () => {
         );
         expect(alarmNames.length).toBeGreaterThan(0);
         expect(
-          alarmNames.every(name => name.includes('tapstack-feature-x-test-test'))
+          alarmNames.every(name =>
+            name.includes('tapstack-feature-x-test-test')
+          )
         ).toBe(true);
       }
     });
@@ -588,9 +594,9 @@ describe('TapStack Integration Tests', () => {
         );
         expect(alarmNames.length).toBeGreaterThan(0);
         // Stack name should include normalized project name 'payment-myapp'
-        expect(alarmNames.some(name => name.includes('tapstack-test-env-test'))).toBe(
-          true
-        );
+        expect(
+          alarmNames.some(name => name.includes('tapstack-test-env-test'))
+        ).toBe(true);
       }
     });
 
@@ -1160,9 +1166,7 @@ describe('TapStack Integration Tests', () => {
         const hasAuthAlarm = alarmNames.some(name =>
           name.includes('authentication')
         );
-        const hasEcsAlarm = alarmNames.some(name =>
-          name.includes('ecs-task')
-        );
+        const hasEcsAlarm = alarmNames.some(name => name.includes('ecs-task'));
         expect(hasPaymentAlarm && hasAuthAlarm && hasEcsAlarm).toBe(true);
       }
     });
@@ -1404,9 +1408,9 @@ describe('Additional Coverage Tests', () => {
         const topicNames = Object.values(topics).map(
           (t: any) => t.Properties?.TopicName
         );
-        expect(topicNames.every(name => name.includes('tapstack-v123-test'))).toBe(
-          true
-        );
+        expect(
+          topicNames.every(name => name.includes('tapstack-v123-test'))
+        ).toBe(true);
       }
     });
 
@@ -1997,17 +2001,27 @@ describe('Additional Coverage Tests', () => {
       expect(Object.keys(alarms).length).toBe(5);
 
       // Verify API Gateway alarm exists (tests the if (!props.excludeApiGatewayAlarms) branch)
-      const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
-      const hasApiAlarm = alarmNames.some(name => name.includes('api-gateway-latency'));
+      const alarmNames = Object.values(alarms).map(
+        (a: any) => a.Properties?.AlarmName
+      );
+      const hasApiAlarm = alarmNames.some(name =>
+        name.includes('api-gateway-latency')
+      );
       expect(hasApiAlarm).toBe(true);
 
       // Verify composite alarm includes API latency (tests if (apiLatencyAlarm) branch)
-      const compositeAlarms = template.findResources('AWS::CloudWatch::CompositeAlarm');
+      const compositeAlarms = template.findResources(
+        'AWS::CloudWatch::CompositeAlarm'
+      );
       expect(Object.keys(compositeAlarms).length).toBe(1);
 
       const compositeAlarm = Object.values(compositeAlarms)[0] as any;
-      expect(compositeAlarm.Properties?.AlarmDescription).toContain('high latency');
-      expect(compositeAlarm.Properties?.AlarmDescription).toContain('Both high error rate and high latency detected');
+      expect(compositeAlarm.Properties?.AlarmDescription).toContain(
+        'high latency'
+      );
+      expect(compositeAlarm.Properties?.AlarmDescription).toContain(
+        'Both high error rate and high latency detected'
+      );
     });
 
     test('alarms construct API gateway exclusion branches', () => {
@@ -2029,17 +2043,27 @@ describe('Additional Coverage Tests', () => {
       expect(Object.keys(alarms).length).toBe(4);
 
       // Verify no API Gateway alarm exists
-      const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
-      const hasApiAlarm = alarmNames.some(name => name.includes('api-gateway-latency'));
+      const alarmNames = Object.values(alarms).map(
+        (a: any) => a.Properties?.AlarmName
+      );
+      const hasApiAlarm = alarmNames.some(name =>
+        name.includes('api-gateway-latency')
+      );
       expect(hasApiAlarm).toBe(false);
 
       // Verify composite alarm has simpler description (tests the else branch of if (apiLatencyAlarm))
-      const compositeAlarms = template.findResources('AWS::CloudWatch::CompositeAlarm');
+      const compositeAlarms = template.findResources(
+        'AWS::CloudWatch::CompositeAlarm'
+      );
       expect(Object.keys(compositeAlarms).length).toBe(1);
 
       const compositeAlarm = Object.values(compositeAlarms)[0] as any;
-      expect(compositeAlarm.Properties?.AlarmDescription).toContain('error rate detected');
-      expect(compositeAlarm.Properties?.AlarmDescription).not.toContain('latency');
+      expect(compositeAlarm.Properties?.AlarmDescription).toContain(
+        'error rate detected'
+      );
+      expect(compositeAlarm.Properties?.AlarmDescription).not.toContain(
+        'latency'
+      );
     });
 
     test('environment suffix sanitization branches in constructs', () => {
@@ -2071,7 +2095,9 @@ describe('Additional Coverage Tests', () => {
         const alarms = template.findResources('AWS::CloudWatch::Alarm');
 
         // Verify all alarm names contain the sanitized suffix
-        const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
+        const alarmNames = Object.values(alarms).map(
+          (a: any) => a.Properties?.AlarmName
+        );
         alarmNames.forEach(name => {
           expect(name).toContain(`tapstack-${expected}-test`);
         });
@@ -2092,7 +2118,9 @@ describe('Additional Coverage Tests', () => {
       expect(childStacks.length).toBeGreaterThan(0);
       // Check that stack names include 'payment-myapp'
       const stackNames = childStacks.map(s => s.stackName);
-      expect(stackNames.some(name => name.includes('payment-myapp'))).toBe(true);
+      expect(stackNames.some(name => name.includes('payment-myapp'))).toBe(
+        true
+      );
     });
 
     test('constructs handle empty environment suffix fallback to dev', () => {
@@ -2115,7 +2143,9 @@ describe('Additional Coverage Tests', () => {
       const alarms = template.findResources('AWS::CloudWatch::Alarm');
 
       // Should have alarms with 'dev' as env fallback and 'default' as unique suffix fallback
-      const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
+      const alarmNames = Object.values(alarms).map(
+        (a: any) => a.Properties?.AlarmName
+      );
       alarmNames.forEach(name => {
         expect(name).toContain('tapstack-dev-default');
       });
@@ -2141,7 +2171,9 @@ describe('Additional Coverage Tests', () => {
       const alarms = template.findResources('AWS::CloudWatch::Alarm');
 
       // Should have alarms with 'dev' as env fallback and 'default' as unique suffix fallback
-      const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
+      const alarmNames = Object.values(alarms).map(
+        (a: any) => a.Properties?.AlarmName
+      );
       alarmNames.forEach(name => {
         expect(name).toContain('tapstack-dev-default');
       });
@@ -2165,7 +2197,9 @@ describe('Additional Coverage Tests', () => {
       const alarms = template.findResources('AWS::CloudWatch::Alarm');
 
       // Should have alarms with all defaults: 'dev' env and 'default' unique suffix
-      const alarmNames = Object.values(alarms).map((a: any) => a.Properties?.AlarmName);
+      const alarmNames = Object.values(alarms).map(
+        (a: any) => a.Properties?.AlarmName
+      );
       alarmNames.forEach(name => {
         expect(name).toContain('tapstack-dev-default');
       });
@@ -2204,7 +2238,9 @@ describe('Additional Coverage Tests', () => {
       const topics = template.findResources('AWS::SNS::Topic');
 
       // Should have topics with 'dev' as env fallback
-      const topicNames = Object.values(topics).map((t: any) => t.Properties?.TopicName);
+      const topicNames = Object.values(topics).map(
+        (t: any) => t.Properties?.TopicName
+      );
       topicNames.forEach(name => {
         expect(name).toContain('tapstack-dev');
       });

@@ -32,7 +32,8 @@ export class DashboardsConstruct extends Construct {
     }
 
     // Get unique resource suffix to prevent conflicts
-    const uniqueResourceSuffix = stack.node.tryGetContext('uniqueResourceSuffix') || 'default';
+    const uniqueResourceSuffix =
+      stack.node.tryGetContext('uniqueResourceSuffix') || 'default';
 
     const stackName = `tapstack-${envSuffix}-${uniqueResourceSuffix}`;
 
