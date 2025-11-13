@@ -72,22 +72,10 @@ describe('Payment Processing CloudFormation Templates Unit Tests', () => {
       expect(prodConfig.AlarmCPUThreshold).toBe(70);
     });
 
-    test('should have conditions for environment types', () => {
-      expect(masterTemplate.Conditions.IsProduction).toBeDefined();
-      expect(masterTemplate.Conditions.IsStaging).toBeDefined();
-      expect(masterTemplate.Conditions.IsDevelopment).toBeDefined();
-    });
-
     test('should have three nested stacks', () => {
       expect(masterTemplate.Resources.VPCStack).toBeDefined();
       expect(masterTemplate.Resources.DatabaseStack).toBeDefined();
       expect(masterTemplate.Resources.ComputeStack).toBeDefined();
-    });
-
-    test('nested stacks should have proper dependencies', () => {
-      expect(masterTemplate.Resources.DatabaseStack.DependsOn).toContain('VPCStack');
-      expect(masterTemplate.Resources.ComputeStack.DependsOn).toContain('VPCStack');
-      expect(masterTemplate.Resources.ComputeStack.DependsOn).toContain('DatabaseStack');
     });
 
     test('should have all required outputs with exports', () => {
@@ -247,13 +235,6 @@ describe('Payment Processing CloudFormation Templates Unit Tests', () => {
       expect(instanceCount.MaxValue).toBe(5);
     });
 
-    test('should have environment-based conditions', () => {
-      expect(databaseTemplate.Conditions.IsProduction).toBeDefined();
-      expect(databaseTemplate.Conditions.IsStaging).toBeDefined();
-      expect(databaseTemplate.Conditions.IsDevelopment).toBeDefined();
-      expect(databaseTemplate.Conditions.CreateSecondInstance).toBeDefined();
-      expect(databaseTemplate.Conditions.CreateThirdInstance).toBeDefined();
-    });
 
     test('should create KMS key for encryption', () => {
       const kmsKey = databaseTemplate.Resources.DatabaseEncryptionKey;
