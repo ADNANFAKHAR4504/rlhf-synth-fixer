@@ -1688,18 +1688,24 @@ Resources:
           - Sid: AllowALBAccessLogs
             Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
+              Service: 'delivery.logs.amazonaws.com'
             Action:
               - 's3:PutObject'
             Resource: !Sub '${ALBAccessLogsBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
           - Sid: AllowALBBucketCheck
             Effect: Allow
             Principal:
-              Service: elasticloadbalancing.amazonaws.com
+              Service: 'delivery.logs.amazonaws.com'
             Action:
               - 's3:GetBucketAcl'
               - 's3:PutBucketAcl'
             Resource: !GetAtt ALBAccessLogsBucket.Arn
+            Condition:
+              StringEquals:
+                'aws:SourceAccount': !Ref AWS::AccountId
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
