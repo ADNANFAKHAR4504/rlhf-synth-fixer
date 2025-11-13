@@ -321,6 +321,42 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_aurora_global_database(self) -> Dict[str, Any]:
         """Create Aurora Global Database with primary in us-east-1 and secondary in us-east-2"""
+
+        # Get default VPC and subnets for primary region
+        primary_vpc = aws.ec2.get_vpc(default=True)
+        primary_subnets = aws.ec2.get_subnets(
+            filters=[{"name": "vpc-id", "values": [primary_vpc.id]}]
+        )
+
+        # Create DB subnet group for primary region
+        primary_subnet_group = aws.rds.SubnetGroup(
+            f"payment-primary-subnet-group-{self.environment_suffix}",
+            subnet_ids=primary_subnets.ids,
+            tags={
+                **self.common_tags,
+                "Name": f"payment-primary-subnet-group-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Get default VPC and subnets for DR region
+        dr_vpc = aws.ec2.get_vpc(default=True, opts=ResourceOptions(provider=self.dr_provider))
+        dr_subnets = aws.ec2.get_subnets(
+            filters=[{"name": "vpc-id", "values": [dr_vpc.id]}],
+            opts=ResourceOptions(provider=self.dr_provider)
+        )
+
+        # Create DB subnet group for DR region
+        dr_subnet_group = aws.rds.SubnetGroup(
+            f"payment-dr-subnet-group-{self.environment_suffix}",
+            subnet_ids=dr_subnets.ids,
+            tags={
+                **self.common_tags,
+                "Name": f"payment-dr-subnet-group-{self.environment_suffix}"
+            },
+            opts=ResourceOptions(parent=self, provider=self.dr_provider)
+        )
+
         # Create global cluster
         global_cluster = aws.rds.GlobalCluster(
             f"payment-global-cluster-{self.environment_suffix}",
@@ -342,17 +378,13 @@ class TapStack(pulumi.ComponentResource):
             master_username="paymentadmin",
             master_password=pulumi.Output.secret("ChangeMe123!"),
             global_cluster_identifier=global_cluster.id,
+            db_subnet_group_name=primary_subnet_group.name,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
             enabled_cloudwatch_logs_exports=["postgresql"],
             storage_encrypted=True,
             skip_final_snapshot=True,
-            availability_zones=[
-                f"{self.primary_region}a",
-                f"{self.primary_region}b",
-                f"{self.primary_region}c"
-            ],
             tags={
                 **self.common_tags,
                 "Name": f"payment-primary-cluster-{self.environment_suffix}",
@@ -389,17 +421,13 @@ class TapStack(pulumi.ComponentResource):
             engine="aurora-postgresql",
             engine_version="13.9",
             global_cluster_identifier=global_cluster.id,
+            db_subnet_group_name=dr_subnet_group.name,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
             enabled_cloudwatch_logs_exports=["postgresql"],
             storage_encrypted=True,
             skip_final_snapshot=True,
-            availability_zones=[
-                f"{self.dr_region}a",
-                f"{self.dr_region}b",
-                f"{self.dr_region}c"
-            ],
             tags={
                 **self.common_tags,
                 "Name": f"payment-dr-cluster-{self.environment_suffix}",
