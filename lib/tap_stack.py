@@ -483,7 +483,11 @@ class TapStack(pulumi.ComponentResource):
                 "Region": self.primary_region,
                 "DR-Role": "primary"
             },
-            opts=ResourceOptions(parent=self, depends_on=[global_cluster])
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[global_cluster],
+                ignore_changes=["db_subnet_group_name", "kms_key_id"]
+            )
         )
 
         # Primary cluster instance
@@ -530,7 +534,8 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 parent=self,
                 provider=self.dr_provider,
-                depends_on=[primary_cluster]
+                depends_on=[primary_cluster],
+                ignore_changes=["db_subnet_group_name", "kms_key_id"]
             )
         )
 
