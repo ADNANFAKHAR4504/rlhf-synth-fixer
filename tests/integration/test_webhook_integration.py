@@ -122,6 +122,12 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
         self.assertEqual(response['StatusCode'], 200)
 
         payload = json.loads(response['Payload'].read())
+        
+        # Debug: print payload if statusCode is missing
+        if 'statusCode' not in payload:
+            print(f"Lambda returned unexpected payload: {payload}")
+            self.fail(f"Lambda error: {payload.get('errorMessage', 'Unknown error')}")
+        
         self.assertEqual(payload['statusCode'], 200)
 
         body = json.loads(payload['body'])
@@ -166,6 +172,12 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
         self.assertEqual(response['StatusCode'], 200)
 
         payload = json.loads(response['Payload'].read())
+        
+        # Debug: print payload if statusCode is missing
+        if 'statusCode' not in payload:
+            print(f"Lambda returned unexpected payload: {payload}")
+            self.fail(f"Lambda error: {payload.get('errorMessage', 'Unknown error')}")
+        
         self.assertEqual(payload['statusCode'], 200)
 
         body = json.loads(payload['body'])
@@ -240,6 +252,12 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
         )
 
         payload = json.loads(response['Payload'].read())
+        
+        # Debug: print payload if statusCode is missing
+        if 'statusCode' not in payload:
+            print(f"Lambda returned unexpected payload: {payload}")
+            self.fail(f"Lambda error: {payload.get('errorMessage', 'Unknown error')}")
+        
         # Should succeed (200) if IAM permissions are correct
         self.assertEqual(payload['statusCode'], 200)
 
