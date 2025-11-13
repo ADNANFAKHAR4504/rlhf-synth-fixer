@@ -6,7 +6,15 @@ import os
 # Get configuration
 config = pulumi.Config()
 environment_suffix = config.get("environment_suffix") or os.environ.get("ENVIRONMENT_SUFFIX", "dev")
-aws_region = config.get("aws_region") or os.environ.get("AWS_REGION", "us-east-1")
+
+# Read AWS region from file if it exists, otherwise use config/env/default
+region_file_path = os.path.join(os.path.dirname(__file__), "AWS_REGION")
+default_region = "us-east-1"
+if os.path.exists(region_file_path):
+    with open(region_file_path, 'r', encoding='utf-8') as f:
+        default_region = f.read().strip()
+
+aws_region = config.get("aws_region") or os.environ.get("AWS_REGION", default_region)
 
 # Set AWS provider region
 aws_provider = aws.Provider("aws-provider", region=aws_region)

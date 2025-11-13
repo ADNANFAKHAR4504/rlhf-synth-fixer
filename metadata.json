@@ -19,5 +19,8 @@
     "IAM",
     "X-Ray"
   ],
+  "region": "eu-south-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
   "training_quality": 9
 }

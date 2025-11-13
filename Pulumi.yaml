@@ -8,6 +8,7 @@ config:
   environment_suffix:
     description: Unique environment suffix for resource naming
     type: string
+    default: dev
   aws_region:
     description: AWS region for deployment
     type: string
