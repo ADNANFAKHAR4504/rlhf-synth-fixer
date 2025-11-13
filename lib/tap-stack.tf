@@ -64,24 +64,17 @@ data "aws_region" "current" {}
 
 data "aws_caller_identity" "current" {}
 
-# Get latest Deep Learning AMI
+# Get latest Deep Learning AMI (Ubuntu 20.04 GPU)
+data "aws_ssm_parameter" "dlami" {
+  name = "/aws/service/deeplearning/ami-ubuntu-20.04-x86_64-gpu/latest"
+}
+
 data "aws_ami" "deep_learning" {
-  most_recent = true
-  owners      = ["amazon"]
+  owners = ["amazon"]
 
   filter {
-    name   = "name"
-    values = ["Deep Learning AMI (Ubuntu 20.04) *"]
-  }
-
-  filter {
-    name   = "architecture"
-    values = ["x86_64"]
-  }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
+    name   = "image-id"
+    values = [data.aws_ssm_parameter.dlami.value]
   }
 }
 
