@@ -184,7 +184,8 @@ class TestTurnAroundPromptAPIIntegrationTests:
             
             # Verify queue configuration
             assert "QueueArn" in attributes, f"{priority} queue missing ARN"
-            assert attributes["QueueArn"].endswith(f"-{priority}-"), f"{priority} queue ARN format incorrect"
+            queue_arn = attributes["QueueArn"]
+            assert f"-{priority}-" in queue_arn or f"queue-{priority}-" in queue_arn, f"{priority} queue ARN format incorrect: {queue_arn}"
             
             # Verify visibility timeout is set
             visibility_timeout = int(attributes.get("VisibilityTimeoutSeconds", "0"))
@@ -306,7 +307,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
 
         # Test putting an item
         test_item = {
-            "transaction_id": {"S": "test-txn-001"},
+            "transactionId": {"S": "test-txn-001"},
             "timestamp": {"S": "2024-01-01T12:00:00Z"},
             "status": {"S": "pending"},
             "amount": {"N": "250.75"}
@@ -316,7 +317,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
             lambda: dynamodb.put_item(
                 TableName=table_name,
                 Item=test_item,
-                ConditionExpression="attribute_not_exists(transaction_id)"
+                ConditionExpression="attribute_not_exists(transactionId)"
             ),
             _offline_dynamodb_operation_check,
         )
@@ -328,7 +329,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
         get_response = self._run_or_offline(
             lambda: dynamodb.get_item(
                 TableName=table_name,
-                Key={"transaction_id": {"S": "test-txn-001"}}
+                Key={"transactionId": {"S": "test-txn-001"}}
             ),
             _offline_dynamodb_operation_check,
         )
@@ -338,14 +339,14 @@ class TestTurnAroundPromptAPIIntegrationTests:
 
         assert "Item" in get_response, "Failed to retrieve test item"
         retrieved_item = get_response["Item"]
-        assert retrieved_item["transaction_id"]["S"] == "test-txn-001"
+        assert retrieved_item["transactionId"]["S"] == "test-txn-001"
         assert retrieved_item["status"]["S"] == "pending"
 
         # Clean up test item
         self._run_or_offline(
             lambda: dynamodb.delete_item(
                 TableName=table_name,
-                Key={"transaction_id": {"S": "test-txn-001"}}
+                Key={"transactionId": {"S": "test-txn-001"}}
             ),
             lambda: None,
         )
