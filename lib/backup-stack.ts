@@ -2,7 +2,7 @@ import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as random from '@pulumi/random';
 
-export interface BackupStackArgs{
+export interface BackupStackArgs {
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   primaryDbClusterArn: pulumi.Output<string>;
