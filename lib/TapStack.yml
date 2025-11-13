@@ -595,8 +595,7 @@ Resources:
     DependsOn: FlowLogsBucketPolicy
     Properties:
       ResourceType: VPC
-      ResourceIds:
-        - !Ref VPC
+      ResourceId: !Ref VPC
       TrafficType: ALL
       LogDestinationType: s3
       LogDestination: !GetAtt FlowLogsBucket.Arn
