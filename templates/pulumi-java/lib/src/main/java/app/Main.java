@@ -2,9 +2,17 @@ package app;
 
 import com.pulumi.Context;
 import com.pulumi.Pulumi;
+import com.pulumi.aws.Provider;
+import com.pulumi.aws.ProviderArgs;
+import com.pulumi.aws.inputs.ProviderDefaultTagsArgs;
 import com.pulumi.aws.s3.Bucket;
 import com.pulumi.aws.s3.BucketArgs;
+import com.pulumi.resources.CustomResourceOptions;
 
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -47,11 +55,40 @@ public final class Main {
      * @param ctx The Pulumi context for exporting outputs
      */
     static void defineInfrastructure(Context ctx) {
+        // Get environment variables for tagging
+        String environmentSuffix = System.getenv().getOrDefault("ENVIRONMENT_SUFFIX", "dev");
+        String repositoryName = System.getenv().getOrDefault("REPOSITORY", "unknown");
+        String commitAuthor = System.getenv().getOrDefault("COMMIT_AUTHOR", "unknown");
+        String prNumber = System.getenv().getOrDefault("PR_NUMBER", "unknown");
+        String team = System.getenv().getOrDefault("TEAM", "unknown");
+        String awsRegion = System.getenv().getOrDefault("AWS_REGION", "us-east-1");
+
+        // Create default tags
+        Map<String, String> defaultTags = Map.of(
+                "Environment", environmentSuffix,
+                "Repository", repositoryName,
+                "Author", commitAuthor,
+                "PRNumber", prNumber,
+                "Team", team,
+                "CreateAt", ZonedDateTime.now(ZoneOffset.UTC)
+                        .format(DateTimeFormatter.ISO_INSTANT)
+        );
+
+        // Configure AWS provider with default tags
+        Provider provider = new Provider("aws", ProviderArgs.builder()
+                .region(awsRegion)
+                .defaultTags(List.of(AwsProviderDefaultTags.builder()
+                        .tags(defaultTags)
+                        .build()))
+                .build());
+
         Bucket bucket = new Bucket("java-app-bucket", BucketArgs.builder()
                 .tags(Map.of(
-                        "Environment", "development",
+                        "Environment", environmentSuffix,
                         "Project", "pulumi-java-template",
                         "ManagedBy", "pulumi"))
+                .build(), CustomResourceOptions.builder()
+                .provider(provider)
                 .build());
 
         ctx.export("bucketName", bucket.id());

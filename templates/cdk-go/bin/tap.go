@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"time"
 
 	"github.com/TuringGpt/iac-test-automations/lib"
 	"github.com/aws/aws-cdk-go/awscdk/v2"
@@ -29,11 +30,17 @@ func main() {
 
 	repositoryName := getEnv("REPOSITORY", "unknown")
 	commitAuthor := getEnv("COMMIT_AUTHOR", "unknown")
+	prNumber := getEnv("PR_NUMBER", "unknown")
+	team := getEnv("TEAM", "unknown")
+	createdAt := time.Now().UTC().Format(time.RFC3339)
 
 	// Apply tags to all stacks in this app
 	awscdk.Tags_Of(app).Add(jsii.String("Environment"), jsii.String(environmentSuffix), nil)
 	awscdk.Tags_Of(app).Add(jsii.String("Repository"), jsii.String(repositoryName), nil)
 	awscdk.Tags_Of(app).Add(jsii.String("Author"), jsii.String(commitAuthor), nil)
+	awscdk.Tags_Of(app).Add(jsii.String("PRNumber"), jsii.String(prNumber), nil)
+	awscdk.Tags_Of(app).Add(jsii.String("Team"), jsii.String(team), nil)
+	awscdk.Tags_Of(app).Add(jsii.String("CreatedAt"), jsii.String(createdAt), nil)
 
 	// Create TapStackProps
 	var env *awscdk.Environment

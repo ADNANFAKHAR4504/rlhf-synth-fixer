@@ -1,0 +1,883 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Compute Stack - ECS Fargate cluster with Application Load Balancer",
+    "Parameters": {
+        "EnvironmentType": {
+            "Type": "String",
+            "AllowedValues": [
+                "dev",
+                "staging",
+                "prod"
+            ],
+            "Description": "Environment type for deployment"
+        },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Description": "Unique suffix for resource naming"
+        },
+        "VpcId": {
+            "Type": "String",
+            "Description": "VPC ID from VPC stack"
+        },
+        "PublicSubnetIds": {
+            "Type": "String",
+            "Description": "Comma-separated list of public subnet IDs"
+        },
+        "PrivateSubnetIds": {
+            "Type": "String",
+            "Description": "Comma-separated list of private subnet IDs"
+        },
+        "DatabaseSecurityGroupId": {
+            "Type": "String",
+            "Description": "Database security group ID"
+        },
+        "DatabaseEndpoint": {
+            "Type": "String",
+            "Description": "Database write endpoint"
+        },
+        "DatabaseReaderEndpoint": {
+            "Type": "String",
+            "Description": "Database read endpoint"
+        },
+        "ECSDesiredCount": {
+            "Type": "Number",
+            "Description": "Desired number of ECS tasks"
+        },
+        "ECSTaskCPU": {
+            "Type": "Number",
+            "Description": "CPU units for ECS task"
+        },
+        "ECSTaskMemory": {
+            "Type": "Number",
+            "Description": "Memory (MB) for ECS task"
+        },
+        "AlarmCPUThreshold": {
+            "Type": "Number",
+            "Description": "CPU alarm threshold percentage"
+        },
+        "AlarmMemoryThreshold": {
+            "Type": "Number",
+            "Description": "Memory alarm threshold percentage"
+        }
+    },
+    "Resources": {
+        "ECSLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/ecs/payment-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VpcId"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from anywhere"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-alb-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ECSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "payment-ecs-sg-${EnvironmentSuffix}"
+                },
+                "GroupDescription": "Security group for ECS tasks",
+                "VpcId": {
+                    "Ref": "VpcId"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 8080,
+                        "ToPort": 8080,
+                        "SourceSecurityGroupId": {
+                            "Ref": "ALBSecurityGroup"
+                        },
+                        "Description": "Allow traffic from ALB"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-ecs-sg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "DatabaseSecurityGroupIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "DatabaseSecurityGroupId"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 5432,
+                "ToPort": 5432,
+                "SourceSecurityGroupId": {
+                    "Ref": "ECSSecurityGroup"
+                },
+                "Description": "Allow PostgreSQL access from ECS tasks"
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-alb-${EnvironmentSuffix}"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "IpAddressType": "ipv4",
+                "Subnets": {
+                    "Fn::Split": [
+                        ",",
+                        {
+                            "Ref": "PublicSubnetIds"
+                        }
+                    ]
+                },
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-alb-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-tg-${EnvironmentSuffix}"
+                },
+                "Port": 8080,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VpcId"
+                },
+                "TargetType": "ip",
+                "HealthCheckEnabled": true,
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckPath": "/health",
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": "200"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-tg-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ALBListener": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ]
+            }
+        },
+        "ECSCluster": {
+            "Type": "AWS::ECS::Cluster",
+            "Properties": {
+                "ClusterName": {
+                    "Fn::Sub": "payment-cluster-${EnvironmentSuffix}"
+                },
+                "ClusterSettings": [
+                    {
+                        "Name": "containerInsights",
+                        "Value": "enabled"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "payment-cluster-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ECSTaskExecutionRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "payment-ecs-execution-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ECSTaskRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "payment-ecs-task-role-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ecs-tasks.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole",
+                            "Condition": {
+                                "StringEquals": {
+                                    "aws:ResourceTag/Environment": {
+                                        "Ref": "EnvironmentType"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogs",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents"
+                                    ],
+                                    "Resource": {
+                                        "Fn::GetAtt": [
+                                            "ECSLogGroup",
+                                            "Arn"
+                                        ]
+                                    }
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ECSTaskDefinition": {
+            "Type": "AWS::ECS::TaskDefinition",
+            "Properties": {
+                "Family": {
+                    "Fn::Sub": "payment-processor-${EnvironmentSuffix}"
+                },
+                "NetworkMode": "awsvpc",
+                "RequiresCompatibilities": [
+                    "FARGATE"
+                ],
+                "Cpu": {
+                    "Ref": "ECSTaskCPU"
+                },
+                "Memory": {
+                    "Ref": "ECSTaskMemory"
+                },
+                "ExecutionRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskExecutionRole",
+                        "Arn"
+                    ]
+                },
+                "TaskRoleArn": {
+                    "Fn::GetAtt": [
+                        "ECSTaskRole",
+                        "Arn"
+                    ]
+                },
+                "ContainerDefinitions": [
+                    {
+                        "Name": "payment-processor",
+                        "Image": "public.ecr.aws/docker/library/nginx:latest",
+                        "PortMappings": [
+                            {
+                                "ContainerPort": 8080,
+                                "Protocol": "tcp"
+                            }
+                        ],
+                        "Environment": [
+                            {
+                                "Name": "ENVIRONMENT",
+                                "Value": {
+                                    "Ref": "EnvironmentType"
+                                }
+                            },
+                            {
+                                "Name": "DB_ENDPOINT",
+                                "Value": {
+                                    "Ref": "DatabaseEndpoint"
+                                }
+                            },
+                            {
+                                "Name": "DB_READER_ENDPOINT",
+                                "Value": {
+                                    "Ref": "DatabaseReaderEndpoint"
+                                }
+                            },
+                            {
+                                "Name": "DB_PORT",
+                                "Value": "5432"
+                            },
+                            {
+                                "Name": "DB_NAME",
+                                "Value": "payments"
+                            }
+                        ],
+                        "LogConfiguration": {
+                            "LogDriver": "awslogs",
+                            "Options": {
+                                "awslogs-group": {
+                                    "Ref": "ECSLogGroup"
+                                },
+                                "awslogs-region": {
+                                    "Ref": "AWS::Region"
+                                },
+                                "awslogs-stream-prefix": "payment-processor"
+                            }
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ECSService": {
+            "Type": "AWS::ECS::Service",
+            "DependsOn": "ALBListener",
+            "Properties": {
+                "ServiceName": {
+                    "Fn::Sub": "payment-service-${EnvironmentSuffix}"
+                },
+                "Cluster": {
+                    "Ref": "ECSCluster"
+                },
+                "TaskDefinition": {
+                    "Ref": "ECSTaskDefinition"
+                },
+                "DesiredCount": {
+                    "Ref": "ECSDesiredCount"
+                },
+                "LaunchType": "FARGATE",
+                "NetworkConfiguration": {
+                    "AwsvpcConfiguration": {
+                        "AssignPublicIp": "DISABLED",
+                        "Subnets": {
+                            "Fn::Split": [
+                                ",",
+                                {
+                                    "Ref": "PrivateSubnetIds"
+                                }
+                            ]
+                        },
+                        "SecurityGroups": [
+                            {
+                                "Ref": "ECSSecurityGroup"
+                            }
+                        ]
+                    }
+                },
+                "LoadBalancers": [
+                    {
+                        "ContainerName": "payment-processor",
+                        "ContainerPort": 8080,
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "HealthCheckGracePeriodSeconds": 60,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentType"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "payments"
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": "payment-processor"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    }
+                ]
+            }
+        },
+        "ECSServiceCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-ecs-cpu-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "ECS Service CPU utilization exceeds ${AlarmCPUThreshold}%"
+                },
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/ECS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Ref": "AlarmCPUThreshold"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ServiceName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ECSService",
+                                "Name"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "ClusterName",
+                        "Value": {
+                            "Ref": "ECSCluster"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ECSServiceMemoryAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-ecs-memory-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "ECS Service memory utilization exceeds ${AlarmMemoryThreshold}%"
+                },
+                "MetricName": "MemoryUtilization",
+                "Namespace": "AWS/ECS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": {
+                    "Ref": "AlarmMemoryThreshold"
+                },
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "ServiceName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ECSService",
+                                "Name"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "ClusterName",
+                        "Value": {
+                            "Ref": "ECSCluster"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ALBTargetResponseTimeAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-alb-response-time-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "ALB target response time is too high",
+                "MetricName": "TargetResponseTime",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1.0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ALBUnhealthyHostCountAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "payment-alb-unhealthy-hosts-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "ALB has unhealthy targets",
+                "MetricName": "UnHealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ALBTargetGroup",
+                                "TargetGroupFullName"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "ALBSecurityGroupId": {
+            "Description": "ALB Security Group ID",
+            "Value": {
+                "Ref": "ALBSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ALBSecurityGroupId"
+                }
+            }
+        },
+        "ECSSecurityGroupId": {
+            "Description": "ECS Security Group ID",
+            "Value": {
+                "Ref": "ECSSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSSecurityGroupId"
+                }
+            }
+        },
+        "LoadBalancerDNSName": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-LoadBalancerDNSName"
+                }
+            }
+        },
+        "LoadBalancerArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            }
+        },
+        "TargetGroupArn": {
+            "Description": "Target Group ARN",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            }
+        },
+        "ECSClusterName": {
+            "Description": "ECS Cluster Name",
+            "Value": {
+                "Ref": "ECSCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-ECSClusterName"
+                }
+            }
+        },
+        "ECSServiceName": {
+            "Description": "ECS Service Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ECSService",
+                    "Name"
+                ]
+            }
+        },
+        "ECSLogGroupName": {
+            "Description": "CloudWatch Log Group Name",
+            "Value": {
+                "Ref": "ECSLogGroup"
+            }
+        }
+    }
+}
