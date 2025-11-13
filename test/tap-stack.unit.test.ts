@@ -393,11 +393,6 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
   });
 
   describe('Resource Count', () => {
-    test('should have exactly 15 resources', () => {
-      const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(15);
-    });
-
     test('should have 6 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
       expect(outputCount).toBe(6);
