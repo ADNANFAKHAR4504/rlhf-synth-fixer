@@ -199,9 +199,11 @@ class TestTurnAroundPromptAPIIntegrationTests:
             else:
                 assert visibility_timeout == expected_timeout, f"{priority} queue visibility timeout should be {expected_timeout}s, got {visibility_timeout}s"
             
-            # Verify message retention period
+            # Verify message retention period matches prompt requirements
             retention_period = int(attributes.get("MessageRetentionPeriod", "0"))
-            assert retention_period >= 345600, f"{priority} queue retention period too low"  # At least 4 days
+            expected_retention = {"high": 86400, "medium": 259200, "low": 604800}
+            expected = expected_retention[priority]
+            assert retention_period == expected, f"{priority} queue retention should be {expected}s, got {retention_period}s"
 
     def test_step_functions_state_machine_exists(self, outputs: Dict[str, Any], aws_region: str) -> None:
         """Test that Step Functions state machine exists and is active."""
