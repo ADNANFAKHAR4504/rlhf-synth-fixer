@@ -457,7 +457,7 @@
       "Properties": {
         "DBClusterIdentifier": {"Fn::Sub": "aurora-cluster-${EnvironmentSuffix}"},
         "Engine": "aurora-postgresql",
-        "EngineVersion": "16.1",
+        "EngineVersion": "16.2",
         "EngineMode": "provisioned",
         "DatabaseName": {"Ref": "DatabaseName"},
         "MasterUsername": {"Fn::Sub": "{{resolve:secretsmanager:${DatabaseSecret}:SecretString:username}}"},
