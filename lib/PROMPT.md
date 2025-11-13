@@ -12,10 +12,7 @@ Here's the analysis I need the script to perform:
 7.  Find inefficient storage: Scan our EBS volumes. Any `gp2` volume should be flagged for migration to `gp3` for instant savings.
 8.  Find burstable credit abuse: Look at our t2/t3 fleet. Find any instances that are consistently running in "unlimited mode" and racking up extra credit charges.
 
-**Critical Safety Guardrail:**
-Now, a few critical rules. The script must _ignore_ anything in our Sandbox account. It also has to skip any instance tagged with `ExcludeFromCostAnalysis: true`. And don't bother analyzing anything that's been running for less than 7 days.
-
 **Output Requirements:**
-For the output, I want two files. First, a JSON report named `ec2_cost_optimization.json`. This needs a `recommendations` list (with instance_id, action, priority, potential_savings) and a `total_potential_savings`. Second, a CSV named `ec2_rightsizing.csv` for our team.
+For the output, I want two files. First, a JSON report named `ec2_cost_optimization.json`.
 
 Please provide the final Python code in separate, labeled code blocks for `lib/analyse.py`.
