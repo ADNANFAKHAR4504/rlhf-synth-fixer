@@ -417,6 +417,75 @@ resource "aws_emr_instance_group" "task" {
     volumes_per_instance = 1
   }
 
+  auto_scaling_policy = jsonencode({
+    Constraints = {
+      MinCapacity = var.task_instance_min
+      MaxCapacity = var.task_instance_max
+    }
+    Rules = [
+      {
+        Name        = "ScaleOutOnYarnMemory"
+        Description = "Increase task nodes when available YARN memory falls below threshold"
+        Action = {
+          Market = "SPOT"
+          SimpleScalingPolicyConfiguration = {
+            AdjustmentType    = "CHANGE_IN_CAPACITY"
+            ScalingAdjustment = 1
+            CoolDown          = 300
+          }
+        }
+        Trigger = {
+          CloudWatchAlarmDefinition = {
+            ComparisonOperator = "LESS_THAN"
+            EvaluationPeriods  = 2
+            MetricName         = "YARNMemoryAvailablePercentage"
+            Namespace          = "AWS/ElasticMapReduce"
+            Period             = 300
+            Statistic          = "AVERAGE"
+            Threshold          = var.yarn_memory_scale_out_threshold
+            Unit               = "PERCENT"
+            Dimensions = [
+              {
+                Key   = "JobFlowId"
+                Value = aws_emr_cluster.main.id
+              }
+            ]
+          }
+        }
+      },
+      {
+        Name        = "ScaleInOnYarnMemory"
+        Description = "Reduce task nodes when the cluster has ample YARN memory available"
+        Action = {
+          Market = "SPOT"
+          SimpleScalingPolicyConfiguration = {
+            AdjustmentType    = "CHANGE_IN_CAPACITY"
+            ScalingAdjustment = -1
+            CoolDown          = 300
+          }
+        }
+        Trigger = {
+          CloudWatchAlarmDefinition = {
+            ComparisonOperator = "GREATER_THAN"
+            EvaluationPeriods  = 2
+            MetricName         = "YARNMemoryAvailablePercentage"
+            Namespace          = "AWS/ElasticMapReduce"
+            Period             = 300
+            Statistic          = "AVERAGE"
+            Threshold          = var.yarn_memory_scale_in_threshold
+            Unit               = "PERCENT"
+            Dimensions = [
+              {
+                Key   = "JobFlowId"
+                Value = aws_emr_cluster.main.id
+              }
+            ]
+          }
+        }
+      }
+    ]
+  })
+
   lifecycle {
     create_before_destroy = true
   }

@@ -59,11 +59,12 @@ describe("Terraform EMR stack conformance", () => {
 
   test("task instance group is configured for Spot with autoscaling headroom", () => {
     expect(mainTf).toMatch(/resource\s+"aws_emr_instance_group"\s+"task"/);
-    expect(mainTf).toMatch(/market\s*=\s*"SPOT"/);
+    expect(mainTf).toMatch(/bid_price\s*=\s*var\.task_spot_bid_price/);
     expect(mainTf).toMatch(/instance_count\s*=\s*max\(1,\s*var\.task_instance_min\)/);
-    expect(autoscalingTf).toMatch(/TargetTrackingScaling/);
-    expect(autoscalingTf).toMatch(/YARNMemoryAvailablePercentage/);
-    expect(autoscalingTf).toMatch(/var\.yarn_memory_target/);
+    expect(mainTf).toMatch(/auto_scaling_policy\s*=\s*jsonencode/);
+    expect(mainTf).toMatch(/ScaleOutOnYarnMemory/);
+    expect(mainTf).toMatch(/var\.yarn_memory_scale_out_threshold/);
+    expect(mainTf).toMatch(/var\.yarn_memory_scale_in_threshold/);
   });
 
   test("IAM policies restrict S3 access to specific buckets and log prefixes", () => {

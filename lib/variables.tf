@@ -126,10 +126,16 @@ variable "task_spot_bid_price" {
   default     = "0.50"
 }
 
-variable "yarn_memory_target" {
-  description = "Target value for YARNMemoryAvailablePercentage used by the autoscaling policy"
+variable "yarn_memory_scale_out_threshold" {
+  description = "YARNMemoryAvailablePercentage threshold that triggers scaling out task nodes"
   type        = number
   default     = 25
+}
+
+variable "yarn_memory_scale_in_threshold" {
+  description = "YARNMemoryAvailablePercentage threshold that triggers scaling in task nodes"
+  type        = number
+  default     = 75
 }
 
 variable "idle_timeout_seconds" {
