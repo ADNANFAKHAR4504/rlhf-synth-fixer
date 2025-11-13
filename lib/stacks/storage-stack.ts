@@ -20,13 +20,7 @@ export class StorageStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: StorageStackProps) {
     super(scope, id, props);
 
-    const {
-      environmentSuffix,
-      kmsKey,
-      isPrimary,
-      secondaryRegion,
-      replicaKmsKeyArn,
-    } = props;
+    const { environmentSuffix, kmsKey, isPrimary, secondaryRegion } = props;
 
     this.bucket = new s3.Bucket(this, `Bucket-${environmentSuffix}`, {
       bucketName: `dr-storage-${environmentSuffix}-${this.region}`,
