@@ -300,7 +300,7 @@ class TestTapStack(unittest.TestCase):
             self.assertEqual(outputs["validation_runtime"], "python3.11")
             self.assertEqual(outputs["validation_memory"], 512)
             self.assertEqual(outputs["validation_timeout"], 60)
-            self.assertEqual(outputs["validation_concurrency"], 100)
+            self.assertEqual(outputs["validation_concurrency"], None)  # Removed per lessons_learnt.md
 
             # Fraud Detection Lambda
             self.assertEqual(
