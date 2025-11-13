@@ -67,7 +67,9 @@ class TapStack(pulumi.ComponentResource):
 
         # Create VPC for ECS (simplified private subnet setup)
         self.vpc = self._create_vpc(child_opts)
+        self.internet_gateway = self._create_internet_gateway(child_opts)
         self.private_subnets = self._create_subnets(child_opts)
+        self.route_table = self._create_route_table(child_opts)
         self.security_group = self._create_security_group(child_opts)
 
         # Create ECS cluster and task definition
@@ -566,6 +568,28 @@ class TapStack(pulumi.ComponentResource):
 
         return vpc
 
+    def _create_internet_gateway(self, opts: pulumi.ResourceOptions) -> aws.ec2.InternetGateway:
+        """Create Internet Gateway for VPC (required for Application Load Balancer)."""
+        igw = aws.ec2.InternetGateway(
+            f"ecs-igw-{self.environment_suffix}",
+            tags={
+                "Name": f"ecs-igw-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+                "ManagedBy": "Pulumi"
+            },
+            opts=opts
+        )
+
+        # Attach Internet Gateway to VPC
+        aws.ec2.InternetGatewayAttachment(
+            f"ecs-igw-attachment-{self.environment_suffix}",
+            internet_gateway_id=igw.id,
+            vpc_id=self.vpc.id,
+            opts=opts
+        )
+
+        return igw
+
     def _create_subnets(self, opts: pulumi.ResourceOptions):
         """Create private subnets for ECS."""
         subnets = []
@@ -588,6 +612,34 @@ class TapStack(pulumi.ComponentResource):
             subnets.append(subnet)
 
         return subnets
+
+    def _create_route_table(self, opts: pulumi.ResourceOptions) -> aws.ec2.RouteTable:
+        """Create route table with Internet Gateway route."""
+        route_table = aws.ec2.RouteTable(
+            f"ecs-rt-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            routes=[aws.ec2.RouteTableRouteArgs(
+                cidr_block="0.0.0.0/0",
+                gateway_id=self.internet_gateway.id
+            )],
+            tags={
+                "Name": f"ecs-rt-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+                "ManagedBy": "Pulumi"
+            },
+            opts=opts
+        )
+
+        # Associate route table with subnets
+        for i, subnet in enumerate(self.private_subnets):
+            aws.ec2.RouteTableAssociation(
+                f"ecs-rta-{i}-{self.environment_suffix}",
+                subnet_id=subnet.id,
+                route_table_id=route_table.id,
+                opts=opts
+            )
+
+        return route_table
 
     def _create_security_group(self, opts: pulumi.ResourceOptions) -> aws.ec2.SecurityGroup:
         """Create security group for ECS tasks and load balancer."""
@@ -752,6 +804,11 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_ecs_service(self, opts: pulumi.ResourceOptions) -> aws.ecs.Service:
         """Create ECS service with load balancer configuration for CODE_DEPLOY."""
+        # Ensure ECS service depends on load balancer listener being created
+        service_opts = pulumi.ResourceOptions.merge(opts, pulumi.ResourceOptions(
+            depends_on=[self.load_balancer_listener]
+        ))
+        
         service = aws.ecs.Service(
             f"app-service-{self.environment_suffix}",
             name=f"nodejs-service-{self.environment_suffix}",
@@ -777,7 +834,7 @@ class TapStack(pulumi.ComponentResource):
                 "Environment": self.environment_suffix,
                 "ManagedBy": "Pulumi"
             },
-            opts=opts
+            opts=service_opts
         )
 
         return service
