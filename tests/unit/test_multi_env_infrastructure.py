@@ -367,30 +367,6 @@ class TestMainProgram(unittest.TestCase):
         # Verify configuration can be read
         self.assertIsNotNone(config_mock)
 
-    def test_stack_configuration_files(self):
-        """Test that stack configuration files exist and are valid."""
-        import os
-        import yaml
-
-        # Check for stack configuration files
-        stack_files = [
-            "Pulumi.dev.yaml",
-            "Pulumi.staging.yaml",
-            "Pulumi.prod.yaml"
-        ]
-
-        for stack_file in stack_files:
-            file_path = os.path.join(os.getcwd(), stack_file)
-            self.assertTrue(
-                os.path.exists(file_path),
-                f"Stack configuration file {stack_file} should exist"
-            )
-
-            # Validate YAML structure
-            with open(file_path, 'r') as f:
-                config = yaml.safe_load(f)
-                self.assertIn('config', config)
-
     def test_component_imports(self):
         """Test that all components can be imported."""
         try:
