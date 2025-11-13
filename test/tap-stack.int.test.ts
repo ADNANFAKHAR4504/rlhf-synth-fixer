@@ -21,6 +21,9 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 import crypto from 'crypto';
 
+// Set global timeout for all integration tests (S3 operations and Lambda invocations can take time)
+jest.setTimeout(600000); // 10 minutes
+
 // Configuration - Load from cfn-outputs after stack deployment
 const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
