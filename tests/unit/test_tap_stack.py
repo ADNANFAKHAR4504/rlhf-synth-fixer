@@ -52,17 +52,16 @@ class TestTapStack(unittest.TestCase):
 
         # Verify Lambda function properties
         def check_lambda(args):
-            runtime, memory_size, timeout, concurrent_executions = args
+            runtime, memory_size, timeout = args
             assert runtime == "nodejs18.x"
             assert memory_size == 1024
             assert timeout == 10
-            assert concurrent_executions == 100
+            # Note: reserved_concurrent_executions was removed to avoid account limit issues
 
         pulumi.Output.all(
             stack.lambda_function.runtime,
             stack.lambda_function.memory_size,
-            stack.lambda_function.timeout,
-            stack.lambda_function.reserved_concurrent_executions
+            stack.lambda_function.timeout
         ).apply(check_lambda)
 
     @pulumi.runtime.test
