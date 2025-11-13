@@ -42,8 +42,10 @@ tap_stack = TapStack(
 )
 
 # Export key outputs
-pulumi.export("api_endpoint", tap_stack.api_gateway.execution_arn.apply(
-    lambda arn: f"https://{tap_stack.api_gateway.id}.execute-api.{region}.amazonaws.com/prod"
+pulumi.export("api_endpoint", pulumi.Output.all(
+    tap_stack.api_gateway.id
+).apply(
+    lambda args: f"https://{args[0]}.execute-api.{region}.amazonaws.com/{environment_suffix}"
 ))
 pulumi.export("dashboard_url", tap_stack.dashboard.dashboard_name.apply(
     lambda name: (

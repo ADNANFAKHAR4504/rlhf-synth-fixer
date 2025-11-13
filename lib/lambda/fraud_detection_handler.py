@@ -9,7 +9,7 @@ alerts for suspicious transactions via SNS.
 import json
 import os
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from botocore.exceptions import ClientError
 
@@ -85,7 +85,7 @@ def lambda_handler(event, context):
 
             # Store transaction in DynamoDB
             transaction_table = dynamodb.Table(TRANSACTION_TABLE_NAME)
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
 
             transaction_table.put_item(
                 Item={

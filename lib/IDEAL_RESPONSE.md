@@ -760,7 +760,7 @@ def lambda_handler(event, context):
 
             # Store transaction in DynamoDB
             transaction_table = dynamodb.Table(TRANSACTION_TABLE_NAME)
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
 
             transaction_table.put_item(
                 Item={
@@ -871,7 +871,7 @@ def lambda_handler(event, context):
 
             # Store failed transaction in DynamoDB with FAILED status
             transaction_table = dynamodb.Table(TRANSACTION_TABLE_NAME)
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
 
             transaction_table.put_item(
                 Item={
@@ -898,7 +898,7 @@ def lambda_handler(event, context):
                             'MetricName': 'FailedTransactions',
                             'Value': 1,
                             'Unit': 'Count',
-                            'Timestamp': datetime.utcnow(),
+                            'Timestamp': datetime.now(timezone.utc),
                             'Dimensions': [
                                 {
                                     'Name': 'TransactionStatus',
@@ -1865,6 +1865,25 @@ validated_output = pulumi.Output.all(
      ```
    - **Best Practice**: Always use `pulumi.Output.all()` when you need to reference multiple Output values in a single lambda function
    - **Impact**: Prevents output resolution errors and ensures proper API endpoint URL generation for integration tests
+
+7. **Datetime Deprecation Warnings**:
+   - **Symptom**: `DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal`
+   - **Root Cause**: Python 3.12+ deprecates `datetime.utcnow()` in favor of timezone-aware datetime objects
+   - **Example Problem**:
+     ```python
+     # INCORRECT: Using deprecated utcnow()
+     timestamp = datetime.utcnow().isoformat()
+     ```
+   - **Solution**: Use timezone-aware `datetime.now(timezone.utc)` instead
+     ```python
+     # CORRECT: Import timezone
+     from datetime import datetime, timezone
+
+     # Use timezone-aware datetime
+     timestamp = datetime.now(timezone.utc).isoformat()
+     ```
+   - **Best Practice**: Always use timezone-aware datetime objects to prevent ambiguity and ensure proper time handling across different regions
+   - **Impact**: Eliminates deprecation warnings and ensures code compatibility with future Python versions
 
 ## Compliance and Audit
 

@@ -8,7 +8,7 @@ It logs failures, stores them for audit, and sends notifications.
 import json
 import os
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 from botocore.exceptions import ClientError
 
 # Initialize AWS clients
@@ -47,7 +47,7 @@ def lambda_handler(event, context):
 
             # Store failed transaction in DynamoDB with FAILED status
             transaction_table = dynamodb.Table(TRANSACTION_TABLE_NAME)
-            timestamp = datetime.utcnow().isoformat()
+            timestamp = datetime.now(timezone.utc).isoformat()
 
             transaction_table.put_item(
                 Item={
@@ -74,7 +74,7 @@ def lambda_handler(event, context):
                             'MetricName': 'FailedTransactions',
                             'Value': 1,
                             'Unit': 'Count',
-                            'Timestamp': datetime.utcnow(),
+                            'Timestamp': datetime.now(timezone.utc),
                             'Dimensions': [
                                 {
                                     'Name': 'TransactionStatus',

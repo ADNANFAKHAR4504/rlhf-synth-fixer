@@ -58,7 +58,9 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = {**args.tags, 'PulumiOutputVersion': 'v2'}  # Force stack update to regenerate outputs
-        self.region = 'us-east-1'  # Deployment region
+        # Get region from AWS config or default to us-east-2
+        aws_config = pulumi.Config("aws")
+        self.region = aws_config.get("region") or "us-east-2"
         self.stage_name = self.environment_suffix  # API Gateway stage name
 
         # Create KMS key for encryption
@@ -149,7 +151,7 @@ class TapStack(pulumi.ComponentResource):
                     "Sid": "Allow CloudWatch Logs",
                     "Effect": "Allow",
                     "Principal": {
-                        "Service": f"logs.us-east-1.amazonaws.com"
+                        "Service": f"logs.{self.region}.amazonaws.com"
                     },
                     "Action": [
                         "kms:Encrypt",
@@ -162,7 +164,7 @@ class TapStack(pulumi.ComponentResource):
                     "Resource": "*",
                     "Condition": {
                         "ArnLike": {
-                            "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:us-east-1:{aws.get_caller_identity().account_id}:log-group:*"
+                            "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{self.region}:{aws.get_caller_identity().account_id}:log-group:*"
                         }
                     }
                 }
@@ -202,7 +204,7 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_private_subnets(self):
         """Create 3 private subnets across 3 AZs"""
-        availability_zones = ['us-east-1a', 'us-east-1b', 'us-east-1c']
+        availability_zones = [f'{self.region}a', f'{self.region}b', f'{self.region}c']
         subnets = []
 
         for i, az in enumerate(availability_zones):

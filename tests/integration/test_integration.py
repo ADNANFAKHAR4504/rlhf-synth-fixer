@@ -9,7 +9,7 @@ import unittest
 import json
 import os
 import boto3
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 class TestTransactionProcessingIntegration(unittest.TestCase):
@@ -182,8 +182,8 @@ class TestTransactionProcessingIntegration(unittest.TestCase):
         # Verify DynamoDB table is writable (test with put_item)
         table = self.dynamodb.Table(table_name)
         test_item = {
-            'transaction_id': f'test-{datetime.utcnow().isoformat()}',
-            'timestamp': datetime.utcnow().isoformat(),
+            'transaction_id': f'test-{datetime.now(timezone.utc).isoformat()}',
+            'timestamp': datetime.now(timezone.utc).isoformat(),
             'fraud_status': 'TEST',
             'fraud_score': 0,
             'amount': 0
@@ -218,7 +218,7 @@ class TestTransactionProcessingIntegration(unittest.TestCase):
 
         # Create test merchant
         test_merchant = {
-            'merchant_id': f'test-merchant-{datetime.utcnow().timestamp()}',
+            'merchant_id': f'test-merchant-{datetime.now(timezone.utc).timestamp()}',
             'name': 'Test Merchant',
             'active': True,
             'max_transaction_amount': 10000
