@@ -17,6 +17,7 @@ import sys
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
+import uuid
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -49,6 +50,14 @@ class PaymentProcessingStack(TerraformStack):
         with open(region_file, "r", encoding="utf-8") as f:
             region = f.read().strip()
 
+        # Generate random suffix for unique resource naming
+        # This ensures resources are unique even when redeploying with same environment suffix
+        # Format: pr6460-abc123 (6 character random suffix)
+        random_suffix = str(uuid.uuid4())[:6]
+
+        # Combine environment suffix with random suffix
+        combined_suffix = f"{environment_suffix}-{random_suffix}"
+
         # AWS Provider configuration
         AwsProvider(
             self,
@@ -57,7 +66,7 @@ class PaymentProcessingStack(TerraformStack):
             default_tags=[
                 {
                     "tags": {
-                        "Environment": f"payment-processing-{environment_suffix}",
+                        "Environment": f"payment-processing-{combined_suffix}",
                         "ManagedBy": "CDKTF",
                         "Project": "PaymentProcessing",
                         "Compliance": "PCI-DSS",
@@ -68,14 +77,14 @@ class PaymentProcessingStack(TerraformStack):
 
         # Deploy networking infrastructure
         networking = NetworkingInfrastructure(
-            self, "networking", environment_suffix=environment_suffix, region=region
+            self, "networking", environment_suffix=combined_suffix, region=region
         )
 
         # Deploy security infrastructure
         security = SecurityInfrastructure(
             self,
             "security",
-            environment_suffix=environment_suffix,
+            environment_suffix=combined_suffix,
             vpc_id=networking.vpc_id,
         )
 
@@ -83,7 +92,7 @@ class PaymentProcessingStack(TerraformStack):
         database = DatabaseInfrastructure(
             self,
             "database",
-            environment_suffix=environment_suffix,
+            environment_suffix=combined_suffix,
             vpc_id=networking.vpc_id,
             private_subnet_ids=networking.private_subnet_ids,
             db_security_group_id=security.db_security_group_id,
@@ -91,14 +100,14 @@ class PaymentProcessingStack(TerraformStack):
 
         # Deploy storage infrastructure
         storage = StorageInfrastructure(
-            self, "storage", environment_suffix=environment_suffix, region=region
+            self, "storage", environment_suffix=combined_suffix, region=region
         )
 
         # Deploy compute infrastructure
         compute = ComputeInfrastructure(
             self,
             "compute",
-            environment_suffix=environment_suffix,
+            environment_suffix=combined_suffix,
             vpc_id=networking.vpc_id,
             public_subnet_ids=networking.public_subnet_ids,
             private_subnet_ids=networking.private_subnet_ids,
@@ -114,7 +123,7 @@ class PaymentProcessingStack(TerraformStack):
         monitoring = MonitoringInfrastructure(
             self,
             "monitoring",
-            environment_suffix=environment_suffix,
+            environment_suffix=combined_suffix,
             autoscaling_group_name=compute.autoscaling_group_name,
             alb_arn_suffix=compute.alb_arn_suffix,
             target_group_arn_suffix=compute.target_group_arn_suffix,

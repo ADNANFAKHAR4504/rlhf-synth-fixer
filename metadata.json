@@ -1,13 +1,16 @@
 {
+  "author": "raaj1021",
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "m54an1",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-11-13T03:52:00.000Z",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "aws_services": [
     "VPC",
     "ALB",
@@ -19,5 +22,6 @@
     "WAF",
     "CloudWatch",
     "IAM"
-  ]
+  ],
+  "training_quality": 10
 }
