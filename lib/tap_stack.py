@@ -39,14 +39,13 @@ class TapStack(TerraformStack):
         )
 
         # Configure S3 Backend with encryption
-        # Temporarily disabled S3 backend due to access issues in local testing
-        # S3Backend(
-        #     self,
-        #     bucket=state_bucket,
-        #     key=f"{environment_suffix}/{construct_id}.tfstate",
-        #     region=state_bucket_region,
-        #     encrypt=True,
-        # )
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+        )
 
         # 1. Networking Stack - VPC, Subnets, NAT, Flow Logs
         networking = NetworkingStack(
