@@ -226,7 +226,7 @@ stripe_lambda = aws.lambda_.Function(
     handler="stripe_handler.lambda_handler",
     role=stripe_lambda_role.arn,
     code=pulumi.AssetArchive({
-        "stripe_handler.py": pulumi.FileAsset("lib/lambda_functions/stripe_handler.py")
+        "stripe_handler.py": pulumi.FileAsset(os.path.join(os.path.dirname(__file__), "lambda_functions/stripe_handler.py"))
     }),
     timeout=30,
     memory_size=512,
@@ -263,7 +263,7 @@ paypal_lambda = aws.lambda_.Function(
     handler="paypal_handler.lambda_handler",
     role=paypal_lambda_role.arn,
     code=pulumi.AssetArchive({
-        "paypal_handler.py": pulumi.FileAsset("lib/lambda_functions/paypal_handler.py")
+        "paypal_handler.py": pulumi.FileAsset(os.path.join(os.path.dirname(__file__), "lambda_functions/paypal_handler.py"))
     }),
     timeout=30,
     memory_size=512,
