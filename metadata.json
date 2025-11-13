@@ -6,7 +6,10 @@
   "team": "synth",
   "startedAt": "2025-11-12T23:53:51+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": [],
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "po_id": "9jt64c",
   "aws_services": [
     "VPC",
