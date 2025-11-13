@@ -1,30 +1,43 @@
-// lib/modules.ts
 import { Construct } from 'constructs';
-import { Vpc } from '@cdktf/provider-aws/lib/vpc';
-import { InternetGateway } from '@cdktf/provider-aws/lib/internet-gateway';
-import { RouteTable } from '@cdktf/provider-aws/lib/route-table';
-import { Route } from '@cdktf/provider-aws/lib/route';
-import { RouteTableAssociation } from '@cdktf/provider-aws/lib/route-table-association';
-import { NatGateway } from '@cdktf/provider-aws/lib/nat-gateway';
-import { Eip } from '@cdktf/provider-aws/lib/eip';
-import { Subnet } from '@cdktf/provider-aws/lib/subnet';
-import { SecurityGroup } from '@cdktf/provider-aws/lib/security-group';
-import { SecurityGroupRule } from '@cdktf/provider-aws/lib/security-group-rule';
+import * as aws from '@cdktf/provider-aws';
 
-// VPC Module
-export interface VpcConfig {
-  cidrBlock: string;
+export interface NetworkingConfig {
+  vpcCidr: string;
+  availabilityZones: string[];
+  publicSubnetCidrs: string[];
+  privateSubnetCidrs: string[];
+  tags: { [key: string]: string };
+}
+
+export interface EksNodeGroupConfig {
+  clusterName: string;
+  nodeRoleName: string;
+  subnetIds: string[];
+  instanceTypes: string[];
+  scalingConfig: {
+    desired: number;
+    min: number;
+    max: number;
+  };
+  capacityType?: string;
+  labels?: { [key: string]: string };
+  taint?: aws.eksNodeGroup.EksNodeGroupTaint[];
   tags: { [key: string]: string };
 }
 
 export class VpcConstruct extends Construct {
-  public readonly vpc: Vpc;
+  public readonly vpc: aws.vpc.Vpc;
+  public readonly publicSubnets: aws.subnet.Subnet[];
+  public readonly privateSubnets: aws.subnet.Subnet[];
+  public readonly natGateways: aws.natGateway.NatGateway[];
+  public readonly internetGateway: aws.internetGateway.InternetGateway;
 
-  constructor(scope: Construct, id: string, config: VpcConfig) {
+  constructor(scope: Construct, id: string, config: NetworkingConfig) {
     super(scope, id);
 
-    this.vpc = new Vpc(this, 'vpc', {
-      cidrBlock: config.cidrBlock,
+    // Create VPC
+    this.vpc = new aws.vpc.Vpc(this, 'vpc', {
+      cidrBlock: config.vpcCidr,
       enableDnsHostnames: true,
       enableDnsSupport: true,
       tags: {
@@ -32,195 +45,635 @@ export class VpcConstruct extends Construct {
         Name: `${id}-vpc`,
       },
     });
-  }
-}
 
-// Network Module (Subnets, IGW, NAT Gateways, Route Tables)
-export interface NetworkConfig {
-  vpcId: string;
-  publicSubnetCidrs: string[];
-  privateSubnetCidrs: string[];
-  availabilityZones: string[];
-  tags: { [key: string]: string };
-}
+    // Create Internet Gateway
+    this.internetGateway = new aws.internetGateway.InternetGateway(
+      this,
+      'igw',
+      {
+        vpcId: this.vpc.id,
+        tags: {
+          ...config.tags,
+          Name: `${id}-igw`,
+        },
+      }
+    );
 
-export class NetworkConstruct extends Construct {
-  public readonly publicSubnets: Subnet[] = [];
-  public readonly privateSubnets: Subnet[] = [];
-  public readonly natGateways: NatGateway[] = [];
-
-  constructor(scope: Construct, id: string, config: NetworkConfig) {
-    super(scope, id);
-
-    // Internet Gateway
-    const igw = new InternetGateway(this, 'igw', {
-      vpcId: config.vpcId,
-      tags: {
-        ...config.tags,
-        Name: `${id}-igw`,
-      },
-    });
-
-    // Public Route Table
-    const publicRouteTable = new RouteTable(this, 'public-rt', {
-      vpcId: config.vpcId,
-      tags: {
-        ...config.tags,
-        Name: `${id}-public-rt`,
-      },
-    });
-
-    // Public Route to Internet
-    new Route(this, 'public-route', {
-      routeTableId: publicRouteTable.id,
-      destinationCidrBlock: '0.0.0.0/0',
-      gatewayId: igw.id,
-    });
-
-    // Create Public Subnets
-    for (let i = 0; i < config.publicSubnetCidrs.length; i++) {
-      const subnet = new Subnet(this, `public-subnet-${i + 1}`, {
-        vpcId: config.vpcId,
-        cidrBlock: config.publicSubnetCidrs[i],
-        availabilityZone: config.availabilityZones[i],
+    // Create public subnets
+    this.publicSubnets = config.publicSubnetCidrs.map((cidr, index) => {
+      return new aws.subnet.Subnet(this, `public-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: config.availabilityZones[index],
         mapPublicIpOnLaunch: true,
         tags: {
           ...config.tags,
-          Name: `${id}-public-subnet-${i + 1}`,
+          Name: `${id}-public-subnet-${index + 1}`,
           'kubernetes.io/role/elb': '1',
+          'kubernetes.io/cluster/eks-production': 'shared',
         },
       });
+    });
 
-      new RouteTableAssociation(this, `public-rt-assoc-${i + 1}`, {
-        subnetId: subnet.id,
-        routeTableId: publicRouteTable.id,
+    // Create private subnets
+    this.privateSubnets = config.privateSubnetCidrs.map((cidr, index) => {
+      return new aws.subnet.Subnet(this, `private-subnet-${index}`, {
+        vpcId: this.vpc.id,
+        cidrBlock: cidr,
+        availabilityZone: config.availabilityZones[index],
+        tags: {
+          ...config.tags,
+          Name: `${id}-private-subnet-${index + 1}`,
+          'kubernetes.io/role/internal-elb': '1',
+          'kubernetes.io/cluster/eks-production': 'shared',
+        },
       });
+    });
 
-      this.publicSubnets.push(subnet);
-    }
-
-    // Create Private Subnets with NAT Gateways
-    for (let i = 0; i < config.privateSubnetCidrs.length; i++) {
-      // EIP for NAT Gateway
-      const eip = new Eip(this, `nat-eip-${i + 1}`, {
+    // Create Elastic IPs for NAT Gateways
+    const elasticIps = this.publicSubnets.map((_, index) => {
+      return new aws.eip.Eip(this, `nat-eip-${index}`, {
         domain: 'vpc',
         tags: {
           ...config.tags,
-          Name: `${id}-nat-eip-${i + 1}`,
+          Name: `${id}-nat-eip-${index + 1}`,
         },
       });
+    });
 
-      // NAT Gateway in public subnet
-      const natGw = new NatGateway(this, `nat-gw-${i + 1}`, {
-        allocationId: eip.id,
-        subnetId: this.publicSubnets[i].id,
-        tags: {
-          ...config.tags,
-          Name: `${id}-nat-gw-${i + 1}`,
-        },
-      });
-
-      this.natGateways.push(natGw);
-
-      // Private Route Table
-      const privateRouteTable = new RouteTable(this, `private-rt-${i + 1}`, {
-        vpcId: config.vpcId,
-        tags: {
-          ...config.tags,
-          Name: `${id}-private-rt-${i + 1}`,
-        },
-      });
-
-      // Private Route to NAT Gateway
-      new Route(this, `private-route-${i + 1}`, {
-        routeTableId: privateRouteTable.id,
-        destinationCidrBlock: '0.0.0.0/0',
-        natGatewayId: natGw.id,
-      });
-
-      // Create Private Subnet
-      const subnet = new Subnet(this, `private-subnet-${i + 1}`, {
-        vpcId: config.vpcId,
-        cidrBlock: config.privateSubnetCidrs[i],
-        availabilityZone: config.availabilityZones[i],
-        tags: {
-          ...config.tags,
-          Name: `${id}-private-subnet-${i + 1}`,
-          'kubernetes.io/role/internal-elb': '1',
-        },
-      });
-
-      new RouteTableAssociation(this, `private-rt-assoc-${i + 1}`, {
+    // Create NAT Gateways
+    this.natGateways = this.publicSubnets.map((subnet, index) => {
+      return new aws.natGateway.NatGateway(this, `nat-gateway-${index}`, {
+        allocationId: elasticIps[index].id,
         subnetId: subnet.id,
-        routeTableId: privateRouteTable.id,
+        tags: {
+          ...config.tags,
+          Name: `${id}-nat-gateway-${index + 1}`,
+        },
       });
+    });
 
-      this.privateSubnets.push(subnet);
-    }
+    // Create route tables
+    this.createRouteTables(config.tags, id);
   }
-}
 
-// Security Group Module
-export interface SecurityGroupConfig {
-  name: string;
-  vpcId: string;
-  ingressRules: {
-    fromPort: number;
-    toPort: number;
-    protocol: string;
-    cidrBlocks: string[];
-    description: string;
-  }[];
-  egressRules: {
-    fromPort: number;
-    toPort: number;
-    protocol: string;
-    cidrBlocks: string[];
-    description: string;
-  }[];
-  tags: { [key: string]: string };
-}
-
-export class SecurityGroupConstruct extends Construct {
-  public readonly securityGroup: SecurityGroup;
-
-  constructor(scope: Construct, id: string, config: SecurityGroupConfig) {
-    super(scope, id);
-
-    this.securityGroup = new SecurityGroup(this, 'security-group', {
-      name: config.name,
-      vpcId: config.vpcId,
-      description: `Security group for ${config.name}`,
+  private createRouteTables(tags: { [key: string]: string }, prefix: string) {
+    // Public route table
+    const publicRouteTable = new aws.routeTable.RouteTable(this, 'public-rt', {
+      vpcId: this.vpc.id,
       tags: {
-        ...config.tags,
-        Name: config.name,
+        ...tags,
+        Name: `${prefix}-public-rt`,
       },
     });
 
-    // Ingress Rules
-    config.ingressRules.forEach((rule, index) => {
-      new SecurityGroupRule(this, `ingress-rule-${index}`, {
-        securityGroupId: this.securityGroup.id,
-        type: 'ingress',
-        fromPort: rule.fromPort,
-        toPort: rule.toPort,
-        protocol: rule.protocol,
-        cidrBlocks: rule.cidrBlocks,
-        description: rule.description,
-      });
+    // Public route to Internet Gateway
+    new aws.route.Route(this, 'public-route', {
+      routeTableId: publicRouteTable.id,
+      destinationCidrBlock: '0.0.0.0/0',
+      gatewayId: this.internetGateway.id,
     });
 
-    // Egress Rules
-    config.egressRules.forEach((rule, index) => {
-      new SecurityGroupRule(this, `egress-rule-${index}`, {
-        securityGroupId: this.securityGroup.id,
-        type: 'egress',
-        fromPort: rule.fromPort,
-        toPort: rule.toPort,
-        protocol: rule.protocol,
-        cidrBlocks: rule.cidrBlocks,
-        description: rule.description,
+    // Associate public subnets with public route table
+    this.publicSubnets.forEach((subnet, index) => {
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `public-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: publicRouteTable.id,
+        }
+      );
+    });
+
+    // Private route tables (one per AZ for high availability)
+    this.privateSubnets.forEach((subnet, index) => {
+      const privateRouteTable = new aws.routeTable.RouteTable(
+        this,
+        `private-rt-${index}`,
+        {
+          vpcId: this.vpc.id,
+          tags: {
+            ...tags,
+            Name: `${prefix}-private-rt-${index + 1}`,
+          },
+        }
+      );
+
+      // Route to NAT Gateway
+      new aws.route.Route(this, `private-route-${index}`, {
+        routeTableId: privateRouteTable.id,
+        destinationCidrBlock: '0.0.0.0/0',
+        natGatewayId: this.natGateways[index].id,
       });
+
+      // Associate private subnet with route table
+      new aws.routeTableAssociation.RouteTableAssociation(
+        this,
+        `private-rta-${index}`,
+        {
+          subnetId: subnet.id,
+          routeTableId: privateRouteTable.id,
+        }
+      );
+    });
+  }
+}
+
+export class EksSecurityGroups extends Construct {
+  public readonly clusterSecurityGroup: aws.securityGroup.SecurityGroup;
+  public readonly nodeSecurityGroup: aws.securityGroup.SecurityGroup;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    vpcId: string,
+    tags: { [key: string]: string }
+  ) {
+    super(scope, id);
+
+    // Cluster security group
+    this.clusterSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'cluster-sg',
+      {
+        name: `${id}-cluster-sg`,
+        description: 'Security group for EKS cluster control plane',
+        vpcId: vpcId,
+        tags: {
+          ...tags,
+          Name: `${id}-cluster-sg`,
+        },
+      }
+    );
+
+    // Node security group
+    this.nodeSecurityGroup = new aws.securityGroup.SecurityGroup(
+      this,
+      'node-sg',
+      {
+        name: `${id}-node-sg`,
+        description: 'Security group for EKS worker nodes',
+        vpcId: vpcId,
+        tags: {
+          ...tags,
+          Name: `${id}-node-sg`,
+        },
+      }
+    );
+
+    // Security group rules
+    this.createSecurityGroupRules();
+  }
+
+  private createSecurityGroupRules() {
+    // Allow nodes to communicate with cluster API
+    new aws.securityGroupRule.SecurityGroupRule(this, 'node-to-cluster-api', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      securityGroupId: this.clusterSecurityGroup.id,
+      sourceSecurityGroupId: this.nodeSecurityGroup.id,
+      description: 'Allow nodes to communicate with the cluster API',
+    });
+
+    // Allow cluster API to communicate with nodes
+    new aws.securityGroupRule.SecurityGroupRule(this, 'cluster-to-node-api', {
+      type: 'ingress',
+      fromPort: 443,
+      toPort: 443,
+      protocol: 'tcp',
+      securityGroupId: this.nodeSecurityGroup.id,
+      sourceSecurityGroupId: this.clusterSecurityGroup.id,
+      description: 'Allow cluster API to communicate with nodes',
+    });
+
+    // Allow nodes to communicate with each other
+    new aws.securityGroupRule.SecurityGroupRule(this, 'node-to-node-all', {
+      type: 'ingress',
+      fromPort: 0,
+      toPort: 65535,
+      protocol: '-1',
+      securityGroupId: this.nodeSecurityGroup.id,
+      sourceSecurityGroupId: this.nodeSecurityGroup.id,
+      description: 'Allow nodes to communicate with each other',
+    });
+
+    // Allow cluster to communicate with nodes on ephemeral ports
+    new aws.securityGroupRule.SecurityGroupRule(
+      this,
+      'cluster-to-node-ephemeral',
+      {
+        type: 'ingress',
+        fromPort: 1025,
+        toPort: 65535,
+        protocol: 'tcp',
+        securityGroupId: this.nodeSecurityGroup.id,
+        sourceSecurityGroupId: this.clusterSecurityGroup.id,
+        description:
+          'Allow cluster to communicate with nodes on ephemeral ports',
+      }
+    );
+
+    // Egress rules
+    new aws.securityGroupRule.SecurityGroupRule(this, 'cluster-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      securityGroupId: this.clusterSecurityGroup.id,
+      cidrBlocks: ['0.0.0.0/0'],
+      description: 'Allow all outbound traffic from cluster',
+    });
+
+    new aws.securityGroupRule.SecurityGroupRule(this, 'node-egress-all', {
+      type: 'egress',
+      fromPort: 0,
+      toPort: 0,
+      protocol: '-1',
+      securityGroupId: this.nodeSecurityGroup.id,
+      cidrBlocks: ['0.0.0.0/0'],
+      description: 'Allow all outbound traffic from nodes',
+    });
+  }
+}
+
+export class IamRoles extends Construct {
+  public readonly eksClusterRole: aws.iamRole.IamRole;
+  public readonly eksNodeRole: aws.iamRole.IamRole;
+  public readonly clusterAutoscalerRole: aws.iamRole.IamRole;
+  public readonly awsLoadBalancerControllerRole: aws.iamRole.IamRole;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    clusterName: string,
+    oidcProviderArn: string,
+    oidcProviderUrl: string,
+    tags: { [key: string]: string }
+  ) {
+    super(scope, id);
+
+    // EKS Cluster Role
+    this.eksClusterRole = new aws.iamRole.IamRole(this, 'eks-cluster-role', {
+      name: `${clusterName}-cluster-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'eks.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: tags,
+    });
+
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'eks-cluster-policy',
+      {
+        role: this.eksClusterRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy',
+      }
+    );
+
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'eks-service-policy',
+      {
+        role: this.eksClusterRole.name,
+        policyArn: 'arn:aws:iam::aws:policy/AmazonEKSServicePolicy',
+      }
+    );
+
+    // EKS Node Role
+    this.eksNodeRole = new aws.iamRole.IamRole(this, 'eks-node-role', {
+      name: `${clusterName}-node-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Effect: 'Allow',
+            Principal: {
+              Service: 'ec2.amazonaws.com',
+            },
+            Action: 'sts:AssumeRole',
+          },
+        ],
+      }),
+      tags: tags,
+    });
+
+    const nodePolicies = [
+      'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy',
+      'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy',
+      'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly',
+      'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+    ];
+
+    nodePolicies.forEach((policyArn, index) => {
+      new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+        this,
+        `node-policy-${index}`,
+        {
+          role: this.eksNodeRole.name,
+          policyArn: policyArn,
+        }
+      );
+    });
+
+    // Cluster Autoscaler IRSA Role
+    const oidcProvider = oidcProviderUrl.replace('https://', '');
+
+    this.clusterAutoscalerRole = new aws.iamRole.IamRole(
+      this,
+      'cluster-autoscaler-role',
+      {
+        name: `${clusterName}-cluster-autoscaler`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Federated: oidcProviderArn,
+              },
+              Action: 'sts:AssumeRoleWithWebIdentity',
+              Condition: {
+                StringEquals: {
+                  [`${oidcProvider}:sub`]:
+                    'system:serviceaccount:kube-system:cluster-autoscaler',
+                  [`${oidcProvider}:aud`]: 'sts.amazonaws.com',
+                },
+              },
+            },
+          ],
+        }),
+        tags: tags,
+      }
+    );
+
+    // Cluster Autoscaler Policy
+    const autoscalerPolicy = new aws.iamPolicy.IamPolicy(
+      this,
+      'cluster-autoscaler-policy',
+      {
+        name: `${clusterName}-cluster-autoscaler`,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'autoscaling:DescribeAutoScalingGroups',
+                'autoscaling:DescribeAutoScalingInstances',
+                'autoscaling:DescribeLaunchConfigurations',
+                'autoscaling:DescribeTags',
+                'autoscaling:SetDesiredCapacity',
+                'autoscaling:TerminateInstanceInAutoScalingGroup',
+                'ec2:DescribeLaunchTemplateVersions',
+                'ec2:DescribeInstanceTypes',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+        tags: tags,
+      }
+    );
+
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'autoscaler-policy-attachment',
+      {
+        role: this.clusterAutoscalerRole.name,
+        policyArn: autoscalerPolicy.arn,
+      }
+    );
+
+    // AWS Load Balancer Controller IRSA Role
+    this.awsLoadBalancerControllerRole = new aws.iamRole.IamRole(
+      this,
+      'aws-load-balancer-controller-role',
+      {
+        name: `${clusterName}-aws-load-balancer-controller`,
+        assumeRolePolicy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Principal: {
+                Federated: oidcProviderArn,
+              },
+              Action: 'sts:AssumeRoleWithWebIdentity',
+              Condition: {
+                StringEquals: {
+                  [`${oidcProvider}:sub`]:
+                    'system:serviceaccount:kube-system:aws-load-balancer-controller',
+                  [`${oidcProvider}:aud`]: 'sts.amazonaws.com',
+                },
+              },
+            },
+          ],
+        }),
+        tags: tags,
+      }
+    );
+
+    // AWS Load Balancer Controller Policy
+    const lbControllerPolicy = new aws.iamPolicy.IamPolicy(
+      this,
+      'lb-controller-policy',
+      {
+        name: `${clusterName}-AWSLoadBalancerControllerIAMPolicy`,
+        policy: JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'iam:CreateServiceLinkedRole',
+                'ec2:DescribeAccountAttributes',
+                'ec2:DescribeAddresses',
+                'ec2:DescribeAvailabilityZones',
+                'ec2:DescribeInternetGateways',
+                'ec2:DescribeVpcs',
+                'ec2:DescribeVpcPeeringConnections',
+                'ec2:DescribeSubnets',
+                'ec2:DescribeSecurityGroups',
+                'ec2:DescribeInstances',
+                'ec2:DescribeNetworkInterfaces',
+                'ec2:DescribeTags',
+                'ec2:GetCoipPoolUsage',
+                'ec2:DescribeCoipPools',
+                'elasticloadbalancing:DescribeLoadBalancers',
+                'elasticloadbalancing:DescribeLoadBalancerAttributes',
+                'elasticloadbalancing:DescribeListeners',
+                'elasticloadbalancing:DescribeListenerCertificates',
+                'elasticloadbalancing:DescribeSSLPolicies',
+                'elasticloadbalancing:DescribeRules',
+                'elasticloadbalancing:DescribeTargetGroups',
+                'elasticloadbalancing:DescribeTargetGroupAttributes',
+                'elasticloadbalancing:DescribeTargetHealth',
+                'elasticloadbalancing:DescribeTags',
+              ],
+              Resource: '*',
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'cognito-idp:DescribeUserPoolClient',
+                'acm:ListCertificates',
+                'acm:DescribeCertificate',
+                'iam:ListServerCertificates',
+                'iam:GetServerCertificate',
+                'waf-regional:GetWebACL',
+                'waf-regional:GetWebACLForResource',
+                'waf-regional:AssociateWebACL',
+                'waf-regional:DisassociateWebACL',
+                'wafv2:GetWebACL',
+                'wafv2:GetWebACLForResource',
+                'wafv2:AssociateWebACL',
+                'wafv2:DisassociateWebACL',
+                'shield:GetSubscriptionState',
+                'shield:DescribeProtection',
+                'shield:CreateProtection',
+                'shield:DeleteProtection',
+              ],
+              Resource: '*',
+            },
+            {
+              Effect: 'Allow',
+              Action: [
+                'ec2:AuthorizeSecurityGroupIngress',
+                'ec2:RevokeSecurityGroupIngress',
+                'ec2:CreateSecurityGroup',
+                'ec2:CreateTags',
+                'ec2:DeleteTags',
+                'ec2:DeleteSecurityGroup',
+                'elasticloadbalancing:CreateLoadBalancer',
+                'elasticloadbalancing:CreateTargetGroup',
+                'elasticloadbalancing:CreateListener',
+                'elasticloadbalancing:DeleteListener',
+                'elasticloadbalancing:CreateRule',
+                'elasticloadbalancing:DeleteRule',
+                'elasticloadbalancing:AddTags',
+                'elasticloadbalancing:RemoveTags',
+                'elasticloadbalancing:ModifyLoadBalancerAttributes',
+                'elasticloadbalancing:SetIpAddressType',
+                'elasticloadbalancing:SetSecurityGroups',
+                'elasticloadbalancing:SetSubnets',
+                'elasticloadbalancing:DeleteLoadBalancer',
+                'elasticloadbalancing:ModifyTargetGroup',
+                'elasticloadbalancing:ModifyTargetGroupAttributes',
+                'elasticloadbalancing:RegisterTargets',
+                'elasticloadbalancing:DeregisterTargets',
+                'elasticloadbalancing:DeleteTargetGroup',
+                'elasticloadbalancing:SetWebAcl',
+                'elasticloadbalancing:ModifyListener',
+                'elasticloadbalancing:AddListenerCertificates',
+                'elasticloadbalancing:RemoveListenerCertificates',
+                'elasticloadbalancing:ModifyRule',
+              ],
+              Resource: '*',
+            },
+          ],
+        }),
+        tags: tags,
+      }
+    );
+
+    new aws.iamRolePolicyAttachment.IamRolePolicyAttachment(
+      this,
+      'lb-controller-policy-attachment',
+      {
+        role: this.awsLoadBalancerControllerRole.name,
+        policyArn: lbControllerPolicy.arn,
+      }
+    );
+  }
+}
+
+export class EcrRepository extends Construct {
+  public readonly repository: aws.ecrRepository.EcrRepository;
+  public readonly repositoryUrl: string;
+
+  constructor(
+    scope: Construct,
+    id: string,
+    name: string,
+    tags: { [key: string]: string }
+  ) {
+    super(scope, id);
+
+    this.repository = new aws.ecrRepository.EcrRepository(this, 'repository', {
+      name: name,
+      imageTagMutability: 'MUTABLE',
+      imageScanningConfiguration: {
+        scanOnPush: true,
+      },
+      encryptionConfiguration: [
+        {
+          encryptionType: 'AES256',
+        },
+      ] as any,
+      tags: tags,
+    });
+
+    // Lifecycle policy to keep only last 30 images
+    new aws.ecrLifecyclePolicy.EcrLifecyclePolicy(this, 'lifecycle-policy', {
+      repository: this.repository.name,
+      policy: JSON.stringify({
+        rules: [
+          {
+            rulePriority: 1,
+            description: 'Keep last 30 images',
+            selection: {
+              tagStatus: 'any',
+              countType: 'imageCountMoreThan',
+              countNumber: 30,
+            },
+            action: {
+              type: 'expire',
+            },
+          },
+        ],
+      }),
+    });
+
+    this.repositoryUrl = this.repository.repositoryUrl;
+  }
+}
+
+export class EksNodeGroup extends Construct {
+  public readonly nodeGroup: aws.eksNodeGroup.EksNodeGroup;
+
+  constructor(scope: Construct, id: string, config: EksNodeGroupConfig) {
+    super(scope, id);
+
+    this.nodeGroup = new aws.eksNodeGroup.EksNodeGroup(this, 'node-group', {
+      clusterName: config.clusterName,
+      nodeGroupName: id,
+      nodeRoleArn: config.nodeRoleName,
+      subnetIds: config.subnetIds,
+      instanceTypes: config.instanceTypes,
+      capacityType: config.capacityType || 'ON_DEMAND',
+      scalingConfig: {
+        desiredSize: config.scalingConfig.desired,
+        minSize: config.scalingConfig.min,
+        maxSize: config.scalingConfig.max,
+      },
+      labels: config.labels,
+      taint: config.taint,
+      tags: config.tags,
+      updateConfig: {
+        maxUnavailable: 1,
+      },
     });
   }
 }
