@@ -1,5 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 
 export interface ComputeStackArgs {
   environmentSuffix: string;
@@ -46,6 +47,19 @@ export class ComputeStack extends pulumi.ComponentResource {
 
     // Skip HTTPS for test/PR environments to avoid ACM certificate validation timeouts
     const enableHttps = !environmentSuffix.toLowerCase().startsWith('pr');
+
+    // Generate random suffix to avoid resource name conflicts
+    const randomSuffix = new random.RandomString(
+      `compute-random-suffix-${environmentSuffix}`,
+      {
+        length: 8,
+        special: false,
+        upper: false,
+        lower: true,
+        numeric: true,
+      },
+      { parent: this }
+    );
 
     // Get latest Amazon Linux 2 AMI for primary region
     const primaryAmi = aws.ec2.getAmi(
@@ -246,7 +260,7 @@ echo "OK" > /var/www/html/health.html
     const primaryLaunchTemplate = new aws.ec2.LaunchTemplate(
       `primary-lt-${environmentSuffix}`,
       {
-        namePrefix: `primary-lt-${environmentSuffix}`,
+        namePrefix: pulumi.interpolate`primary-lt-${environmentSuffix}-${randomSuffix.result}-`,
         imageId: pulumi.output(primaryAmi).apply(ami => ami.id),
         instanceType: 't3.medium',
         vpcSecurityGroupIds: [primaryInstanceSg.id],
@@ -264,7 +278,7 @@ echo "OK" > /var/www/html/health.html
     const drLaunchTemplate = new aws.ec2.LaunchTemplate(
       `dr-lt-${environmentSuffix}`,
       {
-        namePrefix: `dr-lt-${environmentSuffix}`,
+        namePrefix: pulumi.interpolate`dr-lt-${environmentSuffix}-${randomSuffix.result}-`,
         imageId: pulumi.output(drAmi).apply(ami => ami.id),
         instanceType: 't3.medium',
         vpcSecurityGroupIds: [drInstanceSg.id],
@@ -282,7 +296,7 @@ echo "OK" > /var/www/html/health.html
     const primaryTargetGroup = new aws.lb.TargetGroup(
       `primary-tg-${environmentSuffix}`,
       {
-        name: `primary-tg-${environmentSuffix}`,
+        name: pulumi.interpolate`primary-tg-${environmentSuffix}-${randomSuffix.result}`,
         port: 80,
         protocol: 'HTTP',
         vpcId: primaryVpcId,
@@ -309,7 +323,7 @@ echo "OK" > /var/www/html/health.html
     const drTargetGroup = new aws.lb.TargetGroup(
       `dr-tg-${environmentSuffix}`,
       {
-        name: `dr-tg-${environmentSuffix}`,
+        name: pulumi.interpolate`dr-tg-${environmentSuffix}-${randomSuffix.result}`,
         port: 80,
         protocol: 'HTTP',
         vpcId: drVpcId,
@@ -336,7 +350,7 @@ echo "OK" > /var/www/html/health.html
     const _primaryAsg = new aws.autoscaling.Group(
       `primary-asg-${environmentSuffix}`,
       {
-        name: `primary-asg-${environmentSuffix}`,
+        name: pulumi.interpolate`primary-asg-${environmentSuffix}-${randomSuffix.result}`,
         vpcZoneIdentifiers: primaryPrivateSubnetIds,
         targetGroupArns: [primaryTargetGroup.arn],
         minSize: 2,
@@ -374,7 +388,7 @@ echo "OK" > /var/www/html/health.html
     const _drAsg = new aws.autoscaling.Group(
       `dr-asg-${environmentSuffix}`,
       {
-        name: `dr-asg-${environmentSuffix}`,
+        name: pulumi.interpolate`dr-asg-${environmentSuffix}-${randomSuffix.result}`,
         vpcZoneIdentifiers: drPrivateSubnetIds,
         targetGroupArns: [drTargetGroup.arn],
         minSize: 2,
@@ -412,7 +426,7 @@ echo "OK" > /var/www/html/health.html
     const primaryAlb = new aws.lb.LoadBalancer(
       `primary-alb-${environmentSuffix}`,
       {
-        name: `primary-alb-${environmentSuffix}`,
+        name: pulumi.interpolate`primary-alb-${environmentSuffix}-${randomSuffix.result}`,
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [primaryAlbSg.id],
@@ -432,7 +446,7 @@ echo "OK" > /var/www/html/health.html
     const drAlb = new aws.lb.LoadBalancer(
       `dr-alb-${environmentSuffix}`,
       {
-        name: `dr-alb-${environmentSuffix}`,
+        name: pulumi.interpolate`dr-alb-${environmentSuffix}-${randomSuffix.result}`,
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [drAlbSg.id],
