@@ -64,17 +64,14 @@ data "aws_region" "current" {}
 
 data "aws_caller_identity" "current" {}
 
-# Get latest Deep Learning AMI (Ubuntu 20.04 GPU)
-data "aws_ssm_parameter" "dlami" {
-  name = "/aws/service/deeplearning/ami-ubuntu-20.04-x86_64-gpu/latest"
-}
-
+# Get latest Deep Learning AMI
 data "aws_ami" "deep_learning" {
-  owners = ["amazon"]
+  most_recent = true
+  owners      = ["amazon"]
 
   filter {
-    name   = "image-id"
-    values = [data.aws_ssm_parameter.dlami.value]
+    name   = "name"
+    values = ["Deep Learning AMI Neuron (Ubuntu 22.04) 20250718*"]
   }
 }
 
