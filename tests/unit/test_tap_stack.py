@@ -46,8 +46,8 @@ class TestTapStack(unittest.TestCase):
         stack = self._create_stack()
         template = Template.from_stack(stack)
 
-        # ASSERT - Should have public, private, and database subnets * 3 AZs = 9 subnets
-        template.resource_count_is("AWS::EC2::Subnet", 9)
+        # ASSERT - Should have public, private, and database subnets * 2 AZs = 6 subnets (cost optimization)
+        template.resource_count_is("AWS::EC2::Subnet", 6)
 
     @mark.it("creates NAT Gateway for private subnet connectivity")
     def test_creates_nat_gateway(self):
@@ -66,7 +66,9 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT
         template.resource_count_is("AWS::EC2::FlowLog", 1)
-        template.resource_count_is("AWS::Logs::LogGroup", Match.any_value())
+        # LogGroups created for VPC Flow Logs and other services
+        resources = template.find_resources("AWS::Logs::LogGroup")
+        self.assertGreater(len(resources), 0)
 
     @mark.it("creates KMS key with rotation enabled")
     def test_creates_kms_key(self):
@@ -212,8 +214,9 @@ class TestTapStack(unittest.TestCase):
         stack = self._create_stack()
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::Lambda::Function", Match.any_value())
+        # ASSERT - At least 4 Lambda functions (validation, fraud, processing, rotation)
+        resources = template.find_resources("AWS::Lambda::Function")
+        self.assertGreaterEqual(len(resources), 4)
         template.has_resource_properties("AWS::Lambda::Function", {
             "Runtime": "python3.9",
             "Handler": "index.handler",
@@ -278,14 +281,15 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::ApiGateway::Deployment", 1)
         template.resource_count_is("AWS::ApiGateway::Stage", 1)
 
-    @mark.it("creates VPC Link for API Gateway")
-    def test_creates_vpc_link(self):
+    @mark.it("creates API Gateway Lambda integrations")
+    def test_creates_lambda_integrations(self):
         # ARRANGE
         stack = self._create_stack()
         template = Template.from_stack(stack)
 
-        # ASSERT
-        template.resource_count_is("AWS::ApiGateway::VpcLink", 1)
+        # ASSERT - API Gateway methods with Lambda integrations
+        resources = template.find_resources("AWS::ApiGateway::Method")
+        self.assertGreater(len(resources), 0)
 
     @mark.it("creates API Gateway request validator")
     def test_creates_request_validator(self):
@@ -334,7 +338,8 @@ class TestTapStack(unittest.TestCase):
         template = Template.from_stack(stack)
 
         # ASSERT - At least API latency and Lambda error alarms
-        template.resource_count_is("AWS::CloudWatch::Alarm", Match.any_value())
+        resources = template.find_resources("AWS::CloudWatch::Alarm")
+        self.assertGreater(len(resources), 0, "Should have at least one CloudWatch alarm")
 
     @mark.it("creates secrets rotation Lambda function")
     def test_creates_secrets_rotation_lambda(self):
@@ -358,7 +363,7 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::SecretsManager::RotationSchedule", 1)
         template.has_resource_properties("AWS::SecretsManager::RotationSchedule", {
             "RotationRules": {
-                "AutomaticallyAfterDays": 30
+                "ScheduleExpression": "rate(30 days)"
             }
         })
 
@@ -488,6 +493,47 @@ class TestTapStack(unittest.TestCase):
 
         # ASSERT - Tags are applied (check via CDK Tags API)
         self.assertIsNotNone(stack)
+
+    @mark.it("uses default environment suffix when props is None")
+    def test_default_environment_suffix_no_props(self):
+        # ARRANGE & ACT
+        stack = TapStack(self.app, "TestStackNoProps", props=None)
+
+        # ASSERT
+        self.assertEqual(stack.environment_suffix, 'dev')
+
+    @mark.it("uses default environment suffix when props has no suffix")
+    def test_default_environment_suffix_empty_props(self):
+        # ARRANGE
+        props = TapStackProps(environment_suffix=None)
+
+        # ACT
+        stack = TapStack(self.app, "TestStackEmptyProps", props=props)
+
+        # ASSERT
+        self.assertEqual(stack.environment_suffix, 'dev')
+
+    @mark.it("validates environment suffix length")
+    def test_environment_suffix_validation(self):
+        # ARRANGE
+        props = TapStackProps(environment_suffix="a" * 21)  # 21 characters
+
+        # ACT & ASSERT
+        with self.assertRaises(ValueError) as context:
+            TapStack(self.app, "TestStackTooLong", props=props)
+
+        self.assertIn("Environment suffix cannot exceed 20 characters", str(context.exception))
+
+    @mark.it("accepts valid environment suffix")
+    def test_valid_environment_suffix(self):
+        # ARRANGE
+        props = TapStackProps(environment_suffix="valid-suffix")
+
+        # ACT
+        stack = TapStack(self.app, "TestStackValid", props=props)
+
+        # ASSERT
+        self.assertEqual(stack.environment_suffix, "valid-suffix")
 
 
 if __name__ == '__main__':

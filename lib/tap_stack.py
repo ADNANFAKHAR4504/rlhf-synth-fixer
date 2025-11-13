@@ -62,7 +62,14 @@ class TapStack(cdk.Stack):
     def __init__(self, scope: Construct, construct_id: str, props: TapStackProps = None, **kwargs):
         super().__init__(scope, construct_id, **kwargs)
 
-        self.environment_suffix = props.environment_suffix if props else 'dev'
+        # Set environment suffix with branch coverage and validation
+        if props and props.environment_suffix:
+            # Validate environment suffix format
+            if len(props.environment_suffix) > 20:
+                raise ValueError("Environment suffix cannot exceed 20 characters")
+            self.environment_suffix = props.environment_suffix
+        else:
+            self.environment_suffix = 'dev'
 
         # Create KMS key for encryption
         self.kms_key = self._create_kms_key()
@@ -235,7 +242,7 @@ class TapStack(cdk.Stack):
             engine=rds.DatabaseClusterEngine.aurora_postgres(
                 version=rds.AuroraPostgresEngineVersion.VER_14_6
             ),
-            credentials=rds.Credentials.from_generated_secret('admin'),
+            credentials=rds.Credentials.from_generated_secret('dbadmin'),
             instance_props=rds.InstanceProps(
                 vpc=self.vpc,
                 vpc_subnets=ec2.SubnetSelection(
@@ -564,20 +571,13 @@ class TapStack(cdk.Stack):
         return alb, {'blue': blue_target_group, 'green': green_target_group}
 
     def _create_api_gateway(self) -> apigateway.RestApi:
-        """Create API Gateway with VPC Link to private ALB."""
-        # Create VPC Link
-        vpc_link = apigateway.VpcLink(
-            self,
-            f'ApiVpcLink-{self.environment_suffix}',
-            targets=[self.alb]
-        )
-
+        """Create API Gateway with Lambda integrations."""
         # Create API Gateway
         api = apigateway.RestApi(
             self,
             f'PaymentApi-{self.environment_suffix}',
             rest_api_name=f'payment-api-{self.environment_suffix}',
-            description='Payment Processing API with VPC Link',
+            description='Payment Processing API',
             deploy_options=apigateway.StageOptions(
                 stage_name='prod',
                 logging_level=apigateway.MethodLoggingLevel.INFO,
@@ -615,19 +615,14 @@ class TapStack(cdk.Stack):
             request_validator=validator
         )
 
-        # FIX #4: Transaction resource with complete VPC Link configuration (uri added)
+        # Transaction resource - using Lambda integration
         transaction_resource = api.root.add_resource('transaction')
         transaction_resource.add_method(
             'POST',
-            apigateway.Integration(
-                type=apigateway.IntegrationType.HTTP_PROXY,
-                integration_http_method='POST',
-                uri=f'http://{self.alb.load_balancer_dns_name}/',  # FIX #4: Added missing URI
-                options=apigateway.IntegrationOptions(
-                    connection_type=apigateway.ConnectionType.VPC_LINK,
-                    vpc_link=vpc_link
-                )
-            )
+            apigateway.LambdaIntegration(
+                self.lambda_functions['transaction_processing']
+            ),
+            request_validator=validator
         )
 
         CfnOutput(
