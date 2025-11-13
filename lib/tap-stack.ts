@@ -77,7 +77,7 @@ export class TapStack extends TerraformStack {
     // 1. Create VPC with networking components
     const networkingConfig: NetworkingConfig = {
       vpcCidr: '10.0.0.0/16',
-      availabilityZones: Fn.slice(azs.names, 0, 2),
+      availabilityZones: [azs.names[0], azs.names[1]],
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
       privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
       tags: commonTags,
