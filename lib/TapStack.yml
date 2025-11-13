@@ -1623,6 +1623,7 @@ Resources:
   # ==================== APPLICATION LOAD BALANCER ====================
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: ALBAccessLogsBucketPolicy
     Properties:
       Name: !Sub '${EnvironmentName}-meridian-alb'
       Scheme: internet-facing
@@ -1682,6 +1683,7 @@ Resources:
     Properties:
       Bucket: !Ref ALBAccessLogsBucket
       PolicyDocument:
+        Version: '2012-10-17'
         Statement:
           - Sid: AllowALBAccessLogs
             Effect: Allow
@@ -1690,6 +1692,14 @@ Resources:
             Action:
               - 's3:PutObject'
             Resource: !Sub '${ALBAccessLogsBucket.Arn}/*'
+          - Sid: AllowALBBucketCheck
+            Effect: Allow
+            Principal:
+              Service: elasticloadbalancing.amazonaws.com
+            Action:
+              - 's3:GetBucketAcl'
+              - 's3:PutBucketAcl'
+            Resource: !GetAtt ALBAccessLogsBucket.Arn
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
