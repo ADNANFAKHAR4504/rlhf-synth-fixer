@@ -69,6 +69,20 @@ resource "aws_kms_key" "config_key" {
   deletion_window_in_days = 10
   enable_key_rotation     = true
 
+  tags = {
+    Name        = "compliance-kms-${var.environment_suffix}"
+    Environment = var.environment_suffix
+  }
+}
+
+resource "aws_kms_alias" "config_key" {
+  name          = "alias/compliance-${var.environment_suffix}"
+  target_key_id = aws_kms_key.config_key.key_id
+}
+
+resource "aws_kms_key_policy" "config_key" {
+  key_id = aws_kms_key.config_key.id
+
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -79,7 +93,7 @@ resource "aws_kms_key" "config_key" {
           AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
         }
         Action   = "kms:*"
-        Resource = "*"
+        Resource = aws_kms_key.config_key.arn
       },
       {
         Sid    = "Allow AWS Config to use the key"
@@ -91,7 +105,7 @@ resource "aws_kms_key" "config_key" {
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = "*"
+        Resource = aws_kms_key.config_key.arn
       },
       {
         Sid    = "Allow Lambda to use the key"
@@ -103,7 +117,7 @@ resource "aws_kms_key" "config_key" {
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = "*"
+        Resource = aws_kms_key.config_key.arn
       },
       {
         Sid    = "Allow SNS to use the key"
@@ -115,7 +129,7 @@ resource "aws_kms_key" "config_key" {
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = "*"
+        Resource = aws_kms_key.config_key.arn
       },
       {
         Sid    = "Allow S3 to use the key"
@@ -127,20 +141,15 @@ resource "aws_kms_key" "config_key" {
           "kms:Decrypt",
           "kms:GenerateDataKey"
         ]
-        Resource = "*"
+        Resource = aws_kms_key.config_key.arn
+        Condition = {
+          StringEquals = {
+            "kms:ViaService" = "s3.${var.aws_region}.amazonaws.com"
+          }
+        }
       }
     ]
   })
-
-  tags = {
-    Name        = "compliance-kms-${var.environment_suffix}"
-    Environment = var.environment_suffix
-  }
-}
-
-resource "aws_kms_alias" "config_key" {
-  name          = "alias/compliance-${var.environment_suffix}"
-  target_key_id = aws_kms_key.config_key.key_id
 }
 
 # IAM Role for AWS Config

@@ -78,7 +78,7 @@ terraform apply \
 | `compliance_rules` | List of Config rules to enable | list(string) | See variables.tf | No |
 | `enable_auto_remediation` | Enable automatic remediation | bool | true | No |
 | `sns_email_endpoint` | Email for notifications | string | "" | No |
-| `config_snapshot_frequency` | Config snapshot frequency | string | One_Hour | No |
+| `config_snapshot_frequency` | Config snapshot frequency | string | Three_Hours | No |
 
 ## Outputs
 
@@ -101,6 +101,21 @@ cd lib/lambda
 zip -r remediation.zip index.py
 cd ../..
 ```
+
+> This function currently relies only on the AWS SDK (`boto3`) that ships with the Lambda runtime.  
+> If you add third-party libraries, install them into the `lib/lambda` directory before zipping:
+> `python -m pip install -r requirements.txt --target .`.
+
+### Rebuilding and Verifying the Remediation Package
+
+```bash
+cd lib/lambda
+zip -r remediation.zip index.py
+ls -lh remediation.zip  # sanity-check package size (~kilobytes today)
+cd ../..
+```
+
+Keeping these commands in source control makes it easy for reviewers to reproduce the `.zip` if the Lambda code changes.
 
 ## Monitoring
 
@@ -125,6 +140,7 @@ terraform output compliance_dashboard_url
 
 ## Cost Considerations
 
+- **Config Snapshots**: The default snapshot frequency is now `Three_Hours`, which cuts AWS Config snapshot charges by ~66% compared to hourly runs while still providing timely visibility. Increase the frequency only when compliance requirements demand it.
 - **AWS Config**: ~$2/rule/region/month + $0.003/configuration item
 - **Lambda**: Free tier covers most usage (1M requests/month)
 - **S3**: Minimal cost with lifecycle policies
