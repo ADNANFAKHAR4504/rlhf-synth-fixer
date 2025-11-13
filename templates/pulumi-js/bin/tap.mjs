@@ -9,19 +9,22 @@
  * different deployment environments (development, staging, production, etc.).
  */
 import * as pulumi from '@pulumi/pulumi';
+import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack.mjs';
 
 // Initialize Pulumi configuration for the current stack.
 const config = new pulumi.Config();
 
-// Get the environment suffix from the Pulumi config, defaulting to 'dev'.
-// You can set this value using the command: `pulumi config set env <value>`
-const environmentSuffix = config.get('env') || 'dev';
+// Get the environment suffix from environment variables, defaulting to 'dev'.
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 
 // Get metadata from environment variables for tagging purposes.
 // These are often injected by CI/CD systems.
-const repository = config.get('repository') || 'unknown';
-const commitAuthor = config.get('commitAuthor') || 'unknown';
+const repository = process.env.REPOSITORY || 'unknown';
+const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+const prNumber = process.env.PR_NUMBER || 'unknown';
+const team = process.env.TEAM || 'unknown';
+const createdAt = new Date().toISOString();
 
 // Define a set of default tags to apply to all resources.
 // While not explicitly used in the TapStack instantiation here,
@@ -31,14 +34,25 @@ const defaultTags = {
   Environment: environmentSuffix,
   Repository: repository,
   Author: commitAuthor,
+  PRNumber: prNumber,
+  Team: team,
+  CreatedAt: createdAt,
 };
+
+// Configure AWS provider with default tags
+const provider = new aws.Provider('aws', {
+  region: process.env.AWS_REGION || 'us-east-1',
+  defaultTags: {
+    tags: defaultTags,
+  },
+});
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
 const stack = new TapStack('pulumi-infra', {
   environmentSuffix: environmentSuffix,
   tags: defaultTags,
-});
+}, { provider });
 
 // Export the stack outputs for verification
 export const bucketName = stack.bucketName;

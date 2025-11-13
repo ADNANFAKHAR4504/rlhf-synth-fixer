@@ -10,11 +10,17 @@ const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 const repositoryName = process.env.REPOSITORY || 'unknown';
 const commitAuthor = process.env.COMMIT_AUTHOR || 'unknown';
+const prNumber = process.env.PR_NUMBER || 'unknown';
+const team = process.env.TEAM || 'unknown';
+const createdAt = new Date().toISOString();
 
 // Apply tags to all stacks in this app (optional - you can do this at stack level instead)
 Tags.of(app).add('Environment', environmentSuffix);
 Tags.of(app).add('Repository', repositoryName);
 Tags.of(app).add('Author', commitAuthor);
+Tags.of(app).add('PRNumber', prNumber);
+Tags.of(app).add('Team', team);
+Tags.of(app).add('CreatedAt', createdAt);
 
 new TapStack(app, stackName, {
   stackName: stackName, // This ensures CloudFormation stack name includes the suffix
