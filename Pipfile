@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 aws-cdk-aws-lambda-python-alpha = "*"
 cdktf = "0.21.0"
-cdktf-cdktf-provider-aws = "21.9.1"
 pulumi_random = "*"
 pulumi = "*"
 pulumi-aws = "*"
@@ -20,6 +19,7 @@ constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 tabulate = "*"
+cdktf-cdktf-provider-aws = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -33,8 +33,8 @@ cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
 pillow = "*"
-pytest-cov = "*"
 psycopg2-binary = "*"
+pytest-cov = "*"
 yamllint = "*"
 
 [requires]

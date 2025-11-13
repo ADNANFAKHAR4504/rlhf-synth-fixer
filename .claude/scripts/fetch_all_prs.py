@@ -1,20 +1,32 @@
 #!/usr/bin/env python3
+import argparse
 import json
 import subprocess
 import sys
 from datetime import datetime
 
-# Get list of OPEN PR numbers for mayanksethi-turing
+# Parse command-line arguments
+parser = argparse.ArgumentParser(description='Fetch and analyze open PRs from GitHub')
+parser.add_argument('--assignee', default='mayanksethi-turing',
+                    help='Filter PRs by assignee (default: mayanksethi-turing)')
+parser.add_argument('--output', default='.claude/open_pr_status.json',
+                    help='Output JSON file path (default: .claude/open_pr_status.json)')
+args = parser.parse_args()
+
+ASSIGNEE = args.assignee
+OUTPUT_FILE = args.output
+
+# Get list of OPEN PR numbers for the specified assignee
 try:
     result = subprocess.run(
-        ['gh', 'pr', 'list', '--author', 'mayanksethi-turing', '--state', 'open', '--limit', '100', '--json', 'number'],
+        ['gh', 'pr', 'list', '--author', ASSIGNEE, '--state', 'open', '--limit', '100', '--json', 'number'],
         capture_output=True,
         text=True,
         timeout=30
     )
     pr_list = json.loads(result.stdout)
     pr_numbers = [pr['number'] for pr in pr_list]
-    print(f"Initial list: {len(pr_numbers)} OPEN PRs for mayanksethi-turing", file=sys.stderr)
+    print(f"Initial list: {len(pr_numbers)} OPEN PRs for {ASSIGNEE}", file=sys.stderr)
 except Exception as e:
     print(f"Error getting PR list: {e}", file=sys.stderr)
     sys.exit(1)
@@ -174,7 +186,7 @@ for pr in results:
 output_data = {
     'metadata': {
         'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'author': 'mayanksethi-turing',
+        'assignee': ASSIGNEE,
         'repository': 'TuringGpt/iac-test-automations',
         'total_open_prs': len(results)
     },
@@ -207,10 +219,10 @@ output_data = {
 }
 
 # Write to JSON file with pretty formatting
-with open('.claude/open_pr_status.json', 'w') as jsonfile:
+with open(OUTPUT_FILE, 'w') as jsonfile:
     json.dump(output_data, jsonfile, indent=2, ensure_ascii=False)
 
 # Print statistics
-print(f"\nProcessed {len(results)} valid OPEN PRs for mayanksethi-turing", file=sys.stderr)
+print(f"\nProcessed {len(results)} valid OPEN PRs for {ASSIGNEE}", file=sys.stderr)
 print(f"FAILED: {failed_count}, PASSED: {passed_count}, IN PROGRESS: {in_progress_count}", file=sys.stderr)
-print(f"JSON file created at .claude/open_pr_status.json", file=sys.stderr)
+print(f"JSON file created at {OUTPUT_FILE}", file=sys.stderr)
