@@ -57,38 +57,43 @@ describe('TapStack', () => {
   describe('VPC Configuration', () => {
     test('Should create VPC with correct configuration', () => {
       template.hasResourceProperties('AWS::EC2::VPC', {
-        CidrBlock: '10.0.0.0/16',
         EnableDnsHostnames: true,
         EnableDnsSupport: true,
-        Tags: Match.arrayWith([
-          {
-            Key: 'Name',
-            Value: Match.stringLikeRegexp('TestTapStack/ServiceMeshVpc'),
-          },
-        ]),
       });
     });
 
-    test('Should create public subnets', () => {
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        Tags: Match.arrayWith([
-          { Key: 'Name', Value: Match.stringLikeRegexp('.*public.*') },
-        ]),
+    test('Should create only public subnets', () => {
+      const subnets = template.findResources('AWS::EC2::Subnet');
+      const subnetResources = Object.values(subnets);
+
+      // All subnets should be public
+      subnetResources.forEach((subnet: any) => {
+        const tags = subnet.Properties?.Tags || [];
+        const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+        expect(nameTag?.Value).toMatch(/.*public.*/);
       });
     });
 
-    test('Should create private subnets', () => {
-      template.hasResourceProperties('AWS::EC2::Subnet', {
-        Tags: Match.arrayWith([
-          { Key: 'Name', Value: Match.stringLikeRegexp('.*private.*') },
-        ]),
-      });
+    test('Should create VPC with 2 availability zones', () => {
+      const subnets = template.findResources('AWS::EC2::Subnet');
+      // Should have 2 public subnets (one per AZ)
+      expect(Object.keys(subnets).length).toBe(2);
     });
 
-    test('Should create NAT Gateways', () => {
+    test('Should not create private subnets', () => {
+      const subnets = template.findResources('AWS::EC2::Subnet');
+      const subnetResources = Object.values(subnets);
+      const hasPrivateSubnet = subnetResources.some((subnet: any) => {
+        const tags = subnet.Properties?.Tags || [];
+        const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+        return nameTag?.Value?.includes('private');
+      });
+      expect(hasPrivateSubnet).toBe(false);
+    });
+
+    test('Should not create NAT Gateways', () => {
       const natGateways = template.findResources('AWS::EC2::NatGateway');
-      // CDK may optimize NAT gateways, but should create at least one per AZ
-      expect(Object.keys(natGateways).length).toBeGreaterThanOrEqual(2);
+      expect(Object.keys(natGateways).length).toBe(0);
     });
 
     test('Should create Internet Gateway', () => {
@@ -100,36 +105,26 @@ describe('TapStack', () => {
     test('Should create ECS cluster with correct name', () => {
       template.hasResourceProperties('AWS::ECS::Cluster', {
         ClusterName: `payment-mesh-cluster-${environmentSuffix}`,
-        ClusterSettings: Match.arrayWith([
-          {
-            Name: 'containerInsights',
-            Value: 'enabled',
-          },
-        ]),
       });
     });
 
-    test('Should create Cloud Map namespace', () => {
-      template.hasResourceProperties(
-        'AWS::ServiceDiscovery::PrivateDnsNamespace',
-        {
-          Name: 'payments.local',
-          Vpc: Match.anyValue(),
-        }
+    test('Should have Container Insights disabled', () => {
+      const clusters = template.findResources('AWS::ECS::Cluster');
+      const cluster = Object.values(clusters)[0] as any;
+      // Container Insights disabled means no ClusterSettings or empty array
+      const settings = cluster.Properties?.ClusterSettings || [];
+      const hasContainerInsights = settings.some(
+        (setting: any) =>
+          setting.Name === 'containerInsights' && setting.Value === 'enabled'
       );
+      expect(hasContainerInsights).toBe(false);
     });
-  });
 
-  describe('App Mesh', () => {
-    test('Should create App Mesh with correct name', () => {
-      template.hasResourceProperties('AWS::AppMesh::Mesh', {
-        MeshName: `payment-mesh-${environmentSuffix}`,
-        Spec: {
-          EgressFilter: {
-            Type: 'DROP_ALL',
-          },
-        },
-      });
+    test('Should not create Cloud Map namespace', () => {
+      const namespaces = template.findResources(
+        'AWS::ServiceDiscovery::PrivateDnsNamespace'
+      );
+      expect(Object.keys(namespaces).length).toBe(0);
     });
   });
 
@@ -145,6 +140,24 @@ describe('TapStack', () => {
           },
         ]),
       });
+    });
+
+    test('Service security group should allow internal communication', () => {
+      // Verify that security group ingress rules are created
+      // CDK creates separate SecurityGroupIngress resources for rules added via addIngressRule
+      const ingressRules = template.findResources(
+        'AWS::EC2::SecurityGroupIngress'
+      );
+      // Should have at least one ingress rule (for internal communication or ALB)
+      expect(Object.keys(ingressRules).length).toBeGreaterThan(0);
+      // Verify service security group exists
+      const serviceSg = Object.values(
+        template.findResources('AWS::EC2::SecurityGroup')
+      ).find(
+        (sg: any) =>
+          sg.Properties?.GroupDescription === 'Security group for ECS services'
+      );
+      expect(serviceSg).toBeDefined();
     });
 
     test('Should create ALB security group', () => {
@@ -165,6 +178,31 @@ describe('TapStack', () => {
         )
       ).toBe(true);
     });
+
+    test('Service security group should allow traffic from ALB', () => {
+      // Verify that security group ingress rules are created
+      // CDK creates separate SecurityGroupIngress resources for rules added via addIngressRule
+      const ingressRules = template.findResources(
+        'AWS::EC2::SecurityGroupIngress'
+      );
+      // Should have ingress rules (for internal communication and ALB)
+      expect(Object.keys(ingressRules).length).toBeGreaterThan(0);
+      // Verify both security groups exist
+      const serviceSg = Object.values(
+        template.findResources('AWS::EC2::SecurityGroup')
+      ).find(
+        (sg: any) =>
+          sg.Properties?.GroupDescription === 'Security group for ECS services'
+      );
+      const albSg = Object.values(
+        template.findResources('AWS::EC2::SecurityGroup')
+      ).find(
+        (sg: any) =>
+          sg.Properties?.GroupDescription === 'Security group for ALB'
+      );
+      expect(serviceSg).toBeDefined();
+      expect(albSg).toBeDefined();
+    });
   });
 
   describe('Application Load Balancer', () => {
@@ -179,72 +217,89 @@ describe('TapStack', () => {
       );
     });
 
-    test('Should create HTTP listener', () => {
+    test('ALB should be in public subnets', () => {
+      const albs = template.findResources(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
+      const alb = Object.values(albs)[0] as any;
+      expect(alb.Properties?.Subnets).toBeDefined();
+    });
+
+    test('Should create HTTP listener on port 80', () => {
+      template.hasResourceProperties('AWS::ElasticLoadBalancingV2::Listener', {
+        Port: 80,
+        Protocol: 'HTTP',
+      });
+    });
+
+    test('HTTP listener should be open', () => {
       const listeners = template.findResources(
         'AWS::ElasticLoadBalancingV2::Listener'
       );
       const httpListener = Object.values(listeners).find(
-        (listener: any) =>
-          listener.Properties?.Port === 80 &&
-          listener.Properties?.Protocol === 'HTTP'
+        (listener: any) => listener.Properties?.Port === 80
       );
-      expect(httpListener).toBeDefined();
       expect(httpListener?.Properties?.DefaultActions).toBeDefined();
       const actions = httpListener?.Properties?.DefaultActions as any[];
-      expect(
-        actions.some((action: any) => action.Type === 'fixed-response')
-      ).toBe(true);
-    });
-  });
-
-  describe('Private CA for mTLS', () => {
-    test('Should create Private CA for mTLS', () => {
-      template.hasResourceProperties('AWS::ACMPCA::CertificateAuthority', {
-        Type: 'ROOT',
-        KeyAlgorithm: 'RSA_2048',
-        SigningAlgorithm: 'SHA256WITHRSA',
-      });
-    });
-  });
-
-  describe('Virtual Gateway', () => {
-    test('Should create virtual gateway with correct name', () => {
-      const virtualGateways = template.findResources(
-        'AWS::AppMesh::VirtualGateway'
+      const fixedResponse = actions.find(
+        (action: any) => action.Type === 'fixed-response'
       );
-      const virtualGateway = Object.values(virtualGateways).find(
-        (vg: any) =>
-          vg.Properties?.VirtualGatewayName ===
-          `payment-gateway-${environmentSuffix}`
+      expect(fixedResponse).toBeDefined();
+      expect(fixedResponse?.FixedResponseConfig?.StatusCode).toBe('200');
+      expect(fixedResponse?.FixedResponseConfig?.ContentType).toBe(
+        'text/plain'
       );
-      expect(virtualGateway).toBeDefined();
-      expect(virtualGateway?.Properties?.Spec?.Listeners).toBeDefined();
-      const listeners = virtualGateway?.Properties?.Spec?.Listeners as any[];
-      expect(listeners.length).toBeGreaterThan(0);
-      expect(listeners[0].PortMapping.Port).toBe(8080);
-      expect(listeners[0].PortMapping.Protocol).toBe('http');
+      expect(fixedResponse?.FixedResponseConfig?.MessageBody).toBe(
+        'Service running'
+      );
     });
   });
 
   describe('Microservices Configuration', () => {
     const services = ['payment-api', 'fraud-detection', 'notification-service'];
+    const pathPatterns: { [key: string]: string } = {
+      'payment-api': '/api/payments/',
+      'fraud-detection': '/api/fraud/',
+      'notification-service': '/api/notify/',
+    };
 
     services.forEach(serviceName => {
       describe(`${serviceName} Service`, () => {
         test(`Should create task role for ${serviceName}`, () => {
-          const roles = template.findResources('AWS::IAM::Role');
-          const taskRole = Object.values(roles).find(
-            (role: any) =>
-              role.Properties?.RoleName ===
-              `${serviceName}-task-role-${environmentSuffix}`
-          );
-          expect(taskRole).toBeDefined();
-          expect(
-            taskRole?.Properties?.AssumeRolePolicyDocument?.Statement
-          ).toBeDefined();
+          template.hasResourceProperties('AWS::IAM::Role', {
+            RoleName: `${serviceName}-task-role-${environmentSuffix}`,
+            AssumeRolePolicyDocument: {
+              Statement: Match.arrayWith([
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'ecs-tasks.amazonaws.com',
+                  },
+                  Action: 'sts:AssumeRole',
+                },
+              ]),
+            },
+          });
         });
 
         test(`Should create execution role for ${serviceName}`, () => {
+          template.hasResourceProperties('AWS::IAM::Role', {
+            RoleName: `${serviceName}-execution-role-${environmentSuffix}`,
+            AssumeRolePolicyDocument: {
+              Statement: Match.arrayWith([
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Service: 'ecs-tasks.amazonaws.com',
+                  },
+                  Action: 'sts:AssumeRole',
+                },
+              ]),
+            },
+          });
+        });
+
+        test(`Execution role should have ECS task execution policy for ${serviceName}`, () => {
           const roles = template.findResources('AWS::IAM::Role');
           const executionRole = Object.values(roles).find(
             (role: any) =>
@@ -264,48 +319,39 @@ describe('TapStack', () => {
           ).toBe(true);
         });
 
-        test(`Should create log groups for ${serviceName}`, () => {
+        test(`Should create log group for ${serviceName}`, () => {
           template.hasResourceProperties('AWS::Logs::LogGroup', {
             LogGroupName: `/ecs/${serviceName}-${environmentSuffix}`,
             RetentionInDays: 7,
           });
+        });
 
-          template.hasResourceProperties('AWS::Logs::LogGroup', {
-            LogGroupName: `/ecs/${serviceName}-${environmentSuffix}/envoy`,
-            RetentionInDays: 7,
-          });
-
-          template.hasResourceProperties('AWS::Logs::LogGroup', {
-            LogGroupName: `/ecs/${serviceName}-${environmentSuffix}/xray`,
-            RetentionInDays: 7,
-          });
+        test(`Log group should have DESTROY removal policy for ${serviceName}`, () => {
+          const logGroups = template.findResources('AWS::Logs::LogGroup');
+          const logGroup = Object.values(logGroups).find(
+            (lg: any) =>
+              lg.Properties?.LogGroupName ===
+              `/ecs/${serviceName}-${environmentSuffix}`
+          );
+          expect(logGroup?.DeletionPolicy).toBe('Delete');
         });
 
         test(`Should create task definition for ${serviceName}`, () => {
           template.hasResourceProperties('AWS::ECS::TaskDefinition', {
             Family: `${serviceName}-${environmentSuffix}`,
-            Cpu: '1024',
-            Memory: '2048',
+            Cpu: '256',
+            Memory: '512',
             NetworkMode: 'awsvpc',
             RequiresCompatibilities: ['FARGATE'],
-            ProxyConfiguration: {
-              ContainerName: 'envoy',
-              ProxyConfigurationProperties: Match.arrayWith([
-                {
-                  Name: 'AppPorts',
-                  Value: '8080',
-                },
-                {
-                  Name: 'ProxyEgressPort',
-                  Value: '15001',
-                },
-                {
-                  Name: 'ProxyIngressPort',
-                  Value: '15000',
-                },
-              ]),
-            },
           });
+        });
+
+        test(`Task definition should not have proxy configuration for ${serviceName}`, () => {
+          const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
+          const taskDef = Object.values(taskDefs).find((td: any) =>
+            td.Properties?.Family?.includes(serviceName)
+          );
+          expect(taskDef?.Properties?.ProxyConfiguration).toBeUndefined();
         });
 
         test(`Should create application container for ${serviceName}`, () => {
@@ -319,213 +365,212 @@ describe('TapStack', () => {
           const appContainer = containers.find(c => c.Name === serviceName);
           expect(appContainer).toBeDefined();
           expect(appContainer?.Image).toContain('nginx');
-          expect(appContainer?.Memory).toBe(1024);
-          expect(appContainer?.Cpu).toBe(512);
           expect(appContainer?.PortMappings).toEqual([
             {
-              ContainerPort: 8080,
+              ContainerPort: 80,
               Protocol: 'tcp',
             },
           ]);
         });
 
-        test(`Should create X-Ray daemon container for ${serviceName}`, () => {
+        test(`Container should have nginx command for ${serviceName}`, () => {
           const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
           const taskDef = Object.values(taskDefs).find((td: any) =>
             td.Properties?.Family?.includes(serviceName)
           );
           const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-          const xrayContainer = containers.find(c => c.Name === 'xray-daemon');
-          expect(xrayContainer).toBeDefined();
-          expect(xrayContainer?.Image).toContain('xray');
-          expect(xrayContainer?.Memory).toBe(256);
-          expect(xrayContainer?.Cpu).toBe(128);
+          const appContainer = containers.find(c => c.Name === serviceName);
+          expect(appContainer?.Command).toEqual(['nginx', '-g', 'daemon off;']);
         });
 
-        test(`Should create Envoy container for ${serviceName}`, () => {
+        test(`Container should not have health check for ${serviceName}`, () => {
           const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
           const taskDef = Object.values(taskDefs).find((td: any) =>
             td.Properties?.Family?.includes(serviceName)
           );
           const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-          const envoyContainer = containers.find(c => c.Name === 'envoy');
-          expect(envoyContainer).toBeDefined();
-          expect(envoyContainer?.Image).toContain('appmesh-envoy');
-          expect(envoyContainer?.Essential).toBe(true);
-          expect(envoyContainer?.Memory).toBe(512);
-          expect(envoyContainer?.Cpu).toBe(256);
-          expect(envoyContainer?.User).toBe('1337');
+          const appContainer = containers.find(c => c.Name === serviceName);
+          expect(appContainer?.HealthCheck).toBeUndefined();
+        });
+
+        test(`Container should have CloudWatch Logs configuration for ${serviceName}`, () => {
+          const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
+          const taskDef = Object.values(taskDefs).find((td: any) =>
+            td.Properties?.Family?.includes(serviceName)
+          );
+          const containers = taskDef?.Properties?.ContainerDefinitions as any[];
+          const appContainer = containers.find(c => c.Name === serviceName);
+          expect(appContainer?.LogConfiguration).toBeDefined();
+          expect(appContainer?.LogConfiguration?.LogDriver).toBe('awslogs');
+          // CDK uses Ref for log group, so we check that it references a log group
+          const logGroupRef =
+            appContainer?.LogConfiguration?.Options?.['awslogs-group'];
+          expect(logGroupRef).toBeDefined();
+          // Verify the log group exists
+          const logGroups = template.findResources('AWS::Logs::LogGroup');
+          const logGroupExists = Object.values(logGroups).some(
+            (lg: any) =>
+              lg.Properties?.LogGroupName ===
+              `/ecs/${serviceName}-${environmentSuffix}`
+          );
+          expect(logGroupExists).toBe(true);
+          expect(
+            appContainer?.LogConfiguration?.Options?.['awslogs-stream-prefix']
+          ).toBe(serviceName);
         });
 
         test(`Should create ECS service for ${serviceName}`, () => {
           template.hasResourceProperties('AWS::ECS::Service', {
             ServiceName: `${serviceName}-${environmentSuffix}`,
-            DesiredCount: 2,
+            DesiredCount: 1,
             LaunchType: 'FARGATE',
-            NetworkConfiguration: {
-              AwsvpcConfiguration: {
-                AssignPublicIp: 'DISABLED',
-              },
-            },
-            EnableExecuteCommand: true,
           });
         });
 
-        test(`Should create Cloud Map service for ${serviceName}`, () => {
-          const services = template.findResources(
+        test(`ECS service should use public subnets with public IPs for ${serviceName}`, () => {
+          const services = template.findResources('AWS::ECS::Service');
+          const ecsService = Object.values(services).find(
+            (svc: any) =>
+              svc.Properties?.ServiceName ===
+              `${serviceName}-${environmentSuffix}`
+          );
+          expect(ecsService).toBeDefined();
+          expect(
+            ecsService?.Properties?.NetworkConfiguration?.AwsvpcConfiguration
+              ?.AssignPublicIp
+          ).toBe('ENABLED');
+        });
+
+        test(`ECS service should have lenient deployment settings for ${serviceName}`, () => {
+          const services = template.findResources('AWS::ECS::Service');
+          const ecsService = Object.values(services).find(
+            (svc: any) =>
+              svc.Properties?.ServiceName ===
+              `${serviceName}-${environmentSuffix}`
+          );
+          expect(
+            ecsService?.Properties?.DeploymentConfiguration
+              ?.MinimumHealthyPercent
+          ).toBe(0);
+          expect(
+            ecsService?.Properties?.DeploymentConfiguration?.MaximumPercent
+          ).toBe(200);
+        });
+
+        test(`ECS service should have circuit breaker with rollback disabled for ${serviceName}`, () => {
+          const services = template.findResources('AWS::ECS::Service');
+          const ecsService = Object.values(services).find(
+            (svc: any) =>
+              svc.Properties?.ServiceName ===
+              `${serviceName}-${environmentSuffix}`
+          );
+          expect(
+            ecsService?.Properties?.DeploymentConfiguration
+              ?.DeploymentCircuitBreaker?.Enable
+          ).toBe(true);
+          expect(
+            ecsService?.Properties?.DeploymentConfiguration
+              ?.DeploymentCircuitBreaker?.Rollback
+          ).toBe(false);
+        });
+
+        test(`ECS service should have execute command disabled for ${serviceName}`, () => {
+          const services = template.findResources('AWS::ECS::Service');
+          const ecsService = Object.values(services).find(
+            (svc: any) =>
+              svc.Properties?.ServiceName ===
+              `${serviceName}-${environmentSuffix}`
+          );
+          expect(ecsService?.Properties?.EnableExecuteCommand).toBe(false);
+        });
+
+        test(`Should create target group for ${serviceName}`, () => {
+          template.hasResourceProperties(
+            'AWS::ElasticLoadBalancingV2::TargetGroup',
+            {
+              Port: 80,
+              Protocol: 'HTTP',
+              TargetType: 'ip',
+            }
+          );
+        });
+
+        test(`Target group should have forgiving health check for ${serviceName}`, () => {
+          const targetGroups = template.findResources(
+            'AWS::ElasticLoadBalancingV2::TargetGroup'
+          );
+          const targetGroup = Object.values(targetGroups).find((tg: any) => {
+            // Find target group associated with this service
+            // We check by looking at listener rules that reference this service
+            return true; // All target groups should have the same health check config
+          });
+          expect(targetGroup?.Properties?.HealthCheckPath).toBe('/');
+          expect(targetGroup?.Properties?.Matcher?.HttpCode).toBe('200-499');
+        });
+
+        test(`Should create listener rule with path pattern for ${serviceName}`, () => {
+          template.hasResourceProperties(
+            'AWS::ElasticLoadBalancingV2::ListenerRule',
+            {
+              Conditions: Match.arrayWith([
+                {
+                  Field: 'path-pattern',
+                  PathPatternConfig: {
+                    Values: [pathPatterns[serviceName]],
+                  },
+                },
+              ]),
+            }
+          );
+        });
+
+        test(`Listener rule should have correct priority for ${serviceName}`, () => {
+          const listenerRules = template.findResources(
+            'AWS::ElasticLoadBalancingV2::ListenerRule'
+          );
+          const rules = Object.values(listenerRules);
+          const serviceIndex = services.indexOf(serviceName);
+          const rule = rules.find((r: any) => {
+            const conditions = r.Properties?.Conditions || [];
+            return conditions.some((c: any) =>
+              c.PathPatternConfig?.Values?.includes(pathPatterns[serviceName])
+            );
+          });
+          expect(rule?.Properties?.Priority).toBe(serviceIndex + 1);
+        });
+
+        test(`Should not create Cloud Map service for ${serviceName}`, () => {
+          const cloudMapServices = template.findResources(
             'AWS::ServiceDiscovery::Service'
           );
-          const cloudMapService = Object.values(services).find(
+          const cloudMapService = Object.values(cloudMapServices).find(
             (svc: any) =>
               svc.Properties?.Name === `${serviceName}-${environmentSuffix}`
           );
-          expect(cloudMapService).toBeDefined();
-          expect(
-            cloudMapService?.Properties?.DnsConfig?.DnsRecords
-          ).toBeDefined();
+          expect(cloudMapService).toBeUndefined();
         });
 
-        test(`Should create virtual node for ${serviceName}`, () => {
+        test(`Should not create virtual node for ${serviceName}`, () => {
           const virtualNodes = template.findResources(
             'AWS::AppMesh::VirtualNode'
           );
-          const virtualNode = Object.values(virtualNodes).find(
-            (vn: any) =>
-              vn.Properties?.VirtualNodeName ===
-              `${serviceName}-vn-${environmentSuffix}`
+          const virtualNode = Object.values(virtualNodes).find((vn: any) =>
+            vn.Properties?.VirtualNodeName?.includes(serviceName)
           );
-          expect(virtualNode).toBeDefined();
-          expect(virtualNode?.Properties?.Spec?.Listeners).toBeDefined();
-          const listeners = virtualNode?.Properties?.Spec?.Listeners as any[];
-          expect(listeners.length).toBeGreaterThan(0);
-          const listener = listeners[0];
-          expect(listener.PortMapping.Port).toBe(8080);
-          expect(listener.PortMapping.Protocol).toBe('http');
-          expect(listener.ConnectionPool?.HTTP?.MaxConnections).toBe(50);
-          expect(listener.OutlierDetection?.MaxServerErrors).toBe(5);
-          // TLS is temporarily removed - will be added back with Private CA certificates
+          expect(virtualNode).toBeUndefined();
         });
 
-        test(`Should create virtual service for ${serviceName}`, () => {
-          template.hasResourceProperties('AWS::AppMesh::VirtualService', {
-            VirtualServiceName: `${serviceName}-${environmentSuffix}.payments.local`,
-          });
-        });
-
-        // Target groups are not created for microservices in App Mesh architecture
-        // ALB forwards to Virtual Gateway, which routes through App Mesh to services
-
-        test(`Should create gateway route for ${serviceName}`, () => {
-          const pathPatterns: { [key: string]: string } = {
-            'payment-api': '/api/payments/',
-            'fraud-detection': '/api/fraud/',
-            'notification-service': '/api/notify/',
-          };
-
-          template.hasResourceProperties('AWS::AppMesh::GatewayRoute', {
-            GatewayRouteName: `${serviceName}-route-${environmentSuffix}`,
-            Spec: {
-              HttpRoute: {
-                Match: {
-                  Prefix: pathPatterns[serviceName],
-                },
-              },
-            },
-          });
-        });
-
-        test(`Should grant App Mesh permissions to ${serviceName} task role`, () => {
-          const policies = template.findResources('AWS::IAM::Policy');
-          const taskRolePolicy = Object.values(policies).find((policy: any) => {
-            const statements =
-              policy.Properties?.PolicyDocument?.Statement || [];
-            return statements.some((stmt: any) => {
-              const resources = Array.isArray(stmt.Resource)
-                ? stmt.Resource
-                : [stmt.Resource];
-              return (
-                stmt.Effect === 'Allow' &&
-                stmt.Action?.includes('appmesh:StreamAggregatedResources') &&
-                resources.some((r: any) => {
-                  const resourceStr =
-                    typeof r === 'string' ? r : JSON.stringify(r);
-                  return (
-                    resourceStr.includes('virtualNode') ||
-                    resourceStr.includes('mesh')
-                  );
-                })
-              );
-            });
-          });
-          expect(taskRolePolicy).toBeDefined();
-        });
-      });
-    });
-  });
-
-  describe('Gateway Service', () => {
-    test('Should create gateway task role', () => {
-      template.hasResourceProperties('AWS::IAM::Role', {
-        RoleName: `virtual-gateway-task-role-${environmentSuffix}`,
-      });
-    });
-
-    test('Should create gateway task definition', () => {
-      template.hasResourceProperties('AWS::ECS::TaskDefinition', {
-        Family: `virtual-gateway-${environmentSuffix}`,
-        Cpu: '512',
-        Memory: '1024',
-      });
-    });
-
-    test('Should create gateway log group', () => {
-      template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/ecs/virtual-gateway-${environmentSuffix}/envoy`,
-        RetentionInDays: 7,
-      });
-    });
-
-    test('Should create gateway ECS service', () => {
-      template.hasResourceProperties('AWS::ECS::Service', {
-        ServiceName: `virtual-gateway-${environmentSuffix}`,
-        DesiredCount: 2,
-        LaunchType: 'FARGATE',
-      });
-    });
-
-    test('Should create gateway target group', () => {
-      template.hasResourceProperties(
-        'AWS::ElasticLoadBalancingV2::TargetGroup',
-        {
-          Port: 8080,
-          Protocol: 'HTTP',
-          HealthCheckPath: '/health',
-        }
-      );
-    });
-
-    test('Should grant App Mesh permissions to gateway task role', () => {
-      const policies = template.findResources('AWS::IAM::Policy');
-      const gatewayPolicy = Object.values(policies).find((policy: any) => {
-        const statements = policy.Properties?.PolicyDocument?.Statement || [];
-        return statements.some((stmt: any) => {
-          const resources = Array.isArray(stmt.Resource)
-            ? stmt.Resource
-            : [stmt.Resource];
-          return (
-            stmt.Effect === 'Allow' &&
-            stmt.Action?.includes('appmesh:StreamAggregatedResources') &&
-            resources.some((r: any) => {
-              const resourceStr = typeof r === 'string' ? r : JSON.stringify(r);
-              return (
-                resourceStr.includes('virtualGateway') ||
-                resourceStr.includes('mesh')
-              );
-            })
+        test(`Should not create virtual service for ${serviceName}`, () => {
+          const virtualServices = template.findResources(
+            'AWS::AppMesh::VirtualService'
           );
+          const virtualService = Object.values(virtualServices).find(
+            (vs: any) =>
+              vs.Properties?.VirtualServiceName?.includes(serviceName)
+          );
+          expect(virtualService).toBeUndefined();
         });
       });
-      expect(gatewayPolicy).toBeDefined();
     });
   });
 
@@ -535,25 +580,37 @@ describe('TapStack', () => {
         DashboardName: `payment-mesh-dashboard-${environmentSuffix}`,
       });
     });
+
+    test('Dashboard should have Body property defined', () => {
+      const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+      const dashboard = Object.values(dashboards)[0] as any;
+      // CDK creates dashboard with Body property (might be Fn::Sub or string)
+      expect(dashboard.Properties).toBeDefined();
+      // Body is created by CDK, we just verify dashboard exists with correct name
+      expect(dashboard.Properties.DashboardName).toBe(
+        `payment-mesh-dashboard-${environmentSuffix}`
+      );
+    });
+
+    test('Dashboard should be created for all services', () => {
+      // Verify dashboard exists - the actual metrics are added via CDK API
+      // which creates the Body dynamically, so we can't easily parse it in unit tests
+      template.hasResourceProperties('AWS::CloudWatch::Dashboard', {
+        DashboardName: `payment-mesh-dashboard-${environmentSuffix}`,
+      });
+    });
   });
 
   describe('Stack Outputs', () => {
     test('Should output ALB DNS name', () => {
-      template.hasOutput('AlbDnsName', {
+      template.hasOutput('AlbDns', {
         Description: 'Application Load Balancer DNS name for external access',
-        Export: {
-          Name: 'PaymentMeshAlbDns',
-        },
       });
     });
 
-    test('Should output Cloud Map namespace ARN', () => {
-      template.hasOutput('CloudMapNamespaceArn', {
-        Description: 'Cloud Map namespace ARN for service discovery',
-        Export: {
-          Name: 'PaymentMeshCloudMapArn',
-        },
-      });
+    test('Should not output Cloud Map namespace ARN', () => {
+      const outputs = template.findOutputs('CloudMapNamespaceArn');
+      expect(Object.keys(outputs).length).toBe(0);
     });
 
     test('Should output dashboard URL', () => {
@@ -561,15 +618,6 @@ describe('TapStack', () => {
         Description: 'CloudWatch dashboard URL for monitoring',
         Export: {
           Name: 'PaymentMeshDashboardUrl',
-        },
-      });
-    });
-
-    test('Should output mesh ARN', () => {
-      template.hasOutput('MeshArn', {
-        Description: 'App Mesh ARN',
-        Export: {
-          Name: 'PaymentMeshArn',
         },
       });
     });
@@ -582,179 +630,135 @@ describe('TapStack', () => {
         },
       });
     });
+
+    test('Dashboard URL should include correct region and dashboard name', () => {
+      const outputs = template.findOutputs('DashboardUrl');
+      const output = Object.values(outputs)[0] as any;
+      // Output value is a CloudFormation Fn::Join intrinsic function
+      // We verify it has the structure we expect
+      expect(output.Value).toBeDefined();
+      // Convert to string to check contents
+      const valueStr = JSON.stringify(output.Value);
+      expect(valueStr).toContain('cloudwatch');
+      expect(valueStr).toContain('dashboards:name');
+      // The dashboard name is referenced via Ref, so we verify the structure includes a Ref
+      expect(valueStr).toContain('Ref');
+      // Verify it references a dashboard resource
+      const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+      const dashboardLogicalId = Object.keys(dashboards)[0];
+      expect(valueStr).toContain(dashboardLogicalId);
+    });
   });
 
   describe('Resource Counts', () => {
     test('Should create correct number of ECS services', () => {
-      // 3 microservices + 1 gateway service = 4 total
-      template.resourceCountIs('AWS::ECS::Service', 4);
+      // 3 microservices
+      template.resourceCountIs('AWS::ECS::Service', 3);
     });
 
     test('Should create correct number of task definitions', () => {
-      // 3 microservices + 1 gateway = 4 total
-      template.resourceCountIs('AWS::ECS::TaskDefinition', 4);
-    });
-
-    test('Should create correct number of virtual nodes', () => {
       // 3 microservices
-      template.resourceCountIs('AWS::AppMesh::VirtualNode', 3);
-    });
-
-    test('Should create correct number of virtual services', () => {
-      // 3 microservices
-      template.resourceCountIs('AWS::AppMesh::VirtualService', 3);
-    });
-
-    test('Should create correct number of gateway routes', () => {
-      // 3 microservices
-      template.resourceCountIs('AWS::AppMesh::GatewayRoute', 3);
+      template.resourceCountIs('AWS::ECS::TaskDefinition', 3);
     });
 
     test('Should create correct number of target groups', () => {
-      // Only 1 target group for the gateway (microservices communicate through App Mesh)
-      template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 1);
+      // 3 target groups (one per service)
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::TargetGroup', 3);
+    });
+
+    test('Should create correct number of listener rules', () => {
+      // 3 listener rules (one per service)
+      template.resourceCountIs('AWS::ElasticLoadBalancingV2::ListenerRule', 3);
     });
 
     test('Should create correct number of IAM roles', () => {
-      // 3 services * 2 roles (task + execution) + 1 gateway task role + 1 gateway execution role = 8 total
-      template.resourceCountIs('AWS::IAM::Role', 8);
+      // 3 services * 2 roles (task + execution) = 6 total
+      template.resourceCountIs('AWS::IAM::Role', 6);
     });
 
     test('Should create correct number of log groups', () => {
-      // 3 services * 3 log groups (app, envoy, xray) + 1 gateway envoy = 10 total
-      template.resourceCountIs('AWS::Logs::LogGroup', 10);
+      // 3 services * 1 log group = 3 total
+      template.resourceCountIs('AWS::Logs::LogGroup', 3);
+    });
+
+    test('Should not create App Mesh resources', () => {
+      template.resourceCountIs('AWS::AppMesh::Mesh', 0);
+      template.resourceCountIs('AWS::AppMesh::VirtualNode', 0);
+      template.resourceCountIs('AWS::AppMesh::VirtualService', 0);
+      template.resourceCountIs('AWS::AppMesh::VirtualGateway', 0);
+      template.resourceCountIs('AWS::AppMesh::GatewayRoute', 0);
+    });
+
+    test('Should not create Cloud Map resources', () => {
+      template.resourceCountIs('AWS::ServiceDiscovery::PrivateDnsNamespace', 0);
+      template.resourceCountIs('AWS::ServiceDiscovery::Service', 0);
     });
   });
 
-  describe('X-Ray Configuration', () => {
-    test('Should have X-Ray permissions in task roles', () => {
-      // X-Ray permissions are in inline policies on roles, not separate Policy resources
-      const roles = template.findResources('AWS::IAM::Role');
-      const rolesWithXRay = Object.values(roles).filter((role: any) => {
-        const policies = role.Properties?.Policies || [];
-        return policies.some((policy: any) => {
-          const statements = policy.PolicyDocument?.Statement || [];
-          return statements.some((stmt: any) => {
-            const actions = Array.isArray(stmt.Action)
-              ? stmt.Action
-              : [stmt.Action];
-            return actions.some((action: string) =>
-              action?.includes('xray:PutTraceSegments')
-            );
-          });
-        });
+  describe('Service Configuration Details', () => {
+    test('All services should use nginx image', () => {
+      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
+      Object.values(taskDefs).forEach((taskDef: any) => {
+        const containers = taskDef.Properties?.ContainerDefinitions || [];
+        const appContainer = containers.find((c: any) =>
+          ['payment-api', 'fraud-detection', 'notification-service'].includes(
+            c.Name
+          )
+        );
+        expect(appContainer?.Image).toContain('nginx');
       });
-      expect(rolesWithXRay.length).toBeGreaterThan(0);
     });
-  });
 
-  describe('Container Configuration', () => {
-    test('Should configure Envoy with correct environment variables', () => {
+    test('All services should have same resource allocation', () => {
       const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
-      const taskDef = Object.values(taskDefs).find((td: any) =>
-        td.Properties?.Family?.includes('payment-api')
-      );
-      const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-      const envoyContainer = containers.find(c => c.Name === 'envoy');
-      expect(envoyContainer?.Environment).toEqual(
-        expect.arrayContaining([
-          {
-            Name: 'ENVOY_LOG_LEVEL',
-            Value: 'info',
-          },
-          {
-            Name: 'ENABLE_ENVOY_XRAY_TRACING',
-            Value: '1',
-          },
-          {
-            Name: 'ENABLE_ENVOY_STATS_TAGS',
-            Value: '1',
-          },
-          {
-            Name: 'XRAY_DAEMON_PORT',
-            Value: '2000',
-          },
-        ])
-      );
-    });
-
-    test('Should configure application containers with correct environment', () => {
-      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
-      const taskDef = Object.values(taskDefs).find((td: any) =>
-        td.Properties?.Family?.includes('payment-api')
-      );
-      const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-      const appContainer = containers.find(c => c.Name === 'payment-api');
-      expect(appContainer?.Environment).toEqual(
-        expect.arrayContaining([
-          {
-            Name: 'SERVICE_NAME',
-            Value: 'payment-api',
-          },
-          {
-            Name: 'PORT',
-            Value: '8080',
-          },
-          {
-            Name: 'ENABLE_XRAY',
-            Value: 'true',
-          },
-        ])
-      );
-    });
-  });
-
-  describe('Health Checks', () => {
-    test('Should configure health checks for application containers', () => {
-      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
-      const taskDef = Object.values(taskDefs).find((td: any) =>
-        td.Properties?.Family?.includes('payment-api')
-      );
-      const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-      const appContainer = containers.find(c => c.Name === 'payment-api');
-      expect(appContainer?.HealthCheck).toBeDefined();
-      const command = Array.isArray(appContainer?.HealthCheck?.Command)
-        ? appContainer?.HealthCheck?.Command.join(' ')
-        : appContainer?.HealthCheck?.Command;
-      expect(command).toContain('curl');
-      expect(appContainer?.HealthCheck?.Interval).toBe(30);
-      expect(appContainer?.HealthCheck?.Timeout).toBe(5);
-      expect(appContainer?.HealthCheck?.Retries).toBe(3);
-    });
-
-    test('Should configure health checks for Envoy containers', () => {
-      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
-      const taskDef = Object.values(taskDefs).find((td: any) =>
-        td.Properties?.Family?.includes('payment-api')
-      );
-      const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-      const envoyContainer = containers.find(c => c.Name === 'envoy');
-      expect(envoyContainer?.HealthCheck).toBeDefined();
-      const command = Array.isArray(envoyContainer?.HealthCheck?.Command)
-        ? envoyContainer?.HealthCheck?.Command.join(' ')
-        : envoyContainer?.HealthCheck?.Command;
-      expect(command).toContain('curl');
-    });
-  });
-
-  describe('Container Dependencies', () => {
-    test('Should configure Envoy to depend on application container', () => {
-      const taskDefs = template.findResources('AWS::ECS::TaskDefinition');
-      const taskDef = Object.values(taskDefs).find((td: any) =>
-        td.Properties?.Family?.includes('payment-api')
-      );
-      const containers = taskDef?.Properties?.ContainerDefinitions as any[];
-      const envoyContainer = containers.find(c => c.Name === 'envoy');
-      expect(envoyContainer?.DependsOn).toBeDefined();
-    });
-  });
-
-  describe('Removal Policies', () => {
-    test('Log groups should have DESTROY removal policy', () => {
-      const logGroups = template.findResources('AWS::Logs::LogGroup');
-      Object.values(logGroups).forEach((logGroup: any) => {
-        expect(logGroup.DeletionPolicy).toBe('Delete');
+      Object.values(taskDefs).forEach((taskDef: any) => {
+        expect(taskDef.Properties?.Cpu).toBe('256');
+        expect(taskDef.Properties?.Memory).toBe('512');
       });
+    });
+
+    test('All services should have desired count of 1', () => {
+      const services = template.findResources('AWS::ECS::Service');
+      Object.values(services).forEach((service: any) => {
+        expect(service.Properties?.DesiredCount).toBe(1);
+      });
+    });
+
+    test('All services should use Fargate launch type', () => {
+      const services = template.findResources('AWS::ECS::Service');
+      Object.values(services).forEach((service: any) => {
+        expect(service.Properties?.LaunchType).toBe('FARGATE');
+      });
+    });
+  });
+
+  describe('Security Group Rules', () => {
+    test('ALB security group should allow HTTP from anywhere', () => {
+      const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
+      const albSg = Object.values(securityGroups).find(
+        (sg: any) =>
+          sg.Properties?.GroupDescription === 'Security group for ALB'
+      );
+      const ingress = albSg?.Properties?.SecurityGroupIngress as any[];
+      const httpRule = ingress?.find(
+        (rule: any) => rule.FromPort === 80 && rule.IpProtocol === 'tcp'
+      );
+      expect(httpRule).toBeDefined();
+      expect(httpRule?.CidrIp).toBe('0.0.0.0/0');
+    });
+
+    test('ALB security group should allow HTTPS from anywhere', () => {
+      const securityGroups = template.findResources('AWS::EC2::SecurityGroup');
+      const albSg = Object.values(securityGroups).find(
+        (sg: any) =>
+          sg.Properties?.GroupDescription === 'Security group for ALB'
+      );
+      const ingress = albSg?.Properties?.SecurityGroupIngress as any[];
+      const httpsRule = ingress?.find(
+        (rule: any) => rule.FromPort === 443 && rule.IpProtocol === 'tcp'
+      );
+      expect(httpsRule).toBeDefined();
+      expect(httpsRule?.CidrIp).toBe('0.0.0.0/0');
     });
   });
 
@@ -766,14 +770,6 @@ describe('TapStack', () => {
       expect(cluster.Properties.ClusterName).toContain(environmentSuffix);
       expect(cluster.Properties.ClusterName).toBe(
         `payment-mesh-cluster-${environmentSuffix}`
-      );
-
-      // Check mesh
-      const meshes = template.findResources('AWS::AppMesh::Mesh');
-      const mesh = Object.values(meshes)[0] as any;
-      expect(mesh.Properties.MeshName).toContain(environmentSuffix);
-      expect(mesh.Properties.MeshName).toBe(
-        `payment-mesh-${environmentSuffix}`
       );
 
       // Check ALB
@@ -790,6 +786,56 @@ describe('TapStack', () => {
       expect(dashboard.Properties.DashboardName).toContain(environmentSuffix);
       expect(dashboard.Properties.DashboardName).toBe(
         `payment-mesh-dashboard-${environmentSuffix}`
+      );
+    });
+  });
+
+  describe('Path-based Routing', () => {
+    test('Payment API should route to /api/payments/', () => {
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::ListenerRule',
+        {
+          Conditions: Match.arrayWith([
+            {
+              Field: 'path-pattern',
+              PathPatternConfig: {
+                Values: ['/api/payments/'],
+              },
+            },
+          ]),
+        }
+      );
+    });
+
+    test('Fraud Detection should route to /api/fraud/', () => {
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::ListenerRule',
+        {
+          Conditions: Match.arrayWith([
+            {
+              Field: 'path-pattern',
+              PathPatternConfig: {
+                Values: ['/api/fraud/'],
+              },
+            },
+          ]),
+        }
+      );
+    });
+
+    test('Notification Service should route to /api/notify/', () => {
+      template.hasResourceProperties(
+        'AWS::ElasticLoadBalancingV2::ListenerRule',
+        {
+          Conditions: Match.arrayWith([
+            {
+              Field: 'path-pattern',
+              PathPatternConfig: {
+                Values: ['/api/notify/'],
+              },
+            },
+          ]),
+        }
       );
     });
   });

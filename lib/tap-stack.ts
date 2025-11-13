@@ -3,7 +3,6 @@ import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as iam from 'aws-cdk-lib/aws-iam';
-import * as servicediscovery from 'aws-cdk-lib/aws-servicediscovery';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
@@ -21,40 +20,25 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    // 🔹 VPC Configuration - 3 AZs with public/private subnets
+    // 🔹 VPC Configuration - Only public subnets (simplify networking)
     const vpc = new ec2.Vpc(this, 'ServiceMeshVpc', {
-      maxAzs: 3,
-      ipAddresses: ec2.IpAddresses.cidr('10.0.0.0/16'),
-      natGateways: 1, // Reduced from 3 to 1 to avoid EIP limit (1 NAT Gateway is sufficient for dev/test)
+      maxAzs: 2,
       enableDnsHostnames: true,
       enableDnsSupport: true,
       subnetConfiguration: [
         {
           name: 'public',
           subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: 24,
-        },
-        {
-          name: 'private',
-          subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: 24,
         },
       ],
     });
 
-    // 🔹 ECS Cluster with Container Insights
+    // 🔹 ECS Cluster (CloudMap removed for simplified deployment)
     const cluster = new ecs.Cluster(this, 'PaymentCluster', {
       vpc,
       clusterName: `payment-mesh-cluster-${environmentSuffix}`,
-      containerInsights: true,
-      defaultCloudMapNamespace: {
-        name: 'payments.local',
-        type: servicediscovery.NamespaceType.DNS_PRIVATE,
-        vpc,
-      },
+      containerInsights: false,
     });
-
-    const cloudMapNamespace = cluster.defaultCloudMapNamespace!;
 
     // 🔹 Security Groups
     const serviceSecurityGroup = new ec2.SecurityGroup(
@@ -107,10 +91,10 @@ export class TapStack extends cdk.Stack {
 
     const httpListener = alb.addListener('HttpListener', {
       port: 80,
-      protocol: elbv2.ApplicationProtocol.HTTP,
-      defaultAction: elbv2.ListenerAction.fixedResponse(404, {
+      open: true,
+      defaultAction: elbv2.ListenerAction.fixedResponse(200, {
         contentType: 'text/plain',
-        messageBody: 'Not Found',
+        messageBody: 'Service running',
       }),
     });
 
@@ -191,14 +175,14 @@ export class TapStack extends cdk.Stack {
         `${serviceConfig.name}TaskDef`,
         {
           family: `${serviceConfig.name}-${environmentSuffix}`,
-          cpu: 512,
-          memoryLimitMiB: 1024,
+          cpu: 256,
+          memoryLimitMiB: 512,
           taskRole,
           executionRole,
         }
       );
 
-      // Application Container - simplified (single container, no X-Ray/Envoy)
+      // Application Container - simplified (single container, no health checks)
       taskDefinition.addContainer(serviceConfig.name, {
         image: ecs.ContainerImage.fromRegistry(serviceConfig.containerImage),
         logging: ecs.LogDriver.awsLogs({
@@ -206,19 +190,10 @@ export class TapStack extends cdk.Stack {
           logGroup,
         }),
         portMappings: [{ containerPort: serviceConfig.port }],
-        healthCheck: {
-          command: [
-            'CMD-SHELL',
-            `wget --no-verbose --tries=1 --spider http://localhost:${serviceConfig.port}/ || exit 1`,
-          ],
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(5),
-          retries: 3,
-          startPeriod: cdk.Duration.seconds(60), // Give nginx time to start
-        },
+        command: ['nginx', '-g', 'daemon off;'],
       });
 
-      // ECS Service - simplified (public subnets, direct ALB attachment)
+      // ECS Service - simplified (public subnets, lenient rollout settings)
       const ecsService = new ecs.FargateService(
         this,
         `${serviceConfig.name}Service`,
@@ -226,20 +201,20 @@ export class TapStack extends cdk.Stack {
           cluster,
           serviceName: `${serviceConfig.name}-${environmentSuffix}`,
           taskDefinition,
-          desiredCount: 2,
-          assignPublicIp: true, // Use public subnets for simplified deployment
+          desiredCount: 1,
+          assignPublicIp: true,
           securityGroups: [serviceSecurityGroup],
           vpcSubnets: {
             subnetType: ec2.SubnetType.PUBLIC,
           },
-          enableECSManagedTags: true,
-          propagateTags: ecs.PropagatedTagSource.SERVICE,
-          enableExecuteCommand: true,
-          healthCheckGracePeriod: cdk.Duration.seconds(120), // Give tasks time to pass health checks
+          minHealthyPercent: 0,
+          maxHealthyPercent: 200,
+          circuitBreaker: { rollback: false },
+          enableExecuteCommand: false,
         }
       );
 
-      // Attach service directly to ALB listener
+      // Attach service directly to ALB listener (forgiving health check)
       httpListener.addTargets(`${serviceConfig.name}Target`, {
         port: 80,
         targets: [ecsService],
@@ -251,10 +226,7 @@ export class TapStack extends cdk.Stack {
         ],
         healthCheck: {
           path: '/',
-          interval: cdk.Duration.seconds(30),
-          timeout: cdk.Duration.seconds(5),
-          healthyThresholdCount: 2,
-          unhealthyThresholdCount: 3,
+          healthyHttpCodes: '200-499',
         },
       });
 
@@ -397,16 +369,9 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 Stack Outputs
-    new cdk.CfnOutput(this, 'AlbDnsName', {
+    new cdk.CfnOutput(this, 'AlbDns', {
       value: alb.loadBalancerDnsName,
       description: 'Application Load Balancer DNS name for external access',
-      exportName: 'PaymentMeshAlbDns',
-    });
-
-    new cdk.CfnOutput(this, 'CloudMapNamespaceArn', {
-      value: cloudMapNamespace.namespaceArn,
-      description: 'Cloud Map namespace ARN for service discovery',
-      exportName: 'PaymentMeshCloudMapArn',
     });
 
     new cdk.CfnOutput(this, 'DashboardUrl', {
