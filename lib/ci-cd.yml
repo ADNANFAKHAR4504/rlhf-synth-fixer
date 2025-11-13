@@ -55,7 +55,7 @@ jobs:
 
       - name: Install validation tools
         run: |
-          pip install tflint tfsec checkov yamllint
+          pip install tflint==0.50.0 tfsec==1.28.1 checkov==3.1.0 yamllint==1.33.0
 
       - name: Terraform fmt
         run: |
@@ -68,6 +68,10 @@ jobs:
       - name: Terraform validate
         run: |
           terraform validate
+
+      - name: Verify Terraform backend locking
+        run: |
+          if ! grep -R "dynamodb_table" -n .; then echo "Missing DynamoDB state lock config"; exit 1; fi
 
       - name: Run tflint
         run: |
@@ -87,7 +91,7 @@ jobs:
 
       - name: Install markdownlint
         run: |
-          npm install -g markdownlint-cli
+          npm install -g markdownlint-cli@0.39.0
 
       - name: Markdown lint
         run: |
@@ -156,6 +160,8 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.ORDER_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build & push payment-service
         uses: docker/build-push-action@v5
@@ -164,6 +170,8 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.PAYMENT_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build & push inventory-service
         uses: docker/build-push-action@v5
@@ -172,6 +180,8 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.INVENTORY_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Build & push notification-service
         uses: docker/build-push-action@v5
@@ -180,6 +190,8 @@ jobs:
           push: true
           tags: |
             ${{ env.ECR_REGISTRY }}/${{ env.NOTIFICATION_SERVICE_REPO }}:${{ env.IMAGE_TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Install frontend deps
         working-directory: ./frontend
@@ -206,6 +218,7 @@ jobs:
         with:
           name: terraform-plan-build
           path: tfplan
+          retention-days: 30
 
   test:
     name: Tests
@@ -282,6 +295,7 @@ jobs:
         with:
           name: test-and-coverage
           path: artifacts
+          retention-days: 30
 
   security:
     name: Security Scans
@@ -293,7 +307,7 @@ jobs:
 
       - name: Install security tools
         run: |
-          pip install snyk trivy grype semgrep trufflehog prowler aws-parliament
+          pip install snyk==1.1215.0 trivy==0.51.0 grype==0.81.0 semgrep==1.95.0 trufflehog==2.2.0 prowler==4.5.0 aws-parliament==1.5.0
 
       - name: Snyk container scan
         env:
@@ -312,7 +326,7 @@ jobs:
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
         run: |
-          trivy image "$ECR_REGISTRY/${{ env.ORDER_SERVICE_REPO }}:$IMAGE_TAG" --format sarif --output trivy-image.sarif
+          trivy image "$ECR_REGISTRY/${{ env.ORDER_SERVICE_REPO }}:$IMAGE_TAG" --severity HIGH,CRITICAL --format sarif --output trivy-image.sarif
 
       - name: Upload Trivy SARIF
         uses: github/codeql-action/upload-sarif@v3
@@ -355,6 +369,7 @@ jobs:
             semgrep.json
             prowler.json
             parliament.json
+          retention-days: 30
 
   infrastructure-preview:
     name: Infrastructure Preview
@@ -372,7 +387,7 @@ jobs:
 
       - name: Install infra preview tools
         run: |
-          pip install infracost driftctl
+          pip install infracost==0.10.39 driftctl==1.10.0
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -395,6 +410,7 @@ jobs:
         with:
           name: terraform-plan-pr
           path: tfplan-pr
+          retention-days: 30
 
       - name: Infracost breakdown
         env:
@@ -413,6 +429,7 @@ jobs:
           path: |
             infracost.json
             driftctl.json
+          retention-days: 30
 
       - name: PR comment with preview
         uses: actions/github-script@v7
@@ -450,10 +467,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.8.5'
-
-      - name: Install Flyway
-        run: |
-          echo "Assuming flyway is preinstalled on runner"
 
       - name: Terraform init (dev)
         env:
@@ -502,7 +515,7 @@ jobs:
 
       - name: Install newman
         run: |
-          npm install -g newman
+          npm install -g newman@6.0.0
 
       - name: Newman API tests (dev)
         run: |
@@ -525,6 +538,7 @@ jobs:
         with:
           name: integration-dev
           path: logs/integration
+          retention-days: 30
 
   deploy-staging:
     name: Deploy Staging
@@ -551,10 +565,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.8.5'
-
-      - name: Install Flyway
-        run: |
-          echo "Assuming flyway is preinstalled on runner"
 
       - name: Terraform init (staging)
         env:
@@ -621,6 +631,7 @@ jobs:
         with:
           name: e2e-staging
           path: artifacts/e2e
+          retention-days: 30
 
   security-scan-live:
     name: Live Security Scan (Staging)
@@ -632,7 +643,7 @@ jobs:
 
       - name: Install DAST tools
         run: |
-          pip install zap-cli sqlmap nuclei
+          pip install zap-cli==0.15.0 sqlmap==1.8.0 nuclei==3.3.7
 
       - name: OWASP ZAP DAST
         run: |
@@ -640,7 +651,7 @@ jobs:
 
       - name: SQLMap tests
         run: |
-          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1 --risk=1 --technique=B --skip-heuristics
+          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1 --risk=1 --technique=B --no-cast --flush-session
 
       - name: Nuclei scan
         run: |
@@ -652,6 +663,7 @@ jobs:
           name: live-security-staging
           path: |
             nuclei.json
+          retention-days: 30
 
   performance-test:
     name: Performance Tests (Staging)
@@ -663,7 +675,7 @@ jobs:
 
       - name: Install performance tools
         run: |
-          npm install -g k6 jmeter
+          npm install -g k6@0.51.0 jmeter@5.6.3
 
       - name: K6 load test
         run: |
@@ -682,6 +694,7 @@ jobs:
         with:
           name: performance-staging
           path: perf
+          retention-days: 30
 
   compliance-validation:
     name: Compliance Validation
@@ -710,6 +723,7 @@ jobs:
         with:
           name: compliance-report
           path: compliance
+          retention-days: 30
 
   deploy-prod-approval:
     name: Deploy Prod Approval
@@ -732,7 +746,11 @@ jobs:
     needs:
       - compliance-validation
       - deploy-prod-approval
-    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'deploy-production'
+    if: >
+      (github.ref == 'refs/heads/main' &&
+       needs.deploy-prod-approval.result == 'success') ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.event.inputs.target == 'deploy-production')
     concurrency:
       group: deploy-prod
       cancel-in-progress: false
@@ -753,10 +771,6 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.8.5'
-
-      - name: Install Flyway
-        run: |
-          echo "Assuming flyway is preinstalled on runner"
 
       - name: Terraform init (prod)
         env:
@@ -799,7 +813,7 @@ jobs:
 
       - name: Install newman
         run: |
-          npm install -g newman
+          npm install -g newman@6.0.0
 
       - name: Postman smoke tests (prod)
         run: |
@@ -822,6 +836,7 @@ jobs:
         with:
           name: smoke-prod
           path: logs/smoke
+          retention-days: 30
 
   monitoring:
     name: Monitoring & Observability
@@ -844,10 +859,12 @@ jobs:
         with:
           name: monitoring
           path: monitoring
+          retention-days: 30
 
   rollback:
     name: Rollback
     runs-on: ubuntu-latest
+    needs: []
     if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'rollback'
     concurrency:
       group: deploy-prod
@@ -890,3 +907,23 @@ jobs:
         with:
           name: rollback
           path: logs/rollback
+          retention-days: 30
+
+  notify-failure:
+    name: Notify on Failure
+    runs-on: ubuntu-latest
+    if: failure()
+    needs:
+      - validation
+      - build
+      - test
+      - security
+      - deploy-dev
+      - deploy-staging
+      - deploy-production
+    steps:
+      - name: Notify Slack
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          webhook_url: ${{ secrets.SLACK_WEBHOOK }}
