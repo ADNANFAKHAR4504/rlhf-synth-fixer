@@ -722,7 +722,7 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Enable X-Ray tracing for API Gateway
-        aws.apigateway.Stage(
+        self.api_stage = aws.apigateway.Stage(
             f"transaction-api-stage-{self.environment_suffix}",
             rest_api=api.id,
             deployment=aws.apigateway.Deployment(
@@ -815,7 +815,7 @@ class TapStack(pulumi.ComponentResource):
                 'rate_limit': 500
             },
             tags={**self.tags, 'Name': f'transaction-usage-plan-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self.api_gateway)
+            opts=ResourceOptions(parent=self.api_gateway, depends_on=[self.api_stage])
         )
 
         # Associate API key with usage plan
@@ -894,7 +894,7 @@ class TapStack(pulumi.ComponentResource):
                 lambda args: f"arn:aws:apigateway:{self.region}::/restapis/{args[0]}/stages/{self.stage_name}"
             ),
             web_acl_arn=self.waf_web_acl.arn,
-            opts=ResourceOptions(parent=self.waf_web_acl, depends_on=[self.api_gateway])
+            opts=ResourceOptions(parent=self.waf_web_acl, depends_on=[self.api_gateway, self.api_stage])
         )
 
         return association
