@@ -67,9 +67,17 @@ class TestStripeLambdaHandlerImproved(unittest.TestCase):
     @patch('boto3.client')
     def test_stripe_webhook_no_body_key(self, mock_boto3_client):
         """Test Stripe webhook without body key"""
+        # Ensure environment variables are set correctly
+        os.environ['TABLE_NAME'] = 'test-table'
+        os.environ['WEBHOOK_TYPE'] = 'Stripe'
+        
         mock_dynamodb = MagicMock()
         mock_boto3_client.return_value = mock_dynamodb
         mock_dynamodb.put_item.return_value = {}
+
+        # Clear cache to reload with correct env vars
+        if 'lib.lambda_functions.stripe_handler' in sys.modules:
+            del sys.modules['lib.lambda_functions.stripe_handler']
 
         from lib.lambda_functions.stripe_handler import lambda_handler
 
@@ -81,9 +89,17 @@ class TestStripeLambdaHandlerImproved(unittest.TestCase):
     @patch('boto3.client')
     def test_stripe_webhook_no_id_generates_default(self, mock_boto3_client):
         """Test Stripe webhook without ID generates default"""
+        # Ensure environment variables are set correctly
+        os.environ['TABLE_NAME'] = 'test-table'
+        os.environ['WEBHOOK_TYPE'] = 'Stripe'
+        
         mock_dynamodb = MagicMock()
         mock_boto3_client.return_value = mock_dynamodb
         mock_dynamodb.put_item.return_value = {}
+
+        # Clear cache to reload with correct env vars
+        if 'lib.lambda_functions.stripe_handler' in sys.modules:
+            del sys.modules['lib.lambda_functions.stripe_handler']
 
         from lib.lambda_functions.stripe_handler import lambda_handler
 

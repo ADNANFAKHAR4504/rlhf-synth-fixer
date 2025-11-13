@@ -1,4 +1,0 @@
-encryptionsalt: v1:GL00bvzuI9g=:v1:GR8y5ERStsf4KBN9:r6WQyz8LvDK0z4ztYXI4v8HuZY1QzQ==
-config:
-  payment-webhook-processor:environment_suffix: synth101912484
-  aws:region: us-east-1
