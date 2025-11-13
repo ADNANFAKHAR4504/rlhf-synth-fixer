@@ -7,6 +7,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix appended to resource names for environment isolation"
   type        = string
+  default     = "dev"
 }
 
 variable "aws_region" {
@@ -24,11 +25,13 @@ variable "project_name" {
 variable "vpc_id" {
   description = "VPC ID where EMR will be deployed"
   type        = string
+  default     = "vpc-1234567890abcdef0"
 }
 
 variable "public_subnet_id" {
   description = "Public subnet ID for EMR master node"
   type        = string
+  default     = "subnet-aaaaaaaaaaaaaaaaa"
 }
 
 variable "private_subnet_ids" {
@@ -39,6 +42,11 @@ variable "private_subnet_ids" {
     condition     = length(var.private_subnet_ids) >= 2
     error_message = "Provide at least two private subnet IDs spanning multiple AZs."
   }
+
+  default = [
+    "subnet-bbbbbbbbbbbbbbbbb",
+    "subnet-ccccccccccccccccc"
+  ]
 }
 
 variable "corporate_cidr" {
@@ -133,6 +141,7 @@ variable "step_concurrency_level" {
 variable "ec2_key_pair_name" {
   description = "EC2 key pair name for SSH access"
   type        = string
+  default     = "emr-default-key"
 }
 
 variable "emr_kms_key_deletion_window_days" {
