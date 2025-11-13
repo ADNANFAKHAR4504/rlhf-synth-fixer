@@ -1,19 +1,19 @@
 import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
   DescribeClusterCommand,
   DescribeNodegroupCommand,
   EKSClient,
 } from "@aws-sdk/client-eks";
 import { GetRoleCommand, IAMClient } from "@aws-sdk/client-iam";
+import { DescribeKeyCommand, KMSClient } from "@aws-sdk/client-kms";
 import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from "@aws-sdk/client-cloudwatch-logs";
-import { KMSClient, DescribeKeyCommand } from "@aws-sdk/client-kms";
-import {
-  SecretsManagerClient,
   DescribeSecretCommand,
+  SecretsManagerClient,
 } from "@aws-sdk/client-secrets-manager";
-import { SNSClient, GetTopicAttributesCommand } from "@aws-sdk/client-sns";
+import { GetTopicAttributesCommand, SNSClient } from "@aws-sdk/client-sns";
 import fs from "fs";
 import path from "path";
 
