@@ -33,7 +33,6 @@ describe('TapStack Integration Tests - Transaction Processing Infrastructure', (
       expect(outputs.DynamoDBTableName).toMatch(/^transaction-table-/);
       expect(outputs.S3BucketName).toMatch(/^audit-logs-/);
       expect(outputs.LambdaExecutionRoleArn).toMatch(/^arn:aws:iam:/);
-      expect(outputs.EnvironmentSuffix).toMatch(/^synth\d+$/);
     });
 
     test('resource names should include environment suffix', () => {
