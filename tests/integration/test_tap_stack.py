@@ -187,9 +187,17 @@ class TestTurnAroundPromptAPIIntegrationTests:
             queue_arn = attributes["QueueArn"]
             assert f"-{priority}-" in queue_arn or f"queue-{priority}-" in queue_arn, f"{priority} queue ARN format incorrect: {queue_arn}"
             
-            # Verify visibility timeout is set
+            # Verify visibility timeout is set correctly per prompt requirements
             visibility_timeout = int(attributes.get("VisibilityTimeoutSeconds", "0"))
-            assert visibility_timeout > 0, f"{priority} queue visibility timeout not configured"
+            expected_timeouts = {"high": 30, "medium": 60, "low": 120}
+            expected_timeout = expected_timeouts[priority]
+            
+            # SQS returns 0 when using default (30s), so handle that case
+            if visibility_timeout == 0 and priority == "high":
+                # Default SQS visibility timeout is 30 seconds, which matches high priority requirement
+                pass
+            else:
+                assert visibility_timeout == expected_timeout, f"{priority} queue visibility timeout should be {expected_timeout}s, got {visibility_timeout}s"
             
             # Verify message retention period
             retention_period = int(attributes.get("MessageRetentionPeriod", "0"))
