@@ -59,6 +59,7 @@ class TapStack(pulumi.ComponentResource):
         self.environment_suffix = args.environment_suffix
         self.tags = args.tags
         self.region = 'us-east-1'  # Deployment region
+        self.stage_name = self.environment_suffix  # API Gateway stage name
 
         # Create KMS key for encryption
         self.kms_key = self._create_kms_key()
@@ -106,7 +107,7 @@ class TapStack(pulumi.ComponentResource):
         # Register outputs
         self.register_outputs({
             'api_endpoint': self.api_gateway.execution_arn.apply(
-                lambda arn: f"https://{self.api_gateway.id}.execute-api.{self.region}.amazonaws.com/prod"
+                lambda arn: f"https://{self.api_gateway.id}.execute-api.{self.region}.amazonaws.com/{self.stage_name}"
             ),
             'dashboard_url': self.dashboard.dashboard_name.apply(
                 lambda name: (
@@ -729,7 +730,7 @@ class TapStack(pulumi.ComponentResource):
                 rest_api=api.id,
                 opts=ResourceOptions(parent=api, depends_on=[self._create_api_gateway_resources(api)])
             ).id,
-            stage_name="prod",
+            stage_name=self.stage_name,
             xray_tracing_enabled=True,
             tags={**self.tags, 'Name': f'transaction-api-stage-{self.environment_suffix}'},
             opts=ResourceOptions(parent=api)
@@ -803,7 +804,7 @@ class TapStack(pulumi.ComponentResource):
             name=f"transaction-usage-plan-{self.environment_suffix}",
             api_stages=[{
                 'api_id': self.api_gateway.id,
-                'stage': 'prod'
+                'stage': self.stage_name
             }],
             quota_settings={
                 'limit': 10000,
@@ -890,7 +891,7 @@ class TapStack(pulumi.ComponentResource):
                 self.api_gateway.id,
                 self.api_gateway.execution_arn
             ).apply(
-                lambda args: f"arn:aws:apigateway:{self.region}::/restapis/{args[0]}/stages/prod"
+                lambda args: f"arn:aws:apigateway:{self.region}::/restapis/{args[0]}/stages/{self.stage_name}"
             ),
             web_acl_arn=self.waf_web_acl.arn,
             opts=ResourceOptions(parent=self.waf_web_acl, depends_on=[self.api_gateway])
