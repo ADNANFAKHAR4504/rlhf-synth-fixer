@@ -345,14 +345,6 @@ export class TapStack extends TerraformStack {
       commonTags
     );
 
-    new EksAddon(this, 'vpc-cni', {
-      clusterName: eksCluster.name,
-      addonName: 'vpc-cni',
-      addonVersion: 'v1.15.4-eksbuild.1',
-      tags: commonTags,
-      dependsOn: [eksCluster, nodeGroups[0]],
-    });
-
     const vpcCniAddon = new EksAddon(this, 'vpc-cni', {
       clusterName: eksCluster.name,
       addonName: 'vpc-cni',
@@ -375,7 +367,7 @@ export class TapStack extends TerraformStack {
       serviceAccountRoleArn: ebsCsiRole.role.arn,
       tags: commonTags,
       dependsOn: [
-        eksCluster, 
+        eksCluster,
         ebsCsiRole.role,
         iamModule.oidcProvider, // Add OIDC provider dependency
         nodeGroups[0], // Add dependency on at least one node group
