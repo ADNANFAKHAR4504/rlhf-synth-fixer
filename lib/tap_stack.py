@@ -118,7 +118,7 @@ class TapStack(cdk.Stack):
             self,
             f"PaymentEKS-{environment_suffix}",
             cluster_name=f"payment-eks-{environment_suffix}",
-            version=eks.KubernetesVersion.V1_28,
+            version=eks.KubernetesVersion.V1_29,
             vpc=vpc,
             vpc_subnets=[ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS)],
             default_capacity=0,  # We'll create custom node groups
@@ -475,7 +475,7 @@ class TapStack(cdk.Stack):
 
         # Get Bottlerocket AMI
         bottlerocket_ami = ec2.MachineImage.from_ssm_parameter(
-            "/aws/service/bottlerocket/aws-k8s-1.28/x86_64/latest/image_id",
+            "/aws/service/bottlerocket/aws-k8s-1.29/x86_64/latest/image_id",
             os=ec2.OperatingSystemType.LINUX,
         )
 
