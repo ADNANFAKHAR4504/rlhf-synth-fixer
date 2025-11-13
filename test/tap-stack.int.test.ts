@@ -79,6 +79,40 @@ const parseLambdaResponse = (response: any, functionName: string = 'Lambda'): an
   return JSON.parse(Buffer.from(response.Payload!).toString());
 };
 
+const pythonStyleJsonDump = (value: any): string => {
+  if (value === null) {
+    return 'null';
+  }
+
+  if (typeof value === 'number') {
+    if (Number.isFinite(value)) {
+      return Number.isInteger(value) ? value.toString() : Number(value).toString();
+    }
+    return 'null';
+  }
+
+  if (typeof value === 'boolean') {
+    return value ? 'true' : 'false';
+  }
+
+  if (typeof value === 'string') {
+    return JSON.stringify(value);
+  }
+
+  if (Array.isArray(value)) {
+    const elements = value.map((element) => pythonStyleJsonDump(element));
+    return `[${elements.join(', ')}]`;
+  }
+
+  if (typeof value === 'object') {
+    const keys = Object.keys(value).sort();
+    const entries = keys.map((key) => `${JSON.stringify(key)}: ${pythonStyleJsonDump(value[key])}`);
+    return `{${entries.join(', ')}}`;
+  }
+
+  return 'null';
+};
+
 describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow Focus)', () => {
   // Stack outputs
   let apiEndpoint: string;
@@ -1334,8 +1368,8 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       expect(storedData.checksum).toMatch(/^[a-f0-9]{64}$/); // SHA256 hex format
       
       // Verify checksum matches transaction data
-      const transactionDataJson = JSON.stringify(storedData.transactionData, Object.keys(storedData.transactionData).sort());
-      const expectedChecksum = crypto.createHash('sha256').update(transactionDataJson).digest('hex');
+      const pythonStyleTransactionData = pythonStyleJsonDump(storedData.transactionData);
+      const expectedChecksum = crypto.createHash('sha256').update(pythonStyleTransactionData).digest('hex');
       expect(storedData.checksum).toBe(expectedChecksum);
     });
 
