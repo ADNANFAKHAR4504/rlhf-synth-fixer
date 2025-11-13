@@ -1,22 +1,30 @@
 {
-  "po_id": "r7u57r",
   "platform": "pulumi",
   "language": "py",
   "complexity": "expert",
-  "category": "disaster-recovery",
-  "subcategory": "multi-region-dr",
-  "description": "Disaster Recovery Infrastructure with Aurora, DynamoDB, Lambda, API Gateway, and monitoring",
-  "training_quality": 8,
+  "turn_type": "single",
+  "po_id": "r7u57r",
+  "team": "1",
+  "startedAt": "",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": ["Failure Recovery"],
   "aws_services": [
-    "VPC",
-    "EC2",
-    "DynamoDB",
-    "S3",
-    "Lambda",
-    "API Gateway",
-    "EventBridge",
-    "CloudWatch",
-    "SNS",
-    "IAM"
-  ]
+    "vpc",
+    "ec2",
+    "dynamodb",
+    "s3",
+    "lambda",
+    "apigateway",
+    "eventbridge",
+    "cloudwatch",
+    "sns",
+    "iam"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "",
+  "dockerS3Location": ""
 }
