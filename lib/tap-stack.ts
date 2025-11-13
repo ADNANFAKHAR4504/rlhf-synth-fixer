@@ -1222,7 +1222,10 @@ export class TapStack extends pulumi.ComponentResource {
         healthCheckGracePeriodSeconds: 60,
         tags: { ...tags, Name: `frontend-service-${environmentSuffix}` },
       },
-      { parent: this, dependsOn: [albListener, fargateCapacityProvider] }
+      {
+        parent: this,
+        dependsOn: [albListener, fargateCapacityProvider, frontendDiscoveryService],
+      }
     );
 
     // Frontend Auto Scaling
@@ -1283,7 +1286,10 @@ export class TapStack extends pulumi.ComponentResource {
         healthCheckGracePeriodSeconds: 60,
         tags: { ...tags, Name: `api-gateway-service-${environmentSuffix}` },
       },
-      { parent: this, dependsOn: [albListener, fargateCapacityProvider] }
+      {
+        parent: this,
+        dependsOn: [albListener, fargateCapacityProvider, apiDiscoveryService],
+      }
     );
 
     // API Gateway Auto Scaling
@@ -1336,7 +1342,10 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `processing-service-${environmentSuffix}` },
       },
-      { parent: this, dependsOn: [fargateCapacityProvider] }
+      {
+        parent: this,
+        dependsOn: [fargateCapacityProvider, processingDiscoveryService],
+      }
     );
 
     // Processing Service Auto Scaling
