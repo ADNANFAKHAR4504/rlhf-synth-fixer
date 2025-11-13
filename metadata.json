@@ -11,6 +11,8 @@
     "infrastructure",
     "iac-program-optimization-&-fixes"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "po_id": "101912504",
   "aws_services": [
     "DynamoDB",

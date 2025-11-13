@@ -287,10 +287,7 @@ describe('TapStack CloudFormation Template - Transaction Processing', () => {
       expect(lambda.Type).toBe('AWS::Lambda::Function');
     });
 
-    test('TransactionProcessorFunction should depend on execution role', () => {
-      const lambda = template.Resources.TransactionProcessorFunction;
-      expect(lambda.DependsOn).toBe('LambdaExecutionRole');
-    });
+    // Test removed - DependsOn was removed as it's not needed when using GetAtt
 
     test('TransactionProcessorFunction should use parameterized memory size', () => {
       const lambda = template.Resources.TransactionProcessorFunction;
