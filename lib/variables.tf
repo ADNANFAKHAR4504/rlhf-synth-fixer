@@ -25,28 +25,63 @@ variable "project_name" {
 variable "vpc_id" {
   description = "VPC ID where EMR will be deployed"
   type        = string
-  default     = "vpc-1234567890abcdef0"
+  default     = null
+
+  validation {
+    condition     = var.vpc_id == null ? true : (var.public_subnet_id != null && var.private_subnet_ids != null && length(var.private_subnet_ids) >= 2)
+    error_message = "When supplying vpc_id, also provide public_subnet_id and at least two private_subnet_ids."
+  }
 }
 
 variable "public_subnet_id" {
   description = "Public subnet ID for EMR master node"
   type        = string
-  default     = "subnet-aaaaaaaaaaaaaaaaa"
+  default     = null
 }
 
 variable "private_subnet_ids" {
   description = "Private subnet IDs for EMR core/task nodes across at least two AZs"
   type        = list(string)
+  default     = null
 
   validation {
-    condition     = length(var.private_subnet_ids) >= 2
+    condition     = var.private_subnet_ids == null || length(var.private_subnet_ids) >= 2
     error_message = "Provide at least two private subnet IDs spanning multiple AZs."
   }
+}
 
-  default = [
-    "subnet-bbbbbbbbbbbbbbbbb",
-    "subnet-ccccccccccccccccc"
-  ]
+variable "vpc_cidr" {
+  description = "CIDR block for the automatically created EMR VPC (when existing VPC is not supplied)"
+  type        = string
+  default     = "10.60.0.0/16"
+}
+
+variable "public_subnet_cidr" {
+  description = "CIDR block for the public subnet when creating networking resources"
+  type        = string
+  default     = "10.60.0.0/24"
+}
+
+variable "private_subnet_cidrs" {
+  description = "CIDR blocks for private subnets when creating networking resources"
+  type        = list(string)
+  default     = ["10.60.1.0/24", "10.60.2.0/24"]
+
+  validation {
+    condition     = length(var.private_subnet_cidrs) >= 2
+    error_message = "Provide at least two CIDR blocks for private subnets."
+  }
+}
+
+variable "availability_zones" {
+  description = "Availability zones used when creating networking resources"
+  type        = list(string)
+  default     = ["us-east-1a", "us-east-1b"]
+
+  validation {
+    condition     = length(var.availability_zones) >= 2
+    error_message = "Provide at least two availability zones."
+  }
 }
 
 variable "corporate_cidr" {
@@ -153,7 +188,7 @@ variable "step_concurrency_level" {
 variable "ec2_key_pair_name" {
   description = "EC2 key pair name for SSH access"
   type        = string
-  default     = "emr-default-key"
+  default     = null
 }
 
 variable "emr_kms_key_deletion_window_days" {

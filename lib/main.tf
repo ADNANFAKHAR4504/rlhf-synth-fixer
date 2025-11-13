@@ -1,3 +1,118 @@
+locals {
+  use_existing_vpc             = trimspace(coalesce(var.vpc_id, "")) != ""
+  use_existing_public_subnet   = trimspace(coalesce(var.public_subnet_id, "")) != ""
+  use_existing_private_subnets = var.private_subnet_ids != null && length(var.private_subnet_ids) > 0
+}
+
+##################
+# Core Networking#
+##################
+
+resource "aws_vpc" "emr" {
+  count                = local.use_existing_vpc ? 0 : 1
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-vpc"
+  })
+}
+
+resource "aws_internet_gateway" "emr" {
+  count  = local.use_existing_vpc ? 0 : 1
+  vpc_id = local.use_existing_vpc ? null : aws_vpc.emr[0].id
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-igw"
+  })
+}
+
+resource "aws_subnet" "public" {
+  count                   = local.use_existing_public_subnet ? 0 : 1
+  vpc_id                  = local.use_existing_vpc ? var.vpc_id : aws_vpc.emr[0].id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = var.availability_zones[0]
+  map_public_ip_on_launch = true
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-public-subnet"
+  })
+}
+
+resource "aws_subnet" "private" {
+  count             = local.use_existing_private_subnets ? 0 : length(var.private_subnet_cidrs)
+  vpc_id            = local.use_existing_vpc ? var.vpc_id : aws_vpc.emr[0].id
+  cidr_block        = var.private_subnet_cidrs[count.index]
+  availability_zone = var.availability_zones[count.index % length(var.availability_zones)]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-private-subnet-${count.index + 1}"
+  })
+}
+
+resource "aws_eip" "nat" {
+  count      = local.use_existing_vpc ? 0 : 1
+  domain     = "vpc"
+  depends_on = [aws_internet_gateway.emr]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-nat-eip"
+  })
+}
+
+resource "aws_nat_gateway" "emr" {
+  count         = local.use_existing_vpc ? 0 : 1
+  subnet_id     = local.use_existing_public_subnet ? null : aws_subnet.public[0].id
+  allocation_id = local.use_existing_vpc ? null : aws_eip.nat[0].id
+
+  depends_on = [aws_internet_gateway.emr]
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-nat"
+  })
+}
+
+resource "aws_route_table" "public" {
+  count  = local.use_existing_vpc ? 0 : 1
+  vpc_id = local.use_existing_vpc ? var.vpc_id : aws_vpc.emr[0].id
+
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.emr[0].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-public-rt"
+  })
+}
+
+resource "aws_route_table_association" "public" {
+  count          = local.use_existing_public_subnet ? 0 : 1
+  subnet_id      = aws_subnet.public[count.index].id
+  route_table_id = aws_route_table.public[count.index].id
+}
+
+resource "aws_route_table" "private" {
+  count  = local.use_existing_private_subnets ? 0 : 1
+  vpc_id = local.use_existing_vpc ? var.vpc_id : aws_vpc.emr[0].id
+
+  route {
+    cidr_block     = "0.0.0.0/0"
+    nat_gateway_id = aws_nat_gateway.emr[0].id
+  }
+
+  tags = merge(local.common_tags, {
+    Name = "${local.bucket_prefix}-private-rt"
+  })
+}
+
+resource "aws_route_table_association" "private" {
+  count          = local.use_existing_private_subnets ? 0 : length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[0].id
+}
+
 ##############################
 # Encryption and Data Stores #
 ##############################
@@ -154,7 +269,7 @@ resource "aws_s3_bucket_policy" "logs_https_only" {
 resource "aws_security_group" "emr_master" {
   name_prefix = "${local.bucket_prefix}-master-"
   description = "Security group for EMR master node"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.emr_vpc_id
 
   ingress {
     description = "SSH from corporate network"
@@ -180,7 +295,7 @@ resource "aws_security_group" "emr_master" {
 resource "aws_security_group" "emr_core_task" {
   name_prefix = "${local.bucket_prefix}-core-task-"
   description = "Security group for EMR core and task nodes"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.emr_vpc_id
 
   egress {
     description = "All outbound traffic"
@@ -198,7 +313,7 @@ resource "aws_security_group" "emr_core_task" {
 resource "aws_security_group" "emr_service" {
   name_prefix = "${local.bucket_prefix}-service-"
   description = "Service access security group for EMR control plane"
-  vpc_id      = var.vpc_id
+  vpc_id      = local.emr_vpc_id
 
   egress {
     description = "All outbound traffic"
@@ -276,6 +391,7 @@ resource "aws_emr_security_configuration" "main" {
       InTransitEncryptionConfiguration = {
         TLSCertificateConfiguration = {
           CertificateProviderType = "PEM"
+          S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_certificate.key}"
         }
       }
     }
@@ -293,6 +409,41 @@ resource "aws_s3_object" "bootstrap_script" {
   etag   = filemd5("${path.module}/bootstrap.sh")
 }
 
+resource "aws_s3_object" "emr_tls_certificate" {
+  bucket       = aws_s3_bucket.logs.id
+  key          = "security/emr-cluster.pem"
+  content_type = "application/x-pem-file"
+  content      = <<-EOT
+-----BEGIN CERTIFICATE-----
+MIIDVDCCAjygAwIBAgIUUD1MEyorde0x4tq5wO7iXKcBPiMwDQYJKoZIhvcNAQEL
+BQAwRzELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNBMQ8wDQYDVQQHDAZTdW5ueTEQ
+MA4GA1UECgwHU3BhcmtsZTEPMA0GA1UEAwwGRW1yQ0EwHhcNMjQxMTAxMDAwMDAw
+WhcNMzQxMDI5MDAwMDAwWjBHMQswCQYDVQQGEwJVUzELMAkGA1UECAwCQ0ExDzAN
+BgNVBAcMBlN1bm55MRAwDgYDVQQKDAdTcGFya2xlMQ8wDQYDVQQDDAZFbXJDQTCC
+ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALaNT9l9XMYCzCYbezk6C8PX
+wojaXwft+jrWbVQf1jGwxNUX6jMl8SeQI5ThQex4MXZQ70YIkoccG4ap54FlIrLc
+PnALoWdO52LGjY5cKNqZb3EOKTqKEF/iIhKKuYFX5rVNA4nA8pmJ+eJdChDgF7iA
+fhVQeMMUuaXetRkzqX7nTo8gEz+pX4Y0tk0W8ww0PCvHETPVmHqFDCyGoK5exYhA
+XWlx3hpxPhMkuV3ynslNG05PoD4hGEoTOeGoB19s+yGAV9ApG4f8FgbgT2/LOWBR
+XN4g14n4FEBA1/shFZuh4ARlpVBLxAP5EflPGcyonRmeRdGPzKT4K77Y/it3bVsC
+AwEAAaNTMFEwHQYDVR0OBBYEFLqznuJ1PUqz4LCMK9uIMP9r5BwIMB8GA1UdIwQY
+MBaAFLqznuJ1PUqz4LCMK9uIMP9r5BwIMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
+hvcNAQELBQADggEBADEb8zzmFqmPuS7xJYAE7mefQmlkHT/ogGJVKRlULHn6ud+G
+Tx4F20yR38G5dc1QOueHE2qXXgZyRdfQ1VoA0kTFcB7MXNfa0MzASJKuVdzm6hmK
+QDihsp5ZULr6GPLXss7Go7WuS+daOg3Hjtw0YqKbuJBpMsWHDuoDxLKNY7TK9b+I
+4V0dDVemGGSxIHiOaFguQ+r7G1YQpk72V3nex3hjgPqyBcUS2uXfdY6XjSfFlIY8
+jbTt3bnVwwDUD2dD+BRg0yH196zCkHiTuI1xVW0ZvqvJ1P0z3PCNN7WTR2GXRf9F
+gf/xMA3BiWVYr6nO0wxx1qaUSvWtNfC7omMotxA=
+-----END CERTIFICATE-----
+EOT
+}
+
+locals {
+  emr_vpc_id             = local.use_existing_vpc ? var.vpc_id : aws_vpc.emr[0].id
+  emr_public_subnet_id   = local.use_existing_public_subnet ? var.public_subnet_id : aws_subnet.public[0].id
+  emr_private_subnet_ids = local.use_existing_private_subnets ? var.private_subnet_ids : [for subnet in aws_subnet.private : subnet.id]
+}
+
 ################
 # EMR Cluster #
 ################
@@ -308,7 +459,7 @@ resource "aws_emr_cluster" "main" {
   visible_to_all_users              = true
 
   ec2_attributes {
-    subnet_id                         = var.public_subnet_id
+    subnet_id                         = local.emr_public_subnet_id
     emr_managed_master_security_group = aws_security_group.emr_master.id
     emr_managed_slave_security_group  = aws_security_group.emr_core_task.id
     service_access_security_group     = aws_security_group.emr_service.id
