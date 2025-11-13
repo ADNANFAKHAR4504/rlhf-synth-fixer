@@ -4,21 +4,17 @@ Description: 'Secure and Compliant E-Commerce Cloud Environment'
 Parameters:
   Environment:
     Type: String
-    Default: Production
+    Default: production
     AllowedValues:
-      - Development
-      - Staging
-      - Production
+      - development
+      - staging
+      - production
     Description: Environment name
   
   OwnerEmail:
     Type: String
     Default: admin@example.com
     Description: Owner email for tagging
-  
-  KeyPairName:
-    Type: AWS::EC2::KeyPair::KeyName
-    Description: EC2 Key Pair for SSH access
   
   DBUsername:
     Type: String
@@ -31,6 +27,7 @@ Parameters:
   
   DBPassword:
     Type: String
+    Default: TempPassword123
     NoEcho: true
     MinLength: 8
     MaxLength: 41
@@ -40,6 +37,54 @@ Parameters:
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
+Mappings:
+  # AWS ELB Account IDs by region - needed for ALB access logging
+  RegionToELBAccountId:
+    us-east-1:
+      AccountId: "127311923021"
+    us-east-2:
+      AccountId: "033677994240"
+    us-west-1:
+      AccountId: "027434742980"
+    us-west-2:
+      AccountId: "797873946194"
+    af-south-1:
+      AccountId: "098369216593"
+    ca-central-1:
+      AccountId: "985666609251"
+    eu-central-1:
+      AccountId: "054676820928"
+    eu-west-1:
+      AccountId: "156460612806"
+    eu-west-2:
+      AccountId: "652711504416"
+    eu-west-3:
+      AccountId: "009996457667"
+    eu-north-1:
+      AccountId: "897822967062"
+    eu-south-1:
+      AccountId: "635631232127"
+    ap-east-1:
+      AccountId: "754344448648"
+    ap-northeast-1:
+      AccountId: "582318560864"
+    ap-northeast-2:
+      AccountId: "600734575887"
+    ap-northeast-3:
+      AccountId: "383597477331"
+    ap-southeast-1:
+      AccountId: "114774131450"
+    ap-southeast-2:
+      AccountId: "783225319266"
+    ap-southeast-3:
+      AccountId: "589379963580"
+    ap-south-1:
+      AccountId: "718504428378"
+    me-south-1:
+      AccountId: "076674570225"
+    sa-east-1:
+      AccountId: "507241528517"
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -52,14 +97,28 @@ Metadata:
       - Label:
           default: Security Configuration
         Parameters:
-          - KeyPairName
           - DBUsername
           - DBPassword
 
 Resources:
+  # ==================== EC2 Key Pair ====================
+  EC2KeyPair:
+    Type: AWS::EC2::KeyPair
+    Properties:
+      KeyName: !Sub 'ecommerce-keypair-${Environment}'
+      Tags:
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref OwnerEmail
+        - Key: Purpose
+          Value: E-Commerce-SSH
+
   # ==================== KMS Keys ====================
   MasterKMSKey:
     Type: AWS::KMS::Key
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       Description: Master KMS key for E-Commerce encryption
       KeyPolicy:
@@ -75,11 +134,10 @@ Resources:
             Effect: Allow
             Principal:
               Service:
-                - ec2.amazonaws.com
                 - s3.amazonaws.com
-                - rds.amazonaws.com
-                - lambda.amazonaws.com
                 - logs.amazonaws.com
+                - rds.amazonaws.com
+                - cloudtrail.amazonaws.com
             Action:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
@@ -366,12 +424,6 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           Description: HTTP from Internet (will redirect to HTTPS)
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          DestinationSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: HTTPS to web servers
       Tags:
         - Key: Name
           Value: !Sub 'ALB-SG-${Environment}'
@@ -389,11 +441,6 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 443
-          ToPort: 443
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: HTTPS from ALB
-        - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 10.0.0.0/16
@@ -404,11 +451,6 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: HTTPS to Internet
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: PostgreSQL to RDS
       Tags:
         - Key: Name
           Value: !Sub 'WebServer-SG-${Environment}'
@@ -424,17 +466,6 @@ Resources:
     Properties:
       GroupDescription: Security group for RDS database
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: PostgreSQL from web servers
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref LambdaSecurityGroup
-          Description: PostgreSQL from Lambda
       Tags:
         - Key: Name
           Value: !Sub 'Database-SG-${Environment}'
@@ -456,11 +487,6 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: HTTPS to Internet
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: PostgreSQL to RDS
       Tags:
         - Key: Name
           Value: !Sub 'Lambda-SG-${Environment}'
@@ -471,16 +497,78 @@ Resources:
         - Key: Purpose
           Value: E-Commerce-Security
 
+  # Security Group Rules (added separately to avoid circular dependencies)
+  ALBToWebServerEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      DestinationSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: HTTP to web servers
+
+  WebServerFromALBIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Description: HTTP from ALB
+
+  WebServerToDatabaseEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Description: PostgreSQL to RDS
+
+  DatabaseFromWebServerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: PostgreSQL from web servers
+
+  LambdaToDatabaseEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Description: PostgreSQL to RDS
+
+  DatabaseFromLambdaIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Description: PostgreSQL from Lambda
+
   # ==================== S3 Buckets ====================
   S3LoggingBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub 'ecommerce-logs-${AWS::AccountId}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !Ref MasterKMSKey
+              SSEAlgorithm: AES256
       VersioningConfiguration:
         Status: Enabled
       LifecycleConfiguration:
@@ -501,8 +589,41 @@ Resources:
         - Key: Purpose
           Value: E-Commerce-Logging
 
+  S3LoggingBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref S3LoggingBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSLogDeliveryWrite
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${S3LoggingBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+          - Sid: AWSLogDeliveryAclCheck
+            Effect: Allow
+            Principal:
+              Service: logging.s3.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt S3LoggingBucket.Arn
+          - Sid: ELBAccessLogsPolicy
+            Effect: Allow
+            Principal:
+              AWS: !Sub 
+                - 'arn:aws:iam::${AccountId}:root'
+                - AccountId: !FindInMap [RegionToELBAccountId, !Ref 'AWS::Region', AccountId]
+            Action: 's3:PutObject'
+            Resource: !Sub '${S3LoggingBucket.Arn}/*'
+
   S3ApplicationBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub 'ecommerce-app-${AWS::AccountId}-${Environment}'
       BucketEncryption:
@@ -548,6 +669,8 @@ Resources:
   # ==================== CloudTrail ====================
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub 'ecommerce-trail-${AWS::AccountId}-${Environment}'
       BucketEncryption:
@@ -617,6 +740,8 @@ Resources:
   # ==================== AWS Config ====================
   ConfigBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       BucketName: !Sub 'ecommerce-config-${AWS::AccountId}-${Environment}'
       BucketEncryption:
@@ -678,7 +803,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -693,7 +818,7 @@ Resources:
       - ConfigBucketPolicy
     Properties:
       Name: !Sub 'ECommerce-Recorder-${Environment}'
-      RoleArn: !GetAtt ConfigRecorderRole.Arn
+      RoleARN: !GetAtt ConfigRecorderRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -738,6 +863,10 @@ Resources:
                   - 'ssm:GetParameter'
                   - 'ssm:GetParameters'
                 Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ecommerce/*'
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref DBSecret
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -790,6 +919,10 @@ Resources:
                   - 'ssm:GetParameter'
                   - 'ssm:GetParameters'
                 Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/ecommerce/*'
+              - Effect: Allow
+                Action:
+                  - 'secretsmanager:GetSecretValue'
+                Resource: !Ref DBSecret
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -821,34 +954,29 @@ Resources:
               BoolIfExists:
                 'aws:MultiFactorAuthPresent': 'false'
 
-  # ==================== SSM Parameter Store ====================
-  DBEndpointParameter:
-    Type: AWS::SSM::Parameter
+  # ==================== Secrets Manager ====================
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
     Properties:
-      Name: /ecommerce/database/endpoint
-      Type: String
-      Value: !GetAtt RDSDatabase.Endpoint.Address
-      Description: RDS Database Endpoint
+      Name: !Sub '/ecommerce/database/credentials-${Environment}'
+      Description: RDS Database Credentials
+      SecretString: !Sub |
+        {
+          "username": "${DBUsername}",
+          "password": "${DBPassword}"
+        }
       Tags:
-        Environment: !Ref Environment
-        Owner: !Ref OwnerEmail
-        Purpose: E-Commerce-Config
-
-  DBPasswordParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: /ecommerce/database/password
-      Type: String
-      Value: !Ref DBPassword
-      Description: RDS Database Password
-      Tags:
-        Environment: !Ref Environment
-        Owner: !Ref OwnerEmail
-        Purpose: E-Commerce-Config
+        - Key: Environment
+          Value: !Ref Environment
+        - Key: Owner
+          Value: !Ref OwnerEmail
+        - Key: Purpose
+          Value: E-Commerce-Config
 
   # ==================== Application Load Balancer ====================
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    DependsOn: S3LoggingBucketPolicy
     Properties:
       Name: !Sub 'ECommerce-ALB-${Environment}'
       Type: application
@@ -881,14 +1009,14 @@ Resources:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Name: !Sub 'ECommerce-TG-${Environment}'
-      Port: 443
-      Protocol: HTTPS
+      Port: 80
+      Protocol: HTTP
       VpcId: !Ref VPC
       TargetType: instance
       HealthCheckEnabled: true
       HealthCheckIntervalSeconds: 30
       HealthCheckPath: /health
-      HealthCheckProtocol: HTTPS
+      HealthCheckProtocol: HTTP
       HealthCheckTimeoutSeconds: 5
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
@@ -907,11 +1035,8 @@ Resources:
       Port: 80
       Protocol: HTTP
       DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            StatusCode: HTTP_301
+        - Type: forward
+          TargetGroupArn: !Ref ALBTargetGroup
 
   # Note: You'll need to import or create an SSL certificate in ACM
   # For now, using HTTP to HTTPS redirect only
@@ -998,26 +1123,21 @@ Resources:
       LaunchTemplateData:
         ImageId: !Ref LatestAmiId
         InstanceType: t3.medium
-        KeyName: !Ref KeyPairName
+        KeyName: !Ref EC2KeyPair
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
           - !Ref WebServerSecurityGroup
-        BlockDeviceMappings:
-          - DeviceName: /dev/xvda
-            Ebs:
-              VolumeType: gp3
-              VolumeSize: 20
-              Encrypted: true
-              KmsKeyId: !Ref MasterKMSKey
-              DeleteOnTermination: true
         UserData:
           Fn::Base64: !Sub |
             #!/bin/bash
+            set -euo pipefail
             yum update -y
-            yum install -y amazon-cloudwatch-agent
+            yum install -y python3 python3-pip awscli amazon-cloudwatch-agent
             
-            # Configure CloudWatch agent
+            pip3 install --upgrade pip
+            pip3 install boto3 psycopg2-binary
+            
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
               "metrics": {
@@ -1053,6 +1173,11 @@ Resources:
                         "file_path": "/var/log/messages",
                         "log_group_name": "/aws/ec2/ecommerce/${Environment}",
                         "log_stream_name": "{instance_id}/messages"
+                      },
+                      {
+                        "file_path": "/home/ec2-user/server.log",
+                        "log_group_name": "/aws/ec2/ecommerce/${Environment}",
+                        "log_stream_name": "{instance_id}/server"
                       }
                     ]
                   }
@@ -1064,6 +1189,96 @@ Resources:
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config -m ec2 \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
+            
+            cat > /home/ec2-user/server.py <<'EOF'
+            import http.server
+            import socketserver
+            import json
+            import os
+            import boto3
+            import psycopg2
+            import json
+            
+            ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
+            AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+            DB_SECRET_ARN = os.environ.get("DB_SECRET_ARN", "")
+            DB_ENDPOINT_PARAMETER = os.environ.get("DB_ENDPOINT_PARAMETER", "/ecommerce/database/endpoint")
+            
+            ssm = boto3.client("ssm", region_name=AWS_REGION)
+            secrets = boto3.client("secretsmanager", region_name=AWS_REGION)
+            
+            def get_db_connection():
+                endpoint = ssm.get_parameter(Name=DB_ENDPOINT_PARAMETER)["Parameter"]["Value"]
+                secret_value = secrets.get_secret_value(SecretId=DB_SECRET_ARN)
+                secret = json.loads(secret_value["SecretString"])
+                return psycopg2.connect(
+                    host=endpoint,
+                    user=secret["username"],
+                    password=secret["password"],
+                    dbname="postgres",
+                    connect_timeout=5,
+                    sslmode="require"
+                )
+            
+            class Handler(http.server.SimpleHTTPRequestHandler):
+                def do_GET(self):
+                    if self.path == "/":
+                        self.send_response(200)
+                        self.send_header("Content-type", "text/html")
+                        self.end_headers()
+                        html = f"<h1>E-Commerce Application ({ENVIRONMENT})</h1>" \
+                               "<p><a href='/health'>Health Check</a> | <a href='/db-test'>Database Test</a></p>"
+                        self.wfile.write(html.encode())
+                    elif self.path == "/health":
+                        self.send_response(200)
+                        self.send_header("Content-type", "application/json")
+                        self.end_headers()
+                        response = {"status": "healthy", "service": "python-server", "environment": ENVIRONMENT}
+                        self.wfile.write(json.dumps(response).encode())
+                    elif self.path.startswith("/db-test"):
+                        self.handle_db_test()
+                    else:
+                        super().do_GET()
+            
+                def handle_db_test(self):
+                    self.send_response(200)
+                    self.send_header("Content-type", "application/json")
+                    try:
+                        connection = get_db_connection()
+                        cursor = connection.cursor()
+                        cursor.execute("SELECT 1")
+                        cursor.fetchone()
+                        cursor.close()
+                        connection.close()
+                        response = {
+                            "status": "success",
+                            "message": "Database connection successful"
+                        }
+                    except Exception as error:
+                        response = {
+                            "status": "error",
+                            "message": f"{error}"
+                        }
+                    self.end_headers()
+                    self.wfile.write(json.dumps(response).encode())
+            
+            if __name__ == "__main__":
+                PORT = 80
+                with socketserver.TCPServer(("", PORT), Handler) as httpd:
+                    print(f"Server running on port {PORT}")
+                    httpd.serve_forever()
+            EOF
+            
+            chown ec2-user:ec2-user /home/ec2-user/server.py
+            chmod +x /home/ec2-user/server.py
+            
+            REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
+            export ENVIRONMENT="${Environment}"
+            export AWS_DEFAULT_REGION=$REGION
+            export DB_SECRET_ARN="${DBSecret}"
+            export DB_ENDPOINT_PARAMETER="/ecommerce/database/endpoint"
+            
+            nohup python3 /home/ec2-user/server.py > /home/ec2-user/server.log 2>&1 &
         TagSpecifications:
           - ResourceType: instance
             Tags:
@@ -1194,19 +1409,20 @@ Resources:
 
   RDSDatabase:
     Type: AWS::RDS::DBInstance
-    DeletionPolicy: Snapshot
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub 'ecommerce-db-${Environment}'
       DBName: ecommercedb
       Engine: postgres
-      EngineVersion: '15.4'
+      EngineVersion: '15.14'
       DBInstanceClass: db.t3.medium
       AllocatedStorage: 100
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref MasterKMSKey
-      MasterUsername: !Ref DBUsername
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       VPCSecurityGroups:
         - !Ref DatabaseSecurityGroup
       DBSubnetGroupName: !Ref DBSubnetGroup
@@ -1225,9 +1441,23 @@ Resources:
         - Key: Purpose
           Value: E-Commerce-Database
 
+  DBEndpointParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /ecommerce/database/endpoint
+      Type: String
+      Value: !GetAtt RDSDatabase.Endpoint.Address
+      Description: RDS Database Endpoint
+      Tags:
+        Environment: !Ref Environment
+        Owner: !Ref OwnerEmail
+        Purpose: E-Commerce-Config
+
   # ==================== Lambda Function ====================
   LambdaLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/lambda/ECommerce-Function-${Environment}'
       RetentionInDays: 14
@@ -1285,12 +1515,16 @@ Resources:
   # ==================== CloudWatch Log Groups ====================
   EC2LogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/ec2/ecommerce/${Environment}'
       RetentionInDays: 30
 
   RDSLogGroup:
     Type: AWS::Logs::LogGroup
+    DeletionPolicy: Delete
+    UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/rds/instance/ecommerce-db-${Environment}/postgresql'
       RetentionInDays: 30

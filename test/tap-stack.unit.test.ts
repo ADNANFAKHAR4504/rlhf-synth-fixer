@@ -1,210 +1,440 @@
 import fs from 'fs';
 import path from 'path';
 
-const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-
 describe('TapStack CloudFormation Template', () => {
   let template: any;
 
-  beforeAll(() => {
-    // If youre testing a yaml template. run `pipenv run cfn-flip-to-json > lib/TapStack.json`
-    // Otherwise, ensure the template is in JSON format.
+  const loadTemplate = () => {
     const templatePath = path.join(__dirname, '../lib/TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf8');
-    template = JSON.parse(templateContent);
-  });
+    return JSON.parse(templateContent);
+  };
 
-  describe('Write Integration TESTS', () => {
-    test('Dont forget!', async () => {
-      expect(false).toBe(true);
-    });
+  const getResource = (resourceName: string) => template.Resources[resourceName];
+  const getTagValue = (tags: any[], key: string) =>
+    tags?.find(tag => tag.Key === key)?.Value;
+
+  beforeAll(() => {
+    template = loadTemplate();
   });
 
   describe('Template Structure', () => {
-    test('should have valid CloudFormation format version', () => {
+    test('should use the correct format version', () => {
       expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
     });
 
-    test('should have a description', () => {
-      expect(template.Description).toBeDefined();
-      expect(template.Description).toBe(
-        'TAP Stack - Task Assignment Platform CloudFormation Template'
-      );
-    });
-
-    test('should have metadata section', () => {
+    test('should provide template description and metadata', () => {
+      expect(template.Description).toBe('Secure and Compliant E-Commerce Cloud Environment');
       expect(template.Metadata).toBeDefined();
       expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+      expect(
+        template.Metadata['AWS::CloudFormation::Interface'].ParameterGroups
+      ).toHaveLength(2);
     });
   });
 
   describe('Parameters', () => {
-    test('should have EnvironmentSuffix parameter', () => {
-      expect(template.Parameters.EnvironmentSuffix).toBeDefined();
+    test('should define core parameters with expected defaults', () => {
+      const { Parameters } = template;
+
+      expect(Parameters.Environment).toMatchObject({
+        Type: 'String',
+        Default: 'production',
+        AllowedValues: ['development', 'staging', 'production'],
+        Description: 'Environment name',
+      });
+
+      expect(Parameters.OwnerEmail).toMatchObject({
+        Type: 'String',
+        Default: 'admin@example.com',
+        Description: 'Owner email for tagging',
+      });
+
+      expect(Parameters.DBUsername).toMatchObject({
+        Type: 'String',
+        Default: 'dbadmin',
+        NoEcho: true,
+        MinLength: 1,
+        MaxLength: 16,
+        AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*',
+      });
+
+      expect(Parameters.DBPassword).toMatchObject({
+        Type: 'String',
+        Default: 'TempPassword123',
+        NoEcho: true,
+        MinLength: 8,
+        MaxLength: 41,
+        AllowedPattern: '[a-zA-Z0-9]*',
+      });
+
+      expect(Parameters.LatestAmiId).toEqual({
+        Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>',
+        Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2',
+      });
+    });
+  });
+
+  describe('Mappings', () => {
+    test('should include ELB account mappings for multiple regions', () => {
+      const mapping = template.Mappings.RegionToELBAccountId;
+      expect(mapping).toBeDefined();
+      expect(mapping['us-east-1'].AccountId).toBe('127311923021');
+      expect(mapping['ap-southeast-2'].AccountId).toBe('783225319266');
+      expect(Object.keys(mapping).length).toBeGreaterThanOrEqual(20);
+    });
+  });
+
+  describe('KMS Resources', () => {
+    test('should define a master key with expected policy and tags', () => {
+      const kmsKey = getResource('MasterKMSKey');
+      expect(kmsKey.Type).toBe('AWS::KMS::Key');
+      expect(kmsKey.Properties.Description).toContain('E-Commerce encryption');
+      expect(kmsKey.Properties.KeyPolicy.Statement).toHaveLength(2);
+      expect(getTagValue(kmsKey.Properties.Tags, 'Environment')).toEqual({ Ref: 'Environment' });
+      expect(getTagValue(kmsKey.Properties.Tags, 'Purpose')).toBe('E-Commerce-Encryption');
     });
 
-    test('EnvironmentSuffix parameter should have correct properties', () => {
-      const envSuffixParam = template.Parameters.EnvironmentSuffix;
-      expect(envSuffixParam.Type).toBe('String');
-      expect(envSuffixParam.Default).toBe('dev');
-      expect(envSuffixParam.Description).toBe(
-        'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    test('should create an alias for the master key', () => {
+      const alias = getResource('MasterKMSKeyAlias');
+      expect(alias.Type).toBe('AWS::KMS::Alias');
+      expect(alias.Properties.AliasName['Fn::Sub']).toBe('alias/ecommerce-${Environment}');
+      expect(alias.Properties.TargetKeyId).toEqual({ Ref: 'MasterKMSKey' });
+    });
+  });
+
+  describe('Networking Resources', () => {
+    test('should create VPC, subnets, and internet gateway', () => {
+      const vpc = getResource('VPC');
+      expect(vpc.Type).toBe('AWS::EC2::VPC');
+      expect(vpc.Properties.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.Properties.EnableDnsHostnames).toBe(true);
+
+      ['PublicSubnet1', 'PublicSubnet2', 'PrivateSubnet1', 'PrivateSubnet2'].forEach(subnetName => {
+        const subnet = getResource(subnetName);
+        expect(subnet.Type).toBe('AWS::EC2::Subnet');
+        expect(getTagValue(subnet.Properties.Tags, 'Environment')).toEqual({ Ref: 'Environment' });
+      });
+
+      expect(getResource('InternetGateway').Type).toBe('AWS::EC2::InternetGateway');
+      expect(getResource('AttachGateway').Type).toBe('AWS::EC2::VPCGatewayAttachment');
+    });
+
+    test('should provision redundant NAT gateways and routes', () => {
+      expect(getResource('NATGateway1').Type).toBe('AWS::EC2::NatGateway');
+      expect(getResource('NATGateway2').Type).toBe('AWS::EC2::NatGateway');
+      expect(getResource('PrivateRoute1').Properties.NatGatewayId).toEqual({ Ref: 'NATGateway1' });
+      expect(getResource('PrivateRoute2').Properties.NatGatewayId).toEqual({ Ref: 'NATGateway2' });
+    });
+  });
+
+  describe('Security Groups', () => {
+    test('should define ALB, web, database, and lambda security groups', () => {
+      const albSg = getResource('ALBSecurityGroup');
+      const webSg = getResource('WebServerSecurityGroup');
+      const dbSg = getResource('DatabaseSecurityGroup');
+      const lambdaSg = getResource('LambdaSecurityGroup');
+
+      expect(albSg.Type).toBe('AWS::EC2::SecurityGroup');
+      expect(albSg.Properties.SecurityGroupIngress).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ FromPort: 80, ToPort: 80, CidrIp: '0.0.0.0/0' }),
+          expect.objectContaining({ FromPort: 443, ToPort: 443, CidrIp: '0.0.0.0/0' }),
+        ])
       );
-      expect(envSuffixParam.AllowedPattern).toBe('^[a-zA-Z0-9]+$');
-      expect(envSuffixParam.ConstraintDescription).toBe(
-        'Must contain only alphanumeric characters'
+
+      expect(webSg.Properties.SecurityGroupIngress).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ FromPort: 22, ToPort: 22, CidrIp: '10.0.0.0/16' }),
+        ])
+      );
+
+      expect(dbSg.Properties.GroupDescription).toContain('RDS database');
+      expect(lambdaSg.Properties.SecurityGroupEgress[0]).toMatchObject({
+        FromPort: 443,
+        ToPort: 443,
+        CidrIp: '0.0.0.0/0',
+      });
+    });
+
+    test('should create explicit security group relationships', () => {
+      expect(getResource('ALBToWebServerEgress').Properties).toMatchObject({
+        GroupId: { Ref: 'ALBSecurityGroup' },
+        DestinationSecurityGroupId: { Ref: 'WebServerSecurityGroup' },
+        FromPort: 80,
+      });
+
+      expect(getResource('WebServerFromALBIngress').Properties).toMatchObject({
+        GroupId: { Ref: 'WebServerSecurityGroup' },
+        SourceSecurityGroupId: { Ref: 'ALBSecurityGroup' },
+        FromPort: 80,
+      });
+
+      expect(getResource('DatabaseFromWebServerIngress').Properties.FromPort).toBe(5432);
+      expect(getResource('DatabaseFromLambdaIngress').Properties.FromPort).toBe(5432);
+    });
+  });
+
+  describe('S3 Buckets and Policies', () => {
+    const bucketNames = [
+      'S3LoggingBucket',
+      'S3ApplicationBucket',
+      'CloudTrailBucket',
+      'ConfigBucket',
+    ];
+
+    test('should enable encryption, versioning, and public access blocking', () => {
+      bucketNames.forEach(bucketName => {
+        const bucket = getResource(bucketName);
+        expect(bucket.Type).toBe('AWS::S3::Bucket');
+        expect(bucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
+        const encryptionConfig =
+          bucket.Properties.BucketEncryption.ServerSideEncryptionConfiguration[0]
+            .ServerSideEncryptionByDefault;
+        expect(encryptionConfig.SSEAlgorithm).toBeDefined();
+        expect(bucket.Properties.PublicAccessBlockConfiguration).toMatchObject({
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        });
+      });
+    });
+
+    test('application bucket logging should target logging bucket', () => {
+      const appBucket = getResource('S3ApplicationBucket');
+      expect(appBucket.Properties.LoggingConfiguration).toMatchObject({
+        DestinationBucketName: { Ref: 'S3LoggingBucket' },
+        LogFilePrefix: 'app-bucket/',
+      });
+    });
+
+    test('logging bucket policy should allow ELB and AWS logging services', () => {
+      const policy = getResource('S3LoggingBucketPolicy');
+      expect(policy.Type).toBe('AWS::S3::BucketPolicy');
+      expect(policy.Properties.PolicyDocument.Statement).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ Sid: 'AWSLogDeliveryWrite' }),
+          expect.objectContaining({ Sid: 'ELBAccessLogsPolicy' }),
+        ])
       );
     });
   });
 
-  describe('Resources', () => {
-    test('should have TurnAroundPromptTable resource', () => {
-      expect(template.Resources.TurnAroundPromptTable).toBeDefined();
+  describe('IAM Roles and Policies', () => {
+    test('EC2 role should allow S3, KMS, and SSM access', () => {
+      const role = getResource('EC2Role');
+      expect(role.Type).toBe('AWS::IAM::Role');
+      expect(role.Properties.ManagedPolicyArns).toEqual(
+        expect.arrayContaining([
+          'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy',
+          'arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore',
+        ])
+      );
+      expect(role.Properties.Policies[0].PolicyDocument.Statement).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Action: expect.arrayContaining(['s3:GetObject', 's3:PutObject']),
+          }),
+        ])
+      );
     });
 
-    test('TurnAroundPromptTable should be a DynamoDB table', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.Type).toBe('AWS::DynamoDB::Table');
+    test('Lambda execution role should include logging and KMS permissions', () => {
+      const role = getResource('LambdaExecutionRole');
+      const statements = role.Properties.Policies[0].PolicyDocument.Statement;
+
+      expect(statements).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            Action: expect.arrayContaining(['logs:CreateLogGroup', 'logs:PutLogEvents']),
+          }),
+          expect.objectContaining({
+            Action: expect.arrayContaining(['kms:Decrypt', 'kms:GenerateDataKey']),
+            Resource: { 'Fn::GetAtt': ['MasterKMSKey', 'Arn'] },
+          }),
+        ])
+      );
+    });
+  });
+
+  describe('Compute and Scaling Resources', () => {
+    test('launch template should install CloudWatch agent and configure logging', () => {
+      const launchTemplate = getResource('EC2LaunchTemplate');
+      expect(launchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
+      expect(launchTemplate.Properties.LaunchTemplateData.InstanceType).toBe('t3.medium');
+      expect(launchTemplate.Properties.LaunchTemplateData.UserData['Fn::Base64']).toBeDefined();
+      expect(launchTemplate.Properties.LaunchTemplateData.TagSpecifications).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ ResourceType: 'instance' }),
+          expect.objectContaining({ ResourceType: 'volume' }),
+        ])
+      );
     });
 
-    test('TurnAroundPromptTable should have correct deletion policies', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      expect(table.DeletionPolicy).toBe('Delete');
-      expect(table.UpdateReplacePolicy).toBe('Delete');
+    test('auto scaling group should target private subnets and ALB', () => {
+      const asg = getResource('AutoScalingGroup');
+      expect(asg.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
+      expect(asg.Properties.MinSize).toBe(2);
+      expect(asg.Properties.MaxSize).toBe(6);
+      expect(asg.Properties.DesiredCapacity).toBe(2);
+      expect(asg.Properties.VPCZoneIdentifier).toEqual(
+        expect.arrayContaining([{ Ref: 'PrivateSubnet1' }, { Ref: 'PrivateSubnet2' }])
+      );
+      expect(asg.Properties.TargetGroupARNs).toEqual([{ Ref: 'ALBTargetGroup' }]);
     });
 
-    test('TurnAroundPromptTable should have correct properties', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const properties = table.Properties;
-
-      expect(properties.TableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
+    test('CloudWatch alarms should trigger scale policies', () => {
+      expect(getResource('CPUAlarmHigh').Properties).toMatchObject({
+        Threshold: 70,
+        AlarmActions: [{ Ref: 'ScaleUpPolicy' }],
       });
-      expect(properties.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(properties.DeletionProtectionEnabled).toBe(false);
+      expect(getResource('CPUAlarmLow').Properties).toMatchObject({
+        Threshold: 30,
+        AlarmActions: [{ Ref: 'ScaleDownPolicy' }],
+      });
+    });
+  });
+
+  describe('Application Load Balancer and WAF', () => {
+    test('ALB should be internet-facing with access logging enabled', () => {
+      const alb = getResource('ApplicationLoadBalancer');
+      expect(alb.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      expect(alb.Properties.Scheme).toBe('internet-facing');
+      expect(alb.Properties.LoadBalancerAttributes).toEqual(
+        expect.arrayContaining([
+          { Key: 'access_logs.s3.enabled', Value: 'true' },
+          { Key: 'access_logs.s3.bucket', Value: { Ref: 'S3LoggingBucket' } },
+        ])
+      );
+      expect(alb.Properties.Subnets).toEqual(
+        expect.arrayContaining([{ Ref: 'PublicSubnet1' }, { Ref: 'PublicSubnet2' }])
+      );
     });
 
-    test('TurnAroundPromptTable should have correct attribute definitions', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const attributeDefinitions = table.Properties.AttributeDefinitions;
+    test('target group and listener should enforce HTTPS health checks and redirects', () => {
+      const tg = getResource('ALBTargetGroup');
+      expect(tg.Properties).toMatchObject({
+        Protocol: 'HTTP',
+        Port: 80,
+        HealthCheckProtocol: 'HTTP',
+        HealthCheckPath: '/health',
+      });
 
-      expect(attributeDefinitions).toHaveLength(1);
-      expect(attributeDefinitions[0].AttributeName).toBe('id');
-      expect(attributeDefinitions[0].AttributeType).toBe('S');
+      const listener = getResource('HTTPListener');
+      expect(listener.Properties.DefaultActions[0]).toMatchObject({
+        Type: 'forward',
+        TargetGroupArn: { Ref: 'ALBTargetGroup' },
+      });
     });
 
-    test('TurnAroundPromptTable should have correct key schema', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const keySchema = table.Properties.KeySchema;
+    test('WebACL should apply AWS managed rule groups and rate limiting', () => {
+      const webAcl = getResource('WebACL');
+      expect(webAcl.Type).toBe('AWS::WAFv2::WebACL');
+      expect(webAcl.Properties.Rules).toHaveLength(3);
+      const rateLimitRule = webAcl.Properties.Rules.find((rule: any) => rule.Name === 'RateLimitRule');
+      expect(rateLimitRule.Statement.RateBasedStatement.Limit).toBe(2000);
+      expect(getResource('WebACLAssociation').Properties.ResourceArn).toEqual({
+        Ref: 'ApplicationLoadBalancer',
+      });
+    });
+  });
 
-      expect(keySchema).toHaveLength(1);
-      expect(keySchema[0].AttributeName).toBe('id');
-      expect(keySchema[0].KeyType).toBe('HASH');
+  describe('Database and Configuration Resources', () => {
+    test('RDS instance should use PostgreSQL with encryption and logging', () => {
+      const rds = getResource('RDSDatabase');
+      expect(rds.Type).toBe('AWS::RDS::DBInstance');
+      expect(rds.Properties.Engine).toBe('postgres');
+      expect(rds.Properties.EngineVersion).toBe('15.14');
+      expect(rds.Properties.StorageEncrypted).toBe(true);
+      expect(rds.Properties.KmsKeyId).toEqual({ Ref: 'MasterKMSKey' });
+      expect(rds.Properties.MasterUsername).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}',
+      });
+      expect(rds.Properties.MasterUserPassword).toEqual({
+        'Fn::Sub': '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}',
+      });
+      expect(rds.Properties.DBSubnetGroupName).toEqual({ Ref: 'DBSubnetGroup' });
+      expect(rds.Properties.EnableCloudwatchLogsExports).toEqual(['postgresql']);
+    });
+
+    test('database connection details should be stored securely', () => {
+      const secret = getResource('DBSecret');
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.SecretString['Fn::Sub']).toContain('${DBPassword}');
+
+      const endpointParam = getResource('DBEndpointParameter');
+      expect(endpointParam.Type).toBe('AWS::SSM::Parameter');
+      expect(endpointParam.Properties.Value).toEqual({
+        'Fn::GetAtt': ['RDSDatabase', 'Endpoint.Address'],
+      });
+    });
+
+    test('AWS Config and CloudTrail resources should be fully configured', () => {
+      const configRecorder = getResource('ConfigRecorder');
+      expect(configRecorder.Type).toBe('AWS::Config::ConfigurationRecorder');
+      expect(configRecorder.Properties.RecordingGroup.AllSupported).toBe(true);
+
+      const cloudTrail = getResource('CloudTrail');
+      expect(cloudTrail.Type).toBe('AWS::CloudTrail::Trail');
+      expect(cloudTrail.Properties.EnableLogFileValidation).toBe(true);
+      expect(cloudTrail.Properties.IsMultiRegionTrail).toBe(true);
+    });
+  });
+
+  describe('Lambda Resources', () => {
+    test('lambda function should run inside VPC with environment variables', () => {
+      const lambdaFn = getResource('LambdaFunction');
+      expect(lambdaFn.Properties.Runtime).toBe('python3.9');
+      expect(lambdaFn.Properties.Handler).toBe('index.lambda_handler');
+      expect(lambdaFn.Properties.VpcConfig.SecurityGroupIds).toEqual([{ Ref: 'LambdaSecurityGroup' }]);
+      expect(lambdaFn.Properties.VpcConfig.SubnetIds).toEqual(
+        expect.arrayContaining([{ Ref: 'PrivateSubnet1' }, { Ref: 'PrivateSubnet2' }])
+      );
+      expect(lambdaFn.Properties.Environment.Variables).toMatchObject({
+        ENVIRONMENT: { Ref: 'Environment' },
+        DB_ENDPOINT: { 'Fn::GetAtt': ['RDSDatabase', 'Endpoint.Address'] },
+      });
     });
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
+    test('should expose key resource identifiers', () => {
       const expectedOutputs = [
-        'TurnAroundPromptTableName',
-        'TurnAroundPromptTableArn',
-        'StackName',
-        'EnvironmentSuffix',
+        'VPCId',
+        'ALBDNSName',
+        'S3ApplicationBucketName',
+        'RDSEndpoint',
+        'LambdaFunctionArn',
+        'CloudTrailName',
+        'ConfigRecorderName',
+        'WebACLArn',
       ];
 
-      expectedOutputs.forEach(outputName => {
-        expect(template.Outputs[outputName]).toBeDefined();
+      expectedOutputs.forEach(output => {
+        expect(template.Outputs[output]).toBeDefined();
       });
     });
 
-    test('TurnAroundPromptTableName output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableName;
-      expect(output.Description).toBe('Name of the DynamoDB table');
-      expect(output.Value).toEqual({ Ref: 'TurnAroundPromptTable' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableName',
-      });
-    });
-
-    test('TurnAroundPromptTableArn output should be correct', () => {
-      const output = template.Outputs.TurnAroundPromptTableArn;
-      expect(output.Description).toBe('ARN of the DynamoDB table');
-      expect(output.Value).toEqual({
-        'Fn::GetAtt': ['TurnAroundPromptTable', 'Arn'],
-      });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-TurnAroundPromptTableArn',
-      });
-    });
-
-    test('StackName output should be correct', () => {
-      const output = template.Outputs.StackName;
-      expect(output.Description).toBe('Name of this CloudFormation stack');
-      expect(output.Value).toEqual({ Ref: 'AWS::StackName' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-StackName',
-      });
-    });
-
-    test('EnvironmentSuffix output should be correct', () => {
-      const output = template.Outputs.EnvironmentSuffix;
-      expect(output.Description).toBe(
-        'Environment suffix used for this deployment'
-      );
-      expect(output.Value).toEqual({ Ref: 'EnvironmentSuffix' });
-      expect(output.Export.Name).toEqual({
-        'Fn::Sub': '${AWS::StackName}-EnvironmentSuffix',
+    test('outputs should export names scoped by environment', () => {
+      expect(template.Outputs.VPCId.Export.Name['Fn::Sub']).toBe('ECommerce-VPC-${Environment}');
+      expect(template.Outputs.WebACLArn.Value).toEqual({ 'Fn::GetAtt': ['WebACL', 'Arn'] });
+      expect(template.Outputs.ALBDNSName.Value).toEqual({
+        'Fn::GetAtt': ['ApplicationLoadBalancer', 'DNSName'],
       });
     });
   });
 
-  describe('Template Validation', () => {
-    test('should have valid JSON structure', () => {
-      expect(template).toBeDefined();
-      expect(typeof template).toBe('object');
+  describe('General Template Validation', () => {
+    test('should have non-empty major sections', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(template.Resources).toBeDefined();
+      expect(template.Outputs).toBeDefined();
     });
 
-    test('should not have any undefined or null required sections', () => {
-      expect(template.AWSTemplateFormatVersion).not.toBeNull();
-      expect(template.Description).not.toBeNull();
-      expect(template.Parameters).not.toBeNull();
-      expect(template.Resources).not.toBeNull();
-      expect(template.Outputs).not.toBeNull();
-    });
-
-    test('should have exactly one resource', () => {
+    test('should declare a comprehensive set of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(1);
-    });
-
-    test('should have exactly one parameter', () => {
-      const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBe(1);
-    });
-
-    test('should have exactly four outputs', () => {
-      const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(4);
-    });
-  });
-
-  describe('Resource Naming Convention', () => {
-    test('table name should follow naming convention with environment suffix', () => {
-      const table = template.Resources.TurnAroundPromptTable;
-      const tableName = table.Properties.TableName;
-
-      expect(tableName).toEqual({
-        'Fn::Sub': 'TurnAroundPromptTable${EnvironmentSuffix}',
-      });
-    });
-
-    test('export names should follow naming convention', () => {
-      Object.keys(template.Outputs).forEach(outputKey => {
-        const output = template.Outputs[outputKey];
-        expect(output.Export.Name).toEqual({
-          'Fn::Sub': `\${AWS::StackName}-${outputKey}`,
-        });
-      });
+      expect(resourceCount).toBeGreaterThan(60);
     });
   });
 });
