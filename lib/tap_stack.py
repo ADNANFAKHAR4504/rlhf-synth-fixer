@@ -357,6 +357,34 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=self.dr_provider)
         )
 
+        # Create KMS key for primary region RDS encryption
+        primary_kms_key = aws.kms.Key(
+            f"payment-primary-rds-key-{self.environment_suffix}",
+            description=f"KMS key for RDS encryption in primary region - {self.environment_suffix}",
+            deletion_window_in_days=10,
+            enable_key_rotation=True,
+            tags={
+                **self.common_tags,
+                "Name": f"payment-primary-rds-key-{self.environment_suffix}",
+                "Purpose": "RDS Encryption"
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create KMS key for DR region RDS encryption
+        dr_kms_key = aws.kms.Key(
+            f"payment-dr-rds-key-{self.environment_suffix}",
+            description=f"KMS key for RDS encryption in DR region - {self.environment_suffix}",
+            deletion_window_in_days=10,
+            enable_key_rotation=True,
+            tags={
+                **self.common_tags,
+                "Name": f"payment-dr-rds-key-{self.environment_suffix}",
+                "Purpose": "RDS Encryption"
+            },
+            opts=ResourceOptions(parent=self, provider=self.dr_provider)
+        )
+
         # Create global cluster
         global_cluster = aws.rds.GlobalCluster(
             f"payment-global-cluster-{self.environment_suffix}",
@@ -379,6 +407,7 @@ class TapStack(pulumi.ComponentResource):
             master_password=pulumi.Output.secret("ChangeMe123!"),
             global_cluster_identifier=global_cluster.id,
             db_subnet_group_name=primary_subnet_group.name,
+            kms_key_id=primary_kms_key.arn,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
@@ -422,6 +451,7 @@ class TapStack(pulumi.ComponentResource):
             engine_version="13.9",
             global_cluster_identifier=global_cluster.id,
             db_subnet_group_name=dr_subnet_group.name,
+            kms_key_id=dr_kms_key.arn,
             backup_retention_period=7,
             preferred_backup_window="03:00-04:00",
             preferred_maintenance_window="mon:04:00-mon:05:00",
