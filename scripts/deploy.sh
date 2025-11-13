@@ -337,15 +337,22 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔧 Go Pulumi project detected"
     pulumi login "$PULUMI_BACKEND_URL"
     cd lib
+
+    # Ensure Go dependencies are up to date
+    echo "📦 Running go mod tidy..."
+    cd ..
+    go mod tidy
+    cd lib
+
     echo "Selecting or creating Pulumi stack..."
     pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create
-    
+
     # Clear any existing locks before deployment
     echo "🔓 Clearing any stuck locks..."
     pulumi cancel --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
-    
+
     echo "Deploying infrastructure ..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
       echo "⚠️ Deployment failed, attempting lock recovery..."
