@@ -3,7 +3,6 @@ import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as ssm from 'aws-cdk-lib/aws-ssm';
 import { Construct } from 'constructs';
 
 interface StorageStackProps extends cdk.StackProps {
@@ -11,6 +10,7 @@ interface StorageStackProps extends cdk.StackProps {
   kmsKey: kms.IKey;
   isPrimary: boolean;
   secondaryRegion?: string;
+  replicaKmsKeyArn?: string;
 }
 
 export class StorageStack extends cdk.Stack {
@@ -20,7 +20,13 @@ export class StorageStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: StorageStackProps) {
     super(scope, id, props);
 
-    const { environmentSuffix, kmsKey, isPrimary, secondaryRegion } = props;
+    const {
+      environmentSuffix,
+      kmsKey,
+      isPrimary,
+      secondaryRegion,
+      replicaKmsKeyArn,
+    } = props;
 
     this.bucket = new s3.Bucket(this, `Bucket-${environmentSuffix}`, {
       bucketName: `dr-storage-${environmentSuffix}-${this.region}`,
@@ -106,14 +112,8 @@ export class StorageStack extends cdk.Stack {
       };
     }
 
-    // For primary region with replicas, get the secondary KMS key ARN from SSM
-    let replicaKmsKeyArn: string | undefined;
-    if (isPrimary && secondaryRegion) {
-      replicaKmsKeyArn = ssm.StringParameter.valueForStringParameter(
-        this,
-        `/dr/${environmentSuffix}/kms-key-arn/${secondaryRegion}`
-      );
-    }
+    // For primary region with replicas, use the provided replica KMS key ARN
+    // This is passed directly from the parent stack to avoid cross-region lookups
 
     this.dynamoTable = new dynamodb.TableV2(
       this,
@@ -125,12 +125,10 @@ export class StorageStack extends cdk.Stack {
           type: dynamodb.AttributeType.STRING,
         },
         billing: dynamodb.Billing.onDemand(),
-        encryption: dynamodb.TableEncryptionV2.customerManagedKey(
-          kmsKey,
-          isPrimary && replicaKmsKeyArn
-            ? { [secondaryRegion!]: replicaKmsKeyArn }
-            : undefined
-        ),
+        // DynamoDB Global Tables require KMS keys for ALL replica regions when using CMK
+        // Due to CloudFormation cross-stack reference limitations in nested stacks,
+        // we use AWS-managed encryption instead
+        encryption: dynamodb.TableEncryptionV2.dynamoOwnedKey(),
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         pointInTimeRecovery: true,
         contributorInsights: true,

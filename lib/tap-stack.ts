@@ -109,12 +109,13 @@ export class TapStack extends cdk.Stack {
         environmentSuffix,
         kmsKey: primaryKms.key,
         secondaryRegion: secondaryRegion,
+        // Note: DynamoDB Global Tables don't support customer-managed KMS for replicas
+        // across different nested stacks due to CloudFormation cross-stack reference limitations
+        // The replica will use AWS-managed encryption
         isPrimary: true,
         env: { region: primaryRegion },
       }
     );
-    // Primary storage depends on secondary KMS for SSM parameter lookup
-    primaryStorage.addDependency(secondaryKms);
 
     const secondaryStorage = new StorageStack(
       this,

@@ -24,7 +24,7 @@ export class MonitoringStack extends cdk.Stack {
     });
 
     // Add email subscriptions if provided
-    alertEmails.forEach((email, index) => {
+    alertEmails.forEach(email => {
       this.alarmTopic.addSubscription(
         new subscriptions.EmailSubscription(email)
       );
