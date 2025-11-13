@@ -73,6 +73,13 @@ class TapStack(pulumi.ComponentResource):
         # Create ECS cluster and task definition
         self.ecs_cluster = self._create_ecs_cluster(child_opts)
         self.task_definition = self._create_task_definition(child_opts)
+        
+        # Create Application Load Balancer and target groups (required for CODE_DEPLOY)
+        self.load_balancer = self._create_load_balancer(child_opts)
+        self.target_group_blue = self._create_target_group("blue", child_opts)
+        self.target_group_green = self._create_target_group("green", child_opts)
+        self.load_balancer_listener = self._create_load_balancer_listener(child_opts)
+        
         self.ecs_service = self._create_ecs_service(child_opts)
 
         # Create CodeBuild project
@@ -583,11 +590,27 @@ class TapStack(pulumi.ComponentResource):
         return subnets
 
     def _create_security_group(self, opts: pulumi.ResourceOptions) -> aws.ec2.SecurityGroup:
-        """Create security group for ECS tasks."""
+        """Create security group for ECS tasks and load balancer."""
         sg = aws.ec2.SecurityGroup(
             f"ecs-sg-{self.environment_suffix}",
             vpc_id=self.vpc.id,
-            description=f"Security group for ECS tasks - {self.environment_suffix}",
+            description=f"Security group for ECS tasks and load balancer - {self.environment_suffix}",
+            ingress=[
+                aws.ec2.SecurityGroupIngressArgs(
+                    description="Allow HTTP from internet (for ALB)",
+                    protocol="tcp",
+                    from_port=80,
+                    to_port=80,
+                    cidr_blocks=["0.0.0.0/0"]
+                ),
+                aws.ec2.SecurityGroupIngressArgs(
+                    description="Allow HTTP from VPC (for ECS tasks)",
+                    protocol="tcp",
+                    from_port=3000,
+                    to_port=3000,
+                    cidr_blocks=[self.vpc.cidr_block]
+                )
+            ],
             egress=[aws.ec2.SecurityGroupEgressArgs(
                 protocol="-1",
                 from_port=0,
@@ -668,8 +691,67 @@ class TapStack(pulumi.ComponentResource):
 
         return task_def
 
+    def _create_load_balancer(self, opts: pulumi.ResourceOptions) -> aws.lb.LoadBalancer:
+        """Create Application Load Balancer for ECS service."""
+        alb = aws.lb.LoadBalancer(
+            f"alb-{self.environment_suffix}",
+            name=f"nodejs-alb-{self.environment_suffix}",
+            load_balancer_type="application",
+            subnets=[subnet.id for subnet in self.private_subnets],
+            security_groups=[self.security_group.id],
+            enable_deletion_protection=False,
+            tags={
+                "Name": f"nodejs-alb-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+                "ManagedBy": "Pulumi"
+            },
+            opts=opts
+        )
+        return alb
+
+    def _create_target_group(self, color: str, opts: pulumi.ResourceOptions) -> aws.lb.TargetGroup:
+        """Create target group for blue/green deployment."""
+        tg = aws.lb.TargetGroup(
+            f"tg-{color}-{self.environment_suffix}",
+            name=f"tg-{color}-{self.environment_suffix}",
+            port=3000,
+            protocol="HTTP",
+            target_type="ip",
+            vpc_id=self.vpc.id,
+            health_check=aws.lb.TargetGroupHealthCheckArgs(
+                enabled=True,
+                path="/health",
+                healthy_threshold=2,
+                unhealthy_threshold=2,
+                timeout=5,
+                interval=30
+            ),
+            tags={
+                "Name": f"tg-{color}-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+                "ManagedBy": "Pulumi"
+            },
+            opts=opts
+        )
+        return tg
+
+    def _create_load_balancer_listener(self, opts: pulumi.ResourceOptions) -> aws.lb.Listener:
+        """Create listener on the load balancer pointing to blue target group."""
+        listener = aws.lb.Listener(
+            f"alb-listener-{self.environment_suffix}",
+            load_balancer_arn=self.load_balancer.arn,
+            port=80,
+            protocol="HTTP",
+            default_actions=[aws.lb.ListenerDefaultActionArgs(
+                type="forward",
+                target_group_arn=self.target_group_blue.arn
+            )],
+            opts=opts
+        )
+        return listener
+
     def _create_ecs_service(self, opts: pulumi.ResourceOptions) -> aws.ecs.Service:
-        """Create ECS service."""
+        """Create ECS service with load balancer configuration for CODE_DEPLOY."""
         service = aws.ecs.Service(
             f"app-service-{self.environment_suffix}",
             name=f"nodejs-service-{self.environment_suffix}",
@@ -680,6 +762,11 @@ class TapStack(pulumi.ComponentResource):
             deployment_controller=aws.ecs.ServiceDeploymentControllerArgs(
                 type="CODE_DEPLOY"
             ),
+            load_balancers=[aws.ecs.ServiceLoadBalancerArgs(
+                target_group_arn=self.target_group_blue.arn,
+                container_name="nodejs-app",
+                container_port=3000
+            )],
             network_configuration=aws.ecs.ServiceNetworkConfigurationArgs(
                 subnets=[subnet.id for subnet in self.private_subnets],
                 security_groups=[self.security_group.id],
@@ -786,54 +873,7 @@ artifacts:
         return app
 
     def _create_deployment_group(self, opts: pulumi.ResourceOptions) -> aws.codedeploy.DeploymentGroup:
-        """Create CodeDeploy deployment group."""
-        # Create target groups for blue/green deployment
-        target_group_blue = aws.lb.TargetGroup(
-            f"tg-blue-{self.environment_suffix}",
-            name=f"tg-blue-{self.environment_suffix}",
-            port=3000,
-            protocol="HTTP",
-            target_type="ip",
-            vpc_id=self.vpc.id,
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                enabled=True,
-                path="/health",
-                healthy_threshold=2,
-                unhealthy_threshold=2,
-                timeout=5,
-                interval=30
-            ),
-            tags={
-                "Name": f"tg-blue-{self.environment_suffix}",
-                "Environment": self.environment_suffix,
-                "ManagedBy": "Pulumi"
-            },
-            opts=opts
-        )
-
-        target_group_green = aws.lb.TargetGroup(
-            f"tg-green-{self.environment_suffix}",
-            name=f"tg-green-{self.environment_suffix}",
-            port=3000,
-            protocol="HTTP",
-            target_type="ip",
-            vpc_id=self.vpc.id,
-            health_check=aws.lb.TargetGroupHealthCheckArgs(
-                enabled=True,
-                path="/health",
-                healthy_threshold=2,
-                unhealthy_threshold=2,
-                timeout=5,
-                interval=30
-            ),
-            tags={
-                "Name": f"tg-green-{self.environment_suffix}",
-                "Environment": self.environment_suffix,
-                "ManagedBy": "Pulumi"
-            },
-            opts=opts
-        )
-
+        """Create CodeDeploy deployment group with load balancer configuration."""
         deployment_group = aws.codedeploy.DeploymentGroup(
             f"deploy-group-{self.environment_suffix}",
             app_name=self.deploy_app.name,
@@ -860,14 +900,14 @@ artifacts:
             load_balancer_info=aws.codedeploy.DeploymentGroupLoadBalancerInfoArgs(
                 target_group_pair_info=aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupPairInfoArgs(
                     prod_traffic_route=aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupPairInfoProdTrafficRouteArgs(
-                        listener_arns=[]
+                        listener_arns=[self.load_balancer_listener.arn]
                     ),
                     target_groups=[
                         aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupPairInfoTargetGroupArgs(
-                            name=target_group_blue.name
+                            name=self.target_group_blue.name
                         ),
                         aws.codedeploy.DeploymentGroupLoadBalancerInfoTargetGroupPairInfoTargetGroupArgs(
-                            name=target_group_green.name
+                            name=self.target_group_green.name
                         )
                     ]
                 )
