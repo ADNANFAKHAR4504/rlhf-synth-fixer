@@ -2,7 +2,7 @@ name: TapStack
 runtime:
   name: python
 description: Serverless payment webhook processor for Stripe and PayPal
-main: __main__.py
+main: lib/__main__.py
 
 config:
   environment_suffix:
