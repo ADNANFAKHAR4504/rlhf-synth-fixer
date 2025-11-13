@@ -26,6 +26,12 @@ class MinimalMocks(pulumi.runtime.Mocks):
         elif "aws:s3/bucket:Bucket" in args.typ:
             outputs["id"] = args.inputs.get("bucket", f"{args.name}-bucket")
             outputs["arn"] = f"arn:aws:s3:::{args.inputs.get('bucket', f'{args.name}-bucket')}"
+        elif "aws:s3/bucketVersioning:BucketVersioning" in args.typ:
+            outputs["id"] = f"{args.name}-versioning"
+            outputs["bucket"] = args.inputs.get("bucket", f"{args.name}-bucket")
+        elif "aws:s3/bucketServerSideEncryptionConfiguration:BucketServerSideEncryptionConfiguration" in args.typ:
+            outputs["id"] = f"{args.name}-encryption"
+            outputs["bucket"] = args.inputs.get("bucket", f"{args.name}-bucket")
         elif "aws:ecr/repository:Repository" in args.typ:
             outputs["id"] = args.inputs.get("name", f"{args.name}-repo")
             outputs["repository_url"] = f"123456789012.dkr.ecr.us-east-1.amazonaws.com/{args.inputs.get('name', f'{args.name}-repo')}"
