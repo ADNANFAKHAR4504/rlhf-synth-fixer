@@ -8,12 +8,8 @@
  * The stack created by this module uses environment suffixes to distinguish between
  * different deployment environments (development, staging, production, etc.).
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
-
-// Initialize Pulumi configuration for the current stack.
-const config = new pulumi.Config();
 
 // Get the environment suffix from environment variables, defaulting to 'dev'.
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
