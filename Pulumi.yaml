@@ -1,0 +1,14 @@
+name: payment-webhook-processor
+runtime:
+  name: python
+description: Serverless payment webhook processor for Stripe and PayPal
+main: __main__.py
+
+config:
+  environment_suffix:
+    description: Unique environment suffix for resource naming
+    type: string
+  aws_region:
+    description: AWS region for deployment
+    type: string
+    default: us-east-1
