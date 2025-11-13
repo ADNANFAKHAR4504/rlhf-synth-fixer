@@ -1,10 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-// Load region configuration
-const regionConfig = JSON.parse(
-  fs.readFileSync(path.join(__dirname, '../lib/AWS_REGION'), 'utf8')
-);
+// Load region configuration from AWS_REGION file
+const awsRegion = fs.readFileSync(path.join(__dirname, '../lib/AWS_REGION'), 'utf8').trim();
 
 describe('Secure VPC Foundation CloudFormation Template', () => {
   let template: any;
@@ -40,9 +38,8 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
       expect(template.Metadata.Region.RegionName).toBe('Europe (Spain)');
     });
 
-    test('region config file should specify eu-south-2', () => {
-      expect(regionConfig.region).toBe('eu-south-2');
-      expect(regionConfig.regionName).toBe('Europe (Spain)');
+    test('AWS_REGION file should contain eu-south-2', () => {
+      expect(awsRegion).toBe('eu-south-2');
     });
   });
 

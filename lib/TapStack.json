@@ -76,7 +76,7 @@
         "Region": {
             "TargetRegion": "eu-south-2",
             "RegionName": "Europe (Spain)",
-            "ConfigFile": "lib/AWS_REGION"
+            "RegionFile": "lib/AWS_REGION"
         }
     },
     "Resources": {
