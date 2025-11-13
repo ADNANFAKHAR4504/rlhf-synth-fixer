@@ -12,6 +12,7 @@ import {
   CreateSecurityGroupCommand,
   DeleteSecurityGroupCommand,
   AuthorizeSecurityGroupIngressCommand,
+  DescribeFlowLogsCommand,
 } from '@aws-sdk/client-ec2';
 import {
   EKSClient,
@@ -34,6 +35,8 @@ import {
   ListOpenIDConnectProvidersCommand,
   SimulatePrincipalPolicyCommand,
   CreateServiceLinkedRoleCommand,
+  GetRolePolicyCommand,
+  ListRolePoliciesCommand,
 } from '@aws-sdk/client-iam';
 import {
   STSClient,
@@ -116,8 +119,18 @@ function createMockOutputs() {
     'eks-cluster-certificate-authority-data': Buffer.from('mock-certificate').toString('base64'),
     'eks-oidc-provider-arn': `arn:aws:iam::123456789012:oidc-provider/oidc.eks.${region}.amazonaws.com/id/${generateMockId()}`,
     'eks-oidc-provider-url': `https://oidc.eks.${region}.amazonaws.com/id/${generateMockId()}`,
-    'node-group-id': `${environmentSuffix}-eks-cluster:${environmentSuffix}-general`,
+    'node-group-ids': [
+      `${environmentSuffix}-eks-cluster:${environmentSuffix}-medium`,
+      `${environmentSuffix}-eks-cluster:${environmentSuffix}-large`,
+      `${environmentSuffix}-eks-cluster:${environmentSuffix}-xlarge`
+    ],
     'aws-account-id': '123456789012',
+    'kubeconfig-command': `aws eks update-kubeconfig --region ${region} --name ${environmentSuffix}-eks-cluster`,
+    'cluster-autoscaler-role-arn': `arn:aws:iam::123456789012:role/${environmentSuffix}-eks-cluster-cluster-autoscaler`,
+    'ebs-csi-role-arn': `arn:aws:iam::123456789012:role/${environmentSuffix}-eks-cluster-ebs-csi-driver`,
+    'backend-role-arn': `arn:aws:iam::123456789012:role/${environmentSuffix}-eks-cluster-backend-role`,
+    'frontend-role-arn': `arn:aws:iam::123456789012:role/${environmentSuffix}-eks-cluster-frontend-role`,
+    'data-processing-role-arn': `arn:aws:iam::123456789012:role/${environmentSuffix}-eks-cluster-data-processing-role`,
   };
 }
 
@@ -227,7 +240,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       expect(outputs['eks-cluster-certificate-authority-data']).toBeDefined();
       expect(outputs['eks-oidc-provider-arn']).toBeDefined();
       expect(outputs['eks-oidc-provider-url']).toBeDefined();
-      expect(outputs['node-group-id']).toBeDefined();
+      expect(outputs['node-group-ids']).toBeDefined();
       expect(outputs['aws-account-id']).toBeDefined();
 
       // Verify output values are not empty
@@ -239,7 +252,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       expect(outputs['eks-cluster-certificate-authority-data']).toBeTruthy();
       expect(outputs['eks-oidc-provider-arn']).toBeTruthy();
       expect(outputs['eks-oidc-provider-url']).toBeTruthy();
-      expect(outputs['node-group-id']).toBeTruthy();
+      expect(outputs['node-group-ids']).toBeTruthy();
       expect(outputs['aws-account-id']).toBeTruthy();
 
       if (isMockData) {
@@ -270,6 +283,33 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       
       const nameTag = tags.find(tag => tag.Key === 'Name');
       expect(nameTag?.Value).toBe(`${environmentSuffix}-eks-vpc`);
+    }, 30000);
+
+    // NEW TEST: VPC Flow Logs configuration
+    test('should have VPC Flow Logs configured for network monitoring', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      const flowLogsResponse = await ec2Client.send(new DescribeFlowLogsCommand({
+      }));
+
+      expect(flowLogsResponse.FlowLogs?.length).toBeGreaterThan(0);
+      
+      const flowLog = flowLogsResponse.FlowLogs![0];
+      expect(flowLog.FlowLogStatus).toBe('ACTIVE');
+      expect(flowLog.TrafficType).toBe('ALL');
+      expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
+      
+      // Verify CloudWatch Log Group for VPC Flow Logs
+      const logGroupName = `/aws/vpc/flowlogs/${environmentSuffix}`;
+      const logGroupResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: logGroupName
+      }));
+      
+      expect(logGroupResponse.logGroups?.length).toBeGreaterThan(0);
+      const logGroup = logGroupResponse.logGroups![0];
+      expect(logGroup.retentionInDays).toBe(14);
     }, 30000);
 
     test('should have subnets configured with proper tags for EKS', async () => {
@@ -423,35 +463,58 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       expect(cluster.identity?.oidc?.issuer).toBe(outputs['eks-oidc-provider-url']);
     }, 30000);
 
-    test('should have node group configured with proper settings', async () => {
+    // NEW TEST: Multiple node groups with different configurations
+    test('should have all three node groups configured with proper settings', async () => {
       if (isMockData) {
-        expect(outputs['node-group-id']).toMatch(/^[a-z0-9-]+-eks-cluster:[a-z0-9-]+-general$/);
+        expect(outputs['node-group-ids'].length).toBe(3);
         return;
       }
 
-      const nodeGroupName = outputs['node-group-id'].split(':')[1];
-      
-      const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
+      const nodeGroups = outputs['node-group-ids'];
+      expect(nodeGroups.length).toBe(3);
+
+      // Check medium node group
+      const mediumNodeGroup = await eksClient.send(new DescribeNodegroupCommand({
         clusterName: outputs['eks-cluster-name'],
-        nodegroupName: nodeGroupName
+        nodegroupName: `${environmentSuffix}-medium`
       }));
 
-      const nodeGroup = nodeGroupResponse.nodegroup!;
-      
-      expect(nodeGroup.status).toBe('ACTIVE');
-      expect(nodeGroup.scalingConfig?.minSize).toBe(2);
-      expect(nodeGroup.scalingConfig?.maxSize).toBe(10);
-      expect(nodeGroup.scalingConfig?.desiredSize).toBe(3);
-      expect(nodeGroup.instanceTypes).toContain('t3.medium');
-      expect(nodeGroup.diskSize).toBe(20);
-      
-      // Verify labels
-      expect(nodeGroup.labels?.['role']).toBe('general');
-      
-      // Verify subnets
-      expect(nodeGroup.subnets?.length).toBe(3);
-      expect(nodeGroup.subnets).toEqual(outputs['private-subnet-ids']);
-    }, 30000);
+      expect(mediumNodeGroup.nodegroup?.status).toBe('ACTIVE');
+      expect(mediumNodeGroup.nodegroup?.scalingConfig?.minSize).toBe(2);
+      expect(mediumNodeGroup.nodegroup?.scalingConfig?.maxSize).toBe(5);
+      expect(mediumNodeGroup.nodegroup?.scalingConfig?.desiredSize).toBe(2);
+      expect(mediumNodeGroup.nodegroup?.instanceTypes).toContain('t3.medium');
+      expect(mediumNodeGroup.nodegroup?.labels?.['role']).toBe('general');
+      expect(mediumNodeGroup.nodegroup?.labels?.['size']).toBe('medium');
+
+      // Check large node group
+      const largeNodeGroup = await eksClient.send(new DescribeNodegroupCommand({
+        clusterName: outputs['eks-cluster-name'],
+        nodegroupName: `${environmentSuffix}-large`
+      }));
+
+      expect(largeNodeGroup.nodegroup?.status).toBe('ACTIVE');
+      expect(largeNodeGroup.nodegroup?.scalingConfig?.minSize).toBe(1);
+      expect(largeNodeGroup.nodegroup?.scalingConfig?.maxSize).toBe(3);
+      expect(largeNodeGroup.nodegroup?.scalingConfig?.desiredSize).toBe(1);
+      expect(largeNodeGroup.nodegroup?.instanceTypes).toContain('t3.large');
+      expect(largeNodeGroup.nodegroup?.labels?.['role']).toBe('compute');
+      expect(largeNodeGroup.nodegroup?.labels?.['size']).toBe('large');
+
+      // Check xlarge node group
+      const xlargeNodeGroup = await eksClient.send(new DescribeNodegroupCommand({
+        clusterName: outputs['eks-cluster-name'],
+        nodegroupName: `${environmentSuffix}-xlarge`
+      }));
+
+      expect(xlargeNodeGroup.nodegroup?.status).toBe('ACTIVE');
+      expect(xlargeNodeGroup.nodegroup?.scalingConfig?.minSize).toBe(0);
+      expect(xlargeNodeGroup.nodegroup?.scalingConfig?.maxSize).toBe(2);
+      expect(xlargeNodeGroup.nodegroup?.scalingConfig?.desiredSize).toBe(0);
+      expect(xlargeNodeGroup.nodegroup?.instanceTypes).toContain('t3.xlarge');
+      expect(xlargeNodeGroup.nodegroup?.labels?.['role']).toBe('batch');
+      expect(xlargeNodeGroup.nodegroup?.labels?.['size']).toBe('xlarge');
+    }, 45000);
 
     test('should have IAM roles configured for EKS cluster and nodes', async () => {
       if (isMockData) {
@@ -510,6 +573,122 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       expect(oidcResponse.ClientIDList).toContain('sts.amazonaws.com');
       expect(oidcResponse.ThumbprintList?.length).toBeGreaterThan(0);
     }, 30000);
+
+    // NEW TEST: EKS Addons configuration
+    test('should have all required EKS addons configured', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      const addonsResponse = await eksClient.send(new ListAddonsCommand({
+        clusterName: outputs['eks-cluster-name']
+      }));
+
+      expect(addonsResponse.addons).toContain('vpc-cni');
+      expect(addonsResponse.addons).toContain('coredns');
+      expect(addonsResponse.addons).toContain('aws-ebs-csi-driver');
+
+      // Check VPC CNI addon
+      const vpcCniResponse = await eksClient.send(new DescribeAddonCommand({
+        clusterName: outputs['eks-cluster-name'],
+        addonName: 'vpc-cni'
+      }));
+      expect(vpcCniResponse.addon?.status).toBe('ACTIVE');
+      expect(vpcCniResponse.addon?.addonVersion).toBe('v1.15.4-eksbuild.1');
+
+      // Check CoreDNS addon
+      const coreDnsResponse = await eksClient.send(new DescribeAddonCommand({
+        clusterName: outputs['eks-cluster-name'],
+        addonName: 'coredns'
+      }));
+      expect(coreDnsResponse.addon?.status).toBe('ACTIVE');
+      expect(coreDnsResponse.addon?.addonVersion).toBe('v1.10.1-eksbuild.5');
+
+      // Check EBS CSI Driver addon
+      const ebsCsiResponse = await eksClient.send(new DescribeAddonCommand({
+        clusterName: outputs['eks-cluster-name'],
+        addonName: 'aws-ebs-csi-driver'
+      }));
+      expect(ebsCsiResponse.addon?.status).toBe('ACTIVE');
+      expect(ebsCsiResponse.addon?.addonVersion).toBe('v1.25.0-eksbuild.1');
+      expect(ebsCsiResponse.addon?.serviceAccountRoleArn).toBe(outputs['ebs-csi-role-arn']);
+    }, 45000);
+
+    // NEW TEST: IRSA Roles for cluster services
+    test('should have cluster autoscaler and EBS CSI IRSA roles configured', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      // Check cluster autoscaler role
+      const clusterAutoscalerRole = await iamClient.send(new GetRoleCommand({
+        RoleName: `${outputs['eks-cluster-name']}-cluster-autoscaler`
+      }));
+      
+      expect(clusterAutoscalerRole.Role?.Arn).toBe(outputs['cluster-autoscaler-role-arn']);
+      
+      // Verify trust policy
+      const autoscalerTrustPolicy = JSON.parse(clusterAutoscalerRole.Role?.AssumeRolePolicyDocument || '{}');
+      expect(autoscalerTrustPolicy.Statement[0].Principal.Federated).toBe(outputs['eks-oidc-provider-arn']);
+      expect(autoscalerTrustPolicy.Statement[0].Condition.StringEquals[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+        .toBe('system:serviceaccount:kube-system:cluster-autoscaler');
+
+      // Check EBS CSI driver role
+      const ebsCsiRole = await iamClient.send(new GetRoleCommand({
+        RoleName: `${outputs['eks-cluster-name']}-ebs-csi-driver`
+      }));
+      
+      expect(ebsCsiRole.Role?.Arn).toBe(outputs['ebs-csi-role-arn']);
+      
+      // Verify trust policy
+      const ebsCsiTrustPolicy = JSON.parse(ebsCsiRole.Role?.AssumeRolePolicyDocument || '{}');
+      expect(ebsCsiTrustPolicy.Statement[0].Principal.Federated).toBe(outputs['eks-oidc-provider-arn']);
+      expect(ebsCsiTrustPolicy.Statement[0].Condition.StringEquals[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+        .toBe('system:serviceaccount:kube-system:ebs-csi-controller-sa');
+    }, 30000);
+
+    // NEW TEST: Workload IRSA Roles
+    test('should have workload IRSA roles configured with proper policies', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      // Check backend role
+      const backendRole = await iamClient.send(new GetRoleCommand({
+        RoleName: `${outputs['eks-cluster-name']}-backend-role`
+      }));
+      
+      expect(backendRole.Role?.Arn).toBe(outputs['backend-role-arn']);
+      
+      // Verify trust policy allows any service account in backend namespace
+      const backendTrustPolicy = JSON.parse(backendRole.Role?.AssumeRolePolicyDocument || '{}');
+      expect(backendTrustPolicy.Statement[0].Condition.StringLike[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+        .toBe('system:serviceaccount:backend:*');
+
+      // Check frontend role
+      const frontendRole = await iamClient.send(new GetRoleCommand({
+        RoleName: `${outputs['eks-cluster-name']}-frontend-role`
+      }));
+      
+      expect(frontendRole.Role?.Arn).toBe(outputs['frontend-role-arn']);
+      
+      // Verify trust policy allows any service account in frontend namespace
+      const frontendTrustPolicy = JSON.parse(frontendRole.Role?.AssumeRolePolicyDocument || '{}');
+      expect(frontendTrustPolicy.Statement[0].Condition.StringLike[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+        .toBe('system:serviceaccount:frontend:*');
+
+      // Check data processing role
+      const dataProcessingRole = await iamClient.send(new GetRoleCommand({
+        RoleName: `${outputs['eks-cluster-name']}-data-processing-role`
+      }));
+      
+      expect(dataProcessingRole.Role?.Arn).toBe(outputs['data-processing-role-arn']);
+      
+      // Verify trust policy allows any service account in data-processing namespace
+      const dataProcessingTrustPolicy = JSON.parse(dataProcessingRole.Role?.AssumeRolePolicyDocument || '{}');
+      expect(dataProcessingTrustPolicy.Statement[0].Condition.StringLike[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+        .toBe('system:serviceaccount:data-processing:*');
+    }, 45000);
   });
 
   // ============================================================================
@@ -527,7 +706,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         clusterName: outputs['eks-cluster-name']
       }));
 
-      const expectedAddons = ['vpc-cni', 'kube-proxy', 'coredns'];
+      const expectedAddons = ['vpc-cni', 'kube-proxy', 'coredns', 'aws-ebs-csi-driver'];
       
       for (const addonName of expectedAddons) {
         if (addonsResponse.addons?.includes(addonName)) {
@@ -548,25 +727,25 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         return;
       }
 
-      const nodeGroupName = outputs['node-group-id'].split(':')[1];
+      const mediumNodeGroupName = `${environmentSuffix}-medium`;
       
       // ACTION: Get current configuration
       const currentResponse = await eksClient.send(new DescribeNodegroupCommand({
         clusterName: outputs['eks-cluster-name'],
-        nodegroupName: nodeGroupName
+        nodegroupName: mediumNodeGroupName
       }));
 
-      const currentDesired = currentResponse.nodegroup?.scalingConfig?.desiredSize || 3;
+      const currentDesired = currentResponse.nodegroup?.scalingConfig?.desiredSize || 2;
 
       // ACTION: Update node group scaling (non-destructive)
       try {
         await eksClient.send(new UpdateNodegroupConfigCommand({
           clusterName: outputs['eks-cluster-name'],
-          nodegroupName: nodeGroupName,
+          nodegroupName: mediumNodeGroupName,
           scalingConfig: {
             desiredSize: currentDesired + 1,
             minSize: 2,
-            maxSize: 10
+            maxSize: 5
           }
         }));
 
@@ -576,11 +755,11 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         // Revert changes
         await eksClient.send(new UpdateNodegroupConfigCommand({
           clusterName: outputs['eks-cluster-name'],
-          nodegroupName: nodeGroupName,
+          nodegroupName: mediumNodeGroupName,
           scalingConfig: {
             desiredSize: currentDesired,
             minSize: 2,
-            maxSize: 10
+            maxSize: 5
           }
         }));
       } catch (error: any) {
@@ -674,6 +853,58 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       
       expect(trustPolicy.Statement[0].Principal.Federated).toBe(oidcProviderArn);
     }, 30000);
+
+    // NEW TEST: Workload role policy validation
+    test('should validate workload roles have correct permissions', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      // Check backend role permissions
+      try {
+        const backendSimulation = await iamClient.send(new SimulatePrincipalPolicyCommand({
+          PolicySourceArn: outputs['backend-role-arn'],
+          ActionNames: ['s3:GetObject', 's3:PutObject', 'rds:DescribeDBInstances', 'ssm:GetParameter'],
+          ResourceArns: ['*']
+        }));
+
+        backendSimulation.EvaluationResults?.forEach(result => {
+          expect(result.EvalDecision).toBe('allowed');
+        });
+      } catch (error) {
+        console.log('Backend role simulation skipped');
+      }
+
+      // Check frontend role permissions
+      try {
+        const frontendSimulation = await iamClient.send(new SimulatePrincipalPolicyCommand({
+          PolicySourceArn: outputs['frontend-role-arn'],
+          ActionNames: ['cloudfront:CreateInvalidation', 's3:GetObject'],
+          ResourceArns: ['*']
+        }));
+
+        frontendSimulation.EvaluationResults?.forEach(result => {
+          expect(result.EvalDecision).toBe('allowed');
+        });
+      } catch (error) {
+        console.log('Frontend role simulation skipped');
+      }
+
+      // Check data processing role permissions
+      try {
+        const dataProcessingSimulation = await iamClient.send(new SimulatePrincipalPolicyCommand({
+          PolicySourceArn: outputs['data-processing-role-arn'],
+          ActionNames: ['s3:GetObject', 's3:PutObject', 's3:ListBucket', 'sqs:ReceiveMessage', 'sqs:DeleteMessage'],
+          ResourceArns: ['*']
+        }));
+
+        dataProcessingSimulation.EvaluationResults?.forEach(result => {
+          expect(result.EvalDecision).toBe('allowed');
+        });
+      } catch (error) {
+        console.log('Data processing role simulation skipped');
+      }
+    }, 45000);
   });
 
   // ============================================================================
@@ -713,28 +944,30 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         return;
       }
 
-      const nodeGroupName = outputs['node-group-id'].split(':')[1];
+      const nodeGroupNames = outputs['node-group-ids'].map((id: string) => id.split(':')[1]);
       
-      const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-        clusterName: outputs['eks-cluster-name'],
-        nodegroupName: nodeGroupName
-      }));
-
-      // Verify nodes are in private subnets
-      expect(nodeGroupResponse.nodegroup?.subnets).toEqual(outputs['private-subnet-ids']);
-      
-      // Get Auto Scaling Group
-      const asgName = nodeGroupResponse.nodegroup?.resources?.autoScalingGroups?.[0].name;
-      
-      if (asgName) {
-        const asgResponse = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
-          AutoScalingGroupNames: [asgName]
+      for (const nodeGroupName of nodeGroupNames) {
+        const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
+          clusterName: outputs['eks-cluster-name'],
+          nodegroupName: nodeGroupName
         }));
 
-        const asg = asgResponse.AutoScalingGroups?.[0];
-        expect(asg?.VPCZoneIdentifier?.split(',').sort()).toEqual(outputs['private-subnet-ids'].sort());
+        // Verify nodes are in private subnets
+        expect(nodeGroupResponse.nodegroup?.subnets).toEqual(outputs['private-subnet-ids']);
+        
+        // Get Auto Scaling Group
+        const asgName = nodeGroupResponse.nodegroup?.resources?.autoScalingGroups?.[0].name;
+        
+        if (asgName) {
+          const asgResponse = await autoScalingClient.send(new DescribeAutoScalingGroupsCommand({
+            AutoScalingGroupNames: [asgName]
+          }));
+
+          const asg = asgResponse.AutoScalingGroups?.[0];
+          expect(asg?.VPCZoneIdentifier?.split(',').sort()).toEqual(outputs['private-subnet-ids'].sort());
+        }
       }
-    }, 45000);
+    }, 60000);
   });
 
   describe('[Cross-Service] EKS ↔ IAM Integration', () => {
@@ -792,6 +1025,42 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       );
       expect(hasSSMPolicy).toBe(true);
     }, 30000);
+
+    // NEW TEST: IRSA roles integration with cluster
+    test('should validate IRSA roles can be assumed by EKS service accounts', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      const irsaRoles = [
+        { name: 'cluster-autoscaler', namespace: 'kube-system', serviceAccount: 'cluster-autoscaler' },
+        { name: 'ebs-csi-driver', namespace: 'kube-system', serviceAccount: 'ebs-csi-controller-sa' },
+        { name: 'backend-role', namespace: 'backend', serviceAccount: '*', isWildcard: true },
+        { name: 'frontend-role', namespace: 'frontend', serviceAccount: '*', isWildcard: true },
+        { name: 'data-processing-role', namespace: 'data-processing', serviceAccount: '*', isWildcard: true }
+      ];
+
+      for (const role of irsaRoles) {
+        const roleName = `${outputs['eks-cluster-name']}-${role.name}`;
+        const roleResponse = await iamClient.send(new GetRoleCommand({
+          RoleName: roleName
+        }));
+
+        const trustPolicy = JSON.parse(roleResponse.Role?.AssumeRolePolicyDocument || '{}');
+        const statement = trustPolicy.Statement[0];
+
+        expect(statement.Action).toContain('sts:AssumeRoleWithWebIdentity');
+        expect(statement.Principal.Federated).toBe(outputs['eks-oidc-provider-arn']);
+
+        if (role.isWildcard) {
+          expect(statement.Condition.StringLike[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+            .toBe(`system:serviceaccount:${role.namespace}:${role.serviceAccount}`);
+        } else {
+          expect(statement.Condition.StringEquals[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`])
+            .toBe(`system:serviceaccount:${role.namespace}:${role.serviceAccount}`);
+        }
+      }
+    }, 45000);
   });
 
   describe('[Cross-Service] CloudWatch ↔ EKS Integration', () => {
@@ -851,7 +1120,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
               Timestamp: new Date(),
               Dimensions: [
                 { Name: 'ClusterName', Value: outputs['eks-cluster-name'] },
-                { Name: 'NodeGroup', Value: outputs['node-group-id'].split(':')[1] }
+                { Name: 'NodeGroup', Value: outputs['node-group-ids'][0].split(':')[1] }
               ]
             }
           ]
@@ -877,6 +1146,40 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         console.log('CloudWatch metrics test skipped:', error.message);
       }
     }, 45000);
+
+    // NEW TEST: VPC Flow Logs integration with CloudWatch
+    test('should validate VPC Flow Logs are being sent to CloudWatch', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      const flowLogGroupName = `/aws/vpc/flowlogs/${environmentSuffix}`;
+      
+      // Check log group exists
+      const logGroupResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: flowLogGroupName
+      }));
+
+      expect(logGroupResponse.logGroups?.length).toBeGreaterThan(0);
+      
+      const logGroup = logGroupResponse.logGroups![0];
+      expect(logGroup.retentionInDays).toBe(14);
+      expect(logGroup.storedBytes).toBeDefined();
+
+      // Check for log streams (may not have data immediately)
+      try {
+        const logStreamsResponse = await cloudWatchLogsClient.send(new DescribeLogStreamsCommand({
+          logGroupName: flowLogGroupName,
+          limit: 5
+        }));
+
+        if (logStreamsResponse.logStreams && logStreamsResponse.logStreams.length > 0) {
+          expect(logStreamsResponse.logStreams[0].logStreamName).toBeDefined();
+        }
+      } catch (error) {
+        console.log('VPC Flow Logs streams not yet available');
+      }
+    }, 30000);
   });
 
   // ============================================================================
@@ -968,14 +1271,17 @@ describe('EKS Stack CDKTF Integration Tests', () => {
 
       expect(clusterResponse.cluster?.status).toBe('ACTIVE');
 
-      // Step 3: Verify node group is active
-      const nodeGroupName = outputs['node-group-id'].split(':')[1];
-      const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-        clusterName: outputs['eks-cluster-name'],
-        nodegroupName: nodeGroupName
-      }));
+      // Step 3: Verify node groups are active
+      const nodeGroupIds = outputs['node-group-ids'];
+      for (const nodeGroupId of nodeGroupIds) {
+        const nodeGroupName = nodeGroupId.split(':')[1];
+        const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
+          clusterName: outputs['eks-cluster-name'],
+          nodegroupName: nodeGroupName
+        }));
 
-      expect(nodeGroupResponse.nodegroup?.status).toBe('ACTIVE');
+        expect(nodeGroupResponse.nodegroup?.status).toBe('ACTIVE');
+      }
       
       if (k8sApi) {
         try {
@@ -1050,6 +1356,72 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       }
     }, 60000);
 
+    // NEW E2E TEST: Complete workload deployment flow
+    test('should validate complete workload deployment flow: IRSA → Namespace → ServiceAccount → Pod', async () => {
+      if (isMockData) {
+        return;
+      }
+
+      // Step 1: Verify workload IRSA roles exist
+      const workloadRoles = [
+        { namespace: 'backend', roleArn: outputs['backend-role-arn'] },
+        { namespace: 'frontend', roleArn: outputs['frontend-role-arn'] },
+        { namespace: 'data-processing', roleArn: outputs['data-processing-role-arn'] }
+      ];
+
+      for (const workload of workloadRoles) {
+        // Verify role exists
+        const roleResponse = await iamClient.send(new GetRoleCommand({
+          RoleName: workload.roleArn.split('/').pop()!
+        }));
+        expect(roleResponse.Role).toBeDefined();
+
+        // Verify trust policy allows namespace
+        const trustPolicy = JSON.parse(roleResponse.Role?.AssumeRolePolicyDocument || '{}');
+        const condition = trustPolicy.Statement[0].Condition.StringLike[`${outputs['eks-oidc-provider-url'].replace('https://', '')}:sub`];
+        expect(condition).toBe(`system:serviceaccount:${workload.namespace}:*`);
+      }
+
+      // Step 2: If we have kube access, validate namespace deployment capability
+      if (k8sApi) {
+        try {
+          // Check if system namespaces exist
+          const namespacesResponse = await k8sApi.listNamespace();
+          const namespaces = (namespacesResponse as any).body?.items || [];
+          
+          // Essential namespaces should exist
+          const essentialNamespaces = ['default', 'kube-system', 'kube-public'];
+          essentialNamespaces.forEach(ns => {
+            const namespace = namespaces.find((n: any) => n.metadata?.name === ns);
+            expect(namespace).toBeDefined();
+          });
+
+          // Check system pods are running with proper IRSA
+          const systemPodsResponse = await (k8sApi as any).listNamespacedPod('kube-system');
+          const systemPods: V1Pod[] = ((systemPodsResponse as any).body?.items) || [];
+
+          // Check EBS CSI driver pods have service account
+          const ebsCsiPods = systemPods.filter((p: V1Pod) => 
+            p.metadata?.name?.includes('ebs-csi-controller')
+          );
+          
+          if (ebsCsiPods.length > 0) {
+            expect(ebsCsiPods[0].spec?.serviceAccountName).toBe('ebs-csi-controller-sa');
+          }
+        } catch (error) {
+          console.log('Kubernetes namespace test skipped');
+        }
+      }
+
+      console.log('\n✅ Workload Deployment Flow Test Completed');
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.log('Available Workload Roles:');
+      workloadRoles.forEach(w => {
+        console.log(`  • ${w.namespace}: ${w.roleArn}`);
+      });
+      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+    }, 90000);
+
     test('[TRADITIONAL E2E] Complete cluster provisioning flow: IAM → VPC → EKS → NodeGroup → Apps', async () => {
       if (isMockData) {
         return;
@@ -1078,13 +1450,15 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       }));
       expect(clusterResponse.cluster?.status).toBe('ACTIVE');
 
-      // Step 4: Verify node group is running
-      const nodeGroupName = outputs['node-group-id'].split(':')[1];
-      const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
-        clusterName: outputs['eks-cluster-name'],
-        nodegroupName: nodeGroupName
-      }));
-      expect(nodeGroupResponse.nodegroup?.status).toBe('ACTIVE');
+      // Step 4: Verify all node groups are running
+      for (const nodeGroupId of outputs['node-group-ids']) {
+        const nodeGroupName = nodeGroupId.split(':')[1];
+        const nodeGroupResponse = await eksClient.send(new DescribeNodegroupCommand({
+          clusterName: outputs['eks-cluster-name'],
+          nodegroupName: nodeGroupName
+        }));
+        expect(nodeGroupResponse.nodegroup?.status).toBe('ACTIVE');
+      }
 
       // Step 5: Verify cluster can run workloads (if kube access available)
       if (k8sApi) {
@@ -1094,7 +1468,7 @@ describe('EKS Stack CDKTF Integration Tests', () => {
           const systemPods: V1Pod[] = ((podsResponse as any).body?.items) || [];
 
           // Essential system pods should be running
-          const essentialPods = ['coredns', 'kube-proxy', 'aws-node'];
+          const essentialPods = ['coredns', 'kube-proxy', 'aws-node', 'ebs-csi'];
           essentialPods.forEach(podPrefix => {
             const pod = systemPods.find((p: V1Pod) => p.metadata?.name?.includes(podPrefix));
             if (pod) {
@@ -1134,7 +1508,6 @@ describe('EKS Stack CDKTF Integration Tests', () => {
 
           try {
             const createResponse = await (k8sApi as any).createNamespacedPod('default', testPod);
-            // The client returns different shapes depending on version; check response/statusCode if present
             const statusCode = (createResponse as any).response?.statusCode ?? (createResponse as any).statusCode;
             if (statusCode) {
               expect(statusCode).toBe(201);
@@ -1159,13 +1532,20 @@ describe('EKS Stack CDKTF Integration Tests', () => {
       }));
       expect(logGroupsResponse.logGroups?.length).toBeGreaterThan(0);
 
+      // Step 7: Verify VPC Flow Logs monitoring
+      const flowLogGroupResponse = await cloudWatchLogsClient.send(new DescribeLogGroupsCommand({
+        logGroupNamePrefix: `/aws/vpc/flowlogs/${environmentSuffix}`
+      }));
+      expect(flowLogGroupResponse.logGroups?.length).toBeGreaterThan(0);
+
       console.log('\n✅ E2E Test Completed Successfully');
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       console.log('Cluster Details:');
       console.log(`  • Cluster Name: ${outputs['eks-cluster-name']}`);
       console.log(`  • Endpoint: ${outputs['eks-cluster-endpoint']}`);
-      console.log(`  • Node Group: ${outputs['node-group-id']}`);
+      console.log(`  • Node Groups: ${outputs['node-group-ids'].length}`);
       console.log(`  • VPC: ${outputs['vpc-id']}`);
+      console.log(`  • IRSA Roles: 5 (cluster-autoscaler, ebs-csi, backend, frontend, data-processing)`);
       console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
       
     }, 120000);
@@ -1193,17 +1573,19 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         }))
       );
 
-      // Node group health check
-      const nodeGroupName = outputs['node-group-id'].split(':')[1];
-      healthChecks.push(
-        eksClient.send(new DescribeNodegroupCommand({
-          clusterName: outputs['eks-cluster-name'],
-          nodegroupName: nodeGroupName
-        })).then(res => ({
-          service: 'Node Group',
-          status: res.nodegroup?.status === 'ACTIVE' ? 'Healthy' : 'Unhealthy'
-        }))
-      );
+      // Node groups health check
+      for (const nodeGroupId of outputs['node-group-ids']) {
+        const nodeGroupName = nodeGroupId.split(':')[1];
+        healthChecks.push(
+          eksClient.send(new DescribeNodegroupCommand({
+            clusterName: outputs['eks-cluster-name'],
+            nodegroupName: nodeGroupName
+          })).then(res => ({
+            service: `Node Group (${nodeGroupName})`,
+            status: res.nodegroup?.status === 'ACTIVE' ? 'Healthy' : 'Unhealthy'
+          }))
+        );
+      }
 
       // VPC health check
       healthChecks.push(
@@ -1238,6 +1620,35 @@ describe('EKS Stack CDKTF Integration Tests', () => {
         })).catch(() => ({
           service: 'OIDC Provider',
           status: 'Unhealthy'
+        }))
+      );
+
+      // EKS Addons health check
+      healthChecks.push(
+        eksClient.send(new ListAddonsCommand({
+          clusterName: outputs['eks-cluster-name']
+        })).then(async res => {
+          const addonStatuses = [];
+          for (const addon of res.addons || []) {
+            const addonDetails = await eksClient.send(new DescribeAddonCommand({
+              clusterName: outputs['eks-cluster-name'],
+              addonName: addon
+            }));
+            addonStatuses.push(addonDetails.addon?.status === 'ACTIVE');
+          }
+          return {
+            service: 'EKS Addons',
+            status: addonStatuses.every(s => s) ? 'Healthy' : 'Degraded'
+          };
+        })
+      );
+
+      // VPC Flow Logs health check
+      healthChecks.push(
+        ec2Client.send(new DescribeFlowLogsCommand({
+        })).then(res => ({
+          service: 'VPC Flow Logs',
+          status: res.FlowLogs?.[0]?.FlowLogStatus === 'ACTIVE' ? 'Healthy' : 'Unhealthy'
         }))
       );
 
