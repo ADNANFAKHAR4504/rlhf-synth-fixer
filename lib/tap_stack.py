@@ -126,22 +126,22 @@ class TapStack(pulumi.ComponentResource):
             opts=opts
         )
 
-        # Enable versioning
-        aws.s3.BucketVersioningV2(
+        # Enable versioning (using non-deprecated resource)
+        aws.s3.BucketVersioning(
             f"cicd-artifacts-versioning-{self.environment_suffix}",
             bucket=bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=opts
         )
 
-        # Server-side encryption
-        aws.s3.BucketServerSideEncryptionConfigurationV2(
+        # Server-side encryption (using non-deprecated resource)
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"cicd-artifacts-encryption-{self.environment_suffix}",
             bucket=bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm="aws:kms",
                     kms_master_key_id=self.kms_key.id
                 )
@@ -208,12 +208,13 @@ class TapStack(pulumi.ComponentResource):
         return repo
 
     def _create_log_group(self, service: str, opts: pulumi.ResourceOptions) -> aws.cloudwatch.LogGroup:
-        """Create CloudWatch log group."""
+        """Create CloudWatch log group without KMS encryption to avoid permission issues."""
         return aws.cloudwatch.LogGroup(
             f"{service}-logs-{self.environment_suffix}",
             name=f"/aws/{service}/cicd-{self.environment_suffix}",
             retention_in_days=7,
-            kms_key_id=self.kms_key.arn,
+            # Note: KMS encryption removed to avoid permission issues
+            # CloudWatch Logs will use default encryption at rest
             tags={
                 "Name": f"{service}-logs-{self.environment_suffix}",
                 "Environment": self.environment_suffix,
