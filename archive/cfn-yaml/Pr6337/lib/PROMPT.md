@@ -1,0 +1,15 @@
+You're the lead infrastructure architect at FinSecure, a prominent financial institution that recently underwent a comprehensive security audit. The audit revealed the need for a complete overhaul of their data processing infrastructure to meet stringent PCI-DSS and SOC 2 compliance requirements. 
+
+Your task is to architect a CloudFormation template that establishes this secure data processing pipeline. The solution needs to process customer data flowing through an API Gateway that authenticates partners using mutual TLS certificates, ensuring that only verified external systems can submit data for processing.
+
+You'll need to implement a Lambda based processing engine that operates within an isolated VPC environment spanning two availability zones for resilience. This Lambda function should retrieve encrypted data from an S3 bucket that enforces encryption at rest using a customer managed KMS key with automatic rotation enabled. The KMS key itself requires careful configuration, it should only permit the Lambda and S3 services to utilize it, preventing any unauthorized services or users from accessing the encryption capabilities.
+
+The VPC should contain only private subnets with no direct internet connectivity, relying instead on VPC endpoints to communicate with S3, Lambda and CloudWatch Logs services. This air gapped approach ensures that sensitive data never traverses public networks. The API Gateway needs a custom authorizer Lambda function to validate incoming requests beyond just the mTLS authentication, adding an additional layer of security verification.
+
+All Lambda executions and API Gateway requests must be logged to CloudWatch Log Groups with KMS encryption and a seven year retention period to satisfy compliance mandates. Additionally, you'll need to implement CloudWatch alarms that immediately alert the security team about any unauthorized API calls or suspicious KMS key usage patterns.
+
+The IAM security model should follow the principle of least privilege with a twist each role must include explicit deny statements that prevent actions outside their required scope, even if future policy attachments might inadvertently grant such permissions. For handling failures gracefully, implement a dead letter queue using SQS with KMS encryption to capture any Lambda invocations that fail processing, ensuring no data loss while maintaining encryption standards.
+
+Every resource must be tagged with CostCenter, DataClassification and Owner tags, with stack level policies enforcing this requirement. The S3 bucket configuration should include versioning for audit trail purposes and a bucket policy that categorically denies any attempt to upload unencrypted objects, regardless of the principal making the request.
+
+Your deliverable should be a single, comprehensive CloudFormation YAML template that orchestrates all these components with proper dependencies and security configurations.

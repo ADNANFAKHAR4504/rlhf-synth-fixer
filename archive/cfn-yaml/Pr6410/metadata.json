@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T17:43:46+00:00",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "infrastructure-analysis-/-qa"
+  ],
+  "po_id": "101912436",
+  "aws_services": [
+    "Config",
+    "Lambda",
+    "S3",
+    "SNS",
+    "KMS",
+    "EventBridge",
+    "IAM",
+    "CloudWatch"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

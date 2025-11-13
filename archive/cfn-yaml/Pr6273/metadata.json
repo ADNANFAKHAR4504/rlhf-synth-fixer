@@ -1,0 +1,44 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912207",
+  "team": "3",
+  "startedAt": "2025-11-11T09:36:39.162Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway REST API",
+    "API Gateway Stage",
+    "API Gateway Method",
+    "API Gateway Deployment",
+    "Lambda Ingestion Function",
+    "Lambda Detection Function",
+    "Lambda Scheduled Analysis Function",
+    "DynamoDB Table",
+    "SQS Queue",
+    "SQS Dead Letter Queue",
+    "SNS Topic",
+    "SNS Subscription",
+    "CloudWatch Log Group",
+    "CloudWatch Dashboard",
+    "CloudWatch Alarm",
+    "EventBridge Rule",
+    "IAM Role for Ingestion Lambda",
+    "IAM Role for Detection Lambda",
+    "IAM Role for Scheduled Analysis Lambda",
+    "IAM Policy Attachments",
+    "X-Ray Tracing Configuration"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a serverless transaction anomaly detection system in us-east-1 using a single TapStack.yml template. The stack provisions a REST API Gateway with throttled POST endpoints for webhook ingestion, multiple Lambda functions for ingestion, anomaly detection, and scheduled pattern analysis (all ARM64 with X-Ray tracing and DLQs), an on-demand DynamoDB table for transaction history, SQS for buffering during peak loads, and SNS for alert notifications. It includes CloudWatch dashboards and alarms for latency, error rate, and DynamoDB capacity. All components follow the AWS Well-Architected Framework with least-privilege IAM roles, environment-tagged resources, and fully managed, event-driven architecture for secure, real-time financial anomaly detection.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

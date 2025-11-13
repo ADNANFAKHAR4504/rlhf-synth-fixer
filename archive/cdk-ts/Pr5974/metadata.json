@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-06T00:00:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "anthropic-claude"
+  ],
+  "po_id": "101000853",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NATGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "FlowLogs",
+    "VPCEndpoint",
+    "S3"
+  ],
+  "region": "us-east-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

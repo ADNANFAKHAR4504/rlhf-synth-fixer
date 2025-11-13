@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000184",
+  "team": "1",
+  "startedAt": "2025-11-04T16:13:52.563Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "ECS",
+    "RDS",
+    "VPC",
+    "EC2 Security Groups",
+    "EC2 NAT Gateway",
+    "Application Load Balancer",
+    "ECR",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboards",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}
