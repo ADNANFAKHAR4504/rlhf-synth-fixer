@@ -1,0 +1,18 @@
+{
+  "name": "trade-processor",
+  "version": "1.0.0",
+  "description": "Lambda function to process trade orders",
+  "main": "index.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.490.0",
+    "@aws-sdk/client-s3": "^3.490.0"
+  },
+  "devDependencies": {
+    "@types/aws-lambda": "^8.10.131",
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
