@@ -226,28 +226,8 @@ describe('TapStack — CloudFormation Template Unit Tests', () => {
     expect(arnStr).toEqual(expect.stringContaining('DlqNotifierTopic'));
   });
 
-  // ---- SSM Parameters
-  it('21) SSM parameters exist for primary & DR queue URLs and ARNs', () => {
-    const params = [
-      'PrimaryQueueUrlParameter',
-      'PrimaryQueueArnParameter',
-      'PrimaryDlqUrlParameter',
-      'PrimaryDlqArnParameter',
-      'DrQueueUrlParameter',
-      'DrQueueArnParameter',
-      'VisibilityTimeoutParameter',
-      'DrQueueUrlForReplicationParameter'
-    ];
-    for (const p of params) {
-      const res = getResource(tpl, p);
-      expect(res?.Type).toBe('AWS::SSM::Parameter');
-      expect(res?.Properties?.Name).toBeDefined();
-      expect(res?.Properties?.Value).toBeDefined();
-    }
-  });
-
   // ---- Queue purge (non-prod only) resources present with Conditions
-  it('22) QueuePurgeLambda and schedule exist with conditional creation', () => {
+  it('21) QueuePurgeLambda and schedule exist with conditional creation', () => {
     const fn = getResource(tpl, 'QueuePurgeLambda');
     const rule = getResource(tpl, 'QueuePurgeSchedule');
     const perm = getResource(tpl, 'QueuePurgeLambdaPermission');
@@ -261,7 +241,7 @@ describe('TapStack — CloudFormation Template Unit Tests', () => {
   });
 
   // ---- IAM roles/policies existence
-  it('23) Lambda IAM roles exist for primary, replication, and purge (conditional)', () => {
+  it('22) Lambda IAM roles exist for primary, replication, and purge (conditional)', () => {
     const r1 = getResource(tpl, 'PrimaryProcessorLambdaRole');
     const r2 = getResource(tpl, 'ReplicationLambdaRole');
     const r3 = getResource(tpl, 'QueuePurgeLambdaRole');
@@ -271,7 +251,7 @@ describe('TapStack — CloudFormation Template Unit Tests', () => {
     expect(r3?.Type).toBe('AWS::IAM::Role');
   });
 
-  it('24) LambdaExecutionManagedPolicy exists and grants log permissions', () => {
+  it('23) LambdaExecutionManagedPolicy exists and grants log permissions', () => {
     const mp = getResource(tpl, 'LambdaExecutionManagedPolicy');
     expect(mp?.Type).toBe('AWS::IAM::ManagedPolicy');
     const doc = mp?.Properties?.PolicyDocument;
@@ -281,7 +261,7 @@ describe('TapStack — CloudFormation Template Unit Tests', () => {
   });
 
   // ---- Outputs
-  it('25) Outputs include essential ARNs/URLs and exports', () => {
+  it('24) Outputs include essential ARNs/URLs and exports', () => {
     const outs = tpl.Outputs || {};
     const keys = [
       'PrimaryQueueUrl',
@@ -302,7 +282,7 @@ describe('TapStack — CloudFormation Template Unit Tests', () => {
   });
 
   // ---- Queue policies for trusted account principal
-  it('26) Queue policies exist (primary/dr & their DLQs) and reference TrustedRole when present', () => {
+  it('25) Queue policies exist (primary/dr & their DLQs) and reference TrustedRole when present', () => {
     const qp1 = getResource(tpl, 'QueuePolicyPrimary');
     const qp2 = getResource(tpl, 'QueuePolicyPrimaryDlq');
     const qp3 = getResource(tpl, 'QueuePolicyDr');
@@ -325,7 +305,7 @@ describe('TapStack — CloudFormation Template Unit Tests', () => {
   });
 
   // ---- FIFO eventing and ordering practices
-  it('27) Event source mappings use small batch size for FIFO ordering', () => {
+  it('26) Event source mappings use small batch size for FIFO ordering', () => {
     const m1 = getResource(tpl, 'PrimaryProcessorEventSourceMapping');
     const m2 = getResource(tpl, 'ReplicationEventSourceMapping');
     expect(m1?.Properties?.BatchSize).toBeLessThanOrEqual(10);

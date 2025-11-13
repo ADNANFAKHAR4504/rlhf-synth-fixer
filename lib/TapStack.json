@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack - Async financial processing (SQS FIFO, Lambda, DynamoDB, EventBridge, CloudWatch, SSM). All names include EnvironmentSuffix.",
+    "Description": "TapStack - Async financial processing (SQS FIFO, Lambda, DynamoDB, EventBridge, CloudWatch, SSM). All names include EnvironmentSuffix. Security-hardened & production-ready.",
     "Parameters": {
         "EnvironmentSuffix": {
             "Type": "String",
@@ -126,6 +126,30 @@
             ]
         }
     },
+    "Metadata": {
+        "TagSets": {
+            "CommonTags": [
+                {
+                    "Key": "Environment",
+                    "Value": {
+                        "Ref": "EnvironmentSuffix"
+                    }
+                },
+                {
+                    "Key": "CostCenter",
+                    "Value": "FinancialProcessing"
+                },
+                {
+                    "Key": "ManagedBy",
+                    "Value": "CloudFormation"
+                },
+                {
+                    "Key": "Project",
+                    "Value": "AsyncMessageProcessing"
+                }
+            ]
+        }
+    },
     "Resources": {
         "PrimaryDlqQueue": {
             "Type": "AWS::SQS::Queue",
@@ -138,7 +162,28 @@
                 "VisibilityTimeout": {
                     "Ref": "QueueVisibilityTimeoutSeconds"
                 },
-                "ReceiveMessageWaitTimeSeconds": 10
+                "ReceiveMessageWaitTimeSeconds": 10,
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "PrimaryFifoQueue": {
@@ -161,7 +206,28 @@
                         ]
                     },
                     "maxReceiveCount": 3
-                }
+                },
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "DrDlqQueue": {
@@ -175,7 +241,28 @@
                 "VisibilityTimeout": {
                     "Ref": "QueueVisibilityTimeoutSeconds"
                 },
-                "ReceiveMessageWaitTimeSeconds": 10
+                "ReceiveMessageWaitTimeSeconds": 10,
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "DrFifoQueue": {
@@ -198,7 +285,28 @@
                         ]
                     },
                     "maxReceiveCount": 3
-                }
+                },
+                "SqsManagedSseEnabled": true,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "QueuePolicyPrimary": {
@@ -357,18 +465,30 @@
                 "ManagedPolicyName": {
                     "Fn::Sub": "lambda-exec-base-${EnvironmentSuffix}-${AWS::Region}"
                 },
-                "Description": "Base policy for Lambda logs",
+                "Description": "Base policy for Lambda logs (scoped to specific log groups)",
                 "PolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
                         {
+                            "Sid": "LogsCore",
                             "Effect": "Allow",
                             "Action": [
                                 "logs:CreateLogGroup",
                                 "logs:CreateLogStream",
-                                "logs:PutLogEvents"
+                                "logs:PutLogEvents",
+                                "logs:DescribeLogStreams"
                             ],
-                            "Resource": "arn:aws:logs:*:*:*"
+                            "Resource": [
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/primary-processor-${EnvironmentSuffix}:*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/queue-replication-${EnvironmentSuffix}:*"
+                                },
+                                {
+                                    "Fn::Sub": "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/queue-purge-${EnvironmentSuffix}:*"
+                                }
+                            ]
                         }
                     ]
                 }
@@ -443,11 +563,31 @@
                                         "ssm:GetParameters"
                                     ],
                                     "Resource": {
-                                        "Fn::Sub": "arn:${AWS::Partition}:ssm:${PrimaryRegion}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+                                        "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
                                     }
                                 }
                             ]
                         }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
                     }
                 ]
             }
@@ -515,9 +655,38 @@
                                         "cloudwatch:PutMetricData"
                                     ],
                                     "Resource": "*"
+                                },
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ssm:GetParameter"
+                                    ],
+                                    "Resource": {
+                                        "Fn::Sub": "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+                                    }
                                 }
                             ]
                         }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
                     }
                 ]
             }
@@ -590,6 +759,114 @@
                             ]
                         }
                     }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "PrimaryProcessorLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/primary-processor-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "ReplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/queue-replication-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
+            }
+        },
+        "QueuePurgeLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Condition": "AutoPurgeActive",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/lambda/queue-purge-${EnvironmentSuffix}"
+                },
+                "RetentionInDays": 30,
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
                 ]
             }
         },
@@ -629,8 +906,28 @@
                     }
                 },
                 "Code": {
-                    "ZipFile": "import os\nimport json\nimport boto3\nfrom botocore.exceptions import ClientError\nfrom datetime import datetime, timezone\n\nddb = boto3.client('dynamodb')\n\ndef handler(event, context):\n    table = os.environ.get('MESSAGE_TABLE_NAME')\n    now = datetime.now(timezone.utc).isoformat()\n    for record in event.get('Records', []):\n        msg_id = record.get('messageId')\n        body = record.get('body', '')\n        try:\n            ddb.put_item(\n                TableName=table,\n                Item={\n                    'MessageId': {'S': msg_id},\n                    'ProcessedAt': {'S': now},\n                    'Payload': {'S': body},\n                    'Status': {'S': 'PROCESSED'}\n                },\n                ConditionExpression='attribute_not_exists(MessageId)'\n            )\n        except ClientError as e:\n            if e.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':\n                raise\n    return {'statusCode': 200}\n"
-                }
+                    "ZipFile": "import os\nimport json\nimport boto3\nfrom botocore.exceptions import ClientError\nfrom datetime import datetime, timezone\n\nddb = boto3.client('dynamodb')\n\ndef handler(event, context):\n    table = os.environ.get('MESSAGE_TABLE_NAME')\n    now = datetime.now(timezone.utc).isoformat()\n    for record in event.get('Records', []):\n        msg_id = record.get('messageId')\n        body = record.get('body', '')\n        try:\n            ddb.put_item(\n                TableName=table,\n                Item={\n                    'MessageId': {'S': msg_id},\n                    'ProcessedAt': {'S': now},\n                    'Payload': {'S': body},\n                    'Status': {'S': 'PROCESSED'}\n                },\n                ConditionExpression='attribute_not_exists(MessageId)'\n            )\n        except ClientError as e:\n            error_code = e.response.get('Error', {}).get('Code')\n            if error_code != 'ConditionalCheckFailedException':\n                print(f\"DynamoDB error: {error_code} - {e}\")\n                raise\n            print(f\"Duplicate message detected: {msg_id}\")\n    return {'statusCode': 200}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "PrimaryProcessorEventSourceMapping": {
@@ -676,8 +973,28 @@
                     }
                 },
                 "Code": {
-                    "ZipFile": "import os\nimport boto3\nfrom botocore.exceptions import ClientError\nsqs = boto3.client('sqs')\nssm = boto3.client('ssm')\n\ndef _resolve_dest(param_or_url):\n    if not param_or_url:\n        return None\n    if param_or_url.startswith('/'):\n        try:\n            return ssm.get_parameter(Name=param_or_url)['Parameter']['Value']\n        except ClientError:\n            return None\n    return param_or_url\n\ndef handler(event, context):\n    dest = _resolve_dest(os.environ.get('DEST_QUEUE_URL_PARAM')) or os.environ.get('DEST_QUEUE_URL')\n    if not dest:\n        print('Destination queue not configured')\n        return {'statusCode': 400}\n    for record in event.get('Records', []):\n        body = record.get('body', '')\n        attrs = record.get('attributes', {})\n        group_id = attrs.get('MessageGroupId') or 'default'\n        dedup = attrs.get('MessageDeduplicationId') or record.get('messageId')\n        try:\n            sqs.send_message(\n                QueueUrl=dest,\n                MessageBody=body,\n                MessageGroupId=group_id,\n                MessageDeduplicationId=dedup\n            )\n        except ClientError as exc:\n            print('Replication send failed', exc)\n            raise\n    return {'statusCode': 200}\n"
-                }
+                    "ZipFile": "import os\nimport boto3\nfrom botocore.exceptions import ClientError\nsqs = boto3.client('sqs')\nssm = boto3.client('ssm')\n\ndef _resolve_dest(param_or_url):\n    if not param_or_url:\n        return None\n    if param_or_url.startswith('/'):\n        try:\n            return ssm.get_parameter(Name=param_or_url)['Parameter']['Value']\n        except ClientError as e:\n            print(f\"SSM get_parameter failed: {e}\")\n            return None\n    return param_or_url\n\ndef handler(event, context):\n    dest = _resolve_dest(os.environ.get('DEST_QUEUE_URL_PARAM')) or os.environ.get('DEST_QUEUE_URL')\n    if not dest:\n        raise ValueError('Destination queue not configured')\n\n    for record in event.get('Records', []):\n        body = record.get('body', '')\n        attrs = record.get('attributes', {}) or {}\n        group_id = attrs.get('MessageGroupId')\n        if not group_id:\n            raise ValueError(f\"Missing MessageGroupId for message {record.get('messageId')}\")\n        dedup = attrs.get('MessageDeduplicationId') or record.get('messageId')\n        try:\n            sqs.send_message(\n                QueueUrl=dest,\n                MessageBody=body,\n                MessageGroupId=group_id,\n                MessageDeduplicationId=dedup\n            )\n        except ClientError as exc:\n            print('Replication send failed', exc)\n            raise\n    return {'statusCode': 200}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "ReplicationEventSourceMapping": {
@@ -731,7 +1048,27 @@
                 },
                 "Code": {
                     "ZipFile": "import os\nimport boto3\nfrom botocore.exceptions import ClientError\nsqs = boto3.client('sqs')\n\ndef _purge(url):\n    if not url:\n        return\n    try:\n        sqs.purge_queue(QueueUrl=url)\n        print('Purged:', url)\n    except ClientError as e:\n        print('Purge failed:', e)\n\ndef handler(event, context):\n    for u in [os.environ.get('PRIMARY_QUEUE_URL'),\n              os.environ.get('PRIMARY_DLQ_URL'),\n              os.environ.get('DR_QUEUE_URL'),\n              os.environ.get('DR_DLQ_URL')]:\n        _purge(u)\n    return {'status': 'ok'}\n"
-                }
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "QueuePurgeSchedule": {
@@ -816,7 +1153,30 @@
                 ],
                 "StreamSpecification": {
                     "StreamViewType": "NEW_AND_OLD_IMAGES"
-                }
+                },
+                "PointInTimeRecoverySpecification": {
+                    "PointInTimeRecoveryEnabled": true
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "CostCenter",
+                        "Value": "FinancialProcessing"
+                    },
+                    {
+                        "Key": "ManagedBy",
+                        "Value": "CloudFormation"
+                    },
+                    {
+                        "Key": "Project",
+                        "Value": "AsyncMessageProcessing"
+                    }
+                ]
             }
         },
         "PrimaryQueueDepthAlarm": {
@@ -883,6 +1243,118 @@
                 "TreatMissingData": "notBreaching"
             }
         },
+        "DrQueueDepthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "dr-queue-depth-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "DR FIFO queue depth exceeds ${QueueDepthAlarmThreshold} (${EnvironmentSuffix})"
+                },
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "DrFifoQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "QueueDepthAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DrDlqDepthAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "dr-dlq-depth-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": {
+                    "Fn::Sub": "DR DLQ depth exceeds ${DlqAlarmThreshold} (${EnvironmentSuffix})"
+                },
+                "Namespace": "AWS/SQS",
+                "MetricName": "ApproximateNumberOfMessagesVisible",
+                "Dimensions": [
+                    {
+                        "Name": "QueueName",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "DrDlqQueue",
+                                "QueueName"
+                            ]
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": {
+                    "Ref": "DlqAlarmThreshold"
+                },
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "PrimaryProcessorThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "primary-processor-throttles-${EnvironmentSuffix}"
+                },
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Throttles",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "PrimaryProcessorLambda"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "ReplicationThrottleAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "replication-throttles-${EnvironmentSuffix}"
+                },
+                "Namespace": "AWS/Lambda",
+                "MetricName": "Throttles",
+                "Dimensions": [
+                    {
+                        "Name": "FunctionName",
+                        "Value": {
+                            "Ref": "ReplicationLambda"
+                        }
+                    }
+                ],
+                "Statistic": "Sum",
+                "Period": 60,
+                "EvaluationPeriods": 1,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+                "TreatMissingData": "notBreaching"
+            }
+        },
         "ReplicationLambdaErrorAlarm": {
             "Type": "AWS::CloudWatch::Alarm",
             "Properties": {
@@ -912,7 +1384,7 @@
             "Type": "AWS::CloudWatch::Dashboard",
             "Properties": {
                 "DashboardBody": {
-                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary Queue Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${PrimaryFifoQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary DLQ Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${PrimaryDlqQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary Processor Lambda\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${PrimaryProcessorLambda}\"],\n          [\".\",\"Errors\",\".\",\".\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Replication Lambda\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${ReplicationLambda}\"],\n          [\".\",\"Errors\",\".\",\".\"]\n        ]\n      }\n    }\n  ]\n}\n"
+                    "Fn::Sub": "{\n  \"widgets\": [\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary Queue Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${PrimaryFifoQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 0, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary DLQ Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${PrimaryDlqQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Primary Processor Lambda\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${PrimaryProcessorLambda}\"],\n          [\".\",\"Errors\",\".\",\".\"],\n          [\".\",\"Throttles\",\".\",\".\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 6, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"Replication Lambda\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/Lambda\",\"Invocations\",\"FunctionName\",\"${ReplicationLambda}\"],\n          [\".\",\"Errors\",\".\",\".\"],\n          [\".\",\"Throttles\",\".\",\".\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 0, \"y\": 12, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"DR Queue Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${DrFifoQueue.QueueName}\"]\n        ]\n      }\n    },\n    {\n      \"type\": \"metric\",\n      \"x\": 12, \"y\": 12, \"width\": 12, \"height\": 6,\n      \"properties\": {\n        \"title\": \"DR DLQ Depth (${EnvironmentSuffix})\",\n        \"view\": \"timeSeries\",\n        \"stacked\": false,\n        \"region\": \"${PrimaryRegion}\",\n        \"metrics\": [\n          [\"AWS/SQS\",\"ApproximateNumberOfMessagesVisible\",\"QueueName\",\"${DrDlqQueue.QueueName}\"]\n        ]\n      }\n    }\n  ]\n}\n"
                 }
             }
         },
@@ -1099,18 +1571,6 @@
                 "Type": "String",
                 "Value": {
                     "Ref": "TrustedRoleArn"
-                }
-            }
-        },
-        "DrQueueUrlForReplicationParameter": {
-            "Type": "AWS::SSM::Parameter",
-            "Properties": {
-                "Name": {
-                    "Fn::Sub": "/async/${EnvironmentSuffix}/dr-queue-url-for-replication"
-                },
-                "Type": "String",
-                "Value": {
-                    "Ref": "DrFifoQueue"
                 }
             }
         }
