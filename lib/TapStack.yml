@@ -84,18 +84,6 @@ Conditions:
     - !Equals [!Ref EnableAutoPurgeNonProd, "true"]
     - !Not [!Condition IsProdEnv]
 
-Metadata:
-  TagSets:
-    CommonTags: &CommonTags
-      - Key: Environment
-        Value: !Ref EnvironmentSuffix
-      - Key: CostCenter
-        Value: FinancialProcessing
-      - Key: ManagedBy
-        Value: CloudFormation
-      - Key: Project
-        Value: AsyncMessageProcessing
-
 Resources:
 
   # ---------------- SQS (Primary + DLQ) ----------------
@@ -108,7 +96,15 @@ Resources:
       VisibilityTimeout: !Ref QueueVisibilityTimeoutSeconds
       ReceiveMessageWaitTimeSeconds: 10
       SqsManagedSseEnabled: true
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   PrimaryFifoQueue:
     Type: AWS::SQS::Queue
@@ -122,7 +118,15 @@ Resources:
         deadLetterTargetArn: !GetAtt PrimaryDlqQueue.Arn
         maxReceiveCount: 3
       SqsManagedSseEnabled: true
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- SQS (DR pattern in same region) ----------------
   DrDlqQueue:
@@ -134,7 +138,15 @@ Resources:
       VisibilityTimeout: !Ref QueueVisibilityTimeoutSeconds
       ReceiveMessageWaitTimeSeconds: 10
       SqsManagedSseEnabled: true
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   DrFifoQueue:
     Type: AWS::SQS::Queue
@@ -148,7 +160,15 @@ Resources:
         deadLetterTargetArn: !GetAtt DrDlqQueue.Arn
         maxReceiveCount: 3
       SqsManagedSseEnabled: true
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- Queue Policies (optional trusted role) ----------------
   QueuePolicyPrimary:
@@ -283,7 +303,15 @@ Resources:
                   - ssm:GetParameter
                   - ssm:GetParameters
                 Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   ReplicationLambdaRole:
     Type: AWS::IAM::Role
@@ -317,7 +345,15 @@ Resources:
                 Action:
                   - ssm:GetParameter
                 Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   QueuePurgeLambdaRole:
     Type: AWS::IAM::Role
@@ -345,7 +381,15 @@ Resources:
                   - !GetAtt PrimaryDlqQueue.Arn
                   - !GetAtt DrFifoQueue.Arn
                   - !GetAtt DrDlqQueue.Arn
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- Lambda Log Groups (retention) ----------------
   PrimaryProcessorLogGroup:
@@ -353,14 +397,30 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/primary-processor-${EnvironmentSuffix}"
       RetentionInDays: 30
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   ReplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/queue-replication-${EnvironmentSuffix}"
       RetentionInDays: 30
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   QueuePurgeLogGroup:
     Type: AWS::Logs::LogGroup
@@ -368,7 +428,15 @@ Resources:
     Properties:
       LogGroupName: !Sub "/aws/lambda/queue-purge-${EnvironmentSuffix}"
       RetentionInDays: 30
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- Lambdas ----------------
   PrimaryProcessorLambda:
@@ -421,7 +489,15 @@ Resources:
                           raise
                       print(f"Duplicate message detected: {msg_id}")
               return {'statusCode': 200}
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   PrimaryProcessorEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
@@ -486,7 +562,15 @@ Resources:
                       print('Replication send failed', exc)
                       raise
               return {'statusCode': 200}
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   ReplicationEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
@@ -535,7 +619,15 @@ Resources:
                         os.environ.get('DR_DLQ_URL')]:
                   _purge(u)
               return {'status': 'ok'}
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   QueuePurgeSchedule:
     Type: AWS::Events::Rule
@@ -582,7 +674,15 @@ Resources:
         StreamViewType: NEW_AND_OLD_IMAGES
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
-      Tags: *CommonTags
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- CloudWatch Alarms ----------------
   PrimaryQueueDepthAlarm:

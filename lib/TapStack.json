@@ -126,30 +126,6 @@
             ]
         }
     },
-    "Metadata": {
-        "TagSets": {
-            "CommonTags": [
-                {
-                    "Key": "Environment",
-                    "Value": {
-                        "Ref": "EnvironmentSuffix"
-                    }
-                },
-                {
-                    "Key": "CostCenter",
-                    "Value": "FinancialProcessing"
-                },
-                {
-                    "Key": "ManagedBy",
-                    "Value": "CloudFormation"
-                },
-                {
-                    "Key": "Project",
-                    "Value": "AsyncMessageProcessing"
-                }
-            ]
-        }
-    },
     "Resources": {
         "PrimaryDlqQueue": {
             "Type": "AWS::SQS::Queue",
