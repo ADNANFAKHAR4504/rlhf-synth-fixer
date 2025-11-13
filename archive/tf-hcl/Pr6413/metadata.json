@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "6403",
+  "team": "5",
+  "startedAt": "2025-11-12T16:54:03.710Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Build zero-trust security infrastructure with network segmentation, end-to-end encryption, and comprehensive audit trails to achieve PCI DSS compliance for payment processing following security audit requirements",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "KMS",
+    "S3",
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "Secrets Manager",
+    "GuardDuty"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
