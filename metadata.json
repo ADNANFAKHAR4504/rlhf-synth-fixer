@@ -11,6 +11,8 @@
     "infrastructure",
     "infrastructure-analysis-/-qa"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "po_id": "101912507",
   "aws_services": [
     "AWS Config",
@@ -20,11 +22,5 @@
     "CloudWatch Logs"
   ],
   "region": "us-east-1",
-  "training_quality": 10,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "claude-synth",
-  "dockerS3Location": ""
+  "training_quality": 10
 }

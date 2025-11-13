@@ -82,6 +82,16 @@ because the maximum number of delivery channels: 1 is reached.
 Error Code: MaxNumberOfDeliveryChannelsExceededException)
 ```
 
+#### Evidence in Template (`lib/TapStack.json`)
+
+- Lines ~400-520 declare `ConfigRecorderRole`, `ConfigRecorder`, and `ConfigDeliveryChannel`, demonstrating that the template provisions account-level AWS Config infrastructure that already exists in most environments.
+- Every AWS Config rule block (lines ~210-390) includes `"DependsOn": ["ConfigRecorder"]`, so the entire compliance ruleset becomes undeployable the moment the recorder resource fails.
+- No conditions or parameters gate these resources, meaning the template always violates the one-recorder-per-account quota in shared or preconfigured accounts.
+
+#### Required Fix
+
+Remove the recorder, delivery channel, and role resources entirely and strip the `DependsOn` references from each Config rule so they can attach to the already-enabled account-level recorder.
+
 **IDEAL_RESPONSE Fix**:
 
 Complete removal of these resources:
@@ -239,6 +249,10 @@ Despite the critical failure, the MODEL_RESPONSE demonstrated strong understandi
    - SNS notifications for alerts
    - Lifecycle policies for cost control
    - No Retain deletion policies (fully destroyable)
+
+## Reference Implementation
+
+The fully remediated template is embedded in `lib/IDEAL_RESPONSE.md`, ensuring the entire `lib/TapStack.json` source is available in Markdown for quick review or reuse.
 
 ### Recommendations for Model Training
 

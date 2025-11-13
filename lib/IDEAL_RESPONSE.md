@@ -11,6 +11,10 @@ The solution implements a compliance monitoring system using:
 - **CloudWatch Logs**: Operational monitoring
 - **No Config Recorder/Delivery Channel**: Uses existing account-level AWS Config infrastructure
 
+## Source Coverage
+
+All executable IaC in `lib/` lives in `lib/TapStack.json`, so the full template is embedded below inside a fenced `json` block for easy copy/paste without needing to open another file.
+
 ## Key Design Decisions
 
 ### 1. Leveraging Existing AWS Config Infrastructure

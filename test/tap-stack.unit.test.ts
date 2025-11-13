@@ -398,9 +398,9 @@ describe('TapStack CloudFormation Template Unit Tests', () => {
       expect(resourceCount).toBe(15);
     });
 
-    test('should have 5 outputs', () => {
+    test('should have 6 outputs', () => {
       const outputCount = Object.keys(template.Outputs).length;
-      expect(outputCount).toBe(5);
+      expect(outputCount).toBe(6);
     });
 
     test('should have 3 parameters', () => {

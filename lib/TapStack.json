@@ -209,6 +209,7 @@
     },
     "S3BucketPublicReadProhibitedRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-read-prohibited-${EnvironmentSuffix}"
@@ -227,6 +228,7 @@
     },
     "S3BucketPublicWriteProhibitedRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-public-write-prohibited-${EnvironmentSuffix}"
@@ -245,6 +247,7 @@
     },
     "S3BucketServerSideEncryptionEnabledRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-encryption-enabled-${EnvironmentSuffix}"
@@ -263,6 +266,7 @@
     },
     "S3BucketVersioningEnabledRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "s3-bucket-versioning-enabled-${EnvironmentSuffix}"
@@ -281,6 +285,7 @@
     },
     "EC2VolumeEncryptionRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "ec2-volume-encryption-${EnvironmentSuffix}"
@@ -299,6 +304,7 @@
     },
     "RDSEncryptionEnabledRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "rds-encryption-enabled-${EnvironmentSuffix}"
@@ -317,6 +323,7 @@
     },
     "IAMPasswordPolicyRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "iam-password-policy-${EnvironmentSuffix}"
@@ -337,6 +344,7 @@
     },
     "IAMRootAccessKeyCheckRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "iam-root-access-key-check-${EnvironmentSuffix}"
@@ -350,6 +358,7 @@
     },
     "VPCFlowLogsEnabledRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "vpc-flow-logs-enabled-${EnvironmentSuffix}"
@@ -368,6 +377,7 @@
     },
     "CloudTrailEnabledRule": {
       "Type": "AWS::Config::ConfigRule",
+      "DependsOn": ["ConfigRecorder"],
       "Properties": {
         "ConfigRuleName": {
           "Fn::Sub": "cloudtrail-enabled-${EnvironmentSuffix}"
@@ -386,6 +396,106 @@
           "Fn::Sub": "/aws/compliance/monitoring-${EnvironmentSuffix}"
         },
         "RetentionInDays": 30
+      }
+    },
+    "ConfigRecorderRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {
+          "Fn::Sub": "ConfigRecorderRole-${EnvironmentSuffix}"
+        },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "config.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/service-role/ConfigRole"
+        ],
+        "Policies": [
+          {
+            "PolicyName": "ConfigRecorderS3Policy",
+            "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [
+                {
+                  "Effect": "Allow",
+                  "Action": [
+                    "s3:GetBucketVersioning",
+                    "s3:PutObject",
+                    "s3:GetObject"
+                  ],
+                  "Resource": [
+                    {
+                      "Fn::GetAtt": ["ConfigBucket", "Arn"]
+                    },
+                    {
+                      "Fn::Sub": "${ConfigBucket.Arn}/*"
+                    }
+                  ]
+                },
+                {
+                  "Effect": "Allow",
+                  "Action": "sns:Publish",
+                  "Resource": {
+                    "Ref": "ComplianceNotificationTopic"
+                  }
+                }
+              ]
+            }
+          }
+        ],
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": {
+              "Fn::Sub": "ConfigRecorderRole-${EnvironmentSuffix}"
+            }
+          }
+        ]
+      }
+    },
+    "ConfigRecorder": {
+      "Type": "AWS::Config::ConfigurationRecorder",
+      "DependsOn": ["ConfigBucketPolicy"],
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "compliance-recorder-${EnvironmentSuffix}"
+        },
+        "RoleARN": {
+          "Fn::GetAtt": ["ConfigRecorderRole", "Arn"]
+        },
+        "RecordingGroup": {
+          "AllSupported": true,
+          "IncludeGlobalResourceTypes": true,
+          "ResourceTypes": []
+        }
+      }
+    },
+    "ConfigDeliveryChannel": {
+      "Type": "AWS::Config::DeliveryChannel",
+      "Properties": {
+        "Name": {
+          "Fn::Sub": "compliance-delivery-${EnvironmentSuffix}"
+        },
+        "S3BucketName": {
+          "Ref": "ConfigBucket"
+        },
+        "SnsTopicARN": {
+          "Ref": "ComplianceNotificationTopic"
+        },
+        "ConfigSnapshotDeliveryProperties": {
+          "DeliveryFrequency": {
+            "Ref": "ConfigSnapshotFrequency"
+          }
+        }
       }
     }
   },
@@ -423,6 +533,17 @@
       "Export": {
         "Name": {
           "Fn::Sub": "${AWS::StackName}-NotificationTopic"
+        }
+      }
+    },
+    "ConfigRecorderName": {
+      "Description": "Name of the AWS Config recorder",
+      "Value": {
+        "Ref": "ConfigRecorder"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}-ConfigRecorder"
         }
       }
     },
