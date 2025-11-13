@@ -12,6 +12,8 @@
     "infrastructure",
     "infrastructure-analysis-/-qa"
   ],
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
   "aws_services": [
     "S3",
     "KMS",
