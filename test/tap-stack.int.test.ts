@@ -24,21 +24,30 @@ const servicediscovery = new AWS.ServiceDiscovery();
 const iam = new AWS.IAM();
 
 describe('TAP Stack Integration Tests', () => {
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6415';
+
   describe('VPC and Networking', () => {
     let vpcId: string;
 
-    beforeAll(() => {
-      vpcId = outputs['vpcId'] || getResourceIdByTag('ecs-vpc');
+    beforeAll(async () => {
+      // Get VPC ID from deployed resources
+      const response = await ec2.describeVpcs({
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }]
+      }).promise();
+
+      if (response.Vpcs && response.Vpcs.length > 0) {
+        vpcId = response.Vpcs[0].VpcId!;
+      }
     });
 
     it('should have VPC deployed', async () => {
       const response = await ec2.describeVpcs({
-        Filters: [{ Name: 'tag:Name', Values: ['ecs-vpc-*'] }]
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }]
       }).promise();
 
       expect(response.Vpcs).toBeDefined();
       expect(response.Vpcs!.length).toBeGreaterThan(0);
-      
+
       const vpc = response.Vpcs![0];
       expect(vpc.CidrBlock).toBe('10.0.0.0/16');
       expect(vpc.State).toBe('available');
@@ -260,15 +269,22 @@ describe('TAP Stack Integration Tests', () => {
   describe('Security Groups', () => {
     let vpcId: string;
 
-    beforeAll(() => {
-      vpcId = outputs['vpcId'] || '';
+    beforeAll(async () => {
+      // Get VPC ID from deployed resources
+      const response = await ec2.describeVpcs({
+        Filters: [{ Name: 'tag:Name', Values: [`ecs-vpc-${environmentSuffix}`] }]
+      }).promise();
+
+      if (response.Vpcs && response.Vpcs.length > 0) {
+        vpcId = response.Vpcs[0].VpcId!;
+      }
     });
 
     it('should have ALB security group with correct rules', async () => {
       const response = await ec2.describeSecurityGroups({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
-          { Name: 'tag:Name', Values: ['*alb-sg*'] }
+          { Name: 'tag:Name', Values: [`*alb-sg-${environmentSuffix}*`] }
         ]
       }).promise();
 
@@ -289,7 +305,7 @@ describe('TAP Stack Integration Tests', () => {
       const response = await ec2.describeSecurityGroups({
         Filters: [
           { Name: 'vpc-id', Values: [vpcId] },
-          { Name: 'tag:Name', Values: ['*ecs-task-sg*'] }
+          { Name: 'tag:Name', Values: [`*ecs-task-sg-${environmentSuffix}*`] }
         ]
       }).promise();
 
@@ -314,7 +330,7 @@ describe('TAP Stack Integration Tests', () => {
       const response = await iam.listRoles({}).promise();
 
       const executionRole = response.Roles.find(r =>
-        r.RoleName.includes('task-execution-role')
+        r.RoleName.includes(`task-execution-role-${environmentSuffix}`)
       );
 
       expect(executionRole).toBeDefined();
@@ -323,9 +339,9 @@ describe('TAP Stack Integration Tests', () => {
     it('should have task roles for each service', async () => {
       const response = await iam.listRoles({}).promise();
 
-      const frontendRole = response.Roles.find(r => r.RoleName.includes('frontend-task-role'));
-      const apiRole = response.Roles.find(r => r.RoleName.includes('api-gateway-task-role'));
-      const processingRole = response.Roles.find(r => r.RoleName.includes('processing-task-role'));
+      const frontendRole = response.Roles.find(r => r.RoleName.includes(`frontend-task-role-${environmentSuffix}`));
+      const apiRole = response.Roles.find(r => r.RoleName.includes(`api-gateway-task-role-${environmentSuffix}`));
+      const processingRole = response.Roles.find(r => r.RoleName.includes(`processing-task-role-${environmentSuffix}`));
 
       expect(frontendRole).toBeDefined();
       expect(apiRole).toBeDefined();
@@ -334,7 +350,7 @@ describe('TAP Stack Integration Tests', () => {
 
     it('should have least-privilege S3 policy for frontend role', async () => {
       const response = await iam.listRoles({}).promise();
-      const frontendRole = response.Roles.find(r => r.RoleName.includes('frontend-task-role'));
+      const frontendRole = response.Roles.find(r => r.RoleName.includes(`frontend-task-role-${environmentSuffix}`));
 
       if (frontendRole) {
         const policiesResponse = await iam.listRolePolicies({
@@ -395,9 +411,9 @@ describe('TAP Stack Integration Tests', () => {
       const response = await ecs.listTaskDefinitionFamilies({}).promise();
 
       const families = response.families!.filter(f =>
-        f.includes('frontend') ||
-        f.includes('api-gateway') ||
-        f.includes('processing')
+        f.includes(`frontend-${environmentSuffix}`) ||
+        f.includes(`api-gateway-${environmentSuffix}`) ||
+        f.includes(`processing-service-${environmentSuffix}`)
       );
 
       expect(families.length).toBe(3);
@@ -406,7 +422,7 @@ describe('TAP Stack Integration Tests', () => {
     it('should have correct CPU/Memory for processing service', async () => {
       const familiesResponse = await ecs.listTaskDefinitionFamilies({}).promise();
       const processingFamily = familiesResponse.families!.find(f =>
-        f.includes('processing-service')
+        f.includes(`processing-service-${environmentSuffix}`)
       );
 
       if (processingFamily) {
@@ -424,7 +440,9 @@ describe('TAP Stack Integration Tests', () => {
       const familiesResponse = await ecs.listTaskDefinitionFamilies({}).promise();
 
       for (const family of familiesResponse.families!) {
-        if (family.includes('frontend') || family.includes('api-gateway') || family.includes('processing')) {
+        if (family.includes(`frontend-${environmentSuffix}`) ||
+            family.includes(`api-gateway-${environmentSuffix}`) ||
+            family.includes(`processing-service-${environmentSuffix}`)) {
           const response = await ecs.describeTaskDefinition({
             taskDefinition: family
           }).promise();
@@ -459,8 +477,8 @@ describe('TAP Stack Integration Tests', () => {
       const response = await elbv2.describeTargetGroups({}).promise();
 
       const targetGroups = response.TargetGroups!.filter(tg =>
-        tg.TargetGroupName!.includes('frontend') ||
-        tg.TargetGroupName!.includes('api-gateway')
+        tg.TargetGroupName!.includes(`fe-tg-${environmentSuffix}`) ||
+        tg.TargetGroupName!.includes(`api-tg-${environmentSuffix}`)
       );
 
       expect(targetGroups.length).toBe(2);
@@ -470,8 +488,8 @@ describe('TAP Stack Integration Tests', () => {
       const response = await elbv2.describeTargetGroups({}).promise();
 
       const targetGroups = response.TargetGroups!.filter(tg =>
-        tg.TargetGroupName!.includes('frontend') ||
-        tg.TargetGroupName!.includes('api-gateway')
+        tg.TargetGroupName!.includes(`fe-tg-${environmentSuffix}`) ||
+        tg.TargetGroupName!.includes(`api-tg-${environmentSuffix}`)
       );
 
       targetGroups.forEach(tg => {
