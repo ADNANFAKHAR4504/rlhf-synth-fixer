@@ -101,36 +101,46 @@ class Route53Stack(Stack):
         # Outputs
         CfnOutput(
             self,
-            "HostedZoneId",
+            "Route53HostedZoneId",
             value=self.hosted_zone.hosted_zone_id,
             description="Route 53 hosted zone ID",
-            export_name=f"HostedZoneId-{environment_suffix}",
+            export_name=f"Route53HostedZoneId-{environment_suffix}",
         )
 
         CfnOutput(
             self,
-            "DomainName",
+            "Route53HostedZoneName",
+            value=self.hosted_zone.zone_name,
+            description="Route 53 hosted zone name",
+            export_name=f"Route53HostedZoneName-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "Route53DomainName",
             value=f"api.payment-migration-{environment_suffix}.internal",
             description="API domain name for traffic routing",
         )
 
         CfnOutput(
             self,
-            "TrafficShiftCommand",
-            value=f"aws route53 change-resource-record-sets --hosted-zone-id {self.hosted_zone.hosted_zone_id} --change-batch file://traffic-shift.json",
-            description="Command to shift traffic between environments",
-        )
-
-        CfnOutput(
-            self,
-            "SourceHealthCheckId",
+            "Route53SourceHealthCheckId",
             value=source_health_check.attr_health_check_id,
             description="Health check ID for source ALB",
+            export_name=f"Route53SourceHealthCheckId-{environment_suffix}",
         )
 
         CfnOutput(
             self,
-            "TargetHealthCheckId",
+            "Route53TargetHealthCheckId",
             value=target_health_check.attr_health_check_id,
             description="Health check ID for target ALB",
+            export_name=f"Route53TargetHealthCheckId-{environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "Route53TrafficShiftCommand",
+            value=f"aws route53 change-resource-record-sets --hosted-zone-id {self.hosted_zone.hosted_zone_id} --change-batch file://traffic-shift.json",
+            description="Command to shift traffic between environments",
         )

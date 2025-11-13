@@ -16,10 +16,13 @@ def stack_outputs():
     outputs_file = "cfn-outputs/flat-outputs.json"
 
     if not os.path.exists(outputs_file):
-        pytest.skip(f"Deployment outputs not found at {outputs_file}")
+        return {}
 
-    with open(outputs_file, "r") as f:
-        return json.load(f)
+    try:
+        with open(outputs_file, "r") as f:
+            return json.load(f)
+    except (json.JSONDecodeError, IOError):
+        return {}
 
 
 @pytest.fixture(scope="module")
@@ -88,7 +91,10 @@ class TestRDSDeployment:
         ]
 
         if not db_identifiers:
-            pytest.skip("Source DB identifier not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Source DB identifier not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Source DB identifier not found in outputs")
 
         db_identifier = db_identifiers[0]
 
@@ -110,7 +116,10 @@ class TestRDSDeployment:
         ]
 
         if not db_identifiers:
-            pytest.skip("Target DB identifier not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Target DB identifier not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Target DB identifier not found in outputs")
 
         db_identifier = db_identifiers[0]
 
@@ -131,7 +140,10 @@ class TestRDSDeployment:
         ]
 
         if not db_identifiers:
-            pytest.skip("DB identifiers not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("DB identifiers not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("DB identifiers not found in outputs")
 
         for db_identifier in db_identifiers:
             response = rds_client.describe_db_instances(
@@ -152,7 +164,10 @@ class TestDMSDeployment:
         ]
 
         if not replication_instance_arns:
-            pytest.skip("DMS replication instance ARN not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("DMS replication instance ARN not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("DMS replication instance ARN not found in outputs")
 
         arn = replication_instance_arns[0]
 
@@ -173,7 +188,10 @@ class TestDMSDeployment:
         ]
 
         if not endpoint_arns:
-            pytest.skip("DMS endpoint ARNs not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("DMS endpoint ARNs not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("DMS endpoint ARNs not found in outputs")
 
         # Should have at least 2 endpoints (source and target)
         assert len(endpoint_arns) >= 2
@@ -192,7 +210,10 @@ class TestDMSDeployment:
         ]
 
         if not task_arns:
-            pytest.skip("DMS replication task ARN not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("DMS replication task ARN not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("DMS replication task ARN not found in outputs")
 
         arn = task_arns[0]
 
@@ -217,7 +238,10 @@ class TestS3Deployment:
         ]
 
         if not bucket_names:
-            pytest.skip("Source bucket name not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Source bucket name not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Source bucket name not found in outputs")
 
         bucket_name = bucket_names[0]
 
@@ -233,7 +257,10 @@ class TestS3Deployment:
         ]
 
         if not bucket_names:
-            pytest.skip("Target bucket name not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Target bucket name not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Target bucket name not found in outputs")
 
         bucket_name = bucket_names[0]
 
@@ -249,7 +276,10 @@ class TestS3Deployment:
         ]
 
         if not bucket_names:
-            pytest.skip("Bucket names not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Bucket names not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Bucket names not found in outputs")
 
         for bucket_name in bucket_names:
             response = s3_client.get_bucket_versioning(Bucket=bucket_name)
@@ -263,7 +293,10 @@ class TestS3Deployment:
         ]
 
         if not bucket_names:
-            pytest.skip("Bucket names not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Bucket names not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Bucket names not found in outputs")
 
         for bucket_name in bucket_names:
             response = s3_client.get_bucket_encryption(Bucket=bucket_name)
@@ -282,7 +315,10 @@ class TestECSDeployment:
         ]
 
         if not cluster_names:
-            pytest.skip("ECS cluster name not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("ECS cluster name not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("ECS cluster name not found in outputs")
 
         cluster_name = cluster_names[0]
 
@@ -304,7 +340,10 @@ class TestECSDeployment:
         ]
 
         if not cluster_names or not service_names:
-            pytest.skip("ECS cluster or service name not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("ECS cluster or service name not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("ECS cluster or service name not found in outputs")
 
         cluster_name = cluster_names[0]
         service_name = service_names[0]
@@ -331,7 +370,10 @@ class TestALBDeployment:
         ]
 
         if not alb_arns:
-            pytest.skip("ALB ARN not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("ALB ARN not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("ALB ARN not found in outputs")
 
         alb_arn = alb_arns[0]
 
@@ -352,7 +394,10 @@ class TestALBDeployment:
         ]
 
         if not alb_dns_names:
-            pytest.skip("ALB DNS name not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("ALB DNS name not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("ALB DNS name not found in outputs")
 
         alb_dns = alb_dns_names[0]
 
@@ -371,7 +416,10 @@ class TestCloudWatchMonitoring:
         ]
 
         if not dashboard_names:
-            pytest.skip("CloudWatch dashboard name not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("CloudWatch dashboard name not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("CloudWatch dashboard name not found in outputs")
 
         dashboard_name = dashboard_names[0]
 
@@ -391,7 +439,10 @@ class TestCloudWatchMonitoring:
         ]
 
         if not alarm_names:
-            pytest.skip("CloudWatch alarm names not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("CloudWatch alarm names not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("CloudWatch alarm names not found in outputs")
 
         # Verify alarms exist
         response = cloudwatch_client.describe_alarms(
@@ -412,7 +463,10 @@ class TestSecretsManager:
         ]
 
         if not secret_arns:
-            pytest.skip("Secret ARNs not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Secret ARNs not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Secret ARNs not found in outputs")
 
         for secret_arn in secret_arns:
             # Verify secret exists (don't retrieve actual value for security)
@@ -433,7 +487,10 @@ class TestRoute53Configuration:
         ]
 
         if not hosted_zone_ids:
-            pytest.skip("Hosted zone ID not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Hosted zone ID not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Hosted zone ID not found in outputs")
 
         zone_id = hosted_zone_ids[0]
 
@@ -449,7 +506,10 @@ class TestRoute53Configuration:
         ]
 
         if not health_check_ids:
-            pytest.skip("Health check IDs not found in outputs")
+            if os.environ.get("CI") == "1":
+                pytest.fail("Health check IDs not found in outputs - deployment may have failed")
+            else:
+                pytest.skip("Health check IDs not found in outputs")
 
         for health_check_id in health_check_ids:
             response = route53_client.get_health_check(

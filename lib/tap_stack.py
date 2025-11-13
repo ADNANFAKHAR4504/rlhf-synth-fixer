@@ -893,6 +893,7 @@ class TapStack(Stack):
 
     def _create_outputs(self) -> None:
         """Create CloudFormation outputs for migration runbook"""
+        # VPC outputs
         CfnOutput(
             self,
             "VpcId",
@@ -901,20 +902,62 @@ class TapStack(Stack):
             export_name=f"VpcId-{self.environment_suffix}",
         )
 
+        # RDS outputs
         CfnOutput(
             self,
-            "SourceDatabaseEndpoint",
+            "RDSSourceDatabaseEndpoint",
             value=self.source_db.db_instance_endpoint_address,
-            description="Source database endpoint",
-            export_name=f"SourceDbEndpoint-{self.environment_suffix}",
+            description="Source RDS database endpoint",
+            export_name=f"RDSSourceDbEndpoint-{self.environment_suffix}",
         )
 
         CfnOutput(
             self,
-            "TargetDatabaseEndpoint",
+            "RDSTargetDatabaseEndpoint",
             value=self.target_db.db_instance_endpoint_address,
-            description="Target database endpoint",
-            export_name=f"TargetDbEndpoint-{self.environment_suffix}",
+            description="Target RDS database endpoint",
+            export_name=f"RDSTargetDbEndpoint-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "RDSSourceDBIdentifier",
+            value=self.source_db.instance_identifier,
+            description="Source RDS DB instance identifier",
+            export_name=f"RDSSourceDBIdentifier-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "RDSTargetDBIdentifier",
+            value=self.target_db.instance_identifier,
+            description="Target RDS DB instance identifier",
+            export_name=f"RDSTargetDBIdentifier-{self.environment_suffix}",
+        )
+
+        # DMS outputs
+        CfnOutput(
+            self,
+            "DMSReplicationInstanceArn",
+            value=self.dms_replication_instance.ref,
+            description="DMS replication instance ARN",
+            export_name=f"DMSReplicationInstanceArn-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "DMSSourceEndpointArn",
+            value=self.dms_source_endpoint.ref,
+            description="DMS source endpoint ARN",
+            export_name=f"DMSSourceEndpointArn-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "DMSTargetEndpointArn",
+            value=self.dms_target_endpoint.ref,
+            description="DMS target endpoint ARN",
+            export_name=f"DMSTargetEndpointArn-{self.environment_suffix}",
         )
 
         CfnOutput(
@@ -922,48 +965,126 @@ class TapStack(Stack):
             "DMSReplicationTaskArn",
             value=self.dms_replication_task.ref,
             description="DMS replication task ARN for monitoring",
-            export_name=f"DmsTaskArn-{self.environment_suffix}",
+            export_name=f"DMSReplicationTaskArn-{self.environment_suffix}",
         )
 
+        # S3 outputs
         CfnOutput(
             self,
-            "SourceBucketName",
+            "S3SourceBucketName",
             value=self.source_bucket.bucket_name,
             description="Source S3 bucket name",
-            export_name=f"SourceBucket-{self.environment_suffix}",
+            export_name=f"S3SourceBucketName-{self.environment_suffix}",
         )
 
         CfnOutput(
             self,
-            "TargetBucketName",
+            "S3TargetBucketName",
             value=self.target_bucket.bucket_name,
             description="Target S3 bucket name",
-            export_name=f"TargetBucket-{self.environment_suffix}",
+            export_name=f"S3TargetBucketName-{self.environment_suffix}",
         )
 
         CfnOutput(
             self,
-            "LoadBalancerDNS",
-            value=self.alb.load_balancer_dns_name,
-            description="Application Load Balancer DNS name",
-            export_name=f"AlbDns-{self.environment_suffix}",
+            "S3SourceBucketArn",
+            value=self.source_bucket.bucket_arn,
+            description="Source S3 bucket ARN",
+            export_name=f"S3SourceBucketArn-{self.environment_suffix}",
         )
 
+        CfnOutput(
+            self,
+            "S3TargetBucketArn",
+            value=self.target_bucket.bucket_arn,
+            description="Target S3 bucket ARN",
+            export_name=f"S3TargetBucketArn-{self.environment_suffix}",
+        )
+
+        # ECS outputs
         CfnOutput(
             self,
             "ECSClusterName",
             value=self.ecs_cluster.cluster_name,
             description="ECS cluster name",
-            export_name=f"EcsCluster-{self.environment_suffix}",
+            export_name=f"ECSClusterName-{self.environment_suffix}",
         )
 
         CfnOutput(
             self,
-            "CloudWatchDashboard",
+            "ECSClusterArn",
+            value=self.ecs_cluster.cluster_arn,
+            description="ECS cluster ARN",
+            export_name=f"ECSClusterArn-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "ECSServiceName",
+            value=f"payment-service-{self.environment_suffix}",
+            description="ECS service name",
+            export_name=f"ECSServiceName-{self.environment_suffix}",
+        )
+
+        # ALB outputs
+        CfnOutput(
+            self,
+            "ALBLoadBalancerDNS",
+            value=self.alb.load_balancer_dns_name,
+            description="Application Load Balancer DNS name",
+            export_name=f"ALBLoadBalancerDNS-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "ALBLoadBalancerArn",
+            value=self.alb.load_balancer_arn,
+            description="Application Load Balancer ARN",
+            export_name=f"ALBLoadBalancerArn-{self.environment_suffix}",
+        )
+
+        # CloudWatch outputs
+        CfnOutput(
+            self,
+            "CloudWatchDashboardName",
+            value=f"payment-migration-{self.environment_suffix}",
+            description="CloudWatch dashboard name",
+            export_name=f"CloudWatchDashboardName-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "CloudWatchDashboardURL",
             value=f"https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=payment-migration-{self.environment_suffix}",
             description="CloudWatch dashboard URL",
         )
 
+        CfnOutput(
+            self,
+            "CloudWatchAlarmDMSReplicationLag",
+            value=f"DMS-Replication-Lag-{self.environment_suffix}",
+            description="CloudWatch alarm name for DMS replication lag",
+            export_name=f"CloudWatchAlarmDMSLag-{self.environment_suffix}",
+        )
+
+        # Secrets Manager outputs
+        CfnOutput(
+            self,
+            "SecretsManagerSourceDBSecretArn",
+            value=self.source_db_secret.secret_arn,
+            description="Source database secret ARN in Secrets Manager",
+            export_name=f"SecretsSourceDBArn-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "SecretsManagerTargetDBSecretArn",
+            value=self.target_db_secret.secret_arn,
+            description="Target database secret ARN in Secrets Manager",
+            export_name=f"SecretsTargetDBArn-{self.environment_suffix}",
+        )
+
+        # Migration runbook
         CfnOutput(
             self,
             "MigrationRunbook",
