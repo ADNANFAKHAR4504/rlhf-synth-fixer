@@ -327,3 +327,61 @@ output "nat_gateway_ids" {
     for k, v in aws_nat_gateway.main : k => v.id
   }
 }
+
+output "internet_gateway_id" {
+  description = "ID of the Internet Gateway"
+  value       = aws_internet_gateway.main.id
+}
+
+output "web_tier_security_group_id" {
+  description = "ID of the Web Tier Security Group"
+  value       = aws_security_group.web_tier.id
+}
+
+output "app_tier_security_group_id" {
+  description = "ID of the App Tier Security Group"
+  value       = aws_security_group.app_tier.id
+}
+
+output "public_route_table_id" {
+  description = "ID of the Public Route Table"
+  value       = aws_route_table.public.id
+}
+
+output "private_route_table_ids" {
+  description = "Map of Private Route Table IDs by availability zone"
+  value = {
+    for k, v in aws_route_table.private : k => v.id
+  }
+}
+
+output "eip_allocation_ids" {
+  description = "Map of Elastic IP allocation IDs by availability zone"
+  value = {
+    for k, v in aws_eip.nat : k => v.id
+  }
+}
+
+output "vpc_cidr_block" {
+  description = "CIDR block of the VPC"
+  value       = aws_vpc.main.cidr_block
+}
+
+output "public_subnet_cidrs" {
+  description = "Map of public subnet CIDR blocks by availability zone"
+  value = {
+    for k, v in aws_subnet.public : k => v.cidr_block
+  }
+}
+
+output "private_subnet_cidrs" {
+  description = "Map of private subnet CIDR blocks by availability zone"
+  value = {
+    for k, v in aws_subnet.private : k => v.cidr_block
+  }
+}
+
+output "availability_zones" {
+  description = "List of availability zones used"
+  value       = local.availability_zones
+}
