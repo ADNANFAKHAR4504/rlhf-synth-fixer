@@ -285,7 +285,7 @@ export class StepFunctionsModule extends Construct {
       policy: sfnPolicy.json,
     });
 
-    // Step Functions State Machine Definition
+    // In StepFunctionsModule, update the state machine definition
     const definition = {
       Comment: 'ETL Pipeline State Machine',
       StartAt: 'ValidateFile',
@@ -355,11 +355,21 @@ export class StepFunctionsModule extends Construct {
           Parameters: {
             TableName: dynamoTableName,
             Item: {
-              file_name: { S: '$.fileName' },
-              process_start_time: { S: '$.startTime' },
-              process_end_time: { S: '$$.State.EnteredTime' },
-              status: { S: 'SUCCESS' },
-              error_message: { S: '' },
+              file_name: {
+                'S.$': '$.fileName', // Correct JSONPath reference
+              },
+              process_start_time: {
+                'S.$': '$.startTime',
+              },
+              process_end_time: {
+                'S.$': '$$.State.EnteredTime',
+              },
+              status: {
+                S: 'SUCCESS', // Static value
+              },
+              error_message: {
+                S: '', // Static value
+              },
             },
           },
           End: true,
@@ -369,7 +379,7 @@ export class StepFunctionsModule extends Construct {
           Resource: 'arn:aws:states:::sns:publish',
           Parameters: {
             TopicArn: snsTopicArn,
-            Message: 'ETL Pipeline Error: $.error',
+            'Message.$': "States.Format('ETL Pipeline Error: {}', $.error)", // Correct JSONPath
             Subject: 'ETL Pipeline Processing Failed',
           },
           Next: 'RecordFailure',
@@ -380,11 +390,21 @@ export class StepFunctionsModule extends Construct {
           Parameters: {
             TableName: dynamoTableName,
             Item: {
-              file_name: { S: '$.fileName' },
-              process_start_time: { S: '$.startTime' },
-              process_end_time: { S: '$$.State.EnteredTime' },
-              status: { S: 'FAILED' },
-              error_message: { S: '$.error' },
+              file_name: {
+                'S.$': '$.fileName',
+              },
+              process_start_time: {
+                'S.$': '$.startTime',
+              },
+              process_end_time: {
+                'S.$': '$$.State.EnteredTime',
+              },
+              status: {
+                S: 'FAILED',
+              },
+              error_message: {
+                'S.$': '$.error',
+              },
             },
           },
           End: true,
@@ -408,11 +428,31 @@ export class StepFunctionsModule extends Construct {
   }
 }
 
+export class KMSModule extends Construct {
+  public key: aws.kmsKey.KmsKey;
+  public alias: aws.kmsAlias.KmsAlias;
+
+  constructor(scope: Construct, id: string) {
+    super(scope, id);
+
+    this.key = new aws.kmsKey.KmsKey(this, 'etl-kms-key', {
+      description: 'KMS key for ETL Pipeline encryption',
+      enableKeyRotation: true,
+      tags: commonTags,
+    });
+
+    this.alias = new aws.kmsAlias.KmsAlias(this, 'etl-kms-alias', {
+      name: 'alias/etl-pipeline',
+      targetKeyId: this.key.keyId,
+    });
+  }
+}
+
 // DynamoDB Module
 export class DynamoDBModule extends Construct {
   public table: aws.dynamodbTable.DynamodbTable;
 
-  constructor(scope: Construct, id: string) {
+  constructor(scope: Construct, id: string, kmsKeyArn: string) {
     super(scope, id);
 
     this.table = new aws.dynamodbTable.DynamodbTable(this, 'metadata-table', {
@@ -427,6 +467,7 @@ export class DynamoDBModule extends Construct {
       ],
       serverSideEncryption: {
         enabled: true,
+        kmsKeyArn: kmsKeyArn, // Use customer-managed KMS key
       },
       tags: commonTags,
     });
@@ -504,6 +545,7 @@ import * as aws from '@cdktf/provider-aws';
 import {
   S3Module,
   LambdaModule,
+  KMSModule,
   StepFunctionsModule,
   DynamoDBModule,
   SNSModule,
@@ -517,6 +559,7 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags[];
+  lambdaDeploymentBucket?: string;
 }
 
 // If you need to override the AWS Region for the terraform provider for any particular task,
@@ -563,8 +606,17 @@ export class TapStack extends TerraformStack {
     // Create SNS Topic
     const snsModule = new SNSModule(this, 'sns');
 
+    const kmsModule = new KMSModule(this, 'kms');
+
     // Create DynamoDB Table
-    const dynamoModule = new DynamoDBModule(this, 'dynamodb');
+    const dynamoModule = new DynamoDBModule(
+      this,
+      'dynamodb',
+      kmsModule.key.arn
+    );
+
+    // Create a temporary S3 bucket reference for initial Lambda creation
+    const tempBucketName = `etl-pipeline-bucket-${environmentSuffix}-${awsRegion}`;
 
     // Create Validation Lambda
     const validationLambda = new LambdaModule(this, 'validation-lambda', {
@@ -573,29 +625,16 @@ export class TapStack extends TerraformStack {
       runtime: 'nodejs18.x',
       timeout: 300,
       memorySize: 512,
-      s3Bucket: 'my-etl-lambda-deployments-123', // Your bucket name
+      s3Bucket:
+        props?.lambdaDeploymentBucket || 'my-etl-lambda-deployments-123', // Your bucket name
       s3Key: 'validation-lambda.zip',
       environmentVariables: {
         SNS_TOPIC_ARN: snsModule.topic.arn,
-        BUCKET_NAME: 'placeholder', // Will be updated after S3 creation
+        BUCKET_NAME: tempBucketName,
+        STATE_MACHINE_SSM_PARAM: '/etl/state-machine-arn',
       },
       iamStatements: [
-        {
-          actions: ['s3:GetObject'],
-          resources: ['arn:aws:s3:::*/*'],
-        },
-        {
-          actions: ['s3:PutObject'],
-          resources: ['arn:aws:s3:::*/failed/*'],
-        },
-        {
-          actions: ['sns:Publish'],
-          resources: [snsModule.topic.arn],
-        },
-        {
-          actions: ['states:StartExecution'],
-          resources: ['*'],
-        },
+        // These will be updated after S3 creation
       ],
     });
 
@@ -609,24 +648,14 @@ export class TapStack extends TerraformStack {
         runtime: 'nodejs18.x',
         timeout: 300,
         memorySize: 512,
-        s3Bucket: 'my-etl-lambda-deployments-123', // Your bucket name
+        s3Bucket:
+          props?.lambdaDeploymentBucket || 'my-etl-lambda-deployments-123', // Your bucket name
         s3Key: 'transformation-lambda.zip',
         environmentVariables: {
           BUCKET_NAME: 'placeholder', // Will be updated after S3 creation
         },
         iamStatements: [
-          {
-            actions: ['s3:GetObject'],
-            resources: ['arn:aws:s3:::*/*'],
-          },
-          {
-            actions: ['s3:PutObject'],
-            resources: ['arn:aws:s3:::*/processed/*'],
-          },
-          {
-            actions: ['s3:DeleteObject'],
-            resources: ['arn:aws:s3:::*/raw/*'],
-          },
+          // These will be updated after S3 creation
         ],
       }
     );
@@ -653,19 +682,22 @@ export class TapStack extends TerraformStack {
       sourceArn: s3Module.bucket.arn,
     });
 
-    // Update Lambda environment variables with actual bucket name
-    validationLambda.function.addOverride('environment', {
-      variables: {
-        SNS_TOPIC_ARN: snsModule.topic.arn,
-        BUCKET_NAME: s3Module.bucket.id,
-      },
+    // Store state machine ARN in SSM
+    new aws.ssmParameter.SsmParameter(this, 'state-machine-arn-param', {
+      name: '/etl/state-machine-arn',
+      type: 'String',
+      value: stepFunctions.stateMachine.arn,
     });
 
-    transformationLambda.function.addOverride('environment', {
-      variables: {
-        BUCKET_NAME: s3Module.bucket.id,
-      },
-    });
+    // After creating resources, update environment variables properly
+    validationLambda.function.addOverride(
+      'environment.variables.BUCKET_NAME',
+      s3Module.bucket.id
+    );
+    transformationLambda.function.addOverride(
+      'environment.variables.BUCKET_NAME',
+      s3Module.bucket.id
+    );
 
     // Create CloudWatch Alarms
     new CloudWatchModule(
@@ -673,6 +705,92 @@ export class TapStack extends TerraformStack {
       'cloudwatch',
       [validationLambda.function, transformationLambda.function],
       snsModule.topic.arn
+    );
+
+    const validationPolicyDoc =
+      new aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+        this,
+        'validation-lambda-updated-policy',
+        {
+          statement: [
+            {
+              actions: ['s3:GetObject'],
+              resources: [
+                `${s3Module.bucket.arn}/*`,
+                `${s3Module.bucket.arn}/raw/*`,
+              ],
+            },
+            {
+              actions: ['s3:PutObject'],
+              resources: [`${s3Module.bucket.arn}/failed/*`],
+            },
+            {
+              actions: ['sns:Publish'],
+              resources: [snsModule.topic.arn],
+            },
+            {
+              actions: ['states:StartExecution'],
+              resources: [stepFunctions.stateMachine.arn],
+            },
+            {
+              actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
+              resources: [validationLambda.dlq.arn],
+            },
+            {
+              actions: ['ssm:GetParameter'],
+              resources: ['arn:aws:ssm:*:*:parameter/etl/state-machine-arn'],
+            },
+          ],
+        }
+      );
+
+    new aws.iamRolePolicy.IamRolePolicy(
+      this,
+      'validation-lambda-updated-policy-attachment',
+      {
+        name: 'etl-validation-updated-policy',
+        role: validationLambda.role.id,
+        policy: validationPolicyDoc.json,
+      }
+    );
+
+    const transformationPolicyDoc =
+      new aws.dataAwsIamPolicyDocument.DataAwsIamPolicyDocument(
+        this,
+        'transformation-lambda-updated-policy',
+        {
+          statement: [
+            {
+              actions: ['s3:GetObject'],
+              resources: [
+                `${s3Module.bucket.arn}/*`,
+                `${s3Module.bucket.arn}/raw/*`,
+              ],
+            },
+            {
+              actions: ['s3:PutObject'],
+              resources: [`${s3Module.bucket.arn}/processed/*`],
+            },
+            {
+              actions: ['s3:DeleteObject'],
+              resources: [`${s3Module.bucket.arn}/raw/*`],
+            },
+            {
+              actions: ['sqs:SendMessage', 'sqs:GetQueueAttributes'],
+              resources: [transformationLambda.dlq.arn],
+            },
+          ],
+        }
+      );
+
+    new aws.iamRolePolicy.IamRolePolicy(
+      this,
+      'transformation-lambda-updated-policy-attachment',
+      {
+        name: 'etl-transformation-updated-policy',
+        role: transformationLambda.role.id,
+        policy: transformationPolicyDoc.json,
+      }
     );
 
     // Outputs
@@ -690,6 +808,12 @@ export class TapStack extends TerraformStack {
       value: dynamoModule.table.name,
       description: 'DynamoDB table name for metadata',
     });
+
+    new TerraformOutput(this, 'sns-topic-arn', {
+      value: snsModule.topic.arn, // adjust based on your actual variable name
+      description: 'SNS Topic ARN for notifications',
+    });
+
     // ! Do NOT create resources directly in this stack.
     // ! Instead, create separate stacks for each resource type.
   }
