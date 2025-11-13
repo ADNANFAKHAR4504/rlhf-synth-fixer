@@ -30,14 +30,8 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
         
         cls.region = os.getenv('AWS_REGION', default_region)
         
-        # Read environment suffix from file if it exists, otherwise use env/default
-        env_suffix_file_path = 'lib/ENVIRONMENT_SUFFIX'
-        default_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
-        if os.path.exists(env_suffix_file_path):
-            with open(env_suffix_file_path, 'r', encoding='utf-8') as f:
-                default_suffix = f.read().strip()
-        
-        cls.environment_suffix = default_suffix
+        # Read environment suffix from environment variable (exported in CI/CD)
+        cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
         
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
         cls.dynamodb_client = boto3.client('dynamodb', region_name=cls.region)

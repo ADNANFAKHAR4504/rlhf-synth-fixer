@@ -7,21 +7,9 @@ import sys
 # Get configuration
 config = pulumi.Config()
 
-# Read environment suffix from multiple sources in priority order:
-# 1. Pulumi config
-# 2. ENVIRONMENT_SUFFIX file (similar to AWS_REGION pattern)
-# 3. Environment variable
-# 4. Default to "dev"
-environment_suffix_file = os.path.join(os.path.dirname(__file__), "ENVIRONMENT_SUFFIX")
-default_suffix = "dev"
-
-if os.path.exists(environment_suffix_file):
-    with open(environment_suffix_file, 'r', encoding='utf-8') as f:
-        default_suffix = f.read().strip()
-elif os.environ.get("ENVIRONMENT_SUFFIX"):
-    default_suffix = os.environ.get("ENVIRONMENT_SUFFIX")
-
-environment_suffix = config.get("environment_suffix") or default_suffix
+# Read environment suffix - prioritize environment variable over Pulumi config default
+# This ensures CI/CD exported ENVIRONMENT_SUFFIX is respected
+environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX") or config.get("environment_suffix") or "dev"
 
 print(f"Using environment suffix: {environment_suffix}", file=sys.stderr)
 
