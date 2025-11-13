@@ -45,9 +45,7 @@ export class ComputeStack extends pulumi.ComponentResource {
     } = args;
 
     // Skip HTTPS for test/PR environments to avoid ACM certificate validation timeouts
-    const enableHttps = pulumi
-      .output(environmentSuffix)
-      .apply(suffix => !suffix.toLowerCase().startsWith('pr'));
+    const enableHttps = !environmentSuffix.toLowerCase().startsWith('pr');
 
     // Get latest Amazon Linux 2 AMI for primary region
     const primaryAmi = aws.ec2.getAmi(

@@ -1,5 +1,6 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 
 export interface MonitoringStackArgs {
   environmentSuffix: string;
@@ -38,6 +39,19 @@ export class MonitoringStack extends pulumi.ComponentResource {
     } = args;
     void _drDbClusterId;
     void _dynamoTableName;
+
+    // Generate random suffix to avoid resource name conflicts
+    const randomSuffix = new random.RandomString(
+      `random-suffix-${environmentSuffix}`,
+      {
+        length: 8,
+        special: false,
+        upper: false,
+        lower: true,
+        numeric: true,
+      },
+      { parent: this }
+    );
 
     // SNS topics for alerting
     const primarySnsTopic = new aws.sns.Topic(
@@ -153,7 +167,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const primaryFirehose = new aws.kinesis.FirehoseDeliveryStream(
       `primary-metrics-stream-${environmentSuffix}`,
       {
-        name: `primary-metrics-stream-${environmentSuffix}`,
+        name: pulumi.interpolate`primary-metrics-stream-${environmentSuffix}-${randomSuffix.result}`,
         destination: 'extended_s3',
         extendedS3Configuration: {
           roleArn: firehoseRole.arn,
@@ -175,7 +189,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const drFirehose = new aws.kinesis.FirehoseDeliveryStream(
       `dr-metrics-stream-${environmentSuffix}`,
       {
-        name: `dr-metrics-stream-${environmentSuffix}`,
+        name: pulumi.interpolate`dr-metrics-stream-${environmentSuffix}-${randomSuffix.result}`,
         destination: 'extended_s3',
         extendedS3Configuration: {
           roleArn: firehoseRole.arn,
@@ -464,7 +478,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const failoverLambda = new aws.lambda.Function(
       `failover-lambda-${environmentSuffix}`,
       {
-        name: `failover-lambda-${environmentSuffix}`,
+        name: pulumi.interpolate`failover-lambda-${environmentSuffix}-${randomSuffix.result}`,
         runtime: 'nodejs18.x',
         handler: 'index.handler',
         role: lambdaRole.arn,
