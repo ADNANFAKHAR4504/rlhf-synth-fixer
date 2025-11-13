@@ -1,13 +1,13 @@
 locals {
-  normalized_project = lower(regexreplace(var.project_name, "[^a-z0-9-]", "-"))
-  normalized_suffix  = lower(regexreplace(var.environment_suffix, "[^a-z0-9-]", "-"))
-  normalized_region  = lower(regexreplace(var.aws_region, "[^a-z0-9-]", "-"))
+  normalized_project = lower(replace(var.project_name, " ", "-"))
+  normalized_suffix  = lower(replace(var.environment_suffix, " ", "-"))
+  normalized_region  = lower(replace(var.aws_region, " ", "-"))
 
-  bucket_prefix = trim(lower(join("-", compact([
+  bucket_prefix = lower(join("-", compact([
     local.normalized_project,
     local.normalized_suffix,
     local.normalized_region
-  ]))), "-")
+  ])))
 
   raw_bucket_name     = coalesce(var.s3_raw_bucket_name, "${local.bucket_prefix}-raw")
   curated_bucket_name = coalesce(var.s3_curated_bucket_name, "${local.bucket_prefix}-curated")

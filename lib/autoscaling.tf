@@ -12,7 +12,7 @@ resource "aws_emr_managed_scaling_policy" "main" {
 }
 
 # Custom Auto Scaling Rules based on YARN Memory
-resource "aws_applicationautoscaling_target" "emr_task_group" {
+resource "aws_appautoscaling_target" "emr_task_group" {
   max_capacity       = var.task_instance_max
   min_capacity       = var.task_instance_min
   resource_id        = "instancegroup/${aws_emr_cluster.main.id}/${aws_emr_instance_group.task.id}"
@@ -22,12 +22,12 @@ resource "aws_applicationautoscaling_target" "emr_task_group" {
 }
 
 # Scale Out Policy - When YARN Memory Available is Low
-resource "aws_applicationautoscaling_policy" "scale_out" {
+resource "aws_appautoscaling_policy" "scale_out" {
   name               = "${local.bucket_prefix}-emr-yarn-memory"
   policy_type        = "TargetTrackingScaling"
-  resource_id        = aws_applicationautoscaling_target.emr_task_group.resource_id
-  scalable_dimension = aws_applicationautoscaling_target.emr_task_group.scalable_dimension
-  service_namespace  = aws_applicationautoscaling_target.emr_task_group.service_namespace
+  resource_id        = aws_appautoscaling_target.emr_task_group.resource_id
+  scalable_dimension = aws_appautoscaling_target.emr_task_group.scalable_dimension
+  service_namespace  = aws_appautoscaling_target.emr_task_group.service_namespace
 
   target_tracking_scaling_policy_configuration {
     target_value = var.yarn_memory_target

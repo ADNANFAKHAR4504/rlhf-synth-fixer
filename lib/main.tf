@@ -308,7 +308,7 @@ resource "aws_emr_cluster" "main" {
   visible_to_all_users              = true
 
   ec2_attributes {
-    subnet_ids                        = concat([var.public_subnet_id], var.private_subnet_ids)
+    subnet_id                         = var.public_subnet_id
     emr_managed_master_security_group = aws_security_group.emr_master.id
     emr_managed_slave_security_group  = aws_security_group.emr_core_task.id
     service_access_security_group     = aws_security_group.emr_service.id
@@ -322,9 +322,7 @@ resource "aws_emr_cluster" "main" {
 
     ebs_config {
       size                 = 100
-      type                 = "gp3"
-      iops                 = 3000
-      throughput           = 125
+      type                 = "gp2"
       volumes_per_instance = 1
     }
   }
@@ -335,9 +333,7 @@ resource "aws_emr_cluster" "main" {
 
     ebs_config {
       size                 = 100
-      type                 = "gp3"
-      iops                 = 3000
-      throughput           = 125
+      type                 = "gp2"
       volumes_per_instance = 1
     }
   }
@@ -413,13 +409,11 @@ resource "aws_emr_instance_group" "task" {
   instance_type  = var.task_instance_type
   instance_count = max(1, var.task_instance_min)
   name           = "Task Instance Group"
-  market         = "SPOT"
+  bid_price      = var.task_spot_bid_price
 
   ebs_config {
     size                 = 100
-    type                 = "gp3"
-    iops                 = 3000
-    throughput           = 125
+    type                 = "gp2"
     volumes_per_instance = 1
   }
 

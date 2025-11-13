@@ -120,6 +120,12 @@ variable "task_instance_max" {
   default     = 10
 }
 
+variable "task_spot_bid_price" {
+  description = "Maximum Spot bid price for task instance group"
+  type        = string
+  default     = "0.50"
+}
+
 variable "yarn_memory_target" {
   description = "Target value for YARNMemoryAvailablePercentage used by the autoscaling policy"
   type        = number
