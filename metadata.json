@@ -25,5 +25,6 @@
     "IAM"
   ],
   "region": "ap-southeast-1",
+  "author": "aj-turing",
   "training_quality": 10
 }
