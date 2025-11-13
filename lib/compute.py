@@ -1,5 +1,6 @@
 """Compute infrastructure module with ALB and Auto Scaling Group."""
 
+import base64
 from constructs import Construct
 from cdktf_cdktf_provider_aws.lb import Lb
 from cdktf_cdktf_provider_aws.lb_target_group import (
@@ -25,10 +26,11 @@ from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
 class ComputeInfrastructure(Construct):
     """Compute infrastructure with ALB and Auto Scaling."""
 
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        construct_id: str,
         environment_suffix: str,
         vpc_id: str,
         public_subnet_ids: list,
@@ -45,7 +47,7 @@ class ComputeInfrastructure(Construct):
 
         Args:
             scope: The scope in which to define this construct
-            id: The scoped construct ID
+            construct_id: The scoped construct ID
             environment_suffix: Unique suffix for resource naming
             vpc_id: VPC ID
             public_subnet_ids: List of public subnet IDs
@@ -57,7 +59,7 @@ class ComputeInfrastructure(Construct):
             db_endpoint: Database endpoint
             s3_bucket_name: S3 bucket name for static content
         """
-        super().__init__(scope, id)
+        super().__init__(scope, construct_id)
 
         # Application Load Balancer
         self.alb = Lb(
@@ -240,6 +242,9 @@ echo "Application setup complete"
 """
 
         # Launch Template
+        # Encode user data in Python using base64
+        user_data_encoded = base64.b64encode(user_data_script.encode()).decode()
+
         launch_template = LaunchTemplate(
             self,
             "launch_template",
@@ -250,7 +255,7 @@ echo "Application setup complete"
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
                 name=instance_profile_name,
             ),
-            user_data="${base64encode(<<-EOF\n" + user_data_script + "\nEOF\n)}",
+            user_data=user_data_encoded,
             monitoring=LaunchTemplateMonitoring(
                 enabled=True,
             ),

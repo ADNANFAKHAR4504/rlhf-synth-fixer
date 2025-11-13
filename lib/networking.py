@@ -1,6 +1,7 @@
 """Networking infrastructure module for payment processing application."""
 
 from constructs import Construct
+from cdktf import Fn
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -16,17 +17,17 @@ from cdktf_cdktf_provider_aws.data_aws_availability_zones import (
 class NetworkingInfrastructure(Construct):
     """Networking infrastructure with VPC, subnets, and routing."""
 
-    def __init__(self, scope: Construct, id: str, environment_suffix: str, region: str):
+    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, region: str):
         """
         Initialize networking infrastructure.
 
         Args:
             scope: The scope in which to define this construct
-            id: The scoped construct ID
+            construct_id: The scoped construct ID
             environment_suffix: Unique suffix for resource naming
             region: AWS region
         """
-        super().__init__(scope, id)
+        super().__init__(scope, construct_id)
 
         # Get available AZs
         azs = DataAwsAvailabilityZones(
@@ -65,7 +66,7 @@ class NetworkingInfrastructure(Construct):
                 f"public_subnet_{i}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i}.0/24",
-                availability_zone=f"${{element({azs.names}, {i})}}",
+                availability_zone=Fn.element(azs.names, i),
                 map_public_ip_on_launch=True,
                 tags={
                     "Name": f"payment-public-subnet-{i+1}-{environment_suffix}",
@@ -82,7 +83,7 @@ class NetworkingInfrastructure(Construct):
                 f"private_subnet_{i}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"10.0.{i+10}.0/24",
-                availability_zone=f"${{element({azs.names}, {i})}}",
+                availability_zone=Fn.element(azs.names, i),
                 tags={
                     "Name": f"payment-private-subnet-{i+1}-{environment_suffix}",
                     "Type": "Private",

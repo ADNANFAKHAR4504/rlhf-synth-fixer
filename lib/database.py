@@ -11,10 +11,11 @@ import string
 class DatabaseInfrastructure(Construct):
     """Database infrastructure with RDS PostgreSQL Multi-AZ."""
 
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        construct_id: str,
         environment_suffix: str,
         vpc_id: str,
         private_subnet_ids: list,
@@ -25,13 +26,13 @@ class DatabaseInfrastructure(Construct):
 
         Args:
             scope: The scope in which to define this construct
-            id: The scoped construct ID
+            construct_id: The scoped construct ID
             environment_suffix: Unique suffix for resource naming
             vpc_id: VPC ID
             private_subnet_ids: List of private subnet IDs
             db_security_group_id: Security group ID for database
         """
-        super().__init__(scope, id)
+        super().__init__(scope, construct_id)
 
         # DB Subnet Group
         db_subnet_group = DbSubnetGroup(

@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "pipenv run python lib/main.py",
+  "app": "pipenv run python tap.py",
   "projectId": "payment-processing-m54an1",
   "sendCrashReports": "false",
   "terraformProviders": [

@@ -9,10 +9,11 @@ from cdktf_cdktf_provider_aws.sns_topic_subscription import SnsTopicSubscription
 class MonitoringInfrastructure(Construct):
     """Monitoring infrastructure with CloudWatch alarms."""
 
+    # pylint: disable=too-many-positional-arguments
     def __init__(
         self,
         scope: Construct,
-        id: str,
+        construct_id: str,
         environment_suffix: str,
         autoscaling_group_name: str,
         alb_arn_suffix: str,
@@ -24,14 +25,14 @@ class MonitoringInfrastructure(Construct):
 
         Args:
             scope: The scope in which to define this construct
-            id: The scoped construct ID
+            construct_id: The scoped construct ID
             environment_suffix: Unique suffix for resource naming
             autoscaling_group_name: Auto Scaling Group name
             alb_arn_suffix: ALB ARN suffix
             target_group_arn_suffix: Target Group ARN suffix
             db_instance_identifier: RDS instance identifier
         """
-        super().__init__(scope, id)
+        super().__init__(scope, construct_id)
 
         # SNS Topic for alarms
         alarm_topic = SnsTopic(

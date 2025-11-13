@@ -19,17 +19,17 @@ import json
 class SecurityInfrastructure(Construct):
     """Security infrastructure with IAM roles, security groups, and WAF."""
 
-    def __init__(self, scope: Construct, id: str, environment_suffix: str, vpc_id: str):
+    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, vpc_id: str):
         """
         Initialize security infrastructure.
 
         Args:
             scope: The scope in which to define this construct
-            id: The scoped construct ID
+            construct_id: The scoped construct ID
             environment_suffix: Unique suffix for resource naming
             vpc_id: VPC ID for security groups
         """
-        super().__init__(scope, id)
+        super().__init__(scope, construct_id)
 
         # ALB Security Group
         self.alb_sg = SecurityGroup(

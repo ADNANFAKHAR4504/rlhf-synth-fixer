@@ -11,20 +11,23 @@ This stack deploys a highly available, secure infrastructure including:
 - Comprehensive monitoring and security controls
 """
 
+import os
+import sys
+
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput, Fn
 from cdktf_cdktf_provider_aws.provider import AwsProvider
-import os
 
-import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+# pylint: disable=wrong-import-position
 from lib.networking import NetworkingInfrastructure
 from lib.compute import ComputeInfrastructure
 from lib.database import DatabaseInfrastructure
 from lib.storage import StorageInfrastructure
 from lib.security import SecurityInfrastructure
 from lib.monitoring import MonitoringInfrastructure
+# pylint: enable=wrong-import-position
 
 
 class PaymentProcessingStack(TerraformStack):

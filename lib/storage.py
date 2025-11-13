@@ -32,17 +32,17 @@ import json
 class StorageInfrastructure(Construct):
     """Storage infrastructure with S3 bucket and CloudFront distribution."""
 
-    def __init__(self, scope: Construct, id: str, environment_suffix: str, region: str):
+    def __init__(self, scope: Construct, construct_id: str, environment_suffix: str, region: str):
         """
         Initialize storage infrastructure.
 
         Args:
             scope: The scope in which to define this construct
-            id: The scoped construct ID
+            construct_id: The scoped construct ID
             environment_suffix: Unique suffix for resource naming
             region: AWS region
         """
-        super().__init__(scope, id)
+        super().__init__(scope, construct_id)
 
         # S3 Bucket for static content
         self.static_bucket = S3Bucket(
@@ -72,8 +72,10 @@ class StorageInfrastructure(Construct):
             bucket=self.static_bucket.id,
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                        sse_algorithm="AES256",
+                    apply_server_side_encryption_by_default=(
+                        S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(  # pylint: disable=line-too-long
+                            sse_algorithm="AES256",
+                        )
                     ),
                     bucket_key_enabled=True,
                 )
@@ -106,10 +108,10 @@ class StorageInfrastructure(Construct):
                     "Sid": "CloudFrontOAIAccess",
                     "Effect": "Allow",
                     "Principal": {
-                        "AWS": f"${{aws_cloudfront_origin_access_identity.oai.iam_arn}}"
+                        "AWS": f"{oai.iam_arn}"
                     },
                     "Action": "s3:GetObject",
-                    "Resource": f"${{{self.static_bucket.arn}}}/*",
+                    "Resource": f"{self.static_bucket.arn}/*",
                 }
             ],
         }
