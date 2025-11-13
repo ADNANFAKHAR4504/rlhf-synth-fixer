@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T12:46:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "security"
+  ],
+  "po_id": "101000900",
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "NatGateway",
+    "Eip",
+    "RouteTable",
+    "Route",
+    "RouteTableAssociation",
+    "NetworkAcl",
+    "NetworkAclRule",
+    "NetworkAclAssociation",
+    "FlowLog",
+    "CloudWatch",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

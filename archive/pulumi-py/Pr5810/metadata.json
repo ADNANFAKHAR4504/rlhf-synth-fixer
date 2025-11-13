@@ -1,0 +1,40 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "multi-environment",
+    "vpc",
+    "rds",
+    "lambda",
+    "dynamodb",
+    "s3"
+  ],
+  "po_id": "101000835",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-05T12:34:56.789Z",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "EC2",
+    "SecurityGroup",
+    "NAT",
+    "AppAutoScaling"
+  ],
+  "region": "eu-west-3",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

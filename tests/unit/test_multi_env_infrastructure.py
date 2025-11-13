@@ -8,6 +8,38 @@ from unittest.mock import Mock, patch, MagicMock
 import pulumi
 
 
+class PulumiMocks(pulumi.runtime.Mocks):
+    """Custom mock for Pulumi resources."""
+
+    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
+        """Mock resource creation."""
+        outputs = {
+            **args.inputs,
+            'id': f"{args.name}_id",
+            'arn': f"arn:aws:{args.typ}:us-east-1:123456789:resource/{args.name}",
+        }
+
+        # Special handling for RDS instances
+        if args.typ == 'aws:rds/instance:Instance':
+            outputs['endpoint'] = 'mock-db.us-east-1.rds.amazonaws.com:3306'
+            outputs['address'] = 'mock-db.us-east-1.rds.amazonaws.com'
+
+        return [args.name, outputs]
+
+    def call(self, args: pulumi.runtime.MockCallArgs):
+        """Mock function calls."""
+        if args.token == 'aws:index/getAvailabilityZones:getAvailabilityZones':
+            return {
+                'names': ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+                'zone_ids': ['use1-az1', 'use1-az2', 'use1-az3'],
+                'id': 'us-east-1'
+            }
+        return {}
+
+
+pulumi.runtime.set_mocks(PulumiMocks())
+
+
 class TestVpcComponent(unittest.TestCase):
     """Test cases for VPC Component."""
 
@@ -306,8 +338,8 @@ class TestS3Component(unittest.TestCase):
 class TestMainProgram(unittest.TestCase):
     """Test cases for main Pulumi program."""
 
-    @patch('__main__.pulumi.Config')
-    @patch('__main__.aws.ec2.get_ami')
+    @patch('pulumi.Config')
+    @patch('pulumi_aws.ec2.get_ami')
     def test_main_program_configuration(self, mock_get_ami, mock_config):
         """Test main program configuration reading."""
         # Mock configuration values

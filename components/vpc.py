@@ -46,6 +46,7 @@ class VpcComponent(ComponentResource):
 
         # Get availability zones
         azs = aws.get_availability_zones(state="available")
+        az_names = azs.names or ['us-east-1a', 'us-east-1b']
 
         # Create public subnets in two AZs
         self.public_subnets = []
@@ -54,7 +55,7 @@ class VpcComponent(ComponentResource):
                 f"public-subnet-{i+1}-{environment}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"{vpc_cidr.rsplit('.', 2)[0]}.{i}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i] if isinstance(az_names, list) else pulumi.Output.from_input(az_names).apply(lambda names: names[i]),
                 map_public_ip_on_launch=True,
                 tags={
                     **tags,
@@ -72,7 +73,7 @@ class VpcComponent(ComponentResource):
                 f"private-subnet-{i+1}-{environment}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"{vpc_cidr.rsplit('.', 2)[0]}.{i+10}.0/24",
-                availability_zone=azs.names[i],
+                availability_zone=az_names[i] if isinstance(az_names, list) else pulumi.Output.from_input(az_names).apply(lambda names: names[i]),
                 map_public_ip_on_launch=False,
                 tags={
                     **tags,

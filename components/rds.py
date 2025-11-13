@@ -133,7 +133,7 @@ class RdsComponent(ComponentResource):
                         "username": "admin",
                         "password": password,
                         "engine": "mysql",
-                        "host": endpoint.split(":")[0],
+                        "host": endpoint.split(":")[0] if endpoint else "localhost",
                         "port": 3306,
                         "dbname": f"appdb_{environment}",
                     }

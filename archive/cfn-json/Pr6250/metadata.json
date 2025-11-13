@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "po_id": "101000892",
+  "startedAt": "2025-11-11T04:46:55+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "compute",
+    "database",
+    "security",
+    "migration",
+    "multi-az"
+  ],
+  "aws_services": [
+    "AutoScaling",
+    "EC2",
+    "ELB",
+    "IAM",
+    "Lambda",
+    "RDS",
+    "SecretsManager",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

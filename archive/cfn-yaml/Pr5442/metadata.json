@@ -1,0 +1,29 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "iac-saac-ref2",
+  "team": "5",
+  "startedAt": "2025-10-30T09:51:34.069Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "IAM",
+    "EC2",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "SSM",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "govardhan-turing",
+  "dockerS3Location": ""
+}
