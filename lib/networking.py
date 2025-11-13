@@ -92,21 +92,25 @@ class NetworkingInfrastructure(Construct):
             self.private_subnets.append(subnet)
 
         # Create single EIP for NAT Gateway (to avoid EIP limit)
+        # Note: EIP depends on IGW being attached to VPC
         nat_eip = Eip(
             self,
             "nat_eip",
             domain="vpc",
+            depends_on=[igw],
             tags={
                 "Name": f"payment-nat-eip-{environment_suffix}",
             },
         )
 
         # Create single NAT Gateway in first public subnet (cost optimization)
+        # Note: NAT Gateway depends on EIP and public subnet
         nat_gateway = NatGateway(
             self,
             "nat_gateway",
             allocation_id=nat_eip.id,
             subnet_id=self.public_subnets[0].id,
+            depends_on=[nat_eip, self.public_subnets[0]],
             tags={
                 "Name": f"payment-nat-{environment_suffix}",
             },
