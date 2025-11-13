@@ -1,18 +1,18 @@
-import { Construct } from 'constructs';
+import * as cdk from 'aws-cdk-lib';
+import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
-import * as rds from 'aws-cdk-lib/aws-rds';
-import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
-import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
-import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
-import * as sns from 'aws-cdk-lib/aws-sns';
 import * as kms from 'aws-cdk-lib/aws-kms';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import * as cdk from 'aws-cdk-lib';
-import { Duration, RemovalPolicy } from 'aws-cdk-lib';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as sns from 'aws-cdk-lib/aws-sns';
+import { Construct } from 'constructs';
 
 export interface TapStackProps {
   environmentSuffix: string;
@@ -43,7 +43,7 @@ export class TapStack extends Construct {
     this.vpc = new ec2.Vpc(this, 'PaymentVpc', {
       vpcName: `payment-vpc-${environmentSuffix}`,
       maxAzs: 3,
-      natGateways: 3,
+      natGateways: 1,
       subnetConfiguration: [
         {
           name: 'Public',
