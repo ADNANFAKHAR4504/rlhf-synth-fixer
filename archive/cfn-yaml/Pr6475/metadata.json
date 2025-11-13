@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth-1",
+  "turn_type": "single",
+  "startedAt": "2025-11-13T09:40:48.968545Z",
+  "po_id": "101912474",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "multi-environment-consistency-&-replication"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS Aurora",
+    "ALB",
+    "CloudWatch",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "CloudFormation",
+    "NAT Gateway",
+    "Internet Gateway",
+    "DynamoDB"
+  ],
+  "training_quality": 8.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
