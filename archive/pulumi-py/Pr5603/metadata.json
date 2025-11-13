@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "python",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000802",
+  "team": "synth",
+  "startedAt": "2025-11-02T11:37:45-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "api-gateway",
+    "lambda",
+    "dynamodb",
+    "s3",
+    "sqs",
+    "cloudwatch"
+  ],
+  "aws_services": [
+    "api-gateway",
+    "lambda",
+    "dynamodb",
+    "s3",
+    "sqs",
+    "cloudwatch",
+    "iam",
+    "eventbridge"
+  ],
+  "region": "us-east-2",
+  "author": "iamarpit-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

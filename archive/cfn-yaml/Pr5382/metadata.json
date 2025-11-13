@@ -1,0 +1,36 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000195",
+  "team": "3",
+  "startedAt": "2025-10-30T04:53:11.501Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "VPC",
+    "Subnet",
+    "SecurityGroup",
+    "SQS",
+    "CloudWatch Log Group",
+    "IAM Role",
+    "IAM Policy",
+    "SSM Parameter Store",
+    "CloudFormation"
+  ],
+  "background": "Deploy a self-contained stack to provision a serverless webhook processing system in AWS. The stack must create an API Gateway with Lambda integration, including DynamoDB for storing webhook transactions, S3 for storing payloads, SQS for Dead Letter Queue (DLQ), CloudWatch Log Groups for Lambda logs, and IAM roles/policies with least-privilege access. Ensure that Lambda functions are deployed in private subnets, and all resources are secured using best practices. The stack should include environment parameters for keys and stage names, and be deployable using CloudFormation in the specified region.",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

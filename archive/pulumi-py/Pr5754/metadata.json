@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349126",
+  "team": "6",
+  "startedAt": "2025-11-04T09:18:19.589Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "CI/CD in cloud environments facilitates rapid and reliable software deployment. Integrating AWS services such as CodePipeline and CodeBuild with Pulumi ensures that infrastructure and application deployments are consistent, secure, and automated.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "Lambda",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "SQS",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

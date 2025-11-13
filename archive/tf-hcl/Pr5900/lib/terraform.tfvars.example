@@ -1,0 +1,50 @@
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and customize for your environment
+
+environment_suffix = "dev"
+aws_region         = "ap-southeast-1"
+
+# VPC Configuration
+vpc_cidr               = "10.0.0.0/16"
+availability_zones     = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
+private_subnet_cidrs   = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
+public_subnet_cidrs    = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+# ECR Repository URLs (update with your account ID)
+ecr_repository_urls = {
+  payment_service   = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/payment-service"
+  auth_service      = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/auth-service"
+  analytics_service = "123456789012.dkr.ecr.ap-southeast-1.amazonaws.com/analytics-service"
+}
+
+# Container Image Tags
+container_image_tags = {
+  payment_service   = "v1.0.0"
+  auth_service      = "v1.0.0"
+  analytics_service = "v1.0.0"
+}
+
+# ECS Configuration
+task_cpu    = 512
+task_memory = 1024
+
+# Service Configuration
+desired_count = 2
+
+# Auto Scaling
+autoscaling_min_capacity     = 2
+autoscaling_max_capacity     = 10
+autoscaling_cpu_threshold    = 70
+autoscaling_memory_threshold = 70
+
+# CloudWatch Logs
+log_retention_days = 7
+
+# Container Insights
+enable_container_insights = true
+
+# Health Checks
+health_check_interval            = 30
+health_check_timeout             = 5
+health_check_healthy_threshold   = 2
+health_check_unhealthy_threshold = 3

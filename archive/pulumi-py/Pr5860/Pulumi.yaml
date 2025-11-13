@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: python
+description: Serverless payment processing infrastructure with API Gateway, Lambda, DynamoDB, and SQS
+main: tap.py

@@ -3,8 +3,10 @@ package app;
 import software.constructs.Construct;
 import com.hashicorp.cdktf.TerraformStack;
 import com.hashicorp.cdktf.providers.aws.provider.AwsProvider;
+import com.hashicorp.cdktf.providers.aws.provider.AwsProviderDefaultTags;
 import com.hashicorp.cdktf.providers.aws.s3_bucket.S3Bucket;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -26,13 +28,16 @@ public class MainStack extends TerraformStack {
 
     private final String stackId;
 
-    public MainStack(final Construct scope, final String id) {
+    public MainStack(final Construct scope, final String id, final Map<String, String> defaultTags) {
         super(scope, id);
         this.stackId = id;
 
-        // Configure AWS Provider
+        // Configure AWS Provider with default tags
         AwsProvider.Builder.create(this, "aws")
-                .region("us-east-1")
+                .region(System.getenv().getOrDefault("AWS_REGION", "us-east-1"))
+                .defaultTags(List.of(AwsProviderDefaultTags.builder()
+                        .tags(defaultTags)
+                        .build()))
                 .build();
 
         // Create S3 bucket for application storage

@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "go",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "101000781",
+  "startedAt": "2025-10-31T07:06:00+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Aurora",
+    "Secrets Manager",
+    "KMS",
+    "CloudWatch"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

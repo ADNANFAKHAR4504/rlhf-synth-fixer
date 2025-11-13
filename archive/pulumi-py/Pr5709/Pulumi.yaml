@@ -1,0 +1,36 @@
+name: TapStack
+runtime: python
+description: Cross-region VPC peering infrastructure with enhanced security and monitoring
+main: lib/
+
+config:
+  environment_suffix:
+    description: Environment suffix for resource naming (e.g., dev, staging, prod)
+    default: dev
+  owner:
+    description: Team or individual responsible for this infrastructure
+    default: platform-team
+  cost_center:
+    description: Cost center for billing and chargeback
+    default: engineering
+  payment_vpc_id:
+    description: VPC ID for the payment environment (us-east-1)
+    default: ""
+  analytics_vpc_id:
+    description: VPC ID for the analytics environment (us-west-2)
+    default: ""
+  payment_vpc_cidr:
+    description: CIDR block for payment VPC
+    default: "10.0.0.0/16"
+  analytics_vpc_cidr:
+    description: CIDR block for analytics VPC
+    default: "10.1.0.0/16"
+  payment_app_subnet_cidr:
+    description: CIDR block for payment application subnet
+    default: "10.0.1.0/24"
+  analytics_api_subnet_cidr:
+    description: CIDR block for analytics API subnet
+    default: "10.1.2.0/24"
+  create_vpcs:
+    description: Whether to create VPCs or use existing ones
+    default: true

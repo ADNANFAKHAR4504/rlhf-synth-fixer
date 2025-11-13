@@ -121,13 +121,54 @@ Emphasize: "Platform and language are MANDATORY constraints from metadata.json"
 
 **Prerequisites**:
 - Phase 4 (code-reviewer) reports "Ready"
+- **ALL pre-submission requirements met** (see below)
 - GitHub CLI (`gh`) installed and authenticated
 - Git remote origin accessible
 - User has write permissions
 
+**MANDATORY Pre-Submission Requirements**:
+
+Run the pre-submission validation script:
+```bash
+bash .claude/scripts/pre-submission-check.sh
+```
+
+This validates **ALL** critical requirements:
+1. ✅ Build successful (lint + build + synth)
+2. ✅ No lint issues
+3. ✅ No synth issues  
+4. ✅ Deployment successful
+5. ✅ **Test coverage: 100%** (statements, functions, lines)
+6. ✅ Integration tests passing
+7. ✅ All files in allowed directories
+8. ✅ All documentation present
+9. ✅ Training quality ≥ 8
+
+**If ANY requirement fails**:
+- **BLOCK PR creation immediately**
+- Report specific failures
+- Do NOT proceed until all pass
+- Reference: `.claude/docs/references/pre-submission-checklist.md`
+
 **Pre-flight Checks**:
 
-**Validation**: Run Checkpoint K: PR Prerequisites
+**Validation**: Run Checkpoint K: File Location Compliance
+- See `.claude/docs/references/validation-checkpoints.md` for file location rules
+- See `.claude/docs/references/cicd-file-restrictions.md` for complete restrictions
+
+```bash
+# Check what files will be in the PR
+git diff --name-only origin/main...HEAD
+
+# Manually verify all files are in allowed locations:
+# - bin/, lib/, test/, tests/ folders
+# - metadata.json, cdk.json, cdktf.json, Pulumi.yaml, tap.py, tap.go, package.json, package-lock.json at root
+# NO files in .github/, scripts/, docs/, or other locations
+```
+
+**If violations found**: STOP, fix file locations, do NOT proceed
+
+**Validation**: Run Checkpoint L: PR Prerequisites
 - See `.claude/docs/references/validation-checkpoints.md` for prerequisite checks
 
 Script reference:
@@ -207,7 +248,7 @@ Task ID: ${TASK_ID}"
 6. **Create PR**:
    ```bash
    AWS_SERVICES_COUNT=$(jq -r '.aws_services | length' metadata.json)
-   SYNTH_GROUP=$(jq -r '.synth_group // "Synth-1"' ../../.claude/settings.local.json)
+   SYNTH_GROUP=$(jq -r '.synth_group' ../../.claude/settings.local.json)
 
    gh pr create \
      --title "synth-${TASK_ID} {SUBTASK}" \

@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T21:00:53+05:30",
+  "completedAt": "2025-11-10T21:35:00+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "myew9",
+  "aws_services": [],
+  "region": "us-east-1",
+  "synth_group": "Synth-2",
+  "testing_approach": "unit_only",
+  "deployment_status": "not_deployed",
+  "test_coverage": {
+    "statements": 100,
+    "branches": 100,
+    "functions": 100,
+    "lines": 100
+  },
+  "prerequisites": {
+    "eks_cluster": "required",
+    "istio_version": "1.19",
+    "kubernetes_version": "1.28"
+  },
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "reviewer": "raghav-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

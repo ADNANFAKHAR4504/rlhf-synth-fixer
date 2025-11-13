@@ -1,0 +1,37 @@
+{
+  "po_id": "wajbh",
+  "platform": "cdktf",
+  "language": "ts",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-07T04:02:45-08:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "EC2",
+    "EIP",
+    "NetworkACL",
+    "SecurityGroup",
+    "VPCEndpoint",
+    "TransitGateway",
+    "VPCFlowLogs",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

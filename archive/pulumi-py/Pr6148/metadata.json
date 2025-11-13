@@ -1,0 +1,37 @@
+{
+  "task_id": "101000870",
+  "po_id": "101000870",
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "turn_type": "single",
+  "startedAt": "2025-11-10T04:05:00.690646",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency & Replication"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "ALB",
+    "Auto Scaling",
+    "WAF",
+    "RDS",
+    "S3",
+    "NAT Gateway",
+    "Security Groups",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
