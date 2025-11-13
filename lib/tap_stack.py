@@ -543,35 +543,35 @@ class TapStack(cdk.Stack):
             },
         )
         
-        # Node group 4: GPU enabled (g4dn.xlarge)
-        nodegroup_gpu = cluster.add_nodegroup_capacity(
-            f"GPUNodeGroup-{environment_suffix}",
-            instance_types=[ec2.InstanceType("g4dn.xlarge")],
-            min_size=1,
-            max_size=3,
-            desired_size=1,
-            nodegroup_name=f"gpu-enabled-{environment_suffix}",
-            subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            ami_type=eks.NodegroupAmiType.BOTTLEROCKET_X86_64_NVIDIA,
-            capacity_type=eks.CapacityType.ON_DEMAND,
-            labels={
-                "workload-type": "gpu",
-                "node-group": "gpu",
-                "nvidia.com/gpu": "true",
-            },
-            tags={
-                "k8s.io/cluster-autoscaler/enabled": "true",
-                f"k8s.io/cluster-autoscaler/payment-eks-{environment_suffix}": "owned",
-                "EnvironmentSuffix": environment_suffix,
-            },
-            taints=[
-                eks.TaintSpec(
-                    effect=eks.TaintEffect.NO_SCHEDULE,
-                    key="nvidia.com/gpu",
-                    value="true",
-                )
-            ],
-        )
+        # # Node group 4: GPU enabled (g4dn.xlarge)
+        # nodegroup_gpu = cluster.add_nodegroup_capacity(
+        #     f"GPUNodeGroup-{environment_suffix}",
+        #     instance_types=[ec2.InstanceType("g4dn.xlarge")],
+        #     min_size=1,
+        #     max_size=3,
+        #     desired_size=1,
+        #     nodegroup_name=f"gpu-enabled-{environment_suffix}",
+        #     subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
+        #     ami_type=eks.NodegroupAmiType.BOTTLEROCKET_X86_64_NVIDIA,
+        #     capacity_type=eks.CapacityType.ON_DEMAND,
+        #     labels={
+        #         "workload-type": "gpu",
+        #         "node-group": "gpu",
+        #         "nvidia.com/gpu": "true",
+        #     },
+        #     tags={
+        #         "k8s.io/cluster-autoscaler/enabled": "true",
+        #         f"k8s.io/cluster-autoscaler/payment-eks-{environment_suffix}": "owned",
+        #         "EnvironmentSuffix": environment_suffix,
+        #     },
+        #     taints=[
+        #         eks.TaintSpec(
+        #             effect=eks.TaintEffect.NO_SCHEDULE,
+        #             key="nvidia.com/gpu",
+        #             value="true",
+        #         )
+        #     ],
+        # )
         
         # Create CloudWatch dashboard for cluster metrics
         dashboard = cloudwatch.Dashboard(
