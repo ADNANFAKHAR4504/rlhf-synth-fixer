@@ -21,7 +21,14 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
         with open('cfn-outputs/flat-outputs.json', 'r') as f:
             cls.outputs = json.load(f)
 
-        cls.region = os.getenv('AWS_REGION', 'us-east-1')
+        # Read AWS region from file if it exists, otherwise use env/default
+        region_file_path = 'lib/AWS_REGION'
+        default_region = 'us-east-1'
+        if os.path.exists(region_file_path):
+            with open(region_file_path, 'r', encoding='utf-8') as f:
+                default_region = f.read().strip()
+        
+        cls.region = os.getenv('AWS_REGION', default_region)
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
         cls.dynamodb_client = boto3.client('dynamodb', region_name=cls.region)
         cls.logs_client = boto3.client('logs', region_name=cls.region)
