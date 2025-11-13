@@ -1,0 +1,30 @@
+{
+  "task_id": "101912468",
+  "po_id": "101912468",
+  "platform": "CloudFormation",
+  "language": "JSON",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-13T10:14:59.681699Z",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "cloud-environment-setup"
+  ],
+  "aws_services": [
+    "Auto Scaling",
+    "CloudWatch",
+    "EC2",
+    "ELB",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "Logs",
+    "RDS",
+    "Secrets Manager",
+    "VPC"
+  ],
+  "training_quality": 10
+}
