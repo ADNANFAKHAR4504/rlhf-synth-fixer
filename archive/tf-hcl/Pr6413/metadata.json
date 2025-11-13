@@ -11,5 +11,23 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
- "aws_services": ["KMS", "S3", "VPC", "EC2", "IAM", "CloudWatch", "Lambda", "EventBridge", "SNS", "Secrets Manager", "GuardDuty"]
+  "aws_services": [
+    "KMS",
+    "S3",
+    "VPC",
+    "EC2",
+    "IAM",
+    "CloudWatch",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "Secrets Manager",
+    "GuardDuty"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
