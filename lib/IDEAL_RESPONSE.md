@@ -67,7 +67,7 @@
 ```yaml
 
 AWSTemplateFormatVersion: '2010-09-09'
-Description: "TapStack - Async financial processing (SQS FIFO, Lambda, DynamoDB, EventBridge, CloudWatch, SSM). All names include EnvironmentSuffix."
+Description: "TapStack - Async financial processing (SQS FIFO, Lambda, DynamoDB, EventBridge, CloudWatch, SSM). All names include EnvironmentSuffix. Security-hardened & production-ready."
 
 Parameters:
   EnvironmentSuffix:
@@ -163,6 +163,16 @@ Resources:
       ContentBasedDeduplication: true
       VisibilityTimeout: !Ref QueueVisibilityTimeoutSeconds
       ReceiveMessageWaitTimeSeconds: 10
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   PrimaryFifoQueue:
     Type: AWS::SQS::Queue
@@ -175,6 +185,16 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt PrimaryDlqQueue.Arn
         maxReceiveCount: 3
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- SQS (DR pattern in same region) ----------------
   DrDlqQueue:
@@ -185,6 +205,16 @@ Resources:
       ContentBasedDeduplication: true
       VisibilityTimeout: !Ref QueueVisibilityTimeoutSeconds
       ReceiveMessageWaitTimeSeconds: 10
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   DrFifoQueue:
     Type: AWS::SQS::Queue
@@ -197,6 +227,16 @@ Resources:
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt DrDlqQueue.Arn
         maxReceiveCount: 3
+      SqsManagedSseEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- Queue Policies (optional trusted role) ----------------
   QueuePolicyPrimary:
@@ -273,21 +313,26 @@ Resources:
               - sqs:GetQueueUrl
             Resource: !GetAtt DrDlqQueue.Arn
 
-  # ---------------- IAM Managed Policy for Lambda logs ----------------
+  # ---------------- IAM Managed Policy for Lambda logs (scoped to log groups) ----------------
   LambdaExecutionManagedPolicy:
     Type: AWS::IAM::ManagedPolicy
     Properties:
       ManagedPolicyName: !Sub "lambda-exec-base-${EnvironmentSuffix}-${AWS::Region}"
-      Description: "Base policy for Lambda logs"
+      Description: "Base policy for Lambda logs (scoped to specific log groups)"
       PolicyDocument:
         Version: "2012-10-17"
         Statement:
-          - Effect: Allow
+          - Sid: LogsCore
+            Effect: Allow
             Action:
               - logs:CreateLogGroup
               - logs:CreateLogStream
               - logs:PutLogEvents
-            Resource: "arn:aws:logs:*:*:*"
+              - logs:DescribeLogStreams
+            Resource:
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/primary-processor-${EnvironmentSuffix}:*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/queue-replication-${EnvironmentSuffix}:*"
+              - !Sub "arn:${AWS::Partition}:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/queue-purge-${EnvironmentSuffix}:*"
 
   # ---------------- IAM Roles ----------------
   PrimaryProcessorLambdaRole:
@@ -325,7 +370,16 @@ Resources:
                 Action:
                   - ssm:GetParameter
                   - ssm:GetParameters
-                Resource: !Sub "arn:${AWS::Partition}:ssm:${PrimaryRegion}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   ReplicationLambdaRole:
     Type: AWS::IAM::Role
@@ -355,6 +409,19 @@ Resources:
               - Effect: Allow
                 Action: [cloudwatch:PutMetricData]
                 Resource: "*"
+              - Effect: Allow
+                Action:
+                  - ssm:GetParameter
+                Resource: !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/async/${EnvironmentSuffix}/*"
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   QueuePurgeLambdaRole:
     Type: AWS::IAM::Role
@@ -382,6 +449,62 @@ Resources:
                   - !GetAtt PrimaryDlqQueue.Arn
                   - !GetAtt DrFifoQueue.Arn
                   - !GetAtt DrDlqQueue.Arn
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
+
+  # ---------------- Lambda Log Groups (retention) ----------------
+  PrimaryProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/primary-processor-${EnvironmentSuffix}"
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
+
+  ReplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/queue-replication-${EnvironmentSuffix}"
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
+
+  QueuePurgeLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: AutoPurgeActive
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/queue-purge-${EnvironmentSuffix}"
+      RetentionInDays: 30
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- Lambdas ----------------
   PrimaryProcessorLambda:
@@ -428,9 +551,21 @@ Resources:
                           ConditionExpression='attribute_not_exists(MessageId)'
                       )
                   except ClientError as e:
-                      if e.response.get('Error', {}).get('Code') != 'ConditionalCheckFailedException':
+                      error_code = e.response.get('Error', {}).get('Code')
+                      if error_code != 'ConditionalCheckFailedException':
+                          print(f"DynamoDB error: {error_code} - {e}")
                           raise
+                      print(f"Duplicate message detected: {msg_id}")
               return {'statusCode': 200}
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   PrimaryProcessorEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
@@ -439,7 +574,6 @@ Resources:
       EventSourceArn: !GetAtt PrimaryFifoQueue.Arn
       Enabled: true
       BatchSize: 5
-      #MaximumBatchingWindowInSeconds: 5
 
   ReplicationLambda:
     Type: AWS::Lambda::Function
@@ -468,19 +602,22 @@ Resources:
               if param_or_url.startswith('/'):
                   try:
                       return ssm.get_parameter(Name=param_or_url)['Parameter']['Value']
-                  except ClientError:
+                  except ClientError as e:
+                      print(f"SSM get_parameter failed: {e}")
                       return None
               return param_or_url
 
           def handler(event, context):
               dest = _resolve_dest(os.environ.get('DEST_QUEUE_URL_PARAM')) or os.environ.get('DEST_QUEUE_URL')
               if not dest:
-                  print('Destination queue not configured')
-                  return {'statusCode': 400}
+                  raise ValueError('Destination queue not configured')
+
               for record in event.get('Records', []):
                   body = record.get('body', '')
-                  attrs = record.get('attributes', {})
-                  group_id = attrs.get('MessageGroupId') or 'default'
+                  attrs = record.get('attributes', {}) or {}
+                  group_id = attrs.get('MessageGroupId')
+                  if not group_id:
+                      raise ValueError(f"Missing MessageGroupId for message {record.get('messageId')}")
                   dedup = attrs.get('MessageDeduplicationId') or record.get('messageId')
                   try:
                       sqs.send_message(
@@ -493,6 +630,15 @@ Resources:
                       print('Replication send failed', exc)
                       raise
               return {'statusCode': 200}
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   ReplicationEventSourceMapping:
     Type: AWS::Lambda::EventSourceMapping
@@ -501,7 +647,6 @@ Resources:
       EventSourceArn: !GetAtt PrimaryFifoQueue.Arn
       Enabled: true
       BatchSize: 5
-      #MaximumBatchingWindowInSeconds: 5
 
   QueuePurgeLambda:
     Type: AWS::Lambda::Function
@@ -542,6 +687,15 @@ Resources:
                         os.environ.get('DR_DLQ_URL')]:
                   _purge(u)
               return {'status': 'ok'}
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   QueuePurgeSchedule:
     Type: AWS::Events::Rule
@@ -586,6 +740,17 @@ Resources:
             ProjectionType: ALL
       StreamSpecification:
         StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: CostCenter
+          Value: FinancialProcessing
+        - Key: ManagedBy
+          Value: CloudFormation
+        - Key: Project
+          Value: AsyncMessageProcessing
 
   # ---------------- CloudWatch Alarms ----------------
   PrimaryQueueDepthAlarm:
@@ -619,6 +784,72 @@ Resources:
       Period: 60
       EvaluationPeriods: 1
       Threshold: !Ref DlqAlarmThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  DrQueueDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "dr-queue-depth-${EnvironmentSuffix}"
+      AlarmDescription: !Sub "DR FIFO queue depth exceeds ${QueueDepthAlarmThreshold} (${EnvironmentSuffix})"
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DrFifoQueue.QueueName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: !Ref QueueDepthAlarmThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  DrDlqDepthAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "dr-dlq-depth-${EnvironmentSuffix}"
+      AlarmDescription: !Sub "DR DLQ depth exceeds ${DlqAlarmThreshold} (${EnvironmentSuffix})"
+      Namespace: AWS/SQS
+      MetricName: ApproximateNumberOfMessagesVisible
+      Dimensions:
+        - Name: QueueName
+          Value: !GetAtt DrDlqQueue.QueueName
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: !Ref DlqAlarmThreshold
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  PrimaryProcessorThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "primary-processor-throttles-${EnvironmentSuffix}"
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref PrimaryProcessorLambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+
+  ReplicationThrottleAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub "replication-throttles-${EnvironmentSuffix}"
+      Namespace: AWS/Lambda
+      MetricName: Throttles
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref ReplicationLambda
+      Statistic: Sum
+      Period: 60
+      EvaluationPeriods: 1
+      Threshold: 1
       ComparisonOperator: GreaterThanOrEqualToThreshold
       TreatMissingData: notBreaching
 
@@ -682,7 +913,8 @@ Resources:
                 "region": "${PrimaryRegion}",
                 "metrics": [
                   ["AWS/Lambda","Invocations","FunctionName","${PrimaryProcessorLambda}"],
-                  [".","Errors",".","."]
+                  [".","Errors",".","."],
+                  [".","Throttles",".","."]
                 ]
               }
             },
@@ -696,7 +928,34 @@ Resources:
                 "region": "${PrimaryRegion}",
                 "metrics": [
                   ["AWS/Lambda","Invocations","FunctionName","${ReplicationLambda}"],
-                  [".","Errors",".","."]
+                  [".","Errors",".","."],
+                  [".","Throttles",".","."]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 0, "y": 12, "width": 12, "height": 6,
+              "properties": {
+                "title": "DR Queue Depth (${EnvironmentSuffix})",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${PrimaryRegion}",
+                "metrics": [
+                  ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","${DrFifoQueue.QueueName}"]
+                ]
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12, "y": 12, "width": 12, "height": 6,
+              "properties": {
+                "title": "DR DLQ Depth (${EnvironmentSuffix})",
+                "view": "timeSeries",
+                "stacked": false,
+                "region": "${PrimaryRegion}",
+                "metrics": [
+                  ["AWS/SQS","ApproximateNumberOfMessagesVisible","QueueName","${DrDlqQueue.QueueName}"]
                 ]
               }
             }
@@ -795,13 +1054,6 @@ Resources:
       Name: !Sub "/async/${EnvironmentSuffix}/trusted-role-arn"
       Type: String
       Value: !Ref TrustedRoleArn
-
-  DrQueueUrlForReplicationParameter:
-    Type: AWS::SSM::Parameter
-    Properties:
-      Name: !Sub "/async/${EnvironmentSuffix}/dr-queue-url-for-replication"
-      Type: String
-      Value: !Ref DrFifoQueue
 
 Outputs:
   PrimaryQueueUrl:
