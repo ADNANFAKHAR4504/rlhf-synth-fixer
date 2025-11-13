@@ -16,12 +16,31 @@ def stack_outputs():
     outputs_file = "cfn-outputs/flat-outputs.json"
 
     if not os.path.exists(outputs_file):
+        # In CI mode, fail the entire test session immediately
+        if os.environ.get("CI") == "1":
+            pytest.exit(
+                "Integration tests require deployed infrastructure. "
+                "The cfn-outputs/flat-outputs.json file is missing. "
+                "Ensure deployment completes successfully before running integration tests.",
+                returncode=1
+            )
         return {}
 
     try:
         with open(outputs_file, "r") as f:
-            return json.load(f)
-    except (json.JSONDecodeError, IOError):
+            outputs = json.load(f)
+            # In CI mode, fail if outputs are empty
+            if os.environ.get("CI") == "1" and not outputs:
+                pytest.exit(
+                    "Integration tests require deployed infrastructure. "
+                    "The cfn-outputs/flat-outputs.json file exists but is empty. "
+                    "Ensure deployment completes successfully and outputs are collected.",
+                    returncode=1
+                )
+            return outputs
+    except (json.JSONDecodeError, IOError) as e:
+        if os.environ.get("CI") == "1":
+            pytest.exit(f"Failed to load deployment outputs: {e}", returncode=1)
         return {}
 
 
