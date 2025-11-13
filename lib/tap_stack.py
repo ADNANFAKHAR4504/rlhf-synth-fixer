@@ -28,6 +28,7 @@ from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAtt
 from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
 from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
 import json
+import os
 
 
 class TapStack(TerraformStack):
@@ -458,6 +459,9 @@ class TapStack(TerraformStack):
         concurrency_limits = {'high': 100, 'medium': 50, 'low': 25}
         queues = {'high': queue_high, 'medium': queue_medium, 'low': queue_low}
 
+        # Get absolute path to lambda package
+        lambda_zip_path = os.path.join(os.getcwd(), "lib", "lambda_package.zip")
+
         for priority in priorities:
             lambda_functions[priority] = LambdaFunction(
                 self,
@@ -466,7 +470,7 @@ class TapStack(TerraformStack):
                 runtime="python3.11",
                 handler="lambda_function.handler",
                 role=lambda_role.arn,
-                filename="lib/lambda_package.zip",
+                filename=lambda_zip_path,
                 timeout=300,
                 memory_size=512,
                 reserved_concurrent_executions=concurrency_limits[priority],
