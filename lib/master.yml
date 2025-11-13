@@ -42,6 +42,11 @@ Parameters:
     Description: 'S3 prefix (folder) for nested stack templates'
     Default: 'payment-processing'
 
+  ContainerImage:
+    Type: String
+    Description: 'Docker container image URI for payment processor'
+    Default: 'public.ecr.aws/docker/library/nginx:latest'
+
 Mappings:
   EnvironmentConfig:
     dev:
@@ -120,6 +125,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -128,6 +139,7 @@ Resources:
   # Database Nested Stack
   DatabaseStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn: VPCStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/database.yml'
       Parameters:
@@ -138,6 +150,8 @@ Resources:
         RDSInstanceClass: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, RDSInstanceClass]
         RDSInstanceCount: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, RDSInstanceCount]
         BackupRetentionPeriod: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, RDSBackupRetention]
+        PreferredBackupWindow: '03:00-04:00'
+        PreferredMaintenanceWindow: 'sun:04:00-sun:05:00'
         AlarmRDSCPUThreshold: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, AlarmRDSCPUThreshold]
         AlarmRDSConnectionsThreshold: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, AlarmRDSConnectionsThreshold]
       Tags:
@@ -145,6 +159,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -153,6 +173,9 @@ Resources:
   # Compute Nested Stack
   ComputeStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - VPCStack
+      - DatabaseStack
     Properties:
       TemplateURL: !Sub 'https://${TemplateS3Bucket}.s3.${AWS::Region}.amazonaws.com/${TemplateS3Prefix}/compute.yml'
       Parameters:
@@ -164,6 +187,7 @@ Resources:
         DatabaseSecurityGroupId: !GetAtt DatabaseStack.Outputs.DatabaseSecurityGroupId
         DatabaseEndpoint: !GetAtt DatabaseStack.Outputs.AuroraClusterEndpoint
         DatabaseReaderEndpoint: !GetAtt DatabaseStack.Outputs.AuroraReaderEndpoint
+        ContainerImage: !Ref ContainerImage
         ECSDesiredCount: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, ECSDesiredCount]
         ECSTaskCPU: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, ECSTaskCPU]
         ECSTaskMemory: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, ECSTaskMemory]
@@ -174,6 +198,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy

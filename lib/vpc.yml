@@ -58,6 +58,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -74,6 +80,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -100,6 +112,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -121,6 +139,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -142,6 +166,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -163,6 +193,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -183,6 +219,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -203,6 +245,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -223,6 +271,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -240,6 +294,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -257,6 +317,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -275,6 +341,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -292,6 +364,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -309,6 +387,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -326,6 +410,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -369,6 +459,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -398,6 +494,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -427,6 +529,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy

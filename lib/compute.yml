@@ -38,6 +38,11 @@ Parameters:
     Type: String
     Description: 'Database read endpoint'
 
+  ContainerImage:
+    Type: String
+    Description: 'Docker container image URI'
+    Default: 'public.ecr.aws/docker/library/nginx:latest'
+
   ECSDesiredCount:
     Type: Number
     Description: 'Desired number of ECS tasks'
@@ -59,6 +64,36 @@ Parameters:
     Description: 'Memory alarm threshold percentage'
 
 Resources:
+  # SNS Topic for CloudWatch Alarms
+  AlarmNotificationTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'payment-alarms-${EnvironmentSuffix}'
+      DisplayName: !Sub 'Payment Processing Alarms - ${EnvironmentType}'
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentType
+        - Key: CostCenter
+          Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
+        - Key: Application
+          Value: payment-processor
+        - Key: ManagedBy
+          Value: CloudFormation
+
+  # SNS Topic Subscription (placeholder - add real email)
+  AlarmNotificationSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: email
+      TopicArn: !Ref AlarmNotificationTopic
+      Endpoint: 'alerts@example.com'  # Update with actual email
+
   # CloudWatch Logs Group
   ECSLogGroup:
     Type: AWS::Logs::LogGroup
@@ -70,6 +105,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -104,6 +145,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -133,6 +180,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -167,6 +220,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -197,6 +256,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -228,6 +293,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -252,6 +323,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -287,6 +364,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -306,7 +389,7 @@ Resources:
       TaskRoleArn: !GetAtt ECSTaskRole.Arn
       ContainerDefinitions:
         - Name: payment-processor
-          Image: 'public.ecr.aws/docker/library/nginx:latest'
+          Image: !Ref ContainerImage
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
@@ -332,6 +415,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -363,6 +452,12 @@ Resources:
           Value: !Ref EnvironmentType
         - Key: CostCenter
           Value: payments
+        - Key: Project
+          Value: payment-processing-system
+        - Key: Owner
+          Value: payments-team
+        - Key: Department
+          Value: finance
         - Key: Application
           Value: payment-processor
         - Key: ManagedBy
@@ -387,6 +482,10 @@ Resources:
         - Name: ClusterName
           Value: !Ref ECSCluster
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
 
   ECSServiceMemoryAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -406,6 +505,10 @@ Resources:
         - Name: ClusterName
           Value: !Ref ECSCluster
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
 
   ALBTargetResponseTimeAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -423,6 +526,10 @@ Resources:
         - Name: LoadBalancer
           Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
 
   ALBUnhealthyHostCountAlarm:
     Type: AWS::CloudWatch::Alarm
@@ -442,6 +549,10 @@ Resources:
         - Name: LoadBalancer
           Value: !GetAtt ApplicationLoadBalancer.LoadBalancerFullName
       TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmNotificationTopic
+      OKActions:
+        - !Ref AlarmNotificationTopic
 
 Outputs:
   ALBSecurityGroupId:
