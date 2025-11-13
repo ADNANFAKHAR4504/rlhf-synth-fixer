@@ -475,8 +475,5 @@ exports.handler = async (event) => {
             "/convert"
         )
 
-        # Export outputs using pulumi.export
-        pulumi.export("api_url", self.api_url)
-        pulumi.export("api_key_id", self.api_key.id)
-        pulumi.export("lambda_function_name", self.lambda_function.name)
-        pulumi.export("api_gateway_id", self.api_gateway.id)
+        # Note: Exports are done in tap.py at the stack level, not here
+        # pulumi.export() can only be called at the stack level, not inside component resources
