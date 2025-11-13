@@ -417,7 +417,7 @@ resource "aws_emr_instance_group" "task" {
     volumes_per_instance = 1
   }
 
-  auto_scaling_policy = jsonencode({
+  autoscaling_policy = jsonencode({
     Constraints = {
       MinCapacity = var.task_instance_min
       MaxCapacity = var.task_instance_max
