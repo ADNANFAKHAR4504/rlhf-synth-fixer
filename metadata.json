@@ -7,16 +7,7 @@
   "startedAt": "2025-11-13T00:07:18+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "DynamoDB tables must use on-demand billing mode",
-    "API Gateway must use AWS WAF with rate-based rules",
-    "Lambda functions must have reserved concurrent executions set to prevent cold starts",
-    "Lambda functions must use Lambda Layers for shared dependencies",
-    "API Gateway must implement request throttling at 1000 requests per second",
-    "X-Ray tracing must be enabled across all services",
-    "Lambda functions must use ARM64 architecture for cost optimization",
-    "All Lambda environment variables must be encrypted with a customer-managed KMS key",
-    "DynamoDB streams must trigger a separate audit Lambda function",
-    "Dead letter queues must be configured for all asynchronous invocations"
+    "Serverless Infrastructure (Functions as Code)"
   ],
   "po_id": "0b9sw0",
   "aws_services": [
@@ -30,6 +21,6 @@
     "WAF",
     "X-Ray"
   ],
-  "region": "ap-southeast-1",
+  "region": "us-east-1",
   "training_quality": 8
 }

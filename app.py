@@ -9,11 +9,11 @@ environment_suffix = app.node.try_get_context("environment_suffix") or os.enviro
 
 TapStack(
     app,
-    f"TapStack-{environment_suffix}",
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region='ap-southeast-1'
+        region='us-east-1'
     ),
 )
 

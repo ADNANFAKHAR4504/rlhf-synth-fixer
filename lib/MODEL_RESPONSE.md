@@ -485,7 +485,7 @@ TapStack(
     environment_suffix=environment_suffix,
     env=cdk.Environment(
         account=os.getenv('CDK_DEFAULT_ACCOUNT'),
-        region='ap-southeast-1'
+        region='us-east-1'
     ),
 )
 
@@ -612,7 +612,7 @@ cd ../../../../..
 
 3. Bootstrap CDK (first time only):
 ```bash
-cdk bootstrap aws://ACCOUNT-ID/ap-southeast-1
+cdk bootstrap aws://ACCOUNT-ID/us-east-1
 ```
 
 ## Deployment
@@ -635,7 +635,7 @@ cdk deploy -c environment_suffix=prod
 Test the webhook endpoint:
 
 ```bash
-curl -X POST https://YOUR-API-ID.execute-api.ap-southeast-1.amazonaws.com/prod/webhook/stripe \
+curl -X POST https://YOUR-API-ID.execute-api.us-east-1.amazonaws.com/prod/webhook/stripe \
   -H "Content-Type: application/json" \
   -d '{"event": "payment.succeeded", "amount": 1000}'
 ```

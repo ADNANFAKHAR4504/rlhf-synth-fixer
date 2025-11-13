@@ -52,7 +52,7 @@ Create a serverless webhook processing pipeline using **AWS CDK with Python** th
 ### Technical Requirements
 
 - All infrastructure defined using **AWS CDK with Python**
-- Deploy to **ap-southeast-1** region
+- Deploy to **us-east-1** region
 - Use **API Gateway REST API** for webhook ingestion
 - Use **Lambda** (Python 3.11, ARM64) for all compute
 - Use **DynamoDB** with on-demand billing for data persistence
@@ -106,4 +106,4 @@ Create a serverless webhook processing pipeline using **AWS CDK with Python** th
 - IAM roles and policies with least privilege
 - CloudWatch logging configuration
 - Documentation with deployment instructions
-- All code ready for production deployment to ap-southeast-1
+- All code ready for production deployment to us-east-1

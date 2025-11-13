@@ -85,7 +85,6 @@ class TapStack(Stack):
             code=_lambda.Code.from_asset("lib/lambda/webhook_receiver"),
             handler="index.handler",
             timeout=Duration.seconds(30),
-            reserved_concurrent_executions=100,
             environment={
                 "TABLE_NAME": webhooks_table.table_name,
                 "PROCESSOR_QUEUE": "processor-queue",
@@ -116,7 +115,6 @@ class TapStack(Stack):
             code=_lambda.Code.from_asset("lib/lambda/payment_processor"),
             handler="index.handler",
             timeout=Duration.minutes(5),
-            reserved_concurrent_executions=50,
             environment={
                 "TABLE_NAME": webhooks_table.table_name,
             },
@@ -140,7 +138,6 @@ class TapStack(Stack):
             code=_lambda.Code.from_asset("lib/lambda/audit_logger"),
             handler="index.handler",
             timeout=Duration.seconds(60),
-            reserved_concurrent_executions=20,
             environment={
                 "ALERT_TOPIC_ARN": alert_topic.topic_arn,
             },
