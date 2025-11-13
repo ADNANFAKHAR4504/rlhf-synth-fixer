@@ -2,6 +2,8 @@
 
 This CloudFormation template implements a comprehensive compliance monitoring system using AWS Config to analyze and validate AWS infrastructure against compliance requirements.
 
+> **Region Alignment:** The solution, validation steps, and deployment commands are written for the `eu-central-1` region to match the project requirement and the `lib/AWS_REGION` setting.
+
 ## Architecture Overview
 
 The solution uses:

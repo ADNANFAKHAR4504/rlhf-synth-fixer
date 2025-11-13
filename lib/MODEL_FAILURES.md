@@ -2,6 +2,8 @@
 
 This document analyzes the failures in the initial MODEL_RESPONSE and explains the corrections needed to reach the IDEAL_RESPONSE for the Infrastructure Compliance Analysis System.
 
+> **Region Reminder:** All analysis and remediation guidance assume the stack is deployed in `eu-central-1`, so any referenced AWS limits or service behaviors map to that region.
+
 ## Executive Summary
 
 The MODEL_RESPONSE provided a well-structured CloudFormation template that demonstrated good understanding of AWS Config, S3, SNS, and security best practices. However, it contained **one critical failure** that prevented deployment: attempting to create AWS Config Recorder and Delivery Channel resources when AWS enforces a strict limit of one per region per account.

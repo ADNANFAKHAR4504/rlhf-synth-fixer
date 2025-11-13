@@ -2,6 +2,8 @@
 
 This document describes the ideal CloudFormation implementation for an automated compliance monitoring system using AWS Config.
 
+> **Regional Context:** The template, ARNs, and operational guidance target `eu-central-1`, matching the mandated deployment region and the repository’s `lib/AWS_REGION` file.
+
 ## Architecture Overview
 
 The solution implements a compliance monitoring system using:

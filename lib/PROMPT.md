@@ -2,6 +2,8 @@
 
 Hey team,
 
+> **Region:** All work in this engagement targets the `eu-central-1` AWS region. Keep that region in mind for every resource, test, and piece of documentation.
+
 We need to build an automated compliance monitoring system that can analyze our existing AWS infrastructure and validate it against our compliance requirements. I've been asked to create this using **CloudFormation with JSON** format. The business wants a solution that continuously monitors our infrastructure and alerts us to any compliance violations before they become serious issues.
 
 Right now, we're doing manual compliance audits which are time-consuming and error-prone. We need an automated system that can track configuration changes, evaluate them against our compliance rules, and provide detailed reports on any violations. This will help us maintain security standards and pass audits more easily.

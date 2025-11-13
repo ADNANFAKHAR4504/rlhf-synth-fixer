@@ -3,7 +3,7 @@
   "language": "json",
   "complexity": "hard",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-1",
   "startedAt": "2025-11-12T00:00:00+00:00",
   "subtask": "Infrastructure QA and Management",
   "subject_labels": [
