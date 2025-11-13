@@ -71,12 +71,58 @@ export class NetworkModule extends Construct {
           },
         ],
       }),
+      inlinePolicy: [
+        {
+          name: 'vpc-flow-logs-policy',
+          policy: JSON.stringify({
+            Version: '2012-10-17',
+            Statement: [
+              {
+                Effect: 'Allow',
+                Action: [
+                  'logs:CreateLogGroup',
+                  'logs:CreateLogStream',
+                  'logs:PutLogEvents',
+                  'logs:DescribeLogGroups',
+                  'logs:DescribeLogStreams',
+                ],
+                Resource: '*',
+              },
+            ],
+          }),
+        },
+      ],
       tags: config.tags,
     });
 
-    new IamRolePolicyAttachment(this, 'vpc-flow-logs-policy', {
+    // Create inline policy for VPC Flow Logs instead of attaching non-existent managed policy
+    const flowLogsPolicyDocument = new DataAwsIamPolicyDocument(this, 'vpc-flow-logs-policy-doc', {
+      statement: [
+        {
+          effect: 'Allow',
+          actions: [
+            'logs:CreateLogGroup',
+            'logs:CreateLogStream',
+            'logs:PutLogEvents',
+            'logs:DescribeLogGroups',
+            'logs:DescribeLogStreams',
+          ],
+          resources: ['*'],
+        },
+      ],
+    });
+
+    new IamPolicy(this, 'vpc-flow-logs-inline-policy', {
+      name: `${config.tags.Environment}-vpc-flow-logs-policy`,
+      policy: flowLogsPolicyDocument.json,
+    });
+
+    new IamRolePolicyAttachment(this, 'vpc-flow-logs-policy-attachment', {
       role: vpcFlowLogRole.name,
-      policyArn: 'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+      policyArn: new IamPolicy(this, 'vpc-flow-logs-custom-policy', {
+        name: `${config.tags.Environment}-vpc-flow-logs-custom-policy`,
+        policy: flowLogsPolicyDocument.json,
+      }).arn,
     });
 
     const vpcFlowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'vpc-flow-logs', {
@@ -374,7 +420,7 @@ export class IrsaRoleModule extends Construct {
       tags,
     });
 
-    if (policyDocument) {
+    if (policyDocument && policyDocument.length > 0) {
       const policy = new IamPolicy(this, 'policy', {
         name: `${name}-policy`,
         policy: policyDocument,
