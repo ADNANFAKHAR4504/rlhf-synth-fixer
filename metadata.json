@@ -1,0 +1,40 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-13T09:10:40.390400",
+  "subtask": "Failure Recovery and High Availability",
+  "subject_labels": [
+    "RDS cross-region read replicas must use encrypted snapshots with KMS CMK",
+    "All IAM roles must follow least privilege with explicit deny statements for unused regions",
+    "CloudWatch alarms must trigger SNS notifications to multiple email endpoints",
+    "S3 bucket replication must include object metadata and tags",
+    "Application Load Balancers must use AWS Certificate Manager certificates in both regions",
+    "Route 53 health checks must monitor both primary and secondary endpoints with 30-second intervals",
+    "EventBridge rules must coordinate failover orchestration with 5-minute retry intervals",
+    "DynamoDB global tables must have contributor insights enabled for both regions",
+    "Lambda functions for health monitoring must have dead letter queues configured"
+  ],
+  "po_id": "1s1zk2",
+  "aws_services": [
+    "aurora",
+    "backup",
+    "cloudwatch",
+    "dynamodb",
+    "ecs",
+    "elb",
+    "eventbridge",
+    "fargate",
+    "lambda",
+    "logs",
+    "rds",
+    "route53",
+    "s3",
+    "sns",
+    "vpc"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}
