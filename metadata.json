@@ -1,0 +1,28 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "po_id": "101912492",
+  "startedAt": "2025-11-13T00:00:00Z",
+  "subtask": "RDS",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "disaster-recovery",
+    "rds",
+    "high-availability"
+  ],
+  "aws_services": [
+    "RDS",
+    "Route53",
+    "CloudWatch",
+    "KMS",
+    "IAM",
+    "SecretsManager",
+    "SNS",
+    "EC2"
+  ],
+  "training_quality": 9
+}

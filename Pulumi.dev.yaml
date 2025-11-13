@@ -1,0 +1,4 @@
+encryptionsalt: v1:KWIpAdVkFKc=:v1:5zrLh5ub+4ZdUsdB:PI2WwzGxByAZ3qiVmcpY/NCSUtdVKg==
+config:
+  aws:region: us-east-1
+  multi-region-dr-postgres:environmentSuffix: synth101912492
