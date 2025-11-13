@@ -29,7 +29,7 @@ class Route53Stack(Stack):
         self.hosted_zone = route53.HostedZone(
             self,
             f"hosted-zone-{environment_suffix}",
-            zone_name=f"payment-migration-{environment_suffix}.example.com",
+            zone_name=f"payment-migration-{environment_suffix}.internal",
             comment=f"Hosted zone for payment processing migration - {environment_suffix}",
         )
 
@@ -38,10 +38,10 @@ class Route53Stack(Stack):
             self,
             f"source-health-{environment_suffix}",
             health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-                type="HTTPS",
-                resource_path="/health",
+                type="HTTP",
+                resource_path="/",
                 fully_qualified_domain_name=source_alb.load_balancer_dns_name,
-                port=443,
+                port=80,
                 request_interval=30,
                 failure_threshold=3,
             ),
@@ -58,10 +58,10 @@ class Route53Stack(Stack):
             self,
             f"target-health-{environment_suffix}",
             health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-                type="HTTPS",
-                resource_path="/health",
+                type="HTTP",
+                resource_path="/",
                 fully_qualified_domain_name=target_alb.load_balancer_dns_name,
-                port=443,
+                port=80,
                 request_interval=30,
                 failure_threshold=3,
             ),
@@ -79,7 +79,7 @@ class Route53Stack(Stack):
             self,
             f"source-record-{environment_suffix}",
             zone=self.hosted_zone,
-            record_name=f"source.payment-migration-{environment_suffix}.example.com",
+            record_name=f"source.payment-migration-{environment_suffix}.internal",
             target=route53.RecordTarget.from_alias(
                 route53_targets.LoadBalancerTarget(source_alb)
             ),
@@ -91,7 +91,7 @@ class Route53Stack(Stack):
             self,
             f"target-record-{environment_suffix}",
             zone=self.hosted_zone,
-            record_name=f"target.payment-migration-{environment_suffix}.example.com",
+            record_name=f"target.payment-migration-{environment_suffix}.internal",
             target=route53.RecordTarget.from_alias(
                 route53_targets.LoadBalancerTarget(target_alb)
             ),
@@ -110,7 +110,7 @@ class Route53Stack(Stack):
         CfnOutput(
             self,
             "DomainName",
-            value=f"api.payment-migration-{environment_suffix}.example.com",
+            value=f"api.payment-migration-{environment_suffix}.internal",
             description="API domain name for traffic routing",
         )
 
