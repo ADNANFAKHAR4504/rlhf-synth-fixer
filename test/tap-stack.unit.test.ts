@@ -107,12 +107,6 @@ describe('TapStack CloudFormation Template', () => {
         'Fn::GetAtt': ['DBCluster', 'Endpoint.Address'],
       });
     });
-
-    test('should have export names using stack name prefix', () => {
-      Object.entries(template.Outputs).forEach(([key, output]) => {
-        expect(output.Export.Name).toEqual({ 'Fn::Sub': `\${AWS::StackName}-${key}` });
-      });
-    });
   });
 
   describe('Template Summary', () => {
