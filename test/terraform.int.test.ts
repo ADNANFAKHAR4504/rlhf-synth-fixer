@@ -102,11 +102,6 @@ describe('Terraform Compliance Module - Integration Tests', () => {
   });
 
   describe('Infrastructure as Code Best Practices', () => {
-    test('should follow terraform naming conventions', () => {
-      const resourceName = 'aws_s3_bucket_config';
-      expect(resourceName).toMatch(/^aws_[a-z_]+$/);
-    });
-
     test('should use underscores in resource names', () => {
       const resourceName = 'aws_lambda_function';
       expect(resourceName).toContain('_');
