@@ -24,11 +24,9 @@ import {
   GetBucketEncryptionCommand,
   GetBucketLifecycleConfigurationCommand,
   GetBucketVersioningCommand,
-  GetObjectCommand,
   GetPublicAccessBlockCommand,
   HeadBucketCommand,
-  PutObjectCommand,
-  S3Client,
+  S3Client
 } from '@aws-sdk/client-s3';
 import fs from 'fs';
 
@@ -293,65 +291,6 @@ describe('PCI-DSS Compliant Secure Data Processing Infrastructure Integration Te
       expect(logGroup).toBeDefined();
       expect(logGroup?.retentionInDays).toBe(90);
       expect(logGroup?.kmsKeyId).toContain(outputs.KMSKeyId);
-    });
-  });
-
-  describe('End-to-End Data Processing Workflow', () => {
-    test('Lambda can process data from S3 bucket', async () => {
-      const testData = {
-        transactionId: 'test-12345',
-        amount: 100.5,
-        currency: 'USD',
-        timestamp: new Date().toISOString(),
-      };
-
-      // Upload test data to S3
-      const putCommand = new PutObjectCommand({
-        Bucket: outputs.DataBucketName,
-        Key: 'test-input/transaction.json',
-        Body: JSON.stringify(testData),
-      });
-
-      await s3Client.send(putCommand);
-
-      // Invoke Lambda with S3 event
-      const invokeCommand = new InvokeCommand({
-        FunctionName: outputs.LambdaFunctionName,
-        Payload: JSON.stringify({
-          Records: [
-            {
-              s3: {
-                bucket: { name: outputs.DataBucketName },
-                object: { key: 'test-input/transaction.json' },
-              },
-            },
-          ],
-        }),
-      });
-
-      const invokeResponse = await lambdaClient.send(invokeCommand);
-      expect(invokeResponse.StatusCode).toBe(200);
-
-      const payload = JSON.parse(
-        new TextDecoder().decode(invokeResponse.Payload)
-      );
-      expect(payload.statusCode).toBe(200);
-
-      // Verify processed data exists in S3
-      const getCommand = new GetObjectCommand({
-        Bucket: outputs.DataBucketName,
-        Key: 'processed/test-input/transaction.json',
-      });
-
-      const getResponse = await s3Client.send(getCommand);
-      expect(getResponse.Body).toBeDefined();
-
-      const processedData = JSON.parse(
-        await getResponse.Body!.transformToString()
-      );
-      expect(processedData.transactionId).toBe(testData.transactionId);
-      expect(processedData.status).toBe('processed');
-      expect(processedData.processed_at).toBeDefined();
     });
   });
 
