@@ -1,8 +1,8 @@
+import { DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
+import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import fs from "fs";
-import path from "path";
 import fetch from "node-fetch";
-import { ElasticLoadBalancingV2Client, DescribeTargetHealthCommand } from "@aws-sdk/client-elastic-load-balancing-v2";
-import { SecretsManagerClient, DescribeSecretCommand } from "@aws-sdk/client-secrets-manager";
+import path from "path";
 
 jest.setTimeout(60000);
 
@@ -61,62 +61,58 @@ describe("Terraform infrastructure integration", () => {
     process.env.AWS_DEFAULT_REGION ||
     "us-east-1";
 
-  it("exposes required stack outputs", () => {
-    const requiredKeys = [
-      "alb_dns_name",
-      "alb_target_group_arn",
-      "ecr_repository_url",
-      "ecs_cluster_name",
-      "ecs_service_name",
-      "rds_endpoint",
-      "rds_master_secret_arn",
-      "cloudwatch_log_group",
-    ];
+  describe("End-to-end testing", () => {
+    it("validates the complete ECS Fargate deployment workflow", async () => {
+      const requiredKeys = [
+        "alb_dns_name",
+        "alb_target_group_arn",
+        "ecr_repository_url",
+        "ecs_cluster_name",
+        "ecs_service_name",
+        "rds_endpoint",
+        "rds_master_secret_arn",
+        "cloudwatch_log_group",
+      ];
 
-    requiredKeys.forEach((key) => {
-      const value = outputs[key];
-      expect(outputs[key]).toBeDefined();
-      expect(typeof value).toBe("string");
-      expect((value as string).length).toBeGreaterThan(0);
+      requiredKeys.forEach((key) => {
+        const value = outputs[key];
+        expect(outputs[key]).toBeDefined();
+        expect(typeof value).toBe("string");
+        expect((value as string).length).toBeGreaterThan(0);
+      });
+
+      expect(outputs.alb_dns_name as string).toMatch(/\.elb\.amazonaws\.com$/);
+      expect(outputs.ecr_repository_url as string).toMatch(/\.dkr\.ecr\./);
+      expect(outputs.rds_endpoint as string).toMatch(/\.rds\.amazonaws\.com$/);
+      expect(outputs.rds_master_secret_arn as string).toMatch(/^arn:aws:secretsmanager:/);
+
+      const { protocol, status } = await hitApplicationHealthEndpoint(
+        outputs.alb_dns_name as string
+      );
+      expect(["http", "https"]).toContain(protocol);
+      expect(status).toBeLessThan(400);
+
+      const elbv2 = new ElasticLoadBalancingV2Client({ region });
+      const result = await elbv2.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: outputs.alb_target_group_arn as string,
+        })
+      );
+      const descriptions = result.TargetHealthDescriptions ?? [];
+      expect(descriptions.length).toBeGreaterThan(0);
+      descriptions.forEach((description) => {
+        expect(description.TargetHealth?.State).toBe("healthy");
+      });
+
+      const secrets = new SecretsManagerClient({ region });
+      const secret = await secrets.send(
+        new DescribeSecretCommand({
+          SecretId: outputs.rds_master_secret_arn as string,
+        })
+      );
+      expect(secret.ARN).toBe(outputs.rds_master_secret_arn);
+      expect(secret.Name).toBeDefined();
+      expect(secret.CreatedDate).toBeInstanceOf(Date);
     });
-
-    expect(outputs.alb_dns_name as string).toMatch(/\.elb\.amazonaws\.com$/);
-    expect(outputs.ecr_repository_url as string).toMatch(/\.dkr\.ecr\./);
-    expect(outputs.rds_endpoint as string).toMatch(/\.rds\.amazonaws\.com$/);
-    expect(outputs.rds_master_secret_arn as string).toMatch(/^arn:aws:secretsmanager:/);
-  });
-
-  it("serves a healthy response via the Application Load Balancer", async () => {
-    const { protocol, status } = await hitApplicationHealthEndpoint(
-      outputs.alb_dns_name as string
-    );
-    expect(["http", "https"]).toContain(protocol);
-    expect(status).toBeLessThan(400);
-  });
-
-  it("reports all targets as healthy in the ALB target group", async () => {
-    const elbv2 = new ElasticLoadBalancingV2Client({ region });
-    const result = await elbv2.send(
-      new DescribeTargetHealthCommand({
-        TargetGroupArn: outputs.alb_target_group_arn as string,
-      })
-    );
-    const descriptions = result.TargetHealthDescriptions ?? [];
-    expect(descriptions.length).toBeGreaterThan(0);
-    descriptions.forEach((description) => {
-      expect(description.TargetHealth?.State).toBe("healthy");
-    });
-  });
-
-  it("stores database credentials in Secrets Manager", async () => {
-    const secrets = new SecretsManagerClient({ region });
-    const secret = await secrets.send(
-      new DescribeSecretCommand({
-        SecretId: outputs.rds_master_secret_arn as string,
-      })
-    );
-    expect(secret.ARN).toBe(outputs.rds_master_secret_arn);
-    expect(secret.Name).toBeDefined();
-    expect(secret.CreatedDate).toBeInstanceOf(Date);
   });
 });
