@@ -201,7 +201,7 @@ class TapStack(Stack):
         # Allow ALB to connect to ECS tasks
         self.ecs_security_group.add_ingress_rule(
             peer=sg,
-            connection=ec2.Port.tcp(8080),
+            connection=ec2.Port.tcp(80),
             description="Allow ALB to connect to ECS tasks",
         )
 
@@ -597,7 +597,7 @@ class TapStack(Stack):
         )
 
         container.add_port_mappings(
-            ecs.PortMapping(container_port=8080, protocol=ecs.Protocol.TCP)
+            ecs.PortMapping(container_port=80, protocol=ecs.Protocol.TCP)
         )
 
         # Create target group
@@ -605,11 +605,11 @@ class TapStack(Stack):
             self,
             f"ecs-target-{self.environment_suffix}",
             vpc=self.vpc,
-            port=8080,
+            port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
             target_type=elbv2.TargetType.IP,
             health_check=elbv2.HealthCheck(
-                path="/health",
+                path="/",
                 interval=Duration.seconds(30),
                 timeout=Duration.seconds(5),
                 healthy_threshold_count=2,
