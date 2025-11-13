@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-AWS Resource Audit Script
-Identifies unused and misconfigured resources in AWS environment.
+S3 Security and Compliance Audit Script
+Identifies security and compliance issues in S3 buckets for SOC2 and GDPR.
 """
 
 import json
@@ -48,217 +48,6 @@ class Finding:
     current_config: str
     required_config: str
     remediation_steps: str
-
-
-class AWSResourceAuditor:
-    """Audits AWS resources for optimization and security improvements."""
-    
-    def __init__(self, region_name: str = None):
-        """
-        Initialize AWS clients for resource auditing.
-        
-        Args:
-            region_name: AWS region name (uses default if not specified)
-        """
-        self.region_name = region_name
-        self.ec2_client = boto3.client('ec2', region_name=region_name)
-        self.logs_client = boto3.client('logs', region_name=region_name)
-        
-    def find_unused_ebs_volumes(self) -> List[Dict[str, Any]]:
-        """
-        Find EBS volumes that are not attached to any EC2 instance.
-        
-        Returns:
-            List of unused volumes with their details
-        """
-        unused_volumes = []
-        
-        try:
-            # Describe all EBS volumes
-            paginator = self.ec2_client.get_paginator('describe_volumes')
-            
-            for page in paginator.paginate():
-                for volume in page['Volumes']:
-                    # Check if volume is available (not attached)
-                    if volume['State'] == 'available':
-                        volume_info = {
-                            'VolumeId': volume['VolumeId'],
-                            'Size': volume['Size'],  # Size in GiB
-                            'VolumeType': volume['VolumeType'],
-                            'CreateTime': volume['CreateTime'].strftime('%Y-%m-%d %H:%M:%S'),
-                            'AvailabilityZone': volume['AvailabilityZone'],
-                            'Encrypted': volume.get('Encrypted', False),
-                            'Tags': self._extract_tags(volume.get('Tags', []))
-                        }
-                        unused_volumes.append(volume_info)
-                        
-        except ClientError as e:
-            print(f"Error retrieving EBS volumes: {e}")
-            
-        return unused_volumes
-    
-    def find_public_security_groups(self) -> List[Dict[str, Any]]:
-        """
-        Find security groups that allow unrestricted access from the internet.
-        
-        Returns:
-            List of public security groups with their details
-        """
-        public_security_groups = []
-        
-        try:
-            # Describe all security groups
-            paginator = self.ec2_client.get_paginator('describe_security_groups')
-            
-            for page in paginator.paginate():
-                for sg in page['SecurityGroups']:
-                    public_rules = []
-                    
-                    # Check ingress rules for public access
-                    for rule in sg.get('IpPermissions', []):
-                        # Check for IPv4 public access
-                        for ip_range in rule.get('IpRanges', []):
-                            if ip_range.get('CidrIp') == '0.0.0.0/0':
-                                public_rules.append({
-                                    'Protocol': rule.get('IpProtocol', 'All'),
-                                    'FromPort': rule.get('FromPort', 'All'),
-                                    'ToPort': rule.get('ToPort', 'All'),
-                                    'Source': '0.0.0.0/0'
-                                })
-                        
-                        # Check for IPv6 public access
-                        for ipv6_range in rule.get('Ipv6Ranges', []):
-                            if ipv6_range.get('CidrIpv6') == '::/0':
-                                public_rules.append({
-                                    'Protocol': rule.get('IpProtocol', 'All'),
-                                    'FromPort': rule.get('FromPort', 'All'),
-                                    'ToPort': rule.get('ToPort', 'All'),
-                                    'Source': '::/0'
-                                })
-                    
-                    # If security group has public rules, add it to the list
-                    if public_rules:
-                        sg_info = {
-                            'GroupId': sg['GroupId'],
-                            'GroupName': sg['GroupName'],
-                            'Description': sg.get('Description', ''),
-                            'VpcId': sg.get('VpcId', 'EC2-Classic'),
-                            'PublicIngressRules': public_rules,
-                            'Tags': self._extract_tags(sg.get('Tags', []))
-                        }
-                        public_security_groups.append(sg_info)
-                        
-        except ClientError as e:
-            print(f"Error retrieving security groups: {e}")
-            
-        return public_security_groups
-    
-    def calculate_log_stream_metrics(self) -> Dict[str, Any]:
-        """
-        Calculate average CloudWatch log stream size across all log groups.
-        
-        Returns:
-            Dictionary containing log stream metrics
-        """
-        total_size = 0
-        total_streams = 0
-        log_group_metrics = []
-        
-        try:
-            # Describe all log groups
-            log_groups_paginator = self.logs_client.get_paginator('describe_log_groups')
-            
-            for log_groups_page in log_groups_paginator.paginate():
-                for log_group in log_groups_page['logGroups']:
-                    group_size = 0
-                    group_stream_count = 0
-                    
-                    # Get log streams for each log group
-                    try:
-                        streams_paginator = self.logs_client.get_paginator('describe_log_streams')
-                        
-                        for streams_page in streams_paginator.paginate(
-                            logGroupName=log_group['logGroupName']
-                        ):
-                            for stream in streams_page['logStreams']:
-                                # storedBytes represents the size of the log stream
-                                stream_size = stream.get('storedBytes', 0)
-                                group_size += stream_size
-                                group_stream_count += 1
-                                total_size += stream_size
-                                total_streams += 1
-                        
-                        if group_stream_count > 0:
-                            log_group_metrics.append({
-                                'LogGroupName': log_group['logGroupName'],
-                                'StreamCount': group_stream_count,
-                                'TotalSize': group_size,
-                                'AverageStreamSize': group_size / group_stream_count
-                            })
-                            
-                    except ClientError as e:
-                        print(f"Error retrieving streams for log group {log_group['logGroupName']}: {e}")
-                        
-        except ClientError as e:
-            print(f"Error retrieving log groups: {e}")
-        
-        # Calculate overall average
-        average_stream_size = total_size / total_streams if total_streams > 0 else 0
-        
-        return {
-            'TotalLogStreams': total_streams,
-            'TotalSize': total_size,
-            'AverageStreamSize': average_stream_size,
-            'LogGroupMetrics': log_group_metrics
-        }
-    
-    def _extract_tags(self, tags: List[Dict]) -> Dict[str, str]:
-        """
-        Extract tags into a simple key-value dictionary.
-        
-        Args:
-            tags: List of tag dictionaries from AWS
-            
-        Returns:
-            Dictionary of tag key-value pairs
-        """
-        return {tag.get('Key', ''): tag.get('Value', '') for tag in tags}
-    
-    def audit_resources(self) -> Dict[str, Any]:
-        """
-        Perform complete audit of AWS resources.
-        
-        Returns:
-            Dictionary containing all audit results
-        """
-        print("Starting AWS resource audit...")
-        
-        print("Finding unused EBS volumes...")
-        unused_volumes = self.find_unused_ebs_volumes()
-        
-        print("Finding public security groups...")
-        public_security_groups = self.find_public_security_groups()
-        
-        print("Calculating CloudWatch log stream metrics...")
-        log_metrics = self.calculate_log_stream_metrics()
-        
-        # Compile results
-        results = {
-            'AuditTimestamp': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'Region': self.region_name or 'default',
-            'UnusedEBSVolumes': {
-                'Count': len(unused_volumes),
-                'TotalSize': sum(vol['Size'] for vol in unused_volumes),
-                'Volumes': unused_volumes
-            },
-            'PublicSecurityGroups': {
-                'Count': len(public_security_groups),
-                'SecurityGroups': public_security_groups
-            },
-            'CloudWatchLogMetrics': log_metrics
-        }
-        
-        return results
 
 
 class S3SecurityAuditor:
@@ -360,14 +149,19 @@ class S3SecurityAuditor:
         try:
             tagging_response = self.s3_client.get_bucket_tagging(Bucket=bucket_name)
             cache['tags'] = {tag['Key']: tag['Value'] for tag in tagging_response.get('TagSet', [])}
-        except:
-            cache['tags'] = {}
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchTagSet':
+                cache['tags'] = {}
+            else:
+                logger.warning(f"Error getting tags for bucket {bucket_name}: {e}")
+                cache['tags'] = {}
         
         # Get bucket location
         try:
             location_response = self.s3_client.get_bucket_location(Bucket=bucket_name)
             cache['region'] = location_response.get('LocationConstraint', 'us-east-1')
-        except:
+        except ClientError as e:
+            logger.warning(f"Error getting location for bucket {bucket_name}: {e}")
             cache['region'] = 'us-east-1'
         
         self.bucket_cache[bucket_name] = cache
@@ -483,7 +277,11 @@ class S3SecurityAuditor:
     def _check_lifecycle_policies(self, bucket_name: str):
         """Check for lifecycle policies on large buckets"""
         try:
-            # Get bucket size from CloudWatch
+            # Get bucket size from CloudWatch with timeout
+            import time
+            start_time = time.time()
+            timeout = 10  # 10 second timeout for CloudWatch calls
+            
             metrics = self.cloudwatch_client.get_metric_statistics(
                 Namespace='AWS/S3',
                 MetricName='BucketSizeBytes',
@@ -496,6 +294,10 @@ class S3SecurityAuditor:
                 Period=86400,
                 Statistics=['Average']
             )
+            
+            if time.time() - start_time > timeout:
+                logger.warning(f"CloudWatch call timed out for bucket {bucket_name}")
+                return
             
             if metrics['Datapoints']:
                 size_bytes = metrics['Datapoints'][0]['Average']
@@ -589,7 +391,20 @@ class S3SecurityAuditor:
                 object_lock_response = self.s3_client.get_object_lock_configuration(Bucket=bucket_name)
                 if object_lock_response.get('ObjectLockConfiguration', {}).get('ObjectLockEnabled') != 'Enabled':
                     raise Exception("Object lock not enabled")
-            except:
+            except ClientError as e:
+                # Object lock not configured or other AWS error
+                self.findings.append(Finding(
+                    bucket_name=bucket_name,
+                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
+                    issue_type='NO_OBJECT_LOCK',
+                    severity=CRITICAL,
+                    compliance_frameworks=['SOC2', 'GDPR'],
+                    current_config="Compliance-required bucket has Object Lock disabled",
+                    required_config="Object Lock must be enabled for compliance-required buckets",
+                    remediation_steps="1. Object Lock must be enabled at bucket creation\n2. Create new bucket with Object Lock\n3. Migrate data to new bucket"
+                ))
+            except Exception as e:
+                # Generic exception for object lock not enabled
                 self.findings.append(Finding(
                     bucket_name=bucket_name,
                     bucket_arn=self.bucket_cache[bucket_name]['arn'],
@@ -630,6 +445,10 @@ class S3SecurityAuditor:
     def _check_access_logging_destination(self, bucket_name: str):
         """Check if high-traffic buckets log to themselves"""
         try:
+            import time
+            start_time = time.time()
+            timeout = 10  # 10 second timeout for CloudWatch calls
+            
             # Get object count metric
             metrics = self.cloudwatch_client.get_metric_statistics(
                 Namespace='AWS/S3',
@@ -643,6 +462,10 @@ class S3SecurityAuditor:
                 Period=86400,
                 Statistics=['Average']
             )
+            
+            if time.time() - start_time > timeout:
+                logger.warning(f"CloudWatch call timed out for bucket {bucket_name}")
+                return
             
             if metrics['Datapoints'] and metrics['Datapoints'][0]['Average'] > HIGH_OBJECT_COUNT:
                 # Check logging configuration
@@ -700,15 +523,27 @@ class S3SecurityAuditor:
     
     def _check_glacier_transitions(self, bucket_name: str):
         """Check if old objects are transitioning to cold storage"""
+        import time
+        
         try:
-            # Check if bucket has old objects
+            # Check if bucket has old objects with timeout and limited pagination
             paginator = self.s3_client.get_paginator('list_objects_v2')
-            page_iterator = paginator.paginate(Bucket=bucket_name, MaxKeys=100)
+            page_iterator = paginator.paginate(
+                Bucket=bucket_name, 
+                MaxKeys=50,  # Reduced from 100 for better performance
+                PaginationConfig={'MaxItems': 200}  # Limit total objects checked
+            )
             
             cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
             has_old_objects = False
+            start_time = time.time()
+            timeout = 30  # 30 second timeout
             
             for page in page_iterator:
+                if time.time() - start_time > timeout:
+                    logger.warning(f"Timeout checking glacier transitions for {bucket_name}")
+                    break
+                    
                 for obj in page.get('Contents', []):
                     if obj['LastModified'] < cutoff_date:
                         has_old_objects = True
@@ -801,7 +636,7 @@ class S3SecurityAuditor:
     def print_findings(self):
         """Print findings to console grouped by severity"""
         if not self.findings:
-            print("\n✅ No security issues found!")
+            logger.info("✅ No security issues found!")
             return
         
         # Group findings by severity
@@ -812,17 +647,17 @@ class S3SecurityAuditor:
         # Print in order of severity
         for severity in [CRITICAL, HIGH, MEDIUM, LOW]:
             if severity in findings_by_severity:
-                print(f"\n{'='*80}")
-                print(f"{severity} SEVERITY FINDINGS ({len(findings_by_severity[severity])} issues)")
-                print('='*80)
+                logger.info(f"\n{'='*80}")
+                logger.info(f"{severity} SEVERITY FINDINGS ({len(findings_by_severity[severity])} issues)")
+                logger.info('='*80)
                 
                 for finding in findings_by_severity[severity]:
-                    print(f"\nBucket: {finding.bucket_name}")
-                    print(f"Issue: {finding.issue_type}")
-                    print(f"Current: {finding.current_config}")
-                    print(f"Required: {finding.required_config}")
-                    print(f"Remediation:\n{finding.remediation_steps}")
-                    print('-'*40)
+                    logger.info(f"\nBucket: {finding.bucket_name}")
+                    logger.info(f"Issue: {finding.issue_type}")
+                    logger.info(f"Current: {finding.current_config}")
+                    logger.info(f"Required: {finding.required_config}")
+                    logger.info(f"Remediation:\n{finding.remediation_steps}")
+                    logger.info('-'*40)
     
     def save_json_report(self, filename: str = 's3_security_audit.json'):
         """Save detailed findings to JSON file"""
@@ -847,8 +682,16 @@ class S3SecurityAuditor:
         compliance_chart = self._create_compliance_chart(summary)
         issue_type_chart = self._create_issue_type_chart(summary)
         
-        # Render HTML template
-        template = Template(HTML_TEMPLATE)
+        # Load HTML template from file
+        template_path = os.path.join(os.path.dirname(__file__), 's3_audit_report_template.html')
+        try:
+            with open(template_path, 'r') as f:
+                template_content = f.read()
+        except FileNotFoundError:
+            logger.error(f"HTML template file not found: {template_path}")
+            return
+        
+        template = Template(template_content)
         html_content = template.render(
             findings=findings,
             summary=summary,
@@ -939,131 +782,6 @@ class S3SecurityAuditor:
         return pio.to_html(fig, include_plotlyjs='cdn', div_id='issue-type-chart')
 
 
-# HTML Template for S3 Security Audit Report
-HTML_TEMPLATE = '''<!DOCTYPE html>
-<html>
-<head>
-    <title>S3 Security Audit Report</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 20px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            background-color: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h1, h2, h3 {
-            color: #333;
-        }
-        .summary-box {
-            background-color: #e3f2fd;
-            padding: 15px;
-            border-radius: 5px;
-            margin: 20px 0;
-        }
-        .critical { color: #d32f2f; font-weight: bold; }
-        .high { color: #f57c00; font-weight: bold; }
-        .medium { color: #fbc02d; font-weight: bold; }
-        .low { color: #388e3c; font-weight: bold; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 20px 0;
-        }
-        th, td {
-            padding: 10px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #1976d2;
-            color: white;
-        }
-        tr:hover {
-            background-color: #f5f5f5;
-        }
-        .chart-container {
-            margin: 30px 0;
-        }
-        .finding-details {
-            margin: 10px 0;
-            padding: 10px;
-            background-color: #fafafa;
-            border-left: 4px solid #1976d2;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>S3 Security and Compliance Audit Report</h1>
-        <div class="summary-box">
-            <h2>Executive Summary</h2>
-            <p><strong>Audit Date:</strong> {{ timestamp }}</p>
-            <p><strong>Region:</strong> {{ region }}</p>
-            <p><strong>Total Buckets Audited:</strong> {{ summary.total_buckets_audited }}</p>
-            <p><strong>Compliant Buckets:</strong> {{ summary.compliant_buckets }} {% if summary.total_buckets_audited > 0 %}({{ (summary.compliant_buckets / summary.total_buckets_audited * 100)|round(1) }}%){% endif %}</p>
-            <p><strong>Non-Compliant Buckets:</strong> {{ summary.non_compliant_buckets }} {% if summary.total_buckets_audited > 0 %}({{ (summary.non_compliant_buckets / summary.total_buckets_audited * 100)|round(1) }}%){% endif %}</p>
-        </div>
-
-        <h2>Compliance Overview</h2>
-        <div class="chart-container">
-            {{ compliance_chart|safe }}
-        </div>
-
-        <h2>Findings by Severity</h2>
-        <div class="chart-container">
-            {{ severity_chart|safe }}
-        </div>
-
-        <h2>Findings by Issue Type</h2>
-        <div class="chart-container">
-            {{ issue_type_chart|safe }}
-        </div>
-
-        <h2>Detailed Findings</h2>
-        <table>
-            <thead>
-                <tr>
-                    <th>Bucket Name</th>
-                    <th>Issue Type</th>
-                    <th>Severity</th>
-                    <th>Current Configuration</th>
-                    <th>Required Configuration</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for finding in findings %}
-                <tr>
-                    <td>{{ finding.bucket_name }}</td>
-                    <td>{{ finding.issue_type }}</td>
-                    <td class="{{ finding.severity.lower() }}">{{ finding.severity }}</td>
-                    <td>{{ finding.current_config }}</td>
-                    <td>{{ finding.required_config }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <h2>Framework Compliance</h2>
-        <div class="summary-box">
-            <h3>SOC2 Compliance</h3>
-            <p><strong>Compliant:</strong> {{ summary.framework_compliance.SOC2.compliant }} buckets</p>
-            <p><strong>Non-Compliant:</strong> {{ summary.framework_compliance.SOC2.non_compliant }} buckets</p>
-            
-            <h3>GDPR Compliance</h3>
-            <p><strong>Compliant:</strong> {{ summary.framework_compliance.GDPR.compliant }} buckets</p>
-            <p><strong>Non-Compliant:</strong> {{ summary.framework_compliance.GDPR.non_compliant }} buckets</p>
-        </div>
-    </div>
-</body>
-</html>'''
-
 def run_s3_security_audit():
     """Run S3 security audit"""
     # Configure logging
@@ -1085,8 +803,8 @@ def run_s3_security_audit():
         # Save HTML report
         auditor.save_html_report(findings, summary)
         
-        print(f"\n📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
-        print(f"📄 Reports saved: s3_security_audit.json, s3_audit_report.html")
+        logger.info(f"📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
+        logger.info(f"📄 Reports saved: s3_security_audit.json, s3_audit_report.html")
         
         # Exit with error code if critical findings
         if any(f.severity == CRITICAL for f in findings):
@@ -1100,36 +818,8 @@ def run_s3_security_audit():
 
 
 def main():
-    """Main function to run audits based on command line arguments."""
-    import sys
-    
-    if len(sys.argv) > 1 and sys.argv[1] == 's3':
-        # Run S3 security audit
-        return run_s3_security_audit()
-    else:
-        # Run AWS resource audit (default)
-        try:
-            # Initialize auditor (uses default region from AWS config)
-            auditor = AWSResourceAuditor()
-            
-            # Perform audit
-            audit_results = auditor.audit_resources()
-            
-            # Output results in JSON format
-            print("\nAudit Results:")
-            print(json.dumps(audit_results, indent=2, default=str))
-            
-            # Optionally save to file
-            with open('aws_audit_results.json', 'w') as f:
-                json.dump(audit_results, f, indent=2, default=str)
-            
-            print("\nAudit complete. Results saved to aws_audit_results.json")
-            
-        except Exception as e:
-            print(f"Error during audit: {e}")
-            return 1
-        
-        return 0
+    """Main function to run S3 security audit."""
+    return run_s3_security_audit()
 
 
 if __name__ == "__main__":

@@ -18,7 +18,7 @@ from analyse import S3SecurityAuditor, Finding
 class TestS3SecurityAuditor:
     """Test suite for S3SecurityAuditor class"""
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_initialization(self, mock_boto_client):
         """Test that auditor initializes correctly"""
         auditor = S3SecurityAuditor(region='us-east-1')
@@ -27,7 +27,7 @@ class TestS3SecurityAuditor:
         assert auditor.findings == []
         assert auditor.bucket_cache == {}
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_bucket_filtering(self, mock_boto_client):
         """Test bucket filtering logic"""
         mock_s3_client = MagicMock()
@@ -51,7 +51,7 @@ class TestS3SecurityAuditor:
         assert len(buckets) == 1
         assert buckets[0]['Name'] == 'old-bucket'
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_public_access_detection(self, mock_boto_client):
         """Test public access detection"""
         mock_s3_client = MagicMock()
@@ -85,7 +85,7 @@ class TestS3SecurityAuditor:
         assert auditor.findings[0].issue_type == 'PUBLIC_ACCESS'
         assert auditor.findings[0].severity == 'CRITICAL'
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_encryption_check(self, mock_boto_client):
         """Test encryption requirement detection"""
         mock_s3_client = MagicMock()
@@ -107,7 +107,7 @@ class TestS3SecurityAuditor:
         assert len(auditor.findings) == 1
         assert auditor.findings[0].issue_type == 'NO_ENCRYPTION'
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_secure_transport_check(self, mock_boto_client):
         """Test SSL/TLS enforcement detection"""
         mock_s3_client = MagicMock()
@@ -135,7 +135,7 @@ class TestS3SecurityAuditor:
         assert len(auditor.findings) == 1
         assert auditor.findings[0].issue_type == 'NO_SECURE_TRANSPORT'
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_compliance_summary(self, mock_boto_client):
         """Test compliance summary generation"""
         auditor = S3SecurityAuditor()
@@ -160,7 +160,7 @@ class TestS3SecurityAuditor:
         assert summary['findings_by_severity']['CRITICAL'] == 1
         assert summary['findings_by_severity']['HIGH'] == 1
 
-    @patch('analyse.boto3.client')
+    @patch('analyze_s3_security.boto3.client')
     def test_error_handling(self, mock_boto_client):
         """Test graceful error handling"""
         from botocore.exceptions import ClientError
