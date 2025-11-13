@@ -348,6 +348,11 @@ class TapStack(pulumi.ComponentResource):
             enabled_cloudwatch_logs_exports=["postgresql"],
             storage_encrypted=True,
             skip_final_snapshot=True,
+            availability_zones=[
+                f"{self.primary_region}a",
+                f"{self.primary_region}b",
+                f"{self.primary_region}c"
+            ],
             tags={
                 **self.common_tags,
                 "Name": f"payment-primary-cluster-{self.environment_suffix}",
@@ -390,6 +395,11 @@ class TapStack(pulumi.ComponentResource):
             enabled_cloudwatch_logs_exports=["postgresql"],
             storage_encrypted=True,
             skip_final_snapshot=True,
+            availability_zones=[
+                f"{self.dr_region}a",
+                f"{self.dr_region}b",
+                f"{self.dr_region}c"
+            ],
             tags={
                 **self.common_tags,
                 "Name": f"payment-dr-cluster-{self.environment_suffix}",
@@ -561,6 +571,7 @@ class TapStack(pulumi.ComponentResource):
                 "id": "ReplicateAll",
                 "status": "Enabled",
                 "priority": 1,
+                "filter": {},  # Required for delete_marker_replication
                 "destination": {
                     "bucket": dr_bucket.arn,
                     "storage_class": "STANDARD",
