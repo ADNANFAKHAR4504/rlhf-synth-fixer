@@ -450,10 +450,8 @@ exports.handler = async (event) => {
             "/convert"
         )
 
-        # Register outputs
-        self.register_outputs({
-            "api_url": self.api_url,
-            "api_key_id": self.api_key.id,
-            "lambda_function_name": self.lambda_function.name,
-            "api_gateway_id": self.api_gateway.id
-        })
+        # Export outputs using pulumi.export
+        pulumi.export("api_url", self.api_url)
+        pulumi.export("api_key_id", self.api_key.id)
+        pulumi.export("lambda_function_name", self.lambda_function.name)
+        pulumi.export("api_gateway_id", self.api_gateway.id)
