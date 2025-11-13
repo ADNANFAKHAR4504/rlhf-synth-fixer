@@ -633,7 +633,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
+      
+      // Assert - Lambda should return success
+      expect(result.statusCode).toBe(200);
+      
       const responseBody = JSON.parse(result.body);
+      expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
 
       // Track for cleanup
@@ -675,7 +680,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
+      
+      // Assert - Lambda should return success
+      expect(result.statusCode).toBe(200);
+      
       const responseBody = JSON.parse(result.body);
+      expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
 
       // Track for cleanup
@@ -723,7 +733,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
+      
+      // Assert - Lambda should return success
+      expect(result.statusCode).toBe(200);
+      
       const responseBody = JSON.parse(result.body);
+      expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
 
       // Track for cleanup
@@ -780,7 +795,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
+      
+      // Assert - Lambda should return success
+      expect(result.statusCode).toBe(200);
+      
       const responseBody = JSON.parse(result.body);
+      expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
 
       // Track for cleanup
@@ -1286,7 +1306,12 @@ describe('FinSecure Data Processing Pipeline - Integration Tests (Data Workflow 
       );
 
       const result = parseLambdaResponse(lambdaResponse, 'Processing Lambda');
+      
+      // Assert - Lambda should return success
+      expect(result.statusCode).toBe(200);
+      
       const responseBody = JSON.parse(result.body);
+      expect(responseBody).toHaveProperty('location');
       const s3Key = responseBody.location;
 
       // Track for cleanup
