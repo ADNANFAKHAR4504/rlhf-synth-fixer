@@ -31,7 +31,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       QueueName: !Sub 'payment-dlq-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600  # 14 days in seconds
+      MessageRetentionPeriod: 1209600 # 14 days in seconds
       SqsManagedSseEnabled: true
       Tags:
         - Key: Environment
@@ -43,7 +43,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       QueueName: !Sub 'payment-queue-${EnvironmentSuffix}'
-      VisibilityTimeout: 1800  # 6 times Lambda timeout (300s * 6 = 1800s)
+      VisibilityTimeout: 1800 # 6 times Lambda timeout (300s * 6 = 1800s)
       SqsManagedSseEnabled: true
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt PaymentDLQ.Arn
@@ -133,7 +133,6 @@ Resources:
       Role: !GetAtt PaymentProcessorRole.Arn
       MemorySize: 1024
       Timeout: 300
-      ReservedConcurrentExecutions: 100
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref PaymentTransactionsTable
@@ -429,6 +428,7 @@ aws sqs get-queue-attributes \
 ### Test 5: Verify IAM Permissions
 
 The Lambda function has been tested with:
+
 - Reading messages from SQS queue (ReceiveMessage, DeleteMessage, GetQueueAttributes)
 - Writing records to DynamoDB table (PutItem, UpdateItem)
 - Creating CloudWatch log streams and events (CreateLogGroup, CreateLogStream, PutLogEvents)

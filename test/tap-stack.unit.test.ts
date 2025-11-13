@@ -82,7 +82,6 @@ describe('TapStack CloudFormation Template', () => {
         Handler: 'index.lambda_handler',
         MemorySize: 1024,
         Timeout: 300,
-        ReservedConcurrentExecutions: 100,
         Environment: Match.objectLike({
           Variables: Match.objectLike({
             DYNAMODB_TABLE_NAME: Match.anyValue(),

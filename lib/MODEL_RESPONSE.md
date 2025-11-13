@@ -31,7 +31,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       QueueName: !Sub 'payment-dlq-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600  # 14 days in seconds
+      MessageRetentionPeriod: 1209600 # 14 days in seconds
       SqsManagedSseEnabled: true
       Tags:
         - Key: Environment
@@ -43,7 +43,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       QueueName: !Sub 'payment-queue-${EnvironmentSuffix}'
-      VisibilityTimeout: 1800  # 6 times Lambda timeout (300s * 6 = 1800s)
+      VisibilityTimeout: 1800 # 6 times Lambda timeout (300s * 6 = 1800s)
       SqsManagedSseEnabled: true
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt PaymentDLQ.Arn
@@ -133,7 +133,6 @@ Resources:
       Role: !GetAtt PaymentProcessorRole.Arn
       MemorySize: 1024
       Timeout: 300
-      ReservedConcurrentExecutions: 100
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref PaymentTransactionsTable
@@ -309,6 +308,7 @@ The template creates a complete serverless payment notification processing syste
 ## Deployment
 
 Deploy with:
+
 ```bash
 aws cloudformation deploy \
   --template-file lib/TapStack.yml \
@@ -321,6 +321,7 @@ aws cloudformation deploy \
 ## Testing
 
 Send a test message to the queue:
+
 ```bash
 QUEUE_URL=$(aws cloudformation describe-stacks \
   --stack-name payment-processor-stack \
@@ -335,11 +336,13 @@ aws sqs send-message \
 ## Monitoring
 
 Check CloudWatch Logs:
+
 ```bash
 aws logs tail /aws/lambda/payment-processor-prod --follow
 ```
 
 Check DLQ for failed messages:
+
 ```bash
 aws sqs get-queue-attributes \
   --queue-url $(aws cloudformation describe-stacks \

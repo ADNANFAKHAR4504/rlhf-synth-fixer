@@ -24,7 +24,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       QueueName: !Sub 'payment-dlq-${EnvironmentSuffix}'
-      MessageRetentionPeriod: 1209600  # 14 days in seconds
+      MessageRetentionPeriod: 1209600 # 14 days in seconds
       SqsManagedSseEnabled: true
       Tags:
         - Key: Environment
@@ -36,7 +36,7 @@ Resources:
     DeletionPolicy: Delete
     Properties:
       QueueName: !Sub 'payment-queue-${EnvironmentSuffix}'
-      VisibilityTimeout: 1800  # 6 times Lambda timeout (300s * 6 = 1800s)
+      VisibilityTimeout: 1800 # 6 times Lambda timeout (300s * 6 = 1800s)
       SqsManagedSseEnabled: true
       RedrivePolicy:
         deadLetterTargetArn: !GetAtt PaymentDLQ.Arn
@@ -126,7 +126,6 @@ Resources:
       Role: !GetAtt PaymentProcessorRole.Arn
       MemorySize: 1024
       Timeout: 300
-      ReservedConcurrentExecutions: 100
       Environment:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref PaymentTransactionsTable
@@ -137,6 +136,7 @@ Resources:
           import os
           import boto3
           from datetime import datetime
+          from decimal import Decimal
           import logging
 
           # Configure logging
@@ -147,6 +147,16 @@ Resources:
           dynamodb = boto3.resource('dynamodb')
           table_name = os.environ['DYNAMODB_TABLE_NAME']
           table = dynamodb.Table(table_name)
+
+          def convert_to_decimal(obj):
+              """Convert float values to Decimal for DynamoDB compatibility"""
+              if isinstance(obj, float):
+                  return Decimal(str(obj))
+              elif isinstance(obj, dict):
+                  return {k: convert_to_decimal(v) for k, v in obj.items()}
+              elif isinstance(obj, list):
+                  return [convert_to_decimal(i) for i in obj]
+              return obj
 
           def lambda_handler(event, context):
               """
@@ -173,7 +183,7 @@ Resources:
                       # Prepare item for DynamoDB
                       item = {
                           'transactionId': transaction_id,
-                          'amount': message_body.get('amount', 0),
+                          'amount': convert_to_decimal(message_body.get('amount', 0)),
                           'currency': message_body.get('currency', 'USD'),
                           'status': message_body.get('status', 'pending'),
                           'paymentMethod': message_body.get('paymentMethod', 'unknown'),
