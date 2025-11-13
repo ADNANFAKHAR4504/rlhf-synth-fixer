@@ -91,32 +91,26 @@ class NetworkingInfrastructure(Construct):
             )
             self.private_subnets.append(subnet)
 
-        # Create EIPs for NAT Gateways
-        nat_eips = []
-        for i in range(3):
-            eip = Eip(
-                self,
-                f"nat_eip_{i}",
-                domain="vpc",
-                tags={
-                    "Name": f"payment-nat-eip-{i+1}-{environment_suffix}",
-                },
-            )
-            nat_eips.append(eip)
+        # Create single EIP for NAT Gateway (to avoid EIP limit)
+        nat_eip = Eip(
+            self,
+            "nat_eip",
+            domain="vpc",
+            tags={
+                "Name": f"payment-nat-eip-{environment_suffix}",
+            },
+        )
 
-        # Create NAT Gateways in public subnets
-        nat_gateways = []
-        for i in range(3):
-            nat = NatGateway(
-                self,
-                f"nat_gateway_{i}",
-                allocation_id=nat_eips[i].id,
-                subnet_id=self.public_subnets[i].id,
-                tags={
-                    "Name": f"payment-nat-{i+1}-{environment_suffix}",
-                },
-            )
-            nat_gateways.append(nat)
+        # Create single NAT Gateway in first public subnet (cost optimization)
+        nat_gateway = NatGateway(
+            self,
+            "nat_gateway",
+            allocation_id=nat_eip.id,
+            subnet_id=self.public_subnets[0].id,
+            tags={
+                "Name": f"payment-nat-{environment_suffix}",
+            },
+        )
 
         # Create public route table
         public_rt = RouteTable(
@@ -143,23 +137,24 @@ class NetworkingInfrastructure(Construct):
                 route_table_id=public_rt.id,
             )
 
-        # Create private route tables (one per AZ for NAT Gateway)
-        for i, subnet in enumerate(self.private_subnets):
-            private_rt = RouteTable(
-                self,
-                f"private_route_table_{i}",
-                vpc_id=self.vpc.id,
-                route=[
-                    RouteTableRoute(
-                        cidr_block="0.0.0.0/0",
-                        nat_gateway_id=nat_gateways[i].id,
-                    )
-                ],
-                tags={
-                    "Name": f"payment-private-rt-{i+1}-{environment_suffix}",
-                },
-            )
+        # Create single private route table for all private subnets
+        private_rt = RouteTable(
+            self,
+            "private_route_table",
+            vpc_id=self.vpc.id,
+            route=[
+                RouteTableRoute(
+                    cidr_block="0.0.0.0/0",
+                    nat_gateway_id=nat_gateway.id,
+                )
+            ],
+            tags={
+                "Name": f"payment-private-rt-{environment_suffix}",
+            },
+        )
 
+        # Associate all private subnets with the single private route table
+        for i, subnet in enumerate(self.private_subnets):
             RouteTableAssociation(
                 self,
                 f"private_rt_assoc_{i}",

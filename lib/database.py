@@ -46,6 +46,7 @@ class DatabaseInfrastructure(Construct):
         )
 
         # DB Parameter Group for PostgreSQL
+        # Note: 'ssl' parameter cannot be modified in RDS, it's controlled by rds.force_ssl
         db_param_group = DbParameterGroup(
             self,
             "db_param_group",
@@ -54,15 +55,15 @@ class DatabaseInfrastructure(Construct):
             description="Custom parameter group for payment processing database",
             parameter=[
                 {
-                    "name": "ssl",
-                    "value": "1",
-                },
-                {
                     "name": "log_connections",
                     "value": "1",
                 },
                 {
                     "name": "log_disconnections",
+                    "value": "1",
+                },
+                {
+                    "name": "rds.force_ssl",
                     "value": "1",
                 },
             ],

@@ -98,11 +98,10 @@ class TestPaymentProcessingStack:
         assert synth.count("payment-private-subnet") >= 3
 
     def test_nat_gateways_created(self, synth):
-        """Test that NAT Gateways are created."""
-        # Check NAT Gateways exist
+        """Test that NAT Gateway is created."""
+        # Check NAT Gateway exists (single NAT for cost optimization)
         assert "aws_nat_gateway" in synth
-        # Should have 3 NAT Gateways (one per AZ)
-        assert synth.count("payment-nat-") >= 3
+        assert "payment-nat-" in synth
 
     def test_stack_outputs(self, synth):
         """Test that stack has required outputs."""

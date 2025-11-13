@@ -13,6 +13,7 @@ from cdktf_cdktf_provider_aws.launch_template import (
     LaunchTemplateIamInstanceProfile,
     LaunchTemplateMonitoring,
     LaunchTemplateMetadataOptions,
+    LaunchTemplateTagSpecifications,
 )
 from cdktf_cdktf_provider_aws.autoscaling_group import (
     AutoscalingGroup,
@@ -265,13 +266,13 @@ echo "Application setup complete"
                 http_put_response_hop_limit=1,
             ),
             tag_specifications=[
-                {
-                    "resource_type": "instance",
-                    "tags": {
+                LaunchTemplateTagSpecifications(
+                    resource_type="instance",
+                    tags={
                         "Name": f"payment-app-{environment_suffix}",
                         "Environment": environment_suffix,
                     },
-                }
+                )
             ],
         )
 
