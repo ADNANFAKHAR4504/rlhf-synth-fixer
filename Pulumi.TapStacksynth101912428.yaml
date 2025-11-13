@@ -1,4 +1,0 @@
-encryptionsalt: v1:ehP2WJJLaXM=:v1:6f/aZNqJ+4TNj5aT:IdvuYI3HYLCBMxrwdecH79d2OBlLHg==
-config:
-  pulumi-infra:environmentSuffix: synth101912428
-  pulumi-infra:region: us-east-1
