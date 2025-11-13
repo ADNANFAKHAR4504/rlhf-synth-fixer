@@ -7,7 +7,9 @@
   "team": "synth",
   "startedAt": "2025-11-13T03:17:00+05:30",
   "subtask": "Failure Recovery Automation",
-  "subject_labels": ["Failure Recovery"],
+  "subject_labels": [
+    "Failure Recovery"
+  ],
   "aws_services": [
     "vpc",
     "ec2",
@@ -20,5 +22,11 @@
     "sns",
     "iam"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
