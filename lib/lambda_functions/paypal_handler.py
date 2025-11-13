@@ -3,11 +3,6 @@ import boto3
 import os
 import logging
 from datetime import datetime
-from aws_xray_sdk.core import xray_recorder
-from aws_xray_sdk.core import patch_all
-
-# Patch AWS services for X-Ray tracing
-patch_all()
 
 # Configure logging
 logger = logging.getLogger()
