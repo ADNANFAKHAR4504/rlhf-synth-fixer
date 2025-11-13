@@ -34,8 +34,8 @@ resource "aws_security_group" "alb" {
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-alb-sg"
-    Type      = "security-group"
+    Name = "${var.environment}-${var.project_name}-alb-sg"
+    Type = "security-group"
     Component = "alb"
   })
 
@@ -49,7 +49,7 @@ resource "aws_security_group" "web" {
   name_prefix = "${var.environment}-${var.project_name}-web-"
   vpc_id      = var.vpc_id
   description = "Security group for web servers"
-
+  
   # Custom application port from ALB
   ingress {
     description     = "HTTP from ALB"
@@ -90,8 +90,8 @@ resource "aws_security_group" "web" {
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-web-sg"
-    Type      = "security-group"
+    Name = "${var.environment}-${var.project_name}-web-sg"
+    Type = "security-group"
     Component = "web"
   })
 
@@ -128,8 +128,8 @@ resource "aws_security_group" "database" {
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-db-sg"
-    Type      = "security-group"
+    Name = "${var.environment}-${var.project_name}-db-sg"
+    Type = "security-group"
     Component = "database"
   })
 
@@ -165,8 +165,8 @@ resource "aws_security_group" "bastion" {
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-bastion-sg"
-    Type      = "security-group"
+    Name = "${var.environment}-${var.project_name}-bastion-sg"
+    Type = "security-group"
     Component = "bastion"
   })
 
@@ -193,8 +193,8 @@ resource "aws_iam_role" "ec2_role" {
   })
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-ec2-role"
-    Type      = "iam-role"
+    Name = "${var.environment}-${var.project_name}-ec2-role"
+    Type = "iam-role"
     Component = "ec2"
   })
 }
@@ -253,8 +253,8 @@ resource "aws_iam_instance_profile" "ec2_profile" {
   role = aws_iam_role.ec2_role.name
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-ec2-profile"
-    Type      = "iam-instance-profile"
+    Name = "${var.environment}-${var.project_name}-ec2-profile"
+    Type = "iam-instance-profile"
     Component = "ec2"
   })
 }

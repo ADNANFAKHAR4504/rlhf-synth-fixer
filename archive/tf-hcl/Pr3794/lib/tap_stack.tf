@@ -42,7 +42,7 @@ data "aws_caller_identity" "current" {}
 locals {
   # Generate random suffix for unique naming
   random_suffix = lower(substr(uuid(), 0, 4))
-
+  
   # Common tags for all resources
   common_tags = {
     Environment = var.environment
@@ -50,10 +50,10 @@ locals {
     Region      = var.region
     Timestamp   = timestamp()
   }
-
+  
   # Availability zones (using first 3 available)
   azs = slice(data.aws_availability_zones.available.names, 0, 3)
-
+  
   # Subnet CIDR calculations
   public_subnet_cidrs  = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i)]
   private_subnet_cidrs = [for i in range(2) : cidrsubnet(var.vpc_cidr, 8, i + 100)]
@@ -83,7 +83,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "vpc-main-${local.random_suffix}"
   })
@@ -92,7 +92,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
+  
   tags = merge(local.common_tags, {
     Name = "igw-main-${local.random_suffix}"
   })
@@ -102,11 +102,11 @@ resource "aws_internet_gateway" "main" {
 resource "aws_eip" "nat" {
   count  = 2
   domain = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "eip-nat-${count.index}-${local.random_suffix}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -117,7 +117,7 @@ resource "aws_subnet" "public" {
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "subnet-public-${count.index}-${local.random_suffix}"
     Type = "Public"
@@ -130,7 +130,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = local.private_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-
+  
   tags = merge(local.common_tags, {
     Name = "subnet-private-${count.index}-${local.random_suffix}"
     Type = "Private"
@@ -142,23 +142,23 @@ resource "aws_nat_gateway" "main" {
   count         = 2
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "nat-gateway-${count.index}-${local.random_suffix}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # Route Table for Public Subnets
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "rt-public-${local.random_suffix}"
   })
@@ -168,12 +168,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "rt-private-${count.index}-${local.random_suffix}"
   })
@@ -199,7 +199,7 @@ resource "aws_security_group" "rds" {
   name        = "sg-rds-${local.random_suffix}"
   description = "Security group for RDS database"
   vpc_id      = aws_vpc.main.id
-
+  
   ingress {
     description = "MySQL/Aurora from VPC"
     from_port   = 3306
@@ -207,7 +207,7 @@ resource "aws_security_group" "rds" {
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -215,7 +215,7 @@ resource "aws_security_group" "rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "sg-rds-${local.random_suffix}"
   })
@@ -226,7 +226,7 @@ resource "aws_security_group" "ec2" {
   name        = "sg-ec2-${local.random_suffix}"
   description = "Security group for EC2 instances"
   vpc_id      = aws_vpc.main.id
-
+  
   # SSH access from specific CIDR only (not 0.0.0.0/0)
   ingress {
     description = "SSH from specific CIDR"
@@ -235,7 +235,7 @@ resource "aws_security_group" "ec2" {
     protocol    = "tcp"
     cidr_blocks = var.ssh_allowed_cidr
   }
-
+  
   # HTTP access
   ingress {
     description = "HTTP from VPC"
@@ -244,7 +244,7 @@ resource "aws_security_group" "ec2" {
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
-
+  
   # HTTPS access
   ingress {
     description = "HTTPS from VPC"
@@ -253,7 +253,7 @@ resource "aws_security_group" "ec2" {
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
-
+  
   egress {
     description = "Allow all outbound"
     from_port   = 0
@@ -261,7 +261,7 @@ resource "aws_security_group" "ec2" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "sg-ec2-${local.random_suffix}"
   })
@@ -271,7 +271,7 @@ resource "aws_security_group" "ec2" {
 # S3 Bucket with encryption and versioning
 resource "aws_s3_bucket" "main" {
   bucket = "s3-bucket-${local.random_suffix}"
-
+  
   tags = merge(local.common_tags, {
     Name = "s3-bucket-${local.random_suffix}"
   })
@@ -280,7 +280,7 @@ resource "aws_s3_bucket" "main" {
 # Block public access to S3 bucket
 resource "aws_s3_bucket_public_access_block" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -290,7 +290,7 @@ resource "aws_s3_bucket_public_access_block" "main" {
 # Enable versioning for S3 bucket
 resource "aws_s3_bucket_versioning" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -299,7 +299,7 @@ resource "aws_s3_bucket_versioning" "main" {
 # Server-side encryption for S3 bucket (AES-256)
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -311,7 +311,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 # IAM Role for EC2 instances (least privilege)
 resource "aws_iam_role" "ec2_role" {
   name = "role-ec2-${local.random_suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -324,7 +324,7 @@ resource "aws_iam_role" "ec2_role" {
       }
     ]
   })
-
+  
   tags = merge(local.common_tags, {
     Name = "role-ec2-${local.random_suffix}"
   })
@@ -334,7 +334,7 @@ resource "aws_iam_role" "ec2_role" {
 resource "aws_iam_role_policy" "ec2_s3_read" {
   name = "policy-ec2-s3-read-${local.random_suffix}"
   role = aws_iam_role.ec2_role.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -356,7 +356,7 @@ resource "aws_iam_role_policy" "ec2_s3_read" {
 # IAM Role for RDS Enhanced Monitoring
 resource "aws_iam_role" "rds_monitoring" {
   name = "role-rds-monitoring-${local.random_suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -369,7 +369,7 @@ resource "aws_iam_role" "rds_monitoring" {
       }
     ]
   })
-
+  
   tags = merge(local.common_tags, {
     Name = "role-rds-monitoring-${local.random_suffix}"
   })
@@ -386,7 +386,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 resource "aws_secretsmanager_secret" "rds_credentials" {
   name                    = "rds-credentials-${local.random_suffix}"
   recovery_window_in_days = 7
-
+  
   tags = merge(local.common_tags, {
     Name = "rds-credentials-${local.random_suffix}"
   })
@@ -394,7 +394,7 @@ resource "aws_secretsmanager_secret" "rds_credentials" {
 
 resource "aws_secretsmanager_secret_version" "rds_credentials" {
   secret_id = aws_secretsmanager_secret.rds_credentials.id
-
+  
   secret_string = jsonencode({
     username = "a${random_string.rds_master_username.result}"
     password = random_password.rds_master_password.result
@@ -406,7 +406,7 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 resource "aws_db_subnet_group" "main" {
   name       = "db-subnet-group-${local.random_suffix}"
   subnet_ids = aws_subnet.private[*].id
-
+  
   tags = merge(local.common_tags, {
     Name = "db-subnet-group-${local.random_suffix}"
   })
@@ -415,45 +415,45 @@ resource "aws_db_subnet_group" "main" {
 # RDS Instance with Multi-AZ
 resource "aws_db_instance" "main" {
   identifier = "rds-instance-${local.random_suffix}"
-
+  
   # Database settings
-  engine            = "mysql"
-  engine_version    = "8.0"
-  instance_class    = var.db_instance_class
-  allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
-
+  engine               = "mysql"
+  engine_version       = "8.0"
+  instance_class       = var.db_instance_class
+  allocated_storage    = 20
+  storage_type         = "gp3"
+  storage_encrypted    = true
+  
   # Credentials
   db_name  = "maindb"
   username = "a${random_string.rds_master_username.result}"
   password = random_password.rds_master_password.result
-
+  
   # Network settings
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
-
+  
   # High availability
   multi_az = true
-
+  
   # Backup settings
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Updates
   auto_minor_version_upgrade = true
-
+  
   # Monitoring
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
   monitoring_interval             = 60
-  monitoring_role_arn             = aws_iam_role.rds_monitoring.arn
-
+  monitoring_role_arn            = aws_iam_role.rds_monitoring.arn
+  
   # Protection settings
   skip_final_snapshot = true
   deletion_protection = false
-
+  
   tags = merge(local.common_tags, {
     Name = "rds-instance-${local.random_suffix}"
   })
@@ -463,7 +463,7 @@ resource "aws_db_instance" "main" {
 # S3 Bucket for CloudTrail logs
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "cloudtrail-logs-${local.random_suffix}"
-
+  
   tags = merge(local.common_tags, {
     Name = "cloudtrail-logs-${local.random_suffix}"
   })
@@ -472,7 +472,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 # Block public access to CloudTrail bucket
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -482,7 +482,7 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 # Bucket policy for CloudTrail
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -516,25 +516,25 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 # CloudTrail
 resource "aws_cloudtrail" "main" {
   name                          = "cloudtrail-main-${local.random_suffix}"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name               = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
-
+  is_multi_region_trail        = true
+  enable_logging               = true
+  
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
+    
     data_resource {
       type   = "AWS::S3::Object"
       values = ["arn:aws:s3:::*/*"]
     }
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "cloudtrail-main-${local.random_suffix}"
   })
-
+  
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 }
 
@@ -542,7 +542,7 @@ resource "aws_cloudtrail" "main" {
 # S3 Bucket for Config
 resource "aws_s3_bucket" "config" {
   bucket = "aws-config-${local.random_suffix}"
-
+  
   tags = merge(local.common_tags, {
     Name = "aws-config-${local.random_suffix}"
   })
@@ -551,7 +551,7 @@ resource "aws_s3_bucket" "config" {
 # Block public access to Config bucket
 resource "aws_s3_bucket_public_access_block" "config" {
   bucket = aws_s3_bucket.config.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -561,7 +561,7 @@ resource "aws_s3_bucket_public_access_block" "config" {
 # IAM Role for Config
 resource "aws_iam_role" "config" {
   name = "role-config-${local.random_suffix}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -574,7 +574,7 @@ resource "aws_iam_role" "config" {
       }
     ]
   })
-
+  
   tags = merge(local.common_tags, {
     Name = "role-config-${local.random_suffix}"
   })
@@ -584,7 +584,7 @@ resource "aws_iam_role" "config" {
 resource "aws_iam_role_policy" "config" {
   name = "policy-config-${local.random_suffix}"
   role = aws_iam_role.config.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -634,7 +634,7 @@ resource "aws_iam_role_policy" "config" {
 # Bucket policy for Config
 resource "aws_s3_bucket_policy" "config" {
   bucket = aws_s3_bucket.config.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -678,12 +678,12 @@ resource "aws_s3_bucket_policy" "config" {
 resource "aws_config_configuration_recorder" "main" {
   name     = "config-recorder-${local.random_suffix}"
   role_arn = aws_iam_role.config.arn
-
+  
   recording_group {
     all_supported                 = true
     include_global_resource_types = true
   }
-
+  
   depends_on = [aws_config_delivery_channel.main]
 }
 
@@ -697,7 +697,7 @@ resource "aws_config_delivery_channel" "main" {
 resource "aws_config_configuration_recorder_status" "main" {
   name       = aws_config_configuration_recorder.main.name
   is_enabled = true
-
+  
   depends_on = [aws_config_delivery_channel.main]
 }
 
@@ -705,60 +705,60 @@ resource "aws_config_configuration_recorder_status" "main" {
 # Rule 1: Check if S3 buckets are encrypted
 resource "aws_config_config_rule" "s3_bucket_encryption" {
   name = "s3-bucket-encryption-${local.random_suffix}"
-
+  
   source {
     owner             = "AWS"
     source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
   }
-
+  
   depends_on = [aws_config_configuration_recorder.main]
 }
 
 # Rule 2: Check if RDS instances are encrypted
 resource "aws_config_config_rule" "rds_encryption" {
   name = "rds-encryption-${local.random_suffix}"
-
+  
   source {
     owner             = "AWS"
     source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
-
+  
   depends_on = [aws_config_configuration_recorder.main]
 }
 
 # Rule 3: Check if RDS instances are not publicly accessible
 resource "aws_config_config_rule" "rds_public_access" {
   name = "rds-public-access-${local.random_suffix}"
-
+  
   source {
     owner             = "AWS"
     source_identifier = "RDS_INSTANCE_PUBLIC_ACCESS_CHECK"
   }
-
+  
   depends_on = [aws_config_configuration_recorder.main]
 }
 
 # Rule 4: Check if MFA is enabled for IAM users
 resource "aws_config_config_rule" "iam_mfa" {
   name = "iam-mfa-enabled-${local.random_suffix}"
-
+  
   source {
     owner             = "AWS"
     source_identifier = "MFA_ENABLED_FOR_IAM_CONSOLE_ACCESS"
   }
-
+  
   depends_on = [aws_config_configuration_recorder.main]
 }
 
 # Rule 5: Check if CloudTrail is enabled
 resource "aws_config_config_rule" "cloudtrail_enabled" {
   name = "cloudtrail-enabled-${local.random_suffix}"
-
+  
   source {
     owner             = "AWS"
     source_identifier = "CLOUD_TRAIL_ENABLED"
   }
-
+  
   depends_on = [aws_config_configuration_recorder.main]
 }
 

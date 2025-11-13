@@ -22,7 +22,7 @@ desired_capacity = 1
 # DATABASE CONFIGURATION
 # ================================
 
-db_engine                = "postgres"
+db_engine                 = "postgres"
 db_engine_version        = "15.10"
 db_instance_class        = "db.t3.micro"
 db_allocated_storage     = 20
@@ -34,7 +34,7 @@ db_maintenance_window    = "sun:04:00-sun:05:00"
 # SECURITY CONFIGURATION
 # ================================
 
-allowed_cidr_blocks  = ["0.0.0.0/0"] # Open for development testing
+allowed_cidr_blocks  = ["0.0.0.0/0"]  # Open for development testing
 enable_vpc_flow_logs = true
 
 # ================================

@@ -64,7 +64,7 @@ locals {
   }
 
   vpc_cidr = "10.0.0.0/16"
-
+  
   # Subnet CIDRs
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
@@ -210,7 +210,7 @@ resource "aws_subnet" "database" {
 resource "aws_eip" "nat" {
   count = length(local.public_subnet_cidrs)
 
-  domain     = "vpc"
+  domain = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -575,11 +575,11 @@ resource "aws_db_instance" "main" {
 
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   # High availability and updates
-  multi_az                   = true
+  multi_az               = true
   auto_minor_version_upgrade = true
 
   # Monitoring and logging
@@ -676,8 +676,8 @@ resource "aws_s3_bucket_policy" "static_content" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "AllowCloudFrontAccess"
-        Effect = "Allow"
+        Sid       = "AllowCloudFrontAccess"
+        Effect    = "Allow"
         Principal = {
           AWS = aws_iam_role.ec2_role.arn
         }
@@ -803,10 +803,10 @@ resource "aws_launch_template" "main" {
 }
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${var.project_name}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "${var.project_name}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.min_size
@@ -814,7 +814,7 @@ resource "aws_autoscaling_group" "main" {
   desired_capacity = var.desired_capacity
 
   launch_template {
-    id      = aws_launch_template.main.id
+id      = aws_launch_template.main.id
     version = "$Latest"
   }
 
@@ -1115,8 +1115,8 @@ resource "aws_cloudtrail" "main" {
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
-    read_write_type                  = "All"
-    include_management_events        = true
+    read_write_type                 = "All"
+    include_management_events       = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -1134,8 +1134,8 @@ resource "aws_cloudtrail" "main" {
 
 # Systems Manager Document for Patching
 resource "aws_ssm_document" "patch_document" {
-  name            = "${var.project_name}-patch-document"
-  document_type   = "Command"
+  name          = "${var.project_name}-patch-document"
+  document_type = "Command"
   document_format = "YAML"
 
   content = <<DOC
@@ -1186,14 +1186,14 @@ resource "aws_ssm_maintenance_window_target" "main" {
 
 # Systems Manager Maintenance Window Task
 resource "aws_ssm_maintenance_window_task" "main" {
-  max_concurrency = "1"
-  max_errors      = "0"
-  priority        = 1
-  task_arn        = aws_ssm_document.patch_document.name
-  task_type       = "RUN_COMMAND"
-  window_id       = aws_ssm_maintenance_window.main.id
-  name            = "${var.project_name}-maintenance-task"
-  description     = "Run automated maintenance"
+  max_concurrency  = "1"
+  max_errors       = "0"
+  priority         = 1
+  task_arn         = aws_ssm_document.patch_document.name
+  task_type        = "RUN_COMMAND"
+  window_id        = aws_ssm_maintenance_window.main.id
+  name             = "${var.project_name}-maintenance-task"
+  description      = "Run automated maintenance"
 
   targets {
     key    = "WindowTargetIds"

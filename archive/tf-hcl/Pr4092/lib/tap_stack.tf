@@ -734,7 +734,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
         Principal = {
           AWS = "*"
         }
-        Action   = "s3:PutObject"
+        Action = "s3:PutObject"
         Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
         Condition = {
           StringNotEquals = {
@@ -1210,11 +1210,11 @@ resource "aws_lambda_function" "compliance_check" {
 
   environment {
     variables = {
-      SNS_TOPIC_ARN   = aws_sns_topic.security_alerts.arn
-      CLOUDTRAIL_NAME = aws_cloudtrail.main.name
-      VPC_ID          = aws_vpc.main.id
-      ENVIRONMENT     = var.environment
-      APPLICATION     = var.application
+      SNS_TOPIC_ARN       = aws_sns_topic.security_alerts.arn
+      CLOUDTRAIL_NAME     = aws_cloudtrail.main.name
+      VPC_ID              = aws_vpc.main.id
+      ENVIRONMENT         = var.environment
+      APPLICATION         = var.application
     }
   }
 

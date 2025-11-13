@@ -114,7 +114,7 @@ locals {
   # Subnet CIDR calculations
   primary_public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-
+  
   secondary_public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnet_cidrs = ["10.1.10.0/24", "10.1.11.0/24"]
 }
@@ -161,7 +161,7 @@ resource "random_password" "rds_password_secondary" {
 
 resource "aws_vpc" "primary" {
   provider             = aws.us_west_2
-  cidr_block           = local.primary_vpc_cidr
+  cidr_block          = local.primary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -385,9 +385,9 @@ resource "aws_db_subnet_group" "primary" {
 
 # RDS Instance for Primary Region
 resource "aws_db_instance" "primary" {
-  provider                   = aws.us_west_2
-  identifier                 = "${local.primary_prefix}-rds"
-  engine                     = "mysql"
+  provider                    = aws.us_west_2
+  identifier                  = "${local.primary_prefix}-rds"
+  engine                      = "mysql"
   engine_version             = "8.0"
   instance_class             = var.db_instance_class
   allocated_storage          = 20
@@ -547,10 +547,10 @@ resource "aws_lb" "primary" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.primary_alb.id]
-  subnets            = aws_subnet.primary_public[*].id
+  subnets           = aws_subnet.primary_public[*].id
 
   enable_deletion_protection = false
-  enable_http2               = true
+  enable_http2              = true
 
   tags = merge(local.common_tags, {
     Name = "${local.primary_prefix}-alb"
@@ -595,9 +595,9 @@ resource "aws_lb_listener" "primary" {
 
 resource "aws_launch_template" "primary" {
   provider               = aws.us_west_2
-  name_prefix            = "${local.primary_prefix}-lt"
-  image_id               = data.aws_ami.amazon_linux_2_primary.id
-  instance_type          = var.ec2_instance_type
+  name_prefix           = "${local.primary_prefix}-lt"
+  image_id              = data.aws_ami.amazon_linux_2_primary.id
+  instance_type         = var.ec2_instance_type
   vpc_security_group_ids = [aws_security_group.primary_ec2.id]
 
   iam_instance_profile {
@@ -623,15 +623,15 @@ resource "aws_launch_template" "primary" {
 }
 
 resource "aws_autoscaling_group" "primary" {
-  provider                  = aws.us_west_2
-  name_prefix               = "${local.primary_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.primary_private[*].id
-  target_group_arns         = [aws_lb_target_group.primary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_west_2
+  name_prefix         = "${local.primary_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.primary_private[*].id
+  target_group_arns   = [aws_lb_target_group.primary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size                  = 2
-  max_size                  = 4
-  desired_capacity          = 2
+  min_size            = 2
+  max_size            = 4
+  desired_capacity    = 2
 
   launch_template {
     id      = aws_launch_template.primary.id
@@ -653,7 +653,7 @@ resource "aws_autoscaling_group" "primary" {
 
 resource "aws_vpc" "secondary" {
   provider             = aws.eu_west_1
-  cidr_block           = local.secondary_vpc_cidr
+  cidr_block          = local.secondary_vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
@@ -877,9 +877,9 @@ resource "aws_db_subnet_group" "secondary" {
 
 # RDS Instance for Secondary Region
 resource "aws_db_instance" "secondary" {
-  provider                   = aws.eu_west_1
-  identifier                 = "${local.secondary_prefix}-rds"
-  engine                     = "mysql"
+  provider                    = aws.eu_west_1
+  identifier                  = "${local.secondary_prefix}-rds"
+  engine                      = "mysql"
   engine_version             = "8.0"
   instance_class             = var.db_instance_class
   allocated_storage          = 20
@@ -1039,10 +1039,10 @@ resource "aws_lb" "secondary" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.secondary_alb.id]
-  subnets            = aws_subnet.secondary_public[*].id
+  subnets           = aws_subnet.secondary_public[*].id
 
   enable_deletion_protection = false
-  enable_http2               = true
+  enable_http2              = true
 
   tags = merge(local.common_tags, {
     Name = "${local.secondary_prefix}-alb"
@@ -1087,9 +1087,9 @@ resource "aws_lb_listener" "secondary" {
 
 resource "aws_launch_template" "secondary" {
   provider               = aws.eu_west_1
-  name_prefix            = "${local.secondary_prefix}-lt"
-  image_id               = data.aws_ami.amazon_linux_2_secondary.id
-  instance_type          = var.ec2_instance_type
+  name_prefix           = "${local.secondary_prefix}-lt"
+  image_id              = data.aws_ami.amazon_linux_2_secondary.id
+  instance_type         = var.ec2_instance_type
   vpc_security_group_ids = [aws_security_group.secondary_ec2.id]
 
   iam_instance_profile {
@@ -1115,15 +1115,15 @@ resource "aws_launch_template" "secondary" {
 }
 
 resource "aws_autoscaling_group" "secondary" {
-  provider                  = aws.eu_west_1
-  name_prefix               = "${local.secondary_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
-  target_group_arns         = [aws_lb_target_group.secondary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.eu_west_1
+  name_prefix         = "${local.secondary_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.secondary_private[*].id
+  target_group_arns   = [aws_lb_target_group.secondary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-  min_size                  = 2
-  max_size                  = 4
-  desired_capacity          = 2
+  min_size            = 2
+  max_size            = 4
+  desired_capacity    = 2
 
   launch_template {
     id      = aws_launch_template.secondary.id

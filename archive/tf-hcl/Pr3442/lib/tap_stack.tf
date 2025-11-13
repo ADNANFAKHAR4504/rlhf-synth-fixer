@@ -138,8 +138,8 @@ resource "aws_s3_bucket_policy" "logs_policy" {
         }
       },
       {
-        Sid    = "AllowCloudFrontLogging"
-        Effect = "Allow"
+        Sid       = "AllowCloudFrontLogging"
+        Effect    = "Allow"
         Principal = {
           Service = "cloudfront.amazonaws.com"
         }

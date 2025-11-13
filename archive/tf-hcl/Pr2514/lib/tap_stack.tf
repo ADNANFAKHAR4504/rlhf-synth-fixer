@@ -644,8 +644,8 @@ resource "aws_db_subnet_group" "main" {
 
 # Random password for RDS - exclude characters not allowed by RDS
 resource "random_password" "db_password" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 
@@ -777,7 +777,7 @@ resource "aws_lb_listener" "web_http" {
   default_action {
     type             = var.domain_name != "" ? "redirect" : "forward"
     target_group_arn = var.domain_name == "" ? aws_lb_target_group.web.arn : null
-
+    
     dynamic "redirect" {
       for_each = var.domain_name != "" ? [1] : []
       content {

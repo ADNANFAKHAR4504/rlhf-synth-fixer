@@ -48,7 +48,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "logs" {
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
-      kms_master_key_id = aws_kms_key.logs.arn
+      kms_master_key_id = aws_kms_key.logs.arn  
     }
     bucket_key_enabled = true
   }
@@ -163,7 +163,7 @@ data "aws_iam_policy_document" "kms_policy" {
     sid    = "AllowLogsAndCloudTrailUse"
     effect = "Allow"
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = [
         "logs.${var.region}.amazonaws.com",
         "cloudtrail.amazonaws.com"
@@ -200,7 +200,7 @@ data "aws_iam_policy_document" "logs_bucket" {
       type        = "Service"
       identifiers = ["cloudtrail.amazonaws.com"]
     }
-    actions = ["s3:PutObject"]
+    actions  = ["s3:PutObject"]
     resources = [
       "${aws_s3_bucket.logs.arn}/cloudtrail/AWSLogs/${data.aws_caller_identity.current.account_id}/*"
     ]
@@ -229,7 +229,7 @@ data "aws_iam_policy_document" "logs_bucket" {
       type        = "Service"
       identifiers = ["config.amazonaws.com"]
     }
-    actions   = ["s3:PutObject"]
+    actions  = ["s3:PutObject"]
     resources = ["${aws_s3_bucket.logs.arn}/aws-config/*"]
     condition {
       test     = "StringEquals"
@@ -404,8 +404,8 @@ resource "aws_config_delivery_channel" "dc" {
 }
 
 resource "aws_config_configuration_recorder_status" "status" {
-  count      = var.enable_aws_config ? 1 : 0
-  name       = aws_config_configuration_recorder.rec[0].name
+  count     = var.enable_aws_config ? 1 : 0
+  name      = aws_config_configuration_recorder.rec[0].name
   is_enabled = true
   depends_on = [aws_config_delivery_channel.dc]
 }

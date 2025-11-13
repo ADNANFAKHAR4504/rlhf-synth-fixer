@@ -41,7 +41,7 @@ variable "notification_email" {
 locals {
   # Naming convention
   name_prefix = "tap"
-
+  
   # Common tags
   common_tags = {
     Environment = "Production"
@@ -52,11 +52,11 @@ locals {
   # Network configuration
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-
+  
   # Subnet CIDRs for primary region (us-east-2)
   primary_public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
   primary_private_subnets = ["10.0.10.0/24", "10.0.20.0/24"]
-
+  
   # Subnet CIDRs for secondary region (us-west-1)
   secondary_public_subnets  = ["10.1.1.0/24", "10.1.2.0/24"]
   secondary_private_subnets = ["10.1.10.0/24", "10.1.20.0/24"]
@@ -415,10 +415,10 @@ resource "aws_security_group" "primary_ec2" {
   }
 
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
+    description = "HTTP from ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     security_groups = [aws_security_group.primary_alb.id]
   }
 
@@ -458,10 +458,10 @@ resource "aws_security_group" "secondary_ec2" {
   }
 
   ingress {
-    description     = "HTTP from ALB"
-    from_port       = 80
-    to_port         = 80
-    protocol        = "tcp"
+    description = "HTTP from ALB"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
     security_groups = [aws_security_group.secondary_alb.id]
   }
 
@@ -778,7 +778,7 @@ resource "aws_s3_bucket_versioning" "secondary" {
 # S3 Bucket Cross-Region Replication Configuration
 resource "aws_s3_bucket_replication_configuration" "primary_to_secondary" {
   provider   = aws.us_east_2
-  depends_on = [aws_s3_bucket_versioning.primary, aws_s3_bucket_versioning.secondary]
+  depends_on = [aws_s3_bucket_versioning.primary,aws_s3_bucket_versioning.secondary]
 
   role   = aws_iam_role.s3_replication.arn
   bucket = aws_s3_bucket.primary.id
@@ -1037,11 +1037,11 @@ resource "aws_lb_listener" "secondary" {
 
 # Primary Auto Scaling Group
 resource "aws_autoscaling_group" "primary" {
-  provider                  = aws.us_east_2
-  name                      = "${local.name_prefix}-asg-primary"
-  vpc_zone_identifier       = aws_subnet.primary_private[*].id
-  target_group_arns         = [aws_lb_target_group.primary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_east_2
+  name                = "${local.name_prefix}-asg-primary"
+  vpc_zone_identifier = aws_subnet.primary_private[*].id
+  target_group_arns   = [aws_lb_target_group.primary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = local.min_size
@@ -1071,11 +1071,11 @@ resource "aws_autoscaling_group" "primary" {
 
 # Secondary Auto Scaling Group
 resource "aws_autoscaling_group" "secondary" {
-  provider                  = aws.us_west_1
-  name                      = "${local.name_prefix}-asg-secondary"
-  vpc_zone_identifier       = aws_subnet.secondary_private[*].id
-  target_group_arns         = [aws_lb_target_group.secondary.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_west_1
+  name                = "${local.name_prefix}-asg-secondary"
+  vpc_zone_identifier = aws_subnet.secondary_private[*].id
+  target_group_arns   = [aws_lb_target_group.secondary.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = local.min_size
@@ -1151,11 +1151,11 @@ resource "aws_db_instance" "primary" {
   vpc_security_group_ids = [aws_security_group.primary_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.primary.name
 
-  multi_az                = true
-  publicly_accessible     = false
+  multi_az               = true
+  publicly_accessible    = false
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -1187,11 +1187,11 @@ resource "aws_db_instance" "secondary" {
   vpc_security_group_ids = [aws_security_group.secondary_rds.id]
   db_subnet_group_name   = aws_db_subnet_group.secondary.name
 
-  multi_az                = true
-  publicly_accessible     = false
+  multi_az               = true
+  publicly_accessible    = false
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   skip_final_snapshot = true
   deletion_protection = false
@@ -1246,11 +1246,11 @@ resource "aws_lambda_function" "primary_backup" {
   provider         = aws.us_east_2
   filename         = "backup_lambda.zip"
   function_name    = "${local.name_prefix}-rds-backup-primary"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "index.handler"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
-  timeout          = 300
+  runtime         = "python3.9"
+  timeout         = 300
 
   environment {
     variables = {
@@ -1269,11 +1269,11 @@ resource "aws_lambda_function" "secondary_backup" {
   provider         = aws.us_west_1
   filename         = "backup_lambda.zip"
   function_name    = "${local.name_prefix}-rds-backup-secondary"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "index.handler"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
-  timeout          = 300
+  runtime         = "python3.9"
+  timeout         = 300
 
   environment {
     variables = {
@@ -1292,7 +1292,7 @@ data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "backup_lambda.zip"
   source {
-    content  = <<EOF
+    content = <<EOF
 import boto3
 import json
 import os
@@ -1443,15 +1443,15 @@ resource "aws_route53_zone" "main" {
 
 # Route 53 Health Check for Primary ALB
 resource "aws_route53_health_check" "primary" {
-  provider                = aws.us_east_2
-  fqdn                    = aws_lb.primary.dns_name
-  port                    = 80
-  type                    = "HTTP"
-  resource_path           = "/"
-  failure_threshold       = "5"
-  request_interval        = "30"
-  cloudwatch_alarm_region = var.primary_region
-  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.primary_cpu.alarm_name
+  provider                        = aws.us_east_2
+  fqdn                           = aws_lb.primary.dns_name
+  port                           = 80
+  type                           = "HTTP"
+  resource_path                  = "/"
+  failure_threshold              = "5"
+  request_interval               = "30"
+  cloudwatch_alarm_region        = var.primary_region
+  cloudwatch_alarm_name          = aws_cloudwatch_metric_alarm.primary_cpu.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-health-check-primary"
@@ -1460,15 +1460,15 @@ resource "aws_route53_health_check" "primary" {
 
 # Route 53 Health Check for Secondary ALB
 resource "aws_route53_health_check" "secondary" {
-  provider                = aws.us_east_2
-  fqdn                    = aws_lb.secondary.dns_name
-  port                    = 80
-  type                    = "HTTP"
-  resource_path           = "/"
-  failure_threshold       = "5"
-  request_interval        = "30"
-  cloudwatch_alarm_region = var.secondary_region
-  cloudwatch_alarm_name   = aws_cloudwatch_metric_alarm.secondary_cpu.alarm_name
+  provider                        = aws.us_east_2
+  fqdn                           = aws_lb.secondary.dns_name
+  port                           = 80
+  type                           = "HTTP"
+  resource_path                  = "/"
+  failure_threshold              = "5"
+  request_interval               = "30"
+  cloudwatch_alarm_region        = var.secondary_region
+  cloudwatch_alarm_name          = aws_cloudwatch_metric_alarm.secondary_cpu.alarm_name
 
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-health-check-secondary"

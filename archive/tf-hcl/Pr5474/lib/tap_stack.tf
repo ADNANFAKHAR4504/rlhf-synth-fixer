@@ -265,7 +265,7 @@ variable "alarm_email" {
 locals {
   # Naming convention
   name_prefix = "${var.project_name}-${var.env}"
-
+  
   # Merged tags - FIXED: Don't duplicate Environment tag
   tags = merge(
     var.common_tags,
@@ -277,23 +277,23 @@ locals {
       ManagedBy   = "terraform"
     }
   )
-
+  
   # Per-environment capacity maps - Used with lookup() as per prompt
   kinesis_shards_by_env = {
     dev     = 2
     staging = 4
     prod    = 10
   }
-
+  
   lambda_memory_by_env = {
     dev     = 256
     staging = 512
     prod    = 1024
   }
-
+  
   # Availability zones for multi-AZ deployments
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
-
+  
   # FIXED: Inline Step Functions definition using templatefile-style interpolation
   # This keeps everything in one file while still parameterizing the definition
   sfn_definition = jsonencode({
@@ -363,7 +363,7 @@ locals {
       }
     }
   })
-
+  
   # FIXED: Smart NAT count - single or per-AZ
   nat_count = var.enable_nat ? (var.single_nat_gateway ? 1 : length(var.public_subnet_cidrs)) : 0
 }
@@ -387,7 +387,7 @@ resource "aws_kms_key" "master" {
   description             = "Master KMS key for ${local.name_prefix}"
   deletion_window_in_days = var.env == "prod" ? 30 : 7
   enable_key_rotation     = true
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -423,7 +423,7 @@ resource "aws_kms_key" "master" {
       }
     ]
   })
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-kms-${var.kms_key_alias_suffix}"
   })
@@ -443,7 +443,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-vpc"
   })
@@ -452,7 +452,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-igw"
   })
@@ -465,7 +465,7 @@ resource "aws_subnet" "public" {
   cidr_block              = var.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
     Type = "public"
@@ -478,7 +478,7 @@ resource "aws_subnet" "private" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = local.azs[count.index]
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
     Type = "private"
@@ -489,7 +489,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count  = local.nat_count
   domain = "vpc"
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-eip-${count.index + 1}"
   })
@@ -500,23 +500,23 @@ resource "aws_nat_gateway" "main" {
   count         = local.nat_count
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-nat-${count.index + 1}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-public-rt"
   })
@@ -526,7 +526,7 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   count  = length(var.private_subnet_cidrs)
   vpc_id = aws_vpc.main.id
-
+  
   dynamic "route" {
     for_each = var.enable_nat ? [1] : []
     content {
@@ -534,7 +534,7 @@ resource "aws_route_table" "private" {
       nat_gateway_id = var.single_nat_gateway ? aws_nat_gateway.main[0].id : aws_nat_gateway.main[count.index].id
     }
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-private-rt-${count.index + 1}"
   })
@@ -559,7 +559,7 @@ resource "aws_vpc_endpoint" "dynamodb" {
   service_name      = "com.amazonaws.${var.aws_region}.dynamodb"
   vpc_endpoint_type = "Gateway"
   route_table_ids   = aws_route_table.private[*].id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-vpce-dynamodb"
   })
@@ -573,7 +573,7 @@ resource "aws_vpc_endpoint" "kinesis_streams" {
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-vpce-kinesis"
   })
@@ -586,7 +586,7 @@ resource "aws_vpc_endpoint" "sns" {
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-vpce-sns"
   })
@@ -599,7 +599,7 @@ resource "aws_vpc_endpoint" "sqs" {
   subnet_ids          = aws_subnet.private[*].id
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-vpce-sqs"
   })
@@ -614,25 +614,25 @@ resource "aws_security_group" "vpc_endpoints" {
   name_prefix = "${local.name_prefix}-vpce-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for VPC endpoints"
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
     cidr_blocks = [var.vpc_cidr]
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-vpce-sg"
   })
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -643,18 +643,18 @@ resource "aws_security_group" "lambda" {
   name_prefix = "${local.name_prefix}-lambda-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Lambda functions"
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-lambda-sg"
   })
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -665,25 +665,25 @@ resource "aws_security_group" "redis" {
   name_prefix = "${local.name_prefix}-redis-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Redis cluster"
-
+  
   ingress {
     from_port       = 6379
     to_port         = 6379
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-redis-sg"
   })
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -694,25 +694,25 @@ resource "aws_security_group" "aurora" {
   name_prefix = "${local.name_prefix}-aurora-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Aurora cluster"
-
+  
   ingress {
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-aurora-sg"
   })
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -724,25 +724,25 @@ resource "aws_security_group" "neptune" {
   name_prefix = "${local.name_prefix}-neptune-"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Neptune cluster"
-
+  
   ingress {
     from_port       = 8182
     to_port         = 8182
     protocol        = "tcp"
     security_groups = [aws_security_group.lambda.id]
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-neptune-sg"
   })
-
+  
   lifecycle {
     create_before_destroy = true
   }
@@ -760,39 +760,39 @@ resource "aws_dynamodb_table" "reference_data" {
   write_capacity = var.ddb_billing_mode == "PROVISIONED" ? var.ddb_wcu : null
   hash_key       = "id"
   range_key      = "sort_key"
-
+  
   attribute {
     name = "id"
     type = "S"
   }
-
+  
   attribute {
     name = "sort_key"
     type = "S"
   }
-
+  
   attribute {
     name = "gsi1_pk"
     type = "S"
   }
-
+  
   ttl {
     enabled        = true
     attribute_name = var.ddb_ttl_attribute
   }
-
+  
   point_in_time_recovery {
     enabled = true
   }
-
+  
   stream_enabled   = true
   stream_view_type = "NEW_AND_OLD_IMAGES"
-
+  
   server_side_encryption {
     enabled     = true
     kms_key_arn = aws_kms_key.master.arn
   }
-
+  
   global_secondary_index {
     name            = "gsi1"
     hash_key        = "gsi1_pk"
@@ -800,7 +800,7 @@ resource "aws_dynamodb_table" "reference_data" {
     read_capacity   = var.ddb_billing_mode == "PROVISIONED" ? var.ddb_rcu : null
     write_capacity  = var.ddb_billing_mode == "PROVISIONED" ? var.ddb_wcu : null
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-${var.ddb_table_name}"
   })
@@ -813,28 +813,28 @@ resource "aws_dynamodb_table" "reference_data" {
 # Kinesis Data Stream - Using capacity map with lookup()
 resource "aws_kinesis_stream" "main" {
   name = "${local.name_prefix}-stream"
-
+  
   stream_mode_details {
     stream_mode = var.kinesis_mode
   }
-
+  
   # Use lookup from capacity map OR variable override from tfvars
   shard_count = var.kinesis_mode == "PROVISIONED" ? (
     var.kinesis_shard_count != 2 ? var.kinesis_shard_count : lookup(local.kinesis_shards_by_env, var.env)
   ) : null
-
+  
   retention_period          = 24
   encryption_type           = "KMS"
   kms_key_id                = aws_kms_key.master.id
   enforce_consumer_deletion = false
-
+  
   shard_level_metrics = [
     "IncomingBytes",
     "IncomingRecords",
     "OutgoingBytes",
     "OutgoingRecords",
   ]
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-stream"
   })
@@ -847,7 +847,7 @@ resource "aws_kinesis_stream" "main" {
 # Lambda execution role
 resource "aws_iam_role" "lambda_execution" {
   name = "${local.name_prefix}-lambda-execution"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -860,7 +860,7 @@ resource "aws_iam_role" "lambda_execution" {
       }
     ]
   })
-
+  
   tags = local.tags
 }
 
@@ -880,7 +880,7 @@ resource "aws_iam_role_policy_attachment" "lambda_vpc_execution" {
 resource "aws_iam_role_policy" "lambda_ddb_stream" {
   name = "${local.name_prefix}-lambda-ddb-stream"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -916,7 +916,7 @@ resource "aws_iam_role_policy" "lambda_ddb_stream" {
 resource "aws_iam_role_policy" "lambda_kinesis" {
   name = "${local.name_prefix}-lambda-kinesis"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -942,7 +942,7 @@ resource "aws_iam_role_policy" "lambda_kinesis" {
 resource "aws_iam_role_policy" "lambda_sqs" {
   name = "${local.name_prefix}-lambda-sqs"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -967,7 +967,7 @@ resource "aws_iam_role_policy" "lambda_sqs" {
 resource "aws_iam_role_policy" "lambda_sns" {
   name = "${local.name_prefix}-lambda-sns"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -986,7 +986,7 @@ resource "aws_iam_role_policy" "lambda_sns" {
 resource "aws_iam_role_policy" "lambda_kms" {
   name = "${local.name_prefix}-lambda-kms"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1007,7 +1007,7 @@ resource "aws_iam_role_policy" "lambda_kms" {
 resource "aws_iam_role_policy" "lambda_secrets" {
   name = "${local.name_prefix}-lambda-secrets"
   role = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1027,7 +1027,7 @@ resource "aws_iam_role_policy" "lambda_neptune" {
   count = var.enable_neptune ? 1 : 0
   name  = "${local.name_prefix}-lambda-neptune"
   role  = aws_iam_role.lambda_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1048,7 +1048,7 @@ resource "aws_iam_role_policy" "lambda_neptune" {
 data "archive_file" "validator_lambda" {
   type        = "zip"
   output_path = "/tmp/validator_lambda.zip"
-
+  
   source {
     content  = <<EOF
 import json
@@ -1094,30 +1094,30 @@ resource "aws_lambda_function" "validator" {
   timeout          = var.lambda_timeout_s
   source_code_hash = data.archive_file.validator_lambda.output_base64sha256
   publish          = true
-
+  
   dead_letter_config {
     target_arn = aws_sqs_queue.dlq.arn
   }
-
+  
   environment {
     variables = merge(var.lambda_env, {
       KINESIS_STREAM_NAME = aws_kinesis_stream.main.name
       ENV                 = var.env
     })
   }
-
+  
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
-
+  
   # FIXED: Proper reserved concurrency - should be at least equal to provisioned
   reserved_concurrent_executions = var.lambda_provisioned_concurrency > 0 ? var.lambda_provisioned_concurrency : -1
-
+  
   tracing_config {
     mode = "Active"
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-validator"
   })
@@ -1142,7 +1142,7 @@ resource "aws_lambda_provisioned_concurrency_config" "validator" {
 data "archive_file" "processor_lambda" {
   type        = "zip"
   output_path = "/tmp/processor_lambda.zip"
-
+  
   source {
     content  = <<EOF
 import json
@@ -1178,11 +1178,11 @@ resource "aws_lambda_function" "processor" {
   memory_size      = var.lambda_memory_mb != 256 ? var.lambda_memory_mb : lookup(local.lambda_memory_by_env, var.env)
   timeout          = var.lambda_timeout_s
   source_code_hash = data.archive_file.processor_lambda.output_base64sha256
-
+  
   dead_letter_config {
     target_arn = aws_sqs_queue.dlq.arn
   }
-
+  
   # FIXED: Pass Redis auth token to Lambda
   environment {
     variables = merge(var.lambda_env, {
@@ -1191,16 +1191,16 @@ resource "aws_lambda_function" "processor" {
       ENV              = var.env
     })
   }
-
+  
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
-
+  
   tracing_config {
     mode = "Active"
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-processor"
   })
@@ -1210,7 +1210,7 @@ resource "aws_lambda_function" "processor" {
 data "archive_file" "consistency_checker_lambda" {
   type        = "zip"
   output_path = "/tmp/consistency_checker_lambda.zip"
-
+  
   source {
     content  = <<EOF
 import json
@@ -1252,7 +1252,7 @@ resource "aws_lambda_function" "consistency_checker" {
   memory_size      = var.lambda_memory_mb != 256 ? var.lambda_memory_mb : lookup(local.lambda_memory_by_env, var.env)
   timeout          = var.lambda_timeout_s
   source_code_hash = data.archive_file.consistency_checker_lambda.output_base64sha256
-
+  
   environment {
     variables = merge(var.lambda_env, {
       AURORA_ENDPOINT = aws_rds_cluster.aurora.endpoint
@@ -1260,16 +1260,16 @@ resource "aws_lambda_function" "consistency_checker" {
       ENV             = var.env
     })
   }
-
+  
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
-
+  
   tracing_config {
     mode = "Active"
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-consistency-checker"
   })
@@ -1279,7 +1279,7 @@ resource "aws_lambda_function" "consistency_checker" {
 data "archive_file" "reconciliation_lambda" {
   type        = "zip"
   output_path = "/tmp/reconciliation_lambda.zip"
-
+  
   source {
     content  = <<EOF
 import json
@@ -1314,23 +1314,23 @@ resource "aws_lambda_function" "reconciliation" {
   memory_size      = var.lambda_memory_mb != 256 ? var.lambda_memory_mb : lookup(local.lambda_memory_by_env, var.env)
   timeout          = var.lambda_timeout_s
   source_code_hash = data.archive_file.reconciliation_lambda.output_base64sha256
-
+  
   environment {
     variables = merge(var.lambda_env, {
       NEPTUNE_ENDPOINT = var.enable_neptune ? aws_neptune_cluster.main[0].endpoint : ""
       ENV              = var.env
     })
   }
-
+  
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
     security_group_ids = [aws_security_group.lambda.id]
   }
-
+  
   tracing_config {
     mode = "Active"
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-reconciliation"
   })
@@ -1344,11 +1344,11 @@ resource "aws_cloudwatch_log_group" "lambda_logs" {
     consistency_checker = aws_lambda_function.consistency_checker.function_name
     reconciliation      = aws_lambda_function.reconciliation.function_name
   }
-
+  
   name              = "/aws/lambda/${each.value}"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.master.arn
-
+  
   tags = local.tags
 }
 
@@ -1361,11 +1361,11 @@ resource "aws_lambda_event_source_mapping" "ddb_to_validator" {
   event_source_arn  = aws_dynamodb_table.reference_data.stream_arn
   function_name     = aws_lambda_alias.validator.arn
   starting_position = "LATEST"
-
+  
   maximum_batching_window_in_seconds = 10
   parallelization_factor             = 2
   maximum_retry_attempts             = 3
-
+  
   destination_config {
     on_failure {
       destination_arn = aws_sqs_queue.dlq.arn
@@ -1378,11 +1378,11 @@ resource "aws_lambda_event_source_mapping" "kinesis_to_processor" {
   event_source_arn  = aws_kinesis_stream.main.arn
   function_name     = aws_lambda_function.processor.arn
   starting_position = "LATEST"
-
+  
   maximum_batching_window_in_seconds = 5
   parallelization_factor             = 2
   maximum_retry_attempts             = 3
-
+  
   destination_config {
     on_failure {
       destination_arn = aws_sqs_queue.dlq.arn
@@ -1395,7 +1395,7 @@ resource "aws_lambda_event_source_mapping" "sqs_to_reconciliation" {
   event_source_arn = aws_sqs_queue.conflict_queue.arn
   function_name    = aws_lambda_function.reconciliation.arn
   batch_size       = 10
-
+  
   maximum_batching_window_in_seconds = 20
 }
 
@@ -1407,7 +1407,7 @@ resource "aws_lambda_event_source_mapping" "sqs_to_reconciliation" {
 resource "aws_elasticache_subnet_group" "redis" {
   name       = "${local.name_prefix}-redis-subnet"
   subnet_ids = aws_subnet.private[*].id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-redis-subnet-group"
   })
@@ -1417,49 +1417,49 @@ resource "aws_elasticache_subnet_group" "redis" {
 resource "aws_elasticache_parameter_group" "redis" {
   family = "redis7"
   name   = "${local.name_prefix}-redis-params"
-
+  
   parameter {
     name  = "maxmemory-policy"
     value = "allkeys-lru"
   }
-
+  
   tags = local.tags
 }
 
 # FIXED: ElastiCache Replication Group - removed invalid attribute
 resource "aws_elasticache_replication_group" "redis" {
-  replication_group_id = "${local.name_prefix}-redis"
-  description          = "Redis cluster for ${local.name_prefix}"
-  node_type            = var.redis_node_type
-  port                 = 6379
-  parameter_group_name = aws_elasticache_parameter_group.redis.name
-  subnet_group_name    = aws_elasticache_subnet_group.redis.name
-  security_group_ids   = [aws_security_group.redis.id]
-
+  replication_group_id       = "${local.name_prefix}-redis"
+  description                = "Redis cluster for ${local.name_prefix}"
+  node_type                  = var.redis_node_type
+  port                       = 6379
+  parameter_group_name       = aws_elasticache_parameter_group.redis.name
+  subnet_group_name          = aws_elasticache_subnet_group.redis.name
+  security_group_ids         = [aws_security_group.redis.id]
+  
   engine                     = "redis"
   engine_version             = var.redis_engine_version
   num_cache_clusters         = var.redis_num_replicas + 1
   automatic_failover_enabled = var.redis_num_replicas > 0
   multi_az_enabled           = var.redis_multi_az
-
+  
   at_rest_encryption_enabled = true
   kms_key_id                 = aws_kms_key.master.arn
   transit_encryption_enabled = true
   auth_token                 = random_password.redis_auth.result
-
+  
   snapshot_retention_limit = var.env == "prod" ? 7 : 1
   snapshot_window          = "03:00-05:00"
   maintenance_window       = "sun:05:00-sun:07:00"
-
+  
   notification_topic_arn = aws_sns_topic.ops_alerts.arn
-
+  
   log_delivery_configuration {
     destination      = aws_cloudwatch_log_group.redis_logs.name
     destination_type = "cloudwatch-logs"
     log_format       = "json"
     log_type         = "slow-log"
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-redis"
   })
@@ -1469,7 +1469,7 @@ resource "aws_elasticache_replication_group" "redis" {
 resource "random_password" "redis_auth" {
   length  = 32
   special = true
-
+  
   keepers = {
     env     = var.env
     project = var.project_name
@@ -1480,7 +1480,7 @@ resource "aws_cloudwatch_log_group" "redis_logs" {
   name              = "/aws/elasticache/${local.name_prefix}-redis"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.master.arn
-
+  
   tags = local.tags
 }
 
@@ -1492,7 +1492,7 @@ resource "aws_cloudwatch_log_group" "redis_logs" {
 resource "aws_db_subnet_group" "aurora" {
   name       = "${local.name_prefix}-aurora-subnet"
   subnet_ids = aws_subnet.private[*].id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-aurora-subnet-group"
   })
@@ -1502,50 +1502,50 @@ resource "aws_db_subnet_group" "aurora" {
 resource "aws_rds_cluster_parameter_group" "aurora" {
   family = "aurora-postgresql16"
   name   = "${local.name_prefix}-aurora-cluster-params"
-
+  
   parameter {
     name  = "shared_preload_libraries"
     value = "pg_stat_statements"
   }
-
+  
   tags = local.tags
 }
 
 # Aurora Cluster
 resource "aws_rds_cluster" "aurora" {
-  cluster_identifier = "${local.name_prefix}-aurora"
-  engine             = "aurora-postgresql"
-  engine_mode        = "provisioned"
-  engine_version     = var.aurora_engine_version
-  database_name      = var.aurora_initial_db_name
-  master_username    = "dbadmin"
-  master_password    = random_password.aurora_master.result
-
+  cluster_identifier      = "${local.name_prefix}-aurora"
+  engine                  = "aurora-postgresql"
+  engine_mode             = "provisioned"
+  engine_version          = var.aurora_engine_version
+  database_name           = var.aurora_initial_db_name
+  master_username         = "dbadmin"
+  master_password         = random_password.aurora_master.result
+  
   db_subnet_group_name            = aws_db_subnet_group.aurora.name
   db_cluster_parameter_group_name = aws_rds_cluster_parameter_group.aurora.name
   vpc_security_group_ids          = [aws_security_group.aurora.id]
-
+  
   serverlessv2_scaling_configuration {
     min_capacity = var.aurora_min_capacity
     max_capacity = var.aurora_max_capacity
   }
-
+  
   storage_encrypted               = true
   kms_key_id                      = aws_kms_key.master.arn
   enabled_cloudwatch_logs_exports = ["postgresql"]
-
+  
   backup_retention_period      = var.env == "prod" ? 30 : 7
   preferred_backup_window      = "03:00-04:00"
   preferred_maintenance_window = "sun:04:00-sun:05:00"
-
+  
   # FIXED: Removed timestamp to avoid perpetual drift
   skip_final_snapshot       = var.env != "prod"
   final_snapshot_identifier = var.env == "prod" ? "${local.name_prefix}-aurora-final" : null
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-aurora"
   })
-
+  
   lifecycle {
     ignore_changes = [final_snapshot_identifier]
   }
@@ -1559,13 +1559,13 @@ resource "aws_rds_cluster_instance" "aurora" {
   instance_class     = var.aurora_instance_class
   engine             = aws_rds_cluster.aurora.engine
   engine_version     = aws_rds_cluster.aurora.engine_version
-
+  
   performance_insights_enabled    = var.env == "prod"
   performance_insights_kms_key_id = var.env == "prod" ? aws_kms_key.master.id : null
-
+  
   monitoring_interval = 60
   monitoring_role_arn = aws_iam_role.rds_monitoring.arn
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-aurora-${count.index}"
     Role = count.index == 0 ? "writer" : "reader"
@@ -1576,7 +1576,7 @@ resource "aws_rds_cluster_instance" "aurora" {
 resource "random_password" "aurora_master" {
   length  = 32
   special = true
-
+  
   keepers = {
     env     = var.env
     project = var.project_name
@@ -1588,7 +1588,7 @@ resource "aws_secretsmanager_secret" "aurora_credentials" {
   name                    = "${local.name_prefix}-aurora-credentials"
   recovery_window_in_days = var.env == "prod" ? 30 : 0
   kms_key_id              = aws_kms_key.master.id
-
+  
   tags = local.tags
 }
 
@@ -1607,7 +1607,7 @@ resource "aws_secretsmanager_secret_version" "aurora_credentials" {
 # RDS Enhanced Monitoring Role
 resource "aws_iam_role" "rds_monitoring" {
   name = "${local.name_prefix}-rds-monitoring"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1620,7 +1620,7 @@ resource "aws_iam_role" "rds_monitoring" {
       }
     ]
   })
-
+  
   tags = local.tags
 }
 
@@ -1638,7 +1638,7 @@ resource "aws_neptune_subnet_group" "main" {
   count      = var.enable_neptune ? 1 : 0
   name       = "${local.name_prefix}-neptune-subnet"
   subnet_ids = aws_subnet.private[*].id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-neptune-subnet-group"
   })
@@ -1649,12 +1649,12 @@ resource "aws_neptune_cluster_parameter_group" "main" {
   count  = var.enable_neptune ? 1 : 0
   family = "neptune1.3"
   name   = "${local.name_prefix}-neptune-cluster-params"
-
+  
   parameter {
     name  = "neptune_enable_audit_log"
     value = "1"
   }
-
+  
   tags = local.tags
 }
 
@@ -1667,23 +1667,23 @@ resource "aws_neptune_cluster" "main" {
   neptune_subnet_group_name            = aws_neptune_subnet_group.main[0].name
   neptune_cluster_parameter_group_name = aws_neptune_cluster_parameter_group.main[0].name
   vpc_security_group_ids               = [aws_security_group.neptune[0].id]
-
+  
   storage_encrypted                   = true
   kms_key_arn                         = aws_kms_key.master.arn
   iam_database_authentication_enabled = true
-
+  
   backup_retention_period      = var.env == "prod" ? 30 : 7
   preferred_backup_window      = "03:00-04:00"
   preferred_maintenance_window = "sun:04:00-sun:05:00"
-
+  
   # FIXED: Removed timestamp to avoid perpetual drift
   skip_final_snapshot       = var.env != "prod"
   final_snapshot_identifier = var.env == "prod" ? "${local.name_prefix}-neptune-final" : null
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-neptune"
   })
-
+  
   lifecycle {
     ignore_changes = [final_snapshot_identifier]
   }
@@ -1696,7 +1696,7 @@ resource "aws_neptune_cluster_instance" "main" {
   cluster_identifier = aws_neptune_cluster.main[0].id
   instance_class     = var.neptune_instance_class
   engine             = "neptune"
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-neptune-${count.index}"
   })
@@ -1710,7 +1710,7 @@ resource "aws_neptune_cluster_instance" "main" {
 resource "aws_sns_topic" "conflict_events" {
   name              = "${local.name_prefix}-conflict-events"
   kms_master_key_id = aws_kms_key.master.id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-conflict-events"
   })
@@ -1720,7 +1720,7 @@ resource "aws_sns_topic" "conflict_events" {
 resource "aws_sns_topic" "ops_alerts" {
   name              = "${local.name_prefix}-ops-alerts"
   kms_master_key_id = aws_kms_key.master.id
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-ops-alerts"
   })
@@ -1741,15 +1741,15 @@ resource "aws_sqs_queue" "conflict_queue" {
   message_retention_seconds  = 1209600 # 14 days
   max_message_size           = 262144
   receive_wait_time_seconds  = 20
-
+  
   redrive_policy = jsonencode({
     deadLetterTargetArn = aws_sqs_queue.conflict_dlq.arn
     maxReceiveCount     = 3
   })
-
+  
   kms_master_key_id                 = aws_kms_key.master.id
   kms_data_key_reuse_period_seconds = 300
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-conflicts"
   })
@@ -1759,10 +1759,10 @@ resource "aws_sqs_queue" "conflict_queue" {
 resource "aws_sqs_queue" "conflict_dlq" {
   name                      = "${local.name_prefix}-conflicts-dlq"
   message_retention_seconds = 1209600 # 14 days
-
+  
   kms_master_key_id                 = aws_kms_key.master.id
   kms_data_key_reuse_period_seconds = 300
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-conflicts-dlq"
   })
@@ -1772,10 +1772,10 @@ resource "aws_sqs_queue" "conflict_dlq" {
 resource "aws_sqs_queue" "dlq" {
   name                      = "${local.name_prefix}-lambda-dlq"
   message_retention_seconds = 1209600 # 14 days
-
+  
   kms_master_key_id                 = aws_kms_key.master.id
   kms_data_key_reuse_period_seconds = 300
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-lambda-dlq"
   })
@@ -1786,14 +1786,14 @@ resource "aws_sns_topic_subscription" "conflict_to_sqs" {
   topic_arn = aws_sns_topic.conflict_events.arn
   protocol  = "sqs"
   endpoint  = aws_sqs_queue.conflict_queue.arn
-
+  
   raw_message_delivery = true
 }
 
 # FIXED: SQS Queue Policy for SNS - use .url not .id
 resource "aws_sqs_queue_policy" "conflict_queue" {
   queue_url = aws_sqs_queue.conflict_queue.url
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1823,7 +1823,7 @@ resource "aws_cloudwatch_event_rule" "consistency_check" {
   name                = "${local.name_prefix}-consistency-check"
   description         = "Trigger consistency checks"
   schedule_expression = var.consistency_check_rate
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-consistency-check"
   })
@@ -1840,7 +1840,7 @@ resource "aws_cloudwatch_event_target" "sfn" {
 # IAM Role for EventBridge to invoke Step Functions
 resource "aws_iam_role" "eventbridge_sfn" {
   name = "${local.name_prefix}-eventbridge-sfn"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1853,14 +1853,14 @@ resource "aws_iam_role" "eventbridge_sfn" {
       }
     ]
   })
-
+  
   tags = local.tags
 }
 
 resource "aws_iam_role_policy" "eventbridge_sfn" {
   name = "${local.name_prefix}-eventbridge-sfn"
   role = aws_iam_role.eventbridge_sfn.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1880,7 +1880,7 @@ resource "aws_iam_role_policy" "eventbridge_sfn" {
 # Step Functions execution role
 resource "aws_iam_role" "sfn_execution" {
   name = "${local.name_prefix}-sfn-execution"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1893,7 +1893,7 @@ resource "aws_iam_role" "sfn_execution" {
       }
     ]
   })
-
+  
   tags = local.tags
 }
 
@@ -1901,7 +1901,7 @@ resource "aws_iam_role" "sfn_execution" {
 resource "aws_iam_role_policy" "sfn_execution" {
   name = "${local.name_prefix}-sfn-execution"
   role = aws_iam_role.sfn_execution.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -1948,18 +1948,18 @@ resource "aws_sfn_state_machine" "consistency_workflow" {
   name       = "${local.name_prefix}-consistency-workflow"
   role_arn   = aws_iam_role.sfn_execution.arn
   definition = local.sfn_definition
-
+  
   logging_configuration {
     # Step Functions requires :* suffix on log group ARN
     log_destination        = "${aws_cloudwatch_log_group.sfn_logs.arn}:*"
     include_execution_data = true
     level                  = "ERROR"
   }
-
+  
   tracing_configuration {
     enabled = var.sfn_tracing_enabled
   }
-
+  
   tags = merge(local.tags, {
     Name = "${local.name_prefix}-consistency-workflow"
   })
@@ -1969,7 +1969,7 @@ resource "aws_cloudwatch_log_group" "sfn_logs" {
   name              = "/aws/vendedlogs/states/${local.name_prefix}-consistency-workflow"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.master.arn
-
+  
   tags = local.tags
 }
 
@@ -1990,11 +1990,11 @@ resource "aws_cloudwatch_metric_alarm" "ddb_stream_iterator_age" {
   alarm_description   = "DynamoDB stream processing lag"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     FunctionName = aws_lambda_function.validator.function_name
   }
-
+  
   tags = local.tags
 }
 
@@ -2011,11 +2011,11 @@ resource "aws_cloudwatch_metric_alarm" "kinesis_iterator_age" {
   alarm_description   = "Kinesis iterator age too high"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     StreamName = aws_kinesis_stream.main.name
   }
-
+  
   tags = local.tags
 }
 
@@ -2027,7 +2027,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
     consistency_checker = aws_lambda_function.consistency_checker.function_name
     reconciliation      = aws_lambda_function.reconciliation.function_name
   }
-
+  
   alarm_name          = "${local.name_prefix}-${each.key}-errors"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -2039,11 +2039,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_errors" {
   alarm_description   = "Lambda function errors for ${each.key}"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     FunctionName = each.value
   }
-
+  
   tags = local.tags
 }
 
@@ -2055,7 +2055,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
     consistency_checker = aws_lambda_function.consistency_checker.function_name
     reconciliation      = aws_lambda_function.reconciliation.function_name
   }
-
+  
   alarm_name          = "${local.name_prefix}-${each.key}-throttles"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
@@ -2067,11 +2067,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   alarm_description   = "Lambda function throttles for ${each.key}"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     FunctionName = each.value
   }
-
+  
   tags = local.tags
 }
 
@@ -2083,7 +2083,7 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
     consistency_checker = aws_lambda_function.consistency_checker.function_name
     reconciliation      = aws_lambda_function.reconciliation.function_name
   }
-
+  
   alarm_name          = "${local.name_prefix}-${each.key}-duration"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "3"
@@ -2095,11 +2095,11 @@ resource "aws_cloudwatch_metric_alarm" "lambda_duration" {
   alarm_description   = "Lambda function duration approaching timeout for ${each.key}"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     FunctionName = each.value
   }
-
+  
   tags = local.tags
 }
 
@@ -2115,11 +2115,11 @@ resource "aws_cloudwatch_metric_alarm" "redis_cpu" {
   threshold           = "75"
   alarm_description   = "Redis CPU utilization"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
-
+  
   dimensions = {
     ReplicationGroupId = aws_elasticache_replication_group.redis.id
   }
-
+  
   tags = local.tags
 }
 
@@ -2135,11 +2135,11 @@ resource "aws_cloudwatch_metric_alarm" "redis_memory" {
   threshold           = "10" # Less than 10% free
   alarm_description   = "Redis memory usage high"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
-
+  
   dimensions = {
     ReplicationGroupId = aws_elasticache_replication_group.redis.id
   }
-
+  
   tags = local.tags
 }
 
@@ -2156,11 +2156,11 @@ resource "aws_cloudwatch_metric_alarm" "redis_latency" {
   alarm_description   = "Redis replication lag high"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     ReplicationGroupId = aws_elasticache_replication_group.redis.id
   }
-
+  
   tags = local.tags
 }
 
@@ -2176,11 +2176,11 @@ resource "aws_cloudwatch_metric_alarm" "aurora_connections" {
   threshold           = "80"
   alarm_description   = "Aurora database connections"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
-
+  
   dimensions = {
     DBClusterIdentifier = aws_rds_cluster.aurora.id
   }
-
+  
   tags = local.tags
 }
 
@@ -2198,11 +2198,11 @@ resource "aws_cloudwatch_metric_alarm" "neptune_connectivity" {
   alarm_description   = "Neptune replica lag"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     DBClusterIdentifier = aws_neptune_cluster.main[0].id
   }
-
+  
   tags = local.tags
 }
 
@@ -2219,11 +2219,11 @@ resource "aws_cloudwatch_metric_alarm" "sfn_failures" {
   alarm_description   = "Step Functions execution failures"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   dimensions = {
     StateMachineArn = aws_sfn_state_machine.consistency_workflow.arn
   }
-
+  
   tags = local.tags
 }
 
@@ -2239,11 +2239,11 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   threshold           = "1"
   alarm_description   = "Messages in DLQ"
   alarm_actions       = [aws_sns_topic.ops_alerts.arn]
-
+  
   dimensions = {
     QueueName = aws_sqs_queue.dlq.name
   }
-
+  
   tags = local.tags
 }
 
@@ -2253,7 +2253,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
 
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "${local.name_prefix}-dashboard"
-
+  
   dashboard_body = jsonencode({
     widgets = [
       {

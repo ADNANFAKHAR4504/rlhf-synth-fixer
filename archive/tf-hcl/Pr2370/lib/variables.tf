@@ -43,5 +43,5 @@ variable "private_subnet_cidrs" {
 variable "allowed_ssh_cidr" {
   description = "CIDR block allowed for SSH access"
   type        = string
-  default     = "203.0.113.0/32" # Replace with your IP
+  default     = "203.0.113.0/32"  # Replace with your IP
 }

@@ -107,8 +107,8 @@ locals {
 
   azs = slice(data.aws_availability_zones.available.names, 0, 2)
 
-  public_subnet_cidrs   = ["10.0.1.0/24", "10.0.2.0/24"]
-  private_subnet_cidrs  = ["10.0.10.0/24", "10.0.11.0/24"]
+  public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+  private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
   database_subnet_cidrs = ["10.0.20.0/24", "10.0.21.0/24"]
 
   name_prefix = var.environmentSuffix
@@ -491,8 +491,8 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
 
   access_logs {
@@ -643,14 +643,14 @@ HTML
 
 resource "aws_autoscaling_group" "web" {
   name = "${local.name_prefix}-web-asg-123"
-
+  
   min_size         = var.min_size
   max_size         = var.max_size
   desired_capacity = var.desired_capacity
 
-  vpc_zone_identifier       = aws_subnet.public[*].id
-  target_group_arns         = [aws_lb_target_group.web.arn]
-  health_check_type         = "ELB"
+  vpc_zone_identifier = aws_subnet.public[*].id
+  target_group_arns   = [aws_lb_target_group.web.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   launch_template {
@@ -692,7 +692,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${local.name_prefix}-scale-up"
   scaling_adjustment     = 2
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.web.name
 }
 
@@ -700,7 +700,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${local.name_prefix}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.web.name
 }
 
@@ -824,14 +824,14 @@ resource "aws_iam_role_policy_attachment" "web_secrets_manager" {
 
 # Generate random password for RDS
 resource "random_password" "db_password" {
-  length           = 32
-  special          = true
+  length  = 32
+  special = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 
   lifecycle {
     prevent_destroy = true
   }
-
+  
 }
 
 # Create the secret
@@ -927,7 +927,7 @@ resource "aws_db_instance" "main" {
   storage_encrypted     = true
 
   db_name  = "webapp"
-  username = var.db_username
+  username = var.db_username  
   password = random_password.db_password.result
 
   vpc_security_group_ids = [aws_security_group.rds.id]
@@ -935,20 +935,20 @@ resource "aws_db_instance" "main" {
   parameter_group_name   = aws_db_parameter_group.mysql.name
 
   backup_retention_period = 30
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
-  multi_az                  = true
-  publicly_accessible       = false
-  skip_final_snapshot       = false
+  multi_az               = true
+  publicly_accessible    = false
+  skip_final_snapshot    = false
   final_snapshot_identifier = "${local.name_prefix}-mysql-master-final-snapshot-${formatdate("YYYY-MM-DD-hhmm", timestamp())}"
 
   enabled_cloudwatch_logs_exports = ["error", "general", "slowquery"]
 
   auto_minor_version_upgrade = true
-  deletion_protection        = false
+  deletion_protection       = false
 
-  performance_insights_enabled          = true
+  performance_insights_enabled = true
   performance_insights_retention_period = 7
 
   tags = merge(
@@ -962,16 +962,16 @@ resource "aws_db_instance" "main" {
 resource "aws_db_instance" "read_replica" {
   count = 1
 
-  identifier          = "${local.name_prefix}-mysql-read-replica-${count.index + 1}"
-  replicate_source_db = aws_db_instance.main.identifier
-  instance_class      = "db.t3.medium"
+  identifier             = "${local.name_prefix}-mysql-read-replica-${count.index + 1}"
+  replicate_source_db    = aws_db_instance.main.identifier
+  instance_class         = "db.t3.medium"
 
-  publicly_accessible        = false
+  publicly_accessible = false
   auto_minor_version_upgrade = true
 
   skip_final_snapshot = true
 
-  performance_insights_enabled          = true
+  performance_insights_enabled = true
   performance_insights_retention_period = 7
 
   tags = merge(
@@ -1128,7 +1128,7 @@ output "scaling_policy_up_arn" {
 }
 
 output "scaling_policy_down_arn" {
-  description = "ARN of the scale down policy"
+  description = "ARN of the scale down policy"  
   value       = aws_autoscaling_policy.scale_down.arn
 }
 

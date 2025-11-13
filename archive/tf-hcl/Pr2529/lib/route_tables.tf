@@ -21,8 +21,8 @@ resource "aws_route_table" "vpc1_private" {
   vpc_id = aws_vpc.vpc1.id
 
   route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.vpc1_nat.id
+    cidr_block           = "0.0.0.0/0"
+    nat_gateway_id       = aws_nat_gateway.vpc1_nat.id
   }
 
   route {
@@ -58,8 +58,8 @@ resource "aws_route_table" "vpc2_private" {
   vpc_id = aws_vpc.vpc2.id
 
   route {
-    cidr_block     = "0.0.0.0/0"
-    nat_gateway_id = aws_nat_gateway.vpc2_nat.id
+    cidr_block           = "0.0.0.0/0"
+    nat_gateway_id       = aws_nat_gateway.vpc2_nat.id
   }
 
   route {

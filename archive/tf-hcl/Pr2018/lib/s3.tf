@@ -55,7 +55,7 @@ resource "aws_s3_bucket_logging" "app_data" {
 }
 
 resource "aws_s3_bucket_public_access_block" "access_logs" {
-  bucket                  = aws_s3_bucket.access_logs.id
+  bucket = aws_s3_bucket.access_logs.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -63,7 +63,7 @@ resource "aws_s3_bucket_public_access_block" "access_logs" {
 }
 
 resource "aws_s3_bucket_public_access_block" "app_data" {
-  bucket                  = aws_s3_bucket.app_data.id
+  bucket = aws_s3_bucket.app_data.id
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true

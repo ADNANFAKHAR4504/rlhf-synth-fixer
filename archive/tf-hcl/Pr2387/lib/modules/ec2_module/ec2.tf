@@ -31,8 +31,8 @@ locals {
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
     environment         = var.environment
     project_name        = var.project_name
-    app_port            = var.app_port
-    secrets_arn         = var.secrets_manager_secret_name != "" ? data.aws_secretsmanager_secret.app_secrets[0].arn : ""
+    app_port           = var.app_port
+    secrets_arn        = var.secrets_manager_secret_name != "" ? data.aws_secretsmanager_secret.app_secrets[0].arn : ""
     additional_packages = var.additional_packages
   }))
 }
@@ -64,7 +64,7 @@ resource "aws_launch_template" "web" {
   # Instance metadata options
   metadata_options {
     http_endpoint               = "enabled"
-    http_tokens                 = "required"
+    http_tokens                = "required"
     http_put_response_hop_limit = 2
     instance_metadata_tags      = "enabled"
   }
@@ -72,8 +72,8 @@ resource "aws_launch_template" "web" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.common_tags, {
-      Name      = "${var.environment}-${var.project_name}-web-instance"
-      Type      = "ec2-instance"
+      Name = "${var.environment}-${var.project_name}-web-instance"
+      Type = "ec2-instance"
       Component = "web"
     })
   }
@@ -81,15 +81,15 @@ resource "aws_launch_template" "web" {
   tag_specifications {
     resource_type = "volume"
     tags = merge(var.common_tags, {
-      Name      = "${var.environment}-${var.project_name}-web-volume"
-      Type      = "ebs-volume"
+      Name = "${var.environment}-${var.project_name}-web-volume"
+      Type = "ebs-volume"
       Component = "web"
     })
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-web-launch-template"
-    Type      = "launch-template"
+    Name = "${var.environment}-${var.project_name}-web-launch-template"
+    Type = "launch-template"
     Component = "web"
   })
 
@@ -100,10 +100,10 @@ resource "aws_launch_template" "web" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "web" {
-  name                      = "${var.environment}-${var.project_name}-web-asg-hcltftftf"
-  vpc_zone_identifier       = var.private_subnet_ids
-  target_group_arns         = [var.target_group_arn]
-  health_check_type         = var.health_check_type
+  name                = "${var.environment}-${var.project_name}-web-asg-hcltftftf"
+  vpc_zone_identifier = var.private_subnet_ids
+  target_group_arns   = [var.target_group_arn]
+  health_check_type   = var.health_check_type
   health_check_grace_period = var.health_check_grace_period
 
   min_size         = var.min_size
@@ -115,7 +115,7 @@ resource "aws_autoscaling_group" "web" {
     strategy = "Rolling"
     preferences {
       min_healthy_percentage = var.instance_refresh_min_healthy_percentage
-      instance_warmup        = var.instance_warmup
+      instance_warmup       = var.instance_warmup
     }
     triggers = ["tag"]
   }
@@ -134,8 +134,8 @@ resource "aws_autoscaling_group" "web" {
   # Tags
   dynamic "tag" {
     for_each = merge(var.common_tags, {
-      Name      = "${var.environment}-${var.project_name}-web-asg"
-      Type      = "auto-scaling-group"
+      Name = "${var.environment}-${var.project_name}-web-asg"
+      Type = "auto-scaling-group"
       Component = "web"
     })
     content {
@@ -147,7 +147,7 @@ resource "aws_autoscaling_group" "web" {
 
   lifecycle {
     create_before_destroy = true
-    ignore_changes        = [desired_capacity]
+    ignore_changes       = [desired_capacity]
   }
 
   depends_on = [aws_launch_template.web]
@@ -158,18 +158,18 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.environment}-${var.project_name}-scale-up"
   scaling_adjustment     = var.scale_up_adjustment
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = var.scale_up_cooldown
+  cooldown              = var.scale_up_cooldown
   autoscaling_group_name = aws_autoscaling_group.web.name
-  policy_type            = "SimpleScaling"
+  policy_type           = "SimpleScaling"
 }
 
 resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.environment}-${var.project_name}-scale-down"
   scaling_adjustment     = var.scale_down_adjustment
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = var.scale_down_cooldown
+  cooldown              = var.scale_down_cooldown
   autoscaling_group_name = aws_autoscaling_group.web.name
-  policy_type            = "SimpleScaling"
+  policy_type           = "SimpleScaling"
 }
 
 # CloudWatch Alarms for Auto Scaling
@@ -192,8 +192,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_high" {
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-cpu-high-alarm"
-    Type      = "cloudwatch-alarm"
+    Name = "${var.environment}-${var.project_name}-cpu-high-alarm"
+    Type = "cloudwatch-alarm"
     Component = "web"
   })
 }
@@ -217,8 +217,8 @@ resource "aws_cloudwatch_metric_alarm" "cpu_low" {
   }
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-cpu-low-alarm"
-    Type      = "cloudwatch-alarm"
+    Name = "${var.environment}-${var.project_name}-cpu-low-alarm"
+    Type = "cloudwatch-alarm"
     Component = "web"
   })
 }
@@ -229,8 +229,8 @@ resource "aws_cloudwatch_log_group" "app_logs" {
   retention_in_days = var.log_retention_days
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-app-logs"
-    Type      = "log-group"
+    Name = "${var.environment}-${var.project_name}-app-logs"
+    Type = "log-group"
     Component = "web"
   })
 }
@@ -242,8 +242,8 @@ resource "aws_sns_topic" "notifications" {
   name = "${var.environment}-${var.project_name}-notifications"
 
   tags = merge(var.common_tags, {
-    Name      = "${var.environment}-${var.project_name}-notifications"
-    Type      = "sns-topic"
+    Name = "${var.environment}-${var.project_name}-notifications"
+    Type = "sns-topic"
     Component = "web"
   })
 }

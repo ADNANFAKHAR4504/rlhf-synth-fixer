@@ -68,7 +68,7 @@ resource "aws_s3_bucket" "us_east_1" {
 resource "aws_s3_bucket_versioning" "us_east_1" {
   provider = aws.us_east_1
   bucket   = aws_s3_bucket.us_east_1.id
-
+  
   versioning_configuration {
     status = var.bucket_versioning_enabled ? "Enabled" : "Suspended"
   }
@@ -114,7 +114,7 @@ resource "aws_s3_bucket" "eu_west_1" {
 resource "aws_s3_bucket_versioning" "eu_west_1" {
   provider = aws.eu_west_1
   bucket   = aws_s3_bucket.eu_west_1.id
-
+  
   versioning_configuration {
     status = var.bucket_versioning_enabled ? "Enabled" : "Suspended"
   }
@@ -160,7 +160,7 @@ resource "aws_s3_bucket" "ap_southeast_1" {
 resource "aws_s3_bucket_versioning" "ap_southeast_1" {
   provider = aws.ap_southeast_1
   bucket   = aws_s3_bucket.ap_southeast_1.id
-
+  
   versioning_configuration {
     status = var.bucket_versioning_enabled ? "Enabled" : "Suspended"
   }

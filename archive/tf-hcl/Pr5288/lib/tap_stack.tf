@@ -33,37 +33,37 @@ locals {
   # Environment-specific CIDR blocks (non-overlapping)
   environment_config = {
     dev = {
-      vpc_cidr              = "10.1.0.0/16"
-      public_subnet_cidrs   = ["10.1.1.0/24", "10.1.2.0/24"]
-      private_subnet_cidrs  = ["10.1.10.0/24", "10.1.20.0/24"]
-      database_subnet_cidrs = ["10.1.100.0/24", "10.1.200.0/24"]
-      instance_type         = "t3.micro"
-      backup_retention      = 1
-      deletion_protection   = false
+      vpc_cidr               = "10.1.0.0/16"
+      public_subnet_cidrs    = ["10.1.1.0/24", "10.1.2.0/24"]
+      private_subnet_cidrs   = ["10.1.10.0/24", "10.1.20.0/24"]
+      database_subnet_cidrs  = ["10.1.100.0/24", "10.1.200.0/24"]
+      instance_type          = "t3.micro"
+      backup_retention       = 1
+      deletion_protection    = false
     }
     staging = {
-      vpc_cidr              = "10.2.0.0/16"
-      public_subnet_cidrs   = ["10.2.1.0/24", "10.2.2.0/24"]
-      private_subnet_cidrs  = ["10.2.10.0/24", "10.2.20.0/24"]
-      database_subnet_cidrs = ["10.2.100.0/24", "10.2.200.0/24"]
-      instance_type         = "t3.small"
-      backup_retention      = 3
-      deletion_protection   = false
+      vpc_cidr               = "10.2.0.0/16"
+      public_subnet_cidrs    = ["10.2.1.0/24", "10.2.2.0/24"]
+      private_subnet_cidrs   = ["10.2.10.0/24", "10.2.20.0/24"]
+      database_subnet_cidrs  = ["10.2.100.0/24", "10.2.200.0/24"]
+      instance_type          = "t3.small"
+      backup_retention       = 3
+      deletion_protection    = false
     }
     prod = {
-      vpc_cidr              = "10.3.0.0/16"
-      public_subnet_cidrs   = ["10.3.1.0/24", "10.3.2.0/24"]
-      private_subnet_cidrs  = ["10.3.10.0/24", "10.3.20.0/24"]
-      database_subnet_cidrs = ["10.3.100.0/24", "10.3.200.0/24"]
-      instance_type         = "t3.medium"
-      backup_retention      = 7
-      deletion_protection   = true
+      vpc_cidr               = "10.3.0.0/16"
+      public_subnet_cidrs    = ["10.3.1.0/24", "10.3.2.0/24"]
+      private_subnet_cidrs   = ["10.3.10.0/24", "10.3.20.0/24"]
+      database_subnet_cidrs  = ["10.3.100.0/24", "10.3.200.0/24"]
+      instance_type          = "t3.medium"
+      backup_retention       = 7
+      deletion_protection    = true
     }
   }
 
   # Current environment configuration
   current_config = local.environment_config[var.environment]
-
+  
   # Common tags
   common_tags = {
     Project     = var.project_name
@@ -517,13 +517,13 @@ resource "aws_db_instance" "main" {
 
   # Backup configuration (environment-specific)
   backup_retention_period = local.current_config.backup_retention
-  backup_window           = var.db_backup_window
-  maintenance_window      = var.db_maintenance_window
+  backup_window          = var.db_backup_window
+  maintenance_window     = var.db_maintenance_window
 
   # High availability and monitoring
-  multi_az                     = var.environment == "prod" ? true : false
-  monitoring_interval          = 60
-  monitoring_role_arn          = aws_iam_role.rds_enhanced_monitoring.arn
+  multi_az               = var.environment == "prod" ? true : false
+  monitoring_interval    = 60
+  monitoring_role_arn    = aws_iam_role.rds_enhanced_monitoring.arn
   performance_insights_enabled = true
 
   # Deletion protection (production only)

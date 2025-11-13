@@ -22,7 +22,7 @@ resource "aws_kms_key" "media_encryption" {
   description             = "KMS key for media pipeline encryption"
   deletion_window_in_days = 7
   enable_key_rotation     = true
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -352,8 +352,8 @@ resource "aws_iam_policy" "lambda_sqs_access" {
         ]
       },
       {
-        Action = "sqs:SendMessage"
-        Effect = "Allow"
+        Action   = "sqs:SendMessage"
+        Effect   = "Allow"
         Resource = [
           aws_sqs_queue.processing_queue.arn,
           aws_sqs_queue.status_update_queue.arn,
@@ -473,11 +473,11 @@ resource "aws_lambda_function" "media_processor" {
   reserved_concurrent_executions = 100
   environment {
     variables = {
-      INPUT_BUCKET      = aws_s3_bucket.input_bucket.id
-      OUTPUT_BUCKET     = aws_s3_bucket.output_bucket.id
-      ASSETS_TABLE      = aws_dynamodb_table.media_assets.name
-      MEDIACONVERT_ROLE = aws_iam_role.mediaconvert_role.arn
-      AWS_REGION_CUSTOM = var.aws_region
+      INPUT_BUCKET       = aws_s3_bucket.input_bucket.id
+      OUTPUT_BUCKET      = aws_s3_bucket.output_bucket.id
+      ASSETS_TABLE       = aws_dynamodb_table.media_assets.name
+      MEDIACONVERT_ROLE  = aws_iam_role.mediaconvert_role.arn
+      AWS_REGION_CUSTOM  = var.aws_region
     }
   }
   tracing_config {
@@ -505,8 +505,8 @@ resource "aws_sqs_queue_policy" "processing_queue_policy" {
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
-      Sid    = "AllowS3ToSendMessages"
-      Effect = "Allow"
+      Sid       = "AllowS3ToSendMessages"
+      Effect    = "Allow"
       Principal = {
         Service = "s3.amazonaws.com"
       }
@@ -546,7 +546,7 @@ resource "aws_cloudwatch_event_target" "mediaconvert_status_target" {
   rule      = aws_cloudwatch_event_rule.mediaconvert_status_change.name
   target_id = "SendToSQS"
   arn       = aws_sqs_queue.status_update_queue.arn
-
+  
   depends_on = [aws_sqs_queue_policy.status_queue_policy]
 }
 

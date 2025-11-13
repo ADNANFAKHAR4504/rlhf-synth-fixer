@@ -16,7 +16,7 @@ data "aws_cloudfront_origin_request_policy" "cors_s3_origin" {
 # Local values for referencing the correct CloudFront distribution and enhanced tags
 locals {
   cloudfront_distribution = var.domain_name != "" && var.create_dns_records ? aws_cloudfront_distribution.website_with_domain[0] : aws_cloudfront_distribution.website_default[0]
-
+  
   # Enhanced tags with cost allocation
   common_tags = merge(var.tags, {
     Environment = var.environment
@@ -366,8 +366,8 @@ data "aws_route53_zone" "main" {
 
   name = var.hosted_zone_name != "" ? var.hosted_zone_name : (
     # Extract root domain from domain_name (e.g., "example.com" from "www.example.com")
-    length(split(".", var.domain_name)) > 2 ?
-    join(".", slice(split(".", var.domain_name), -2, length(split(".", var.domain_name)))) :
+    length(split(".", var.domain_name)) > 2 ? 
+    join(".", slice(split(".", var.domain_name), -2, length(split(".", var.domain_name)))) : 
     var.domain_name
   )
   private_zone = false

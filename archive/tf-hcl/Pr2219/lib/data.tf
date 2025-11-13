@@ -6,7 +6,7 @@ data "aws_region" "current" {}
 
 data "aws_iam_policy_document" "cloudtrail_s3" {
   statement {
-    sid       = "AWSCloudTrailAclCheck"
+    sid = "AWSCloudTrailAclCheck"
     actions   = ["s3:GetBucketAcl"]
     resources = ["arn:aws:s3:::secconfig-cloudtrail-bucket-pr2219"]
 
@@ -17,7 +17,7 @@ data "aws_iam_policy_document" "cloudtrail_s3" {
   }
 
   statement {
-    sid       = "AWSCloudTrailWrite"
+    sid = "AWSCloudTrailWrite"
     actions   = ["s3:PutObject"]
     resources = ["arn:aws:s3:::secconfig-cloudtrail-bucket-pr2219/*"]
 
@@ -37,7 +37,7 @@ data "aws_iam_policy_document" "cloudtrail_s3" {
 # Secure bucket policy - allow all IAM roles/users in this account
 data "aws_iam_policy_document" "secure_bucket" {
   statement {
-    sid = "AllowAllAccountPrincipals"
+    sid     = "AllowAllAccountPrincipals"
     actions = [
       "s3:ListBucket",
       "s3:GetObject",
@@ -59,10 +59,10 @@ data "aws_iam_policy_document" "secure_bucket" {
 data "aws_iam_policy_document" "config_s3" {
   statement {
     sid = "AWSCloudTrailAclCheck"
-    actions = [
+    actions   = [
       "s3:GetBucketAcl",
       "s3:ListBucket"
-    ]
+      ]
     resources = ["arn:aws:s3:::secconfig-config-bucket-pr2219"]
 
     principals {
@@ -72,7 +72,7 @@ data "aws_iam_policy_document" "config_s3" {
   }
 
   statement {
-    sid       = "AWSCloudTrailWrite"
+    sid = "AWSCloudTrailWrite"
     actions   = ["s3:PutObject"]
     resources = ["arn:aws:s3:::secconfig-config-bucket-pr2219/*"]
 

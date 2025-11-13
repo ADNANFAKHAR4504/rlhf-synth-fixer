@@ -10,5 +10,5 @@ variable "retention_in_days" {
 
 variable "sns_topic" {
   description = "Sns topc arn"
-  type        = string
+  type = string
 }

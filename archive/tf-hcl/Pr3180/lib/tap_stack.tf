@@ -52,18 +52,18 @@ variable "instance_type" {
 
 locals {
   common_tags = {
-    Environment  = var.environment
-    ownership    = var.owner
+    Environment = var.environment
+    ownership   = var.owner
     departmental = var.department
   }
-
+  
   # Availability zones for subnet distribution
   azs = ["${var.aws_region}a", "${var.aws_region}b"]
-
+  
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-
+  
   # Resource naming prefix
   name_prefix = lower("tap-${var.environment}")
 }
@@ -76,12 +76,12 @@ locals {
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
-
+  
   filter {
     name   = "name"
     values = ["amzn2-ami-hvm-*-x86_64-gp2"]
   }
-
+  
   filter {
     name   = "virtualization-type"
     values = ["hvm"]
@@ -126,7 +126,7 @@ resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-vpc"
   })
@@ -135,7 +135,7 @@ resource "aws_vpc" "main" {
 # Internet Gateway
 resource "aws_internet_gateway" "main" {
   vpc_id = aws_vpc.main.id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-igw"
   })
@@ -148,7 +148,7 @@ resource "aws_subnet" "public" {
   cidr_block              = local.public_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-subnet-${count.index + 1}"
     Type = "Public"
@@ -162,7 +162,7 @@ resource "aws_subnet" "private" {
   cidr_block              = local.private_subnet_cidrs[count.index]
   availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = false
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-subnet-${count.index + 1}"
     Type = "Private"
@@ -173,11 +173,11 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count  = 2
   domain = "vpc"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-eip-${count.index + 1}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
@@ -186,23 +186,23 @@ resource "aws_nat_gateway" "main" {
   count         = 2
   allocation_id = aws_eip.nat[count.index].id
   subnet_id     = aws_subnet.public[count.index].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-nat-gateway-${count.index + 1}"
   })
-
+  
   depends_on = [aws_internet_gateway.main]
 }
 
 # Public Route Table
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block = "0.0.0.0/0"
     gateway_id = aws_internet_gateway.main.id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-public-rt"
   })
@@ -212,12 +212,12 @@ resource "aws_route_table" "public" {
 resource "aws_route_table" "private" {
   count  = 2
   vpc_id = aws_vpc.main.id
-
+  
   route {
     cidr_block     = "0.0.0.0/0"
     nat_gateway_id = aws_nat_gateway.main[count.index].id
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-private-rt-${count.index + 1}"
   })
@@ -246,7 +246,7 @@ resource "aws_security_group" "ec2" {
   name_prefix = "${local.name_prefix}-ec2-sg"
   vpc_id      = aws_vpc.main.id
   description = "Security group for EC2 instances"
-
+  
   # SSH access from specified CIDR only
   ingress {
     from_port   = 22
@@ -255,7 +255,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = [var.ssh_allowed_cidr]
     description = "SSH from allowed CIDR"
   }
-
+  
   # HTTP from ALB
   ingress {
     from_port       = 80
@@ -264,7 +264,7 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
     description     = "HTTP from ALB"
   }
-
+  
   # HTTPS from ALB
   ingress {
     from_port       = 443
@@ -273,7 +273,7 @@ resource "aws_security_group" "ec2" {
     security_groups = [aws_security_group.alb.id]
     description     = "HTTPS from ALB"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -281,7 +281,7 @@ resource "aws_security_group" "ec2" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-ec2-sg"
   })
@@ -292,7 +292,7 @@ resource "aws_security_group" "rds" {
   name_prefix = "${local.name_prefix}-rds-sg"
   vpc_id      = aws_vpc.main.id
   description = "Security group for RDS database"
-
+  
   # MySQL access from EC2 instances only
   ingress {
     from_port       = 3306
@@ -301,7 +301,7 @@ resource "aws_security_group" "rds" {
     security_groups = [aws_security_group.ec2.id]
     description     = "MySQL from EC2 instances"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -309,7 +309,7 @@ resource "aws_security_group" "rds" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-sg"
   })
@@ -320,7 +320,7 @@ resource "aws_security_group" "alb" {
   name_prefix = "${local.name_prefix}-alb-sg"
   vpc_id      = aws_vpc.main.id
   description = "Security group for Application Load Balancer"
-
+  
   ingress {
     from_port   = 80
     to_port     = 80
@@ -328,7 +328,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTP from anywhere"
   }
-
+  
   ingress {
     from_port   = 443
     to_port     = 443
@@ -336,7 +336,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "HTTPS from anywhere"
   }
-
+  
   egress {
     from_port   = 0
     to_port     = 0
@@ -344,7 +344,7 @@ resource "aws_security_group" "alb" {
     cidr_blocks = ["0.0.0.0/0"]
     description = "Allow all outbound traffic"
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb-sg"
   })
@@ -357,7 +357,7 @@ resource "aws_security_group" "alb" {
 # IAM Role for EC2 instances
 resource "aws_iam_role" "ec2" {
   name = "${local.name_prefix}-ec2-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -370,7 +370,7 @@ resource "aws_iam_role" "ec2" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -378,7 +378,7 @@ resource "aws_iam_role" "ec2" {
 resource "aws_iam_policy" "ec2_policy" {
   name        = "${local.name_prefix}-ec2-policy"
   description = "Policy for EC2 instances to access S3 and SSM"
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -415,7 +415,7 @@ resource "aws_iam_policy" "ec2_policy" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -435,14 +435,14 @@ resource "aws_iam_role_policy_attachment" "ec2_ssm" {
 resource "aws_iam_instance_profile" "ec2" {
   name = "${local.name_prefix}-ec2-profile"
   role = aws_iam_role.ec2.name
-
+  
   tags = local.common_tags
 }
 
 # IAM Role for CloudTrail
 resource "aws_iam_role" "cloudtrail" {
   name = "${local.name_prefix}-cloudtrail-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -455,7 +455,7 @@ resource "aws_iam_role" "cloudtrail" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -466,7 +466,7 @@ resource "aws_iam_role" "cloudtrail" {
 # S3 Bucket for application data
 resource "aws_s3_bucket" "main" {
   bucket = "${local.name_prefix}-data-${random_id.s3_bucket_suffix.hex}"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-data-bucket"
   })
@@ -475,7 +475,7 @@ resource "aws_s3_bucket" "main" {
 # S3 Bucket Versioning
 resource "aws_s3_bucket_versioning" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
@@ -484,7 +484,7 @@ resource "aws_s3_bucket_versioning" "main" {
 # S3 Bucket Encryption
 resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm = "AES256"
@@ -495,7 +495,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "main" {
 # S3 Bucket Public Access Block
 resource "aws_s3_bucket_public_access_block" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -505,7 +505,7 @@ resource "aws_s3_bucket_public_access_block" "main" {
 # S3 Bucket for access logs
 resource "aws_s3_bucket" "logs" {
   bucket = "${local.name_prefix}-logs-${random_id.s3_bucket_suffix.hex}"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-logs-bucket"
   })
@@ -520,7 +520,7 @@ resource "aws_s3_bucket_acl" "logs" {
 # S3 Bucket Logging
 resource "aws_s3_bucket_logging" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   target_bucket = aws_s3_bucket.logs.id
   target_prefix = "access-logs/"
 }
@@ -528,7 +528,7 @@ resource "aws_s3_bucket_logging" "main" {
 # S3 Bucket for CloudTrail
 resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${local.name_prefix}-cloudtrail-${random_id.s3_bucket_suffix.hex}"
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-cloudtrail-bucket"
   })
@@ -537,7 +537,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 # CloudTrail S3 Bucket Policy
 resource "aws_s3_bucket_policy" "cloudtrail" {
   bucket = aws_s3_bucket.cloudtrail.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -576,7 +576,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 resource "aws_db_subnet_group" "main" {
   name       = lower("${local.name_prefix}-db-subnet-group")
   subnet_ids = aws_subnet.private[*].id
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-db-subnet-group"
   })
@@ -585,40 +585,40 @@ resource "aws_db_subnet_group" "main" {
 # RDS MySQL Instance
 resource "aws_db_instance" "main" {
   identifier = lower("${local.name_prefix}-mysql-db")
-
+  
   # Engine configuration
-  engine            = "mysql"
-  engine_version    = "8.0.43"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
-
+  engine               = "mysql"
+  engine_version       = "8.0.43"
+  instance_class       = "db.t3.micro"
+  allocated_storage    = 20
+  storage_type         = "gp3"
+  storage_encrypted    = true
+  
   # Multi-AZ for high availability
   multi_az = true
-
+  
   # Database configuration
   db_name  = "appdb"
   username = "a${random_string.rds_username.result}"
   password = random_password.rds_password.result
-
+  
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]
   publicly_accessible    = false
-
+  
   # Backup configuration
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   # Auto minor version upgrade
   auto_minor_version_upgrade = true
-
+  
   # Disable deletion protection as per requirements
   deletion_protection = false
   skip_final_snapshot = true
-
+  
   tags = merge(local.common_tags, {
     Name = lower("${local.name_prefix}-mysql-db")
   })
@@ -633,7 +633,7 @@ resource "aws_ssm_parameter" "rds_username" {
   name  = "/${local.name_prefix}/rds/username"
   type  = "SecureString"
   value = aws_db_instance.main.username
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-username"
   })
@@ -643,7 +643,7 @@ resource "aws_ssm_parameter" "rds_password" {
   name  = "/${local.name_prefix}/rds/password"
   type  = "SecureString"
   value = random_password.rds_password.result
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-password"
   })
@@ -653,7 +653,7 @@ resource "aws_ssm_parameter" "rds_endpoint" {
   name  = "/${local.name_prefix}/rds/endpoint"
   type  = "String"
   value = aws_db_instance.main.endpoint
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-rds-endpoint"
   })
@@ -669,12 +669,12 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  subnets           = aws_subnet.public[*].id
+  
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-alb"
   })
@@ -686,7 +686,7 @@ resource "aws_lb_target_group" "main" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -696,13 +696,13 @@ resource "aws_lb_target_group" "main" {
     path                = "/"
     matcher             = "200"
   }
-
+  
   stickiness {
     type            = "lb_cookie"
     cookie_duration = 86400
     enabled         = true
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-tg"
   })
@@ -713,7 +713,7 @@ resource "aws_lb_listener" "main" {
   load_balancer_arn = aws_lb.main.arn
   port              = "80"
   protocol          = "HTTP"
-
+  
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.main.arn
@@ -729,31 +729,31 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${local.name_prefix}-lt"
   image_id      = data.aws_ami.amazon_linux_2.id
   instance_type = var.instance_type
-
+  
   vpc_security_group_ids = [aws_security_group.ec2.id]
-
+  
   iam_instance_profile {
     arn = aws_iam_instance_profile.ec2.arn
   }
-
+  
   # Ensure no public IP
   network_interfaces {
     associate_public_ip_address = false
-    delete_on_termination       = true
+    delete_on_termination      = true
   }
-
+  
   # Enable encryption for root volume
   block_device_mappings {
     device_name = "/dev/xvda"
-
+    
     ebs {
       volume_size           = 20
       volume_type           = "gp3"
-      encrypted             = true
+      encrypted            = true
       delete_on_termination = true
     }
   }
-
+  
   # User data for basic setup
   user_data = base64encode(<<-EOF
     #!/bin/bash
@@ -765,21 +765,21 @@ resource "aws_launch_template" "main" {
     echo "<h1>Hello from ${local.name_prefix}</h1>" > /var/www/html/index.html
   EOF
   )
-
+  
   tag_specifications {
     resource_type = "instance"
     tags = merge(local.common_tags, {
       Name = "${local.name_prefix}-instance"
     })
   }
-
+  
   tag_specifications {
     resource_type = "volume"
     tags = merge(local.common_tags, {
       Name = "${local.name_prefix}-volume"
     })
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-launch-template"
   })
@@ -787,21 +787,21 @@ resource "aws_launch_template" "main" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.name_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "${local.name_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-
+  
   min_size         = 1
   max_size         = 3
   desired_capacity = 2
-
+  
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-
+  
   enabled_metrics = [
     "GroupMinSize",
     "GroupMaxSize",
@@ -809,13 +809,13 @@ resource "aws_autoscaling_group" "main" {
     "GroupInServiceInstances",
     "GroupTotalInstances"
   ]
-
+  
   tag {
     key                 = "Name"
     value               = "${local.name_prefix}-asg-instance"
     propagate_at_launch = true
   }
-
+  
   dynamic "tag" {
     for_each = local.common_tags
     content {
@@ -831,7 +831,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${local.name_prefix}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -840,7 +840,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${local.name_prefix}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -853,18 +853,18 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${local.name_prefix}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "80"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_up.arn]
-
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/EC2"
+  period             = "120"
+  statistic          = "Average"
+  threshold          = "80"
+  alarm_description  = "This metric monitors ec2 cpu utilization"
+  alarm_actions      = [aws_autoscaling_policy.scale_up.arn]
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
   }
-
+  
   tags = local.common_tags
 }
 
@@ -873,18 +873,18 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
   alarm_name          = "${local.name_prefix}-low-cpu"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "20"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.scale_down.arn]
-
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/EC2"
+  period             = "120"
+  statistic          = "Average"
+  threshold          = "20"
+  alarm_description  = "This metric monitors ec2 cpu utilization"
+  alarm_actions      = [aws_autoscaling_policy.scale_down.arn]
+  
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
   }
-
+  
   tags = local.common_tags
 }
 
@@ -895,10 +895,10 @@ resource "aws_cloudwatch_metric_alarm" "low_cpu" {
 # CloudTrail for auditing
 resource "aws_cloudtrail" "main" {
   name                          = "${local.name_prefix}-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name               = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_logging                = true
+  is_multi_region_trail        = true
+  enable_logging               = true
 
   event_selector {
     read_write_type           = "All"
@@ -924,7 +924,7 @@ resource "aws_cloudtrail" "main" {
 # IAM Role for DLM
 resource "aws_iam_role" "dlm" {
   name = "${local.name_prefix}-dlm-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -937,7 +937,7 @@ resource "aws_iam_role" "dlm" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -951,34 +951,34 @@ resource "aws_iam_role_policy_attachment" "dlm" {
 resource "aws_dlm_lifecycle_policy" "ebs_snapshots" {
   description        = "DLM lifecycle policy for EBS snapshots"
   execution_role_arn = aws_iam_role.dlm.arn
-  state              = "ENABLED"
-
+  state             = "ENABLED"
+  
   policy_details {
     resource_types = ["VOLUME"]
-
+    
     schedule {
       name = "Daily snapshots"
-
+      
       create_rule {
         interval      = 24
         interval_unit = "HOURS"
-        times         = ["23:45"]
+        times        = ["23:45"]
       }
-
+      
       retain_rule {
         count = 7
       }
-
+      
       tags_to_add = {
         SnapshotCreator = "DLM"
       }
-
+      
       copy_tags = true
     }
-
+    
     target_tags = local.common_tags
   }
-
+  
   tags = merge(local.common_tags, {
     Name = "${local.name_prefix}-dlm-policy"
   })

@@ -143,7 +143,7 @@ resource "aws_s3_bucket" "ingestion" {
   bucket = var.ingestion_bucket_name
 
   tags = merge(local.common_tags, {
-    Name               = "${var.environment}-ingestion-bucket"
+    Name = "${var.environment}-ingestion-bucket"
     DataClassification = "Confidential"
   })
 }
@@ -182,9 +182,9 @@ resource "aws_s3_bucket" "archive" {
   object_lock_enabled = true
 
   tags = merge(local.common_tags, {
-    Name               = "${var.environment}-archive-bucket"
+    Name = "${var.environment}-archive-bucket"
     DataClassification = "Confidential"
-    Retention          = "10Years"
+    Retention = "10Years"
   })
 }
 
@@ -260,7 +260,7 @@ resource "aws_s3_bucket" "cloudtrail" {
   bucket = "${var.environment}-cloudtrail-logs-${data.aws_caller_identity.current.account_id}"
 
   tags = merge(local.common_tags, {
-    Name      = "${var.environment}-cloudtrail-logs"
+    Name = "${var.environment}-cloudtrail-logs"
     Retention = "10Years"
   })
 }
@@ -532,9 +532,9 @@ resource "aws_iam_role_policy" "step_functions_permissions" {
 
 # DynamoDB Table for metadata and lineage
 resource "aws_dynamodb_table" "metadata" {
-  name         = var.dynamo_table_name
-  billing_mode = "PAY_PER_REQUEST"
-  hash_key     = "reportId"
+  name           = var.dynamo_table_name
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "reportId"
 
   attribute {
     name = "reportId"
@@ -614,7 +614,7 @@ resource "aws_lambda_function" "data_validation" {
 
   environment {
     variables = {
-      ENVIRONMENT    = var.environment
+      ENVIRONMENT = var.environment
       METADATA_TABLE = aws_dynamodb_table.metadata.name
     }
   }
@@ -642,7 +642,7 @@ resource "aws_lambda_function" "data_quality" {
 
   environment {
     variables = {
-      ENVIRONMENT    = var.environment
+      ENVIRONMENT = var.environment
       METADATA_TABLE = aws_dynamodb_table.metadata.name
     }
   }
@@ -719,12 +719,12 @@ resource "aws_glue_security_configuration" "glue_security" {
   encryption_configuration {
     cloudwatch_encryption {
       cloudwatch_encryption_mode = "SSE-KMS"
-      kms_key_arn                = aws_kms_key.glue_key.arn
+      kms_key_arn               = aws_kms_key.glue_key.arn
     }
 
     job_bookmarks_encryption {
       job_bookmarks_encryption_mode = "SSE-KMS"
-      kms_key_arn                   = aws_kms_key.glue_key.arn
+      kms_key_arn                  = aws_kms_key.glue_key.arn
     }
 
     s3_encryption {
@@ -745,12 +745,12 @@ resource "aws_glue_job" "compliance_etl" {
   }
 
   default_arguments = {
-    "--enable-job-insights"              = "true"
-    "--enable-metrics"                   = "true"
+    "--enable-job-insights"     = "true"
+    "--enable-metrics"          = "true"
     "--enable-continuous-cloudwatch-log" = "true"
-    "--job-bookmark-option"              = "job-bookmark-enable"
-    "--TempDir"                          = "s3://${aws_s3_bucket.glue_scripts.bucket}/temp/"
-    "--enable-auto-scaling"              = "true"
+    "--job-bookmark-option"     = "job-bookmark-enable"
+    "--TempDir"                 = "s3://${aws_s3_bucket.glue_scripts.bucket}/temp/"
+    "--enable-auto-scaling"     = "true"
   }
 
   glue_version = "4.0"
@@ -843,7 +843,7 @@ resource "aws_athena_workgroup" "compliance" {
 
       encryption_configuration {
         encryption_option = "SSE_KMS"
-        kms_key_arn       = aws_kms_key.athena_key.arn
+        kms_key_arn      = aws_kms_key.athena_key.arn
       }
     }
 
@@ -867,122 +867,122 @@ resource "aws_sfn_state_machine" "compliance_workflow" {
     StartAt = "RunETL"
     States = {
       RunETL = {
-        Type     = "Task"
+        Type = "Task"
         Resource = "arn:aws:states:::glue:startJobRun.sync"
         Parameters = {
           JobName = aws_glue_job.compliance_etl.name
         }
         Retry = [
           {
-            ErrorEquals     = ["States.ALL"]
+            ErrorEquals = ["States.ALL"]
             IntervalSeconds = 30
-            MaxAttempts     = 3
-            BackoffRate     = 2.0
+            MaxAttempts = 3
+            BackoffRate = 2.0
           }
         ]
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "NotifyError"
+            Next = "NotifyError"
           }
         ]
         Next = "ValidateData"
       }
       ValidateData = {
-        Type     = "Task"
+        Type = "Task"
         Resource = aws_lambda_function.data_validation.arn
         Retry = [
           {
-            ErrorEquals     = ["States.ALL"]
+            ErrorEquals = ["States.ALL"]
             IntervalSeconds = 30
-            MaxAttempts     = 3
-            BackoffRate     = 2.0
+            MaxAttempts = 3
+            BackoffRate = 2.0
           }
         ]
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "NotifyError"
+            Next = "NotifyError"
           }
         ]
         Next = "QualityCheck"
       }
       QualityCheck = {
-        Type     = "Task"
+        Type = "Task"
         Resource = aws_lambda_function.data_quality.arn
         Retry = [
           {
-            ErrorEquals     = ["States.ALL"]
+            ErrorEquals = ["States.ALL"]
             IntervalSeconds = 30
-            MaxAttempts     = 3
-            BackoffRate     = 2.0
+            MaxAttempts = 3
+            BackoffRate = 2.0
           }
         ]
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "NotifyError"
+            Next = "NotifyError"
           }
         ]
         Next = "GenerateReport"
       }
       GenerateReport = {
-        Type     = "Task"
+        Type = "Task"
         Resource = "arn:aws:states:::athena:startQueryExecution.sync"
         Parameters = {
           QueryString = "SELECT * FROM raw_financial_data WHERE transaction_date >= current_date - interval '1' day"
-          WorkGroup   = aws_athena_workgroup.compliance.name
+          WorkGroup = aws_athena_workgroup.compliance.name
           ResultConfiguration = {
             OutputLocation = "s3://${aws_s3_bucket.athena_results.bucket}/reports/"
           }
         }
         Retry = [
           {
-            ErrorEquals     = ["States.ALL"]
+            ErrorEquals = ["States.ALL"]
             IntervalSeconds = 30
-            MaxAttempts     = 3
-            BackoffRate     = 2.0
+            MaxAttempts = 3
+            BackoffRate = 2.0
           }
         ]
         Catch = [
           {
             ErrorEquals = ["States.ALL"]
-            Next        = "NotifyError"
+            Next = "NotifyError"
           }
         ]
         Next = "ArchiveReport"
       }
       ArchiveReport = {
-        Type     = "Task"
+        Type = "Task"
         Resource = "arn:aws:states:::lambda:invoke"
         Parameters = {
           FunctionName = aws_lambda_function.data_validation.arn
           Payload = {
-            "action" : "archive"
+            "action": "archive"
           }
         }
         Next = "NotifySuccess"
       }
       NotifySuccess = {
-        Type     = "Task"
+        Type = "Task"
         Resource = "arn:aws:states:::sns:publish"
         Parameters = {
           TopicArn = aws_sns_topic.notifications.arn
-          Message  = "Compliance report generated successfully"
+          Message = "Compliance report generated successfully"
         }
         End = true
       }
       NotifyError = {
-        Type     = "Task"
+        Type = "Task"
         Resource = "arn:aws:states:::sns:publish"
         Parameters = {
           TopicArn = aws_sns_topic.notifications.arn
-          Message  = "Error in compliance report generation"
+          Message = "Error in compliance report generation"
         }
         Next = "FailState"
       }
       FailState = {
-        Type  = "Fail"
+        Type = "Fail"
         Cause = "Workflow failed"
       }
     }
@@ -1099,8 +1099,8 @@ resource "aws_iam_role_policy" "events_policy" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect   = "Allow"
-        Action   = "states:StartExecution"
+        Effect = "Allow"
+        Action = "states:StartExecution"
         Resource = aws_sfn_state_machine.compliance_workflow.arn
       }
     ]
@@ -1110,17 +1110,17 @@ resource "aws_iam_role_policy" "events_policy" {
 # CloudTrail for audit logging
 resource "aws_cloudtrail" "audit" {
   name                          = "${var.environment}-compliance-audit-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail.id
+  s3_bucket_name               = aws_s3_bucket.cloudtrail.id
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_log_file_validation    = true
+  is_multi_region_trail        = true
+  enable_log_file_validation   = true
 
   event_selector {
     read_write_type           = "All"
     include_management_events = true
 
     data_resource {
-      type = "AWS::S3::Object"
+      type   = "AWS::S3::Object"
       values = [
         "${aws_s3_bucket.ingestion.arn}/",
         "${aws_s3_bucket.archive.arn}/"
@@ -1343,8 +1343,8 @@ resource "aws_quicksight_group" "compliance_viewers" {
 
 resource "aws_quicksight_data_source" "athena" {
   data_source_id = "${var.environment}-athena-datasource"
-  name           = "${var.environment}-athena-datasource"
-  type           = "ATHENA"
+  name          = "${var.environment}-athena-datasource"
+  type          = "ATHENA"
 
   parameters {
     athena {

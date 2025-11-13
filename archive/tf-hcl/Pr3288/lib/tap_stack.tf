@@ -1494,9 +1494,9 @@ resource "aws_lambda_function" "orchestrator" {
   filename         = "${path.module}/lambda_function.zip"
   source_code_hash = fileexists("${path.module}/lambda_function.zip") ? filebase64sha256("${path.module}/lambda_function.zip") : null
 
-  handler     = "lambda_function.handler"
-  runtime     = "nodejs20.x"
-  timeout     = 300
+  handler = "lambda_function.handler"
+  runtime = "nodejs20.x"
+  timeout = 300
   memory_size = 512
 
   vpc_config {
@@ -1599,7 +1599,7 @@ resource "aws_cloudwatch_event_target" "lambda_target" {
 
   retry_policy {
     maximum_retry_attempts       = 2
-    maximum_event_age_in_seconds = 3600 # 1 hour
+    maximum_event_age_in_seconds = 3600  # 1 hour
   }
 }
 

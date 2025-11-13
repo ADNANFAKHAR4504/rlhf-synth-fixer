@@ -53,18 +53,18 @@ variable "ssh_allowed_cidr" {
 locals {
   # Common naming conventions
   name_prefix = "${var.project_name}-${var.environment}"
-
+  
   # Common tags
   common_tags = {
     Environment = "Production"
     Project     = var.project_name
     ManagedBy   = "Terraform"
   }
-
+  
   # Subnet CIDR blocks
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.11.0/24"]
-
+  
   # Availability zones
   availability_zones = ["${var.aws_region}a", "${var.aws_region}b"]
 }
@@ -264,11 +264,11 @@ resource "aws_security_group" "ec2" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "SSH from VPC"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_allowed_cidr]
+    description     = "SSH from VPC"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    cidr_blocks     = [var.ssh_allowed_cidr]
   }
 
   ingress {
@@ -494,10 +494,10 @@ resource "aws_db_instance" "mysql" {
   engine_version = "8.0.43"
   instance_class = var.rds_instance_class
 
-  allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
-  kms_key_id        = aws_kms_key.rds.arn
+  allocated_storage     = 20
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  kms_key_id           = aws_kms_key.rds.arn
 
   db_name  = "tapdb"
   username = "a${random_string.rds_username.result}"
@@ -506,15 +506,15 @@ resource "aws_db_instance" "mysql" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az                   = true
-  publicly_accessible        = false
-  auto_minor_version_upgrade = true
-  backup_retention_period    = 7
+  multi_az                    = true
+  publicly_accessible         = false
+  auto_minor_version_upgrade  = true
+  backup_retention_period     = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-
-  skip_final_snapshot = true
-  deletion_protection = false
+  
+  skip_final_snapshot       = true
+  deletion_protection       = false
 
   tags = merge(
     local.common_tags,
@@ -580,13 +580,13 @@ resource "aws_secretsmanager_secret_version" "rds_credentials" {
 
 # Store EC2 configuration in Parameter Store
 resource "aws_ssm_parameter" "ec2_config" {
-  name = "/${local.name_prefix}/ec2/config"
-  type = "String"
+  name  = "/${local.name_prefix}/ec2/config"
+  type  = "String"
   value = jsonencode({
-    environment  = var.environment
-    project      = var.project_name
-    rds_endpoint = aws_db_instance.mysql.endpoint
-    secret_arn   = aws_secretsmanager_secret.rds_credentials.arn
+    environment     = var.environment
+    project         = var.project_name
+    rds_endpoint    = aws_db_instance.mysql.endpoint
+    secret_arn      = aws_secretsmanager_secret.rds_credentials.arn
   })
 
   tags = merge(
@@ -609,7 +609,7 @@ resource "aws_lb" "main" {
   subnets            = aws_subnet.public[*].id
 
   enable_deletion_protection = false
-  enable_http2               = true
+  enable_http2              = true
 
   tags = merge(
     local.common_tags,
@@ -668,7 +668,7 @@ resource "aws_launch_template" "main" {
   instance_type = var.instance_type
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
-
+  
   iam_instance_profile {
     arn = aws_iam_instance_profile.ec2.arn
   }
@@ -710,12 +710,12 @@ resource "aws_launch_template" "main" {
 # ============================================================================
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.name_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "${local.name_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-
+  
   min_size         = 2
   max_size         = 4
   desired_capacity = 2
@@ -743,7 +743,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${local.name_prefix}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -751,7 +751,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${local.name_prefix}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 

@@ -11,21 +11,21 @@ locals {
   # Environment-specific configurations
   environment_config = {
     staging = {
-      instance_type              = "t3.small"
-      min_size                   = 1
-      max_size                   = 3
-      desired_capacity           = 2
-      enable_deletion_protection = false
+      instance_type                = "t3.small"
+      min_size                    = 1
+      max_size                    = 3
+      desired_capacity            = 2
+      enable_deletion_protection  = false
       enable_nat_gateway         = false
       enable_flow_logs           = false
       db_instance_class          = "db.t3.micro"
     }
     production = {
-      instance_type              = "t3.large"
-      min_size                   = 2
-      max_size                   = 10
-      desired_capacity           = 3
-      enable_deletion_protection = true
+      instance_type                = "t3.large"
+      min_size                    = 2
+      max_size                    = 10
+      desired_capacity            = 3
+      enable_deletion_protection  = true
       enable_nat_gateway         = true
       enable_flow_logs           = true
       db_instance_class          = "db.t3.small"
@@ -361,7 +361,7 @@ variable "termination_policies" {
   default     = ["Default"]
   validation {
     condition = alltrue([
-      for policy in var.termination_policies :
+      for policy in var.termination_policies : 
       contains(["OldestInstance", "NewestInstance", "OldestLaunchConfiguration", "OldestLaunchTemplate", "ClosestToNextInstanceHour", "Default"], policy)
     ])
     error_message = "Termination policies must be valid ASG termination policies."
@@ -502,7 +502,7 @@ variable "block_device_mappings" {
     iops                  = number
     throughput            = number
     encrypted             = bool
-    kms_key_id            = string
+    kms_key_id           = string
     delete_on_termination = bool
   }))
   default = [
@@ -513,7 +513,7 @@ variable "block_device_mappings" {
       iops                  = 3000
       throughput            = 125
       encrypted             = true
-      kms_key_id            = ""
+      kms_key_id           = ""
       delete_on_termination = true
     }
   ]

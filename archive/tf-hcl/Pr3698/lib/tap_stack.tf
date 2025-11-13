@@ -85,15 +85,15 @@ data "aws_ami" "secondary_amazon_linux" {
 locals {
   # Random suffix for resource naming
   resource_suffix = random_string.suffix.result
-
+  
   # Naming conventions
   primary_vpc_name   = "vpc-primary-${local.resource_suffix}"
   secondary_vpc_name = "vpc-secondary-${local.resource_suffix}"
-
+  
   # CIDR blocks
   primary_vpc_cidr   = "10.0.0.0/16"
   secondary_vpc_cidr = "10.1.0.0/16"
-
+  
   # Common tags
   common_tags = {
     Environment = var.environment
@@ -124,8 +124,8 @@ resource "random_string" "rds_username_primary" {
 
 # Random password for RDS primary
 resource "random_password" "rds_password_primary" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
   override_special = "!#$%^&*()-_=+[]{}:?"
 }
 
@@ -139,8 +139,8 @@ resource "random_string" "rds_username_secondary" {
 
 # Random password for RDS secondary
 resource "random_password" "rds_password_secondary" {
-  length           = 16
-  special          = true
+  length  = 16
+  special = true
   override_special = "!#$%^&*()-_=+[]{}:?"
 }
 
@@ -941,7 +941,7 @@ resource "aws_db_subnet_group" "primary_db_subnet_group" {
   provider    = aws.us_west_2
   name        = "db-subnet-group-primary-${local.resource_suffix}"
   description = "Database subnet group for primary region"
-  subnet_ids = [
+  subnet_ids  = [
     aws_subnet.primary_private_subnet_1.id,
     aws_subnet.primary_private_subnet_2.id
   ]
@@ -953,40 +953,40 @@ resource "aws_db_subnet_group" "primary_db_subnet_group" {
 
 # RDS Instance - Primary
 resource "aws_db_instance" "primary_rds" {
-  provider   = aws.us_west_2
-  identifier = "rds-primary-${local.resource_suffix}"
-
+  provider     = aws.us_west_2
+  identifier   = "rds-primary-${local.resource_suffix}"
+  
   # Database configuration
-  engine            = "mysql"
-  engine_version    = "8.0.35"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
-
+  engine                      = "mysql"
+  engine_version             = "8.0.35"
+  instance_class             = "db.t3.micro"
+  allocated_storage          = 20
+  storage_type               = "gp3"
+  storage_encrypted          = true
+  
   # Credentials
   db_name  = "tapdb"
   username = random_string.rds_username_primary.result
   password = random_password.rds_password_primary.result
-
+  
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.primary_db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.primary_rds_sg.id]
   publicly_accessible    = false
-
+  
   # High availability
-  multi_az = true
-
+  multi_az               = true
+  
   # Maintenance and backup
   auto_minor_version_upgrade = true
   backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-
+  
   # Protection
   skip_final_snapshot = true
   deletion_protection = false
-
+  
   tags = merge(local.common_tags, {
     Name = "rds-primary-${local.resource_suffix}"
   })
@@ -1001,7 +1001,7 @@ resource "aws_db_subnet_group" "secondary_db_subnet_group" {
   provider    = aws.eu_west_1
   name        = "db-subnet-group-secondary-${local.resource_suffix}"
   description = "Database subnet group for secondary region"
-  subnet_ids = [
+  subnet_ids  = [
     aws_subnet.secondary_private_subnet_1.id,
     aws_subnet.secondary_private_subnet_2.id
   ]
@@ -1013,40 +1013,40 @@ resource "aws_db_subnet_group" "secondary_db_subnet_group" {
 
 # RDS Instance - Secondary
 resource "aws_db_instance" "secondary_rds" {
-  provider   = aws.eu_west_1
-  identifier = "rds-secondary-${local.resource_suffix}"
-
+  provider     = aws.eu_west_1
+  identifier   = "rds-secondary-${local.resource_suffix}"
+  
   # Database configuration
-  engine            = "mysql"
-  engine_version    = "8.0.35"
-  instance_class    = "db.t3.micro"
-  allocated_storage = 20
-  storage_type      = "gp3"
-  storage_encrypted = true
-
+  engine                      = "mysql"
+  engine_version             = "8.0.35"
+  instance_class             = "db.t3.micro"
+  allocated_storage          = 20
+  storage_type               = "gp3"
+  storage_encrypted          = true
+  
   # Credentials
   db_name  = "tapdb"
   username = random_string.rds_username_secondary.result
   password = random_password.rds_password_secondary.result
-
+  
   # Network configuration
   db_subnet_group_name   = aws_db_subnet_group.secondary_db_subnet_group.name
   vpc_security_group_ids = [aws_security_group.secondary_rds_sg.id]
   publicly_accessible    = false
-
+  
   # High availability
-  multi_az = true
-
+  multi_az               = true
+  
   # Maintenance and backup
   auto_minor_version_upgrade = true
   backup_retention_period    = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-
+  
   # Protection
   skip_final_snapshot = true
   deletion_protection = false
-
+  
   tags = merge(local.common_tags, {
     Name = "rds-secondary-${local.resource_suffix}"
   })
@@ -1068,8 +1068,8 @@ resource "aws_secretsmanager_secret" "primary_rds_secret" {
 }
 
 resource "aws_secretsmanager_secret_version" "primary_rds_secret_version" {
-  provider  = aws.us_west_2
-  secret_id = aws_secretsmanager_secret.primary_rds_secret.id
+  provider      = aws.us_west_2
+  secret_id     = aws_secretsmanager_secret.primary_rds_secret.id
   secret_string = jsonencode({
     username = random_string.rds_username_primary.result
     password = random_password.rds_password_primary.result
@@ -1092,8 +1092,8 @@ resource "aws_secretsmanager_secret" "secondary_rds_secret" {
 }
 
 resource "aws_secretsmanager_secret_version" "secondary_rds_secret_version" {
-  provider  = aws.eu_west_1
-  secret_id = aws_secretsmanager_secret.secondary_rds_secret.id
+  provider      = aws.eu_west_1
+  secret_id     = aws_secretsmanager_secret.secondary_rds_secret.id
   secret_string = jsonencode({
     username = random_string.rds_username_secondary.result
     password = random_password.rds_password_secondary.result
@@ -1186,13 +1186,13 @@ resource "aws_lb" "primary_alb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.primary_alb_sg.id]
-  subnets = [
+  subnets            = [
     aws_subnet.primary_public_subnet_1.id,
     aws_subnet.primary_public_subnet_2.id
   ]
 
   enable_deletion_protection = false
-  enable_http2               = true
+  enable_http2              = true
 
   tags = merge(local.common_tags, {
     Name = "alb-primary-${local.resource_suffix}"
@@ -1246,13 +1246,13 @@ resource "aws_lb" "secondary_alb" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.secondary_alb_sg.id]
-  subnets = [
+  subnets            = [
     aws_subnet.secondary_public_subnet_1.id,
     aws_subnet.secondary_public_subnet_2.id
   ]
 
   enable_deletion_protection = false
-  enable_http2               = true
+  enable_http2              = true
 
   tags = merge(local.common_tags, {
     Name = "alb-secondary-${local.resource_suffix}"
@@ -1337,8 +1337,8 @@ resource "aws_launch_template" "primary_lt" {
 
 # Auto Scaling Group - Primary
 resource "aws_autoscaling_group" "primary_asg" {
-  provider = aws.us_west_2
-  name     = "asg-primary-${local.resource_suffix}"
+  provider            = aws.us_west_2
+  name                = "asg-primary-${local.resource_suffix}"
   vpc_zone_identifier = [
     aws_subnet.primary_private_subnet_1.id,
     aws_subnet.primary_private_subnet_2.id
@@ -1368,7 +1368,7 @@ resource "aws_autoscaling_policy" "primary_scaling_policy" {
   autoscaling_group_name = aws_autoscaling_group.primary_asg.name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = 1
-  cooldown               = 300
+  cooldown              = 300
 }
 
 # CloudWatch Metric Alarm for Scaling - Primary
@@ -1377,13 +1377,13 @@ resource "aws_cloudwatch_metric_alarm" "primary_cpu_alarm" {
   alarm_name          = "high-cpu-primary-${local.resource_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "70"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.primary_scaling_policy.arn]
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/EC2"
+  period             = "120"
+  statistic          = "Average"
+  threshold          = "70"
+  alarm_description  = "This metric monitors ec2 cpu utilization"
+  alarm_actions      = [aws_autoscaling_policy.primary_scaling_policy.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.primary_asg.name
@@ -1431,8 +1431,8 @@ resource "aws_launch_template" "secondary_lt" {
 
 # Auto Scaling Group - Secondary
 resource "aws_autoscaling_group" "secondary_asg" {
-  provider = aws.eu_west_1
-  name     = "asg-secondary-${local.resource_suffix}"
+  provider            = aws.eu_west_1
+  name                = "asg-secondary-${local.resource_suffix}"
   vpc_zone_identifier = [
     aws_subnet.secondary_private_subnet_1.id,
     aws_subnet.secondary_private_subnet_2.id
@@ -1462,7 +1462,7 @@ resource "aws_autoscaling_policy" "secondary_scaling_policy" {
   autoscaling_group_name = aws_autoscaling_group.secondary_asg.name
   adjustment_type        = "ChangeInCapacity"
   scaling_adjustment     = 1
-  cooldown               = 300
+  cooldown              = 300
 }
 
 # CloudWatch Metric Alarm for Scaling - Secondary
@@ -1471,13 +1471,13 @@ resource "aws_cloudwatch_metric_alarm" "secondary_cpu_alarm" {
   alarm_name          = "high-cpu-secondary-${local.resource_suffix}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = "120"
-  statistic           = "Average"
-  threshold           = "70"
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_autoscaling_policy.secondary_scaling_policy.arn]
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/EC2"
+  period             = "120"
+  statistic          = "Average"
+  threshold          = "70"
+  alarm_description  = "This metric monitors ec2 cpu utilization"
+  alarm_actions      = [aws_autoscaling_policy.secondary_scaling_policy.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.secondary_asg.name
@@ -1616,8 +1616,8 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "AWSManagedRulesCommonRuleSetMetric"
-      sampled_requests_enabled   = true
+      metric_name               = "AWSManagedRulesCommonRuleSetMetric"
+      sampled_requests_enabled  = true
     }
   }
 
@@ -1639,15 +1639,15 @@ resource "aws_wafv2_web_acl" "main" {
 
     visibility_config {
       cloudwatch_metrics_enabled = true
-      metric_name                = "SQLInjectionProtectionMetric"
-      sampled_requests_enabled   = true
+      metric_name               = "SQLInjectionProtectionMetric"
+      sampled_requests_enabled  = true
     }
   }
 
   visibility_config {
     cloudwatch_metrics_enabled = true
-    metric_name                = "WAFMetric"
-    sampled_requests_enabled   = true
+    metric_name               = "WAFMetric"
+    sampled_requests_enabled  = true
   }
 
   tags = merge(local.common_tags, {

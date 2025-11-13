@@ -38,11 +38,11 @@ variable "instance_type" {
 
 provider "aws" {
   region = var.aws_region
-
+  
   # Allow AWS credentials to be provided via environment variables:
   # AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_SESSION_TOKEN (optional)
   # Or via AWS CLI profile, IAM roles, etc.
-
+  
   default_tags {
     tags = {
       Environment = "Production"

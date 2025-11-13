@@ -1086,7 +1086,7 @@ resource "aws_launch_template" "app_us_east_1" {
   }
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    region      = "us-east-1"
+    region = "us-east-1"
     environment = var.environment
     secrets_arn = aws_secretsmanager_secret.app_secrets_us_east_1.arn
   }))
@@ -1094,18 +1094,18 @@ resource "aws_launch_template" "app_us_east_1" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.common_tags, {
-      Name        = "${local.name_prefix}-instance-us-east-1"
+      Name = "${local.name_prefix}-instance-us-east-1"
       Environment = var.environment
-      Region      = "us-east-1"
+      Region = "us-east-1"
     })
   }
 
   tag_specifications {
     resource_type = "volume"
     tags = merge(var.common_tags, {
-      Name        = "${local.name_prefix}-volume-us-east-1"
+      Name = "${local.name_prefix}-volume-us-east-1"
       Environment = var.environment
-      Region      = "us-east-1"
+      Region = "us-east-1"
     })
   }
 
@@ -1144,7 +1144,7 @@ resource "aws_launch_template" "app_eu_central_1" {
   }
 
   user_data = base64encode(templatefile("${path.module}/user_data.sh", {
-    region      = "eu-central-1"
+    region = "eu-central-1"
     environment = var.environment
     secrets_arn = aws_secretsmanager_secret.app_secrets_eu_central_1.arn
   }))
@@ -1152,18 +1152,18 @@ resource "aws_launch_template" "app_eu_central_1" {
   tag_specifications {
     resource_type = "instance"
     tags = merge(var.common_tags, {
-      Name        = "${local.name_prefix}-instance-eu-central-1"
+      Name = "${local.name_prefix}-instance-eu-central-1"
       Environment = var.environment
-      Region      = "eu-central-1"
+      Region = "eu-central-1"
     })
   }
 
   tag_specifications {
     resource_type = "volume"
     tags = merge(var.common_tags, {
-      Name        = "${local.name_prefix}-volume-eu-central-1"
+      Name = "${local.name_prefix}-volume-eu-central-1"
       Environment = var.environment
-      Region      = "eu-central-1"
+      Region = "eu-central-1"
     })
   }
 
@@ -1174,11 +1174,11 @@ resource "aws_launch_template" "app_eu_central_1" {
 
 # Auto Scaling Group - US East 1 (Blue)
 resource "aws_autoscaling_group" "app_blue_us_east_1" {
-  provider                  = aws.us_east_1
-  name                      = "${local.name_prefix}-asg-blue-us-east-1"
-  vpc_zone_identifier       = aws_subnet.private_us_east_1[*].id
-  target_group_arns         = [aws_lb_target_group.app_us_east_1.arn]
-  health_check_type         = "ELB"
+  provider            = aws.us_east_1
+  name                = "${local.name_prefix}-asg-blue-us-east-1"
+  vpc_zone_identifier = aws_subnet.private_us_east_1[*].id
+  target_group_arns   = [aws_lb_target_group.app_us_east_1.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
@@ -1192,7 +1192,7 @@ resource "aws_autoscaling_group" "app_blue_us_east_1" {
 
   enabled_metrics = [
     "GroupMinSize",
-    "GroupMaxSize",
+    "GroupMaxSize", 
     "GroupDesiredCapacity",
     "GroupInServiceInstances",
     "GroupTotalInstances"
@@ -1235,11 +1235,11 @@ resource "aws_autoscaling_group" "app_blue_us_east_1" {
 
 # Auto Scaling Group - EU Central 1 (Green)
 resource "aws_autoscaling_group" "app_green_eu_central_1" {
-  provider                  = aws.eu_central_1
-  name                      = "${local.name_prefix}-asg-green-eu-central-1"
-  vpc_zone_identifier       = aws_subnet.private_eu_central_1[*].id
-  target_group_arns         = [aws_lb_target_group.app_eu_central_1.arn]
-  health_check_type         = "ELB"
+  provider            = aws.eu_central_1
+  name                = "${local.name_prefix}-asg-green-eu-central-1"
+  vpc_zone_identifier = aws_subnet.private_eu_central_1[*].id
+  target_group_arns   = [aws_lb_target_group.app_eu_central_1.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
 
   min_size         = var.asg_min_size
@@ -1254,7 +1254,7 @@ resource "aws_autoscaling_group" "app_green_eu_central_1" {
   enabled_metrics = [
     "GroupMinSize",
     "GroupMaxSize",
-    "GroupDesiredCapacity",
+    "GroupDesiredCapacity", 
     "GroupInServiceInstances",
     "GroupTotalInstances"
   ]
@@ -1296,39 +1296,39 @@ resource "aws_autoscaling_group" "app_green_eu_central_1" {
 
 # Auto Scaling Policies - US East 1
 resource "aws_autoscaling_policy" "scale_up_us_east_1" {
-  provider               = aws.us_east_1
-  name                   = "${local.name_prefix}-scale-up-us-east-1"
-  scaling_adjustment     = 2
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_1
+  name               = "${local.name_prefix}-scale-up-us-east-1"
+  scaling_adjustment = 2
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.app_blue_us_east_1.name
 }
 
 resource "aws_autoscaling_policy" "scale_down_us_east_1" {
-  provider               = aws.us_east_1
-  name                   = "${local.name_prefix}-scale-down-us-east-1"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.us_east_1
+  name               = "${local.name_prefix}-scale-down-us-east-1"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.app_blue_us_east_1.name
 }
 
 # Auto Scaling Policies - EU Central 1
 resource "aws_autoscaling_policy" "scale_up_eu_central_1" {
-  provider               = aws.eu_central_1
-  name                   = "${local.name_prefix}-scale-up-eu-central-1"
-  scaling_adjustment     = 2
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.eu_central_1
+  name               = "${local.name_prefix}-scale-up-eu-central-1"
+  scaling_adjustment = 2
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.app_green_eu_central_1.name
 }
 
 resource "aws_autoscaling_policy" "scale_down_eu_central_1" {
-  provider               = aws.eu_central_1
-  name                   = "${local.name_prefix}-scale-down-eu-central-1"
-  scaling_adjustment     = -1
-  adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  provider           = aws.eu_central_1
+  name               = "${local.name_prefix}-scale-down-eu-central-1"
+  scaling_adjustment = -1
+  adjustment_type    = "ChangeInCapacity"
+  cooldown           = 300
   autoscaling_group_name = aws_autoscaling_group.app_green_eu_central_1.name
 }
 
@@ -1642,7 +1642,7 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
         Resource = "${aws_s3_bucket.cloudtrail_logs.arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-acl"  = "bucket-owner-full-control"
+            "s3:x-amz-acl" = "bucket-owner-full-control"
             "AWS:SourceArn" = "arn:${data.aws_partition.current.partition}:cloudtrail:us-east-1:${data.aws_caller_identity.current.account_id}:trail/${local.name_prefix}-trail"
           }
         }
@@ -1655,22 +1655,22 @@ resource "aws_s3_bucket_policy" "cloudtrail_logs" {
 
 # CloudTrail - Multi-region trail with CloudWatch integration
 resource "aws_cloudtrail" "main" {
-  provider                      = aws.us_east_1
-  name                          = "${local.name_prefix}-trail"
-  s3_bucket_name                = aws_s3_bucket.cloudtrail_logs.id
-  s3_key_prefix                 = "cloudtrail-logs"
+  provider           = aws.us_east_1
+  name               = "${local.name_prefix}-trail"
+  s3_bucket_name     = aws_s3_bucket.cloudtrail_logs.id
+  s3_key_prefix      = "cloudtrail-logs"
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_logging                = true
   enable_log_file_validation    = true
   kms_key_id                    = aws_kms_key.main_us_east_1.arn
-
+  
   cloud_watch_logs_group_arn = aws_cloudwatch_log_group.cloudtrail.arn
   cloud_watch_logs_role_arn  = aws_iam_role.cloudtrail_cloudwatch_role.arn
 
   event_selector {
-    read_write_type                  = "All"
-    include_management_events        = true
+    read_write_type                 = "All"
+    include_management_events       = true
     exclude_management_event_sources = []
 
     data_resource {

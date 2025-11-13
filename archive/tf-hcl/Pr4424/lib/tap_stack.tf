@@ -7,11 +7,11 @@ data "aws_region" "current" {}
 # Create VPC if not provided
 resource "aws_vpc" "main" {
   count = var.vpc_id == "" ? 1 : 0
-
+  
   cidr_block           = "10.0.0.0/16"
   enable_dns_hostnames = true
   enable_dns_support   = true
-
+  
   tags = {
     Name        = "${var.project_name}-vpc"
     Environment = var.environment
@@ -21,11 +21,11 @@ resource "aws_vpc" "main" {
 # Create private subnets if not provided
 resource "aws_subnet" "private" {
   count = var.vpc_id == "" ? 2 : 0
-
+  
   vpc_id            = aws_vpc.main[0].id
   cidr_block        = "10.0.${count.index + 1}.0/24"
   availability_zone = data.aws_availability_zones.available.names[count.index]
-
+  
   tags = {
     Name        = "${var.project_name}-private-subnet-${count.index + 1}"
     Environment = var.environment
@@ -48,7 +48,7 @@ resource "aws_kms_key" "secrets_key" {
   description             = "KMS key for Secrets Manager encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -114,7 +114,7 @@ resource "aws_kms_key" "secrets_key" {
       }
     ]
   })
-
+  
   tags = {
     Name        = "${var.project_name}-secrets-key"
     Environment = var.environment
@@ -131,7 +131,7 @@ resource "aws_kms_alias" "secrets_key_alias" {
 resource "aws_db_subnet_group" "main" {
   name       = "${var.project_name}-db-subnet"
   subnet_ids = local.private_subnet_ids
-
+  
   tags = {
     Name        = "${var.project_name}-db-subnet"
     Environment = var.environment
@@ -143,7 +143,7 @@ resource "aws_cloudwatch_log_group" "rds_logs" {
   name              = "/aws/rds/instance/${var.project_name}-mysql"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.secrets_key.arn
-
+  
   tags = {
     Name        = "${var.project_name}-rds-logs"
     Environment = var.environment
@@ -154,22 +154,22 @@ resource "aws_cloudwatch_log_group" "rds_logs" {
 resource "aws_db_parameter_group" "mysql" {
   family = "mysql8.0"
   name   = "${var.project_name}-mysql-params"
-
+  
   parameter {
     name  = "general_log"
     value = "1"
   }
-
+  
   parameter {
     name  = "slow_query_log"
     value = "1"
   }
-
+  
   parameter {
     name  = "require_secure_transport"
     value = "ON"
   }
-
+  
   tags = {
     Name        = "${var.project_name}-mysql-params"
     Environment = var.environment
@@ -182,52 +182,52 @@ resource "aws_db_instance" "main" {
   engine         = "mysql"
   engine_version = var.mysql_version
   instance_class = var.db_instance_class
-
+  
   allocated_storage     = var.db_allocated_storage
   max_allocated_storage = var.db_max_allocated_storage
   storage_encrypted     = true
-  kms_key_id            = aws_kms_key.secrets_key.arn
+  kms_key_id           = aws_kms_key.secrets_key.arn
   storage_type          = "gp3"
-
+  
   db_name  = var.db_name
   username = "admin"
   password = aws_secretsmanager_secret_version.rds_master_password.secret_string
-
+  
   iam_database_authentication_enabled = true
-
+  
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
   parameter_group_name   = aws_db_parameter_group.mysql.name
-
+  
   backup_retention_period = 30
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
-
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
+  
   enabled_cloudwatch_logs_exports = ["audit", "error", "general", "slowquery"]
-
-  performance_insights_enabled          = var.enable_performance_insights
-  performance_insights_kms_key_id       = var.enable_performance_insights ? aws_kms_key.secrets_key.arn : null
+  
+  performance_insights_enabled    = var.enable_performance_insights
+  performance_insights_kms_key_id = var.enable_performance_insights ? aws_kms_key.secrets_key.arn : null
   performance_insights_retention_period = var.enable_performance_insights ? 7 : null
-
+  
   deletion_protection       = true
   skip_final_snapshot       = false
   final_snapshot_identifier = "${var.project_name}-mysql-final-snapshot"
-
-  copy_tags_to_snapshot      = true
+  
+  copy_tags_to_snapshot = true
   auto_minor_version_upgrade = false
-
+  
   lifecycle {
     ignore_changes = [
       final_snapshot_identifier,
       password
     ]
   }
-
+  
   tags = {
     Name        = "${var.project_name}-mysql"
     Environment = var.environment
   }
-
+  
   depends_on = [aws_cloudwatch_log_group.rds_logs]
 }
 
@@ -236,7 +236,7 @@ resource "aws_security_group" "rds" {
   name        = "${var.project_name}-rds-sg"
   description = "Security group for RDS MySQL"
   vpc_id      = local.vpc_id
-
+  
   tags = {
     Name        = "${var.project_name}-rds-sg"
     Environment = var.environment
@@ -257,7 +257,7 @@ resource "aws_security_group" "lambda" {
   name        = "${var.project_name}-lambda-sg"
   description = "Security group for Lambda functions"
   vpc_id      = local.vpc_id
-
+  
   tags = {
     Name        = "${var.project_name}-lambda-sg"
     Environment = var.environment
@@ -287,8 +287,8 @@ resource "aws_secretsmanager_secret" "rds_master_password" {
   name_prefix             = "${var.project_name}-rds-master-"
   description             = "Master password for RDS MySQL"
   recovery_window_in_days = 7
-  kms_key_id              = aws_kms_key.secrets_key.arn
-
+  kms_key_id             = aws_kms_key.secrets_key.arn
+  
   tags = {
     Name = "${var.project_name}-rds-master-password"
   }
@@ -310,7 +310,7 @@ resource "aws_secretsmanager_secret" "user_credential_template" {
   description             = "Template for user credentials with rotation"
   kms_key_id              = aws_kms_key.secrets_key.arn
   recovery_window_in_days = 7
-
+  
   tags = {
     Name     = "${var.project_name}-user-credential-template"
     Template = "true"
@@ -327,7 +327,7 @@ resource "aws_secretsmanager_secret_version" "user_credential_template" {
     port     = 3306
     dbname   = var.db_name
   })
-
+  
   lifecycle {
     ignore_changes = [secret_string]
   }
@@ -335,21 +335,21 @@ resource "aws_secretsmanager_secret_version" "user_credential_template" {
 
 resource "aws_secretsmanager_secret_rotation" "user_credential_template" {
   count = var.enable_rotation ? 1 : 0
-
+  
   secret_id           = aws_secretsmanager_secret.user_credential_template.id
   rotation_lambda_arn = aws_lambda_function.rotation.arn
-
+  
   rotation_rules {
     automatically_after_days = var.rotation_days
   }
-
+  
   depends_on = [aws_lambda_permission.rotation]
 }
 
 # Lambda Execution Role
 resource "aws_iam_role" "lambda_rotation" {
   name = "${var.project_name}-lambda-rotation-role"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [{
@@ -366,7 +366,7 @@ resource "aws_iam_role" "lambda_rotation" {
 resource "aws_iam_role_policy" "lambda_rotation" {
   name = "${var.project_name}-lambda-rotation-policy"
   role = aws_iam_role.lambda_rotation.id
-
+  
   policy = templatefile("${path.module}/iam-policies.json", {
     region       = var.aws_region
     account_id   = data.aws_caller_identity.current.account_id
@@ -386,7 +386,7 @@ resource "aws_cloudwatch_log_group" "lambda_rotation" {
   name              = "/aws/lambda/${var.project_name}-credential-rotation"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.secrets_key.arn
-
+  
   tags = {
     Name        = "${var.project_name}-lambda-rotation-logs"
     Environment = var.environment
@@ -405,41 +405,41 @@ resource "aws_lambda_function" "rotation" {
   filename         = data.archive_file.lambda_rotation.output_path
   source_code_hash = data.archive_file.lambda_rotation.output_base64sha256
   function_name    = "${var.project_name}-credential-rotation"
-  role             = aws_iam_role.lambda_rotation.arn
-  handler          = "rotation-function.lambda_handler"
-  runtime          = var.lambda_runtime
-  timeout          = 60
-  memory_size      = 512
-
+  role            = aws_iam_role.lambda_rotation.arn
+  handler         = "rotation-function.lambda_handler"
+  runtime         = var.lambda_runtime
+  timeout         = 60
+  memory_size     = 512
+  
   environment {
     variables = {
-      RDS_ENDPOINT       = aws_db_instance.main.endpoint
-      RDS_DATABASE       = var.db_name
-      MASTER_SECRET_ARN  = aws_secretsmanager_secret.rds_master_password.arn
-      KMS_KEY_ID         = aws_kms_key.secrets_key.id
-      MAX_RETRY_ATTEMPTS = var.max_retry_attempts
-      ROTATION_ENABLED   = "true"
+      RDS_ENDPOINT          = aws_db_instance.main.endpoint
+      RDS_DATABASE          = var.db_name
+      MASTER_SECRET_ARN     = aws_secretsmanager_secret.rds_master_password.arn
+      KMS_KEY_ID           = aws_kms_key.secrets_key.id
+      MAX_RETRY_ATTEMPTS   = var.max_retry_attempts
+      ROTATION_ENABLED     = "true"
     }
   }
-
+  
   vpc_config {
     subnet_ids         = local.private_subnet_ids
     security_group_ids = [aws_security_group.lambda.id]
   }
-
+  
   dead_letter_config {
     target_arn = aws_sqs_queue.dlq.arn
   }
-
+  
   tracing_config {
     mode = "Active"
   }
-
+  
   tags = {
     Name        = "${var.project_name}-credential-rotation"
     Environment = var.environment
   }
-
+  
   depends_on = [
     aws_cloudwatch_log_group.lambda_rotation,
     aws_iam_role_policy.lambda_rotation,
@@ -454,8 +454,8 @@ resource "aws_sqs_queue" "dlq" {
   max_message_size          = 262144
   message_retention_seconds = 1209600
   receive_wait_time_seconds = 0
-  kms_master_key_id         = aws_kms_key.secrets_key.id
-
+  kms_master_key_id        = aws_kms_key.secrets_key.id
+  
   tags = {
     Name = "${var.project_name}-rotation-dlq"
   }
@@ -477,7 +477,7 @@ resource "aws_vpc_endpoint" "secretsmanager" {
   subnet_ids          = local.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = {
     Name        = "${var.project_name}-secretsmanager-endpoint"
     Environment = var.environment
@@ -492,7 +492,7 @@ resource "aws_vpc_endpoint" "kms" {
   subnet_ids          = local.private_subnet_ids
   security_group_ids  = [aws_security_group.vpc_endpoints.id]
   private_dns_enabled = true
-
+  
   tags = {
     Name        = "${var.project_name}-kms-endpoint"
     Environment = var.environment
@@ -504,7 +504,7 @@ resource "aws_security_group" "vpc_endpoints" {
   name        = "${var.project_name}-vpc-endpoints-sg"
   description = "Security group for VPC endpoints"
   vpc_id      = local.vpc_id
-
+  
   tags = {
     Name        = "${var.project_name}-vpc-endpoints-sg"
     Environment = var.environment
@@ -525,7 +525,7 @@ resource "aws_cloudwatch_log_group" "rotation_events" {
   name              = "/aws/events/${var.project_name}-rotation"
   retention_in_days = 90
   kms_key_id        = aws_kms_key.secrets_key.arn
-
+  
   tags = {
     Name        = "${var.project_name}-rotation-events-logs"
     Environment = var.environment
@@ -536,7 +536,7 @@ resource "aws_cloudwatch_log_group" "rotation_events" {
 resource "aws_cloudwatch_event_rule" "rotation_events" {
   name        = "${var.project_name}-rotation-events"
   description = "Capture rotation events from Secrets Manager"
-
+  
   event_pattern = jsonencode({
     source      = ["aws.secretsmanager"]
     detail-type = ["AWS API Call via CloudTrail"]
@@ -549,7 +549,7 @@ resource "aws_cloudwatch_event_rule" "rotation_events" {
       ]
     }
   })
-
+  
   tags = {
     Name        = "${var.project_name}-rotation-events"
     Environment = var.environment
@@ -561,14 +561,14 @@ resource "aws_cloudwatch_event_target" "rotation_logs" {
   rule      = aws_cloudwatch_event_rule.rotation_events.name
   target_id = "rotation-logs"
   arn       = aws_cloudwatch_log_group.rotation_events.arn
-
+  
   depends_on = [aws_cloudwatch_log_group.rotation_events]
 }
 
 # CloudWatch Log Resource Policy for EventBridge
 resource "aws_cloudwatch_log_resource_policy" "eventbridge_logs" {
   policy_name = "${var.project_name}-eventbridge-logs-policy"
-
+  
   policy_document = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -590,11 +590,11 @@ resource "aws_cloudwatch_log_resource_policy" "eventbridge_logs" {
 # EventBridge Scheduled Rule for Periodic Rotation Check
 resource "aws_cloudwatch_event_rule" "rotation_schedule" {
   count = var.enable_rotation ? 1 : 0
-
+  
   name                = "${var.project_name}-rotation-schedule"
   description         = "Scheduled rule to check for credentials needing rotation"
   schedule_expression = "rate(${var.rotation_check_frequency_hours} hours)"
-
+  
   tags = {
     Name        = "${var.project_name}-rotation-schedule"
     Environment = var.environment
@@ -604,7 +604,7 @@ resource "aws_cloudwatch_event_rule" "rotation_schedule" {
 # EventBridge Target for Scheduled Rotation
 resource "aws_cloudwatch_event_target" "rotation_schedule" {
   count = var.enable_rotation ? 1 : 0
-
+  
   rule      = aws_cloudwatch_event_rule.rotation_schedule[0].name
   target_id = "lambda-rotation"
   arn       = aws_lambda_function.rotation.arn
@@ -613,7 +613,7 @@ resource "aws_cloudwatch_event_target" "rotation_schedule" {
 # Lambda Permission for EventBridge
 resource "aws_lambda_permission" "eventbridge" {
   count = var.enable_rotation ? 1 : 0
-
+  
   statement_id  = "AllowEventBridgeInvoke"
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.rotation.function_name
@@ -626,29 +626,29 @@ resource "aws_lambda_permission" "eventbridge" {
 # Set enable_cloudtrail = true if you have available trail capacity
 resource "aws_cloudtrail" "main" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   name                          = "${var.project_name}-audit-trail"
   s3_bucket_name                = aws_s3_bucket.cloudtrail[0].id
   include_global_service_events = true
   is_multi_region_trail         = true
   enable_logging                = true
   kms_key_id                    = aws_kms_key.secrets_key.arn
-
+  
   event_selector {
     read_write_type           = "All"
     include_management_events = true
-
+    
     data_resource {
       type   = "AWS::Lambda::Function"
       values = ["arn:aws:lambda:*:*:function:*"]
     }
   }
-
+  
   tags = {
     Name        = "${var.project_name}-cloudtrail"
     Environment = var.environment
   }
-
+  
   depends_on = [
     aws_s3_bucket_policy.cloudtrail,
     aws_s3_bucket_public_access_block.cloudtrail
@@ -658,9 +658,9 @@ resource "aws_cloudtrail" "main" {
 # S3 Bucket for CloudTrail (conditional)
 resource "aws_s3_bucket" "cloudtrail" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   bucket_prefix = "${var.project_name}-audit-trail-"
-
+  
   tags = {
     Name = "${var.project_name}-cloudtrail"
   }
@@ -668,9 +668,9 @@ resource "aws_s3_bucket" "cloudtrail" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   bucket = aws_s3_bucket.cloudtrail[0].id
-
+  
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = "aws:kms"
@@ -681,7 +681,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 
 resource "aws_s3_bucket_versioning" "cloudtrail" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   bucket = aws_s3_bucket.cloudtrail[0].id
   versioning_configuration {
     status = "Enabled"
@@ -690,18 +690,18 @@ resource "aws_s3_bucket_versioning" "cloudtrail" {
 
 resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   bucket = aws_s3_bucket.cloudtrail[0].id
-
+  
   rule {
     id     = "archive-old-logs"
     status = "Enabled"
-
+    
     transition {
       days          = 30
       storage_class = "GLACIER"
     }
-
+    
     expiration {
       days = 2555
     }
@@ -710,9 +710,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   bucket = aws_s3_bucket.cloudtrail[0].id
-
+  
   block_public_acls       = true
   block_public_policy     = true
   ignore_public_acls      = true
@@ -721,9 +721,9 @@ resource "aws_s3_bucket_public_access_block" "cloudtrail" {
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
   count = var.enable_cloudtrail ? 1 : 0
-
+  
   bucket = aws_s3_bucket.cloudtrail[0].id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -746,7 +746,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
         Resource = "${aws_s3_bucket.cloudtrail[0].arn}/*"
         Condition = {
           StringEquals = {
-            "s3:x-amz-server-side-encryption"                = "aws:kms"
+            "s3:x-amz-server-side-encryption" = "aws:kms"
             "s3:x-amz-server-side-encryption-aws-kms-key-id" = aws_kms_key.secrets_key.arn
           }
         }
@@ -767,7 +767,7 @@ resource "aws_cloudwatch_metric_alarm" "rotation_failures" {
   threshold           = var.rotation_failure_threshold
   alarm_description   = "This metric monitors rotation failures"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
+  
   dimensions = {
     FunctionName = aws_lambda_function.rotation.function_name
   }
@@ -784,7 +784,7 @@ resource "aws_cloudwatch_metric_alarm" "rotation_duration" {
   threshold           = var.rotation_duration_threshold
   alarm_description   = "This metric monitors rotation duration"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
+  
   dimensions = {
     FunctionName = aws_lambda_function.rotation.function_name
   }
@@ -801,7 +801,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
   threshold           = "0"
   alarm_description   = "This metric monitors DLQ messages"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
+  
   dimensions = {
     QueueName = aws_sqs_queue.dlq.name
   }
@@ -811,7 +811,7 @@ resource "aws_cloudwatch_metric_alarm" "dlq_messages" {
 resource "aws_sns_topic" "alerts" {
   name              = "${var.project_name}-rotation-alerts"
   kms_master_key_id = aws_kms_key.secrets_key.id
-
+  
   tags = {
     Name        = "${var.project_name}-rotation-alerts"
     Environment = var.environment
@@ -828,7 +828,7 @@ resource "aws_sns_topic_subscription" "email_alerts" {
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "rotation" {
   dashboard_name = "${var.project_name}-rotation-dashboard"
-
+  
   dashboard_body = jsonencode({
     widgets = [
       {

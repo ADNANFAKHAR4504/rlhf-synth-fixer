@@ -2,7 +2,7 @@
 resource "aws_cloudwatch_log_group" "app_logs" {
   name              = "/aws/ec2/production"
   retention_in_days = var.log_retention_days
-
+  
   tags = merge(var.common_tags, {
     Name = "production-app-logs"
   })
@@ -12,7 +12,7 @@ resource "aws_cloudwatch_log_group" "app_logs" {
 resource "aws_cloudwatch_log_group" "system_logs" {
   name              = "/aws/ec2/system"
   retention_in_days = var.log_retention_days
-
+  
   tags = merge(var.common_tags, {
     Name = "production-system-logs"
   })
@@ -23,7 +23,7 @@ resource "aws_cloudwatch_log_metric_filter" "error_logs" {
   name           = "error-count"
   log_group_name = aws_cloudwatch_log_group.app_logs.name
   pattern        = "ERROR"
-
+  
   metric_transformation {
     name      = "ErrorCount"
     namespace = "Production/Application"
@@ -34,14 +34,14 @@ resource "aws_cloudwatch_log_metric_filter" "error_logs" {
 # SNS Topic for alerts
 resource "aws_sns_topic" "alerts" {
   name = "production-infrastructure-alerts"
-
+  
   tags = var.common_tags
 }
 
 # CloudWatch Dashboard
 resource "aws_cloudwatch_dashboard" "main" {
   dashboard_name = "Production-Infrastructure-Dashboard"
-
+  
   dashboard_body = jsonencode({
     widgets = [
       {
@@ -50,7 +50,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         y      = 0
         width  = 12
         height = 6
-
+        
         properties = {
           metrics = [
             ["AWS/EC2", "CPUUtilization", "AutoScalingGroupName", "web-asg"],
@@ -70,7 +70,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         y      = 0
         width  = 12
         height = 6
-
+        
         properties = {
           metrics = [
             ["AWS/ApplicationELB", "RequestCount", "LoadBalancer", "app/web-alb/*"],
@@ -92,7 +92,7 @@ resource "aws_cloudwatch_dashboard" "main" {
         y      = 6
         width  = 12
         height = 6
-
+        
         properties = {
           metrics = [
             ["CWAgent", "mem_used_percent", "AutoScalingGroupName", "web-asg"],
@@ -111,17 +111,17 @@ resource "aws_cloudwatch_dashboard" "main" {
         y      = 6
         width  = 12
         height = 6
-
+        
         properties = {
-          query  = "SOURCE '${aws_cloudwatch_log_group.app_logs.name}' | fields @timestamp, @message | sort @timestamp desc | limit 100"
-          region = data.aws_region.current.name
-          title  = "Recent Application Logs"
-          view   = "table"
+          query   = "SOURCE '${aws_cloudwatch_log_group.app_logs.name}' | fields @timestamp, @message | sort @timestamp desc | limit 100"
+          region  = data.aws_region.current.name
+          title   = "Recent Application Logs"
+          view    = "table"
         }
       }
     ]
   })
-
+  
 }
 
 # CloudWatch Alarms
@@ -136,11 +136,11 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   threshold           = "80"
   alarm_description   = "This metric monitors ec2 cpu utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = "web-asg"
   }
-
+  
   tags = var.common_tags
 }
 
@@ -155,11 +155,11 @@ resource "aws_cloudwatch_metric_alarm" "high_memory" {
   threshold           = "85"
   alarm_description   = "This metric monitors memory utilization"
   alarm_actions       = [aws_sns_topic.alerts.arn]
-
+  
   dimensions = {
     AutoScalingGroupName = "web-asg"
   }
-
+  
   tags = var.common_tags
 }
 
@@ -176,7 +176,7 @@ resource "aws_cloudwatch_metric_alarm" "error_rate" {
   alarm_description   = "This metric monitors application error rate"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   tags = var.common_tags
 }
 
@@ -193,7 +193,7 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx_errors" {
   alarm_description   = "This metric monitors ALB 5XX errors"
   alarm_actions       = [aws_sns_topic.alerts.arn]
   treat_missing_data  = "notBreaching"
-
+  
   tags = var.common_tags
 }
 

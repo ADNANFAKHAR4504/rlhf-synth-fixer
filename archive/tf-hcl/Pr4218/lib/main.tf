@@ -21,7 +21,7 @@ variable "environment" {
 variable "domain_name" {
   description = "Domain name for Route 53"
   type        = string
-  default     = "myapp-prod.internal" # Changed from example.com
+  default     = "myapp-prod.internal"  # Changed from example.com
 }
 
 variable "db_master_username" {
@@ -39,10 +39,10 @@ locals {
     ManagedBy   = "Terraform"
     CreatedAt   = timestamp()
   }
-
+  
   vpc_cidr = "10.0.0.0/16"
   azs      = ["us-west-2a", "us-west-2b"]
-
+  
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
   db_subnet_cidrs      = ["10.0.30.0/24", "10.0.40.0/24"]
@@ -77,7 +77,7 @@ resource "aws_kms_key" "main" {
   description             = "KMS key for ${var.project_name} encryption"
   deletion_window_in_days = 30
   enable_key_rotation     = true
-
+  
   # Add policy for CloudWatch Logs
   policy = jsonencode({
     Version = "2012-10-17"
@@ -315,7 +315,7 @@ resource "aws_iam_role_policy" "flow_log" {
           "logs:DescribeLogGroups",
           "logs:DescribeLogStreams"
         ]
-        Effect   = "Allow"
+        Effect = "Allow"
         Resource = "*"
       }
     ]
@@ -496,8 +496,8 @@ resource "aws_ssm_parameter" "db_password" {
 }
 
 resource "aws_ssm_parameter" "app_config" {
-  name = "/${var.project_name}/app/config"
-  type = "String"
+  name  = "/${var.project_name}/app/config"
+  type  = "String"
   value = jsonencode({
     environment = var.environment
     region      = var.aws_region
@@ -514,10 +514,10 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
+  subnets           = aws_subnet.public[*].id
 
-  enable_deletion_protection       = false
-  enable_http2                     = true
+  enable_deletion_protection = false
+  enable_http2              = true
   enable_cross_zone_load_balancing = true
 
   tags = merge(local.common_tags, {
@@ -632,7 +632,7 @@ resource "aws_wafv2_web_acl_association" "main" {
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-"
   image_id      = data.aws_ami.amazon_linux_2.id
-  instance_type = "t3.micro" # Changed to t3.micro for cost savings and faster startup
+  instance_type = "t3.micro"  # Changed to t3.micro for cost savings and faster startup
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
@@ -719,16 +719,16 @@ EOF
 }
 
 resource "aws_autoscaling_group" "main" {
-  name                = "${var.project_name}-asg"
+  name               = "${var.project_name}-asg"
   vpc_zone_identifier = aws_subnet.private[*].id
   target_group_arns   = [aws_lb_target_group.main.arn]
 
   wait_for_capacity_timeout = "0"
-  health_check_type         = "EC2"
+  health_check_type   = "EC2"
   health_check_grace_period = 120
-  min_size                  = 0 # Reduced to 1 for faster deployment
-  max_size                  = 4 # Reduced max size
-  desired_capacity          = 1
+  min_size            = 0  # Reduced to 1 for faster deployment
+  max_size            = 4  # Reduced max size
+  desired_capacity    = 1
 
   launch_template {
     id      = aws_launch_template.main.id
@@ -767,7 +767,7 @@ resource "aws_autoscaling_policy" "scale_up" {
   name                   = "${var.project_name}-scale-up"
   scaling_adjustment     = 1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -775,7 +775,7 @@ resource "aws_autoscaling_policy" "scale_down" {
   name                   = "${var.project_name}-scale-down"
   scaling_adjustment     = -1
   adjustment_type        = "ChangeInCapacity"
-  cooldown               = 300
+  cooldown              = 300
   autoscaling_group_name = aws_autoscaling_group.main.name
 }
 
@@ -793,13 +793,13 @@ resource "aws_db_subnet_group" "main" {
 resource "aws_db_instance" "main" {
   identifier     = "${var.project_name}-db"
   engine         = "postgres"
-  instance_class = "db.t3.micro" # Changed to smaller instance for cost and faster provisioning
-
+  instance_class = "db.t3.micro"  # Changed to smaller instance for cost and faster provisioning
+  
   allocated_storage     = 20  # Reduced initial storage
-  max_allocated_storage = 100 # Reduced max storage
+  max_allocated_storage = 100  # Reduced max storage
   storage_type          = "gp3"
   storage_encrypted     = true
-  kms_key_id            = aws_kms_key.main.arn
+  kms_key_id           = aws_kms_key.main.arn
 
   db_name  = "appdb"
   username = var.db_master_username
@@ -808,10 +808,10 @@ resource "aws_db_instance" "main" {
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
-  multi_az                = false # Set to false for faster provisioning
+  multi_az               = false  # Set to false for faster provisioning
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   enabled_cloudwatch_logs_exports = ["postgresql"]
 
@@ -852,7 +852,7 @@ resource "aws_route53_record" "app" {
 # CLOUDTRAIL
 
 resource "aws_s3_bucket" "cloudtrail" {
-  bucket_prefix = "${var.project_name}-cloudtrail-" # Use prefix to avoid naming conflicts
+  bucket_prefix = "${var.project_name}-cloudtrail-"  # Use prefix to avoid naming conflicts
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-cloudtrail-bucket"
@@ -922,7 +922,7 @@ resource "aws_cloudtrail" "main" {
 
     # Fixed data_resource format
     data_resource {
-      type = "AWS::S3::Object"
+      type   = "AWS::S3::Object"
       values = [
         "${aws_s3_bucket.cloudtrail.arn}/",
         "${aws_s3_bucket.cloudtrail.arn}/*"
@@ -932,8 +932,8 @@ resource "aws_cloudtrail" "main" {
 
   enable_logging                = true
   include_global_service_events = true
-  is_multi_region_trail         = true
-  enable_log_file_validation    = true
+  is_multi_region_trail        = true
+  enable_log_file_validation   = true
 
   depends_on = [aws_s3_bucket_policy.cloudtrail]
 
@@ -957,7 +957,7 @@ resource "aws_sns_topic" "alarms" {
 resource "aws_sns_topic_subscription" "alarm_email" {
   topic_arn = aws_sns_topic.alarms.arn
   protocol  = "email"
-  endpoint  = "devops@yourcompany.com" # Change to your actual email
+  endpoint  = "devops@yourcompany.com"  # Change to your actual email
 }
 
 # EC2 CPU Alarm
@@ -965,13 +965,13 @@ resource "aws_cloudwatch_metric_alarm" "high_cpu" {
   alarm_name          = "${var.project_name}-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/EC2"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 80
-  alarm_description   = "This metric monitors ec2 cpu utilization"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/EC2"
+  period             = 300
+  statistic          = "Average"
+  threshold          = 80
+  alarm_description  = "This metric monitors ec2 cpu utilization"
+  alarm_actions      = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     AutoScalingGroupName = aws_autoscaling_group.main.name
@@ -985,13 +985,13 @@ resource "aws_cloudwatch_metric_alarm" "alb_healthy_hosts" {
   alarm_name          = "${var.project_name}-alb-healthy-hosts"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 1
-  metric_name         = "HealthyHostCount"
-  namespace           = "AWS/ApplicationELB"
-  period              = 60
-  statistic           = "Average"
-  threshold           = 1
-  alarm_description   = "Alert when we have less than 1 healthy host"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  metric_name        = "HealthyHostCount"
+  namespace          = "AWS/ApplicationELB"
+  period             = 60
+  statistic          = "Average"
+  threshold          = 1
+  alarm_description  = "Alert when we have less than 1 healthy host"
+  alarm_actions      = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     TargetGroup  = aws_lb_target_group.main.arn_suffix
@@ -1006,13 +1006,13 @@ resource "aws_cloudwatch_metric_alarm" "rds_cpu" {
   alarm_name          = "${var.project_name}-rds-high-cpu"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 2
-  metric_name         = "CPUUtilization"
-  namespace           = "AWS/RDS"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 75
-  alarm_description   = "This metric monitors RDS cpu utilization"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  metric_name        = "CPUUtilization"
+  namespace          = "AWS/RDS"
+  period             = 300
+  statistic          = "Average"
+  threshold          = 75
+  alarm_description  = "This metric monitors RDS cpu utilization"
+  alarm_actions      = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id
@@ -1026,13 +1026,13 @@ resource "aws_cloudwatch_metric_alarm" "rds_storage" {
   alarm_name          = "${var.project_name}-rds-low-storage"
   comparison_operator = "LessThanThreshold"
   evaluation_periods  = 1
-  metric_name         = "FreeStorageSpace"
-  namespace           = "AWS/RDS"
-  period              = 300
-  statistic           = "Average"
-  threshold           = 2147483648 # 2GB in bytes
-  alarm_description   = "Alert when RDS free storage is less than 2GB"
-  alarm_actions       = [aws_sns_topic.alarms.arn]
+  metric_name        = "FreeStorageSpace"
+  namespace          = "AWS/RDS"
+  period             = 300
+  statistic          = "Average"
+  threshold          = 2147483648  # 2GB in bytes
+  alarm_description  = "Alert when RDS free storage is less than 2GB"
+  alarm_actions      = [aws_sns_topic.alarms.arn]
 
   dimensions = {
     DBInstanceIdentifier = aws_db_instance.main.id

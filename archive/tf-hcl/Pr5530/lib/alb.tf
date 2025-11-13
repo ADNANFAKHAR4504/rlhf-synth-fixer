@@ -25,10 +25,10 @@ resource "aws_lb" "main" {
 
 # ALB Target Group
 resource "aws_lb_target_group" "api" {
-  name        = "${var.project_name}-${local.environment}-api-tg"
-  port        = var.container_port
-  protocol    = "HTTP"
-  vpc_id      = aws_vpc.main.id
+  name     = "${var.project_name}-${local.environment}-api-tg"
+  port     = var.container_port
+  protocol = "HTTP"
+  vpc_id   = aws_vpc.main.id
   target_type = "ip"
 
   health_check {

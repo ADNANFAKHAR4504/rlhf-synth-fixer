@@ -84,7 +84,7 @@ data "aws_caller_identity" "current" {}
 locals {
   # Naming conventions
   name_prefix = "${var.environment}-tap"
-
+  
   # Common tags
   common_tags = {
     Environment  = "Production"
@@ -307,11 +307,11 @@ resource "aws_security_group" "ec2" {
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = [var.ssh_allowed_cidr]
-    description = "Allow SSH from specific CIDR"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    cidr_blocks     = [var.ssh_allowed_cidr]
+    description     = "Allow SSH from specific CIDR"
   }
 
   ingress {
@@ -534,28 +534,28 @@ resource "aws_db_instance" "postgres" {
   identifier     = "${local.name_prefix}-postgres"
   engine         = "postgres"
   engine_version = "17.5"
-
-  instance_class    = var.rds_instance_class
-  allocated_storage = var.rds_allocated_storage
-  storage_type      = "gp3"
-  storage_encrypted = true
-
+  
+  instance_class        = var.rds_instance_class
+  allocated_storage     = var.rds_allocated_storage
+  storage_type          = "gp3"
+  storage_encrypted     = true
+  
   db_name  = "tapdb"
   username = "a${random_string.rds_username_suffix.result}"
   password = random_password.rds_password.result
-
+  
   vpc_security_group_ids = [aws_security_group.rds.id]
   db_subnet_group_name   = aws_db_subnet_group.main.name
-
-  multi_az                   = true
-  publicly_accessible        = false
-  auto_minor_version_upgrade = true
-  backup_retention_period    = 7
+  
+  multi_az                    = true
+  publicly_accessible         = false
+  auto_minor_version_upgrade  = true
+  backup_retention_period     = 7
   backup_window              = "03:00-04:00"
   maintenance_window         = "sun:04:00-sun:05:00"
-
-  skip_final_snapshot = true
-  deletion_protection = false
+  
+  skip_final_snapshot         = true
+  deletion_protection         = false
 
   tags = merge(
     local.common_tags,
@@ -571,7 +571,7 @@ resource "aws_db_instance" "postgres" {
 
 resource "aws_secretsmanager_secret" "rds_credentials" {
   name = "${local.name_prefix}-rds-credentials"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -645,11 +645,11 @@ resource "aws_lb" "main" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb.id]
-  subnets            = aws_subnet.public[*].id
-
+  subnets           = aws_subnet.public[*].id
+  
   enable_deletion_protection = false
-  enable_http2               = true
-
+  enable_http2              = true
+  
   tags = merge(
     local.common_tags,
     {
@@ -664,7 +664,7 @@ resource "aws_lb_target_group" "main" {
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.main.id
-
+  
   health_check {
     enabled             = true
     healthy_threshold   = 2
@@ -674,7 +674,7 @@ resource "aws_lb_target_group" "main" {
     path                = "/"
     matcher             = "200"
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -701,8 +701,8 @@ resource "aws_lb_listener" "https" {
 # Self-signed certificate for HTTPS (for demo purposes)
 
 resource "aws_acm_certificate" "main" {
-  domain_name       = "dev.tapstack.internal" # any FQDN placeholder
-  validation_method = "DNS"                   # skip DNS/EMAIL validation
+  domain_name       = "dev.tapstack.internal"  # any FQDN placeholder
+  validation_method = "DNS"                    # skip DNS/EMAIL validation
   tags = {
     Environment = "dev"
   }
@@ -747,42 +747,42 @@ resource "aws_acm_certificate_validation" "main" {
 # ================================
 
 resource "aws_autoscaling_group" "main" {
-  name                      = "${local.name_prefix}-asg"
-  vpc_zone_identifier       = aws_subnet.private[*].id
-  target_group_arns         = [aws_lb_target_group.main.arn]
-  health_check_type         = "ELB"
+  name                = "${local.name_prefix}-asg"
+  vpc_zone_identifier = aws_subnet.private[*].id
+  target_group_arns   = [aws_lb_target_group.main.arn]
+  health_check_type   = "ELB"
   health_check_grace_period = 300
-
+  
   min_size         = 2
   max_size         = 4
   desired_capacity = 2
-
+  
   launch_template {
     id      = aws_launch_template.main.id
     version = "$Latest"
   }
-
+  
   tag {
     key                 = "Name"
-    value               = "${local.name_prefix}-asg-instance"
+    value              = "${local.name_prefix}-asg-instance"
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "Environment"
-    value               = "Production"
+    value              = "Production"
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "ownership"
-    value               = "self"
+    value              = "self"
     propagate_at_launch = true
   }
-
+  
   tag {
     key                 = "departmental"
-    value               = "businessunit"
+    value              = "businessunit"
     propagate_at_launch = true
   }
 }
@@ -791,8 +791,8 @@ resource "aws_autoscaling_group" "main" {
 resource "aws_autoscaling_policy" "target_tracking" {
   name                   = "${local.name_prefix}-target-tracking"
   autoscaling_group_name = aws_autoscaling_group.main.name
-  policy_type            = "TargetTrackingScaling"
-
+  policy_type           = "TargetTrackingScaling"
+  
   target_tracking_configuration {
     predefined_metric_specification {
       predefined_metric_type = "ASGAverageCPUUtilization"
@@ -811,22 +811,22 @@ resource "aws_cloudfront_origin_access_identity" "main" {
 
 resource "aws_cloudfront_distribution" "main" {
   enabled             = true
-  is_ipv6_enabled     = true
+  is_ipv6_enabled    = true
   default_root_object = "index.html"
-
+  
   origin {
     domain_name = aws_s3_bucket.main.bucket_regional_domain_name
     origin_id   = "${local.name_prefix}-s3-origin"
-
+    
     s3_origin_config {
       origin_access_identity = aws_cloudfront_origin_access_identity.main.cloudfront_access_identity_path
     }
   }
-
+  
   origin {
     domain_name = aws_lb.main.dns_name
     origin_id   = "${local.name_prefix}-alb-origin"
-
+    
     custom_origin_config {
       http_port              = 80
       https_port             = 443
@@ -834,31 +834,31 @@ resource "aws_cloudfront_distribution" "main" {
       origin_ssl_protocols   = ["TLSv1.2"]
     }
   }
-
+  
   default_cache_behavior {
     allowed_methods  = ["GET", "HEAD"]
     cached_methods   = ["GET", "HEAD"]
     target_origin_id = "${local.name_prefix}-s3-origin"
-
+    
     forwarded_values {
       query_string = false
       cookies {
         forward = "none"
       }
     }
-
+    
     viewer_protocol_policy = "redirect-to-https"
     min_ttl                = 0
     default_ttl            = 86400
     max_ttl                = 31536000
   }
-
+  
   ordered_cache_behavior {
     path_pattern     = "/api/*"
     allowed_methods  = ["GET", "HEAD", "OPTIONS", "PUT", "POST", "PATCH", "DELETE"]
     cached_methods   = ["GET", "HEAD", "OPTIONS"]
     target_origin_id = "${local.name_prefix}-alb-origin"
-
+    
     forwarded_values {
       query_string = true
       headers      = ["*"]
@@ -866,23 +866,23 @@ resource "aws_cloudfront_distribution" "main" {
         forward = "all"
       }
     }
-
+    
     viewer_protocol_policy = "https-only"
     min_ttl                = 0
     default_ttl            = 0
     max_ttl                = 0
   }
-
+  
   restrictions {
     geo_restriction {
       restriction_type = "none"
     }
   }
-
+  
   viewer_certificate {
     cloudfront_default_certificate = true
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -894,7 +894,7 @@ resource "aws_cloudfront_distribution" "main" {
 # S3 Bucket Policy for CloudFront
 resource "aws_s3_bucket_policy" "main" {
   bucket = aws_s3_bucket.main.id
-
+  
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -917,11 +917,11 @@ resource "aws_s3_bucket_policy" "main" {
 resource "aws_api_gateway_rest_api" "main" {
   name        = "${local.name_prefix}-api"
   description = "API Gateway for ${local.name_prefix}"
-
+  
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -934,7 +934,7 @@ resource "aws_api_gateway_rest_api" "main" {
 resource "aws_cloudwatch_log_group" "api_gateway" {
   name              = "/aws/apigateway/${aws_api_gateway_rest_api.main.name}"
   retention_in_days = 7
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -953,23 +953,23 @@ resource "aws_api_gateway_stage" "main" {
   stage_name    = var.environment
   rest_api_id   = aws_api_gateway_rest_api.main.id
   deployment_id = aws_api_gateway_deployment.main.id
-
+  
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway.arn
     format = jsonencode({
       requestId      = "$context.requestId"
-      ip             = "$context.identity.sourceIp"
-      caller         = "$context.identity.caller"
-      user           = "$context.identity.user"
-      requestTime    = "$context.requestTime"
-      httpMethod     = "$context.httpMethod"
-      resourcePath   = "$context.resourcePath"
-      status         = "$context.status"
-      protocol       = "$context.protocol"
+      ip            = "$context.identity.sourceIp"
+      caller        = "$context.identity.caller"
+      user          = "$context.identity.user"
+      requestTime   = "$context.requestTime"
+      httpMethod    = "$context.httpMethod"
+      resourcePath  = "$context.resourcePath"
+      status        = "$context.status"
+      protocol      = "$context.protocol"
       responseLength = "$context.responseLength"
     })
   }
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -999,7 +999,7 @@ resource "aws_api_gateway_integration" "main" {
   resource_id = aws_api_gateway_resource.main.id
   http_method = aws_api_gateway_method.main.http_method
   type        = "MOCK"
-
+  
   request_templates = {
     "application/json" = jsonencode({
       statusCode = 200
@@ -1021,25 +1021,25 @@ resource "aws_api_gateway_integration_response" "main" {
   resource_id = aws_api_gateway_resource.main.id
   http_method = aws_api_gateway_method.main.http_method
   status_code = aws_api_gateway_method_response.main.status_code
-
+  
   response_templates = {
     "application/json" = jsonencode({
       message = "OK"
     })
   }
-
+  
   depends_on = [aws_api_gateway_integration.main]
 }
 
 # API Gateway Deployment
 resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
-
+  
   depends_on = [
     aws_api_gateway_method.main,
     aws_api_gateway_integration.main
   ]
-
+  
   lifecycle {
     create_before_destroy = true
   }

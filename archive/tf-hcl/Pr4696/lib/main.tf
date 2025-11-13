@@ -48,11 +48,11 @@ locals {
     ManagedBy   = "terraform"
     Compliance  = "required"
   }
-
-  api_name      = "payment-api"
-  stage_name    = "prod"
-  resource_path = "process-payment"
-  cors_origin   = "https://app.example.com"
+  
+  api_name        = "payment-api"
+  stage_name      = "prod"
+  resource_path   = "process-payment"
+  cors_origin     = "https://app.example.com"
 }
 
 # ========================================
@@ -79,7 +79,7 @@ data "archive_file" "lambda_zip" {
 # ========================================
 resource "aws_iam_role" "lambda_role" {
   name = "payment-processor-lambda-role-${random_string.suffix.result}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -92,7 +92,7 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -107,17 +107,17 @@ resource "aws_iam_role_policy_attachment" "lambda_basic" {
 resource "aws_lambda_function" "payment_processor" {
   filename         = data.archive_file.lambda_zip.output_path
   function_name    = "payment-processor-${random_string.suffix.result}"
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "lambda_function.lambda_handler"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "lambda_function.lambda_handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.11"
-
+  runtime         = "python3.11"
+  
   environment {
     variables = {
       ENVIRONMENT = "production"
     }
   }
-
+  
   tags = local.common_tags
 }
 
@@ -127,11 +127,11 @@ resource "aws_lambda_function" "payment_processor" {
 resource "aws_api_gateway_rest_api" "payment_api" {
   name        = local.api_name
   description = "Payment Processing REST API Gateway for secure mobile app payment transactions"
-
+  
   endpoint_configuration {
     types = ["REGIONAL"]
   }
-
+  
   tags = local.common_tags
 }
 
@@ -148,10 +148,10 @@ resource "aws_api_gateway_resource" "process_payment" {
 # API Methods
 # ========================================
 resource "aws_api_gateway_method" "process_payment_post" {
-  rest_api_id      = aws_api_gateway_rest_api.payment_api.id
-  resource_id      = aws_api_gateway_resource.process_payment.id
-  http_method      = "POST"
-  authorization    = "NONE"
+  rest_api_id   = aws_api_gateway_rest_api.payment_api.id
+  resource_id   = aws_api_gateway_resource.process_payment.id
+  http_method   = "POST"
+  authorization = "NONE"
   api_key_required = true
 }
 
@@ -163,13 +163,13 @@ resource "aws_api_gateway_method_response" "process_payment_post_200" {
   resource_id = aws_api_gateway_resource.process_payment.id
   http_method = aws_api_gateway_method.process_payment_post.http_method
   status_code = "200"
-
+  
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = true
     "method.response.header.Access-Control-Allow-Headers" = true
     "method.response.header.Access-Control-Allow-Methods" = true
   }
-
+  
   response_models = {
     "application/json" = "Empty"
   }
@@ -182,10 +182,10 @@ resource "aws_api_gateway_integration" "process_payment_lambda" {
   rest_api_id = aws_api_gateway_rest_api.payment_api.id
   resource_id = aws_api_gateway_resource.process_payment.id
   http_method = aws_api_gateway_method.process_payment_post.http_method
-
+  
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.payment_processor.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.payment_processor.invoke_arn
 }
 
 # ========================================
@@ -196,13 +196,13 @@ resource "aws_api_gateway_integration_response" "process_payment_post_200" {
   resource_id = aws_api_gateway_resource.process_payment.id
   http_method = aws_api_gateway_method.process_payment_post.http_method
   status_code = aws_api_gateway_method_response.process_payment_post_200.status_code
-
+  
   response_parameters = {
     "method.response.header.Access-Control-Allow-Origin"  = "'${local.cors_origin}'"
     "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
     "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
   }
-
+  
   depends_on = [
     aws_api_gateway_integration.process_payment_lambda
   ]
@@ -215,7 +215,7 @@ resource "aws_api_gateway_api_key" "mobile_app_key" {
   name        = "mobile-app-key"
   description = "API key for mobile application payment processing authentication"
   enabled     = true
-
+  
   tags = local.common_tags
 }
 
@@ -235,7 +235,7 @@ resource "aws_lambda_permission" "api_gateway_invoke" {
 # ========================================
 resource "aws_iam_role" "api_gateway_cloudwatch" {
   name = "payment-api-gateway-cloudwatch-${random_string.suffix.result}"
-
+  
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -248,7 +248,7 @@ resource "aws_iam_role" "api_gateway_cloudwatch" {
       }
     ]
   })
-
+  
   tags = local.common_tags
 }
 
@@ -262,7 +262,7 @@ resource "aws_iam_role_policy_attachment" "api_gateway_cloudwatch_logs" {
 # ========================================
 resource "aws_api_gateway_account" "api_gateway_account" {
   cloudwatch_role_arn = aws_iam_role.api_gateway_cloudwatch.arn
-
+  
   depends_on = [
     aws_iam_role_policy_attachment.api_gateway_cloudwatch_logs
   ]
@@ -274,7 +274,7 @@ resource "aws_api_gateway_account" "api_gateway_account" {
 resource "aws_cloudwatch_log_group" "api_gateway_logs" {
   name              = "/aws/apigateway/${local.api_name}"
   retention_in_days = var.log_retention_days
-
+  
   tags = local.common_tags
 }
 
@@ -283,7 +283,7 @@ resource "aws_cloudwatch_log_group" "api_gateway_logs" {
 # ========================================
 resource "aws_api_gateway_deployment" "payment_api_deployment" {
   rest_api_id = aws_api_gateway_rest_api.payment_api.id
-
+  
   triggers = {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.process_payment.id,
@@ -293,11 +293,11 @@ resource "aws_api_gateway_deployment" "payment_api_deployment" {
       aws_api_gateway_integration_response.process_payment_post_200.id,
     ]))
   }
-
+  
   lifecycle {
     create_before_destroy = true
   }
-
+  
   depends_on = [
     aws_api_gateway_method.process_payment_post,
     aws_api_gateway_integration.process_payment_lambda,
@@ -314,27 +314,27 @@ resource "aws_api_gateway_stage" "prod" {
   deployment_id = aws_api_gateway_deployment.payment_api_deployment.id
   rest_api_id   = aws_api_gateway_rest_api.payment_api.id
   stage_name    = local.stage_name
-
+  
   access_log_settings {
     destination_arn = aws_cloudwatch_log_group.api_gateway_logs.arn
     format = jsonencode({
-      requestId        = "$context.requestId"
-      ip               = "$context.identity.sourceIp"
-      caller           = "$context.identity.caller"
-      user             = "$context.identity.user"
-      requestTime      = "$context.requestTime"
-      httpMethod       = "$context.httpMethod"
-      resourcePath     = "$context.resourcePath"
-      status           = "$context.status"
-      protocol         = "$context.protocol"
-      responseLength   = "$context.responseLength"
-      error            = "$context.error.message"
+      requestId      = "$context.requestId"
+      ip             = "$context.identity.sourceIp"
+      caller         = "$context.identity.caller"
+      user           = "$context.identity.user"
+      requestTime    = "$context.requestTime"
+      httpMethod     = "$context.httpMethod"
+      resourcePath   = "$context.resourcePath"
+      status         = "$context.status"
+      protocol       = "$context.protocol"
+      responseLength = "$context.responseLength"
+      error          = "$context.error.message"
       integrationError = "$context.integrationErrorMessage"
     })
   }
-
+  
   tags = local.common_tags
-
+  
   depends_on = [
     aws_api_gateway_account.api_gateway_account
   ]
@@ -347,7 +347,7 @@ resource "aws_api_gateway_method_settings" "prod_settings" {
   rest_api_id = aws_api_gateway_rest_api.payment_api.id
   stage_name  = aws_api_gateway_stage.prod.stage_name
   method_path = "*/*"
-
+  
   settings {
     metrics_enabled        = true
     logging_level          = "INFO"
@@ -355,7 +355,7 @@ resource "aws_api_gateway_method_settings" "prod_settings" {
     throttling_burst_limit = 5000
     throttling_rate_limit  = 10000
   }
-
+  
   depends_on = [
     aws_api_gateway_account.api_gateway_account
   ]
@@ -367,22 +367,22 @@ resource "aws_api_gateway_method_settings" "prod_settings" {
 resource "aws_api_gateway_usage_plan" "payment_api_plan" {
   name        = "payment-api-usage-plan-${random_string.suffix.result}"
   description = "Usage plan for payment API with throttling and quota limits"
-
+  
   api_stages {
     api_id = aws_api_gateway_rest_api.payment_api.id
     stage  = aws_api_gateway_stage.prod.stage_name
   }
-
+  
   throttle_settings {
     rate_limit  = var.throttle_rate_limit
     burst_limit = var.throttle_burst_limit
   }
-
+  
   quota_settings {
     limit  = var.daily_quota_limit
     period = "DAY"
   }
-
+  
   tags = local.common_tags
 }
 

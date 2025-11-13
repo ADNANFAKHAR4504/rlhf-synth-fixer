@@ -34,10 +34,10 @@ variable "project_name" {
 
 locals {
   availability_zones = ["${var.region}a", "${var.region}b"]
-
+  
   public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
   private_subnet_cidrs = ["10.0.10.0/24", "10.0.20.0/24"]
-
+  
   common_tags = {
     Environment = var.environment
     Project     = var.project_name
@@ -125,7 +125,7 @@ resource "aws_subnet" "private" {
 resource "aws_eip" "nat" {
   count = 2
 
-  domain     = "vpc"
+  domain = "vpc"
   depends_on = [aws_internet_gateway.main]
 
   tags = merge(local.common_tags, {
@@ -385,10 +385,10 @@ resource "aws_s3_bucket_policy" "main" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid       = "DenyInsecureConnections"
-        Effect    = "Deny"
+        Sid    = "DenyInsecureConnections"
+        Effect = "Deny"
         Principal = "*"
-        Action    = "s3:*"
+        Action = "s3:*"
         Resource = [
           aws_s3_bucket.main.arn,
           "${aws_s3_bucket.main.arn}/*"
@@ -583,16 +583,16 @@ resource "aws_db_instance" "main" {
   db_subnet_group_name   = aws_db_subnet_group.main.name
 
   backup_retention_period = 7
-  backup_window           = "03:00-04:00"
-  maintenance_window      = "sun:04:00-sun:05:00"
+  backup_window          = "03:00-04:00"
+  maintenance_window     = "sun:04:00-sun:05:00"
 
   auto_minor_version_upgrade = true
   multi_az                   = true
-  publicly_accessible        = false
+  publicly_accessible       = false
 
-  skip_final_snapshot      = true
-  deletion_protection      = false
-  delete_automated_backups = true
+  skip_final_snapshot       = true
+  deletion_protection       = false
+  delete_automated_backups  = true
 
   tags = merge(local.common_tags, {
     Name = "${var.project_name}-rds-instance"
@@ -686,11 +686,11 @@ resource "aws_kms_alias" "lambda" {
 resource "aws_lambda_function" "rds_backup" {
   filename         = "rds_backup.zip"
   function_name    = "${var.project_name}-rds-backup"
-  role             = aws_iam_role.lambda.arn
-  handler          = "index.handler"
+  role            = aws_iam_role.lambda.arn
+  handler         = "index.handler"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
-  runtime          = "python3.9"
-  timeout          = 60
+  runtime         = "python3.9"
+  timeout         = 60
 
   vpc_config {
     subnet_ids         = aws_subnet.private[*].id
@@ -723,9 +723,9 @@ resource "aws_cloudwatch_log_group" "lambda" {
 data "archive_file" "lambda_zip" {
   type        = "zip"
   output_path = "rds_backup.zip"
-
+  
   source {
-    content  = <<EOF
+    content = <<EOF
 import boto3
 import os
 import json
@@ -780,26 +780,26 @@ resource "aws_elasticache_subnet_group" "main" {
 
 # ElastiCache Replication Group
 resource "aws_elasticache_replication_group" "main" {
-  replication_group_id = "${var.project_name}-cache"
-  description          = "Redis cache cluster"
-
-  node_type            = "cache.t3.micro"
-  port                 = 6379
-  parameter_group_name = "default.redis7"
-
+  replication_group_id       = "${var.project_name}-cache"
+  description                = "Redis cache cluster"
+  
+  node_type                  = "cache.t3.micro"
+  port                       = 6379
+  parameter_group_name       = "default.redis7"
+  
   num_cache_clusters         = 2
   automatic_failover_enabled = true
-  multi_az_enabled           = true
-
-  subnet_group_name  = aws_elasticache_subnet_group.main.name
+  multi_az_enabled          = true
+  
+  subnet_group_name = aws_elasticache_subnet_group.main.name
   security_group_ids = [aws_security_group.elasticache.id]
-
+  
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
-
+  
   snapshot_retention_limit = 5
-  snapshot_window          = "03:00-05:00"
-
+  snapshot_window         = "03:00-05:00"
+  
   tags = local.common_tags
 }
 
@@ -812,8 +812,8 @@ resource "aws_cloudtrail" "main" {
   s3_bucket_name = aws_s3_bucket.cloudtrail.bucket
 
   event_selector {
-    read_write_type                  = "All"
-    include_management_events        = true
+    read_write_type                 = "All"
+    include_management_events       = true
     exclude_management_event_sources = []
 
     data_resource {
@@ -832,8 +832,8 @@ resource "aws_cloudtrail" "main" {
 # =============================================================================
 
 resource "aws_ssm_document" "maintenance" {
-  name            = "${var.project_name}-maintenance-document"
-  document_type   = "Command"
+  name          = "${var.project_name}-maintenance-document"
+  document_type = "Command"
   document_format = "YAML"
 
   content = <<DOC

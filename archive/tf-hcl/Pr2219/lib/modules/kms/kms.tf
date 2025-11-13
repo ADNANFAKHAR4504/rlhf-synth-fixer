@@ -37,7 +37,7 @@ data "aws_iam_policy_document" "kms_key_policy" {
     effect = "Allow"
 
     principals {
-      type = "Service"
+      type        = "Service"
       identifiers = [
         "cloudtrail.amazonaws.com",
         "logs.${var.region}.amazonaws.com"

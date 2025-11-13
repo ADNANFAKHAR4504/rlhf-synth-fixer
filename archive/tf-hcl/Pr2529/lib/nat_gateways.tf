@@ -1,6 +1,6 @@
 resource "aws_eip" "vpc1_nat" {
   domain = "vpc"
-
+  
   tags = merge(var.common_tags, {
     Name = "vpc1-nat-eip"
   })
@@ -8,7 +8,7 @@ resource "aws_eip" "vpc1_nat" {
 
 resource "aws_eip" "vpc2_nat" {
   domain = "vpc"
-
+  
   tags = merge(var.common_tags, {
     Name = "vpc2-nat-eip"
   })

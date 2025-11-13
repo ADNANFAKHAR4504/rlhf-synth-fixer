@@ -8,12 +8,12 @@ data "aws_caller_identity" "current" {}
 # ============================================
 locals {
   account_id = data.aws_caller_identity.current.account_id
-
+  
   common_tags = {
     Project = "Media CMS"
     Owner   = "Media Team"
   }
-
+  
   cors_configuration = {
     allowed_headers = ["*"]
     allowed_methods = ["GET", "HEAD"]
@@ -45,7 +45,7 @@ resource "aws_cloudfront_origin_access_identity" "media_oai" {
 # ============================================
 resource "aws_s3_bucket" "logs" {
   bucket = "media-assets-logs-${random_string.bucket_suffix.result}"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -102,7 +102,7 @@ resource "aws_s3_bucket_policy" "logs" {
         Principal = {
           Service = "logging.s3.amazonaws.com"
         }
-        Action   = "s3:PutObject"
+        Action = "s3:PutObject"
         Resource = "${aws_s3_bucket.logs.arn}/*"
         Condition = {
           StringEquals = {
@@ -121,7 +121,7 @@ resource "aws_s3_bucket_policy" "logs" {
 # ============================================
 resource "aws_s3_bucket" "dev" {
   bucket = "media-assets-dev-${random_string.bucket_suffix.result}"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -189,7 +189,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "dev" {
 # ============================================
 resource "aws_s3_bucket" "prod" {
   bucket = "media-assets-prod-${random_string.bucket_suffix.result}"
-
+  
   tags = merge(
     local.common_tags,
     {
@@ -211,7 +211,7 @@ resource "aws_s3_bucket_public_access_block" "prod" {
 
 resource "aws_s3_bucket_versioning" "prod" {
   bucket = aws_s3_bucket.prod.id
-
+  
   versioning_configuration {
     status = "Enabled"
   }
