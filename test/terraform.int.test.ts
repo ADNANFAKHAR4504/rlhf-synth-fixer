@@ -1,4 +1,4 @@
-// vpc-integration.test.ts
+// integration.test.ts
 import * as fs from 'fs';
 import * as path from 'path';
 import {
@@ -50,55 +50,52 @@ import {
 import { describe, expect, test, beforeAll, afterAll } from '@jest/globals';
 import axios from 'axios';
 
-// Helper function to load and parse terraform outputs
-function loadTerraformOutputs() {
-  const candidates = [
+// ============================================================================
+// DEPLOYMENT OUTPUT MANAGEMENT
+// ============================================================================
+
+// Use the same path definition as the reference code
+const OUTPUT_FILE = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
+
+// Helper function to load and parse deployment outputs, prioritizing the flat JSON file
+function loadDeploymentOutputs(): Record<string, any> {
+  const outputPaths = [
+    // 1. Prioritize the flat file path used in the reference code
+    path.resolve(process.cwd(), OUTPUT_FILE),
+    // 2. Check other standard output locations as a fallback
     path.resolve(process.cwd(), 'terraform-outputs.json'),
     path.resolve(process.cwd(), 'outputs.json'),
     path.resolve(process.cwd(), 'tfoutputs.json'),
+    path.resolve(process.cwd(), 'deployment-outputs.json'),
   ];
 
-  // First check if we have the provided deployment outputs format
-  const deploymentOutputPath = path.resolve(process.cwd(), 'deployment-outputs.json');
-  if (fs.existsSync(deploymentOutputPath)) {
-    const raw = fs.readFileSync(deploymentOutputPath, 'utf8');
-    const parsed = JSON.parse(raw);
-    
-    // Transform the nested format to flat format
-    const flatOutputs: any = {};
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === 'object' && value !== null && 'value' in value) {
-        flatOutputs[key] = value.value;
-      } else {
-        flatOutputs[key] = value;
-      }
-    }
-    return flatOutputs;
-  }
-
-  // Check standard terraform output locations
-  for (const p of candidates) {
+  for (const p of outputPaths) {
     if (fs.existsSync(p)) {
       const raw = fs.readFileSync(p, 'utf8');
       const parsed = JSON.parse(raw);
       
-      // Handle different output formats
+      // Assume the file is in a flat format (key: value) if the prioritized path is used,
+      // or if it's one of the other fallbacks.
+      
+      // If a nested format is accidentally loaded, handle a common nested structure (e.g., from raw terraform output)
       if (parsed.vpc_id?.value !== undefined) {
-        // Terraform output format with value property
         const flatOutputs: any = {};
         for (const [key, value] of Object.entries(parsed)) {
           if (typeof value === 'object' && value !== null && 'value' in value) {
             flatOutputs[key] = value.value;
+          } else {
+            flatOutputs[key] = value;
           }
         }
         return flatOutputs;
       }
       
+      // Return the flat parsed object
       return parsed;
     }
   }
 
-  throw new Error('Terraform outputs file not found. Please run terraform output -json > terraform-outputs.json');
+  throw new Error(`Deployment outputs file not found. Please ensure outputs are exported to a flat JSON file like ${OUTPUT_FILE}`);
 }
 
 // Generate unique test identifiers
@@ -115,7 +112,8 @@ function parseSubnetIds(subnetOutput: any): Record<string, string> {
 }
 
 // Load outputs dynamically
-const outputs = loadTerraformOutputs();
+// Change the function call to the new name
+const outputs = loadDeploymentOutputs(); 
 const region = process.env.AWS_REGION || 'us-east-1';
 
 // Initialize AWS SDK v3 clients
