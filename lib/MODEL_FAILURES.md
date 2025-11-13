@@ -4,14 +4,14 @@ This document analyzes the discrepancies between the PROMPT requirements, MODEL_
 
 ## Executive Summary
 
-The MODEL_RESPONSE generated technically sound CloudFormation code that implemented all functional requirements. However, there were **2 critical failures** that prevented successful deployment:
+The MODEL_RESPONSE generated technically sound CloudFormation code that implemented all functional requirements. However, there were **2 critical failures** that prevented successful deployment and **1 low failure** in integration tests:
 
 - **2 Critical Failures**: VPC Flow Log syntax error and AWS quota limit issue
 - **0 High Failures**: No high-priority issues
 - **1 Medium Failure**: Missing region configuration
-- **1 Low Failure**: Incomplete integration tests
+- **1 Low Failure**: Incomplete integration tests + incorrect AWS SDK API usage for VPC DNS attributes
 
-**Training Value**: High - The failures represent common real-world CloudFormation issues that models should learn to avoid.
+**Training Value**: High - The failures represent common real-world CloudFormation issues and AWS SDK API usage patterns that models should learn to avoid.
 
 ---
 
@@ -212,9 +212,38 @@ describe('Turn Around Prompt API Integration Tests', () => {
 });
 ```
 
+**Additional Issue - Incorrect VPC DNS Attribute Access**:
+
+The initial integration test implementation attempted to access VPC DNS attributes directly from `DescribeVpcsCommand`, which don't exist:
+
+```typescript
+// INCORRECT approach
+test('should have a VPC with correct configuration', async () => {
+  const vpcResponse = await ec2Client.send(
+    new DescribeVpcsCommand({ VpcIds: [vpcId] })
+  );
+  
+  const vpc = vpcResponse.Vpcs?.[0];
+  expect(vpc?.EnableDnsHostnames).toBe(true);  // Property doesn't exist
+  expect(vpc?.EnableDnsSupport).toBe(true);    // Property doesn't exist
+});
+```
+
+**Error Message**:
+```
+expect(received).toBe(expected) // Object.is equality
+
+Expected: true
+Received: undefined
+
+  87 |       expect(vpc?.EnableDnsHostnames).toBe(true);
+     |                                       ^
+```
+
 **IDEAL_RESPONSE Fix**:
 
-Created comprehensive integration tests with dynamic resource discovery:
+Created comprehensive integration tests with dynamic resource discovery AND correct AWS SDK API usage for VPC attributes:
+
 ```typescript
 import {
   CloudFormationClient,
@@ -224,6 +253,7 @@ import {
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,  // Added for DNS attributes
   DescribeSubnetsCommand,
   DescribeNatGatewaysCommand,
   DescribeInternetGatewaysCommand,
@@ -236,15 +266,46 @@ const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
 const stackName = `TapStack${environmentSuffix}`;
 
 describe('VPC Infrastructure Integration Tests', () => {
-  // Test stack discovery
-  // Test VPC configuration
-  // Test subnets across multiple AZs
-  // Test NAT Gateways
-  // Test Internet Gateway
-  // Test VPC Flow Logs
-  // Test S3 bucket
-  // Test resource tagging
-  // Test all stack outputs
+  // CORRECT approach for VPC DNS attributes
+  test('should have a VPC with correct configuration', async () => {
+    const vpcId = stackOutputs.VPCId;
+    expect(vpcId).toBeDefined();
+
+    const vpcResponse = await ec2Client.send(
+      new DescribeVpcsCommand({ VpcIds: [vpcId] })
+    );
+
+    const vpc = vpcResponse.Vpcs?.[0];
+    expect(vpc).toBeDefined();
+    expect(vpc?.State).toBe('available');
+
+    // Check DNS attributes using separate API calls
+    const dnsHostnamesResponse = await ec2Client.send(
+      new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsHostnames',
+      })
+    );
+    expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+    const dnsSupportResponse = await ec2Client.send(
+      new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsSupport',
+      })
+    );
+    expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+  });
+  
+  // Additional tests for:
+  // - Stack discovery
+  // - Subnets across multiple AZs
+  // - NAT Gateways
+  // - Internet Gateway
+  // - VPC Flow Logs
+  // - S3 bucket
+  // - Resource tagging
+  // - Stack outputs
 });
 ```
 
@@ -261,11 +322,21 @@ describe('VPC Infrastructure Integration Tests', () => {
 
 **Root Cause**:
 
-The MODEL_RESPONSE included a TODO placeholder instead of actual integration tests. Integration tests are critical for validating that infrastructure deploys correctly and all resources are properly configured.
+The MODEL_RESPONSE included a TODO placeholder instead of actual integration tests. Additionally, the initial implementation incorrectly attempted to access VPC DNS attributes that don't exist in the `DescribeVpcsCommand` response.
+
+AWS SDK API Design:
+- `DescribeVpcsCommand` returns: VpcId, CidrBlock, State, Tags, and basic properties
+- VPC attributes (EnableDnsHostnames, EnableDnsSupport) require separate API calls
+- `DescribeVpcAttributeCommand` must be used with specific `Attribute` parameter values
+- Each attribute returns a different response structure
+
+Integration tests are critical for validating that infrastructure deploys correctly and all resources are properly configured.
 
 **Learning Point**: Integration tests should:
 - Dynamically discover deployed resources
 - Query AWS APIs for actual state validation
+- Use correct AWS SDK commands for specific attributes
+- Understand that not all properties are returned in list/describe commands
 - Avoid mocked values
 - Test all critical infrastructure components
 - Validate cross-resource relationships
@@ -291,11 +362,12 @@ The MODEL_RESPONSE included a TODO placeholder instead of actual integration tes
 
 ### Testing
 10. ✅ **Integration Tests**: Replaced placeholder with comprehensive AWS API tests
-11. ✅ **Unit Tests**: Updated to validate region configuration and new parameters
+11. ✅ **VPC DNS Attributes**: Fixed to use `DescribeVpcAttributeCommand` instead of accessing non-existent properties
+12. ✅ **Unit Tests**: Updated to validate region configuration and new parameters
 
 ### Documentation
-12. ✅ **Comments**: Added explanations for conditional resources
-13. ✅ **README**: Documented region configuration approach
+13. ✅ **Comments**: Added explanations for conditional resources
+14. ✅ **README**: Documented region configuration approach
 
 ---
 
@@ -304,13 +376,13 @@ The MODEL_RESPONSE included a TODO placeholder instead of actual integration tes
 ### Before Fixes (MODEL_RESPONSE)
 - ❌ CloudFormation lint: FAILED (VPC Flow Log syntax error)
 - ❌ Deployment: FAILED (Service quota exceeded)
-- ❌ Integration tests: FAILED (placeholder test)
+- ❌ Integration tests: FAILED (placeholder test + incorrect VPC DNS attribute access)
 
 ### After Fixes (IDEAL_RESPONSE)
 - ✅ CloudFormation lint: PASSED
 - ✅ Deployment: PASSED (with S3 endpoint disabled by default)
 - ✅ Unit tests: PASSED (37/37 tests)
-- ✅ Integration tests: PASSED (all infrastructure validated)
+- ✅ Integration tests: PASSED (15/15 tests - all infrastructure validated with correct AWS SDK API usage)
 - ✅ Region configuration: PASSED (deployed to eu-south-2)
 
 ---
@@ -338,16 +410,25 @@ The MODEL_RESPONSE included a TODO placeholder instead of actual integration tes
    - Dynamic resource discovery
    - No placeholder or mock tests
 
-5. **CloudFormation Validation**: Run cfn-lint equivalent validation before considering code complete
+5. **AWS SDK API Understanding**: Teach models that:
+   - Not all properties are returned in list/describe commands
+   - VPC attributes require separate `DescribeVpcAttributeCommand` calls
+   - Each AWS resource may have specific commands for attributes
+   - Documentation must be consulted for correct API usage
+
+6. **CloudFormation Validation**: Run cfn-lint equivalent validation before considering code complete
 
 ---
 
 ## Conclusion
 
-The MODEL_RESPONSE was 95% correct but had 2 critical issues that prevented deployment. The fixes were straightforward once identified, but they represent common real-world challenges:
-- AWS API property name precision
+The MODEL_RESPONSE was 95% correct but had 2 critical issues that prevented deployment and 1 integration test issue. The fixes were straightforward once identified, but they represent common real-world challenges:
+- AWS API property name precision (singular vs plural)
 - Service quota management
 - Regional deployment configuration
 - Complete test coverage
+- Correct AWS SDK API usage for resource attributes
 
-These failures provide excellent training data for improving model accuracy on production-grade infrastructure code.
+Key Learning: Models must understand that AWS SDK APIs are designed with separation of concerns - basic resource information comes from Describe* commands, while specific attributes often require separate DescribeAttribute* commands with attribute-specific parameters.
+
+These failures provide excellent training data for improving model accuracy on production-grade infrastructure code and real-world AWS SDK integration patterns.

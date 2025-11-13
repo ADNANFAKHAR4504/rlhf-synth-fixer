@@ -8,6 +8,7 @@ import {
   DescribeInternetGatewaysCommand,
   DescribeNatGatewaysCommand,
   DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
   DescribeVpcsCommand,
   EC2Client,
 } from '@aws-sdk/client-ec2';
@@ -84,8 +85,23 @@ describe('VPC Infrastructure Integration Tests', () => {
       const vpc = vpcResponse.Vpcs?.[0];
       expect(vpc).toBeDefined();
       expect(vpc?.State).toBe('available');
-      expect(vpc?.EnableDnsHostnames).toBe(true);
-      expect(vpc?.EnableDnsSupport).toBe(true);
+
+      // Check DNS attributes using separate API calls
+      const dnsHostnamesResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsHostnames',
+        })
+      );
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+      const dnsSupportResponse = await ec2Client.send(
+        new DescribeVpcAttributeCommand({
+          VpcId: vpcId,
+          Attribute: 'enableDnsSupport',
+        })
+      );
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
     });
 
     test('should have VPC CIDR block output', () => {
