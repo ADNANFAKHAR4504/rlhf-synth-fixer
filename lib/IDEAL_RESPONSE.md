@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-This document provides a comprehensive walkthrough of the **Pulumi with Python** implementation for a production-ready, PCI-compliant serverless transaction processing system deployed in us-east-2.
+This document provides a comprehensive walkthrough of the **Pulumi with Python** implementation for a production-ready, PCI-compliant serverless transaction processing system deployed in us-east-1.
 
 ### System Overview
 
@@ -45,7 +45,7 @@ def _create_vpc(self):
 
 def _create_private_subnets(self):
     """Create 3 private subnets across 3 AZs"""
-    availability_zones = ['us-east-2a', 'us-east-2b', 'us-east-2c']
+    availability_zones = ['us-east-1a', 'us-east-1b', 'us-east-1c']
     subnets = []
 
     for i, az in enumerate(availability_zones):
@@ -1106,7 +1106,7 @@ def _create_api_key(self):
 **Usage**:
 ```bash
 curl -X POST \
-  https://{api_id}.execute-api.us-east-2.amazonaws.com/prod/transaction \
+  https://{api_id}.execute-api.us-east-1.amazonaws.com/prod/transaction \
   -H 'x-api-key: {api_key}' \
   -H 'Content-Type: application/json' \
   -d '{
@@ -1389,7 +1389,7 @@ def _create_cloudwatch_dashboard(self):
 
 1. **Set AWS Region**:
    ```bash
-   pulumi config set aws:region us-east-2
+   pulumi config set aws:region us-east-1
    ```
 
 2. **Set Environment Suffix** (optional, defaults to 'dev'):
@@ -1451,7 +1451,7 @@ Expected outputs:
 4. **Test Transaction**:
    ```bash
    curl -X POST \
-     https://{api_id}.execute-api.us-east-2.amazonaws.com/prod/transaction \
+     https://{api_id}.execute-api.us-east-1.amazonaws.com/prod/transaction \
      -H 'x-api-key: {api_key}' \
      -H 'Content-Type: application/json' \
      -d '{
@@ -1619,7 +1619,7 @@ Verify system handles 1000+ transactions/second:
 ab -n 10000 -c 100 -H "x-api-key: {api_key}" \
   -T "application/json" \
   -p transaction.json \
-  https://{api_id}.execute-api.us-east-2.amazonaws.com/prod/transaction
+  https://{api_id}.execute-api.us-east-1.amazonaws.com/prod/transaction
 ```
 
 ## Performance Optimization

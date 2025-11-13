@@ -58,9 +58,7 @@ class TapStack(pulumi.ComponentResource):
 
         self.environment_suffix = args.environment_suffix
         self.tags = {**args.tags, 'PulumiOutputVersion': 'v2'}  # Force stack update to regenerate outputs
-        # Get region from AWS config or default to us-east-2
-        aws_config = pulumi.Config("aws")
-        self.region = aws_config.get("region") or "us-east-2"
+        self.region = 'us-east-1'  # Deployment region
         self.stage_name = self.environment_suffix  # API Gateway stage name
 
         # Create KMS key for encryption

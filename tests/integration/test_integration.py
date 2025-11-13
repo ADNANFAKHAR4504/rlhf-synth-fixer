@@ -151,7 +151,7 @@ class TestTransactionProcessingIntegration(unittest.TestCase):
         # Verify endpoint format
         self.assertTrue(api_endpoint.startswith('https://'))
         self.assertIn('.execute-api.', api_endpoint)
-        self.assertIn('us-east-2', api_endpoint)
+        self.assertIn('us-east-1', api_endpoint)
 
     def test_cloudwatch_dashboard_url(self):
         """Test CloudWatch dashboard URL is generated"""
@@ -162,7 +162,7 @@ class TestTransactionProcessingIntegration(unittest.TestCase):
         # Verify URL format
         self.assertIn('cloudwatch', dashboard_url)
         self.assertIn('dashboards', dashboard_url)
-        self.assertIn('us-east-2', dashboard_url)
+        self.assertIn('us-east-1', dashboard_url)
 
     def test_transaction_workflow_connectivity(self):
         """Test connectivity between components (without actual transaction)"""

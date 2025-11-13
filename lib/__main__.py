@@ -18,9 +18,8 @@ from tap_stack import TapStack, TapStackArgs
 config = pulumi.Config()
 environment_suffix = config.get("environmentSuffix") or "dev"
 
-# AWS Region
-aws_config = pulumi.Config("aws")
-region = aws_config.get("region") or "us-east-2"
+# AWS Region - use us-east-1 to match existing deployment
+region = "us-east-1"
 
 # Create default tags
 default_tags = {
