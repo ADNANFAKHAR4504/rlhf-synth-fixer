@@ -128,6 +128,9 @@ export class TapStack extends cdk.Stack {
       }
     );
 
+    // Primary storage replicates to secondary bucket, so secondary must be created first
+    primaryStorage.addDependency(secondaryStorage);
+
     // Compute
     const primaryCompute = new ComputeStack(
       this,
