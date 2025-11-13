@@ -721,15 +721,15 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // DR Cluster - must include masterUsername and masterPassword even for secondary clusters
+    // DR Cluster - DO NOT include masterUsername and masterPassword
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
         clusterIdentifier: `trading-aurora-dr-${this.props.environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
-        masterUsername: 'dbadmin',
-        masterPassword: secretVersion.secretString.apply(s => this.validateSecretPassword(s ?? '')),
+        // REMOVED: masterUsername
+        // REMOVED: masterPassword
         globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
@@ -752,6 +752,7 @@ export class TapStack extends pulumi.ComponentResource {
         dependsOn: [primaryCluster, globalCluster],
       }
     );
+
 
     // DR Instance
     new aws.rds.ClusterInstance(
