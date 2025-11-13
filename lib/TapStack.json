@@ -288,8 +288,13 @@
                             "Resource": "*",
                             "Condition": {
                                 "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                    }
+                                },
+                                "ArnLike": {
                                     "kms:EncryptionContext:aws:s3:arn": {
-                                        "Fn::Sub": "arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}"
+                                        "Fn::Sub": "arn:aws:s3:::${ProjectName}-data-*"
                                     }
                                 }
                             }
@@ -335,6 +340,33 @@
                                     "kms:ViaService": {
                                         "Fn::Sub": "sqs.${AWS::Region}.amazonaws.com"
                                     }
+                                }
+                            }
+                        },
+                        {
+                            "Sid": "Allow Processing Lambda Role via IAM",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:role/${ProjectName}-processing-${EnvironmentName}-*"
+                                }
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:DescribeKey"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": [
+                                        {
+                                            "Fn::Sub": "s3.${AWS::Region}.amazonaws.com"
+                                        },
+                                        {
+                                            "Fn::Sub": "lambda.${AWS::Region}.amazonaws.com"
+                                        }
+                                    ]
                                 }
                             }
                         }

@@ -216,7 +216,9 @@ Resources:
             Resource: '*'
             Condition:
               StringEquals:
-                'kms:EncryptionContext:aws:s3:arn': !Sub 'arn:aws:s3:::${ProjectName}-data-${AWS::AccountId}-${AWS::Region}'
+                'kms:ViaService': !Sub 's3.${AWS::Region}.amazonaws.com'
+              ArnLike:
+                'kms:EncryptionContext:aws:s3:arn': !Sub 'arn:aws:s3:::${ProjectName}-data-*'
           - Sid: Allow CloudWatch Logs
             Effect: Allow
             Principal:
@@ -243,6 +245,20 @@ Resources:
             Condition:
               StringEquals:
                 'kms:ViaService': !Sub 'sqs.${AWS::Region}.amazonaws.com'
+          - Sid: Allow Processing Lambda Role via IAM
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:role/${ProjectName}-processing-${EnvironmentName}-*'
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+              - 'kms:DescribeKey'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                'kms:ViaService': 
+                  - !Sub 's3.${AWS::Region}.amazonaws.com'
+                  - !Sub 'lambda.${AWS::Region}.amazonaws.com'
       Tags:
         - Key: CostCenter
           Value: !Ref CostCenter
