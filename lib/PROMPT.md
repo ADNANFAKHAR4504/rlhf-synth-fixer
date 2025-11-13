@@ -1,4 +1,4 @@
-# Prompt: Optimize and Rebuild E-commerce Infra as a Single CloudFormation YAML (TapStack.yml)
+# Prompt: Optimize and Rebuild E-commerce Infra as a Single CloudFormation YAML
 
 ## Context
 
