@@ -1,4 +1,4 @@
-name: payment-webhook-processor
+name: TapStack
 runtime:
   name: python
 description: Serverless payment webhook processor for Stripe and PayPal
