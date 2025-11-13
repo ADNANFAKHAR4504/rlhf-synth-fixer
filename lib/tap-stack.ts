@@ -1,5 +1,6 @@
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
+import { randomBytes } from 'crypto';
 import { ApiGatewayMonitoringStack } from './api-gateway-monitoring-stack';
 import { PaymentMonitoringStack } from './payment-monitoring-stack';
 import { RdsEcsMonitoringStack } from './rds-ecs-monitoring-stack';
@@ -16,9 +17,8 @@ function firstNonNullish<T>(...vals: Array<T | null | undefined>): T {
 
 function generateUniqueSuffix(): string {
   // Generate a highly unique suffix using crypto-random bytes for maximum uniqueness
-  const crypto = require('crypto');
-  const randomBytes = crypto.randomBytes(4).toString('hex'); // 8 chars, cryptographically secure
-  return randomBytes; // 8 hex chars, extremely unlikely to collide
+  const cryptoRandomBytes = randomBytes(4).toString('hex'); // 8 chars, cryptographically secure
+  return cryptoRandomBytes; // 8 hex chars, extremely unlikely to collide
 }
 
 export class TapStack extends cdk.Stack {
