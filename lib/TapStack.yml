@@ -23,6 +23,14 @@ Parameters:
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI from SSM Parameter Store
 
+  CreateCloudTrail:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create CloudTrail resources (AWS limit is 5 trails per region - set to false if limit reached)
+
 # Mappings for environment-specific configurations
 Mappings:
   EnvironmentConfig:
@@ -38,6 +46,9 @@ Mappings:
       InstanceType: t3.medium
       DBInstanceClass: db.t3.small
       MultiAZ: true
+
+Conditions:
+  ShouldCreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
 
 Resources:
   # ==========================================
@@ -468,6 +479,7 @@ Resources:
           
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: ShouldCreateCloudTrail
     DeletionPolicy: Delete
     Properties:
       BucketName: !Sub 'cloudtrail-bucket-${AWS::AccountId}-${AWS::Region}'
@@ -491,12 +503,14 @@ Resources:
 
   EmptyCloudTrailBucket:
     Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateCloudTrail
     Properties:
       ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
       BucketName: !Ref CloudTrailBucket
           
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateCloudTrail
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -583,6 +597,7 @@ Resources:
   
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: ShouldCreateCloudTrail
     DependsOn: CloudTrailBucketPolicy
     Properties:
       TrailName: !Sub '${AWS::StackName}-trail'
@@ -872,12 +887,14 @@ Resources:
   
   CloudTrailLogGroup:
     Type: AWS::Logs::LogGroup
+    Condition: ShouldCreateCloudTrail
     Properties:
       LogGroupName: !Sub '/aws/cloudtrail/${AWS::StackName}'
       RetentionInDays: 90
       
   UnauthorizedAPICallsMetricFilter:
     Type: AWS::Logs::MetricFilter
+    Condition: ShouldCreateCloudTrail
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ ($.errorCode = *UnauthorizedOperation) || ($.errorCode = AccessDenied*) }'
@@ -888,6 +905,7 @@ Resources:
           
   RootAccountUsageMetricFilter:
     Type: AWS::Logs::MetricFilter
+    Condition: ShouldCreateCloudTrail
     Properties:
       LogGroupName: !Ref CloudTrailLogGroup
       FilterPattern: '{ $.userIdentity.type = "Root" && $.userIdentity.invokedBy NOT EXISTS && $.eventType != "AwsServiceEvent" }'
@@ -938,6 +956,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-DB-Password-Secret'
 
   CloudTrailName:
+    Condition: ShouldCreateCloudTrail
     Description: CloudTrail Trail Name
     Value: !GetAtt CloudTrail.Arn
     Export:
