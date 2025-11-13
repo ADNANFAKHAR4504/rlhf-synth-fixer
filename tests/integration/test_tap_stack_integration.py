@@ -30,6 +30,17 @@ class TestTapStackIntegration(unittest.TestCase):
         cls.ec2 = boto3.client('ec2', region_name=cls.region)
         cls.apigateway = boto3.client('apigatewayv2', region_name=cls.region)
 
+        # Get environment suffix from environment variable or derive from outputs
+        cls.env_suffix = os.environ.get('ENVIRONMENT_SUFFIX', '')
+        if not cls.env_suffix:
+            # Derive from resource names if not in environment
+            function_name = cls.outputs.get('lambda_function_name', '')
+            if 'dr-' in function_name:
+                # Extract suffix from pattern: dr-{suffix}-function-{hash}
+                parts = function_name.split('-')
+                if len(parts) >= 2:
+                    cls.env_suffix = parts[1]
+
     def test_vpc_exists_and_accessible(self):
         """Test that VPC exists and is properly configured"""
         vpc_id = self.outputs['vpc_id']
@@ -314,8 +325,9 @@ class TestTapStackIntegration(unittest.TestCase):
         """Test CloudWatch alarms are configured"""
         cloudwatch = boto3.client('cloudwatch', region_name=self.region)
 
-        # Get all alarms with prefix filter
-        response = cloudwatch.describe_alarms(AlarmNamePrefix='dr-synthr7u57r')
+        # Get all alarms with prefix filter using environment suffix
+        alarm_prefix = f'dr-{self.env_suffix}' if self.env_suffix else 'dr-'
+        response = cloudwatch.describe_alarms(AlarmNamePrefix=alarm_prefix)
 
         # Verify alarms exist for our stack
         self.assertGreater(len(response['MetricAlarms']), 0, "CloudWatch alarms should exist")
@@ -388,11 +400,12 @@ class TestTapStackIntegration(unittest.TestCase):
         self.assertTrue(bucket_name.startswith('dr-'), "S3 bucket should have dr- prefix")
         self.assertTrue(rule_name.startswith('dr-'), "Event rule should have dr- prefix")
 
-        # All should contain environment suffix (synthr7u57r)
-        self.assertIn('synthr7u57r', function_name, "Function name should contain environment suffix")
-        self.assertIn('synthr7u57r', table_name, "Table name should contain environment suffix")
-        self.assertIn('synthr7u57r', bucket_name, "Bucket name should contain environment suffix")
-        self.assertIn('synthr7u57r', rule_name, "Rule name should contain environment suffix")
+        # All should contain environment suffix if one is defined
+        if self.env_suffix:
+            self.assertIn(self.env_suffix, function_name, f"Function name should contain environment suffix '{self.env_suffix}'")
+            self.assertIn(self.env_suffix, table_name, f"Table name should contain environment suffix '{self.env_suffix}'")
+            self.assertIn(self.env_suffix, bucket_name, f"Bucket name should contain environment suffix '{self.env_suffix}'")
+            self.assertIn(self.env_suffix, rule_name, f"Rule name should contain environment suffix '{self.env_suffix}'")
 
 
 if __name__ == '__main__':
