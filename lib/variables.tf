@@ -25,6 +25,7 @@ variable "environment_suffix" {
 variable "container_image" {
   description = "Container image URI"
   type        = string
+  default     = "public.ecr.aws/docker/library/nginx:latest"
 }
 
 variable "container_cpu" {
