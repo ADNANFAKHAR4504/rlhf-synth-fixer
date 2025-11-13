@@ -1,5 +1,5 @@
 {
-  "author" : "raaj1021",
+  "author": "mayanksethi-turing",
   "taskId": "m0p3q5",
   "po_id": "m0p3q5",
   "platform": "pulumi",
@@ -28,5 +28,10 @@
     "EventBridge",
     "Kinesis"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
