@@ -17,5 +17,11 @@
     "EventBridge",
     "CloudWatch LogGroup",
     "VPC"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
 }
