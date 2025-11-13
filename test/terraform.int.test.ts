@@ -1,5 +1,21 @@
 import { DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
+import {
+  DescribeServicesCommand,
+  ECSClient,
+} from "@aws-sdk/client-ecs";
+import {
+  DescribeRepositoriesCommand,
+  ECRClient,
+} from "@aws-sdk/client-ecr";
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from "@aws-sdk/client-rds";
 import fs from "fs";
 import fetch from "node-fetch";
 import path from "path";
@@ -113,6 +129,57 @@ describe("Terraform infrastructure integration", () => {
       expect(secret.ARN).toBe(outputs.rds_master_secret_arn);
       expect(secret.Name).toBeDefined();
       expect(secret.CreatedDate).toBeInstanceOf(Date);
+    });
+
+    it("verifies backing AWS services are healthy", async () => {
+      const ecs = new ECSClient({ region });
+      const ecr = new ECRClient({ region });
+      const logs = new CloudWatchLogsClient({ region });
+      const rds = new RDSClient({ region });
+
+      const ecsResponse = await ecs.send(
+        new DescribeServicesCommand({
+          cluster: outputs.ecs_cluster_name as string,
+          services: [outputs.ecs_service_name as string],
+        })
+      );
+      const service = ecsResponse.services?.[0];
+      expect(service).toBeDefined();
+      expect(service?.status).toBe("ACTIVE");
+      expect(service?.desiredCount ?? 0).toBeGreaterThanOrEqual(2);
+      expect(service?.runningCount ?? 0).toBeGreaterThanOrEqual(2);
+
+      const repositoryName = (outputs.ecr_repository_url as string)
+        .split("/")
+        .slice(-1)[0];
+      const ecrResponse = await ecr.send(
+        new DescribeRepositoriesCommand({
+          repositoryNames: [repositoryName],
+        })
+      );
+      expect(ecrResponse.repositories?.[0]?.repositoryUri).toBe(
+        outputs.ecr_repository_url
+      );
+
+      const logResponse = await logs.send(
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: outputs.cloudwatch_log_group as string,
+          limit: 1,
+        })
+      );
+      const logGroup = logResponse.logGroups?.[0];
+      expect(logGroup?.logGroupName).toBe(outputs.cloudwatch_log_group);
+      expect(logGroup?.retentionInDays).toBe(7);
+
+      const dbResponse = await rds.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: outputs.rds_identifier as string,
+        })
+      );
+      const dbInstance = dbResponse.DBInstances?.[0];
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance?.DBInstanceStatus).toBe("available");
+      expect(dbInstance?.MultiAZ).toBe(true);
     });
   });
 });
