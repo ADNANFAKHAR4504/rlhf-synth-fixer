@@ -8,10 +8,10 @@ import { DataAwsCallerIdentity } from '@cdktf/provider-aws/lib/data-aws-caller-i
 import { DataAwsAvailabilityZones } from '@cdktf/provider-aws/lib/data-aws-availability-zones';
 import { Fn } from 'cdktf';
 // Import modules from modules.ts
-import { 
-  VpcConstruct, 
-  NetworkConstruct, 
-  SecurityGroupConstruct 
+import {
+  VpcConstruct,
+  NetworkConstruct,
+  SecurityGroupConstruct,
 } from './modules';
 
 interface TapStackProps {
