@@ -487,10 +487,10 @@ export class TapStack extends pulumi.ComponentResource {
 
     // Secrets Manager Secrets
     const dbSecret = new aws.secretsmanager.Secret(
-      `db-credentials-${environmentSuffix}-v1`,
+      `db-credentials-${environmentSuffix}`,
       {
         description: 'Database connection credentials',
-        tags: { ...tags, Name: `db-credentials-${environmentSuffix}-v1` },
+        tags: { ...tags, Name: `db-credentials-${environmentSuffix}` },
       },
       { parent: this }
     );
@@ -510,10 +510,10 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const apiKeySecret = new aws.secretsmanager.Secret(
-      `api-keys-${environmentSuffix}-v1`,
+      `api-keys-${environmentSuffix}`,
       {
         description: 'Third-party API keys',
-        tags: { ...tags, Name: `api-keys-${environmentSuffix}-v1` },
+        tags: { ...tags, Name: `api-keys-${environmentSuffix}` },
       },
       { parent: this }
     );
@@ -531,10 +531,10 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     const jwtSecret = new aws.secretsmanager.Secret(
-      `jwt-signing-key-${environmentSuffix}-v1`,
+      `jwt-signing-key-${environmentSuffix}`,
       {
         description: 'JWT signing key for authentication',
-        tags: { ...tags, Name: `jwt-signing-key-${environmentSuffix}-v1` },
+        tags: { ...tags, Name: `jwt-signing-key-${environmentSuffix}` },
       },
       { parent: this }
     );
@@ -838,10 +838,7 @@ export class TapStack extends pulumi.ComponentResource {
         description: 'Private DNS namespace for ECS service discovery',
         tags: { ...tags, Name: `service-discovery-${environmentSuffix}` },
       },
-      {
-        parent: this,
-        retainOnDelete: true, // Retain namespace to avoid deletion conflicts with services
-      }
+      { parent: this }
     );
 
     // Task Definitions
