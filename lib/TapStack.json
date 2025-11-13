@@ -55,6 +55,7 @@
     },
     "CostCenter": {
       "Type": "String",
+      "Default": "FinanceOps",
       "Description": "Cost center for resource allocation and billing",
       "AllowedPattern": "^[a-zA-Z0-9-]+$",
       "ConstraintDescription": "Must contain only alphanumeric characters and hyphens"
@@ -305,7 +306,6 @@
     },
     "TransactionProcessorFunction": {
       "Type": "AWS::Lambda::Function",
-      "DependsOn": "LambdaExecutionRole",
       "Properties": {
         "FunctionName": {
           "Fn::Sub": "transaction-processor-${EnvironmentSuffix}"
@@ -318,9 +318,7 @@
         "MemorySize": {"Ref": "LambdaMemorySize"},
         "Timeout": 30,
         "Code": {
-          "ZipFile": {
-            "Fn::Sub": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\n\nTABLE_NAME = os.environ['TABLE_NAME']\nBUCKET_NAME = os.environ['BUCKET_NAME']\n\ndef handler(event, context):\n    \"\"\"\n    Process financial transactions and store in DynamoDB.\n    Audit logs are written to S3.\n    \"\"\"\n    try:\n        table = dynamodb.Table(TABLE_NAME)\n        \n        # Process transaction\n        transaction_id = event.get('transactionId')\n        timestamp = int(datetime.utcnow().timestamp())\n        \n        # Store in DynamoDB\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'data': json.dumps(event)\n            }\n        )\n        \n        # Write audit log to S3\n        audit_key = f'transactions/{datetime.utcnow().strftime(\"%Y/%m/%d\")}/{transaction_id}.json'\n        s3.put_object(\n            Bucket=BUCKET_NAME,\n            Key=audit_key,\n            Body=json.dumps(event)\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({'message': 'Transaction processed successfully'})\n        }\n    except Exception as e:\n        print(f'Error processing transaction: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
-          }
+          "ZipFile": "import json\nimport boto3\nimport os\nfrom datetime import datetime\n\ndynamodb = boto3.resource('dynamodb')\ns3 = boto3.client('s3')\n\nTABLE_NAME = os.environ['TABLE_NAME']\nBUCKET_NAME = os.environ['BUCKET_NAME']\n\ndef handler(event, context):\n    \"\"\"\n    Process financial transactions and store in DynamoDB.\n    Audit logs are written to S3.\n    \"\"\"\n    try:\n        table = dynamodb.Table(TABLE_NAME)\n        \n        # Process transaction\n        transaction_id = event.get('transactionId')\n        timestamp = int(datetime.utcnow().timestamp())\n        \n        # Store in DynamoDB\n        table.put_item(\n            Item={\n                'transactionId': transaction_id,\n                'timestamp': timestamp,\n                'data': json.dumps(event)\n            }\n        )\n        \n        # Write audit log to S3\n        audit_key = f'transactions/{datetime.utcnow().strftime(\"%Y/%m/%d\")}/{transaction_id}.json'\n        s3.put_object(\n            Bucket=BUCKET_NAME,\n            Key=audit_key,\n            Body=json.dumps(event)\n        )\n        \n        return {\n            'statusCode': 200,\n            'body': json.dumps({'message': 'Transaction processed successfully'})\n        }\n    except Exception as e:\n        print(f'Error processing transaction: {str(e)}')\n        return {\n            'statusCode': 500,\n            'body': json.dumps({'error': str(e)})\n        }\n"
         },
         "Environment": {
           "Variables": {
