@@ -25,7 +25,13 @@ jest.mock('aws-cdk-lib/aws-lambda-nodejs', () => {
 
 import { Template } from 'aws-cdk-lib/assertions';
 import { LogProcessingConstruct } from '../lib/constructs/log-processing';
+import { AlarmsConstruct } from '../lib/constructs/alarms';
+import { DashboardsConstruct } from '../lib/constructs/dashboards';
+import { LogRetentionConstruct } from '../lib/constructs/log-retention';
+import { NotificationsConstruct } from '../lib/constructs/notifications';
 import { PaymentMonitoringStack } from '../lib/payment-monitoring-stack';
+import { ApiGatewayMonitoringStack } from '../lib/api-gateway-monitoring-stack';
+import { RdsEcsMonitoringStack } from '../lib/rds-ecs-monitoring-stack';
 import { TapStack } from '../lib/tap-stack';
 
 function buildAppAndStacks(
@@ -144,6 +150,30 @@ describe('TapStack Unit Tests', () => {
       );
       expect(payment.stackName).toBe('beta-monitoring-ctx');
     });
+
+    test('should handle projectName that already starts with payment-', () => {
+      const { payment } = buildAppAndStacks(undefined, {
+        projectName: 'payment-custom',
+        environmentSuffix: 'test',
+      });
+      expect(payment.stackName).toBe('custom-monitoring-test');
+    });
+
+    test('should handle projectName that is exactly payment', () => {
+      const { payment } = buildAppAndStacks(undefined, {
+        projectName: 'payment',
+        environmentSuffix: 'test',
+      });
+      expect(payment.stackName).toBe('payment-monitoring-test');
+    });
+
+    test('should handle projectName that does not start with payment-', () => {
+      const { payment } = buildAppAndStacks(undefined, {
+        projectName: 'custom',
+        environmentSuffix: 'test',
+      });
+      expect(payment.stackName).toBe('custom-monitoring-test');
+    });
   });
 
   describe('Stack Outputs', () => {
@@ -246,6 +276,22 @@ describe('TapStack Unit Tests', () => {
       expect(fn.Properties.Runtime).toMatch(/^nodejs\d+\.x$/);
     });
 
+    test('uses inline stub with custom environment when JEST_WORKER_ID is set', () => {
+      process.env.JEST_WORKER_ID = original || '1';
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'InlineEnvBranchStack');
+      new LogProcessingConstruct(stack, 'LPInlineEnv', {
+        environment: { TEST_VAR: 'test_value' },
+      });
+      const t = Template.fromStack(stack);
+      const lambdas = t.findResources('AWS::Lambda::Function');
+      expect(Object.keys(lambdas).length).toBeGreaterThan(0);
+      const fn: any = Object.values(lambdas)[0];
+      expect(fn.Properties.Environment.Variables).toEqual({
+        TEST_VAR: 'test_value',
+      });
+    });
+
     test('uses NodejsFunction branch when JEST_WORKER_ID is unset', () => {
       delete process.env.JEST_WORKER_ID;
       const app = new cdk.App();
@@ -258,6 +304,549 @@ describe('TapStack Unit Tests', () => {
       expect(fn.Properties.Timeout).toBe(60);
       expect(fn.Properties.Runtime).toMatch(/^nodejs\d+\.x$/);
       if (original) process.env.JEST_WORKER_ID = original;
+    });
+
+    test('uses NodejsFunction with custom environment when JEST_WORKER_ID is unset', () => {
+      delete process.env.JEST_WORKER_ID;
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'BundledEnvBranchStack');
+      new LogProcessingConstruct(stack, 'LPBundledEnv', {
+        environment: { CUSTOM_VAR: 'custom_value' },
+      });
+      const t = Template.fromStack(stack);
+      const lambdas = t.findResources('AWS::Lambda::Function');
+      expect(Object.keys(lambdas).length).toBeGreaterThan(0);
+      const fn: any = Object.values(lambdas)[0];
+      // Should have a Runtime property (NodejsFunction creates a lambda with Runtime)
+      expect(fn.Properties.Runtime).toBeDefined();
+      expect(fn.Properties.Handler).toBeDefined();
+      if (original) process.env.JEST_WORKER_ID = original;
+    });
+
+    test('handles undefined props gracefully', () => {
+      process.env.JEST_WORKER_ID = original || '1';
+      const app = new cdk.App();
+      const stack = new cdk.Stack(app, 'UndefinedPropsStack');
+      new LogProcessingConstruct(stack, 'LPUndefined');
+      const t = Template.fromStack(stack);
+      const lambdas = t.findResources('AWS::Lambda::Function');
+      expect(Object.keys(lambdas).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('Construct Branch Coverage', () => {
+    describe('AlarmsConstruct', () => {
+      test('handles environment suffix sanitization with bash syntax', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '${ENVIRONMENT_SUFFIX:-dev}' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+        });
+        const template = Template.fromStack(stack);
+        // Should create alarms with sanitized names
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBeGreaterThan(0);
+      });
+
+      test('handles empty environment suffix fallback', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '   ' }, // whitespace only
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+        });
+        const template = Template.fromStack(stack);
+        // Should use 'dev' fallback
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBeGreaterThan(0);
+      });
+
+      test('handles invalid characters in environment suffix', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: 'test@#$%^&*()' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+        });
+        const template = Template.fromStack(stack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBeGreaterThan(0);
+      });
+
+      test('handles environment suffix that becomes empty after sanitization', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '@#$%^&*()' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+        });
+        const template = Template.fromStack(stack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBeGreaterThan(0);
+      });
+    });
+
+    describe('DashboardsConstruct', () => {
+      test('handles environment suffix sanitization', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '${DASHBOARD_SUFFIX:-prod}' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const alarms = new Map();
+        new DashboardsConstruct(stack, 'TestDashboards', { alarms });
+        const template = Template.fromStack(stack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+      });
+
+      test('creates dashboard with alarm status widget when alarms are provided', () => {
+        const app = new cdk.App();
+        const stack = new cdk.Stack(app, 'TestStack');
+
+        // Create a mock alarm
+        const alarm = new cdk.aws_cloudwatch.Alarm(stack, 'TestAlarm', {
+          alarmName: 'test-alarm',
+          metric: new cdk.aws_cloudwatch.Metric({
+            namespace: 'Test',
+            metricName: 'TestMetric',
+          }),
+          threshold: 1,
+          evaluationPeriods: 1,
+        });
+
+        const alarms = new Map([['test', alarm]]);
+        new DashboardsConstruct(stack, 'TestDashboards', { alarms });
+        const template = Template.fromStack(stack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+      });
+
+      test('handles empty alarms map', () => {
+        const app = new cdk.App();
+        const stack = new cdk.Stack(app, 'TestStack');
+        const alarms = new Map();
+        new DashboardsConstruct(stack, 'TestDashboards', { alarms });
+        const template = Template.fromStack(stack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+      });
+
+      test('handles environment suffix that becomes empty after sanitization', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '!!!@@@###' }, // Special chars only, becomes empty
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        const alarms = new Map();
+        new DashboardsConstruct(stack, 'TestDashboards', { alarms });
+        const template = Template.fromStack(stack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBeGreaterThan(0);
+        // Should use 'dev' fallback
+        const dashboard: any = Object.values(dashboards)[0];
+        expect(dashboard.Properties?.DashboardName).toContain('tapstack-dev');
+      });
+    });
+
+    describe('LogRetentionConstruct', () => {
+      test('handles environment suffix sanitization with special characters', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '@#$%^&*()' },
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        new LogRetentionConstruct(stack, 'TestRetention');
+        const template = Template.fromStack(stack);
+        const buckets = template.findResources('AWS::S3::Bucket');
+        expect(Object.keys(buckets).length).toBeGreaterThan(0);
+      });
+
+      test('handles empty environment suffix after sanitization', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '!!!@@@###$$$' }, // all special chars
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        new LogRetentionConstruct(stack, 'TestRetention');
+        const template = Template.fromStack(stack);
+        const buckets = template.findResources('AWS::S3::Bucket');
+        expect(Object.keys(buckets).length).toBeGreaterThan(0);
+        // Should use 'dev' fallback
+        const bucket: any = Object.values(buckets)[0];
+        expect(bucket.Properties.BucketName).toContain('tapstack-dev');
+      });
+
+      test('creates S3 bucket with correct lifecycle rules', () => {
+        const app = new cdk.App();
+        const stack = new cdk.Stack(app, 'TestStack');
+        new LogRetentionConstruct(stack, 'TestRetention');
+        const template = Template.fromStack(stack);
+        const buckets = template.findResources('AWS::S3::Bucket');
+        expect(Object.keys(buckets).length).toBeGreaterThan(0);
+        const bucket: any = Object.values(buckets)[0];
+        expect(bucket.Properties.LifecycleConfiguration).toBeDefined();
+        expect(bucket.Properties.VersioningConfiguration).toEqual({
+          Status: 'Enabled',
+        });
+      });
+    });
+
+    describe('ApiGatewayMonitoringStack', () => {
+      test('should handle environment suffix sanitization with special characters', () => {
+        const app = new cdk.App();
+        const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi', {
+          apiGatewayName: 'test-api',
+          environmentSuffix: '!@#$%',
+        });
+        const template = Template.fromStack(apiStack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+      });
+
+      test('should handle empty environment suffix after sanitization', () => {
+        const app = new cdk.App();
+        const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi', {
+          apiGatewayName: 'test-api',
+          environmentSuffix: '!!!@@@',
+        });
+        const template = Template.fromStack(apiStack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBe(1);
+      });
+
+      test('should handle undefined apiGatewayName prop', () => {
+        const app = new cdk.App();
+        const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi');
+        const template = Template.fromStack(apiStack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+      });
+
+      test('should handle environment variable fallback', () => {
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        process.env.ENVIRONMENT_SUFFIX = 'from-env';
+        try {
+          const app = new cdk.App();
+          const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi');
+          const template = Template.fromStack(apiStack);
+          const alarms = template.findResources('AWS::CloudWatch::Alarm');
+          expect(Object.keys(alarms).length).toBe(2);
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
+      });
+
+      test('should use default dev suffix when no context or env var', () => {
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        delete process.env.ENVIRONMENT_SUFFIX;
+        try {
+          const app = new cdk.App();
+          const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi');
+          const template = Template.fromStack(apiStack);
+          const dashboards = template.findResources(
+            'AWS::CloudWatch::Dashboard'
+          );
+          const dashboard = Object.values(dashboards)[0] as any;
+          expect(dashboard?.Properties?.DashboardName).toContain(
+            'tapstack-dev'
+          );
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
+      });
+
+      test('should sanitize bash variable syntax with default', () => {
+        const app = new cdk.App();
+        const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi', {
+          environmentSuffix: '${BRANCH:-main}',
+        });
+        const template = Template.fromStack(apiStack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        const dashboard = Object.values(dashboards)[0] as any;
+        // Should become 'branchmain' after sanitization
+        expect(dashboard?.Properties?.DashboardName).toContain(
+          'tapstack-branchmain'
+        );
+      });
+
+      test('should create metrics, dashboard, and alarms correctly', () => {
+        const app = new cdk.App();
+        const apiStack = new ApiGatewayMonitoringStack(app, 'TestApi', {
+          apiGatewayName: 'custom-api',
+        });
+        const template = Template.fromStack(apiStack);
+
+        // Verify metrics are created (they're referenced in alarms and dashboard)
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+
+        // Verify dashboard is created with widgets
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBe(1);
+
+        // Verify alarm properties
+        const alarmResources = Object.values(alarms) as any[];
+        alarmResources.forEach(alarm => {
+          expect(alarm.Properties?.Threshold).toBeDefined();
+          expect(alarm.Properties?.EvaluationPeriods).toBe(2);
+          expect(alarm.Properties?.ComparisonOperator).toBeDefined();
+          expect(alarm.Properties?.AlarmDescription).toBeDefined();
+        });
+
+        // Verify specific alarm names and thresholds
+        const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
+        expect(alarmNames).toContain('api-gateway-latency-high-tapstack-dev');
+        expect(alarmNames).toContain(
+          'api-gateway-error-rate-high-tapstack-dev'
+        );
+
+        const latencyAlarm = alarmResources.find(a =>
+          a.Properties?.AlarmName?.includes('latency')
+        );
+        const errorAlarm = alarmResources.find(a =>
+          a.Properties?.AlarmName?.includes('error-rate')
+        );
+
+        expect(latencyAlarm?.Properties?.Threshold).toBe(500);
+        expect(errorAlarm?.Properties?.Threshold).toBe(1);
+      });
+    });
+
+    describe('RdsEcsMonitoringStack', () => {
+      test('should handle environment suffix sanitization with special characters', () => {
+        const app = new cdk.App();
+        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
+          dbIdentifier: 'test-db',
+          ecsServiceName: 'test-service',
+          clusterName: 'test-cluster',
+          environmentSuffix: '!@#$%',
+        });
+        const template = Template.fromStack(rdsStack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+      });
+
+      test('should handle empty environment suffix after sanitization', () => {
+        const app = new cdk.App();
+        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
+          dbIdentifier: 'test-db',
+          ecsServiceName: 'test-service',
+          clusterName: 'test-cluster',
+          environmentSuffix: '!!!@@@',
+        });
+        const template = Template.fromStack(rdsStack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBe(1);
+      });
+
+      test('should handle optional props gracefully', () => {
+        const app = new cdk.App();
+        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds');
+        const template = Template.fromStack(rdsStack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+      });
+
+      test('should handle partial props', () => {
+        const app = new cdk.App();
+        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
+          dbIdentifier: 'test-db',
+          // ecsServiceName and clusterName will use defaults
+        });
+        const template = Template.fromStack(rdsStack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+      });
+
+      test('should handle environment variable fallback', () => {
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        process.env.ENVIRONMENT_SUFFIX = 'from-env';
+        try {
+          const app = new cdk.App();
+          const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds');
+          const template = Template.fromStack(rdsStack);
+          const alarms = template.findResources('AWS::CloudWatch::Alarm');
+          expect(Object.keys(alarms).length).toBe(2);
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
+      });
+
+      test('should use default dev suffix when no context or env var', () => {
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        delete process.env.ENVIRONMENT_SUFFIX;
+        try {
+          const app = new cdk.App();
+          const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds');
+          const template = Template.fromStack(rdsStack);
+          const dashboards = template.findResources(
+            'AWS::CloudWatch::Dashboard'
+          );
+          const dashboard = Object.values(dashboards)[0] as any;
+          expect(dashboard?.Properties?.DashboardName).toContain(
+            'tapstack-dev'
+          );
+        } finally {
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
+      });
+
+      test('should sanitize bash variable syntax with default', () => {
+        const app = new cdk.App();
+        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
+          environmentSuffix: '${ENV:-prod}',
+        });
+        const template = Template.fromStack(rdsStack);
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        const dashboard = Object.values(dashboards)[0] as any;
+        // Should become 'envprod' after sanitization
+        expect(dashboard?.Properties?.DashboardName).toContain(
+          'tapstack-envprod'
+        );
+      });
+
+      test('should create all metrics, dashboard, and alarms correctly', () => {
+        const app = new cdk.App();
+        const rdsStack = new RdsEcsMonitoringStack(app, 'TestRds', {
+          dbIdentifier: 'my-db',
+          ecsServiceName: 'my-service',
+          clusterName: 'my-cluster',
+        });
+        const template = Template.fromStack(rdsStack);
+
+        // Verify alarms are created
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        expect(Object.keys(alarms).length).toBe(2);
+
+        // Verify dashboard is created
+        const dashboards = template.findResources('AWS::CloudWatch::Dashboard');
+        expect(Object.keys(dashboards).length).toBe(1);
+
+        // Verify alarm properties and names
+        const alarmResources = Object.values(alarms) as any[];
+        const alarmNames = alarmResources.map(a => a.Properties?.AlarmName);
+        expect(alarmNames).toContain('ecs-cpu-utilization-high-tapstack-dev');
+        expect(alarmNames).toContain('rds-db-connections-high-tapstack-dev');
+
+        // Verify alarm thresholds
+        alarmResources.forEach(alarm => {
+          expect(alarm.Properties?.Threshold).toBeDefined();
+          expect(alarm.Properties?.EvaluationPeriods).toBe(2);
+          expect(alarm.Properties?.ComparisonOperator).toBeDefined();
+          expect(alarm.Properties?.AlarmDescription).toBeDefined();
+        });
+
+        const cpuAlarm = alarmResources.find(a =>
+          a.Properties?.AlarmName?.includes('ecs-cpu')
+        );
+        const dbAlarm = alarmResources.find(a =>
+          a.Properties?.AlarmName?.includes('rds-db')
+        );
+
+        expect(cpuAlarm?.Properties?.Threshold).toBe(80);
+        expect(dbAlarm?.Properties?.Threshold).toBe(100);
+      });
+    });
+
+    describe('NotificationsConstruct', () => {
+      test('handles environment suffix sanitization for SNS topics', () => {
+        // Set environment variable for this test
+        const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+        process.env.ENVIRONMENT_SUFFIX = '${TOPIC_ENV:-staging}';
+
+        try {
+          const app = new cdk.App();
+          const stack = new cdk.Stack(app, 'TestStack', {
+            env: { region: 'us-east-1' },
+          });
+          new NotificationsConstruct(stack, 'TestNotifications');
+          const template = Template.fromStack(stack);
+          const topics = template.findResources('AWS::SNS::Topic');
+          expect(Object.keys(topics).length).toBeGreaterThan(0);
+          // Should have sanitized topic names
+          const topicNames = Object.values(topics).map(
+            (t: any) => t.Properties?.TopicName
+          );
+          // The sanitization should convert ${TOPIC_ENV:-staging} to 'topicenvstaging'
+          // So topic names should include 'tapstack-topicenvstaging'
+          expect(
+            topicNames.some(
+              name => name && name.includes('tapstack-topicenvstaging')
+            )
+          ).toBe(true);
+        } finally {
+          // Restore original environment
+          if (originalEnv === undefined) {
+            delete process.env.ENVIRONMENT_SUFFIX;
+          } else {
+            process.env.ENVIRONMENT_SUFFIX = originalEnv;
+          }
+        }
+      });
+
+      test('creates topics with correct display names', () => {
+        const app = new cdk.App();
+        const stack = new cdk.Stack(app, 'TestStack');
+        new NotificationsConstruct(stack, 'TestNotifications');
+        const template = Template.fromStack(stack);
+        const topics = template.findResources('AWS::SNS::Topic');
+        expect(Object.keys(topics).length).toBeGreaterThan(0);
+
+        const topicList = Object.values(topics) as any[];
+        const operationalTopic = topicList.find(t =>
+          t.Properties?.DisplayName?.includes('Operational')
+        );
+        const securityTopic = topicList.find(t =>
+          t.Properties?.DisplayName?.includes('Security')
+        );
+
+        expect(operationalTopic).toBeDefined();
+        expect(securityTopic).toBeDefined();
+      });
+
+      test('handles environment suffix that becomes empty after sanitization for topics', () => {
+        const app = new cdk.App({
+          context: { environmentSuffix: '$$$$####$$$$' }, // Special chars only, becomes empty
+        });
+        const stack = new cdk.Stack(app, 'TestStack');
+        new NotificationsConstruct(stack, 'TestNotifications');
+        const template = Template.fromStack(stack);
+        const topics = template.findResources('AWS::SNS::Topic');
+        expect(Object.keys(topics).length).toBeGreaterThan(0);
+        // Should use 'dev' fallback in topic names
+        const topicNames = Object.values(topics).map(
+          (t: any) => t.Properties?.TopicName
+        );
+        expect(
+          topicNames.some(name => name && name.includes('tapstack-dev'))
+        ).toBe(true);
+      });
     });
   });
 });

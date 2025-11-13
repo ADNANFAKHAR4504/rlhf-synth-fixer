@@ -1,9 +1,9 @@
 import * as cdk from 'aws-cdk-lib';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 // import * as logs from 'aws-cdk-lib/aws-logs';
-import * as iam from 'aws-cdk-lib/aws-iam';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import { Construct } from 'constructs';
 
@@ -11,9 +11,30 @@ export class LogRetentionConstruct extends Construct {
   constructor(scope: Construct, id: string) {
     super(scope, id);
 
-    // S3 bucket for log archives
+    // S3 bucket for log archives - use unique name with tapstack-envsuffix format
+    const stack = cdk.Stack.of(this);
+    // Get environment suffix from CDK context, similar to tap-stack.ts logic
+    let envSuffix =
+      stack.node.tryGetContext('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev';
+
+    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    envSuffix = envSuffix
+      .replace(/[\${}:-]/g, '')
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      .toLowerCase();
+
+    // Ensure we have a valid suffix
+    if (!envSuffix || envSuffix.trim() === '') {
+      envSuffix = 'dev';
+    }
+
+    const stackName = `tapstack-${envSuffix}`;
+    const bucketName = `payment-logs-archive-${stackName}`;
+
     const logArchiveBucket = new s3.Bucket(this, 'LogArchiveBucket', {
-      bucketName: `payment-logs-archive-${cdk.Stack.of(this).account}-${cdk.Stack.of(this).region}`,
+      bucketName,
       lifecycleRules: [
         {
           id: 'ArchiveOldLogs',
@@ -33,6 +54,8 @@ export class LogRetentionConstruct extends Construct {
       encryption: s3.BucketEncryption.S3_MANAGED,
       blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
       versioned: true,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+      autoDeleteObjects: true,
     });
 
     // Create IAM role for CloudWatch Logs to export to S3
@@ -57,7 +80,7 @@ export class LogRetentionConstruct extends Construct {
 
     // Lambda function for automated log export (simplified for example)
     const exportFunction = new lambda.Function(this, 'LogExporter', {
-      functionName: 'payment-log-exporter',
+      functionName: `payment-log-exporter-${stackName}`,
       runtime: lambda.Runtime.PYTHON_3_11,
       architecture: lambda.Architecture.ARM_64,
       handler: 'index.handler',

@@ -1,4 +1,5 @@
 // lib/constructs/dashboards.ts
+import * as cdk from 'aws-cdk-lib';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import { Construct } from 'constructs';
 
@@ -10,12 +11,31 @@ export class DashboardsConstruct extends Construct {
   constructor(scope: Construct, id: string, props: DashboardsConstructProps) {
     super(scope, id);
 
+    const stack = cdk.Stack.of(this);
+    let envSuffix =
+      stack.node.tryGetContext('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev';
+
+    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    envSuffix = envSuffix
+      .replace(/[\${}:-]/g, '')
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      .toLowerCase();
+
+    // Ensure we have a valid suffix
+    if (!envSuffix || envSuffix.trim() === '') {
+      envSuffix = 'dev';
+    }
+
+    const stackName = `tapstack-${envSuffix}`;
+
     // Keep a relative start window ("last 3 hours"); do NOT also set defaultInterval.
     const dashboard = new cloudwatch.Dashboard(
       this,
       'PaymentPlatformDashboard',
       {
-        dashboardName: 'payment-platform-monitoring',
+        dashboardName: `payment-platform-monitoring-${stackName}`,
         start: '-PT3H', // Last 3 hours default view
         periodOverride: cloudwatch.PeriodOverride.AUTO,
       }
@@ -230,7 +250,7 @@ export class DashboardsConstruct extends Construct {
     const apiAccessLogGroup = '/aws/apigateway/payment-api';
 
     new cloudwatch.CfnInsightRule(this, 'TopAPICallers', {
-      ruleName: 'PaymentAPI-TopCallers',
+      ruleName: `PaymentAPI-TopCallers-${stackName}`,
       ruleState: 'ENABLED',
       ruleBody: JSON.stringify({
         Schema: { Name: 'CloudWatchLogRule', Version: 1 },
@@ -246,7 +266,7 @@ export class DashboardsConstruct extends Construct {
     });
 
     new cloudwatch.CfnInsightRule(this, 'TopErrorEndpoints', {
-      ruleName: 'PaymentAPI-TopErrorEndpoints',
+      ruleName: `PaymentAPI-TopErrorEndpoints-${stackName}`,
       ruleState: 'ENABLED',
       ruleBody: JSON.stringify({
         Schema: { Name: 'CloudWatchLogRule', Version: 1 },

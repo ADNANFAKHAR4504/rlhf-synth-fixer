@@ -38,11 +38,16 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Project', projectName);
     cdk.Tags.of(this).add('Environment', environmentSuffix);
 
-    new PaymentMonitoringStack(
+    // Set context on this stack before creating child stacks
+    this.node.setContext('environmentSuffix', environmentSuffix);
+    this.node.setContext('projectName', projectName);
+
+    // Create PaymentMonitoringStack
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const paymentStack = new PaymentMonitoringStack(
       this,
       `PaymentMonitoringStack-${environmentSuffix}`,
       {
-        ...props,
         stackName: `${normalizedProjectName.replace(
           /^payment-/,
           ''
@@ -51,23 +56,29 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    new ApiGatewayMonitoringStack(
+    // Create ApiGatewayMonitoringStack
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const apiStack = new ApiGatewayMonitoringStack(
       this,
       `ApiGatewayMonitoringStack-${environmentSuffix}`,
       {
-        ...props,
         stackName: `${normalizedProjectName}-apigw-monitoring-${environmentSuffix}`,
         description: `API Gateway monitoring for ${projectName} (${environmentSuffix}).`,
+        environmentSuffix,
+        projectName,
       }
     );
 
-    new RdsEcsMonitoringStack(
+    // Create RdsEcsMonitoringStack
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const rdsStack = new RdsEcsMonitoringStack(
       this,
       `RdsEcsMonitoringStack-${environmentSuffix}`,
       {
-        ...props,
         stackName: `${normalizedProjectName}-rds-ecs-monitoring-${environmentSuffix}`,
         description: `RDS and ECS monitoring for ${projectName} (${environmentSuffix}).`,
+        environmentSuffix,
+        projectName,
       }
     );
   }

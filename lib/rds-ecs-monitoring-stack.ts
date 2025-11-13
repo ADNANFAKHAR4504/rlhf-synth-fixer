@@ -1,11 +1,13 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import { Construct } from 'constructs';
 
 export interface RdsEcsMonitoringStackProps extends cdk.StackProps {
   readonly dbIdentifier?: string;
   readonly ecsServiceName?: string;
   readonly clusterName?: string;
+  readonly environmentSuffix?: string;
+  readonly projectName?: string;
 }
 
 export class RdsEcsMonitoringStack extends cdk.Stack {
@@ -19,6 +21,26 @@ export class RdsEcsMonitoringStack extends cdk.Stack {
     const dbId = props?.dbIdentifier ?? 'payment-db';
     const ecsService = props?.ecsServiceName ?? 'payment-service';
     const cluster = props?.clusterName ?? 'payment-cluster';
+
+    // Get environment suffix for unique resource naming
+    let envSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev';
+
+    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    envSuffix = envSuffix
+      .replace(/[\${}:-]/g, '')
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      .toLowerCase();
+
+    // Ensure we have a valid suffix
+    if (!envSuffix || envSuffix.trim() === '') {
+      envSuffix = 'dev';
+    }
+
+    const stackName = `tapstack-${envSuffix}`;
 
     const cpuUtilization = new cloudwatch.Metric({
       namespace: 'AWS/ECS',
@@ -53,7 +75,7 @@ export class RdsEcsMonitoringStack extends cdk.Stack {
     });
 
     const dashboard = new cloudwatch.Dashboard(this, 'RdsEcsDashboard', {
-      dashboardName: `${dbId}-rds-ecs-dashboard`,
+      dashboardName: `${dbId}-rds-ecs-dashboard-${stackName}`,
     });
 
     dashboard.addWidgets(
@@ -76,6 +98,7 @@ export class RdsEcsMonitoringStack extends cdk.Stack {
     );
 
     new cloudwatch.Alarm(this, 'HighEcsCpuAlarm', {
+      alarmName: `ecs-cpu-utilization-high-${stackName}`,
       metric: cpuUtilization,
       threshold: 80,
       evaluationPeriods: 2,
@@ -84,6 +107,7 @@ export class RdsEcsMonitoringStack extends cdk.Stack {
     });
 
     new cloudwatch.Alarm(this, 'HighDbConnectionsAlarm', {
+      alarmName: `rds-db-connections-high-${stackName}`,
       metric: dbConnections,
       threshold: 100,
       evaluationPeriods: 2,

@@ -1,9 +1,11 @@
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
+import { Construct } from 'constructs';
 
 export interface ApiGatewayMonitoringStackProps extends cdk.StackProps {
   readonly apiGatewayName?: string;
+  readonly environmentSuffix?: string;
+  readonly projectName?: string;
 }
 
 export class ApiGatewayMonitoringStack extends cdk.Stack {
@@ -15,6 +17,26 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
     super(scope, id, props);
 
     const apiName = props?.apiGatewayName ?? 'payment-api';
+
+    // Get environment suffix for unique resource naming
+    let envSuffix =
+      props?.environmentSuffix ||
+      this.node.tryGetContext('environmentSuffix') ||
+      process.env.ENVIRONMENT_SUFFIX ||
+      'dev';
+
+    // Sanitize envSuffix to remove bash syntax and invalid characters, then convert to lowercase
+    envSuffix = envSuffix
+      .replace(/[\${}:-]/g, '')
+      .replace(/[^a-zA-Z0-9-]/g, '')
+      .toLowerCase();
+
+    // Ensure we have a valid suffix
+    if (!envSuffix || envSuffix.trim() === '') {
+      envSuffix = 'dev';
+    }
+
+    const stackName = `tapstack-${envSuffix}`;
 
     const latency = new cloudwatch.Metric({
       namespace: 'AWS/ApiGateway',
@@ -46,7 +68,7 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
     });
 
     const dashboard = new cloudwatch.Dashboard(this, 'ApiGatewayDashboard', {
-      dashboardName: `${apiName}-gateway-dashboard`,
+      dashboardName: `${apiName}-gateway-dashboard-${stackName}`,
     });
 
     dashboard.addWidgets(
@@ -61,6 +83,7 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
     );
 
     new cloudwatch.Alarm(this, 'HighLatencyAlarm', {
+      alarmName: `api-gateway-latency-high-${stackName}`,
       metric: latency,
       threshold: 500,
       evaluationPeriods: 2,
@@ -69,6 +92,7 @@ export class ApiGatewayMonitoringStack extends cdk.Stack {
     });
 
     new cloudwatch.Alarm(this, 'HighErrorRateAlarm', {
+      alarmName: `api-gateway-error-rate-high-${stackName}`,
       metric: errorRate,
       threshold: 1,
       evaluationPeriods: 2,
