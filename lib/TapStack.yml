@@ -22,11 +22,6 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
     Description: Latest Amazon Linux 2 AMI from SSM Parameter Store
-    
-  NotificationEmail:
-    Type: String
-    AllowedPattern: '[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}'
-    Description: Email address for security notifications
 
 # Mappings for environment-specific configurations
 Mappings:
@@ -450,7 +445,7 @@ Resources:
   ApplicationBucket:
     Type: AWS::S3::Bucket
     Properties:
-      BucketName: !Sub '${AWS::StackName}-app-bucket-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'app-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -475,7 +470,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub '${AWS::StackName}-cloudtrail-${AWS::AccountId}-${AWS::Region}'
+      BucketName: !Sub 'cloudtrail-bucket-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -797,9 +792,6 @@ Resources:
     Type: AWS::SNS::Topic
     Properties:
       DisplayName: Security Alarms
-      Subscription:
-        - Endpoint: !Ref NotificationEmail
-          Protocol: email
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentType
@@ -952,7 +944,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
       
   SNSTopicArn:
-    Description: SNS Topic for Security Alarms
+    Description: SNS Topic for Security Alarms - Subscribe via AWS Console or CLI to receive notifications
     Value: !Ref SecurityAlarmTopic
     Export:
       Name: !Sub '${AWS::StackName}-SNS-Topic'
