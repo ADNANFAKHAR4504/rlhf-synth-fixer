@@ -262,7 +262,8 @@ describe('TapStack Integration Tests', () => {
 
         const content = await result.Body?.transformToString();
         expect(content).toContain('integration testing');
-        expect(result.Metadata?.testType).toBe('integration');
+        // Metadata keys are case-insensitive and may be lowercased by S3
+        expect(result.Metadata?.testtype || result.Metadata?.testType).toBe('integration');
       }, 30000);
 
       test('should list objects in S3 bucket', async () => {
@@ -824,20 +825,20 @@ describe('TapStack Integration Tests', () => {
         const alarmName = outputs.HighCPUAlarmName;
         const topicArn = outputs.SNSTopicArn;
 
-        // STEP 1: Send test metric
+        // STEP 1: Send test metric to custom namespace (AWS/ namespaces are reserved)
         await cloudwatchClient.send(
           new PutMetricDataCommand({
-            Namespace: 'AWS/EC2',
+            Namespace: 'TapStack/E2E',
             MetricData: [
               {
-                MetricName: 'CPUUtilization',
-                Value: 50, // Below threshold
+                MetricName: 'TestCPUUtilization',
+                Value: 50,
                 Timestamp: new Date(),
                 Unit: 'Percent',
                 Dimensions: [
                   {
-                    Name: 'AutoScalingGroupName',
-                    Value: outputs.AutoScalingGroupName,
+                    Name: 'TestType',
+                    Value: 'E2E',
                   },
                 ],
               },
