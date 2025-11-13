@@ -838,7 +838,10 @@ export class TapStack extends pulumi.ComponentResource {
         description: 'Private DNS namespace for ECS service discovery',
         tags: { ...tags, Name: `service-discovery-${environmentSuffix}` },
       },
-      { parent: this }
+      {
+        parent: this,
+        retainOnDelete: true, // Retain namespace to avoid deletion conflicts with services
+      }
     );
 
     // Task Definitions
@@ -1149,7 +1152,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `frontend-discovery-${environmentSuffix}` },
       },
-      { parent: this, deleteBeforeReplace: true }
+      { parent: this }
     );
 
     const apiDiscoveryService = new aws.servicediscovery.Service(
@@ -1171,7 +1174,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `api-gateway-discovery-${environmentSuffix}` },
       },
-      { parent: this, deleteBeforeReplace: true }
+      { parent: this }
     );
 
     const processingDiscoveryService = new aws.servicediscovery.Service(
@@ -1193,7 +1196,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `processing-discovery-${environmentSuffix}` },
       },
-      { parent: this, deleteBeforeReplace: true }
+      { parent: this }
     );
 
     // ECS Services
@@ -1224,7 +1227,11 @@ export class TapStack extends pulumi.ComponentResource {
       },
       {
         parent: this,
-        dependsOn: [albListener, fargateCapacityProvider, frontendDiscoveryService],
+        dependsOn: [
+          albListener,
+          fargateCapacityProvider,
+          frontendDiscoveryService,
+        ],
       }
     );
 
