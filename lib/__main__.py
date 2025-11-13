@@ -9,7 +9,9 @@ config = pulumi.Config()
 
 # Read environment suffix - prioritize environment variable over Pulumi config default
 # This ensures CI/CD exported ENVIRONMENT_SUFFIX is respected
-environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX") or config.get("environment_suffix") or "dev"
+env_suffix = os.environ.get("ENVIRONMENT_SUFFIX")
+config_suffix = config.get("environment_suffix")
+environment_suffix = env_suffix or config_suffix or "dev"
 
 print(f"Using environment suffix: {environment_suffix}", file=sys.stderr)
 
