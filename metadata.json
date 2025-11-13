@@ -4,8 +4,8 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "r7u57r",
-  "team": "1",
-  "startedAt": "",
+  "team": "synth",
+  "startedAt": "2025-11-13T03:17:00+05:30",
   "subtask": "Failure Recovery Automation",
   "subject_labels": ["Failure Recovery"],
   "aws_services": [
@@ -20,11 +20,5 @@
     "sns",
     "iam"
   ],
-  "training_quality": 8,
-  "coverage": {
-    "lines": 100,
-    "branches": 100
-  },
-  "author": "",
-  "dockerS3Location": ""
+  "training_quality": 8
 }
