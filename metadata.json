@@ -12,10 +12,20 @@
   ],
   "aws_services": [
     "S3 Bucket",
-    "CloudFormation",
+    "KMS",
+    "IAM",
     "Lambda",
-    "EventBridge",
     "CloudWatch LogGroup",
-    "VPC"
-  ]
+    "CloudWatch Alarm",
+    "API Gateway",
+    "SQS",
+    "SNS",
+    "VPC",
+    "EC2 Security Group",
+    "VPC Endpoint",
+    "Route Table",
+    "Subnet"
+  ],
+  "training_quality": 10,
+  "author": "mikiaszerihun"
 }
