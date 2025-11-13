@@ -2,7 +2,7 @@
   "platform": "cfn",
   "language": "yaml",
   "complexity": "hard",
-  "team": "synth",
+  "team": "synth-1",
   "turn_type": "single",
   "startedAt": "2025-11-13T09:40:48.968545Z",
   "po_id": "101912474",
@@ -12,6 +12,8 @@
     "infrastructure",
     "multi-environment-consistency-&-replication"
   ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "aws_services": [
     "VPC",
     "EC2",
