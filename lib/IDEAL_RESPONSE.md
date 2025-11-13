@@ -1656,6 +1656,167 @@ ab -n 10000 -c 100 -H "x-api-key: {api_key}" \
 2. **Visibility Timeout**: Set to Lambda timeout + 30 seconds
 3. **FIFO Queues**: Use for ordered processing (optional)
 
+## Pulumi Best Practices
+
+### Working with Outputs
+
+Pulumi uses an `Output<T>` type to represent values that are computed asynchronously during deployment. Understanding how to work with Outputs is critical for avoiding common pitfalls.
+
+#### 1. Using pulumi.Output.all() for Multiple Outputs
+
+When you need to combine multiple Output values, always use `pulumi.Output.all()`:
+
+```python
+# CORRECT: Combine all Outputs first
+api_url = pulumi.Output.all(
+    api_id=self.api_gateway.id,
+    region=self.region,
+    stage=self.stage_name
+).apply(lambda args: f"https://{args['api_id']}.execute-api.{args['region']}.amazonaws.com/{args['stage']}")
+
+# INCORRECT: Nesting Outputs (causes errors)
+api_url = self.api_gateway.id.apply(
+    lambda id: f"https://{id}.execute-api.{self.region}.amazonaws.com/{self.stage_name}"
+)
+# self.region and self.stage_name are Outputs, causing nested Output issues
+```
+
+#### 2. Accessing Output Values in Lambda Functions
+
+```python
+# Use positional arguments
+outputs = pulumi.Output.all(val1, val2, val3).apply(
+    lambda args: f"{args[0]}-{args[1]}-{args[2]}"
+)
+
+# Or use dictionary unpacking for readability
+outputs = pulumi.Output.all(
+    id=resource.id,
+    name=resource.name,
+    arn=resource.arn
+).apply(
+    lambda args: f"Resource {args['name']} has ARN {args['arn']}"
+)
+```
+
+#### 3. Conditional Logic with Outputs
+
+```python
+# CORRECT: Use Output.apply() for conditional logic
+deployment_mode = pulumi.Output.all(
+    self.environment_suffix
+).apply(
+    lambda args: 'production' if args[0] == 'prod' else 'development'
+)
+
+# INCORRECT: Direct comparison (won't work)
+# deployment_mode = 'production' if self.environment_suffix == 'prod' else 'development'
+```
+
+#### 4. Exporting Outputs for Integration Tests
+
+When exporting stack outputs for integration tests, ensure all Lambda ARNs and resource identifiers are included:
+
+```python
+self.register_outputs({
+    # API Gateway endpoint (uses Output.all to avoid nesting)
+    'api_endpoint': pulumi.Output.all(
+        self.api_gateway.id,
+        self.region,
+        self.stage_name
+    ).apply(
+        lambda args: f"https://{args[0]}.execute-api.{args[1]}.amazonaws.com/{args[2]}"
+    ),
+
+    # Direct outputs (already Output types)
+    'merchant_table_name': self.merchant_table.name,
+    'transaction_table_name': self.transaction_table.name,
+    'queue_url': self.transaction_queue.url,
+    'sns_topic_arn': self.fraud_alert_topic.arn,
+
+    # Lambda ARNs for integration testing
+    'validation_lambda_arn': self.validation_lambda.arn,
+    'fraud_detection_lambda_arn': self.fraud_detection_lambda.arn,
+    'failed_transaction_lambda_arn': self.failed_transaction_lambda.arn,
+
+    # Dashboard URL (uses apply for string formatting)
+    'dashboard_url': self.dashboard.dashboard_name.apply(
+        lambda name: f"https://console.aws.amazon.com/cloudwatch/home?region={self.region}#dashboards:name={name}"
+    )
+})
+```
+
+#### 5. Common Pitfalls to Avoid
+
+1. **Don't stringify Outputs directly**: Never call `str()` on an Output
+   ```python
+   # WRONG
+   url = f"https://{str(self.api_gateway.id)}"
+
+   # RIGHT
+   url = self.api_gateway.id.apply(lambda id: f"https://{id}")
+   ```
+
+2. **Don't nest .apply() calls unnecessarily**: Use `Output.all()` instead
+   ```python
+   # WRONG (nested applies)
+   result = output1.apply(lambda v1:
+       output2.apply(lambda v2: f"{v1}-{v2}")
+   )
+
+   # RIGHT (single apply with Output.all)
+   result = pulumi.Output.all(output1, output2).apply(
+       lambda args: f"{args[0]}-{args[1]}"
+   )
+   ```
+
+3. **Don't use Outputs in resource names directly**: Extract values properly
+   ```python
+   # WRONG
+   resource = aws.s3.Bucket(
+       f"bucket-{self.environment_suffix}",  # If environment_suffix is an Output, this fails
+   )
+
+   # RIGHT
+   # environment_suffix should be a plain string, not an Output
+   resource = aws.s3.Bucket(
+       f"bucket-{self.environment_suffix}",
+       # OR if it must be an Output:
+       name=self.environment_suffix.apply(lambda suffix: f"bucket-{suffix}")
+   )
+   ```
+
+### Resource Dependencies
+
+Pulumi automatically infers dependencies between resources based on Output usage. However, sometimes you need explicit dependencies:
+
+```python
+# Explicit dependency
+resource_b = aws.Resource(
+    "resource-b",
+    # ... properties ...
+    opts=ResourceOptions(depends_on=[resource_a])
+)
+
+# Parent-child relationship
+child_resource = aws.Resource(
+    "child",
+    # ... properties ...
+    opts=ResourceOptions(parent=parent_resource)
+)
+```
+
+### Error Handling
+
+Always validate Outputs before using them in critical operations:
+
+```python
+# Validate before using
+validated_output = pulumi.Output.all(
+    self.api_gateway.id
+).apply(lambda args: args[0] if args[0] else pulumi.log.error("API Gateway ID is empty"))
+```
+
 ## Troubleshooting
 
 ### Common Issues
@@ -1679,6 +1840,31 @@ ab -n 10000 -c 100 -H "x-api-key: {api_key}" \
 5. **WAF Blocking Legitimate Requests**:
    - **Symptom**: 403 Forbidden from API Gateway
    - **Solution**: Review WAF logs, adjust managed rule sets
+
+6. **Pulumi Output Nesting Issues**:
+   - **Symptom**: "Calling __str__ on an Output[T] is not supported" error in logs
+   - **Root Cause**: Attempting to use an Output value inside another `.apply()` lambda
+   - **Example Problem**:
+     ```python
+     # INCORRECT: Nesting Outputs
+     'api_endpoint': self.api_gateway.execution_arn.apply(
+         lambda arn: f"https://{self.api_gateway.id}.execute-api.{region}.amazonaws.com/{stage}"
+     )
+     # self.api_gateway.id is itself an Output, causing nested Outputs
+     ```
+   - **Solution**: Use `pulumi.Output.all()` to combine multiple Outputs
+     ```python
+     # CORRECT: Combine Outputs before applying
+     'api_endpoint': pulumi.Output.all(
+         self.api_gateway.id,
+         self.region,
+         self.stage_name
+     ).apply(
+         lambda args: f"https://{args[0]}.execute-api.{args[1]}.amazonaws.com/{args[2]}"
+     )
+     ```
+   - **Best Practice**: Always use `pulumi.Output.all()` when you need to reference multiple Output values in a single lambda function
+   - **Impact**: Prevents output resolution errors and ensures proper API endpoint URL generation for integration tests
 
 ## Compliance and Audit
 
