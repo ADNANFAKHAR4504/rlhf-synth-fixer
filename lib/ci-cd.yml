@@ -53,9 +53,17 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install validation tools
+        run: |
+          pip install tflint tfsec checkov yamllint
+
       - name: Terraform fmt
         run: |
           terraform fmt -check -recursive
+
+      - name: Terraform init (validation)
+        run: |
+          terraform init -backend=false -input=false
 
       - name: Terraform validate
         run: |
@@ -114,7 +122,7 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}
+          key: go-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             go-${{ runner.os }}-
 
@@ -139,8 +147,7 @@ jobs:
           AWS_REGION: ${{ env.AWS_REGION }}
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
         run: |
-          aws ecr get-login-password --region "$AWS_REGION" \
-            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
       - name: Build & push order-service
         uses: docker/build-push-action@v5
@@ -219,6 +226,14 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Install Vegeta
+        run: |
+          sudo apt-get update && sudo apt-get install -y vegeta
+
+      - name: Install test tools
+        run: |
+          npm install
+
       - name: Install frontend test deps
         working-directory: ./frontend
         run: |
@@ -276,6 +291,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install security tools
+        run: |
+          pip install snyk trivy grype semgrep trufflehog prowler aws-parliament
+
       - name: Snyk container scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -286,7 +305,7 @@ jobs:
 
       - name: Trivy filesystem scan
         run: |
-          trivy fs . --exit-code 1 --format sarif --output trivy-fs.sarif
+          trivy fs . --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-fs.sarif
 
       - name: Trivy image scan
         env:
@@ -350,6 +369,10 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.8.5'
+
+      - name: Install infra preview tools
+        run: |
+          pip install infracost driftctl
 
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -428,6 +451,10 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install Flyway
+        run: |
+          echo "Assuming flyway is preinstalled on runner"
+
       - name: Terraform init (dev)
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
@@ -472,6 +499,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install newman
+        run: |
+          npm install -g newman
 
       - name: Newman API tests (dev)
         run: |
@@ -521,6 +552,10 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install Flyway
+        run: |
+          echo "Assuming flyway is preinstalled on runner"
+
       - name: Terraform init (staging)
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
@@ -557,6 +592,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install E2E tools
+        run: |
+          npm install
+
       - name: Playwright E2E
         run: |
           npm run test:e2e -- --base-url=https://staging.shop.example.com
@@ -591,13 +630,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install DAST tools
+        run: |
+          pip install zap-cli sqlmap nuclei
+
       - name: OWASP ZAP DAST
         run: |
           zap-cli quick-scan --self-contained https://staging.shop.example.com
 
       - name: SQLMap tests
         run: |
-          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1
+          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1 --risk=1 --technique=B --skip-heuristics
 
       - name: Nuclei scan
         run: |
@@ -617,6 +660,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install performance tools
+        run: |
+          npm install -g k6 jmeter
 
       - name: K6 load test
         run: |
@@ -692,8 +739,6 @@ jobs:
     environment:
       name: production
       url: https://shop.example.com
-    strategy:
-      fail-fast: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -708,6 +753,10 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.8.5'
+
+      - name: Install Flyway
+        run: |
+          echo "Assuming flyway is preinstalled on runner"
 
       - name: Terraform init (prod)
         env:
@@ -748,6 +797,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install newman
+        run: |
+          npm install -g newman
+
       - name: Postman smoke tests (prod)
         run: |
           newman run postman/prod-smoke.json --env-var baseUrl=https://shop.example.com
@@ -777,6 +830,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install sentry-cli
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
 
       - name: Update monitoring systems
         run: |

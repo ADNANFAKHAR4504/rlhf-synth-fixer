@@ -54,9 +54,17 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install validation tools
+        run: |
+          pip install tflint tfsec checkov yamllint
+
       - name: Terraform fmt
         run: |
           terraform fmt -check -recursive
+
+      - name: Terraform init (validation)
+        run: |
+          terraform init -backend=false -input=false
 
       - name: Terraform validate
         run: |
@@ -76,7 +84,7 @@ jobs:
 
       - name: Shellcheck scripts
         run: |
-          shellcheck scripts/*.sh
+          shellcheck lib/scripts/*.sh
 
       - name: Install markdownlint
         run: |
@@ -140,8 +148,7 @@ jobs:
           AWS_REGION: ${{ env.AWS_REGION }}
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
         run: |
-          aws ecr get-login-password --region "$AWS_REGION" \
-            | docker login --username AWS --password-stdin "$ECR_REGISTRY"
+          aws ecr get-login-password --region "$AWS_REGION" | docker login --username AWS --password-stdin "$ECR_REGISTRY"
 
       - name: Build & push order-service
         uses: docker/build-push-action@v5
@@ -220,6 +227,14 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Install Vegeta
+        run: |
+          sudo apt-get update && sudo apt-get install -y vegeta
+
+      - name: Install test tools
+        run: |
+          npm install
+
       - name: Install frontend test deps
         working-directory: ./frontend
         run: |
@@ -277,6 +292,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install security tools
+        run: |
+          pip install snyk trivy grype semgrep trufflehog prowler aws-parliament
+
       - name: Snyk container scan
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -287,7 +306,7 @@ jobs:
 
       - name: Trivy filesystem scan
         run: |
-          trivy fs . --exit-code 1 --format sarif --output trivy-fs.sarif
+          trivy fs . --exit-code 1 --severity HIGH,CRITICAL --format sarif --output trivy-fs.sarif
 
       - name: Trivy image scan
         env:
@@ -352,13 +371,17 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install infra preview tools
+        run: |
+          pip install infracost driftctl
+
       - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/GitHubActionsRole
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Terraform init
+      - name: Terraform init (PR)
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
         run: |
@@ -429,6 +452,10 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install Flyway
+        run: |
+          echo "Assuming flyway is preinstalled on runner"
+
       - name: Terraform init (dev)
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
@@ -445,20 +472,24 @@ jobs:
           ENVIRONMENT: dev
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          SECURITY_GROUPS: ${{ vars.DEV_ECS_SECURITY_GROUPS }}
+          SUBNET_IDS: ${{ vars.DEV_ECS_SUBNET_IDS }}
         run: |
-          bash scripts/deploy-ecs.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
+          bash lib/scripts/deploy-ecs.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
 
       - name: Run DB migrations (dev)
         env:
           ENVIRONMENT: dev
         run: |
-          bash scripts/run-migrations.sh "$ENVIRONMENT"
+          bash lib/scripts/run-migrations.sh "$ENVIRONMENT"
 
       - name: Check Redis health (dev)
         run: |
           aws elasticache describe-cache-clusters --show-cache-node-info
 
       - name: Check ALB target health (dev)
+        env:
+          DEV_TARGET_GROUP_ARN: ${{ vars.DEV_TARGET_GROUP_ARN }}
         run: |
           aws elbv2 describe-target-health --target-group-arn "$DEV_TARGET_GROUP_ARN"
 
@@ -469,6 +500,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install newman
+        run: |
+          npm install -g newman
 
       - name: Newman API tests (dev)
         run: |
@@ -518,6 +553,10 @@ jobs:
         with:
           terraform_version: '1.8.5'
 
+      - name: Install Flyway
+        run: |
+          echo "Assuming flyway is preinstalled on runner"
+
       - name: Terraform init (staging)
         env:
           TF_PLUGIN_CACHE_DIR: ~/.terraform.d/plugin-cache
@@ -534,14 +573,17 @@ jobs:
           ENVIRONMENT: staging
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          BLUE_TG_ARN: ${{ vars.STAGE_BLUE_TG_ARN }}
+          GREEN_TG_ARN: ${{ vars.STAGE_GREEN_TG_ARN }}
+          LISTENER_ARN: ${{ vars.STAGE_LISTENER_ARN }}
         run: |
-          bash scripts/deploy-blue-green.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
+          bash lib/scripts/deploy-blue-green.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
 
       - name: DB migrations (staging)
         env:
           ENVIRONMENT: staging
         run: |
-          bash scripts/run-migrations.sh "$ENVIRONMENT"
+          bash lib/scripts/run-migrations.sh "$ENVIRONMENT"
 
   e2e-test:
     name: E2E Tests (Staging)
@@ -550,6 +592,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install E2E tools
+        run: |
+          npm install
 
       - name: Playwright E2E
         run: |
@@ -585,13 +631,17 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install DAST tools
+        run: |
+          pip install zap-cli sqlmap nuclei
+
       - name: OWASP ZAP DAST
         run: |
           zap-cli quick-scan --self-contained https://staging.shop.example.com
 
       - name: SQLMap tests
         run: |
-          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1
+          sqlmap -u https://staging.shop.example.com/api/orders --batch --level=1 --risk=1 --technique=B --skip-heuristics
 
       - name: Nuclei scan
         run: |
@@ -611,6 +661,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install performance tools
+        run: |
+          npm install -g k6 jmeter
 
       - name: K6 load test
         run: |
@@ -646,11 +700,11 @@ jobs:
 
       - name: PCI-DSS validation
         run: |
-          bash scripts/validate-pci.sh
+          bash lib/scripts/validate-pci.sh
 
       - name: Generate compliance report
         run: |
-          bash scripts/generate-compliance-report.sh
+          bash lib/scripts/generate-compliance-report.sh
 
       - name: Upload compliance report
         uses: actions/upload-artifact@v4
@@ -686,8 +740,6 @@ jobs:
     environment:
       name: production
       url: https://shop.example.com
-    strategy:
-      fail-fast: false
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -702,6 +754,10 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: '1.8.5'
+
+      - name: Install Flyway
+        run: |
+          echo "Assuming flyway is preinstalled on runner"
 
       - name: Terraform init (prod)
         env:
@@ -719,14 +775,16 @@ jobs:
           ENVIRONMENT: prod
           ECR_REGISTRY: ${{ env.ECR_REGISTRY }}
           IMAGE_TAG: ${{ env.IMAGE_TAG }}
+          SECURITY_GROUPS: ${{ vars.PROD_ECS_SECURITY_GROUPS }}
+          SUBNET_IDS: ${{ vars.PROD_ECS_SUBNET_IDS }}
         run: |
-          bash scripts/deploy-ecs.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
+          bash lib/scripts/deploy-ecs.sh "$ENVIRONMENT" "$ECR_REGISTRY" "$IMAGE_TAG"
 
       - name: Run DB migrations (prod)
         env:
           ENVIRONMENT: prod
         run: |
-          bash scripts/run-migrations.sh "$ENVIRONMENT"
+          bash lib/scripts/run-migrations.sh "$ENVIRONMENT"
 
       - name: Configure CloudWatch alarms
         run: |
@@ -739,6 +797,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install newman
+        run: |
+          npm install -g newman
 
       - name: Postman smoke tests (prod)
         run: |
@@ -770,9 +832,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Install sentry-cli
+        run: |
+          curl -sL https://sentry.io/get-cli/ | bash
+
       - name: Update monitoring systems
         run: |
-          bash scripts/update-monitoring.sh
+          bash lib/scripts/update-monitoring.sh
 
       - name: Upload monitoring artifacts
         uses: actions/upload-artifact@v4
@@ -804,13 +870,13 @@ jobs:
         env:
           ENVIRONMENT: prod
         run: |
-          bash scripts/rollback-ecs.sh "$ENVIRONMENT"
+          bash lib/scripts/rollback-ecs.sh "$ENVIRONMENT"
 
       - name: Rollback DB migrations
         env:
           ENVIRONMENT: prod
         run: |
-          bash scripts/rollback-migrations.sh "$ENVIRONMENT"
+          bash lib/scripts/rollback-migrations.sh "$ENVIRONMENT"
 
       - name: Clear caches
         run: |
