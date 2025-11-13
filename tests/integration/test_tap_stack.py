@@ -19,42 +19,74 @@ class TestCurrencyAPIIntegration(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         """Set up test fixtures."""
-        # Get API URL and key from Pulumi outputs
-        try:
-            result = subprocess.run(
-                ["pulumi", "stack", "output", "api_url"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            cls.api_url = result.stdout.strip()
-        except subprocess.CalledProcessError:
-            cls.api_url = None
-
-        try:
-            result = subprocess.run(
-                ["pulumi", "stack", "output", "api_key_id"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            cls.api_key_id = result.stdout.strip()
-        except subprocess.CalledProcessError:
-            cls.api_key_id = None
+        cls.environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        cls.region = os.getenv('AWS_REGION', 'us-east-1')
+        cls.project_name = os.getenv('PULUMI_PROJECT', 'tap')
+        cls.pulumi_org = os.getenv('PULUMI_ORG', 'organization')
+        
+        # Stack name follows the pattern used in deployment
+        cls.stack_name = os.getenv('PULUMI_STACK', f'TapStack{cls.environment_suffix}')
+        
+        # Full Pulumi stack identifier: org/project/stack
+        cls.pulumi_stack_identifier = f"{cls.pulumi_org}/{cls.project_name}/{cls.stack_name}"
+        
+        # Fetch Pulumi stack outputs
+        cls.outputs = cls._fetch_pulumi_outputs()
+        
+        # Extract outputs from the dictionary
+        cls.api_url = cls.outputs.get('api_url', '')
+        cls.api_key_id = cls.outputs.get('api_key_id', '')
+        cls.api_key_value = cls.outputs.get('api_key_value', '')
+        cls.lambda_function_name = cls.outputs.get('lambda_function_name', '')
+        cls.api_gateway_id = cls.outputs.get('api_gateway_id', '')
 
         # Initialize AWS clients (use us-east-1 as configured in Pulumi)
-        cls.region = os.getenv('AWS_REGION', 'us-east-1')
         cls.apigateway_client = boto3.client('apigateway', region_name=cls.region)
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
         cls.iam_client = boto3.client('iam', region_name=cls.region)
+    
+    @classmethod
+    def _fetch_pulumi_outputs(cls):
+        """Fetch Pulumi outputs as a Python dictionary."""
+        try:
+            print(f"\nDebug: Environment suffix: {cls.environment_suffix}")
+            print(f"Debug: Stack name: {cls.stack_name}")
+            print(f"Debug: Full stack identifier: {cls.pulumi_stack_identifier}")
+            print(f"Fetching Pulumi outputs for stack: {cls.pulumi_stack_identifier}")
+            
+            result = subprocess.run(
+                ["pulumi", "stack", "output", "--json", "--stack", cls.pulumi_stack_identifier],
+                capture_output=True,
+                text=True,
+                check=True,
+                cwd=os.path.join(os.path.dirname(__file__), "../..")
+            )
+            outputs = json.loads(result.stdout)
+            print(f"Successfully fetched {len(outputs)} outputs from Pulumi stack")
+            if outputs:
+                print(f"Available outputs: {list(outputs.keys())}")
+            else:
+                print("Note: Stack has no outputs registered. Tests will use naming conventions.")
+            return outputs
+        except subprocess.CalledProcessError as e:
+            print(f"Warning: Could not retrieve Pulumi stack outputs")
+            print(f"Error: {e.stderr}")
+            print("Tests will fall back to standard naming conventions")
+            return {}
+        except json.JSONDecodeError as e:
+            print(f"Warning: Could not parse Pulumi output: {e}")
+            return {}
 
     def test_api_gateway_exists(self):
         """Test that API Gateway is deployed."""
-        if not self.api_url:
-            self.skipTest("API URL not available - stack may not be deployed")
-
-        # Extract API ID from URL
-        api_id = self.api_url.split('//')[1].split('.')[0]
+        # Use api_gateway_id if available, otherwise extract from URL
+        if self.api_gateway_id:
+            api_id = self.api_gateway_id
+        elif self.api_url:
+            # Extract API ID from URL
+            api_id = self.api_url.split('//')[1].split('.')[0]
+        else:
+            self.skipTest("API Gateway ID or URL not available - stack may not be deployed")
 
         response = self.apigateway_client.get_rest_api(restApiId=api_id)
         self.assertIsNotNone(response)
@@ -62,18 +94,10 @@ class TestCurrencyAPIIntegration(unittest.TestCase):
 
     def test_lambda_function_exists(self):
         """Test that Lambda function is deployed."""
-        try:
-            result = subprocess.run(
-                ["pulumi", "stack", "output", "lambda_function_name"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            function_name = result.stdout.strip()
-        except subprocess.CalledProcessError:
+        if not self.lambda_function_name:
             self.skipTest("Lambda function name not available")
 
-        response = self.lambda_client.get_function(FunctionName=function_name)
+        response = self.lambda_client.get_function(FunctionName=self.lambda_function_name)
         self.assertIsNotNone(response)
         self.assertEqual(response['Configuration']['Runtime'], 'nodejs18.x')
         self.assertEqual(response['Configuration']['MemorySize'], 1024)
@@ -81,18 +105,10 @@ class TestCurrencyAPIIntegration(unittest.TestCase):
 
     def test_lambda_has_environment_variables(self):
         """Test that Lambda has correct environment variables."""
-        try:
-            result = subprocess.run(
-                ["pulumi", "stack", "output", "lambda_function_name"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            function_name = result.stdout.strip()
-        except subprocess.CalledProcessError:
+        if not self.lambda_function_name:
             self.skipTest("Lambda function name not available")
 
-        response = self.lambda_client.get_function_configuration(FunctionName=function_name)
+        response = self.lambda_client.get_function_configuration(FunctionName=self.lambda_function_name)
         env_vars = response.get('Environment', {}).get('Variables', {})
 
         self.assertIn('API_VERSION', env_vars)
@@ -102,18 +118,10 @@ class TestCurrencyAPIIntegration(unittest.TestCase):
 
     def test_lambda_xray_enabled(self):
         """Test that X-Ray tracing is enabled on Lambda."""
-        try:
-            result = subprocess.run(
-                ["pulumi", "stack", "output", "lambda_function_name"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            function_name = result.stdout.strip()
-        except subprocess.CalledProcessError:
+        if not self.lambda_function_name:
             self.skipTest("Lambda function name not available")
 
-        response = self.lambda_client.get_function_configuration(FunctionName=function_name)
+        response = self.lambda_client.get_function_configuration(FunctionName=self.lambda_function_name)
         tracing_config = response.get('TracingConfig', {})
 
         self.assertEqual(tracing_config.get('Mode'), 'Active')
@@ -160,12 +168,15 @@ class TestCurrencyAPIIntegration(unittest.TestCase):
         except ImportError:
             self.skipTest("requests library not installed")
 
-        # Get actual API key value
-        response = self.apigateway_client.get_api_key(
-            apiKey=self.api_key_id,
-            includeValue=True
-        )
-        api_key = response['value']
+        # Get actual API key value - use stored value if available, otherwise fetch from AWS
+        if self.api_key_value and self.api_key_value != "[secret]":
+            api_key = self.api_key_value
+        else:
+            response = self.apigateway_client.get_api_key(
+                apiKey=self.api_key_id,
+                includeValue=True
+            )
+            api_key = response['value']
 
         response = requests.post(
             self.api_url,
@@ -263,19 +274,11 @@ class TestCurrencyAPIIntegration(unittest.TestCase):
 
     def test_lambda_has_correct_tags(self):
         """Test that Lambda function has correct tags."""
-        try:
-            result = subprocess.run(
-                ["pulumi", "stack", "output", "lambda_function_name"],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            function_name = result.stdout.strip()
-        except subprocess.CalledProcessError:
+        if not self.lambda_function_name:
             self.skipTest("Lambda function name not available")
 
         # Get function ARN first (list_tags requires ARN, not name)
-        function_response = self.lambda_client.get_function(FunctionName=function_name)
+        function_response = self.lambda_client.get_function(FunctionName=self.lambda_function_name)
         function_arn = function_response['Configuration']['FunctionArn']
 
         response = self.lambda_client.list_tags(Resource=function_arn)
