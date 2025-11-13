@@ -43,7 +43,7 @@ export class TapStack extends Construct {
     this.vpc = new ec2.Vpc(this, 'PaymentVpc', {
       vpcName: `payment-vpc-${environmentSuffix}`,
       maxAzs: 3,
-      natGateways: 1,
+      natGateways: 3,
       subnetConfiguration: [
         {
           name: 'Public',
