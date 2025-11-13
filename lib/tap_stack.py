@@ -57,7 +57,7 @@ class TapStack(pulumi.ComponentResource):
         super().__init__('tap:stack:TapStack', name, None, opts)
 
         self.environment_suffix = args.environment_suffix
-        self.tags = args.tags
+        self.tags = {**args.tags, 'PulumiOutputVersion': 'v2'}  # Force stack update to regenerate outputs
         self.region = 'us-east-1'  # Deployment region
         self.stage_name = self.environment_suffix  # API Gateway stage name
 
