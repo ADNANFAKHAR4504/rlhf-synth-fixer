@@ -1149,7 +1149,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `frontend-discovery-${environmentSuffix}` },
       },
-      { parent: this }
+      { parent: this, deleteBeforeReplace: true }
     );
 
     const apiDiscoveryService = new aws.servicediscovery.Service(
@@ -1171,7 +1171,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `api-gateway-discovery-${environmentSuffix}` },
       },
-      { parent: this }
+      { parent: this, deleteBeforeReplace: true }
     );
 
     const processingDiscoveryService = new aws.servicediscovery.Service(
@@ -1193,7 +1193,7 @@ export class TapStack extends pulumi.ComponentResource {
         },
         tags: { ...tags, Name: `processing-discovery-${environmentSuffix}` },
       },
-      { parent: this }
+      { parent: this, deleteBeforeReplace: true }
     );
 
     // ECS Services
