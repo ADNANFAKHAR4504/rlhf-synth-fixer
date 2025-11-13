@@ -29,6 +29,16 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
                 default_region = f.read().strip()
         
         cls.region = os.getenv('AWS_REGION', default_region)
+        
+        # Read environment suffix from file if it exists, otherwise use env/default
+        env_suffix_file_path = 'lib/ENVIRONMENT_SUFFIX'
+        default_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'dev')
+        if os.path.exists(env_suffix_file_path):
+            with open(env_suffix_file_path, 'r', encoding='utf-8') as f:
+                default_suffix = f.read().strip()
+        
+        cls.environment_suffix = default_suffix
+        
         cls.lambda_client = boto3.client('lambda', region_name=cls.region)
         cls.dynamodb_client = boto3.client('dynamodb', region_name=cls.region)
         cls.logs_client = boto3.client('logs', region_name=cls.region)
@@ -266,11 +276,11 @@ class TestWebhookProcessingIntegration(unittest.TestCase):
     def test_resource_naming_includes_environment_suffix(self):
         """Test all resources include environment suffix in names"""
         # All resource names should include the suffix
-        self.assertIn('synth101912484', self.dynamodb_table_name)
-        self.assertIn('synth101912484', self.stripe_lambda_arn)
-        self.assertIn('synth101912484', self.paypal_lambda_arn)
-        self.assertIn('synth101912484', self.stripe_log_group)
-        self.assertIn('synth101912484', self.paypal_log_group)
+        self.assertIn(self.environment_suffix, self.dynamodb_table_name)
+        self.assertIn(self.environment_suffix, self.stripe_lambda_arn)
+        self.assertIn(self.environment_suffix, self.paypal_lambda_arn)
+        self.assertIn(self.environment_suffix, self.stripe_log_group)
+        self.assertIn(self.environment_suffix, self.paypal_log_group)
 
 
 if __name__ == '__main__':
