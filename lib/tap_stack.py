@@ -265,12 +265,11 @@ class TapStack(pulumi.ComponentResource):
         subnet_ids = [s.id for s in self.private_subnets]
         endpoints = {}
 
-        # Interface endpoints
+        # Interface endpoints (require ENIs in subnets)
         interface_services = [
             'lambda',
             'sqs',
             'sns',
-            'dynamodb',
             'logs',
             'kms',
             'xray'
@@ -281,10 +280,23 @@ class TapStack(pulumi.ComponentResource):
                 f"vpce-{service}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 service_name=f"com.amazonaws.{self.region}.{service}",
-                vpc_endpoint_type="Interface" if service not in ['s3', 'dynamodb'] else "Gateway",
-                subnet_ids=subnet_ids if service not in ['s3', 'dynamodb'] else None,
-                security_group_ids=[endpoint_sg.id] if service not in ['s3', 'dynamodb'] else None,
-                private_dns_enabled=True if service not in ['s3', 'dynamodb'] else None,
+                vpc_endpoint_type="Interface",
+                subnet_ids=subnet_ids,
+                security_group_ids=[endpoint_sg.id],
+                private_dns_enabled=True,
+                tags={**self.tags, 'Name': f'vpce-{service}-{self.environment_suffix}'},
+                opts=ResourceOptions(parent=self.vpc)
+            )
+
+        # Gateway endpoints (route table based, no ENIs)
+        gateway_services = ['dynamodb']
+
+        for service in gateway_services:
+            endpoints[service] = aws.ec2.VpcEndpoint(
+                f"vpce-{service}-{self.environment_suffix}",
+                vpc_id=self.vpc.id,
+                service_name=f"com.amazonaws.{self.region}.{service}",
+                vpc_endpoint_type="Gateway",
                 tags={**self.tags, 'Name': f'vpce-{service}-{self.environment_suffix}'},
                 opts=ResourceOptions(parent=self.vpc)
             )
@@ -547,6 +559,7 @@ class TapStack(pulumi.ComponentResource):
             }),
             timeout=60,
             memory_size=512,
+            reserved_concurrent_executions=100,  # Reserved capacity for burst traffic
             environment={
                 'variables': {
                     'MERCHANT_TABLE_NAME': self.merchant_table.name,
