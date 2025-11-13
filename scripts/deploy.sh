@@ -50,6 +50,12 @@ fi
 echo "=== Bootstrap Phase ==="
 ./scripts/bootstrap.sh
 
+# Destroy existing resources before deployment
+echo "=== Destroy Phase ==="
+echo "🗑️ Destroying existing resources to ensure clean deployment..."
+./scripts/destroy.sh || echo "⚠️ Destroy failed or no resources to destroy, continuing with deployment..."
+echo "✅ Destroy phase completed"
+
 # Deploy step
 echo "=== Deploy Phase ==="
 if [ "$PLATFORM" = "cdk" ]; then
