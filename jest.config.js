@@ -38,6 +38,7 @@ module.exports = {
       isolatedModules: true,
       tsconfig: {
         allowJs: true,
+        esModuleInterop: true,
         esModuleInterop: true
       }
     }
