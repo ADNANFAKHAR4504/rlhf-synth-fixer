@@ -1,30 +1,35 @@
-import { DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
-import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
-import {
-  DescribeServicesCommand,
-  ECSClient,
-} from "@aws-sdk/client-ecs";
-import {
-  DescribeRepositoriesCommand,
-  ECRClient,
-} from "@aws-sdk/client-ecr";
 import {
   CloudWatchLogsClient,
   DescribeLogGroupsCommand,
 } from "@aws-sdk/client-cloudwatch-logs";
 import {
+  DescribeRepositoriesCommand,
+  ECRClient,
+} from "@aws-sdk/client-ecr";
+import {
+  DescribeServicesCommand,
+  ECSClient,
+} from "@aws-sdk/client-ecs";
+import { DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
   DescribeDBInstancesCommand,
   RDSClient,
 } from "@aws-sdk/client-rds";
+import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
 import fs from "fs";
 import fetch from "node-fetch";
 import path from "path";
 
 jest.setTimeout(60000);
 
-const outputsPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
+const outputsPath = path.resolve(
+  __dirname,
+  "../cfn-outputs/all-outputs.json"
+);
 
-const readOutputs = (): Record<string, unknown> => {
+type FlatOutput = Record<string, unknown>;
+
+const readOutputs = (): FlatOutput => {
   if (!fs.existsSync(outputsPath)) {
     throw new Error(
       `Expected stack outputs at ${outputsPath}. Deploy the Terraform stack and export outputs before running integration tests.`
@@ -35,7 +40,50 @@ const readOutputs = (): Record<string, unknown> => {
   if (parsed == null || typeof parsed !== "object") {
     throw new Error("Stack outputs JSON is malformed.");
   }
-  return parsed as Record<string, unknown>;
+  return parsed as FlatOutput;
+};
+
+const extractStringOutput = (
+  outputs: FlatOutput,
+  key: string,
+  required = true
+): string => {
+  const raw = outputs[key];
+  if (typeof raw === "string") {
+    return raw;
+  }
+
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "value" in raw &&
+    typeof (raw as Record<string, unknown>).value === "string"
+  ) {
+    return (raw as Record<string, unknown>).value as string;
+  }
+
+  if (!required && raw == null) {
+    return "";
+  }
+
+  throw new Error(
+    `Output "${key}" is missing or not a string: ${JSON.stringify(raw)}`
+  );
+};
+
+const parseJsonArrayOutput = (value: string): string[] => {
+  try {
+    const parsed = JSON.parse(value);
+    if (Array.isArray(parsed)) {
+      return parsed;
+    }
+  } catch {
+    // fall through
+  }
+  if (!value) {
+    return [];
+  }
+  return value.split(",").map((item) => item.trim());
 };
 
 const hitApplicationHealthEndpoint = async (
@@ -72,7 +120,7 @@ const hitApplicationHealthEndpoint = async (
 describe("Terraform infrastructure integration", () => {
   const outputs = readOutputs();
   const region =
-    (typeof outputs.aws_region === "string" && outputs.aws_region) ||
+    extractStringOutput(outputs, "aws_region", false) ||
     process.env.AWS_REGION ||
     process.env.AWS_DEFAULT_REGION ||
     "us-east-1";
@@ -91,19 +139,25 @@ describe("Terraform infrastructure integration", () => {
       ];
 
       requiredKeys.forEach((key) => {
-        const value = outputs[key];
-        expect(outputs[key]).toBeDefined();
-        expect(typeof value).toBe("string");
-        expect((value as string).length).toBeGreaterThan(0);
+        const value = extractStringOutput(outputs, key);
+        expect(value.length).toBeGreaterThan(0);
       });
 
-      expect(outputs.alb_dns_name as string).toMatch(/\.elb\.amazonaws\.com$/);
-      expect(outputs.ecr_repository_url as string).toMatch(/\.dkr\.ecr\./);
-      expect(outputs.rds_endpoint as string).toMatch(/\.rds\.amazonaws\.com$/);
-      expect(outputs.rds_master_secret_arn as string).toMatch(/^arn:aws:secretsmanager:/);
+      expect(extractStringOutput(outputs, "alb_dns_name")).toMatch(
+        /\.elb\.amazonaws\.com$/
+      );
+      expect(extractStringOutput(outputs, "ecr_repository_url")).toMatch(
+        /\.dkr\.ecr\./
+      );
+      expect(extractStringOutput(outputs, "rds_endpoint")).toMatch(
+        /\.rds\.amazonaws\.com$/
+      );
+      expect(extractStringOutput(outputs, "rds_master_secret_arn")).toMatch(
+        /^arn:aws:secretsmanager:/
+      );
 
       const { protocol, status } = await hitApplicationHealthEndpoint(
-        outputs.alb_dns_name as string
+        extractStringOutput(outputs, "alb_dns_name")
       );
       expect(["http", "https"]).toContain(protocol);
       expect(status).toBeLessThan(400);
@@ -123,10 +177,12 @@ describe("Terraform infrastructure integration", () => {
       const secrets = new SecretsManagerClient({ region });
       const secret = await secrets.send(
         new DescribeSecretCommand({
-          SecretId: outputs.rds_master_secret_arn as string,
+          SecretId: extractStringOutput(outputs, "rds_master_secret_arn"),
         })
       );
-      expect(secret.ARN).toBe(outputs.rds_master_secret_arn);
+      expect(secret.ARN).toBe(
+        extractStringOutput(outputs, "rds_master_secret_arn")
+      );
       expect(secret.Name).toBeDefined();
       expect(secret.CreatedDate).toBeInstanceOf(Date);
     });
@@ -139,8 +195,8 @@ describe("Terraform infrastructure integration", () => {
 
       const ecsResponse = await ecs.send(
         new DescribeServicesCommand({
-          cluster: outputs.ecs_cluster_name as string,
-          services: [outputs.ecs_service_name as string],
+          cluster: extractStringOutput(outputs, "ecs_cluster_name"),
+          services: [extractStringOutput(outputs, "ecs_service_name")],
         })
       );
       const service = ecsResponse.services?.[0];
@@ -149,7 +205,7 @@ describe("Terraform infrastructure integration", () => {
       expect(service?.desiredCount ?? 0).toBeGreaterThanOrEqual(2);
       expect(service?.runningCount ?? 0).toBeGreaterThanOrEqual(2);
 
-      const repositoryName = (outputs.ecr_repository_url as string)
+      const repositoryName = extractStringOutput(outputs, "ecr_repository_url")
         .split("/")
         .slice(-1)[0];
       const ecrResponse = await ecr.send(
@@ -158,28 +214,74 @@ describe("Terraform infrastructure integration", () => {
         })
       );
       expect(ecrResponse.repositories?.[0]?.repositoryUri).toBe(
-        outputs.ecr_repository_url
+        extractStringOutput(outputs, "ecr_repository_url")
       );
 
       const logResponse = await logs.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: outputs.cloudwatch_log_group as string,
+          logGroupNamePrefix: extractStringOutput(outputs, "cloudwatch_log_group"),
           limit: 1,
         })
       );
       const logGroup = logResponse.logGroups?.[0];
-      expect(logGroup?.logGroupName).toBe(outputs.cloudwatch_log_group);
+      expect(logGroup?.logGroupName).toBe(
+        extractStringOutput(outputs, "cloudwatch_log_group")
+      );
       expect(logGroup?.retentionInDays).toBe(7);
 
       const dbResponse = await rds.send(
         new DescribeDBInstancesCommand({
-          DBInstanceIdentifier: outputs.rds_identifier as string,
+          DBInstanceIdentifier: extractStringOutput(outputs, "rds_identifier"),
         })
       );
       const dbInstance = dbResponse.DBInstances?.[0];
       expect(dbInstance).toBeDefined();
       expect(dbInstance?.DBInstanceStatus).toBe("available");
       expect(dbInstance?.MultiAZ).toBe(true);
+    });
+    it("validates network and security outputs", () => {
+      const vpcId = extractStringOutput(outputs, "vpc_id");
+      expect(vpcId).toMatch(/^vpc-/);
+
+      const privateSubnets = parseJsonArrayOutput(
+        extractStringOutput(outputs, "private_subnet_ids")
+      );
+      const publicSubnets = parseJsonArrayOutput(
+        extractStringOutput(outputs, "public_subnet_ids")
+      );
+
+      expect(privateSubnets.length).toBe(3);
+      expect(publicSubnets.length).toBe(3);
+      privateSubnets.forEach((subnet) => expect(subnet).toMatch(/^subnet-/));
+      publicSubnets.forEach((subnet) => expect(subnet).toMatch(/^subnet-/));
+
+      expect(extractStringOutput(outputs, "alb_target_group_arn")).toMatch(
+        /^arn:aws:elasticloadbalancing:/
+      );
+      expect(extractStringOutput(outputs, "task_execution_role_arn")).toMatch(
+        /^arn:aws:iam::/
+      );
+      expect(extractStringOutput(outputs, "task_role_arn")).toMatch(
+        /^arn:aws:iam::/
+      );
+    });
+
+    it("confirms observability and DNS outputs", () => {
+      expect(extractStringOutput(outputs, "cloudwatch_log_group")).toMatch(
+        /^\/ecs\//
+      );
+
+      const route53Fqdn = extractStringOutput(
+        outputs,
+        "route53_record_fqdn",
+        false
+      );
+      expect(typeof route53Fqdn).toBe("string");
+      if (route53Fqdn) {
+        expect(route53Fqdn).toContain(
+          extractStringOutput(outputs, "alb_dns_name")
+        );
+      }
     });
   });
 });
