@@ -258,6 +258,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "transaction_logs"
     }
   }
 }
+
+# S3 Bucket Public Access Block
+resource "aws_s3_bucket_public_access_block" "transaction_logs" {
+  bucket = aws_s3_bucket.transaction_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
 ```
 
 ### `variables.tf`
@@ -1199,7 +1209,7 @@ resource "aws_ecs_task_definition" "main" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
+        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/${var.container_port}' || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3

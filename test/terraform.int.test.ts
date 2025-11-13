@@ -341,6 +341,20 @@ describe('Payment Processing Infrastructure - Integration Tests', () => {
       expect(rule.Transitions.some((t: any) => t.StorageClass === 'STANDARD_IA')).toBe(true);
       expect(rule.Transitions.some((t: any) => t.StorageClass === 'GLACIER')).toBe(true);
     });
+
+    test('S3 bucket has public access block configured', async () => {
+      const bucketName = outputs.transaction_logs_bucket;
+      const res = await diagAwsCall('GetPublicAccessBlock', s3.getPublicAccessBlock.bind(s3), {
+        Bucket: bucketName
+      });
+      if (skipIfNull(res?.PublicAccessBlockConfiguration, 'GetPublicAccessBlock')) return;
+
+      const config = res.PublicAccessBlockConfiguration;
+      expect(config.BlockPublicAcls).toBe(true);
+      expect(config.BlockPublicPolicy).toBe(true);
+      expect(config.IgnorePublicAcls).toBe(true);
+      expect(config.RestrictPublicBuckets).toBe(true);
+    });
   });
 
   // -------------------------

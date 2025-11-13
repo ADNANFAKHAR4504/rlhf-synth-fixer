@@ -182,6 +182,14 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
         expect(tapstackContent).toMatch(/resource\s+"aws_s3_bucket_server_side_encryption_configuration"\s+"transaction_logs"\s*{/);
         expect(tapstackContent).toMatch(/sse_algorithm\s*=\s*"AES256"/);
       });
+
+      test('S3 bucket has public access block configured', () => {
+        expect(tapstackContent).toMatch(/resource\s+"aws_s3_bucket_public_access_block"\s+"transaction_logs"\s*{/);
+        expect(tapstackContent).toMatch(/block_public_acls\s*=\s*true/);
+        expect(tapstackContent).toMatch(/block_public_policy\s*=\s*true/);
+        expect(tapstackContent).toMatch(/ignore_public_acls\s*=\s*true/);
+        expect(tapstackContent).toMatch(/restrict_public_buckets\s*=\s*true/);
+      });
     });
 
     describe('Module Inputs', () => {
