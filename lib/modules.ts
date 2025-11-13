@@ -56,6 +56,44 @@ export class NetworkModule extends Construct {
       },
     });
 
+    // VPC Flow Logs for network monitoring
+    const vpcFlowLogRole = new IamRole(this, 'vpc-flow-logs-role', {
+      name: `${config.tags.Environment}-vpc-flow-logs-role`,
+      assumeRolePolicy: JSON.stringify({
+        Version: '2012-10-17',
+        Statement: [
+          {
+            Action: 'sts:AssumeRole',
+            Effect: 'Allow',
+            Principal: {
+              Service: 'vpc-flow-logs.amazonaws.com',
+            },
+          },
+        ],
+      }),
+      tags: config.tags,
+    });
+
+    new IamRolePolicyAttachment(this, 'vpc-flow-logs-policy', {
+      role: vpcFlowLogRole.name,
+      policyArn: 'arn:aws:iam::aws:policy/service-role/VPCFlowLogsDeliveryRolePolicy',
+    });
+
+    const vpcFlowLogGroup = new aws.cloudwatchLogGroup.CloudwatchLogGroup(this, 'vpc-flow-logs', {
+      name: `/aws/vpc/flowlogs/${config.tags.Environment}`,
+      retentionInDays: 14,
+      tags: config.tags,
+    });
+
+    new aws.flowLog.FlowLog(this, 'vpc-flow-log', {
+      vpcId: this.vpc.id,
+      trafficType: 'ALL',
+      logDestination: vpcFlowLogGroup.arn,
+      logDestinationType: 'cloud-watch-logs',
+      iamRoleArn: vpcFlowLogRole.arn,
+      tags: config.tags,
+    });
+
     // Internet Gateway
     const igw = new aws.internetGateway.InternetGateway(this, 'igw', {
       vpcId: this.vpc.id,
@@ -415,4 +453,46 @@ export class WorkloadRoleModule extends Construct {
       });
     });
   }
+}
+
+// Helper function to generate network policy YAML manifests
+export function generateNetworkPolicyManifests(namespaces: string[]): string {
+  const policies = namespaces.map(namespace => `---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: deny-cross-namespace
+  namespace: ${namespace}
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ${namespace}
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: ${namespace}
+  # Allow egress to kube-system for DNS
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+    ports:
+    - protocol: UDP
+      port: 53
+  # Allow egress to internet for external APIs
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80`);
+  
+  return policies.join('\n\n');
 }
