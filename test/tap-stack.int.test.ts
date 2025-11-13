@@ -2181,28 +2181,39 @@ describe('Additional Coverage Tests', () => {
 
     test('constructs handle all fallback branches when no context is set', () => {
       // Test all fallback branches when no context is provided
-      const app = new cdk.App();
-      const stack = new cdk.Stack(app, 'TestStack');
+      // Mock the environment to ensure clean fallback testing
+      const originalEnv = process.env.ENVIRONMENT_SUFFIX;
+      delete process.env.ENVIRONMENT_SUFFIX;
 
-      // Don't set any context to test all fallbacks
+      try {
+        const app = new cdk.App();
+        const stack = new cdk.Stack(app, 'TestStack');
 
-      const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
-      new AlarmsConstruct(stack, 'TestAlarms', {
-        operationalTopic: sns,
-        securityTopic: sns,
-        excludeApiGatewayAlarms: true,
-      });
+        // Don't set any context to test all fallbacks
 
-      const template = Template.fromStack(stack);
-      const alarms = template.findResources('AWS::CloudWatch::Alarm');
+        const sns = new cdk.aws_sns.Topic(stack, 'TestTopic');
+        new AlarmsConstruct(stack, 'TestAlarms', {
+          operationalTopic: sns,
+          securityTopic: sns,
+          excludeApiGatewayAlarms: true,
+        });
 
-      // Should have alarms with all defaults: 'dev' env and 'default' unique suffix
-      const alarmNames = Object.values(alarms).map(
-        (a: any) => a.Properties?.AlarmName
-      );
-      alarmNames.forEach(name => {
-        expect(name).toContain('tapstack-dev-default');
-      });
+        const template = Template.fromStack(stack);
+        const alarms = template.findResources('AWS::CloudWatch::Alarm');
+
+        // Should have alarms with all defaults: 'dev' env and 'default' unique suffix
+        const alarmNames = Object.values(alarms).map(
+          (a: any) => a.Properties?.AlarmName
+        );
+        alarmNames.forEach(name => {
+          expect(name).toContain('tapstack-dev-default');
+        });
+      } finally {
+        // Restore original environment
+        if (originalEnv !== undefined) {
+          process.env.ENVIRONMENT_SUFFIX = originalEnv;
+        }
+      }
     });
 
     test('dashboards construct handles env suffix fallback to dev', () => {
