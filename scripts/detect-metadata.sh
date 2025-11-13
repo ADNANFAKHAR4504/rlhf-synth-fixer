@@ -76,13 +76,14 @@ fi
 
 # Synthetic task specific validations (only for team="synth")
 if [ "$TEAM" == "synth" ]; then
+  echo ""
   echo "🔍 Detected synthetic task, performing additional validations..."
   
   # Check for required documentation files
   REQUIRED_DOCS=("lib/PROMPT.md" "lib/MODEL_RESPONSE.md")
   for doc in "${REQUIRED_DOCS[@]}"; do
     if [ ! -f "$doc" ]; then
-      echo "❌ $doc not found"
+      echo "  ❌ $doc not found"
       ERRORS+=("$doc")
     fi
   done
@@ -91,17 +92,19 @@ if [ "$TEAM" == "synth" ]; then
   OPTIONAL_DOCS=("lib/IDEAL_RESPONSE.md" "lib/MODEL_FAILURES.md")
   for doc in "${OPTIONAL_DOCS[@]}"; do
     if [ -f "$doc" ]; then
-      echo "✅ $doc found"
+      echo "  ✅ $doc found"
     else
-      echo "ℹ️ $doc not found (may not be required for all workflows)"
+      echo " ℹ️ $doc not found (may not be required for all workflows)"
     fi
   done
 else
+  echo ""
   echo "ℹ️ Non-synthetic task detected (team=$TEAM), skipping background and documentation file checks"
 fi
 
 # Exit with error if any validation failed
 if [ ${#ERRORS[@]} -gt 0 ]; then
+  echo ""
   echo "❌ Metadata validation failed with ${#ERRORS[@]} error(s)"
   exit 1
 fi
@@ -128,4 +131,5 @@ if [ -n "$GITHUB_OUTPUT" ]; then
   echo "subject_labels=$SUBJECT_LABELS" >> "$GITHUB_OUTPUT"
 fi
 
+echo ""
 echo "✅ Metadata detection and validation completed successfully"
