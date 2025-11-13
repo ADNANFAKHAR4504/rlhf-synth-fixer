@@ -21,5 +21,11 @@
     "Shield",
     "Config",
     "EC2"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Chandan-devs-tech",
+  "dockerS3Location": ""
 }
