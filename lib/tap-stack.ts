@@ -676,11 +676,10 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         databaseName: 'trading',
         masterUsername: 'dbadmin',
-
         masterPassword: secretVersion.secretString.apply(s => this.validateSecretPassword(s ?? '')),
-        globalClusterIdentifier: globalCluster.id!,
-        dbSubnetGroupName: primarySubnetGroup.name!,
-        vpcSecurityGroupIds: [primarySecurityGroup.id!],
+        globalClusterIdentifier: globalCluster.id,
+        dbSubnetGroupName: primarySubnetGroup.name,
+        vpcSecurityGroupIds: [primarySecurityGroup.id],
         storageEncrypted: true,
         kmsKeyId: primaryKmsKey.arn,
         backupRetentionPeriod: 7,
@@ -721,15 +720,15 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // DR Cluster - DO NOT include masterUsername and masterPassword
+    // DR Cluster - CRITICAL FIX: Remove masterUsername and masterPassword
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
         clusterIdentifier: `trading-aurora-dr-${this.props.environmentSuffix}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
-        // REMOVED: masterUsername
-        // REMOVED: masterPassword
+        // DO NOT include masterUsername - it's inherited from primary
+        // DO NOT include masterPassword - it's inherited from primary
         globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
@@ -752,7 +751,6 @@ export class TapStack extends pulumi.ComponentResource {
         dependsOn: [primaryCluster, globalCluster],
       }
     );
-
 
     // DR Instance
     new aws.rds.ClusterInstance(
