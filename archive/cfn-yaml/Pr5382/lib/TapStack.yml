@@ -1,0 +1,840 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: TapStack - Serverless webhook processing system for high-volume cryptocurrency exchange events.
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Suffix used in all resource names.
+  ApiStageName:
+    Type: String
+    Default: prod
+    Description: API Gateway stage name.
+  WebhookApiKeyParamPath:
+    Type: String
+    Default: /tapstack/webhook/api-key
+    Description: SSM path for exchange API key.
+  ValidatorSecretParamPath:
+    Type: String
+    Default: /tapstack/validator/secret
+    Description: SSM path for signature validation secret.
+  ProcessorApiKeyParamPath:
+    Type: String
+    Default: /tapstack/processor/api-key
+    Description: SSM path for processor API key.
+  UseVpcEndpoints:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Use VPC endpoints (true) or NAT Gateways (false).
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+    Description: VPC CIDR block.
+  PrivateSubnet1Cidr:
+    Type: String
+    Default: 10.0.1.0/24
+    Description: Private Subnet 1 CIDR
+  PrivateSubnet2Cidr:
+    Type: String
+    Default: 10.0.2.0/24
+    Description: Private Subnet 2 CIDR
+  PublicSubnet1Cidr:
+    Type: String
+    Default: 10.0.3.0/24
+    Description: Public Subnet 1 CIDR
+  PublicSubnet2Cidr:
+    Type: String
+    Default: 10.0.4.0/24
+    Description: Public Subnet 2 CIDR
+
+Conditions:
+  CreateEndpoints: !Equals [!Ref UseVpcEndpoints, 'true']
+  CreateNat: !Equals [!Ref UseVpcEndpoints, 'false']
+
+Resources:
+  # VPC and Networking
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - Key: Name
+          Value: !Sub TapVpc-${EnvironmentSuffix}
+
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub PrivateSubnet1-${EnvironmentSuffix}
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PrivateSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub PrivateSubnet2-${EnvironmentSuffix}
+
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNat
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet1Cidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub PublicSubnet1-${EnvironmentSuffix}
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Condition: CreateNat
+    Properties:
+      VpcId: !Ref Vpc
+      CidrBlock: !Ref PublicSubnet2Cidr
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub PublicSubnet2-${EnvironmentSuffix}
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateNat
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub TapIgw-${EnvironmentSuffix}
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateNat
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub PrivateRt-${EnvironmentSuffix}
+
+  PrivateSubnet1RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateNat
+    Properties:
+      VpcId: !Ref Vpc
+      Tags:
+        - Key: Name
+          Value: !Sub PublicRt-${EnvironmentSuffix}
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateNat
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNat
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssoc:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateNat
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  NatGateway1:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNat
+    DependsOn: AttachGateway
+    Properties:
+      AllocationId: !GetAtt NatEip1.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub NatGw1-${EnvironmentSuffix}
+
+  NatEip1:
+    Type: AWS::EC2::EIP
+    Condition: CreateNat
+    Properties:
+      Domain: vpc
+
+  NatGateway2:
+    Type: AWS::EC2::NatGateway
+    Condition: CreateNat
+    DependsOn: AttachGateway
+    Properties:
+      AllocationId: !GetAtt NatEip2.AllocationId
+      SubnetId: !Ref PublicSubnet2
+      Tags:
+        - Key: Name
+          Value: !Sub NatGw2-${EnvironmentSuffix}
+
+  NatEip2:
+    Type: AWS::EC2::EIP
+    Condition: CreateNat
+    Properties:
+      Domain: vpc
+
+  PrivateRoute1:
+    Type: AWS::EC2::Route
+    Condition: CreateNat
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway1
+
+  PrivateRoute2:
+    Type: AWS::EC2::Route
+    Condition: CreateNat
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway2
+
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda functions.
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: !Sub LambdaSg-${EnvironmentSuffix}
+
+  EndpointSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateEndpoints
+    Properties:
+      GroupDescription: Security group for VPC endpoints.
+      VpcId: !Ref Vpc
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          SourceSecurityGroupId: !Ref LambdaSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub EndpointSg-${EnvironmentSuffix}
+
+  S3GatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.s3
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      VpcEndpointType: Gateway
+
+  DynamoDBGatewayEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.dynamodb
+      RouteTableIds:
+        - !Ref PrivateRouteTable
+      VpcEndpointType: Gateway
+
+  SsmInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssm
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+
+  SsmMessagesInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ssmmessages
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+
+  Ec2MessagesInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.ec2messages
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+
+  LogsInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.logs
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+
+  XrayInterfaceEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Condition: CreateEndpoints
+    Properties:
+      VpcId: !Ref Vpc
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.xray
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+      SecurityGroupIds:
+        - !Ref EndpointSecurityGroup
+      PrivateDnsEnabled: true
+      VpcEndpointType: Interface
+
+  # SQS DLQ
+  Dlq:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub TapDlq-${EnvironmentSuffix}
+      MessageRetentionPeriod: 1209600  # 14 days in seconds
+
+  # CloudWatch Log Groups
+  ReceiverLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/ReceiverFn-${EnvironmentSuffix}
+      RetentionInDays: 7
+
+  ValidatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/ValidatorFn-${EnvironmentSuffix}
+      RetentionInDays: 7
+
+  ProcessorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/ProcessorFn-${EnvironmentSuffix}
+      RetentionInDays: 7
+
+  # S3 Buckets
+  RawBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub webhook-raw-${AWS::AccountId}-${EnvironmentSuffix}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: GlacierTransition
+            Status: Enabled
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LogsBucket
+        LogFilePrefix: access/
+
+  LogsBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub webhook-logs-${AWS::AccountId}-${EnvironmentSuffix}
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireOldLogs
+            Status: Enabled
+            ExpirationInDays: 365
+
+  # DynamoDB Table
+  WebhookTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub WebhookTable-${EnvironmentSuffix}
+      AttributeDefinitions:
+        - AttributeName: transactionId
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+      KeySchema:
+        - AttributeName: transactionId
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      BillingMode: PAY_PER_REQUEST
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+
+  # IAM Roles for Lambdas
+  ReceiverRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: ReceiverPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ReceiverLogGroup.Arn
+              - Effect: Allow
+                Action: xray:PutTraceSegments
+                Resource: '*'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt Dlq.Arn
+              - Effect: Allow
+                Action: s3:PutObject
+                Resource: !Sub ${RawBucket.Arn}/*
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt ValidatorFn.Arn
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${WebhookApiKeyParamPath}
+
+  ValidatorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: ValidatorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ValidatorLogGroup.Arn
+              - Effect: Allow
+                Action: xray:PutTraceSegments
+                Resource: '*'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt Dlq.Arn
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt ProcessorFn.Arn
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ValidatorSecretParamPath}
+
+  ProcessorRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: ProcessorPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !GetAtt ProcessorLogGroup.Arn
+              - Effect: Allow
+                Action: xray:PutTraceSegments
+                Resource: '*'
+              - Effect: Allow
+                Action: sqs:SendMessage
+                Resource: !GetAtt Dlq.Arn
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                Resource: !GetAtt WebhookTable.Arn
+              - Effect: Allow
+                Action: ssm:GetParameter
+                Resource: !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter${ProcessorApiKeyParamPath}
+
+  # Lambda Functions
+  ReceiverFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ReceiverFn-${EnvironmentSuffix}
+      Runtime: nodejs22.x
+      Handler: index.handler
+      MemorySize: 512
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+      ReservedConcurrentExecutions: 100
+      Role: !GetAtt ReceiverRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+      DeadLetterConfig:
+        TargetArn: !GetAtt Dlq.Arn
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref RawBucket
+          VALIDATOR_ARN: !Ref ValidatorFn
+          API_KEY_PARAM_PATH: !Ref WebhookApiKeyParamPath
+      Code:
+        ZipFile: |
+          const aws = require('aws-sdk');
+          const s3 = new aws.S3();
+          const lambda = new aws.Lambda();
+          const ssm = new aws.SSM();
+          
+          exports.handler = async (event) => {
+            try {
+              // Get API key from SSM
+              const apiKeyParam = await ssm.getParameter({
+                Name: process.env.API_KEY_PARAM_PATH,
+                WithDecryption: true
+              }).promise();
+              
+              const body = event.body;
+              const key = `payload-${Date.now()}-${Math.random().toString(36).substring(2, 15)}.json`;
+              
+              await s3.putObject({
+                Bucket: process.env.S3_BUCKET,
+                Key: key,
+                Body: body,
+                ContentType: 'application/json'
+              }).promise();
+              
+              await lambda.invoke({
+                FunctionName: process.env.VALIDATOR_ARN,
+                InvocationType: 'Event',
+                Payload: JSON.stringify({
+                  ...event,
+                  s3Key: key
+                })
+              }).promise();
+              
+              return {
+                statusCode: 200,
+                body: JSON.stringify({ message: 'Webhook received and processing started' })
+              };
+            } catch (err) {
+              console.error('Error in ReceiverFn:', err);
+              throw err;
+            }
+          };
+
+  ValidatorFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ValidatorFn-${EnvironmentSuffix}
+      Runtime: python3.11
+      Handler: index.handler
+      MemorySize: 512
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+      ReservedConcurrentExecutions: 50
+      Role: !GetAtt ValidatorRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+      DeadLetterConfig:
+        TargetArn: !GetAtt Dlq.Arn
+      Environment:
+        Variables:
+          PROCESSOR_ARN: !Ref ProcessorFn
+          VALIDATOR_SECRET_PARAM_PATH: !Ref ValidatorSecretParamPath
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          import hashlib
+          import hmac
+          
+          lambda_client = boto3.client('lambda')
+          ssm_client = boto3.client('ssm')
+          
+          def handler(event, context):
+              try:
+                  # Get validator secret from SSM
+                  secret_param = ssm_client.get_parameter(
+                      Name=os.environ['VALIDATOR_SECRET_PARAM_PATH'],
+                      WithDecryption=True
+                  )
+                  secret = secret_param['Parameter']['Value']
+                  
+                  # Extract signature from headers (case-insensitive)
+                  headers = {k.lower(): v for k, v in event.get('headers', {}).items()}
+                  signature = headers.get('x-exchange-signature', '')
+                  
+                  # Simple HMAC validation (replace with your actual validation logic)
+                  body = event.get('body', '')
+                  expected_signature = hmac.new(
+                      secret.encode(),
+                      body.encode(),
+                      hashlib.sha256
+                  ).hexdigest()
+                  
+                  if not hmac.compare_digest(signature, expected_signature):
+                      raise ValueError('Invalid signature')
+                  
+                  # Invoke processor function
+                  lambda_client.invoke(
+                      FunctionName=os.environ['PROCESSOR_ARN'],
+                      InvocationType='Event',
+                      Payload=json.dumps(event)
+                  )
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'Validation successful'})
+                  }
+              except Exception as e:
+                  print(f'Error in ValidatorFn: {str(e)}')
+                  raise e
+
+  ProcessorFn:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub ProcessorFn-${EnvironmentSuffix}
+      Runtime: python3.11
+      Handler: index.handler
+      MemorySize: 512
+      Timeout: 30
+      TracingConfig:
+        Mode: Active
+      ReservedConcurrentExecutions: 50
+      Role: !GetAtt ProcessorRole.Arn
+      VpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnet1
+          - !Ref PrivateSubnet2
+        SecurityGroupIds:
+          - !Ref LambdaSecurityGroup
+      DeadLetterConfig:
+        TargetArn: !GetAtt Dlq.Arn
+      Environment:
+        Variables:
+          TABLE_NAME: !Ref WebhookTable
+          PROCESSOR_API_KEY_PARAM_PATH: !Ref ProcessorApiKeyParamPath
+      Code:
+        ZipFile: |
+          import os
+          import json
+          import boto3
+          import time
+          from datetime import datetime
+          
+          dynamodb = boto3.resource('dynamodb')
+          table = dynamodb.Table(os.environ['TABLE_NAME'])
+          ssm_client = boto3.client('ssm')
+          
+          def handler(event, context):
+              try:
+                  # Get processor API key from SSM
+                  api_key_param = ssm_client.get_parameter(
+                      Name=os.environ['PROCESSOR_API_KEY_PARAM_PATH'],
+                      WithDecryption=True
+                  )
+                  api_key = api_key_param['Parameter']['Value']
+                  
+                  data = json.loads(event.get('body', '{}'))
+                  
+                  # Create item for DynamoDB
+                  item = {
+                      'transactionId': data.get('transactionId', f'txn-{int(time.time() * 1000)}'),
+                      'timestamp': int(time.time()),
+                      'processedAt': datetime.utcnow().isoformat() + 'Z',
+                      'data': data
+                  }
+                  
+                  # Store in DynamoDB
+                  table.put_item(Item=item)
+                  
+                  return {
+                      'statusCode': 200,
+                      'body': json.dumps({'message': 'Processing completed', 'transactionId': item['transactionId']})
+                  }
+              except Exception as e:
+                  print(f'Error in ProcessorFn: {str(e)}')
+                  raise e
+
+  # API Gateway
+  RestApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub WebhookApi-${EnvironmentSuffix}
+      Description: Webhook API for cryptocurrency exchange events
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  ApiResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref RestApi
+      ParentId: !GetAtt RestApi.RootResourceId
+      PathPart: webhook
+
+  PostMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref RestApi
+      ResourceId: !Ref ApiResource
+      HttpMethod: POST
+      AuthorizationType: NONE
+      RequestParameters:
+        method.request.header.X-Exchange-Signature: true
+      MethodResponses:
+        - StatusCode: 200
+          ResponseParameters:
+            method.response.header.Access-Control-Allow-Origin: true
+        - StatusCode: 400
+        - StatusCode: 500
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${ReceiverFn.Arn}/invocations
+        IntegrationResponses:
+          - StatusCode: 200
+            ResponseParameters:
+              method.response.header.Access-Control-Allow-Origin: "'*'"
+
+  ApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn: PostMethod
+    Properties:
+      RestApiId: !Ref RestApi
+      Description: !Sub Deployment for ${EnvironmentSuffix}
+
+  ApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      StageName: !Ref ApiStageName
+      RestApiId: !Ref RestApi
+      DeploymentId: !Ref ApiDeployment
+      MethodSettings:
+        - ResourcePath: /webhook
+          HttpMethod: POST
+          MetricsEnabled: true
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          ThrottlingBurstLimit: 2000
+          ThrottlingRateLimit: 1000
+
+  ReceiverLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref ReceiverFn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub 
+        - "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${RestApiId}/${ApiStage}/*/webhook"
+        - RestApiId: !Ref RestApi
+          ApiStage: !Ref ApiStageName
+
+Outputs:
+  ApiInvokeUrl:
+    Description: API Gateway Invoke URL
+    Value: !Sub https://${RestApi}.execute-api.${AWS::Region}.amazonaws.com/${ApiStageName}/webhook
+  WebhookTableName:
+    Description: DynamoDB Table Name
+    Value: !Ref WebhookTable
+  RawBucketName:
+    Description: S3 Raw Bucket Name
+    Value: !Ref RawBucket
+  DlqUrl:
+    Description: Dead Letter Queue URL
+    Value: !Ref Dlq

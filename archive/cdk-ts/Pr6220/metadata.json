@@ -1,0 +1,37 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T21:11:23+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "po_id": "trljn",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Application Load Balancer",
+    "RDS",
+    "ECR",
+    "Cloud Map",
+    "CloudWatch",
+    "EventBridge",
+    "S3",
+    "SQS",
+    "IAM",
+    "X-Ray"
+  ],
+  "author": "mayanksethi-turing",
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

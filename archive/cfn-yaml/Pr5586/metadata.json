@@ -1,0 +1,36 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000186",
+  "team": "2",
+  "startedAt": "2025-10-31T13:13:59.533Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "CloudFormation",
+    "RDS",
+    "S3",
+    "Lambda",
+    "EventBridge",
+    "SSM",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "Config",
+    "IAM",
+    "KMS",
+    "SecretsManager",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

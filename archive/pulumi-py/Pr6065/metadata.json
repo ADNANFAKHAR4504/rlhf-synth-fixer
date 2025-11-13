@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912292",
+  "team": "6",
+  "startedAt": "2025-11-07T10:31:56.868Z",
+  "subtask": "Application Deployment",
+  "background": "A financial services company needs to implement comprehensive monitoring for their payment processing system running on AWS. The system handles millions of transactions daily and requires real-time alerting for anomalies, performance degradation, and compliance audit trails.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "CloudWatch Dashboard",
+    "SNS",
+    "EventBridge",
+    "CloudTrail",
+    "X-Ray",
+    "KMS",
+    "S3",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}
