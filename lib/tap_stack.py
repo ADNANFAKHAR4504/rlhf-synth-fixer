@@ -449,6 +449,7 @@ class TapStack(pulumi.ComponentResource):
         dlq = aws.sqs.Queue(
             f"transaction-dlq-{self.environment_suffix}",
             name=f"transaction-dlq-{self.environment_suffix}",
+            visibility_timeout_seconds=360,  # Must be >= 6 * Lambda timeout (60s)
             message_retention_seconds=1209600,  # 14 days
             kms_master_key_id=self.kms_key.id,
             kms_data_key_reuse_period_seconds=300,
@@ -539,7 +540,6 @@ class TapStack(pulumi.ComponentResource):
             }),
             timeout=60,
             memory_size=512,
-            reserved_concurrent_executions=100,
             environment={
                 'variables': {
                     'MERCHANT_TABLE_NAME': self.merchant_table.name,
