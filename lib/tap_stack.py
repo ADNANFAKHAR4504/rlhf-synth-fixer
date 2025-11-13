@@ -22,18 +22,16 @@ from aws_cdk import (
 from aws_cdk.lambda_layer_kubectl_v29 import KubectlV29Layer
 from constructs import Construct
 
-
 class TapStackProps(cdk.StackProps):
     """Properties for TapStack."""
-
+    
     def __init__(self, environment_suffix: Optional[str] = None, **kwargs):
         super().__init__(**kwargs)
         self.environment_suffix = environment_suffix
 
-
 class TapStack(cdk.Stack):
     """Main CDK stack for EKS Payment Processing Platform."""
-
+    
     def __init__(
         self,
         scope: Construct,
@@ -42,13 +40,13 @@ class TapStack(cdk.Stack):
         **kwargs
     ):
         super().__init__(scope, construct_id, **kwargs)
-
+        
         # Get environment suffix
         environment_suffix = (
             props.environment_suffix if props else None
         ) or self.node.try_get_context("environmentSuffix") or "dev"
         self.environment_suffix = environment_suffix
-
+        
         # Create KMS key for EKS secrets encryption
         kms_key = kms.Key(
             self,
@@ -57,7 +55,7 @@ class TapStack(cdk.Stack):
             enable_key_rotation=True,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
-
+        
         # Create VPC with 3 AZs
         vpc = ec2.Vpc(
             self,
@@ -78,20 +76,20 @@ class TapStack(cdk.Stack):
                 ),
             ],
         )
-
+        
         # Tag subnets for EKS and load balancer discovery
         for subnet in vpc.public_subnets:
             Tags.of(subnet).add("kubernetes.io/role/elb", "1")
             Tags.of(subnet).add(
                 f"kubernetes.io/cluster/payment-eks-{environment_suffix}", "shared"
             )
-
+        
         for subnet in vpc.private_subnets:
             Tags.of(subnet).add("kubernetes.io/role/internal-elb", "1")
             Tags.of(subnet).add(
                 f"kubernetes.io/cluster/payment-eks-{environment_suffix}", "shared"
             )
-
+        
         # Create CloudWatch log group for EKS audit logs
         log_group = logs.LogGroup(
             self,
@@ -100,7 +98,7 @@ class TapStack(cdk.Stack):
             retention=logs.RetentionDays.ONE_MONTH,
             removal_policy=cdk.RemovalPolicy.DESTROY,
         )
-
+        
         # Create EKS cluster admin role
         cluster_admin_role = iam.Role(
             self,
@@ -112,8 +110,8 @@ class TapStack(cdk.Stack):
                 )
             ],
         )
-
-        # Create EKS cluster with Kubernetes 1.28 (IPv6 removed)
+        
+        # Create EKS cluster with Kubernetes 1.29
         cluster = eks.Cluster(
             self,
             f"PaymentEKS-{environment_suffix}",
@@ -134,17 +132,17 @@ class TapStack(cdk.Stack):
             masters_role=cluster_admin_role,
             kubectl_layer=KubectlV29Layer(self, f"KubectlLayer-{environment_suffix}"),
         )
-
+        
         # Enable OIDC provider (automatically done by CDK for IRSA)
         # The cluster.open_id_connect_provider is created automatically
-
+        
         # Create service account for cluster autoscaler with IRSA
         cluster_autoscaler_sa = cluster.add_service_account(
             f"ClusterAutoscalerSA-{environment_suffix}",
             name="cluster-autoscaler",
             namespace="kube-system",
         )
-
+        
         cluster_autoscaler_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -161,14 +159,14 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         # Create service account for AWS Load Balancer Controller with IRSA
         alb_controller_sa = cluster.add_service_account(
             f"ALBControllerSA-{environment_suffix}",
             name="aws-load-balancer-controller",
             namespace="kube-system",
         )
-
+        
         # Add AWS Load Balancer Controller policies (using inline policies instead of managed policy)
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
@@ -180,10 +178,10 @@ class TapStack(cdk.Stack):
                     "StringEquals": {
                         "iam:AWSServiceName": "elasticloadbalancing.amazonaws.com"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -214,7 +212,7 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -239,7 +237,7 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -250,7 +248,7 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=["ec2:CreateTags"],
@@ -261,11 +259,11 @@ class TapStack(cdk.Stack):
                     },
                     "Null": {
                         "aws:RequestTag/elbv2.k8s.aws/cluster": "false"
-                    }
-                }
+                    },
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -278,10 +276,10 @@ class TapStack(cdk.Stack):
                         "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
                         "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -294,10 +292,10 @@ class TapStack(cdk.Stack):
                     "Null": {
                         "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -309,10 +307,10 @@ class TapStack(cdk.Stack):
                     "Null": {
                         "aws:RequestTag/elbv2.k8s.aws/cluster": "false"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -324,7 +322,7 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -341,10 +339,10 @@ class TapStack(cdk.Stack):
                         "aws:RequestTag/elbv2.k8s.aws/cluster": "true",
                         "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -354,12 +352,12 @@ class TapStack(cdk.Stack):
                 resources=[
                     "arn:aws:elasticloadbalancing:*:*:listener/net/*/*/*",
                     "arn:aws:elasticloadbalancing:*:*:listener/app/*/*/*",
-                    "arn:aws:elasticloadbalancing:*:*:listener-rule/net/*/*/*",
+                    "arn:aws:elasticloadancing:*:*:listener-rule/net/*/*/*",
                     "arn:aws:elasticloadbalancing:*:*:listener-rule/app/*/*/*",
                 ],
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -377,10 +375,10 @@ class TapStack(cdk.Stack):
                     "Null": {
                         "aws:ResourceTag/elbv2.k8s.aws/cluster": "false"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -401,10 +399,10 @@ class TapStack(cdk.Stack):
                     "Null": {
                         "aws:RequestTag/elbv2.k8s.aws/cluster": "false"
                     }
-                }
+                },
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -414,7 +412,7 @@ class TapStack(cdk.Stack):
                 resources=["arn:aws:elasticloadbalancing:*:*:targetgroup/*/*"],
             )
         )
-
+        
         alb_controller_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -427,14 +425,14 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         # Create service account for external secrets operator
         external_secrets_sa = cluster.add_service_account(
             f"ExternalSecretsSA-{environment_suffix}",
             name="external-secrets-operator",
             namespace="kube-system",
         )
-
+        
         external_secrets_sa.role.add_to_policy(
             iam.PolicyStatement(
                 actions=[
@@ -445,7 +443,7 @@ class TapStack(cdk.Stack):
                 resources=["*"],
             )
         )
-
+        
         # Configure GitHub Actions OIDC provider
         github_provider = iam.OpenIdConnectProvider(
             self,
@@ -453,7 +451,7 @@ class TapStack(cdk.Stack):
             url="https://token.actions.githubusercontent.com",
             client_ids=["sts.amazonaws.com"],
         )
-
+        
         # Create role for GitHub Actions
         github_role = iam.Role(
             self,
@@ -468,17 +466,17 @@ class TapStack(cdk.Stack):
                 assume_role_action="sts:AssumeRoleWithWebIdentity",
             ),
         )
-
+        
         github_role.add_managed_policy(
             iam.ManagedPolicy.from_aws_managed_policy_name("ReadOnlyAccess")
         )
-
+        
         # Get Bottlerocket AMI
         bottlerocket_ami = ec2.MachineImage.from_ssm_parameter(
             "/aws/service/bottlerocket/aws-k8s-1.29/x86_64/latest/image_id",
             os=ec2.OperatingSystemType.LINUX,
         )
-
+        
         # Node group 1: General purpose (t3.large) - Group A
         nodegroup_general_a = cluster.add_nodegroup_capacity(
             f"GeneralNodeGroupA-{environment_suffix}",
@@ -500,7 +498,7 @@ class TapStack(cdk.Stack):
                 "EnvironmentSuffix": environment_suffix,
             },
         )
-
+        
         # Node group 2: General purpose (t3.large) - Group B
         nodegroup_general_b = cluster.add_nodegroup_capacity(
             f"GeneralNodeGroupB-{environment_suffix}",
@@ -522,7 +520,7 @@ class TapStack(cdk.Stack):
                 "EnvironmentSuffix": environment_suffix,
             },
         )
-
+        
         # Node group 3: Memory optimized (r5.xlarge)
         nodegroup_memory = cluster.add_nodegroup_capacity(
             f"MemoryNodeGroup-{environment_suffix}",
@@ -544,7 +542,7 @@ class TapStack(cdk.Stack):
                 "EnvironmentSuffix": environment_suffix,
             },
         )
-
+        
         # Node group 4: GPU enabled (g4dn.xlarge)
         nodegroup_gpu = cluster.add_nodegroup_capacity(
             f"GPUNodeGroup-{environment_suffix}",
@@ -574,17 +572,11 @@ class TapStack(cdk.Stack):
                 )
             ],
         )
-
-        # Install AWS Load Balancer Controller as an add-on
-        alb_controller_addon = eks.CfnAddon(
-            self,
-            f"ALBControllerAddon-{environment_suffix}",
-            addon_name="aws-load-balancer-controller",
-            cluster_name=cluster.cluster_name,
-            service_account_role_arn=alb_controller_sa.role.role_arn,
-            resolve_conflicts="OVERWRITE",
-        )
-
+        
+        # REMOVED: AWS Load Balancer Controller EKS Add-on
+        # The add-on is not supported in Kubernetes 1.29
+        # Instead, deploy it via Helm chart or Kubernetes manifests
+        
         # Apply pod security standards
         pod_security_policy = cluster.add_manifest(
             f"PodSecurityPolicy-{environment_suffix}",
@@ -615,14 +607,14 @@ class TapStack(cdk.Stack):
                 },
             },
         )
-
+        
         # Create CloudWatch dashboard for cluster metrics
         dashboard = cloudwatch.Dashboard(
             self,
             f"EKSDashboard-{environment_suffix}",
             dashboard_name=f"payment-eks-{environment_suffix}-dashboard",
         )
-
+        
         # Add cluster CPU utilization widget
         dashboard.add_widgets(
             cloudwatch.GraphWidget(
@@ -637,7 +629,7 @@ class TapStack(cdk.Stack):
                 ],
             )
         )
-
+        
         # Add cluster memory utilization widget
         dashboard.add_widgets(
             cloudwatch.GraphWidget(
@@ -652,7 +644,7 @@ class TapStack(cdk.Stack):
                 ],
             )
         )
-
+        
         # Add node group health widget
         dashboard.add_widgets(
             cloudwatch.GraphWidget(
@@ -667,7 +659,7 @@ class TapStack(cdk.Stack):
                 ],
             )
         )
-
+        
         # Stack outputs
         CfnOutput(
             self,
@@ -676,7 +668,7 @@ class TapStack(cdk.Stack):
             description="EKS Cluster Endpoint",
             export_name=f"PaymentEKSEndpoint-{environment_suffix}",
         )
-
+        
         CfnOutput(
             self,
             f"OIDCIssuerURL-{environment_suffix}",
@@ -684,7 +676,7 @@ class TapStack(cdk.Stack):
             description="OIDC Issuer URL",
             export_name=f"PaymentEKSOIDCIssuer-{environment_suffix}",
         )
-
+        
         CfnOutput(
             self,
             f"ClusterName-{environment_suffix}",
@@ -692,14 +684,14 @@ class TapStack(cdk.Stack):
             description="EKS Cluster Name",
             export_name=f"PaymentEKSName-{environment_suffix}",
         )
-
+        
         CfnOutput(
             self,
             f"KubectlConfigCommand-{environment_suffix}",
             value=f"aws eks update-kubeconfig --region {self.region} --name {cluster.cluster_name}",
             description="kubectl Configuration Command",
         )
-
+        
         CfnOutput(
             self,
             f"ClusterSecurityGroupId-{environment_suffix}",
@@ -707,7 +699,7 @@ class TapStack(cdk.Stack):
             description="Cluster Security Group ID",
             export_name=f"PaymentEKSSecurityGroup-{environment_suffix}",
         )
-
+        
         CfnOutput(
             self,
             f"GitHubOIDCProviderArn-{environment_suffix}",
@@ -715,7 +707,7 @@ class TapStack(cdk.Stack):
             description="GitHub OIDC Provider ARN",
             export_name=f"GitHubOIDCProviderArn-{environment_suffix}",
         )
-
+        
         CfnOutput(
             self,
             f"VPCId-{environment_suffix}",
@@ -723,7 +715,7 @@ class TapStack(cdk.Stack):
             description="VPC ID",
             export_name=f"PaymentEKSVPCId-{environment_suffix}",
         )
-
+        
         CfnOutput(
             self,
             f"KMSKeyArn-{environment_suffix}",
@@ -731,7 +723,15 @@ class TapStack(cdk.Stack):
             description="KMS Key ARN for EKS Secrets",
             export_name=f"PaymentEKSKMSKeyArn-{environment_suffix}",
         )
-
+        
+        CfnOutput(
+            self,
+            f"ALBControllerRoleArn-{environment_suffix}",
+            value=alb_controller_sa.role.role_arn,
+            description="ALB Controller Service Account Role ARN (use for Helm deployment)",
+            export_name=f"PaymentEKSALBControllerRoleArn-{environment_suffix}",
+        )
+        
         # Store reference for testing
         self.cluster = cluster
         self.vpc = vpc
