@@ -57,7 +57,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const primarySnsTopic = new aws.sns.Topic(
       `primary-alerts-${environmentSuffix}`,
       {
-        name: `primary-alerts-${environmentSuffix}`,
+        name: pulumi.interpolate`primary-alerts-${environmentSuffix}-${randomSuffix.result}`,
         displayName: 'Primary Region Alerts',
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
@@ -71,7 +71,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const drSnsTopic = new aws.sns.Topic(
       `dr-alerts-${environmentSuffix}`,
       {
-        name: `dr-alerts-${environmentSuffix}`,
+        name: pulumi.interpolate`dr-alerts-${environmentSuffix}-${randomSuffix.result}`,
         displayName: 'DR Region Alerts',
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
@@ -115,7 +115,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const firehoseRole = new aws.iam.Role(
       `firehose-role-${environmentSuffix}`,
       {
-        name: `firehose-role-${environmentSuffix}`,
+        name: pulumi.interpolate`firehose-role-${environmentSuffix}-${randomSuffix.result}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -211,7 +211,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const metricStreamRole = new aws.iam.Role(
       `metric-stream-role-${environmentSuffix}`,
       {
-        name: `metric-stream-role-${environmentSuffix}`,
+        name: pulumi.interpolate`metric-stream-role-${environmentSuffix}-${randomSuffix.result}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -409,7 +409,7 @@ export class MonitoringStack extends pulumi.ComponentResource {
     const lambdaRole = new aws.iam.Role(
       `failover-lambda-role-${environmentSuffix}`,
       {
-        name: `failover-lambda-role-${environmentSuffix}`,
+        name: pulumi.interpolate`failover-lambda-role-${environmentSuffix}-${randomSuffix.result}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [

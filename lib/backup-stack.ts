@@ -1,7 +1,8 @@
 import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as random from '@pulumi/random';
 
-export interface BackupStackArgs {
+export interface BackupStackArgs{
   environmentSuffix: string;
   tags: pulumi.Input<{ [key: string]: string }>;
   primaryDbClusterArn: pulumi.Output<string>;
@@ -29,11 +30,24 @@ export class BackupStack extends pulumi.ComponentResource {
       drProvider,
     } = args;
 
+    // Generate random suffix to avoid resource name conflicts
+    const randomSuffix = new random.RandomString(
+      `backup-random-suffix-${environmentSuffix}`,
+      {
+        length: 8,
+        special: false,
+        upper: false,
+        lower: true,
+        numeric: true,
+      },
+      { parent: this }
+    );
+
     // IAM role for AWS Backup
     const backupRole = new aws.iam.Role(
       `backup-role-${environmentSuffix}`,
       {
-        name: `backup-role-${environmentSuffix}`,
+        name: pulumi.interpolate`backup-role-${environmentSuffix}-${randomSuffix.result}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -79,7 +93,7 @@ export class BackupStack extends pulumi.ComponentResource {
     const primaryVault = new aws.backup.Vault(
       `primary-backup-vault-${environmentSuffix}`,
       {
-        name: `primary-backup-vault-${environmentSuffix}`,
+        name: pulumi.interpolate`primary-backup-vault-${environmentSuffix}-${randomSuffix.result}`,
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `primary-backup-vault-${environmentSuffix}`,
@@ -93,7 +107,7 @@ export class BackupStack extends pulumi.ComponentResource {
     const drVault = new aws.backup.Vault(
       `dr-backup-vault-${environmentSuffix}`,
       {
-        name: `dr-backup-vault-${environmentSuffix}`,
+        name: pulumi.interpolate`dr-backup-vault-${environmentSuffix}-${randomSuffix.result}`,
         tags: pulumi.all([tags]).apply(([t]) => ({
           ...t,
           Name: `dr-backup-vault-${environmentSuffix}`,
@@ -112,7 +126,7 @@ export class BackupStack extends pulumi.ComponentResource {
     const backupPlan = new aws.backup.Plan(
       `backup-plan-${environmentSuffix}`,
       {
-        name: `backup-plan-${environmentSuffix}`,
+        name: pulumi.interpolate`backup-plan-${environmentSuffix}-${randomSuffix.result}`,
         rules: [
           {
             ruleName: 'daily-backup',

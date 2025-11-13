@@ -43,6 +43,19 @@ export class DatabaseStack extends pulumi.ComponentResource {
       drInstanceSecurityGroupId,
     } = args;
 
+    // Generate random suffix to avoid resource name conflicts
+    const randomSuffix = new random.RandomString(
+      `database-random-suffix-${environmentSuffix}`,
+      {
+        length: 8,
+        special: false,
+        upper: false,
+        lower: true,
+        numeric: true,
+      },
+      { parent: this }
+    );
+
     // Create KMS key for database encryption in primary region
     const primaryKmsKey = new aws.kms.Key(
       `primary-db-kms-${environmentSuffix}`,
@@ -101,7 +114,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
     const dbPassword = new aws.secretsmanager.Secret(
       `db-password-v2-${environmentSuffix}`,
       {
-        name: `db-password-v2-${environmentSuffix}`,
+        name: pulumi.interpolate`db-password-v2-${environmentSuffix}-${randomSuffix.result}`,
         description: 'RDS Aurora master password',
         kmsKeyId: primaryKmsKey.id,
         tags: pulumi.all([tags]).apply(([t]) => ({
@@ -239,7 +252,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
     const globalCluster = new aws.rds.GlobalCluster(
       `global-db-v2-${environmentSuffix}`,
       {
-        globalClusterIdentifier: `global-db-v2-${environmentSuffix}`,
+        globalClusterIdentifier: pulumi.interpolate`global-db-v2-${environmentSuffix}-${randomSuffix.result}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'paymentsdb',
@@ -252,7 +265,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
     const primaryCluster = new aws.rds.Cluster(
       `primary-db-cluster-v2-${environmentSuffix}`,
       {
-        clusterIdentifier: `primary-db-cluster-v2-${environmentSuffix}`,
+        clusterIdentifier: pulumi.interpolate`primary-db-cluster-v2-${environmentSuffix}-${randomSuffix.result}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         databaseName: 'paymentsdb',
@@ -280,7 +293,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
       new aws.rds.ClusterInstance(
         `primary-db-instance-v2-${i}-${environmentSuffix}`,
         {
-          identifier: `primary-db-instance-v2-${i}-${environmentSuffix}`,
+          identifier: pulumi.interpolate`primary-db-instance-v2-${i}-${environmentSuffix}-${randomSuffix.result}`,
           clusterIdentifier: primaryCluster.id,
           instanceClass: 'db.r6g.large',
           engine: 'aurora-postgresql',
@@ -300,7 +313,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
     const drCluster = new aws.rds.Cluster(
       `dr-db-cluster-v2-${environmentSuffix}`,
       {
-        clusterIdentifier: `dr-db-cluster-v2-${environmentSuffix}`,
+        clusterIdentifier: pulumi.interpolate`dr-db-cluster-v2-${environmentSuffix}-${randomSuffix.result}`,
         engine: 'aurora-postgresql',
         engineVersion: '14.6',
         dbSubnetGroupName: drSubnetGroup.name,
@@ -323,7 +336,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
       new aws.rds.ClusterInstance(
         `dr-db-instance-v2-${i}-${environmentSuffix}`,
         {
-          identifier: `dr-db-instance-v2-${i}-${environmentSuffix}`,
+          identifier: pulumi.interpolate`dr-db-instance-v2-${i}-${environmentSuffix}-${randomSuffix.result}`,
           clusterIdentifier: drCluster.id,
           instanceClass: 'db.r6g.large',
           engine: 'aurora-postgresql',
@@ -344,7 +357,7 @@ export class DatabaseStack extends pulumi.ComponentResource {
     const dynamoTable = new aws.dynamodb.Table(
       `session-table-v2-${environmentSuffix}`,
       {
-        name: `session-table-v2-${environmentSuffix}`,
+        name: pulumi.interpolate`session-table-v2-${environmentSuffix}-${randomSuffix.result}`,
         billingMode: 'PAY_PER_REQUEST',
         hashKey: 'sessionId',
         attributes: [
