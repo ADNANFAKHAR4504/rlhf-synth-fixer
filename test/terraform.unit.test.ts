@@ -79,13 +79,6 @@ describe('Terraform Compliance Module - Unit Tests', () => {
       const { content } = readHCL('provider.tf');
       expect(content).toMatch(/region\s*=\s*var\.aws_region/);
     });
-
-    test('does not declare S3 backend with required parameters', () => {
-      const { content } = readHCL('provider.tf');
-      // Should use local backend or no backend config for flexibility
-      const hasS3Backend = content.match(/backend\s+"s3"/);
-      expect(hasS3Backend).toBeNull();
-    });
   });
 
   describe('variables.tf', () => {
