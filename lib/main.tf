@@ -1,6 +1,6 @@
 locals {
-  use_existing_vpc             = trimspace(coalesce(var.vpc_id, "")) != ""
-  use_existing_public_subnet   = trimspace(coalesce(var.public_subnet_id, "")) != ""
+  use_existing_vpc             = length(trimspace(coalesce(var.vpc_id, ""))) > 0
+  use_existing_public_subnet   = length(trimspace(coalesce(var.public_subnet_id, ""))) > 0
   use_existing_private_subnets = var.private_subnet_ids != null && length(var.private_subnet_ids) > 0
 }
 
