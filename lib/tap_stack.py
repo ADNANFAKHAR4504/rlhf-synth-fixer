@@ -79,6 +79,10 @@ class TapStack(pulumi.ComponentResource):
             "Purpose": "DisasterRecovery"
         }
 
+        # Merge custom tags if provided
+        if args.tags:
+            self.common_tags.update(args.tags)
+
         # Get DR provider
         self.dr_provider = aws.Provider(
             f"aws-dr-{self.environment_suffix}",
