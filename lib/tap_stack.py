@@ -463,7 +463,7 @@ class TapStack(TerraformStack):
                 runtime="python3.11",
                 handler="lambda_function.handler",
                 role=lambda_role.arn,
-                filename="lambda_package.zip",
+                filename="lib/lambda_package.zip",
                 timeout=300,
                 memory_size=512,
                 reserved_concurrent_executions=concurrency_limits[priority],
