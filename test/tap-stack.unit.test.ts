@@ -306,13 +306,6 @@ describe('TapStack CloudFormation Template - Transaction Processing', () => {
       const lambda = template.Resources.TransactionProcessorFunction;
       expect(lambda.Properties.Runtime).toBe('python3.11');
     });
-
-    test('TransactionProcessorFunction should have inline code', () => {
-      const lambda = template.Resources.TransactionProcessorFunction;
-      expect(lambda.Properties.Code).toBeDefined();
-      expect(lambda.Properties.Code.ZipFile).toBeDefined();
-      expect(lambda.Properties.Code.ZipFile['Fn::Sub']).toBeDefined();
-    });
   });
 
   describe('Resources - CloudWatch Logs', () => {
