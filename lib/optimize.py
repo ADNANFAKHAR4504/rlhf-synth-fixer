@@ -7,6 +7,7 @@ Analyzes CloudWatch metrics and optimizes over-provisioned resources based on ut
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from dataclasses import asdict, dataclass
@@ -108,27 +109,27 @@ class AWSOptimizer:
     def _load_stack_outputs(self):
         """Load CloudFormation stack outputs to discover resource names."""
         stack_name = f"TapStack{self.environment_suffix}"
-        
+
         try:
             logger.info("Loading outputs from CloudFormation stack: %s", stack_name)
             response = self.cfn_client.describe_stacks(StackName=stack_name)
-            
+
             if not response['Stacks']:
                 logger.warning("Stack %s not found", stack_name)
                 return
-            
+
             stack = response['Stacks'][0]
             outputs = stack.get('Outputs', [])
-            
+
             # Parse outputs into a dictionary
             for output in outputs:
                 key = output['OutputKey']
                 value = output['OutputValue']
                 self.stack_outputs[key] = value
                 logger.info("Found output: %s = %s", key, value)
-            
+
             logger.info("Loaded %d outputs from stack", len(self.stack_outputs))
-            
+
         except ClientError as e:
             if e.response['Error']['Code'] == 'ValidationError':
                 logger.warning("Stack %s does not exist, will use default resource naming", stack_name)
@@ -431,7 +432,7 @@ class AWSOptimizer:
 
         # Try to get function ARNs from stack outputs, fall back to naming convention
         function_names = []
-        
+
         # Check for Lambda function outputs in stack
         for key in ['ProcessorLambdaArn', 'AnalyzerLambdaArn', 'ReporterLambdaArn']:
             if key in self.stack_outputs:
@@ -439,7 +440,7 @@ class AWSOptimizer:
                 arn = self.stack_outputs[key]
                 function_name = arn.split(':')[-1]
                 function_names.append(function_name)
-        
+
         # If no outputs found, use naming convention
         if not function_names:
             function_names = [
@@ -464,14 +465,12 @@ class AWSOptimizer:
 
                     current_config = {
                         'memory_size': response['MemorySize'],
-                        'timeout': response['Timeout'],
-                        'reserved_concurrent': response.get('ReservedConcurrentExecutions', 0)
+                        'timeout': response['Timeout']
                     }
 
                     optimized_config = {
                         'memory_size': 1024,
-                        'timeout': 300,
-                        'reserved_concurrent': 20
+                        'timeout': 300
                     }
 
                     # Calculate costs
@@ -508,21 +507,21 @@ class AWSOptimizer:
 
         # Try to get bucket names from stack outputs, fall back to discovery
         bucket_names = []
-        
+
         # Check for S3 bucket outputs in stack
         for key in ['MediaBucketName', 'LogsBucketName', 'BackupsBucketName']:
             if key in self.stack_outputs:
                 bucket_names.append(self.stack_outputs[key])
-        
+
         # If no outputs found, discover buckets by prefix
         if not bucket_names:
             bucket_purposes = ["media", "logs", "backups"]
-            
+
             for purpose in bucket_purposes:
                 try:
                     # List buckets with prefix
                     response = self.s3_client.list_buckets()
-                    
+
                     for bucket in response['Buckets']:
                         if f"tap-{purpose}-{self.environment_suffix}" in bucket['Name']:
                             bucket_names.append(bucket['Name'])
@@ -1020,7 +1019,7 @@ class AWSOptimizer:
         # Reserved concurrency cost (if applicable)
         reserved_cost = 0  # Reserved concurrency doesn't have additional cost
 
-        return request_cost_total + compute_cost + reserved_cost
+        return request_cost_total + compute_cost
 
     def _calculate_s3_cost(self, config: Dict[str, Any], metrics: Dict[str, float]) -> float:
         """Calculate S3 monthly cost."""
@@ -1180,41 +1179,6 @@ class AWSOptimizer:
             Timeout=config['timeout']
         )
 
-        # Set reserved concurrent executions separately
-        # Note: AWS requires at least 10 unreserved concurrent executions
-        # Account-level concurrent execution limit is typically 1000
-        reserved_concurrent = config.get('reserved_concurrent', 0)
-
-        if reserved_concurrent > 0:
-            try:
-                # Get account concurrency limit
-                account_settings = self.lambda_client.get_account_settings()
-                account_limit = account_settings['AccountLimit']['ConcurrentExecutions']
-
-                # Only set if it won't violate the minimum unreserved limit
-                if (account_limit - reserved_concurrent) >= 10:
-                    self.lambda_client.put_function_concurrency(
-                        FunctionName=function_name,
-                        ReservedConcurrentExecutions=reserved_concurrent
-                    )
-                else:
-                    logger.warning(
-                        "Skipping concurrency limit for %s: would violate minimum unreserved limit",
-                        function_name
-                    )
-            except Exception as e:
-                logger.warning(
-                    "Could not set concurrency for %s: %s", function_name, str(e)
-                )
-        else:
-            # Delete concurrency limit if set to 0
-            try:
-                self.lambda_client.delete_function_concurrency(
-                    FunctionName=function_name
-                )
-            except Exception:
-                pass  # Ignore if no concurrency limit exists
-
     def _apply_s3_optimization(self, optimization: ResourceConfiguration):
         """Apply S3 bucket optimization."""
         bucket_name = optimization.resource_id
@@ -1372,8 +1336,7 @@ class AWSOptimizer:
         self.lambda_client.update_function_configuration(
             FunctionName=function_name,
             MemorySize=config['memory_size'],
-            Timeout=config['timeout'],
-            ReservedConcurrentExecutions=config['reserved_concurrent']
+            Timeout=config['timeout']
         )
 
     def _rollback_s3(self, optimization: ResourceConfiguration):
@@ -1466,8 +1429,8 @@ class AWSOptimizer:
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(description='AWS Infrastructure Optimizer')
-    parser.add_argument('--environment', '-e', default='dev',
-                      help='Environment suffix (default: dev)')
+    parser.add_argument('--environment', '-e', default=None,
+                      help='Environment suffix overrides ENVIRONMENT_SUFFIX env var')
     parser.add_argument('--dry-run', action='store_true',
                       help='Run in dry-run mode without applying changes')
     parser.add_argument('--force', action='store_true',
@@ -1475,9 +1438,11 @@ def main():
 
     args = parser.parse_args()
 
+    environment_suffix = args.environment or os.getenv('ENVIRONMENT_SUFFIX') or 'dev'
+
     try:
         optimizer = AWSOptimizer(
-            environment_suffix=args.environment,
+            environment_suffix=environment_suffix,
             dry_run=args.dry_run
         )
 
