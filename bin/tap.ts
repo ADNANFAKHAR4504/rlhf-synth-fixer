@@ -100,18 +100,14 @@ export const kubectlConfigCommand = stack.clusterName.apply(
 // Node Groups Information
 // ----------------------------------------------------------------------------
 // General purpose node group for standard workloads
-export const generalNodeGroupName = stack.clusterName.apply((clusterName) =>
-  clusterName.apply(() => `general-${environmentSuffix}`)
-);
+export const generalNodeGroupName = `general-${environmentSuffix}`;
 export const generalNodeGroupInstanceType = 't3.large';
 export const generalNodeGroupMinSize = 2;
 export const generalNodeGroupMaxSize = 10;
 export const generalNodeGroupDesiredSize = 2;
 
 // Compute-intensive node group for high-performance workloads
-export const computeNodeGroupName = stack.clusterName.apply((clusterName) =>
-  clusterName.apply(() => `compute-${environmentSuffix}`)
-);
+export const computeNodeGroupName = `compute-${environmentSuffix}`;
 export const computeNodeGroupInstanceType = 'c5.2xlarge';
 export const computeNodeGroupMinSize = 1;
 export const computeNodeGroupMaxSize = 5;
