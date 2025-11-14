@@ -1,13 +1,12 @@
-import fs from 'fs';
-import path from 'path';
+import * as fs from 'fs';
+import * as path from 'path';
 
-describe('TapStack CloudFormation Template - EKS Cluster', () => {
+describe('Financial Services CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    // Load the JSON CloudFormation template
-    const templatePath = path.join(__dirname, '../lib/TapStack.json');
-    const templateContent = fs.readFileSync(templatePath, 'utf8');
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+    const templateContent = fs.readFileSync(templatePath, 'utf-8');
     template = JSON.parse(templateContent);
   });
 
@@ -18,18 +17,22 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
 
     test('should have a description', () => {
       expect(template.Description).toBeDefined();
-      expect(template.Description).toContain('EKS cluster');
+      expect(template.Description).toContain('financial services');
     });
 
-    test('should have metadata section', () => {
-      expect(template.Metadata).toBeDefined();
-      expect(template.Metadata['AWS::CloudFormation::Interface']).toBeDefined();
+    test('should have parameters section', () => {
+      expect(template.Parameters).toBeDefined();
+      expect(Object.keys(template.Parameters).length).toBeGreaterThan(0);
     });
 
-    test('should have parameter groups in metadata', () => {
-      const metadata = template.Metadata['AWS::CloudFormation::Interface'];
-      expect(metadata.ParameterGroups).toBeDefined();
-      expect(metadata.ParameterGroups.length).toBeGreaterThan(0);
+    test('should have resources section', () => {
+      expect(template.Resources).toBeDefined();
+      expect(Object.keys(template.Resources).length).toBeGreaterThan(0);
+    });
+
+    test('should have outputs section', () => {
+      expect(template.Outputs).toBeDefined();
+      expect(Object.keys(template.Outputs).length).toBeGreaterThan(0);
     });
   });
 
@@ -37,42 +40,48 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
     test('should have EnvironmentSuffix parameter', () => {
       expect(template.Parameters.EnvironmentSuffix).toBeDefined();
       expect(template.Parameters.EnvironmentSuffix.Type).toBe('String');
-      expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
+      expect(template.Parameters.EnvironmentSuffix.Default).toBe('prod');
     });
 
-    test('should have KubernetesVersion parameter with valid versions', () => {
-      const kubernetesVersion = template.Parameters.KubernetesVersion;
-      expect(kubernetesVersion).toBeDefined();
-      expect(kubernetesVersion.Type).toBe('String');
-      expect(kubernetesVersion.Default).toBe('1.28');
-      expect(kubernetesVersion.AllowedValues).toContain('1.28');
-      expect(kubernetesVersion.AllowedValues).toContain('1.29');
-      expect(kubernetesVersion.AllowedValues).toContain('1.30');
+    test('should have Environment parameter with allowed values', () => {
+      expect(template.Parameters.Environment).toBeDefined();
+      expect(template.Parameters.Environment.Type).toBe('String');
+      expect(template.Parameters.Environment.Default).toBe('production');
+      expect(template.Parameters.Environment.AllowedValues).toContain('production');
+      expect(template.Parameters.Environment.AllowedValues).toContain('staging');
+      expect(template.Parameters.Environment.AllowedValues).toContain('development');
     });
 
-    test('should have NodeInstanceType parameter with Graviton2 instances', () => {
-      const nodeInstanceType = template.Parameters.NodeInstanceType;
-      expect(nodeInstanceType).toBeDefined();
-      expect(nodeInstanceType.Type).toBe('String');
-      expect(nodeInstanceType.Default).toBe('t4g.medium');
-      expect(nodeInstanceType.AllowedValues).toContain('t4g.medium');
-      expect(nodeInstanceType.AllowedValues).toContain('t4g.large');
-      expect(nodeInstanceType.AllowedValues).toContain('c6g.medium');
-      expect(nodeInstanceType.AllowedValues).toContain('m6g.medium');
+    test('should have VpcCIDR parameter', () => {
+      expect(template.Parameters.VpcCIDR).toBeDefined();
+      expect(template.Parameters.VpcCIDR.Type).toBe('String');
+      expect(template.Parameters.VpcCIDR.Default).toBe('10.0.0.0/16');
     });
 
-    test('should have scaling parameters', () => {
-      expect(template.Parameters.MinNodes).toBeDefined();
-      expect(template.Parameters.MinNodes.Type).toBe('Number');
-      expect(template.Parameters.MinNodes.Default).toBe(2);
+    test('should have DBMasterUsername parameter', () => {
+      expect(template.Parameters.DBMasterUsername).toBeDefined();
+      expect(template.Parameters.DBMasterUsername.Type).toBe('String');
+      expect(template.Parameters.DBMasterUsername.NoEcho).toBe(true);
+    });
 
-      expect(template.Parameters.MaxNodes).toBeDefined();
-      expect(template.Parameters.MaxNodes.Type).toBe('Number');
-      expect(template.Parameters.MaxNodes.Default).toBe(10);
+    test('should have InstanceType parameter', () => {
+      expect(template.Parameters.InstanceType).toBeDefined();
+      expect(template.Parameters.InstanceType.Type).toBe('String');
+      expect(template.Parameters.InstanceType.Default).toBe('t3.medium');
+      expect(template.Parameters.InstanceType.AllowedValues).toContain('t3.medium');
+      expect(template.Parameters.InstanceType.AllowedValues).toContain('t3.large');
+    });
 
-      expect(template.Parameters.DesiredNodes).toBeDefined();
-      expect(template.Parameters.DesiredNodes.Type).toBe('Number');
-      expect(template.Parameters.DesiredNodes.Default).toBe(2);
+    test('should have Project parameter', () => {
+      expect(template.Parameters.Project).toBeDefined();
+      expect(template.Parameters.Project.Type).toBe('String');
+      expect(template.Parameters.Project.Default).toBe('financial-transactions');
+    });
+
+    test('should have CostCenter parameter', () => {
+      expect(template.Parameters.CostCenter).toBeDefined();
+      expect(template.Parameters.CostCenter.Type).toBe('String');
+      expect(template.Parameters.CostCenter.Default).toBe('engineering');
     });
   });
 
@@ -80,9 +89,6 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
     test('should have VPC resource', () => {
       expect(template.Resources.VPC).toBeDefined();
       expect(template.Resources.VPC.Type).toBe('AWS::EC2::VPC');
-      expect(template.Resources.VPC.Properties.CidrBlock).toBe('10.0.0.0/16');
-      expect(template.Resources.VPC.Properties.EnableDnsHostnames).toBe(true);
-      expect(template.Resources.VPC.Properties.EnableDnsSupport).toBe(true);
     });
 
     test('should have Internet Gateway', () => {
@@ -90,236 +96,179 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(template.Resources.InternetGateway.Type).toBe('AWS::EC2::InternetGateway');
     });
 
-    test('should have VPC Gateway Attachment', () => {
-      expect(template.Resources.VPCGatewayAttachment).toBeDefined();
-      expect(template.Resources.VPCGatewayAttachment.Type).toBe('AWS::EC2::VPCGatewayAttachment');
-    });
-
     test('should have public subnets', () => {
-      expect(template.Resources.PublicSubnetA).toBeDefined();
-      expect(template.Resources.PublicSubnetB).toBeDefined();
-      expect(template.Resources.PublicSubnetC).toBeDefined();
+      expect(template.Resources.PublicSubnet1).toBeDefined();
+      expect(template.Resources.PublicSubnet2).toBeDefined();
+      expect(template.Resources.PublicSubnet3).toBeDefined();
     });
 
     test('should have private subnets', () => {
-      expect(template.Resources.PrivateSubnetA).toBeDefined();
-      expect(template.Resources.PrivateSubnetB).toBeDefined();
-      expect(template.Resources.PrivateSubnetC).toBeDefined();
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      expect(template.Resources.PrivateSubnet3).toBeDefined();
     });
 
-    test('should have NAT Gateway and EIP', () => {
-      expect(template.Resources.NatEip).toBeDefined();
-      expect(template.Resources.NatEip.Type).toBe('AWS::EC2::EIP');
-      expect(template.Resources.NatGateway).toBeDefined();
-      expect(template.Resources.NatGateway.Type).toBe('AWS::EC2::NatGateway');
+    test('should have NAT Gateways', () => {
+      expect(template.Resources.NATGateway1).toBeDefined();
+      expect(template.Resources.NATGateway2).toBeDefined();
+      expect(template.Resources.NATGateway3).toBeDefined();
+      expect(template.Resources.NATGateway1EIP).toBeDefined();
+      expect(template.Resources.NATGateway2EIP).toBeDefined();
+      expect(template.Resources.NATGateway3EIP).toBeDefined();
     });
 
     test('should have route tables', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
-      expect(template.Resources.PrivateRouteTable).toBeDefined();
-      expect(template.Resources.PublicRoute).toBeDefined();
-      expect(template.Resources.PrivateRoute).toBeDefined();
+      expect(template.Resources.PrivateRouteTable1).toBeDefined();
+      expect(template.Resources.PrivateRouteTable2).toBeDefined();
+      expect(template.Resources.PrivateRouteTable3).toBeDefined();
     });
   });
 
-  describe('KMS Encryption Resources', () => {
-    test('should have KMS key for EKS encryption', () => {
-      expect(template.Resources.EKSEncryptionKey).toBeDefined();
-      expect(template.Resources.EKSEncryptionKey.Type).toBe('AWS::KMS::Key');
+  describe('Security Groups', () => {
+    test('should have ALB security group', () => {
+      expect(template.Resources.ALBSecurityGroup).toBeDefined();
+      expect(template.Resources.ALBSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
     });
 
-    test('KMS key should have rotation enabled', () => {
-      const kmsKey = template.Resources.EKSEncryptionKey;
-      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
+    test('should have EC2 security group', () => {
+      expect(template.Resources.EC2SecurityGroup).toBeDefined();
+      expect(template.Resources.EC2SecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
     });
 
-    test('KMS key should have proper key policy', () => {
-      const kmsKey = template.Resources.EKSEncryptionKey;
-      expect(kmsKey.Properties.KeyPolicy).toBeDefined();
-      expect(kmsKey.Properties.KeyPolicy.Statement).toBeDefined();
-      expect(kmsKey.Properties.KeyPolicy.Statement.length).toBeGreaterThanOrEqual(2);
-
-      const eksStatement = kmsKey.Properties.KeyPolicy.Statement.find(
-        (s: any) => s.Principal?.Service === 'eks.amazonaws.com'
-      );
-      expect(eksStatement).toBeDefined();
-      expect(eksStatement.Action).toContain('kms:Decrypt');
-      expect(eksStatement.Action).toContain('kms:DescribeKey');
-      expect(eksStatement.Action).toContain('kms:CreateGrant');
-    });
-
-    test('should have KMS key alias', () => {
-      expect(template.Resources.EKSEncryptionKeyAlias).toBeDefined();
-      expect(template.Resources.EKSEncryptionKeyAlias.Type).toBe('AWS::KMS::Alias');
+    test('should have RDS security group', () => {
+      expect(template.Resources.RDSSecurityGroup).toBeDefined();
+      expect(template.Resources.RDSSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
     });
   });
 
-  describe('EKS Cluster IAM Role', () => {
-    test('should have EKS cluster IAM role', () => {
-      expect(template.Resources.EKSClusterRole).toBeDefined();
-      expect(template.Resources.EKSClusterRole.Type).toBe('AWS::IAM::Role');
+  describe('Compute Resources', () => {
+    test('should have Application Load Balancer', () => {
+      expect(template.Resources.ApplicationLoadBalancer).toBeDefined();
+      expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     });
 
-    test('EKS cluster role should have correct assume role policy', () => {
-      const clusterRole = template.Resources.EKSClusterRole;
-      expect(clusterRole.Properties.AssumeRolePolicyDocument).toBeDefined();
-      const statement = clusterRole.Properties.AssumeRolePolicyDocument.Statement[0];
-      expect(statement.Principal.Service).toBe('eks.amazonaws.com');
-      expect(statement.Action).toBe('sts:AssumeRole');
+    test('should have Target Group', () => {
+      expect(template.Resources.TargetGroup).toBeDefined();
+      expect(template.Resources.TargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
     });
 
-    test('EKS cluster role should have AmazonEKSClusterPolicy', () => {
-      const clusterRole = template.Resources.EKSClusterRole;
-      expect(clusterRole.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy'
-      );
-    });
-  });
-
-  describe('EKS Cluster Security Group', () => {
-    test('should have security group for EKS cluster', () => {
-      expect(template.Resources.EKSClusterSecurityGroup).toBeDefined();
-      expect(template.Resources.EKSClusterSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
+    test('should have Launch Template', () => {
+      expect(template.Resources.LaunchTemplate).toBeDefined();
+      expect(template.Resources.LaunchTemplate.Type).toBe('AWS::EC2::LaunchTemplate');
     });
 
-    test('security group should have proper egress rules', () => {
-      const sg = template.Resources.EKSClusterSecurityGroup;
-      expect(sg.Properties.SecurityGroupEgress).toBeDefined();
-      expect(sg.Properties.SecurityGroupEgress[0].IpProtocol).toBe('-1');
-      expect(sg.Properties.SecurityGroupEgress[0].CidrIp).toBe('0.0.0.0/0');
+    test('should have Auto Scaling Group', () => {
+      expect(template.Resources.AutoScalingGroup).toBeDefined();
+      expect(template.Resources.AutoScalingGroup.Type).toBe('AWS::AutoScaling::AutoScalingGroup');
     });
   });
 
-  describe('EKS Cluster Configuration', () => {
-    test('should have EKS cluster resource', () => {
-      expect(template.Resources.EKSCluster).toBeDefined();
-      expect(template.Resources.EKSCluster.Type).toBe('AWS::EKS::Cluster');
+  describe('Database Resources', () => {
+    test('should have RDS subnet group', () => {
+      expect(template.Resources.DBSubnetGroup).toBeDefined();
+      expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
     });
 
-    test('cluster should have private endpoint access only', () => {
-      const cluster = template.Resources.EKSCluster;
-      const vpcConfig = cluster.Properties.ResourcesVpcConfig;
-      expect(vpcConfig.EndpointPrivateAccess).toBe(true);
-      expect(vpcConfig.EndpointPublicAccess).toBe(false);
+    test('should have RDS cluster', () => {
+      expect(template.Resources.RDSCluster).toBeDefined();
+      expect(template.Resources.RDSCluster.Type).toBe('AWS::RDS::DBCluster');
     });
 
-    test('cluster should have KMS encryption configured', () => {
-      const cluster = template.Resources.EKSCluster;
-      expect(cluster.Properties.EncryptionConfig).toBeDefined();
-      expect(cluster.Properties.EncryptionConfig.length).toBe(1);
-      expect(cluster.Properties.EncryptionConfig[0].Resources).toContain('secrets');
+    test('should have RDS instances', () => {
+      expect(template.Resources.RDSInstance1).toBeDefined();
+      expect(template.Resources.RDSInstance1.Type).toBe('AWS::RDS::DBInstance');
+      expect(template.Resources.RDSInstance2).toBeDefined();
+      expect(template.Resources.RDSInstance2.Type).toBe('AWS::RDS::DBInstance');
     });
 
-    test('cluster should have comprehensive logging enabled', () => {
-      const cluster = template.Resources.EKSCluster;
-      expect(cluster.Properties.Logging).toBeDefined();
-      expect(cluster.Properties.Logging.ClusterLogging).toBeDefined();
-      const enabledTypes = cluster.Properties.Logging.ClusterLogging.EnabledTypes;
-      expect(enabledTypes).toBeDefined();
-      expect(enabledTypes.length).toBe(5);
-
-      const logTypes = enabledTypes.map((t: any) => t.Type);
-      expect(logTypes).toContain('api');
-      expect(logTypes).toContain('audit');
-      expect(logTypes).toContain('authenticator');
-      expect(logTypes).toContain('controllerManager');
-      expect(logTypes).toContain('scheduler');
+    test('should have DynamoDB table', () => {
+      expect(template.Resources.SessionTable).toBeDefined();
+      expect(template.Resources.SessionTable.Type).toBe('AWS::DynamoDB::Table');
     });
   });
 
-  describe('OIDC Provider for IRSA', () => {
-    test('should have OIDC provider resource', () => {
-      expect(template.Resources.EKSOIDCProvider).toBeDefined();
-      expect(template.Resources.EKSOIDCProvider.Type).toBe('AWS::IAM::OIDCProvider');
+  describe('Storage Resources', () => {
+    test('should have S3 buckets', () => {
+      expect(template.Resources.StaticAssetsBucket).toBeDefined();
+      expect(template.Resources.StaticAssetsBucket.Type).toBe('AWS::S3::Bucket');
+      expect(template.Resources.BackupBucket).toBeDefined();
+      expect(template.Resources.BackupBucket.Type).toBe('AWS::S3::Bucket');
     });
 
-    test('OIDC provider should have correct client ID list', () => {
-      const oidc = template.Resources.EKSOIDCProvider;
-      expect(oidc.Properties.ClientIdList).toContain('sts.amazonaws.com');
-    });
-
-    test('OIDC provider should have valid thumbprint', () => {
-      const oidc = template.Resources.EKSOIDCProvider;
-      expect(oidc.Properties.ThumbprintList).toBeDefined();
-      expect(oidc.Properties.ThumbprintList.length).toBeGreaterThan(0);
+    test('should have S3 bucket policies', () => {
+      expect(template.Resources.StaticAssetsBucketPolicy).toBeDefined();
+      expect(template.Resources.StaticAssetsBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
     });
   });
 
-  describe('EKS Node Group', () => {
-    test('should have EKS node group resource', () => {
-      expect(template.Resources.EKSNodeGroup).toBeDefined();
-      expect(template.Resources.EKSNodeGroup.Type).toBe('AWS::EKS::Nodegroup');
+  describe('Security and Encryption', () => {
+    test('should have KMS keys', () => {
+      expect(template.Resources.RDSEncryptionKey).toBeDefined();
+      expect(template.Resources.RDSEncryptionKey.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.S3EncryptionKey).toBeDefined();
+      expect(template.Resources.S3EncryptionKey.Type).toBe('AWS::KMS::Key');
+      expect(template.Resources.SecretsEncryptionKey).toBeDefined();
+      expect(template.Resources.SecretsEncryptionKey.Type).toBe('AWS::KMS::Key');
     });
 
-    test('node group should depend on OIDC provider', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.DependsOn).toBe('EKSOIDCProvider');
+    test('should have Secrets Manager secret', () => {
+      expect(template.Resources.RDSDatabaseSecret).toBeDefined();
+      expect(template.Resources.RDSDatabaseSecret.Type).toBe('AWS::SecretsManager::Secret');
     });
 
-    test('node group should use ARM64 AMI type (Graviton2)', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Properties.AmiType).toBe('AL2_ARM_64');
-    });
-
-    test('node group should have auto-scaling configuration', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      const scalingConfig = nodeGroup.Properties.ScalingConfig;
-
-      expect(scalingConfig.MinSize).toEqual({ Ref: 'MinNodes' });
-      expect(scalingConfig.MaxSize).toEqual({ Ref: 'MaxNodes' });
-      expect(scalingConfig.DesiredSize).toEqual({ Ref: 'DesiredNodes' });
-    });
-
-    test('node group should have update configuration', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Properties.UpdateConfig).toBeDefined();
-      expect(nodeGroup.Properties.UpdateConfig.MaxUnavailable).toBe(1);
+    test('should have WAF Web ACL', () => {
+      expect(template.Resources.WAFWebACL).toBeDefined();
+      expect(template.Resources.WAFWebACL.Type).toBe('AWS::WAFv2::WebACL');
     });
   });
 
-  describe('CloudWatch Container Insights', () => {
+  describe('Monitoring and Logging', () => {
     test('should have CloudWatch log groups', () => {
-      expect(template.Resources.EKSContainerInsightsLogGroup).toBeDefined();
-      expect(template.Resources.EKSApplicationLogGroup).toBeDefined();
-      expect(template.Resources.EKSDataPlaneLogGroup).toBeDefined();
+      expect(template.Resources.ApplicationLogGroup).toBeDefined();
+      expect(template.Resources.ApplicationLogGroup.Type).toBe('AWS::Logs::LogGroup');
+      expect(template.Resources.WAFLogGroup).toBeDefined();
+      expect(template.Resources.WAFLogGroup.Type).toBe('AWS::Logs::LogGroup');
     });
 
-    test('log groups should have retention period', () => {
-      const logGroups = [
-        template.Resources.EKSContainerInsightsLogGroup,
-        template.Resources.EKSApplicationLogGroup,
-        template.Resources.EKSDataPlaneLogGroup,
-      ];
-
-      logGroups.forEach((logGroup) => {
-        expect(logGroup.Properties.RetentionInDays).toBe(7);
-      });
+    test('should have CloudWatch alarms', () => {
+      expect(template.Resources.HighCPUAlarm).toBeDefined();
+      expect(template.Resources.HighCPUAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(template.Resources.LowCPUAlarm).toBeDefined();
+      expect(template.Resources.LowCPUAlarm.Type).toBe('AWS::CloudWatch::Alarm');
+      expect(template.Resources.UnhealthyTargetAlarm).toBeDefined();
+      expect(template.Resources.UnhealthyTargetAlarm.Type).toBe('AWS::CloudWatch::Alarm');
     });
 
-    test('log groups should have unique names with environment suffix', () => {
-      const containerInsights = template.Resources.EKSContainerInsightsLogGroup;
-      expect(containerInsights.Properties.LogGroupName).toEqual({
-        'Fn::Sub': '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance',
-      });
+    test('should have SNS topic', () => {
+      expect(template.Resources.AlarmTopic).toBeDefined();
+      expect(template.Resources.AlarmTopic.Type).toBe('AWS::SNS::Topic');
+    });
+  });
+
+  describe('IAM Resources', () => {
+    test('should have EC2 role', () => {
+      expect(template.Resources.EC2Role).toBeDefined();
+      expect(template.Resources.EC2Role.Type).toBe('AWS::IAM::Role');
+    });
+
+    test('should have EC2 instance profile', () => {
+      expect(template.Resources.EC2InstanceProfile).toBeDefined();
+      expect(template.Resources.EC2InstanceProfile.Type).toBe('AWS::IAM::InstanceProfile');
     });
   });
 
   describe('Outputs', () => {
     test('should have all required outputs', () => {
       const requiredOutputs = [
-        'ClusterName',
-        'ClusterEndpoint',
-        'ClusterArn',
-        'OIDCIssuerUrl',
-        'OIDCProviderArn',
-        'NodeGroupArn',
-        'NodeGroupName',
-        'KMSKeyId',
-        'KMSKeyArn',
-        'ClusterSecurityGroupId',
-        'ContainerInsightsLogGroup',
-        'EnvironmentSuffix',
-        'StackName',
+        'VPCId',
+        'LoadBalancerDNS',
+        'LoadBalancerHostedZoneID',
+        'RDSClusterEndpoint',
+        'RDSClusterReadEndpoint',
+        'DynamoDBTableName',
+        'StaticAssetsBucketName',
+        'BackupBucketName'
       ];
 
       requiredOutputs.forEach((outputName) => {
@@ -336,102 +285,93 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
     });
   });
 
-  describe('Security Best Practices', () => {
-    test('cluster should not have public endpoint access', () => {
-      const cluster = template.Resources.EKSCluster;
-      expect(cluster.Properties.ResourcesVpcConfig.EndpointPublicAccess).toBe(false);
+  describe('High Availability Configuration', () => {
+    test('should deploy resources across multiple availability zones', () => {
+      // Check public subnets are in different AZs
+      const publicSubnet1 = template.Resources.PublicSubnet1;
+      const publicSubnet2 = template.Resources.PublicSubnet2;
+      const publicSubnet3 = template.Resources.PublicSubnet3;
+
+      expect(publicSubnet1.Properties.AvailabilityZone['Fn::Select'][0]).toBe(0);
+      expect(publicSubnet2.Properties.AvailabilityZone['Fn::Select'][0]).toBe(1);
+      expect(publicSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
     });
 
-    test('cluster should have private endpoint access enabled', () => {
-      const cluster = template.Resources.EKSCluster;
-      expect(cluster.Properties.ResourcesVpcConfig.EndpointPrivateAccess).toBe(true);
+    test('should have multi-AZ RDS configuration', () => {
+      const rdsCluster = template.Resources.RDSCluster;
+      // Aurora automatically provides multi-AZ capability
+      expect(rdsCluster.Properties.DBSubnetGroupName).toBeDefined();
     });
 
-    test('KMS key should have rotation enabled', () => {
-      const kmsKey = template.Resources.EKSEncryptionKey;
-      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
-    });
-
-    test('node group should use ARM64 architecture', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Properties.AmiType).toBe('AL2_ARM_64');
-    });
-
-    test('all IAM roles should have tags', () => {
-      const roles = ['EKSClusterRole', 'EKSNodeRole'];
-      roles.forEach((roleName) => {
-        const role = template.Resources[roleName];
-        expect(role.Properties.Tags).toBeDefined();
-        expect(role.Properties.Tags.length).toBeGreaterThan(0);
-      });
+    test('should have Auto Scaling configuration', () => {
+      const asg = template.Resources.AutoScalingGroup;
+      expect(asg.Properties.MinSize).toBeDefined();
+      expect(asg.Properties.MaxSize).toBeDefined();
+      expect(asg.Properties.DesiredCapacity).toBeDefined();
     });
   });
 
-  describe('All 9 Requirements Validation', () => {
-    test('Requirement 1: EKS cluster with Kubernetes 1.28+ and private endpoint', () => {
-      const cluster = template.Resources.EKSCluster;
-      expect(cluster.Type).toBe('AWS::EKS::Cluster');
-      expect(cluster.Properties.ResourcesVpcConfig.EndpointPrivateAccess).toBe(true);
-      expect(cluster.Properties.ResourcesVpcConfig.EndpointPublicAccess).toBe(false);
-      expect(template.Parameters.KubernetesVersion.AllowedValues).toContain('1.28');
+  describe('Security Best Practices', () => {
+    test('should have encryption enabled for RDS', () => {
+      const rdsCluster = template.Resources.RDSCluster;
+      expect(rdsCluster.Properties.StorageEncrypted).toBe(true);
+      expect(rdsCluster.Properties.KmsKeyId).toBeDefined();
     });
 
-    test('Requirement 2: KMS encryption for Kubernetes secrets', () => {
-      const cluster = template.Resources.EKSCluster;
-      const kmsKey = template.Resources.EKSEncryptionKey;
-      expect(kmsKey.Type).toBe('AWS::KMS::Key');
-      expect(kmsKey.Properties.EnableKeyRotation).toBe(true);
-      expect(cluster.Properties.EncryptionConfig[0].Resources).toContain('secrets');
+    test('should have encryption enabled for S3 buckets', () => {
+      const staticBucket = template.Resources.StaticAssetsBucket;
+      const backupBucket = template.Resources.BackupBucket;
+
+      expect(staticBucket.Properties.BucketEncryption).toBeDefined();
+      expect(backupBucket.Properties.BucketEncryption).toBeDefined();
     });
 
-    test('Requirement 3: OIDC provider for IRSA', () => {
-      const oidc = template.Resources.EKSOIDCProvider;
-      expect(oidc.Type).toBe('AWS::IAM::OIDCProvider');
-      expect(oidc.Properties.ClientIdList).toContain('sts.amazonaws.com');
+    test('should use Secrets Manager for database credentials', () => {
+      const rdsCluster = template.Resources.RDSCluster;
+      expect(rdsCluster.Properties.MasterUserPassword).toBeDefined();
+      const masterPassword = JSON.stringify(rdsCluster.Properties.MasterUserPassword);
+      expect(masterPassword).toContain('SecretString');
     });
 
-    test('Requirement 4: Managed node group with Graviton2 (t4g.medium)', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Type).toBe('AWS::EKS::Nodegroup');
-      expect(nodeGroup.Properties.AmiType).toBe('AL2_ARM_64');
-      expect(template.Parameters.NodeInstanceType.Default).toBe('t4g.medium');
+    test('should have versioning enabled for S3 buckets', () => {
+      const backupBucket = template.Resources.BackupBucket;
+      expect(backupBucket.Properties.VersioningConfiguration).toBeDefined();
+      expect(backupBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
     });
 
-    test('Requirement 5: Auto-scaling (min 2, max 10)', () => {
-      expect(template.Parameters.MinNodes.Default).toBe(2);
-      expect(template.Parameters.MaxNodes.Default).toBe(10);
+    test('should have WAF protection for ALB', () => {
+      const wafAssociation = template.Resources.WAFAssociation;
+      expect(wafAssociation).toBeDefined();
+      expect(wafAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
+    });
+  });
+
+  describe('Template Completeness', () => {
+    test('should have more than 50 resources', () => {
+      const resourceCount = Object.keys(template.Resources).length;
+      expect(resourceCount).toBeGreaterThan(50);
     });
 
-    test('Requirement 6: CloudWatch Container Insights', () => {
-      expect(template.Resources.EKSContainerInsightsLogGroup).toBeDefined();
-      expect(template.Resources.EKSApplicationLogGroup).toBeDefined();
-      expect(template.Resources.EKSDataPlaneLogGroup).toBeDefined();
-      const nodeRole = template.Resources.EKSNodeRole;
-      expect(nodeRole.Properties.ManagedPolicyArns).toContain(
-        'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
-      );
+    test('should have comprehensive tagging strategy', () => {
+      const vpc = template.Resources.VPC;
+      expect(vpc.Properties.Tags).toBeDefined();
+      expect(vpc.Properties.Tags.length).toBeGreaterThan(0);
+
+      const tags = vpc.Properties.Tags;
+      const nameTag = tags.find((tag: any) => tag.Key === 'Name');
+      const envTag = tags.find((tag: any) => tag.Key === 'Environment');
+      const projectTag = tags.find((tag: any) => tag.Key === 'Project');
+
+      expect(nameTag).toBeDefined();
+      expect(envTag).toBeDefined();
+      expect(projectTag).toBeDefined();
     });
 
-    test('Requirement 7: Least-privilege IAM roles', () => {
-      const clusterRole = template.Resources.EKSClusterRole;
-      const nodeRole = template.Resources.EKSNodeRole;
-      expect(clusterRole.Properties.ManagedPolicyArns.length).toBeLessThanOrEqual(2);
-      expect(nodeRole.Properties.ManagedPolicyArns.length).toBeLessThanOrEqual(5);
-    });
-
-    test('Requirement 8: Private subnets only', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Properties.Subnets).toBeDefined();
-      expect(Array.isArray(nodeGroup.Properties.Subnets)).toBe(true);
-      expect(template.Resources.PrivateSubnetA).toBeDefined();
-      expect(template.Resources.PrivateSubnetB).toBeDefined();
-      expect(template.Resources.PrivateSubnetC).toBeDefined();
-    });
-
-    test('Requirement 9: Required outputs', () => {
-      expect(template.Outputs.ClusterEndpoint).toBeDefined();
-      expect(template.Outputs.OIDCIssuerUrl).toBeDefined();
-      expect(template.Outputs.NodeGroupArn).toBeDefined();
+    test('should use CloudFormation intrinsic functions', () => {
+      const templateString = JSON.stringify(template);
+      expect(templateString).toContain('Fn::Sub');
+      expect(templateString).toContain('Fn::GetAtt');
+      expect(templateString).toContain('Ref');
     });
   });
 });
