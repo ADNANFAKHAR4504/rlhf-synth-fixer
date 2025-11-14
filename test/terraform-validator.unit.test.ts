@@ -422,4 +422,192 @@ describe('TerraformConfigValidator Unit Tests', () => {
       expect(Array.isArray(result.warnings)).toBe(true);
     });
   });
+
+  describe('error condition coverage', () => {
+    let tempDir: string;
+    let tempValidator: TerraformConfigValidator;
+
+    beforeEach(() => {
+      // Create a temporary directory for test files
+      tempDir = fs.mkdtempSync(path.join(__dirname, 'test-terraform-'));
+      tempValidator = new TerraformConfigValidator(tempDir);
+    });
+
+    afterEach(() => {
+      // Clean up temporary directory
+      if (fs.existsSync(tempDir)) {
+        fs.readdirSync(tempDir).forEach(file => {
+          fs.unlinkSync(path.join(tempDir, file));
+        });
+        fs.rmdirSync(tempDir);
+      }
+    });
+
+    test('validateVPC detects missing VPC resource', () => {
+      const invalidVpc = '# No VPC resource here\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing VPC resource definition'))).toBe(true);
+    });
+
+    test('validateVPC detects missing DNS support', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('enable_dns_support'))).toBe(true);
+    });
+
+    test('validateVPC detects missing DNS hostnames', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n  enable_dns_support = true\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('enable_dns_hostnames'))).toBe(true);
+    });
+
+    test('validateVPC detects missing environment_suffix', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n  enable_dns_support = true\n  enable_dns_hostnames = true\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('environment_suffix'))).toBe(true);
+    });
+
+    test('validateVPC detects wrong public subnet count', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n  enable_dns_support = true\n  enable_dns_hostnames = true\n  tags = { Name = "vpc-${var.environment_suffix}" }\n}\nresource "aws_subnet" "public" {\n  count = 2\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Expected 3 public subnets'))).toBe(true);
+    });
+
+    test('validateVPC detects wrong private subnet count', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n  enable_dns_support = true\n  enable_dns_hostnames = true\n  tags = { Name = "vpc-${var.environment_suffix}" }\n}\nresource "aws_subnet" "public" {\n  count = 3\n}\nresource "aws_subnet" "private" {\n  count = 2\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Expected 3 private subnets'))).toBe(true);
+    });
+
+    test('validateVPC detects wrong NAT Gateway count', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n  enable_dns_support = true\n  enable_dns_hostnames = true\n  tags = { Name = "vpc-${var.environment_suffix}" }\n}\nresource "aws_subnet" "public" {\n  count = 3\n}\nresource "aws_subnet" "private" {\n  count = 3\n}\nresource "aws_nat_gateway" "main" {\n  count = 2\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Expected 3 NAT Gateways'))).toBe(true);
+    });
+
+    test('validateVPC detects prevent_destroy', () => {
+      const invalidVpc = 'resource "aws_vpc" "main" {\n  cidr_block = "10.0.0.0/16"\n  enable_dns_support = true\n  enable_dns_hostnames = true\n  tags = { Name = "vpc-${var.environment_suffix}" }\n  lifecycle {\n    prevent_destroy = true\n  }\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'vpc.tf'), invalidVpc);
+      const result = tempValidator.validateVPC();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('prevent_destroy'))).toBe(true);
+    });
+
+    test('validateNetworkACL detects missing HTTP port', () => {
+      const invalidNacl = 'resource "aws_network_acl" "public" {\n  vpc_id = aws_vpc.main.id\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'network_acl.tf'), invalidNacl);
+      const result = tempValidator.validateNetworkACL();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('HTTP (port 80)'))).toBe(true);
+    });
+
+    test('validateNetworkACL detects missing HTTPS port', () => {
+      const invalidNacl = 'resource "aws_network_acl" "public" {\n  vpc_id = aws_vpc.main.id\n  ingress {\n    from_port = 80\n    to_port = 80\n    protocol = "tcp"\n  }\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'network_acl.tf'), invalidNacl);
+      const result = tempValidator.validateNetworkACL();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('HTTPS (port 443)'))).toBe(true);
+    });
+
+    test('validateNetworkACL detects missing ephemeral ports', () => {
+      const invalidNacl = 'resource "aws_network_acl" "public" {\n  vpc_id = aws_vpc.main.id\n  ingress {\n    from_port = 80\n    to_port = 80\n    protocol = "tcp"\n  }\n  ingress {\n    from_port = 443\n    to_port = 443\n    protocol = "tcp"\n  }\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'network_acl.tf'), invalidNacl);
+      const result = tempValidator.validateNetworkACL();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('ephemeral ports'))).toBe(true);
+    });
+
+    test('validateFlowLogs detects missing CloudWatch Log Group', () => {
+      const invalidFlowLogs = '# No log group here\n';
+      fs.writeFileSync(path.join(tempDir, 'flow_logs.tf'), invalidFlowLogs);
+      const result = tempValidator.validateFlowLogs();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing CloudWatch Log Group'))).toBe(true);
+    });
+
+    test('validateFlowLogs detects wrong retention period', () => {
+      const invalidFlowLogs = 'resource "aws_cloudwatch_log_group" "flow_logs" {\n  name = "vpc-flow-logs"\n  retention_in_days = 14\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'flow_logs.tf'), invalidFlowLogs);
+      const result = tempValidator.validateFlowLogs();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('retention is not set to 7 days'))).toBe(true);
+    });
+
+    test('validateFlowLogs detects missing IAM role', () => {
+      const invalidFlowLogs = 'resource "aws_cloudwatch_log_group" "flow_logs" {\n  name = "vpc-flow-logs"\n  retention_in_days = 7\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'flow_logs.tf'), invalidFlowLogs);
+      const result = tempValidator.validateFlowLogs();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing IAM role'))).toBe(true);
+    });
+
+    test('validateFlowLogs detects missing Flow Log resource', () => {
+      const invalidFlowLogs = 'resource "aws_cloudwatch_log_group" "flow_logs" {\n  name = "vpc-flow-logs"\n  retention_in_days = 7\n}\nresource "aws_iam_role" "flow_logs" {\n  name = "flow-logs-role"\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'flow_logs.tf'), invalidFlowLogs);
+      const result = tempValidator.validateFlowLogs();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing VPC Flow Log resource'))).toBe(true);
+    });
+
+    test('validateFlowLogs detects wrong traffic type', () => {
+      const invalidFlowLogs = 'resource "aws_cloudwatch_log_group" "flow_logs" {\n  name = "vpc-flow-logs"\n  retention_in_days = 7\n}\nresource "aws_iam_role" "flow_logs" {\n  name = "flow-logs-role"\n}\nresource "aws_flow_log" "main" {\n  traffic_type = "ACCEPT"\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'flow_logs.tf'), invalidFlowLogs);
+      const result = tempValidator.validateFlowLogs();
+      expect(result.warnings.some(w => w.includes('traffic_type should be "ALL"'))).toBe(true);
+    });
+
+    test('validateVariables detects missing required variable', () => {
+      const invalidVars = 'variable "aws_region" {\n  default = "us-east-1"\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'variables.tf'), invalidVars);
+      const result = tempValidator.validateVariables();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing required variable: environment_suffix'))).toBe(true);
+    });
+
+    test('validateVariables detects wrong VPC CIDR default', () => {
+      const invalidVars = 'variable "environment_suffix" {}\nvariable "aws_region" { default = "us-east-1" }\nvariable "vpc_cidr" { default = "172.16.0.0/16" }\nvariable "availability_zones" {}\nvariable "public_subnet_cidrs" {}\nvariable "private_subnet_cidrs" {}\nvariable "common_tags" {}\n';
+      fs.writeFileSync(path.join(tempDir, 'variables.tf'), invalidVars);
+      const result = tempValidator.validateVariables();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('VPC CIDR default is not 10.0.0.0/16'))).toBe(true);
+    });
+
+    test('validateVariables detects missing Environment tag', () => {
+      const invalidVars = 'variable "environment_suffix" {}\nvariable "aws_region" { default = "us-east-1" }\nvariable "vpc_cidr" { default = "10.0.0.0/16" }\nvariable "availability_zones" {}\nvariable "public_subnet_cidrs" {}\nvariable "private_subnet_cidrs" {}\nvariable "common_tags" {\n  default = {\n    CostCenter = "Engineering"\n  }\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'variables.tf'), invalidVars);
+      const result = tempValidator.validateVariables();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing Environment tag'))).toBe(true);
+    });
+
+    test('validateVariables detects missing CostCenter tag', () => {
+      const invalidVars = 'variable "environment_suffix" {}\nvariable "aws_region" { default = "us-east-1" }\nvariable "vpc_cidr" { default = "10.0.0.0/16" }\nvariable "availability_zones" {}\nvariable "public_subnet_cidrs" {}\nvariable "private_subnet_cidrs" {}\nvariable "common_tags" {\n  default = {\n    Environment = "dev"\n  }\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'variables.tf'), invalidVars);
+      const result = tempValidator.validateVariables();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing CostCenter tag'))).toBe(true);
+    });
+
+    test('validateOutputs detects missing required output', () => {
+      const invalidOutputs = 'output "vpc_id" {\n  value = aws_vpc.main.id\n}\n';
+      fs.writeFileSync(path.join(tempDir, 'outputs.tf'), invalidOutputs);
+      const result = tempValidator.validateOutputs();
+      expect(result.valid).toBe(false);
+      expect(result.errors.some(e => e.includes('Missing required output: vpc_cidr_block'))).toBe(true);
+    });
+  });
 });
