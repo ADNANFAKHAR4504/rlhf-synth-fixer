@@ -8,9 +8,7 @@
   "startedAt": "2025-11-14T00:04:52+00:00",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "environment-migration"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "ECS",
@@ -22,5 +20,7 @@
     "IAM",
     "KMS"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
