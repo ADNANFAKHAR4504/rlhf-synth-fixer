@@ -25,7 +25,7 @@ const ecr = new AWS.ECR({ region: AWS_REGION });
 // This function will ALWAYS throw errors - no skipping allowed
 async function diagAwsCall(label: string, fn: any, ...args: any[]) {
   try {
-    const res = await fn(...args);
+    const res = await fn(...args).promise();
     if (!res) {
       throw new Error(`[${label}] AWS API call returned null/undefined response`);
     }
