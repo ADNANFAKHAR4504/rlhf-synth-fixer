@@ -9,7 +9,7 @@ This document describes the complete CDKTF Python implementation for a productio
 Production-grade EKS cluster with:
 - EKS v1.29 with private API endpoint
 - 2 Managed Node Groups (on-demand t4g.large + spot t4g.medium Graviton2)
-- AWS EKS Add-ons (VPC CNI v1.14, CoreDNS v1.10, kube-proxy v1.29)
+- AWS EKS Add-ons (VPC CNI v1.20, CoreDNS v1.11, kube-proxy v1.29)
 - OIDC Provider for IRSA functionality
 - KMS encryption for secrets with automatic rotation
 - IAM roles with cluster autoscaler policies

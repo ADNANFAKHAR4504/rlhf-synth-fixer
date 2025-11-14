@@ -10,7 +10,7 @@ class EksAddons(Construct):
         self.vpc_cni = EksAddon(self, "vpc_cni",
             cluster_name=cluster_name,
             addon_name="vpc-cni",
-            addon_version="v1.14.0-eksbuild.3",
+            addon_version="v1.20.4-eksbuild.1",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="PRESERVE",
             tags={
@@ -23,7 +23,7 @@ class EksAddons(Construct):
         self.coredns = EksAddon(self, "coredns",
             cluster_name=cluster_name,
             addon_name="coredns",
-            addon_version="v1.10.1-eksbuild.6",
+            addon_version="v1.11.1-eksbuild.4",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="PRESERVE",
             tags={

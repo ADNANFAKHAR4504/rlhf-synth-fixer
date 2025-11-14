@@ -87,7 +87,7 @@ class TestEksAddons:
         for addon_config in eks_addons.values():
             if addon_config.get("addon_name") == "vpc-cni":
                 version = addon_config.get("addon_version", "")
-                assert "v1.14" in version
+                assert "v1.20" in version
 
     def test_eks_addons_coredns_version(self):
         """EksAddons CoreDNS has correct version."""
@@ -102,7 +102,7 @@ class TestEksAddons:
         for addon_config in eks_addons.values():
             if addon_config.get("addon_name") == "coredns":
                 version = addon_config.get("addon_version", "")
-                assert "v1.10" in version
+                assert "v1.11" in version
 
     def test_eks_addons_kube_proxy_version(self):
         """EksAddons kube-proxy has correct version."""
