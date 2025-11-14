@@ -208,7 +208,7 @@ cluster-certificate = "{cert_data}"
             desired_size=5,
         ),
         instance_types=["t3.large"],
-        ami_type="BOTTLEROCKET_x86_64",
+        ami_type="CUSTOM",
         capacity_type="ON_DEMAND",
         launch_template=aws.eks.NodeGroupLaunchTemplateArgs(
             id=launch_template.id,
