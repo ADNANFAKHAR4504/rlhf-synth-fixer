@@ -424,7 +424,6 @@
     },
     "RDSDatabase": {
       "Type": "AWS::RDS::DBInstance",
-      "DependsOn": "RDSDatabaseSecret",
       "Properties": {
         "DBInstanceIdentifier": { "Fn::Sub": "trading-db-${EnvironmentSuffix}" },
         "AllocatedStorage": "100",
