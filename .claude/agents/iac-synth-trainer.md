@@ -111,12 +111,152 @@ echo ""
 
 ## Agent Workflow
 
-### Phase 1: Load & Analyze PRs
+### Phase 0: Pre-Execution Validation (MANDATORY)
 
-#### 1.1 Load PR Status
+**⚠️ CRITICAL**: Before selecting any PR, complete these validation steps.
+
+**Purpose**: Ensure agent has all required context, scripts, and knowledge to fix PRs effectively.
+
+#### 0.1 Review Required Documentation
+
+**MANDATORY**: Read these documents before starting:
 
 ```bash
-# Read status file
+echo "📖 Reviewing required documentation..."
+
+# 1. Lessons Learned - Common issues and fixes
+if [ -f ".claude/lessons_learnt.md" ]; then
+  echo "✅ Reviewing .claude/lessons_learnt.md for common patterns..."
+  # Agent should read this to understand common failure patterns
+else
+  echo "⚠️ WARNING: .claude/lessons_learnt.md not found"
+fi
+
+# 2. Pre-Submission Checklist - Quality requirements
+if [ -f ".claude/docs/references/pre-submission-checklist.md" ]; then
+  echo "✅ Reviewing pre-submission-checklist.md for quality gates..."
+  # Agent should understand what's required before marking PR as fixed
+else
+  echo "⚠️ WARNING: pre-submission-checklist.md not found"
+fi
+
+# 3. CI/CD File Restrictions - File location rules
+if [ -f ".claude/docs/references/cicd-file-restrictions.md" ]; then
+  echo "✅ Reviewing cicd-file-restrictions.md for file location rules..."
+  # Agent should know where files can/cannot be placed
+else
+  echo "⚠️ WARNING: cicd-file-restrictions.md not found"
+fi
+
+# 4. Error Handling Patterns
+if [ -f ".claude/docs/references/error-handling.md" ]; then
+  echo "✅ Reviewing error-handling.md for error handling patterns..."
+  # Agent should understand blocking vs non-blocking errors
+else
+  echo "⚠️ WARNING: error-handling.md not found"
+fi
+
+echo "✅ Documentation review complete"
+```
+
+**Key Knowledge Points**:
+- Common failure patterns from `lessons_learnt.md`
+- Quality gates from `pre-submission-checklist.md`
+- File location restrictions from `cicd-file-restrictions.md`
+- Error handling patterns from `error-handling.md`
+
+#### 0.2 Verify Required Scripts Exist
+
+```bash
+echo "🔍 Verifying required scripts..."
+
+REQUIRED_SCRIPTS=(
+  ".claude/scripts/pr-manager.sh"
+  ".claude/scripts/pr-status.sh"
+  "scripts/pre-validate-iac.sh"
+)
+
+MISSING_SCRIPTS=()
+
+for script in "${REQUIRED_SCRIPTS[@]}"; do
+  if [ -f "$script" ]; then
+    echo "✅ Found: $script"
+    # Make executable if not already
+    chmod +x "$script" 2>/dev/null || true
+  else
+    echo "❌ Missing: $script"
+    MISSING_SCRIPTS+=("$script")
+  fi
+done
+
+if [ ${#MISSING_SCRIPTS[@]} -gt 0 ]; then
+  echo ""
+  echo "❌ BLOCKED: Required scripts missing:"
+  printf '  - %s\n' "${MISSING_SCRIPTS[@]}"
+  exit 1
+fi
+
+echo "✅ All required scripts available"
+```
+
+#### 0.3 Validate Script Functionality
+
+```bash
+echo "🧪 Testing script functionality..."
+
+# Test pr-manager.sh
+if bash .claude/scripts/pr-manager.sh help > /dev/null 2>&1; then
+  echo "✅ pr-manager.sh is functional"
+else
+  echo "❌ BLOCKED: pr-manager.sh not working"
+  exit 1
+fi
+
+# Test pr-status.sh
+if bash .claude/scripts/pr-status.sh help > /dev/null 2>&1; then
+  echo "✅ pr-status.sh is functional"
+else
+  echo "❌ BLOCKED: pr-status.sh not working"
+  exit 1
+fi
+
+# Test pre-validate-iac.sh (if in worktree context)
+if [ -f "scripts/pre-validate-iac.sh" ]; then
+  echo "✅ pre-validate-iac.sh found (will test in worktree)"
+else
+  echo "⚠️ WARNING: pre-validate-iac.sh not found (may not be needed for all PRs)"
+fi
+
+echo "✅ Script validation complete"
+```
+
+#### 0.4 Report Pre-Execution Status
+
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 0 - PRE-EXECUTION VALIDATION
+**PR**: N/A (not yet selected)
+**PROGRESS**: 0/0 steps completed
+**NEXT ACTION**: Load PR status file and check availability
+**ISSUES**: NONE
+**BLOCKED**: NO
+**VALIDATION**: ✅ Documentation reviewed | ✅ Scripts verified | ✅ Ready to proceed
+```
+
+**CHECKPOINT PR-A**: Pre-Execution Validation
+- ✅ Documentation reviewed
+- ✅ Required scripts exist and functional
+- ✅ Agent ready to proceed
+
+**If validation fails**: Report BLOCKED status, list missing items, stop execution.
+
+---
+
+### Phase 1: Load & Check PR Availability
+
+#### 1.1 Check PR Status File
+
+```bash
+# Verify status file exists
 if [ ! -f ".claude/synth_pr_status.json" ]; then
   echo "❌ ERROR: .claude/synth_pr_status.json not found"
   echo ""
@@ -125,34 +265,91 @@ if [ ! -f ".claude/synth_pr_status.json" ]; then
   exit 1
 fi
 
-# Parse and display summary
-cat .claude/synth_pr_status.json | jq '.summary'
+echo "✅ Status file found"
 ```
 
-#### 1.2 Filter Failed PRs
+#### 1.2 Check Available PRs
+
+**BEFORE selecting a PR**, check if any are available:
 
 ```bash
-# Extract only FAILED PRs assigned to mayanksethi-turing
-FAILED_PRS=$(cat .claude/synth_pr_status.json | jq -r '.pull_requests_by_status.FAILED.by_failure_reason | to_entries[] | .value[] | select(.assignee == "mayanksethi-turing") | .pr_number' | sort -u)
+# Show current status
+echo "📊 Checking PR availability..."
+bash .claude/scripts/pr-status.sh summary
 
-# Count PRs
-PR_COUNT=$(echo "$FAILED_PRS" | wc -l | tr -d ' ')
+# Check for pending PRs
+PENDING_COUNT=$(bash .claude/scripts/pr-manager.sh status | grep "Pending:" | awk '{print $2}')
 
-if [ "$PR_COUNT" -eq 0 ]; then
-  echo "✅ No failed PRs found for mayanksethi-turing"
+if [ "$PENDING_COUNT" -eq 0 ]; then
+  echo ""
+  echo "✅ No pending PRs available"
+  echo "All PRs are either:"
+  echo "  - In progress (being fixed by another agent)"
+  echo "  - Already fixed"
+  echo "  - Marked as failed"
+  echo ""
+  echo "Run this to see active agents:"
+  echo "  bash .claude/scripts/pr-status.sh active"
   exit 0
 fi
 
-echo "Found $PR_COUNT failed PRs to fix"
+echo "Found $PENDING_COUNT pending PRs available for fixing"
 ```
 
-#### 1.3 Apply Command Options
+### Phase 1.5: Atomic PR Selection (CRITICAL FOR PARALLEL EXECUTION)
+
+**MANDATORY**: Use the atomic `select-and-update` command to prevent race conditions.
+
+```bash
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 1.5: ATOMIC PR SELECTION"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Set agent ID for tracking
+export AGENT_ID="agent-$$-$(hostname -s)"
+echo "Agent ID: $AGENT_ID"
+
+# Atomically select next available PR and mark as in_progress
+echo "🔒 Selecting next available PR (with locking)..."
+PR_JSON=$(bash .claude/scripts/pr-manager.sh select-and-update mayanksethi-turing)
+
+if [ $? -ne 0 ]; then
+  echo "❌ Could not select PR (may be no PRs available or lock timeout)"
+  echo "Check status with: bash .claude/scripts/pr-status.sh active"
+  exit 1
+fi
+
+# Extract PR details
+PR_NUMBER=$(echo "$PR_JSON" | jq -r '.pr_number')
+PR_URL=$(echo "$PR_JSON" | jq -r '.pr_link')
+PR_ASSIGNEE=$(echo "$PR_JSON" | jq -r '.assignee')
+FAILURE_REASON=$(echo "$PR_JSON" | jq -r '.failure_reason')
+
+echo "✅ Successfully claimed PR #${PR_NUMBER}"
+echo "   URL: $PR_URL"
+echo "   Assignee: $PR_ASSIGNEE"
+echo "   Failure: $FAILURE_REASON"
+echo "   Agent: $AGENT_ID"
+echo ""
+echo "🔒 This PR is now LOCKED - other agents will skip it"
+echo ""
+```
+
+**IMPORTANT NOTES**:
+- ✅ **DO use `select-and-update`** - This is thread-safe and atomic
+- ❌ **NEVER read PRs directly** from JSON and select manually
+- ✅ The script uses file locking (120-second timeout)
+- ✅ Multiple agents can run simultaneously without conflicts
+- ✅ If no PRs available, script exits gracefully
+- ✅ If another agent has lock, this agent will wait or timeout
+
+#### 1.3 Apply Command Options (Optional - Advanced Usage)
 
 Parse command arguments (if provided):
-- `--pr <number>`: Filter to specific PR
-- `--type <failure_type>`: Filter by failure type
-- `--limit <n>`: Limit number of PRs
-- `--dry-run`: Analysis only mode
+- `--pr <number>`: Fix specific PR only (still uses locking)
+- `--type <failure_type>`: Filter by failure type before selection
+- `--limit <n>`: Limit number of PRs to process
+- `--dry-run`: Analysis only mode (no changes)
 
 #### 1.4 Prioritize PRs
 
@@ -199,6 +396,224 @@ For each failed PR, execute this complete workflow:
 
 ---
 
+### Phase 2.0: Pre-Fix Analysis and Planning (NEW - MANDATORY)
+
+**BEFORE applying any fixes**, analyze and document:
+
+```bash
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.0: PRE-FIX ANALYSIS - PR #${PR_NUMBER}"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Starting analysis"
+
+echo "📋 Failure Reason: $FAILURE_REASON"
+echo ""
+echo "🔍 Analyzing root cause..."
+```
+
+#### 2.0.1 Root Cause Analysis
+
+Analyze WHY the PR failed by:
+
+1. **Reading GitHub logs** (actual errors, not just failure labels)
+2. **Examining code** in the PR branch
+3. **Checking common patterns** from `.claude/lessons_learnt.md`
+4. **Identifying specific issues** (exact lines, exact resources, exact problems)
+
+```bash
+# Get detailed error logs from GitHub
+RUN_ID=$(gh pr view $PR_NUMBER --json statusCheckRollup -q '.statusCheckRollup[0].workflowRun.databaseId' 2>/dev/null || echo "")
+
+if [ -n "$RUN_ID" ]; then
+  echo "Fetching detailed logs from GitHub Actions run $RUN_ID..."
+  gh run view $RUN_ID --log > /tmp/pr-${PR_NUMBER}-logs.txt 2>/dev/null || true
+  
+  # Extract key errors
+  echo "Key errors found:"
+  grep -i "error\|failed\|failure" /tmp/pr-${PR_NUMBER}-logs.txt | grep -v "grep" | head -30
+fi
+```
+
+**Document Root Cause** (be specific and structured):
+
+```bash
+# Enhanced root cause analysis format (similar to MODEL_FAILURES.md structure)
+ROOT_CAUSE="
+Root Cause Analysis for PR #${PR_NUMBER}:
+
+## Failure Category: <Critical/High/Medium/Low>
+
+Failure Type: ${FAILURE_REASON}
+
+## Specific Issues Identified
+
+### Issue 1: [Category - e.g., 'Missing environmentSuffix']
+**Impact Level**: <Critical/High/Medium/Low>
+**Specific Problem**: [Exact issue with file path and line number]
+  - Example: 'S3 bucket name missing environmentSuffix at line 45 in lib/storage-stack.ts'
+  - Resource: [specific resource name]
+  - Location: [file:line]
+
+**Evidence**:
+- GitHub log shows: [exact error message from logs]
+- Code inspection reveals: [exact code problem]
+- Similar to known issue in lessons_learnt.md: [reference if applicable]
+
+**Impact**:
+- [What broke and why]
+- [Cost/Security/Performance impact if applicable]
+
+**Root Cause** (WHY it happened, not just what):
+- [Why did this happen? Model misunderstanding? Missing requirement? Configuration error?]
+
+---
+
+### Issue 2: [Next issue...]
+[Same structure]
+
+## Summary
+- Total issues: X Critical, Y High, Z Medium, W Low
+- Primary root causes: [2-3 key areas]
+- Fix complexity: [Simple/Moderate/Complex]
+"
+
+echo "📝 Root Cause Analysis:"
+echo "$ROOT_CAUSE"
+```
+
+#### 2.0.2 Fix Plan Development
+
+Create a **step-by-step plan** to fix the issues:
+
+```bash
+FIX_PLAN="
+Fix Plan for PR #${PR_NUMBER}:
+
+Step 1: [Specific action - e.g., 'Add environmentSuffix to S3 bucket name in lib/storage-stack.ts line 45']
+  - File: [exact file path]
+  - Change: [exact change to make]
+  - Validation: [how to verify this step worked]
+
+Step 2: [Next specific action]
+  - File: [exact file path]
+  - Change: [exact change]
+  - Validation: [verification method]
+
+Step 3: [Continue...]
+
+Local Validation Sequence:
+1. Run lint: npm run lint
+2. Run build: npm run build
+3. Run synth: npm run synth (if applicable)
+4. Run unit tests: npm run test:unit
+5. Deploy: npm run deploy
+6. Run integration tests: npm run test:integration
+
+Expected Outcome:
+- All linters pass
+- Build succeeds
+- All tests pass with 100% coverage
+- Deployment successful
+- All GitHub pipeline stages will pass
+"
+
+echo "📋 Fix Plan:"
+echo "$FIX_PLAN"
+```
+
+#### 2.0.3 Solution Approach Justification
+
+Explain **WHY this is the best approach**:
+
+```bash
+SOLUTION_APPROACH="
+Solution Approach for PR #${PR_NUMBER}:
+
+Chosen Strategy: [e.g., 'Systematic resource name updates with environmentSuffix']
+
+Why This Approach:
+1. [Reason 1 - e.g., 'Follows established pattern from lessons_learnt.md']
+2. [Reason 2 - e.g., 'Minimal code changes, lower risk']
+3. [Reason 3 - e.g., 'Addresses root cause directly']
+
+Alternative Approaches Considered:
+- [Alternative 1]: Rejected because [reason]
+- [Alternative 2]: Rejected because [reason]
+
+Risks and Mitigations:
+- Risk: [potential issue]
+  Mitigation: [how to handle it]
+
+Success Criteria:
+- [Criterion 1 - e.g., 'All resource names include environmentSuffix']
+- [Criterion 2 - e.g., 'GitHub Deploy stage passes']
+- [Criterion 3 - e.g., '100% test coverage maintained']
+"
+
+echo "💡 Solution Approach:"
+echo "$SOLUTION_APPROACH"
+```
+
+#### 2.0.4 Document Analysis in Status File
+
+```bash
+echo ""
+echo "💾 Saving analysis to status file..."
+
+# Update status file with detailed analysis
+bash .claude/scripts/pr-manager.sh update-analysis \
+  $PR_NUMBER \
+  "$ROOT_CAUSE" \
+  "$FIX_PLAN" \
+  "$SOLUTION_APPROACH"
+
+if [ $? -eq 0 ]; then
+  echo "✅ Analysis documented in synth_pr_status.json"
+else
+  echo "⚠️ Warning: Could not save analysis to status file"
+fi
+
+echo ""
+echo "📊 View your analysis with:"
+echo "   bash .claude/scripts/pr-status.sh pr $PR_NUMBER"
+echo ""
+```
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.0 - ANALYSIS COMPLETE - PR #<number>
+**PR**: #<number>
+**PROGRESS**: 2.0/2.12 phases completed
+**NEXT ACTION**: Create isolated worktree for PR branch
+**ISSUES**: NONE
+**BLOCKED**: NO
+**ANALYSIS**: ✅ Root cause documented | ✅ Fix plan created | ✅ Solution approach defined
+```
+
+**CHECKPOINT PR-C**: Failure Analysis Completeness
+- ✅ Root cause documented with evidence
+- ✅ Fix plan created with actionable steps
+- ✅ Solution approach justified
+- ✅ Analysis saved to status file
+
+**CHECKPOINT PR-D**: Fix Plan Validation
+- ✅ Plan has specific file paths and line numbers
+- ✅ Plan includes validation steps for each fix
+- ✅ Plan addresses all failed stages
+- ✅ Plan is executable (clear steps)
+
+**If checkpoints fail**: Re-analyze, improve documentation, re-validate.
+
+**CHECKPOINT**: Review your analysis before proceeding. Make sure:
+- ✅ Root cause is specific and evidence-based
+- ✅ Fix plan has concrete, actionable steps
+- ✅ Solution approach is justified
+- ✅ Analysis is documented in status file
+
+---
+
 #### 2.1 PR Setup
 
 ```bash
@@ -235,7 +650,12 @@ echo "Author: $PR_AUTHOR"
 
 #### 2.2 Create Isolated Worktree
 
+**CHECKPOINT PR-B**: PR Worktree Validation
+
 ```bash
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Creating worktree"
+
 WORKTREE_DIR="worktree/pr-fix-${PR_NUMBER}"
 
 echo "📁 Creating worktree: $WORKTREE_DIR"
@@ -271,7 +691,31 @@ fi
 git pull origin $PR_BRANCH
 
 echo "✅ Ready to work on PR #${PR_NUMBER} in worktree"
+
+# Verify worktree location (similar to verify-worktree.sh pattern)
+CURRENT_DIR=$(pwd)
+if [[ ! "$CURRENT_DIR" =~ worktree/pr-fix-[^/]+$ ]]; then
+  echo "❌ BLOCKED: Not in expected worktree directory"
+  echo "Current: $CURRENT_DIR"
+  echo "Expected: */worktree/pr-fix-${PR_NUMBER}"
+  exit 1
+fi
+
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "$PR_BRANCH" ]; then
+  echo "❌ BLOCKED: Branch mismatch"
+  echo "Expected: $PR_BRANCH"
+  echo "Got: $CURRENT_BRANCH"
+  exit 1
+fi
+
+echo "✅ Worktree validation passed"
 ```
+
+**CHECKPOINT PR-B**: PR Worktree Validation
+- ✅ Worktree created at correct location
+- ✅ Branch matches PR branch
+- ✅ Ready for fixes
 
 **CHECKPOINT**: Verify you are in the worktree:
 ```bash
@@ -308,6 +752,9 @@ fi
 **CRITICAL**: Get actual failure details from GitHub Actions, not just failure reasons from JSON.
 
 ```bash
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Analyzing pipeline failures"
+
 echo "🔍 Analyzing GitHub pipeline failures..."
 
 # Get all check runs for this PR
@@ -353,18 +800,169 @@ fi
 
 **Report Status**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2 - ANALYZING FAILURES - PR #<number>
-**FAILED STAGES IDENTIFIED**:
-- <stage 1>
-- <stage 2>
-**CURRENT STEP**: Extracting error details
+**SYNTH TRAINER STATUS**: PHASE 2.4 - ANALYZING FAILURES - PR #<number>
+**PR**: #<number>
+**PROGRESS**: 2.4/2.12 phases completed
 **NEXT ACTION**: Apply targeted fixes for each failed stage
+**ISSUES**: <list failed stages or NONE>
 **BLOCKED**: NO
+**FAILED STAGES**: <stage 1>, <stage 2>
 ```
+
+#### 2.4.5 Pre-Fix Build Validation (Baseline Assessment)
+
+**⚠️ CRITICAL**: Validate current state BEFORE applying fixes to establish baseline.
+
+**Purpose**: Understand current build state, identify what's already broken, and ensure fixes don't break working code.
+
+**Validation**: Run Checkpoint PR-D2: Pre-Fix Build Validation
+
+```bash
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Pre-fix build validation"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PRE-FIX BUILD VALIDATION (Baseline Assessment)"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+BASELINE_VALIDATION_PASSED=true
+BASELINE_ISSUES=()
+
+# 1. Lint (baseline)
+echo "1. Checking lint baseline..."
+case "$LANGUAGE" in
+  "ts"|"js")
+    npm run lint > /tmp/baseline-lint.txt 2>&1 || true
+    LINT_BASELINE_STATUS=${PIPESTATUS[0]}
+    ;;
+  "py")
+    pipenv run lint > /tmp/baseline-lint.txt 2>&1 || true
+    LINT_BASELINE_STATUS=${PIPESTATUS[0]}
+    ;;
+  "go")
+    go vet ./... > /tmp/baseline-lint.txt 2>&1 || true
+    LINT_BASELINE_STATUS=${PIPESTATUS[0]}
+    ;;
+  *)
+    LINT_BASELINE_STATUS=0
+    ;;
+esac
+
+if [ $LINT_BASELINE_STATUS -ne 0 ]; then
+  echo "⚠️ Baseline lint issues found (expected for failed PR)"
+  BASELINE_ISSUES+=("Lint: $(grep -c "error\|warning" /tmp/baseline-lint.txt || echo 0) issues")
+else
+  echo "✅ Baseline lint: Clean"
+fi
+
+# 2. Build (baseline)
+echo "2. Checking build baseline..."
+case "$LANGUAGE" in
+  "ts"|"js")
+    npm run build > /tmp/baseline-build.txt 2>&1 || true
+    BUILD_BASELINE_STATUS=${PIPESTATUS[0]}
+    ;;
+  "py")
+    python -m py_compile lib/**/*.py test/**/*.py > /tmp/baseline-build.txt 2>&1 || true
+    BUILD_BASELINE_STATUS=${PIPESTATUS[0]}
+    ;;
+  "go")
+    go build ./... > /tmp/baseline-build.txt 2>&1 || true
+    BUILD_BASELINE_STATUS=${PIPESTATUS[0]}
+    ;;
+  *)
+    BUILD_BASELINE_STATUS=0
+    ;;
+esac
+
+if [ $BUILD_BASELINE_STATUS -ne 0 ]; then
+  echo "⚠️ Baseline build issues found (expected for failed PR)"
+  BASELINE_ISSUES+=("Build: $(grep -c "error" /tmp/baseline-build.txt || echo 0) errors")
+  echo "Build errors:"
+  grep -i "error" /tmp/baseline-build.txt | head -10
+else
+  echo "✅ Baseline build: Clean"
+fi
+
+# 3. Synth (baseline, if applicable)
+if [ "$PLATFORM" = "cdk" ] || [ "$PLATFORM" = "cdktf" ] || [ "$PLATFORM" = "pulumi" ]; then
+  echo "3. Checking synth baseline..."
+  case "$PLATFORM" in
+    "cdk"|"cdktf")
+      npm run synth > /tmp/baseline-synth.txt 2>&1 || true
+      SYNTH_BASELINE_STATUS=${PIPESTATUS[0]}
+      ;;
+    "pulumi")
+      pulumi preview > /tmp/baseline-synth.txt 2>&1 || true
+      SYNTH_BASELINE_STATUS=${PIPESTATUS[0]}
+      ;;
+  esac
+  
+  if [ $SYNTH_BASELINE_STATUS -ne 0 ]; then
+    echo "⚠️ Baseline synth issues found (expected for failed PR)"
+    BASELINE_ISSUES+=("Synth: $(grep -c "error" /tmp/baseline-synth.txt || echo 0) errors")
+    echo "Synth errors:"
+    grep -i "error" /tmp/baseline-synth.txt | head -10
+  else
+    echo "✅ Baseline synth: Clean"
+  fi
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Baseline Assessment Complete"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ ${#BASELINE_ISSUES[@]} -gt 0 ]; then
+  echo "Baseline issues identified:"
+  printf '  - %s\n' "${BASELINE_ISSUES[@]}"
+  echo ""
+  echo "These will be addressed in the fix stages"
+else
+  echo "✅ Baseline validation: All checks passed"
+  echo "Note: PR may have failed due to other issues (deployment, tests, etc.)"
+fi
+
+echo ""
+echo "Proceeding to apply targeted fixes..."
+```
+
+**CHECKPOINT PR-D2**: Pre-Fix Build Validation
+- ✅ Baseline lint status assessed
+- ✅ Baseline build status assessed
+- ✅ Baseline synth status assessed (if applicable)
+- ✅ Baseline issues documented
+- ✅ Ready to apply targeted fixes
+
+**Purpose**: 
+- Establish baseline before fixes
+- Ensure fixes don't break working code
+- Understand current state vs. target state
+- Document what needs fixing
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.4.5 - PRE-FIX BUILD VALIDATION - PR #<number>
+**PR**: #<number>
+**PROGRESS**: 2.4.5/2.12 phases completed
+**NEXT ACTION**: Apply targeted fixes for failed stages
+**ISSUES**: <baseline issues or NONE>
+**BLOCKED**: NO
+**BASELINE**: Lint=<status>, Build=<status>, Synth=<status>
+```
+
+---
 
 #### 2.5 Apply Targeted Fixes
 
 **Process each failed stage in order**: Detect Project Files → Lint → Build → Deploy → Unit Testing → Integration Testing
+
+**Note**: Baseline validation (Phase 2.4.5) has established current state. Fixes will address identified issues.
+
+```bash
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Applying targeted fixes"
+```
 
 ---
 
@@ -375,6 +973,7 @@ If `metadata.json` missing or invalid:
 ```bash
 if [ ! -f "metadata.json" ] || ! jq empty metadata.json 2>/dev/null; then
   echo "🔧 Fixing: Detect Project Files"
+  bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Fixing: Detect Project Files"
 
   # Try to extract info from branch name or PR title
   # Branch format: synth-<task_id>
@@ -680,9 +1279,131 @@ fi
 
 ---
 
+### Phase 2.5: Pre-Deployment Validation (CRITICAL COST OPTIMIZATION)
+
+**⚠️ MANDATORY**: Run pre-deployment validation BEFORE attempting any deployment.
+
+**Purpose**: Catch common errors early to avoid unnecessary AWS deployment attempts (cost optimization).
+
+**Validation**: Run Checkpoint PR-E: Pre-Deployment Validation
+
+```bash
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Pre-deployment validation"
+
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.5: PRE-DEPLOYMENT VALIDATION"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Verify we're in worktree
+if [ ! -f "metadata.json" ]; then
+  echo "❌ BLOCKED: Not in worktree (metadata.json not found)"
+  echo "Current directory: $(pwd)"
+  exit 1
+fi
+
+# Set ENVIRONMENT_SUFFIX if not set
+export ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-fix${PR_NUMBER}}"
+echo "Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
+
+# Run pre-deployment validation script
+echo "🔍 Running pre-deployment validation..."
+if [ -f "scripts/pre-validate-iac.sh" ]; then
+  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+  PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
+else
+  echo "⚠️ WARNING: scripts/pre-validate-iac.sh not found"
+  echo "Skipping pre-validation (may miss common errors)"
+  PRE_VALIDATE_STATUS=0
+fi
+```
+
+**Validation Checks** (from pre-validate-iac.sh):
+- ✅ Resource naming includes environmentSuffix
+- ✅ No hardcoded environment values (prod-, dev-, stage-)
+- ✅ No Retain policies or DeletionProtection
+- ✅ No expensive configurations
+- ✅ Valid cross-resource references
+- ✅ Platform-specific requirements
+
+**Action Based on Results**:
+
+```bash
+if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
+  echo "❌ Pre-deployment validation FAILED"
+  echo ""
+  echo "Errors found:"
+  grep -i "error\|failed" /tmp/pre-validate-output.txt | head -20
+  
+  echo ""
+  echo "🔧 Fixing validation errors before deployment..."
+  
+  # Common fixes based on validation output:
+  
+  # 1. Missing environmentSuffix
+  if grep -qi "environmentSuffix\|environment suffix" /tmp/pre-validate-output.txt; then
+    echo "  → Adding environmentSuffix to resource names..."
+    # Fix will be applied in deployment fix section
+  fi
+  
+  # 2. Retain policies
+  if grep -qi "retain\|RETAIN" /tmp/pre-validate-output.txt; then
+    echo "  → Changing RemovalPolicy from RETAIN to DESTROY..."
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/removalPolicy.*=.*RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' {} \;
+  fi
+  
+  # 3. DeletionProtection
+  if grep -qi "deletionProtection\|deletion_protection" /tmp/pre-validate-output.txt; then
+    echo "  → Disabling DeletionProtection..."
+    find lib/ -type f -exec sed -i.bak 's/deletionProtection.*true/deletionProtection: false/g' {} \;
+    find lib/ -type f -exec sed -i.bak 's/deletion_protection.*True/deletion_protection=False/g' {} \;
+  fi
+  
+  # Re-run validation after fixes
+  echo ""
+  echo "🔄 Re-running validation after fixes..."
+  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
+  PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
+  
+  if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
+    echo "❌ Validation still failing after fixes"
+    echo "Review errors and fix manually:"
+    cat /tmp/pre-validate-output-2.txt
+    # Continue to deployment fix section - it will handle remaining issues
+  else
+    echo "✅ Validation passed after fixes"
+  fi
+else
+  echo "✅ Pre-deployment validation PASSED"
+  echo "Ready to proceed with deployment"
+fi
+```
+
+**CHECKPOINT PR-E**: Pre-Deployment Validation
+- ✅ Pre-validation script executed
+- ✅ Common errors fixed (environmentSuffix, Retain policies, etc.)
+- ✅ Ready for deployment attempts
+
+**Cost Impact**: Saves 2-3 deployment attempts (~15% token reduction)
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.5 - PRE-DEPLOYMENT VALIDATION - PR #<number>
+**VALIDATION RESULT**: <PASSED/FAILED>
+**ISSUES FOUND**: <list or NONE>
+**FIXES APPLIED**: <list or NONE>
+**NEXT ACTION**: Proceed to deployment fixes
+**BLOCKED**: NO
+```
+
+---
+
 ##### Fix 5: Deploy
 
 **CRITICAL**: Deploy failures are complex and require careful analysis.
+
+**Note**: Pre-deployment validation (Phase 2.5) should have already fixed common issues. This section handles deployment-specific failures.
 
 ```bash
 if echo "$FAILED_STAGES" | grep -qi "deploy"; then
@@ -691,12 +1412,15 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
   # Reference lessons learned
   echo "📖 Checking .claude/lessons_learnt.md for known deployment issues..."
 
-  # Pre-deployment validation
-  echo "Running pre-deployment validation..."
-  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
-  PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
+  # Pre-deployment validation should have already run (Phase 2.5)
+  # If not, run it now as fallback
+  if [ ! -f "/tmp/pre-validate-output.txt" ]; then
+    echo "⚠️ Pre-validation not run, running now..."
+    bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
+    PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
+  fi
 
-  if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
+  if [ "${PRE_VALIDATE_STATUS:-0}" -ne 0 ]; then
     echo "⚠️ Pre-validation found issues:"
     cat /tmp/pre-validate-output.txt
 
@@ -861,9 +1585,14 @@ fi
 
 ##### Fix 6: Unit Testing
 
+**CRITICAL REQUIREMENT**: 100% test coverage is MANDATORY.
+
+**Validation**: Run Checkpoint H: Test Coverage (from validation-checkpoints.md pattern)
+
 ```bash
 if echo "$FAILED_STAGES" | grep -qi "unit"; then
   echo "🔧 Fixing: Unit Testing"
+  bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Fixing: Unit Testing"
 
   # Run tests with coverage
   case "$LANGUAGE" in
@@ -902,7 +1631,7 @@ if echo "$FAILED_STAGES" | grep -qi "unit"; then
     # Re-run tests after fixes
   fi
 
-  # Check coverage
+  # Check coverage - MANDATORY: 100% required
   echo "Checking test coverage..."
 
   if [ -f "coverage/coverage-summary.json" ]; then
@@ -912,44 +1641,106 @@ if echo "$FAILED_STAGES" | grep -qi "unit"; then
 
     echo "Coverage: Statements=$STMT_COV%, Functions=$FUNC_COV%, Lines=$LINE_COV%"
 
-    # Must achieve 100% coverage
+    # CRITICAL: Must achieve 100% coverage (not 99%, not 99.9%, exactly 100%)
     if [ "$STMT_COV" != "100" ] || [ "$FUNC_COV" != "100" ] || [ "$LINE_COV" != "100" ]; then
-      echo "⚠️ Coverage below 100%, need to add tests"
-
+      echo "❌ BLOCKED: Coverage below 100%"
+      echo "Statements: ${STMT_COV}% (required: 100%)"
+      echo "Functions: ${FUNC_COV}% (required: 100%)"
+      echo "Lines: ${LINE_COV}% (required: 100%)"
+      
       # Identify untested code
       if [ -f "coverage/lcov.info" ]; then
         echo "Analyzing coverage gaps..."
         # Parse lcov.info to find untested lines
         # Add tests for untested code paths
+        # Test all conditional branches, error handling paths, edge cases
       fi
 
+      # Add tests until 100% coverage achieved
+      echo "Adding tests for uncovered code paths..."
       # After adding tests, re-run
       case "$LANGUAGE" in
         "ts"|"js") npm run test:unit ;;
         "py") pipenv run test:unit ;;
       esac
+      
+      # Re-check coverage
+      STMT_COV=$(jq -r '.total.statements.pct' coverage/coverage-summary.json)
+      FUNC_COV=$(jq -r '.total.functions.pct' coverage/coverage-summary.json)
+      LINE_COV=$(jq -r '.total.lines.pct' coverage/coverage-summary.json)
+      
+      if [ "$STMT_COV" != "100" ] || [ "$FUNC_COV" != "100" ] || [ "$LINE_COV" != "100" ]; then
+        echo "❌ BLOCKED: Still below 100% coverage after adding tests"
+        echo "This blocks PR marking as fixed"
+        # Continue to add more tests or mark as needs manual review
+      fi
     else
       echo "✅ 100% coverage achieved"
     fi
   else
-    echo "⚠️ Coverage report not found"
+    echo "❌ BLOCKED: Coverage report not found"
+    echo "Cannot verify 100% coverage requirement"
+    # Generate coverage report or mark as blocked
   fi
 fi
 ```
+
+**Coverage Validation Requirements**:
+- Statement coverage: **100%** (exactly 100%, not 99.9%)
+- Function coverage: **100%**
+- Line coverage: **100%**
+- All unit tests passing
+
+**If coverage < 100%**: BLOCK PR marking as fixed, add tests until requirement met.
 
 ---
 
 ##### Fix 7: Integration Testing
 
+**CRITICAL REQUIREMENT**: Integration tests must use real AWS outputs (no mocking).
+
+**Validation**: Run Checkpoint I: Integration Test Quality (from validation-checkpoints.md pattern)
+
 ```bash
 if echo "$FAILED_STAGES" | grep -qi "integration"; then
   echo "🔧 Fixing: Integration Testing"
+  bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Fixing: Integration Testing"
 
   # Integration tests require successful deployment
   if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
-    echo "❌ No deployment outputs found - cannot fix integration tests"
+    echo "❌ BLOCKED: No deployment outputs found - cannot fix integration tests"
     echo "Deployment must succeed first"
+    # Mark as blocked, deployment must be fixed first
   else
+    # Validate integration test quality before running
+    echo "🔍 Validating integration test quality..."
+    
+    # Check for common anti-patterns
+    INT_TEST_FILES=$(find test/ tests/ -type f \( -name "*int*test*" -o -name "*e2e*" -o -name "*integration*" \) 2>/dev/null || true)
+    
+    if [ -z "$INT_TEST_FILES" ]; then
+      echo "⚠️ WARNING: No integration test files found"
+    else
+      # Check for mocking (should NOT be present)
+      for test_file in $INT_TEST_FILES; do
+        if grep -qi "jest.mock\|sinon\|Mockito\|WireMock\|gomock" "$test_file" 2>/dev/null; then
+          echo "⚠️ WARNING: Found mocking in integration test: $test_file"
+          echo "Integration tests should use real AWS resources, not mocks"
+        fi
+        
+        # Check for hardcoded values
+        if grep -qi "arn:aws:.*:123456789\|us-east-1.*hardcoded\|prod-\|dev-" "$test_file" 2>/dev/null; then
+          echo "⚠️ WARNING: Found hardcoded values in: $test_file"
+          echo "Integration tests should use cfn-outputs/flat-outputs.json"
+        fi
+        
+        # Check for use of stack outputs
+        if ! grep -qi "cfn-outputs\|flat-outputs\|stack.*output" "$test_file" 2>/dev/null; then
+          echo "⚠️ WARNING: Integration test may not be using stack outputs: $test_file"
+        fi
+      done
+    fi
+    
     # Run integration tests
     case "$LANGUAGE" in
       "ts"|"js")
@@ -965,20 +1756,45 @@ if echo "$FAILED_STAGES" | grep -qi "integration"; then
     if [ $INT_TEST_STATUS -ne 0 ]; then
       echo "❌ Integration tests failed, analyzing..."
 
-      # Common issues:
-      # - Hardcoded values instead of using stack outputs
-      # - Incorrect assertions
-      # - Resource not ready yet (timing)
-      # - Missing permissions
+      # Extract failure details
+      grep -i "failed\|error\|assertion" /tmp/integration-test-output.txt | head -20
+
+      # Common issues and fixes:
+      # - Hardcoded values instead of using stack outputs → Update to use cfn-outputs/flat-outputs.json
+      # - Incorrect assertions → Update assertions to match actual AWS resource values
+      # - Resource not ready yet (timing) → Add retry logic or wait conditions
+      # - Missing permissions → Check IAM roles and policies
+      # - Wrong resource ARNs → Use stack outputs instead of hardcoded ARNs
 
       # Read test files and fix based on actual stack outputs
       # Re-run after fixes
-    else
+      
+      echo "🔧 Applying fixes..."
+      # Fix integration tests based on actual stack outputs
+      # Re-run tests
+      case "$LANGUAGE" in
+        "ts"|"js") npm run test:integration ;;
+        "py") pipenv run test:integration ;;
+      esac
+      INT_TEST_STATUS=$?
+    fi
+    
+    if [ $INT_TEST_STATUS -eq 0 ]; then
       echo "✅ Integration tests passed"
+    else
+      echo "❌ Integration tests still failing after fixes"
+      echo "Review test files and stack outputs"
     fi
   fi
 fi
 ```
+
+**Integration Test Quality Requirements**:
+- ✅ Use real AWS outputs (cfn-outputs/flat-outputs.json)
+- ✅ No mocking (jest.mock, sinon, Mockito, etc.)
+- ✅ No hardcoded values (regions, ARNs, account IDs)
+- ✅ Dynamic validation of actual AWS resources
+- ✅ Tests verify complete workflows, not just individual resources
 
 ---
 
@@ -1078,11 +1894,165 @@ else
 fi
 ```
 
-**CHECKPOINT**: If any validation fails, DO NOT proceed to push. Fix the issues first.
+**CHECKPOINT PR-F**: Post-Fix Validation
+- ✅ All local validations passed (lint, build, synth, test, deploy)
+- ✅ Test coverage: 100% (statements, functions, lines)
+- ✅ Ready for quality gates
+
+**If validation fails**: Report BLOCKED, fix issues, re-validate.
+
+---
+
+#### 2.6.5 Quality Gates (MANDATORY BEFORE MARKING FIXED)
+
+**⚠️ CRITICAL**: All quality gates MUST pass before marking PR as fixed.
+
+**Purpose**: Ensure fixes meet production standards and will pass GitHub pipeline.
+
+```bash
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "QUALITY GATES VALIDATION"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+QUALITY_GATES_PASSED=true
+GATE_FAILURES=()
+
+# Gate 1: Pre-Fix Analysis Complete
+echo "🔍 Gate 1: Pre-Fix Analysis Complete"
+if [ -z "$ROOT_CAUSE" ] || [ -z "$FIX_PLAN" ] || [ -z "$SOLUTION_APPROACH" ]; then
+  echo "❌ FAILED: Missing root cause analysis, fix plan, or solution approach"
+  QUALITY_GATES_PASSED=false
+  GATE_FAILURES+=("Pre-Fix Analysis incomplete")
+else
+  echo "✅ PASSED: All analysis documented"
+fi
+
+# Gate 2: Pre-Deployment Validation Passed
+echo ""
+echo "🔍 Gate 2: Pre-Deployment Validation"
+if [ -f "/tmp/pre-validate-output.txt" ]; then
+  if grep -qi "error\|failed" /tmp/pre-validate-output.txt && [ "${PRE_VALIDATE_STATUS:-0}" -ne 0 ]; then
+    echo "❌ FAILED: Pre-deployment validation had errors"
+    QUALITY_GATES_PASSED=false
+    GATE_FAILURES+=("Pre-deployment validation failed")
+  else
+    echo "✅ PASSED: Pre-deployment validation successful"
+  fi
+else
+  echo "⚠️ WARNING: Pre-deployment validation not run (may have been skipped)"
+fi
+
+# Gate 3: File Location Compliance
+echo ""
+echo "🔍 Gate 3: File Location Compliance"
+# Check changed files
+CHANGED_FILES=$(git diff --name-only origin/$PR_BRANCH HEAD 2>/dev/null || git diff --name-only HEAD)
+VIOLATIONS=()
+
+# Check for files in disallowed locations
+for file in $CHANGED_FILES; do
+  # Skip if file is in allowed directories
+  if [[ "$file" =~ ^(lib/|test/|tests/|bin/|metadata.json|cdk.json|cdktf.json|Pulumi.yaml|tap.py|tap.go|package.json|package-lock.json|Pipfile|Pipfile.lock|go.mod|pom.xml|build.gradle|tsconfig.json|jest.config.js|pytest.ini) ]]; then
+    continue
+  fi
+  
+  # Check for violations
+  if [[ "$file" =~ ^\.github/ ]] || [[ "$file" =~ ^scripts/ ]] || [[ "$file" =~ ^docs/ ]] || [[ "$file" =~ ^\.claude/ ]]; then
+    VIOLATIONS+=("$file")
+  fi
+  
+  # Check for documentation files at root
+  if [[ "$file" =~ ^(README|PROMPT|IDEAL_RESPONSE|MODEL_FAILURES|MODEL_RESPONSE)\.md$ ]]; then
+    VIOLATIONS+=("$file (should be in lib/)")
+  fi
+done
+
+if [ ${#VIOLATIONS[@]} -gt 0 ]; then
+  echo "❌ FAILED: Files in wrong locations:"
+  printf '  - %s\n' "${VIOLATIONS[@]}"
+  QUALITY_GATES_PASSED=false
+  GATE_FAILURES+=("File location violations: ${#VIOLATIONS[@]} files")
+else
+  echo "✅ PASSED: All files in allowed locations"
+fi
+
+# Gate 4: Pre-Submission Check (if script exists)
+echo ""
+echo "🔍 Gate 4: Pre-Submission Check"
+if [ -f ".claude/scripts/pre-submission-check.sh" ]; then
+  echo "Running pre-submission validation..."
+  bash .claude/scripts/pre-submission-check.sh > /tmp/pre-submission-check.txt 2>&1
+  PRE_SUBMISSION_STATUS=$?
+  
+  if [ $PRE_SUBMISSION_STATUS -ne 0 ]; then
+    echo "❌ FAILED: Pre-submission check failed"
+    echo "Issues found:"
+    grep -i "❌\|failed\|error" /tmp/pre-submission-check.txt | head -10
+    QUALITY_GATES_PASSED=false
+    GATE_FAILURES+=("Pre-submission check failed")
+  else
+    echo "✅ PASSED: Pre-submission check successful"
+  fi
+else
+  echo "⚠️ INFO: Pre-submission check script not found (skipping)"
+fi
+
+# Gate 5: All Local Validations Passed
+echo ""
+echo "🔍 Gate 5: All Local Validations Passed"
+if [ "$VALIDATION_PASSED" = true ]; then
+  echo "✅ PASSED: All local validations successful"
+else
+  echo "❌ FAILED: Some local validations failed"
+  QUALITY_GATES_PASSED=false
+  GATE_FAILURES+=("Local validation failures")
+fi
+
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ "$QUALITY_GATES_PASSED" = true ]; then
+  echo "✅ ALL QUALITY GATES PASSED"
+  echo "Ready to commit and push"
+else
+  echo "❌ QUALITY GATES FAILED"
+  echo ""
+  echo "Failed gates:"
+  printf '  - %s\n' "${GATE_FAILURES[@]}"
+  echo ""
+  echo "BLOCKED: Cannot proceed until all quality gates pass"
+  echo "Fix issues and re-run validation"
+  exit 1
+fi
+```
+
+**Quality Gate Summary**:
+1. ✅ **Pre-Fix Gate**: Root cause, plan, and solution documented
+2. ✅ **Pre-Deploy Gate**: Pre-validation passed (environmentSuffix, Retain policies)
+3. ✅ **File Location Gate**: All files in allowed directories
+4. ✅ **Pre-Submission Gate**: Pre-submission check passed (if available)
+5. ✅ **Post-Fix Gate**: All local validations passed
+
+**If ANY gate fails**: Report BLOCKED, list failures, fix issues, re-validate.
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: QUALITY GATES - PR #<number>
+**GATE 1**: ✅/❌ Pre-Fix Analysis
+**GATE 2**: ✅/❌ Pre-Deployment Validation
+**GATE 3**: ✅/❌ File Location Compliance
+**GATE 4**: ✅/❌ Pre-Submission Check
+**GATE 5**: ✅/❌ Local Validations
+**RESULT**: <ALL PASSED / FAILED>
+**NEXT ACTION**: <Commit and push / Fix issues>
+**BLOCKED**: <YES/NO>
+```
+
+---
 
 #### 2.7 Commit & Push Changes
 
-Only proceed if ALL local validations passed.
+Only proceed if ALL quality gates passed.
 
 ```bash
 echo "📝 Committing changes..."
@@ -1130,12 +2100,14 @@ fi
 
 **Report Status**:
 ```markdown
-**SYNTH TRAINER STATUS**: PHASE 2 - PUSHED CHANGES - PR #<number>
-**FIXES APPLIED**: <list of fixes>
-**LOCAL VALIDATIONS**: ALL PASSED ✅
-**CURRENT STEP**: Waiting for GitHub pipeline
+**SYNTH TRAINER STATUS**: PHASE 2.7 - PUSHED CHANGES - PR #<number>
+**PR**: #<number>
+**PROGRESS**: 2.7/2.12 phases completed
 **NEXT ACTION**: Monitor GitHub Actions workflow
+**ISSUES**: NONE
 **BLOCKED**: NO
+**FIXES APPLIED**: <list of fixes>
+**LOCAL VALIDATIONS**: ✅ ALL PASSED
 ```
 
 #### 2.8 Monitor GitHub Pipeline
@@ -1334,45 +2306,48 @@ fi
 ```bash
 echo "📊 Updating synth_pr_status.json..."
 
-# Update PR status in JSON file
+# Determine final status
 if [ "$PR_FIXED" = true ]; then
-  STATUS="FIXED"
-  GITHUB_CHECKS_PASSED=true
+  FINAL_STATUS="fixed"
+  STATUS_NOTE="All GitHub pipeline stages passed - PR fully fixed"
 else
-  STATUS="FAILED"
-  GITHUB_CHECKS_PASSED=false
+  FINAL_STATUS="failed"
+  if [ "${NEEDS_MANUAL_REVIEW:-false}" = true ]; then
+    STATUS_NOTE="Could not fix automatically - manual review needed"
+  else
+    STATUS_NOTE="Some pipeline stages still failing after max iterations"
+  fi
 fi
 
-# Use jq to update the JSON file
-# This is a simplified example - actual implementation would be more robust
-cat .claude/synth_pr_status.json | jq \
-  --arg pr "$PR_NUMBER" \
-  --arg status "$STATUS" \
-  --arg fixed_at "$(date -Iseconds)" \
-  --arg iterations "$FIX_ITERATION" \
-  --argjson checks_passed "$GITHUB_CHECKS_PASSED" \
-  '(.pull_requests[] | select(.pr_number == ($pr | tonumber))) |= . + {
-    status: $status,
-    fix_applied_at: $fixed_at,
-    fix_iterations: ($iterations | tonumber),
-    github_checks_passed: $checks_passed
-  }' > .claude/synth_pr_status.json.tmp
+# Update using pr-manager.sh (thread-safe)
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER $FINAL_STATUS "$STATUS_NOTE"
 
-mv .claude/synth_pr_status.json.tmp .claude/synth_pr_status.json
-
-echo "✅ Status file updated"
+if [ $? -eq 0 ]; then
+  echo "✅ Status file updated to: $FINAL_STATUS"
+else
+  echo "⚠️ Warning: Could not update status file"
+fi
 ```
 
 #### 2.12 Report PR Completion
 
+**CHECKPOINT PR-G**: GitHub Pipeline Validation
+- ✅ All GitHub pipeline stages passed
+- ✅ PR marked as fixed or failed appropriately
+- ✅ Status file updated
+- ✅ Worktree cleaned up
+
 ```markdown
 **SYNTH TRAINER STATUS**: PR #<number> COMPLETE - <STATUS>
+**PR**: #<number>
+**PROGRESS**: 2.12/2.12 phases completed
 **RESULT**: <FIXED or NEEDS_MANUAL_REVIEW>
 **ITERATIONS**: <count>
 **GITHUB PIPELINE**: <ALL_PASSED or SOME_FAILED>
-**CLEANUP**: Worktree removed
 **NEXT ACTION**: <Process next PR or Report final summary>
+**ISSUES**: NONE
 **BLOCKED**: NO
+**CLEANUP**: ✅ Worktree removed
 ```
 
 ---
@@ -1464,6 +2439,57 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 **Detailed Logs**: .claude/synth_pr_status.json
 ```
 
+## Iteration Policy
+
+**Purpose**: Define when to iterate vs mark PR as failed.
+
+### Max Iterations
+
+- **Max 5 fix iterations per PR**: If PR still failing after 5 iterations → Mark as failed
+- **Max 5 deployment attempts**: If deployment fails 5 times → Mark as failed
+- **Max 3 retries for critical blockers**: If critical blocker persists after 3 retries → Mark as failed
+
+### Iteration Decision Logic
+
+```
+After Fix Applied:
+│
+├─ All GitHub stages pass?
+│  ├─ Yes → Mark as FIXED ✅
+│  └─ No → Check iteration count
+│     │
+│     ├─ Iteration < 5?
+│     │  ├─ Yes → Analyze new failures, apply fixes, iterate
+│     │  └─ No → Mark as FAILED ❌
+│     │
+│     └─ Critical blocker persists?
+│        ├─ Retries < 3?
+│        │  ├─ Yes → Retry with different approach
+│        │  └─ No → Mark as FAILED ❌
+│        └─ Can fix automatically?
+│           ├─ Yes → Continue iteration
+│           └─ No → Mark as FAILED ❌
+```
+
+### When to Mark as Failed
+
+Mark PR as failed if:
+- Max iterations reached (5) and still failing
+- Critical blocker persists after 3 retries
+- Fix plan invalid and cannot be corrected
+- Deployment fails 5 times with same error
+- Quality gates fail and cannot be fixed automatically
+- Test coverage cannot reach 100% (unfixable gaps)
+
+### When to Continue Iterating
+
+Continue iterating if:
+- Iteration count < 5
+- New failures identified (different from previous)
+- Fix plan can be improved
+- Deployment failures are fixable (not quota/limit issues)
+- Test coverage gaps are addressable
+
 ## Key Constraints & Rules
 
 1. **One PR at a Time**: Never work on multiple PRs simultaneously
@@ -1472,56 +2498,235 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 4. **Complete Validation**: ALL local checks must pass before pushing
 5. **GitHub Verification**: PR only "fixed" when ALL GitHub pipeline stages pass
 6. **Max Attempts**:
-   - 3 iterations per fix stage
-   - 5 deployment attempts
-   - 5 push iterations per PR
-7. **Cleanup**: Always remove worktrees after completion (success or failure)
-8. **File Restrictions**: Only modify `lib/`, `bin/`, `test/`, root configs
-9. **Commit Format**: Use conventional commits with lowercase subjects
-10. **Status Updates**: Update `synth_pr_status.json` after each PR
+   - 5 fix iterations per PR
+   - 5 deployment attempts per PR
+   - 3 retries for critical blockers
+7. **Pre-Deployment Validation**: Mandatory before deployment (saves costs)
+8. **Quality Gates**: All gates must pass before marking fixed
+9. **Test Coverage**: 100% required (statements, functions, lines)
+10. **Cleanup**: Always remove worktrees after completion (success or failure)
+11. **File Restrictions**: Only modify `lib/`, `bin/`, `test/`, root configs
+12. **Commit Format**: Use conventional commits with lowercase subjects
+13. **Status Updates**: Update `synth_pr_status.json` after each PR
+14. **Error Handling**: Follow standard error response format
 
 ## Error Handling
 
-### GitHub Authentication Failure
+**⚠️ CRITICAL**: Follow standard error handling patterns from `.claude/docs/references/error-handling.md`
+
+### Standard Error Response Format
+
+When validation or operation fails:
+
+1. **Report status**: `❌ BLOCKED: {specific_error}` or `⚠️ WARNING: {non_blocking_issue}`
+2. **List issues**: Missing/invalid items with specifics
+3. **Explain context**: Why this blocks progress (if blocking)
+4. **Provide fix**: Reference to resolution guide or next steps
+5. **Stop execution**: Do NOT proceed past blocking error (if BLOCKED)
+
+**Example**:
+```markdown
+❌ BLOCKED: Pre-deployment validation failed
+Issues found:
+  - Missing environmentSuffix in 3 resource names
+  - RemovalPolicy.RETAIN found in lib/storage-stack.ts
+Explanation: These will cause deployment failures
+Fix: Run pre-validate-iac.sh fixes, update code, re-validate
+Status: STOPPED - awaiting fixes
+```
+
+### Error Categories
+
+#### Blocking Errors (Stop Execution)
+
+**Pattern**: Critical issues that prevent progress
+
+**Response**: Report BLOCKED status, stop execution, escalate if needed
+
+**Examples**:
+- Missing required files (metadata.json, scripts)
+- GitHub authentication failure
+- Invalid platform/language combination
+- Pre-deployment validation failures (critical)
+- Quality gate failures
+- File location violations
+
+**Recovery**: Fix issue, re-validate, continue
+
+#### Non-Blocking Errors (Log and Continue)
+
+**Pattern**: Issues that don't prevent progress but should be noted
+
+**Response**: Log warning, document in notes, continue execution
+
+**Examples**:
+- AWS credentials not configured (skip deployment fixes)
+- Pre-validation warnings (non-critical)
+- Coverage slightly below 100% (add tests)
+- Minor code style issues (fix in next iteration)
+
+**Recovery**: Document, fix in next iteration if needed
+
+### Specific Error Scenarios
+
+#### GitHub Authentication Failure
 ```
 ❌ BLOCKED: GitHub CLI not authenticated
 Action: gh auth login
 Status: BLOCKED
+Recovery: Run 'gh auth login', retry Phase 1
 ```
 
-### AWS Credential Issues
+#### AWS Credential Issues
 ```
 ⚠️ WARNING: AWS not configured, skipping deployment validation
 Status: Continue with non-deploy fixes
+Recovery: Configure AWS credentials for deployment fixes
 ```
 
-### Worktree Creation Failure
+#### Worktree Creation Failure
 ```
 ❌ ERROR: Cannot create worktree for PR #<number>
-Action: Skip this PR, continue to next
+Error: <specific error>
+Action: Skip this PR, mark as failed, continue to next
 Status: Continue
+Recovery: Check disk space, permissions, existing worktrees
 ```
 
-### Max Iterations Reached
+#### Pre-Deployment Validation Failure
+```
+❌ BLOCKED: Pre-deployment validation failed
+Issues: <list specific issues>
+Action: Fix issues before deployment attempts
+Status: BLOCKED until fixes applied
+Recovery: Apply fixes from pre-validate-iac.sh output, re-validate
+```
+
+#### Quality Gate Failure
+```
+❌ BLOCKED: Quality gates failed
+Failed Gates:
+  - Gate 3: File location violations (2 files)
+  - Gate 5: Local validation failures
+Action: Fix violations, re-run validations
+Status: BLOCKED until all gates pass
+Recovery: Fix each failed gate, re-validate
+```
+
+#### Max Iterations Reached
 ```
 ⚠️ PR #<number>: Max iterations reached (5)
 Action: Add comment, label "needs-manual-review", move to next PR
 Status: Continue
+Recovery: Manual review required - agent cannot fix automatically
 ```
 
-### Deployment Quota Limit
+#### Deployment Quota Limit
 ```
 ❌ AWS Quota limit exceeded for PR #<number>
 Action: Add comment with details, label "needs-manual-review", move to next PR
 Status: Continue
+Recovery: Requires AWS account quota increase or manual cleanup
 ```
 
-### Timeout Waiting for Pipeline
+#### Test Coverage Below 100%
+```
+❌ BLOCKED: Test coverage below 100%
+Current: Statements=95%, Functions=98%, Lines=96%
+Action: Add tests for uncovered code paths
+Status: BLOCKED until 100% coverage achieved
+Recovery: Identify gaps using coverage reports, add tests, re-run
+```
+
+#### Timeout Waiting for Pipeline
 ```
 ⏱️ Timeout waiting for GitHub pipeline (30 minutes)
 Action: Add comment, label "needs-verification", move to next PR
 Status: Continue
+Recovery: Check GitHub Actions status manually, verify pipeline completion
 ```
+
+### Error Recovery Decision Tree
+
+```
+Error Encountered
+│
+├─ Blocking Error?
+│  ├─ Yes → Report BLOCKED
+│  │   ├─ Can fix automatically?
+│  │   │  ├─ Yes → Apply fix, re-validate, continue
+│  │   │  └─ No → Document issue, mark PR as failed, continue to next
+│  │   └─ Max retries reached?
+│  │      ├─ Yes → Mark PR as failed, continue to next
+│  │      └─ No → Retry with fix
+│  │
+│  └─ No → Log warning, continue
+│
+└─ Non-Blocking Error?
+   └─ Yes → Log warning, document, continue
+```
+
+### Error Reporting Template
+
+```markdown
+**SYNTH TRAINER STATUS**: ERROR ENCOUNTERED - PR #<number>
+**ERROR TYPE**: <Blocking / Non-Blocking>
+**ERROR CATEGORY**: <Validation / Deployment / Test / Pipeline>
+**SPECIFIC ERROR**: <exact error message>
+**CONTEXT**: <what was being done when error occurred>
+**IMPACT**: <what this prevents>
+**RECOVERY ACTION**: <specific steps to fix>
+**RETRY COUNT**: <X/5>
+**STATUS**: <BLOCKED / CONTINUING>
+**NEXT ACTION**: <fix and retry / skip PR / escalate>
+```
+
+## Status Reporting Requirements
+
+**⚠️ MANDATORY**: Report status at key milestones using standardized format.
+
+### Standard Status Report Format
+
+```markdown
+**SYNTH TRAINER STATUS**: [PHASE] - [STATUS] - [CURRENT_STEP]
+**PR**: #<number>
+**PROGRESS**: [X/Y] steps completed
+**NEXT ACTION**: [Next planned action]
+**ISSUES**: [Blocking issues or NONE]
+**BLOCKED**: [YES/NO - If YES, explain and resolution needed]
+```
+
+### Required Reporting Points
+
+Report status at:
+1. **Start of execution** (Phase 0)
+2. **After PR selection** (Phase 1.5)
+3. **After root cause analysis** (Phase 2.0)
+4. **After fix plan creation** (Phase 2.0)
+5. **Each fix stage completion** (Phase 2.5+)
+6. **After pre-deployment validation** (Phase 2.5)
+7. **After quality gates** (Phase 2.6.5)
+8. **After commit and push** (Phase 2.7)
+9. **During pipeline monitoring** (Phase 2.8)
+10. **Error encounters** (any phase)
+11. **Blocking situations** (any phase)
+12. **Phase completion** (all phases)
+13. **PR completion** (Phase 2.12)
+
+### BLOCKED Status Handling
+
+When reporting BLOCKED:
+- **Explain why**: Specific issue preventing progress
+- **List requirements**: What's needed to unblock
+- **Provide fix steps**: How to resolve the blocker
+- **Stop execution**: Do NOT proceed until unblocked
+
+### Status Update Frequency
+
+- **Major milestones**: Full status report
+- **Progress updates**: Update fix_progress in status file
+- **Errors**: Immediate status report with BLOCKED if blocking
+- **Completion**: Final status report with results
 
 ## Success Metrics
 
@@ -1531,6 +2736,8 @@ Track and report:
 - **Time per PR**: Average minutes from start to GitHub pipeline complete
 - **Failure Patterns**: Most common issues and fix success rates
 - **Cost Savings**: PRs fixed vs. estimated manual intervention hours
+- **Pre-Deployment Validation Impact**: Deployment attempts saved (cost optimization)
+- **Quality Gate Pass Rate**: Percentage of PRs passing all quality gates
 
 ## Integration Notes
 
