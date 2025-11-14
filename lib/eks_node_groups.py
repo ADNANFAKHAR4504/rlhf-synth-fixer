@@ -30,14 +30,6 @@ class EksNodeGroups(Construct):
             monitoring={
                 "enabled": True
             },
-            tag_specifications=[{
-                "resource_type": "instance",
-                "tags": {
-                    "Name": f"eks-critical-node-{environment_suffix}",
-                    "Environment": environment_suffix,
-                    "NodeGroup": "critical"
-                }
-            }],
             tags={
                 "Name": f"eks-critical-lt-{environment_suffix}",
                 "Environment": environment_suffix
@@ -65,14 +57,6 @@ class EksNodeGroups(Construct):
             monitoring={
                 "enabled": True
             },
-            tag_specifications=[{
-                "resource_type": "instance",
-                "tags": {
-                    "Name": f"eks-non-critical-node-{environment_suffix}",
-                    "Environment": environment_suffix,
-                    "NodeGroup": "non-critical"
-                }
-            }],
             tags={
                 "Name": f"eks-non-critical-lt-{environment_suffix}",
                 "Environment": environment_suffix

@@ -1,6 +1,8 @@
 from constructs import Construct
 from cdktf import TerraformStack, TerraformOutput
 from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.data_aws_vpc import DataAwsVpc
+from cdktf_cdktf_provider_aws.data_aws_subnets import DataAwsSubnets
 from lib.eks_cluster import EksCluster
 from lib.eks_node_groups import EksNodeGroups
 from lib.eks_addons import EksAddons
@@ -21,6 +23,34 @@ class TapStack(TerraformStack):
 
         self.environment_suffix = environment_suffix
 
+        # Data source: Find VPC with CIDR 10.0.0.0/16 and default tag
+        vpc = DataAwsVpc(self, "vpc",
+            filter=[
+                {
+                    "name": "cidr",
+                    "values": ["10.0.0.0/16"]
+                },
+                {
+                    "name": "tag:Name",
+                    "values": ["*default*", "*main*", "*primary*"]
+                }
+            ]
+        )
+
+        # Data source: Find private subnets in the VPC
+        private_subnets = DataAwsSubnets(self, "private_subnets",
+            filter=[
+                {
+                    "name": "vpc-id",
+                    "values": [vpc.id]
+                },
+                {
+                    "name": "tag:Name",
+                    "values": ["*private*"]
+                }
+            ]
+        )
+
         # KMS Key for EKS secrets encryption
         kms = KmsEncryption(self, "kms", environment_suffix=environment_suffix)
 
@@ -31,7 +61,7 @@ class TapStack(TerraformStack):
         security_groups = SecurityGroups(
             self, "security_groups",
             environment_suffix=environment_suffix,
-            vpc_id="vpc-placeholder",  # Will use data source
+            vpc_id=vpc.id,
             vpc_cidr="10.0.0.0/16"
         )
 
@@ -41,7 +71,7 @@ class TapStack(TerraformStack):
             environment_suffix=environment_suffix,
             cluster_role_arn=iam.cluster_role_arn,
             security_group_ids=[security_groups.cluster_security_group_id],
-            subnet_ids=["subnet-placeholder-1", "subnet-placeholder-2", "subnet-placeholder-3"],
+            subnet_ids=private_subnets.ids,
             encryption_key_arn=kms.kms_key_arn
         )
 
@@ -58,7 +88,7 @@ class TapStack(TerraformStack):
             environment_suffix=environment_suffix,
             cluster_name=eks_cluster.cluster_name,
             node_role_arn=iam.node_role_arn,
-            subnet_ids=["subnet-placeholder-1", "subnet-placeholder-2", "subnet-placeholder-3"]
+            subnet_ids=private_subnets.ids
         )
 
         # EKS Add-ons

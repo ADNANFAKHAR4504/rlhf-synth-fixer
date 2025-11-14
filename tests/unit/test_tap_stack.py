@@ -218,8 +218,8 @@ class TestStackStructure:
         assert "--region us-east-1" in kubeconfig
         assert "--name" in kubeconfig
 
-    def test_tap_stack_uses_parameters_not_data_sources(self):
-        """TapStack uses provided parameters instead of data sources."""
+    def test_tap_stack_configures_data_sources_for_discovery(self):
+        """TapStack uses data sources to discover VPC and subnets."""
         app = App()
         stack = TapStack(app, "TestTapStackData", environment_suffix="test")
 
@@ -229,9 +229,9 @@ class TestStackStructure:
         data = output_json.get("data", {})
         resources = output_json.get("resource", {})
 
-        # Verify no VPC/subnet data sources (uses parameters instead)
-        assert "aws_vpc" not in data
-        assert "aws_subnet" not in data
+        # Verify VPC and subnet data sources exist for discovery
+        assert "aws_vpc" in data
+        assert "aws_subnets" in data
 
         # Verify resources are created
         assert "aws_eks_cluster" in resources
