@@ -656,6 +656,34 @@ resource "aws_s3_bucket_policy" "cloudfront_logs" {
   policy = data.aws_iam_policy_document.cloudfront_logs_bucket_policy.json
 }
 
+# Random Password Generation for Database
+resource "random_password" "db_master" {
+  length  = 32
+  special = true
+  upper   = true
+  lower   = true
+  number  = true
+  
+  # Generate a secure random password
+  override_special = "!@#$%^&*()-_=+[]{}:|,.<>/?"
+}
+
+# AWS Secrets Manager for Database Credentials
+resource "aws_secretsmanager_secret" "aurora_credentials" {
+  name                    = "aurora-credentials-${var.environment}"
+  description             = "Database credentials for Aurora cluster ${var.environment}"
+  recovery_window_in_days = 7
+  kms_key_id             = aws_kms_key.aurora_encryption.arn
+}
+
+resource "aws_secretsmanager_secret_version" "aurora_credentials" {
+  secret_id = aws_secretsmanager_secret.aurora_credentials.id
+  secret_string = jsonencode({
+    username = var.db_master_username
+    password = random_password.db_master.result
+  })
+}
+
 # Aurora MySQL Cluster
 resource "aws_db_subnet_group" "aurora" {
   name       = "db-subnet-group-aurora-${var.environment}"
@@ -673,7 +701,7 @@ resource "aws_rds_cluster" "aurora" {
   engine_version                  = "8.0.mysql_aurora.3.04.0"
   database_name                   = "videostreaming"
   master_username                 = var.db_master_username
-  master_password                 = var.db_master_password
+  master_password                 = random_password.db_master.result
   db_subnet_group_name            = aws_db_subnet_group.aurora.name
   vpc_security_group_ids          = [aws_security_group.aurora.id]
   storage_encrypted               = true
@@ -1128,7 +1156,6 @@ resource "aws_cloudwatch_dashboard" "main" {
   })
 }
 
-# Outputs
 output "vpc_id" {
   value       = aws_vpc.main.id
   description = "ID of the VPC"
@@ -1341,7 +1368,17 @@ output "db_master_username" {
 }
 
 output "db_master_password" {
-  value       = var.db_master_password
-  description = "Master password for Aurora database"
+  value       = random_password.db_master.result
+  description = "Generated master password for Aurora database"
   sensitive   = true
+}
+
+output "secrets_manager_secret_id" {
+  value       = aws_secretsmanager_secret.aurora_credentials.id
+  description = "ID of the Secrets Manager secret containing database credentials"
+}
+
+output "secrets_manager_secret_arn" {
+  value       = aws_secretsmanager_secret.aurora_credentials.arn
+  description = "ARN of the Secrets Manager secret containing database credentials"
 }

@@ -78,7 +78,7 @@ variable "db_master_username" {
 variable "db_master_password" {
   type        = string
   description = "Master password for Aurora database"
-  default     = "ChangeMe123!"
+  # REMOVED: default = "ChangeMe123!" - now generated via random_password
   sensitive   = true
 }
 ```
