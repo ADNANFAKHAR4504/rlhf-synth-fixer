@@ -225,7 +225,7 @@ class TestS3Deployment:
         """Test source S3 bucket exists"""
         bucket_names = [
             v for k, v in stack_outputs.items()
-            if "source" in k.lower() and "bucket" in k.lower()
+            if "source" in k.lower() and "bucket" in k.lower() and "name" in k.lower() and "arn" not in k.lower()
         ]
 
         if not bucket_names:
@@ -241,7 +241,7 @@ class TestS3Deployment:
         """Test target S3 bucket exists"""
         bucket_names = [
             v for k, v in stack_outputs.items()
-            if "target" in k.lower() and "bucket" in k.lower()
+            if "target" in k.lower() and "bucket" in k.lower() and "name" in k.lower() and "arn" not in k.lower()
         ]
 
         if not bucket_names:
@@ -271,7 +271,7 @@ class TestS3Deployment:
         """Test S3 buckets have encryption enabled"""
         bucket_names = [
             v for k, v in stack_outputs.items()
-            if "bucket" in k.lower() and "name" in k.lower()
+            if "bucket" in k.lower() and "name" in k.lower() and "arn" not in k.lower()
         ]
 
         if not bucket_names:
@@ -279,8 +279,9 @@ class TestS3Deployment:
 
         for bucket_name in bucket_names:
             response = s3_client.get_bucket_encryption(Bucket=bucket_name)
-            assert "Rules" in response
-            assert len(response["Rules"]) > 0
+            assert "ServerSideEncryptionConfiguration" in response
+            assert "Rules" in response["ServerSideEncryptionConfiguration"]
+            assert len(response["ServerSideEncryptionConfiguration"]["Rules"]) > 0
 
 
 class TestECSDeployment:
@@ -451,7 +452,10 @@ class TestRoute53Configuration:
 
         # Verify hosted zone exists
         response = route53_client.get_hosted_zone(Id=zone_id)
-        assert response["HostedZone"]["Id"] == zone_id
+        # AWS returns zone ID with /hostedzone/ prefix, normalize both for comparison
+        returned_zone_id = response["HostedZone"]["Id"].replace("/hostedzone/", "")
+        expected_zone_id = zone_id.replace("/hostedzone/", "")
+        assert returned_zone_id == expected_zone_id
 
     def test_health_checks_configured(self, stack_outputs, route53_client):
         """Test Route 53 health checks are configured"""

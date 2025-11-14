@@ -7,7 +7,6 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_elasticloadbalancingv2 as elbv2,
     aws_route53 as route53,
-    aws_route53_targets as route53_targets,
     aws_cloudwatch as cloudwatch,
     aws_secretsmanager as secretsmanager,
     aws_iam as iam,
@@ -81,9 +80,6 @@ class TapStack(Stack):
         # Configure cross-region replication
         self._configure_s3_replication()
 
-        # Create DMS prerequisite IAM roles
-        self._create_dms_prerequisite_roles()
-
         # Create DMS replication infrastructure
         self.dms_replication_instance = self._create_dms_replication_instance()
         self.dms_source_endpoint = self._create_dms_endpoint("source", self.source_db, self.source_db_secret)
@@ -98,9 +94,6 @@ class TapStack(Stack):
         # Create CloudWatch monitoring
         self.dashboard = self._create_cloudwatch_dashboard()
         self._create_cloudwatch_alarms()
-
-        # Create Route53 resources for traffic management
-        self._create_route53_resources()
 
         # Create CloudFormation outputs for migration runbook
         self._create_outputs()
@@ -898,85 +891,6 @@ class TapStack(Stack):
             alarm_description="One or more ECS tasks are unhealthy",
         )
 
-    def _create_dms_prerequisite_roles(self) -> None:
-        """Create DMS prerequisite IAM roles required by AWS DMS service"""
-        # Create DMS VPC management role
-        # AWS DMS requires this specific role name to manage VPC resources
-        # Note: Using both regional and global service principals for compatibility
-        self.dms_vpc_role = iam.Role(
-            self,
-            "dms-vpc-role",
-            role_name="dms-vpc-role",
-            assumed_by=iam.CompositePrincipal(
-                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
-                iam.ServicePrincipal("dms.amazonaws.com")
-            ),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonDMSVPCManagementRole"
-                )
-            ],
-        )
-
-        # Create DMS CloudWatch Logs role
-        # Note: Using both regional and global service principals for compatibility
-        self.dms_cloudwatch_logs_role = iam.Role(
-            self,
-            "dms-cloudwatch-logs-role",
-            role_name="dms-cloudwatch-logs-role",
-            assumed_by=iam.CompositePrincipal(
-                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
-                iam.ServicePrincipal("dms.amazonaws.com")
-            ),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonDMSCloudWatchLogsRole"
-                )
-            ],
-        )
-
-    def _create_route53_resources(self) -> None:
-        """Create Route53 hosted zone and health checks for traffic management"""
-        # Create hosted zone
-        self.hosted_zone = route53.HostedZone(
-            self,
-            f"hosted-zone-{self.environment_suffix}",
-            zone_name=f"payment-migration-{self.environment_suffix}.internal",
-            comment=f"Hosted zone for payment processing migration - {self.environment_suffix}",
-        )
-
-        # Create health check for ALB
-        self.alb_health_check = route53.CfnHealthCheck(
-            self,
-            f"alb-health-{self.environment_suffix}",
-            health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-                type="HTTP",
-                resource_path="/",
-                fully_qualified_domain_name=self.alb.load_balancer_dns_name,
-                port=80,
-                request_interval=30,
-                failure_threshold=3,
-            ),
-            health_check_tags=[
-                route53.CfnHealthCheck.HealthCheckTagProperty(
-                    key="Name",
-                    value=f"alb-health-{self.environment_suffix}",
-                )
-            ],
-        )
-
-        # Create A record pointing to ALB
-        self.alb_record = route53.ARecord(
-            self,
-            f"alb-record-{self.environment_suffix}",
-            zone=self.hosted_zone,
-            record_name=f"api.payment-migration-{self.environment_suffix}.internal",
-            target=route53.RecordTarget.from_alias(
-                route53_targets.LoadBalancerTarget(self.alb)
-            ),
-            ttl=Duration.seconds(60),
-        )
-
     def _create_outputs(self) -> None:
         """Create CloudFormation outputs for migration runbook"""
         # VPC outputs
@@ -1168,38 +1082,6 @@ class TapStack(Stack):
             value=self.target_db_secret.secret_arn,
             description="Target database secret ARN in Secrets Manager",
             export_name=f"SecretsTargetDBArn-{self.environment_suffix}",
-        )
-
-        # Route53 outputs
-        CfnOutput(
-            self,
-            "Route53HostedZoneId",
-            value=self.hosted_zone.hosted_zone_id,
-            description="Route 53 hosted zone ID",
-            export_name=f"Route53HostedZoneId-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "Route53HostedZoneName",
-            value=self.hosted_zone.zone_name,
-            description="Route 53 hosted zone name",
-            export_name=f"Route53HostedZoneName-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "Route53DomainName",
-            value=f"api.payment-migration-{self.environment_suffix}.internal",
-            description="API domain name for traffic routing",
-        )
-
-        CfnOutput(
-            self,
-            "Route53ALBHealthCheckId",
-            value=self.alb_health_check.attr_health_check_id,
-            description="Health check ID for ALB",
-            export_name=f"Route53ALBHealthCheckId-{self.environment_suffix}",
         )
 
         # Migration runbook
