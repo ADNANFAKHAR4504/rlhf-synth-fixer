@@ -1613,11 +1613,11 @@ Resources:
           HealthCheck:
             Command:
               - CMD-SHELL
-              - 'wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1'
+              - 'curl -f http://localhost:8080/health || exit 1'
             Interval: 30
-            Timeout: 5
-            Retries: 3
-            StartPeriod: 60
+            Timeout: 10
+            Retries: 5
+            StartPeriod: 180
           StopTimeout: 30
       Tags:
         - Key: Environment
@@ -1731,7 +1731,7 @@ Resources:
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
+      HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
@@ -1766,7 +1766,7 @@ Resources:
       HealthCheckPath: /health
       HealthCheckProtocol: HTTP
       HealthCheckIntervalSeconds: 30
-      HealthCheckTimeoutSeconds: 5
+      HealthCheckTimeoutSeconds: 10
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
