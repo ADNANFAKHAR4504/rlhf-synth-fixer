@@ -440,7 +440,7 @@ const app = new cdk.App();
 
 const environmentSuffix = app.node.tryGetContext('environmentSuffix') || 'dev';
 
-const stack = new cdk.Stack(app, `PaymentAppStack-${environmentSuffix}`, {
+const stack = new cdk.Stack(app, `TapStack${environmentSuffix}`, {
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
     region: 'ap-southeast-1',
