@@ -953,7 +953,8 @@ class TestConfirmation:
     @mark.it("declines optimizations when user says no")
     def test_confirm_optimizations_no(self):
         """Test confirmation returns False when user declines"""
-        with patch("lib.optimize.boto3"), patch("builtins.input", return_value="no"):
+        with patch("lib.optimize.boto3"), patch("builtins.input", return_value="no"), \
+             patch("sys.stdin.isatty", return_value=True):
             optimizer = AWSOptimizer(dry_run=False)
             report = OptimizationReport(
                 timestamp="2024-01-01",
@@ -1425,7 +1426,8 @@ class TestCompletNonDryRunWorkflow:
         """Test workflow when user declines optimization"""
         with patch("lib.optimize.boto3") as mock_boto, patch(
             "builtins.open", mock_open()
-        ), patch("builtins.input", return_value="no"):
+        ), patch("builtins.input", return_value="no"), \
+             patch("sys.stdin.isatty", return_value=True):
 
             mock_clients = {
                 "rds": MagicMock(),
@@ -1688,7 +1690,8 @@ class TestEdgeCasesAndErrors:
     def test_optimization_confirmation_no(self):
         """Test user rejecting optimization confirmation"""
         with patch("lib.optimize.boto3") as mock_boto, \
-             patch("builtins.input", return_value="no"):
+             patch("builtins.input", return_value="no"), \
+             patch("sys.stdin.isatty", return_value=True):
 
             mock_client = MagicMock()
             mock_client.describe_stacks.return_value = {"Stacks": []}
