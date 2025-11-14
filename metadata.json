@@ -6,13 +6,9 @@
   "team": "synth",
   "po_id": "101912492",
   "startedAt": "2025-11-13T00:00:00Z",
-  "subtask": "RDS",
+  "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "disaster-recovery",
-    "rds",
-    "high-availability"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "RDS",
@@ -24,5 +20,7 @@
     "SNS",
     "EC2"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
