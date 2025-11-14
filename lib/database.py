@@ -4,11 +4,6 @@ from constructs import Construct
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.db_parameter_group import DbParameterGroup
-from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
-from cdktf_cdktf_provider_aws.secretsmanager_secret_version import (
-    SecretsmanagerSecretVersion,
-)
-import json
 
 
 class DatabaseInfrastructure(Construct):
@@ -75,19 +70,9 @@ class DatabaseInfrastructure(Construct):
             },
         )
 
-        # Create Secrets Manager secret for database credentials
-        db_secret = SecretsmanagerSecret(
-            self,
-            "db_secret",
-            name=f"payment-db-credentials-{environment_suffix}",
-            description="RDS PostgreSQL database credentials for payment processing",
-            tags={
-                "Name": f"payment-db-credentials-{environment_suffix}",
-            },
-        )
-
-        # Store initial credentials in Secrets Manager
-        # Use managed_master_user_password to auto-generate password
+        # Database credentials
+        # Using managed_master_user_password feature for secure password generation
+        # AWS automatically stores credentials in Secrets Manager
         db_username = "dbadmin"
         db_name = "paymentdb"
 

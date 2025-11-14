@@ -22,6 +22,9 @@ from cdktf_cdktf_provider_aws.autoscaling_group import (
 from cdktf_cdktf_provider_aws.autoscaling_schedule import AutoscalingSchedule
 from cdktf_cdktf_provider_aws.wafv2_web_acl_association import Wafv2WebAclAssociation
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
+from cdktf_cdktf_provider_aws.acm_certificate import AcmCertificate
+from cdktf_cdktf_provider_aws.acm_certificate_validation import AcmCertificateValidation
+from cdktf_cdktf_provider_aws.route53_record import Route53Record
 
 
 class ComputeInfrastructure(Construct):
@@ -124,14 +127,30 @@ class ComputeInfrastructure(Construct):
             ],
         )
 
+        # Create ACM Certificate for HTTPS
+        # Using DNS validation for automatic certificate validation
+        certificate = AcmCertificate(
+            self,
+            "ssl_certificate",
+            domain_name=f"payment-{environment_suffix}.example.com",
+            subject_alternative_names=[f"*.payment-{environment_suffix}.example.com"],
+            validation_method="DNS",
+            lifecycle={"create_before_destroy": True},
+            tags={
+                "Name": f"payment-cert-{environment_suffix}",
+            },
+        )
+
         # ALB Listener (HTTPS)
-        # Note: In production, add certificate_arn for SSL/TLS
-        LbListener(
+        # Using HTTPS protocol with ACM certificate for encryption in transit
+        self.https_listener = LbListener(
             self,
             "https_listener",
             load_balancer_arn=self.alb.arn,
             port=443,
-            protocol="HTTP",  # Changed to HTTP for demo without certificate
+            protocol="HTTPS",
+            ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
+            certificate_arn=certificate.arn,
             default_action=[
                 LbListenerDefaultAction(
                     type="forward",

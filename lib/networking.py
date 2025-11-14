@@ -16,6 +16,11 @@ from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
 from cdktf_cdktf_provider_aws.vpc_endpoint_route_table_association import (
     VpcEndpointRouteTableAssociation,
 )
+from cdktf_cdktf_provider_aws.flow_log import FlowLog
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
+import json
 
 
 class NetworkingInfrastructure(Construct):
@@ -189,6 +194,81 @@ class NetworkingInfrastructure(Construct):
             "s3_endpoint_rt_assoc",
             route_table_id=private_rt.id,
             vpc_endpoint_id=s3_endpoint.id,
+        )
+
+        # VPC Flow Logs for security auditing and compliance (PCI DSS 10.2.7)
+        # Create CloudWatch Log Group for VPC Flow Logs
+        flow_log_group = CloudwatchLogGroup(
+            self,
+            "vpc_flow_log_group",
+            name=f"/aws/vpc/flowlogs/payment-{environment_suffix}",
+            retention_in_days=90,  # PCI DSS requires minimum 90 days retention
+            tags={
+                "Name": f"payment-vpc-flow-logs-{environment_suffix}",
+            },
+        )
+
+        # IAM Role for VPC Flow Logs
+        flow_log_role_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"Service": "vpc-flow-logs.amazonaws.com"},
+                    "Action": "sts:AssumeRole",
+                }
+            ],
+        }
+
+        flow_log_role = IamRole(
+            self,
+            "vpc_flow_log_role",
+            name=f"payment-vpc-flow-log-role-{environment_suffix}",
+            assume_role_policy=json.dumps(flow_log_role_policy),
+            tags={
+                "Name": f"payment-vpc-flow-log-role-{environment_suffix}",
+            },
+        )
+
+        # IAM Policy for VPC Flow Logs to write to CloudWatch
+        flow_log_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogGroups",
+                        "logs:DescribeLogStreams",
+                    ],
+                    "Resource": "*",
+                }
+            ],
+        }
+
+        IamRolePolicy(
+            self,
+            "vpc_flow_log_policy",
+            name=f"payment-vpc-flow-log-policy-{environment_suffix}",
+            role=flow_log_role.id,
+            policy=json.dumps(flow_log_policy),
+        )
+
+        # Create VPC Flow Log
+        FlowLog(
+            self,
+            "vpc_flow_log",
+            vpc_id=self.vpc.id,
+            traffic_type="ALL",  # Capture all traffic (ACCEPT, REJECT, ALL)
+            iam_role_arn=flow_log_role.arn,
+            log_destination_type="cloud-watch-logs",
+            log_destination=flow_log_group.arn,
+            max_aggregation_interval=60,  # 1 minute aggregation for faster detection
+            tags={
+                "Name": f"payment-vpc-flow-log-{environment_suffix}",
+            },
         )
 
     @property

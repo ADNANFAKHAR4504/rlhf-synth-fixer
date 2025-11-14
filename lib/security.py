@@ -10,6 +10,7 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
 from cdktf_cdktf_provider_aws.wafv2_web_acl import Wafv2WebAcl
+from cdktf import TerraformResource
 import json
 
 
@@ -179,7 +180,7 @@ class SecurityInfrastructure(Construct):
                         "ssm:GetParameter",
                         "ssm:GetParameters",
                     ],
-                    "Resource": "arn:aws:ssm:*:*:parameter/*",
+                    "Resource": f"arn:aws:ssm:*:*:parameter/payment-processing/{environment_suffix}/*",
                 },
             ],
         }
@@ -200,10 +201,86 @@ class SecurityInfrastructure(Construct):
             role=self.instance_role.name,
         )
 
-        # WAF Web ACL - Placeholder for future implementation
-        # Note: Full managed rule groups implementation requires complex CDKTF configuration
-        # For production deployment, configure WAF manually or use AWS CloudFormation
-        self.waf_acl_arn = ""
+        # WAF Web ACL with AWS Managed Rule Groups
+        # Using raw Terraform resource due to CDKTF Python limitations with nested structures
+        self.waf_acl = TerraformResource(
+            self,
+            "waf_acl",
+            terraform_resource_type="aws_wafv2_web_acl"
+        )
+
+        # Add WAF configuration using overrides
+        self.waf_acl.add_override("name", f"payment-waf-{environment_suffix}")
+        self.waf_acl.add_override("scope", "REGIONAL")
+        self.waf_acl.add_override("default_action", {"allow": {}})
+
+        # Add managed rule groups
+        self.waf_acl.add_override("rule", [
+            {
+                "name": "AWSManagedRulesCommonRuleSet",
+                "priority": 1,
+                "statement": {
+                    "managed_rule_group_statement": {
+                        "vendor_name": "AWS",
+                        "name": "AWSManagedRulesCommonRuleSet"
+                    }
+                },
+                "override_action": {
+                    "none": {}
+                },
+                "visibility_config": {
+                    "cloudwatch_metrics_enabled": True,
+                    "metric_name": "AWSManagedRulesCommonRuleSetMetric",
+                    "sampled_requests_enabled": True
+                }
+            },
+            {
+                "name": "AWSManagedRulesKnownBadInputsRuleSet",
+                "priority": 2,
+                "statement": {
+                    "managed_rule_group_statement": {
+                        "vendor_name": "AWS",
+                        "name": "AWSManagedRulesKnownBadInputsRuleSet"
+                    }
+                },
+                "override_action": {
+                    "none": {}
+                },
+                "visibility_config": {
+                    "cloudwatch_metrics_enabled": True,
+                    "metric_name": "AWSManagedRulesKnownBadInputsRuleSetMetric",
+                    "sampled_requests_enabled": True
+                }
+            },
+            {
+                "name": "AWSManagedRulesSQLiRuleSet",
+                "priority": 3,
+                "statement": {
+                    "managed_rule_group_statement": {
+                        "vendor_name": "AWS",
+                        "name": "AWSManagedRulesSQLiRuleSet"
+                    }
+                },
+                "override_action": {
+                    "none": {}
+                },
+                "visibility_config": {
+                    "cloudwatch_metrics_enabled": True,
+                    "metric_name": "AWSManagedRulesSQLiRuleSetMetric",
+                    "sampled_requests_enabled": True
+                }
+            }
+        ])
+
+        # Add visibility config and tags
+        self.waf_acl.add_override("visibility_config", {
+            "cloudwatch_metrics_enabled": True,
+            "metric_name": f"payment-waf-{environment_suffix}",
+            "sampled_requests_enabled": True
+        })
+        self.waf_acl.add_override("tags", {
+            "Name": f"payment-waf-{environment_suffix}"
+        })
 
     @property
     def alb_security_group_id(self) -> str:
@@ -227,5 +304,5 @@ class SecurityInfrastructure(Construct):
 
     @property
     def waf_web_acl_arn(self) -> str:
-        """Return WAF Web ACL ARN (empty - WAF not deployed)."""
-        return self.waf_acl_arn
+        """Return WAF Web ACL ARN."""
+        return self.waf_acl.get_string_attribute("arn")
