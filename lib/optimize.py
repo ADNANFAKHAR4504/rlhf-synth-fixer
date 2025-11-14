@@ -81,10 +81,11 @@ class OptimizationReport:
 class AWSOptimizer:
     """Main AWS infrastructure optimizer class."""
 
-    def __init__(self, environment_suffix: str = 'dev', dry_run: bool = True):
+    def __init__(self, environment_suffix: str = 'dev', dry_run: bool = True, force: bool = False):
         """Initialize the optimizer with AWS clients."""
         self.environment_suffix = environment_suffix
         self.dry_run = dry_run
+        self.force = force
         self.optimizations: List[ResourceConfiguration] = []
         self.original_configs: Dict[str, Any] = {}
 
@@ -1382,6 +1383,16 @@ class AWSOptimizer:
 
         print("\n" + "="*80)
 
+        # Auto-confirm if force flag is set or running in non-interactive environment
+        if self.force:
+            logger.info("Force flag enabled - auto-confirming optimizations")
+            return True
+
+        # Check if running in CI/CD or non-interactive environment
+        if not sys.stdin.isatty():
+            logger.info("Non-interactive environment detected - auto-confirming optimizations")
+            return True
+
         response = input("\nDo you want to apply these optimizations? (yes/no): ")
         return response.lower() in ['yes', 'y']
 
@@ -1443,7 +1454,8 @@ def main():
     try:
         optimizer = AWSOptimizer(
             environment_suffix=environment_suffix,
-            dry_run=args.dry_run
+            dry_run=args.dry_run,
+            force=args.force
         )
 
         report = optimizer.analyze_and_optimize()
