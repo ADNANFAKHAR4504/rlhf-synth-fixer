@@ -6,11 +6,12 @@ import json
 
 
 class KmsEncryptionConstruct(Construct):
-    def __init__(self, scope: Construct, id: str, environment_suffix: str):
+    def __init__(self, scope: Construct, id: str, environment_suffix: str, region: str = "us-east-1"):
         super().__init__(scope, id)
 
         # Get current account ID
         current = DataAwsCallerIdentity(self, "current")
+        self.region = region
 
         # KMS Key for EKS Cluster Encryption
         self.cluster_key = KmsKey(self, f"cluster-key",
@@ -101,7 +102,7 @@ class KmsEncryptionConstruct(Construct):
                         "Resource": "*",
                         "Condition": {
                             "ArnLike": {
-                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:us-east-2:{current.account_id}:*"
+                                "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{self.region}:{current.account_id}:*"
                             }
                         }
                     }

@@ -13,31 +13,33 @@ import json
 class EksClusterConstruct(Construct):
     def __init__(self, scope: Construct, id: str, environment_suffix: str,
                  vpc_id: str, private_subnet_ids: list, cluster_version: str,
-                 kms_key_arn: str):
+                 kms_key_arn: str, logs_kms_key_arn: str = None):
         super().__init__(scope, id)
 
         self.environment_suffix = environment_suffix
         self.kms_key_arn = kms_key_arn
+        # Use separate logs KMS key if provided, otherwise use cluster key
+        self.logs_kms_key_arn = logs_kms_key_arn or kms_key_arn
 
         # CloudWatch Log Groups for EKS with KMS encryption
         self.audit_log_group = CloudwatchLogGroup(self, f"audit-logs",
             name=f"/aws/eks/cluster-{environment_suffix}/audit",
             retention_in_days=90,
-            kms_key_id=kms_key_arn,
+            kms_key_id=self.logs_kms_key_arn,
             tags={"Name": f"eks-audit-logs-{environment_suffix}"}
         )
 
         self.authenticator_log_group = CloudwatchLogGroup(self, f"authenticator-logs",
             name=f"/aws/eks/cluster-{environment_suffix}/authenticator",
             retention_in_days=90,
-            kms_key_id=kms_key_arn,
+            kms_key_id=self.logs_kms_key_arn,
             tags={"Name": f"eks-authenticator-logs-{environment_suffix}"}
         )
 
         self.scheduler_log_group = CloudwatchLogGroup(self, f"scheduler-logs",
             name=f"/aws/eks/cluster-{environment_suffix}/scheduler",
             retention_in_days=90,
-            kms_key_id=kms_key_arn,
+            kms_key_id=self.logs_kms_key_arn,
             tags={"Name": f"eks-scheduler-logs-{environment_suffix}"}
         )
 

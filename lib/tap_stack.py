@@ -54,12 +54,25 @@ class TapStack(TerraformStack):
         self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # VPC and Networking
+        # Determine availability zones based on region
+        if aws_region.startswith("us-east-1"):
+            azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
+        elif aws_region.startswith("us-east-2"):
+            azs = ["us-east-2a", "us-east-2b", "us-east-2c"]
+        elif aws_region.startswith("us-west-1"):
+            azs = ["us-west-1a", "us-west-1b", "us-west-1c"]
+        elif aws_region.startswith("us-west-2"):
+            azs = ["us-west-2a", "us-west-2b", "us-west-2c"]
+        else:
+            # Default to appending a, b, c to the region
+            azs = [f"{aws_region}a", f"{aws_region}b", f"{aws_region}c"]
+
         vpc = VpcConstruct(
             self,
             "vpc",
             environment_suffix=environment_suffix,
             cidr_block="10.0.0.0/16",
-            availability_zones=["us-east-1a", "us-east-1b", "us-east-1c"],
+            availability_zones=azs,
             region=aws_region
         )
 
@@ -67,7 +80,8 @@ class TapStack(TerraformStack):
         kms = KmsEncryptionConstruct(
             self,
             "kms",
-            environment_suffix=environment_suffix
+            environment_suffix=environment_suffix,
+            region=aws_region
         )
 
         # EKS Cluster
@@ -78,7 +92,8 @@ class TapStack(TerraformStack):
             vpc_id=vpc.vpc_id,
             private_subnet_ids=vpc.private_subnet_ids,
             cluster_version="1.28",
-            kms_key_arn=kms.cluster_key_arn
+            kms_key_arn=kms.cluster_key_arn,
+            logs_kms_key_arn=kms.logs_key_arn
         )
 
         # IRSA Roles
