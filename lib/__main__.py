@@ -7,7 +7,7 @@ across multiple environments (dev, staging, prod).
 """
 
 import pulumi
-from lib.tap_stack import TapStack, TapStackArgs
+from tap_stack import TapStack, TapStackArgs
 
 
 def main():
