@@ -499,10 +499,68 @@ resource "aws_security_group_rule" "nodes_dns_udp" {
 
 ```hcl
 # eks_cluster.tf
+data "aws_caller_identity" "current" {}
+
+data "aws_iam_policy_document" "kms" {
+  statement {
+    sid    = "AccountAccess"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"]
+    }
+
+    actions   = ["kms:*"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowCloudWatchLogs"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["logs.${var.aws_region}.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+
+    resources = ["*"]
+  }
+
+  statement {
+    sid    = "AllowEKS"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey"
+    ]
+
+    resources = ["*"]
+  }
+}
+
 resource "aws_kms_key" "eks" {
   description             = "KMS key for ${local.cluster_name} secret encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
+  policy                  = data.aws_iam_policy_document.kms.json
 
   tags = merge(local.common_tags, {
     Name = "${local.cluster_name}-kms"
