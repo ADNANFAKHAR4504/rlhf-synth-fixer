@@ -363,8 +363,8 @@ describe("NodeGroupsStack", () => {
             ebs: expect.objectContaining({
               volumeSize: 100,
               volumeType: 'gp3',
-              encrypted: true,
-              deleteOnTermination: true,
+              encrypted: 'true',
+              deleteOnTermination: 'true',
             }),
           }),
         ]),
@@ -391,7 +391,7 @@ describe("NodeGroupsStack", () => {
             ebs: expect.objectContaining({
               volumeSize: 100,
               volumeType: 'gp3',
-              encrypted: true,
+              encrypted: 'true',
             }),
           }),
         ]),
