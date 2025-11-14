@@ -1,31 +1,25 @@
 {
-  "task_id": "101912456",
-  "po_id": "101912456",
-  "platform": "pulumi",
-  "language": "py",
+  "platform": "tf",
+  "language": "hcl",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
-  "startedAt": "2025-11-14T00:55:26Z",
-  "subtask": "Failure Recovery and High Availability",
+  "startedAt": "2025-11-14T07:43:35",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
     "aws",
     "infrastructure",
-    "environment-migration"
+    "infrastructure-analysis-/-qa"
   ],
+  "po_id": "101912435",
   "aws_services": [
-    "VPC",
-    "EC2",
-    "RDS",
-    "DynamoDB",
-    "ELB",
+    "Config",
     "Lambda",
+    "CloudWatch Logs",
+    "SNS",
     "IAM",
-    "KMS",
-    "Secrets Manager",
-    "CloudWatch",
-    "AWS Backup",
-    "SSM"
+    "S3",
+    "EventBridge"
   ],
   "training_quality": 10,
   "author": "iamarpit-turing",

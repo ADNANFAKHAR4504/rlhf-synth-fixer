@@ -1,1075 +1,1431 @@
-I'll create a comprehensive blue-green migration infrastructure for your payment processing system using Pulumi with Python. This implementation follows PCI DSS compliance requirements and provides zero-downtime migration capabilities with automated rollback support.
+# Infrastructure Compliance Checking System - Terraform Implementation
 
-## Complete Implementation
+This implementation provides a complete AWS infrastructure compliance checking system using Terraform. The system monitors S3, RDS, and EC2 resources for compliance violations and sends notifications through SNS.
 
-The solution implements all requirements:
-- Dual RDS Aurora MySQL 8.0 environments (blue and green) in private subnets
-- Application Load Balancer with weighted target groups for controlled traffic shifting
-- DynamoDB tables with point-in-time recovery for session management
-- Lambda function for automated environment switching with < 5 minute rollback
-- Comprehensive CloudWatch alarms for database connections and response times
-- AWS Backup plans with 7-day retention
-- KMS encryption for all data at rest
-- Secrets Manager for database credentials with automatic rotation
-- VPC endpoints for S3 and DynamoDB (no internet exposure)
-- Full tagging with Environment, CostCenter, and MigrationPhase
-- Naming convention validation: (dev|staging|prod)-payment-[a-z0-9]{8}
+## Architecture Overview
 
-## File Structure
+The solution includes:
+- AWS Config with configuration recorder and delivery channel
+- Config rules for detecting unencrypted S3 buckets and publicly accessible RDS instances
+- Lambda function for processing compliance events and analyzing snapshots
+- CloudWatch Logs for centralized logging with 30-day retention
+- SNS topic for compliance violation notifications
+- S3 bucket for storing Config snapshots
+- IAM roles and policies following least-privilege principles
 
+## File: variables.tf
+
+```hcl
+# variables.tf
+# Input variables for the compliance checking system
+
+variable "aws_region" {
+  description = "AWS region for resource deployment"
+  type        = string
+  default     = "us-east-1"
+}
+
+variable "environment_suffix" {
+  description = "Unique suffix to append to resource names for environment isolation"
+  type        = string
+  default     = "prod"
+}
+
+variable "config_snapshot_frequency" {
+  description = "Frequency for Config snapshot delivery (One_Hour, Three_Hours, Six_Hours, Twelve_Hours, or TwentyFour_Hours)"
+  type        = string
+  default     = "TwentyFour_Hours"
+}
+
+variable "cloudwatch_log_retention_days" {
+  description = "CloudWatch Logs retention period in days"
+  type        = number
+  default     = 30
+}
+
+variable "lambda_memory_size" {
+  description = "Memory size for Lambda function in MB"
+  type        = number
+  default     = 256
+}
+
+variable "lambda_timeout" {
+  description = "Timeout for Lambda function in seconds"
+  type        = number
+  default     = 60
+}
+
+variable "lambda_runtime" {
+  description = "Python runtime version for Lambda function"
+  type        = string
+  default     = "python3.11"
+}
+
+variable "notification_email" {
+  description = "Email address for compliance violation notifications (optional)"
+  type        = string
+  default     = ""
+}
+
+variable "tags" {
+  description = "Common tags to apply to all resources"
+  type        = map(string)
+  default = {
+    Project     = "ComplianceChecking"
+    ManagedBy   = "Terraform"
+    Environment = "Production"
+  }
+}
 ```
-lib/
-  __init__.py
-  tap_stack.py           # Main implementation (1122 lines)
-tap.py                   # Entry point
-Pulumi.yaml             # Project configuration
-requirements.txt         # Dependencies
+
+## File: main.tf
+
+```hcl
+# main.tf
+# Main configuration for AWS infrastructure compliance checking system
+
+# Data source to get current AWS account ID
+data "aws_caller_identity" "current" {}
+
+# Data source to get current AWS region
+data "aws_region" "current" {}
+
+#############################################
+# S3 Bucket for AWS Config
+#############################################
+
+# S3 bucket for storing AWS Config snapshots and history
+resource "aws_s3_bucket" "config_bucket" {
+  bucket = "config-bucket-${var.environment_suffix}-${data.aws_caller_identity.current.account_id}"
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "config-bucket-${var.environment_suffix}"
+    }
+  )
+}
+
+# Enable versioning for Config bucket
+resource "aws_s3_bucket_versioning" "config_bucket" {
+  bucket = aws_s3_bucket.config_bucket.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+# Enable server-side encryption for Config bucket
+resource "aws_s3_bucket_server_side_encryption_configuration" "config_bucket" {
+  bucket = aws_s3_bucket.config_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Block public access to Config bucket
+resource "aws_s3_bucket_public_access_block" "config_bucket" {
+  bucket = aws_s3_bucket.config_bucket.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+# Bucket policy to allow AWS Config to write to the bucket
+resource "aws_s3_bucket_policy" "config_bucket" {
+  bucket = aws_s3_bucket.config_bucket.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config_bucket.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketExistenceCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:ListBucket"
+        Resource = aws_s3_bucket.config_bucket.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      },
+      {
+        Sid    = "AWSConfigBucketWrite"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config_bucket.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl"      = "bucket-owner-full-control"
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+#############################################
+# IAM Role for AWS Config
+#############################################
+
+# IAM role for AWS Config service
+resource "aws_iam_role" "config_role" {
+  name = "config-role-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "config-role-${var.environment_suffix}"
+    }
+  )
+}
+
+# Attach AWS managed policy for Config
+resource "aws_iam_role_policy_attachment" "config_policy" {
+  role       = aws_iam_role.config_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+}
+
+# Custom policy for Config to write to S3 bucket
+resource "aws_iam_role_policy" "config_s3_policy" {
+  name = "config-s3-policy-${var.environment_suffix}"
+  role = aws_iam_role.config_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetBucketVersioning",
+          "s3:PutObject",
+          "s3:GetObject"
+        ]
+        Resource = [
+          aws_s3_bucket.config_bucket.arn,
+          "${aws_s3_bucket.config_bucket.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+#############################################
+# AWS Config Resources
+#############################################
+
+# AWS Config configuration recorder
+resource "aws_config_configuration_recorder" "main" {
+  name     = "config-recorder-${var.environment_suffix}"
+  role_arn = aws_iam_role.config_role.arn
+
+  recording_group {
+    all_supported = false
+    resource_types = [
+      "AWS::S3::Bucket",
+      "AWS::RDS::DBInstance",
+      "AWS::EC2::Instance",
+      "AWS::EC2::SecurityGroup",
+      "AWS::RDS::DBSecurityGroup",
+      "AWS::RDS::DBSnapshot",
+      "AWS::RDS::DBCluster",
+      "AWS::RDS::DBClusterSnapshot"
+    ]
+  }
+}
+
+# AWS Config delivery channel
+resource "aws_config_delivery_channel" "main" {
+  name           = "config-delivery-channel-${var.environment_suffix}"
+  s3_bucket_name = aws_s3_bucket.config_bucket.id
+
+  snapshot_delivery_properties {
+    delivery_frequency = var.config_snapshot_frequency
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Start the configuration recorder
+resource "aws_config_configuration_recorder_status" "main" {
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+
+  depends_on = [aws_config_delivery_channel.main]
+}
+
+# Config rule for detecting unencrypted S3 buckets
+resource "aws_config_config_rule" "s3_bucket_encryption" {
+  name = "s3-bucket-server-side-encryption-enabled-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Config rule for detecting publicly accessible RDS instances
+resource "aws_config_config_rule" "rds_public_access" {
+  name = "rds-instance-public-access-check-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "RDS_INSTANCE_PUBLIC_ACCESS_CHECK"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Config rule for RDS encryption at rest
+resource "aws_config_config_rule" "rds_encryption" {
+  name = "rds-storage-encrypted-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "RDS_STORAGE_ENCRYPTED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+# Config rule for EC2 instance detailed monitoring
+resource "aws_config_config_rule" "ec2_detailed_monitoring" {
+  name = "ec2-instance-detailed-monitoring-enabled-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "EC2_INSTANCE_DETAILED_MONITORING_ENABLED"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
+
+#############################################
+# SNS Topic for Compliance Notifications
+#############################################
+
+# SNS topic for compliance violation notifications
+resource "aws_sns_topic" "compliance_notifications" {
+  name = "compliance-notifications-${var.environment_suffix}"
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "compliance-notifications-${var.environment_suffix}"
+    }
+  )
+}
+
+# SNS topic policy
+resource "aws_sns_topic_policy" "compliance_notifications" {
+  arn = aws_sns_topic.compliance_notifications.arn
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowConfigPublish"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "SNS:Publish"
+        Resource = aws_sns_topic.compliance_notifications.arn
+      },
+      {
+        Sid    = "AllowLambdaPublish"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action   = "SNS:Publish"
+        Resource = aws_sns_topic.compliance_notifications.arn
+        Condition = {
+          StringEquals = {
+            "AWS:SourceAccount" = data.aws_caller_identity.current.account_id
+          }
+        }
+      }
+    ]
+  })
+}
+
+# Optional: SNS topic subscription for email notifications
+resource "aws_sns_topic_subscription" "compliance_email" {
+  count     = var.notification_email != "" ? 1 : 0
+  topic_arn = aws_sns_topic.compliance_notifications.arn
+  protocol  = "email"
+  endpoint  = var.notification_email
+}
+
+#############################################
+# CloudWatch Log Groups
+#############################################
+
+# CloudWatch Log Group for Config
+resource "aws_cloudwatch_log_group" "config_logs" {
+  name              = "/aws/config/compliance-checker-${var.environment_suffix}"
+  retention_in_days = var.cloudwatch_log_retention_days
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "config-logs-${var.environment_suffix}"
+    }
+  )
+}
+
+# CloudWatch Log Group for Lambda function
+resource "aws_cloudwatch_log_group" "lambda_logs" {
+  name              = "/aws/lambda/compliance-checker-${var.environment_suffix}"
+  retention_in_days = var.cloudwatch_log_retention_days
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "lambda-logs-${var.environment_suffix}"
+    }
+  )
+}
+
+# CloudWatch Log Group for Config delivery
+resource "aws_cloudwatch_log_group" "config_delivery_logs" {
+  name              = "/aws/config/delivery-${var.environment_suffix}"
+  retention_in_days = var.cloudwatch_log_retention_days
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "config-delivery-logs-${var.environment_suffix}"
+    }
+  )
+}
+
+#############################################
+# IAM Role for Lambda Function
+#############################################
+
+# IAM role for Lambda compliance checker function
+resource "aws_iam_role" "lambda_role" {
+  name = "compliance-lambda-role-${var.environment_suffix}"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+        Action = "sts:AssumeRole"
+      }
+    ]
+  })
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "compliance-lambda-role-${var.environment_suffix}"
+    }
+  )
+}
+
+# IAM policy for Lambda to write CloudWatch Logs
+resource "aws_iam_role_policy" "lambda_cloudwatch_policy" {
+  name = "lambda-cloudwatch-policy-${var.environment_suffix}"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "${aws_cloudwatch_log_group.lambda_logs.arn}:*"
+      }
+    ]
+  })
+}
+
+# IAM policy for Lambda to read Config data
+resource "aws_iam_role_policy" "lambda_config_policy" {
+  name = "lambda-config-policy-${var.environment_suffix}"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "config:GetComplianceDetailsByConfigRule",
+          "config:GetComplianceDetailsByResource",
+          "config:DescribeConfigRules",
+          "config:DescribeConfigRuleEvaluationStatus",
+          "config:DescribeComplianceByConfigRule",
+          "config:DescribeComplianceByResource"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+# IAM policy for Lambda to publish to SNS
+resource "aws_iam_role_policy" "lambda_sns_policy" {
+  name = "lambda-sns-policy-${var.environment_suffix}"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:Publish"
+        ]
+        Resource = aws_sns_topic.compliance_notifications.arn
+      }
+    ]
+  })
+}
+
+# IAM policy for Lambda to read S3 Config snapshots
+resource "aws_iam_role_policy" "lambda_s3_policy" {
+  name = "lambda-s3-policy-${var.environment_suffix}"
+  role = aws_iam_role.lambda_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.config_bucket.arn,
+          "${aws_s3_bucket.config_bucket.arn}/*"
+        ]
+      }
+    ]
+  })
+}
+
+#############################################
+# Lambda Function
+#############################################
+
+# Archive Lambda function code
+data "archive_file" "lambda_code" {
+  type        = "zip"
+  output_path = "${path.module}/lambda_function.zip"
+
+  source {
+    content  = file("${path.module}/lambda_function.py")
+    filename = "lambda_function.py"
+  }
+}
+
+# Lambda function for compliance checking
+resource "aws_lambda_function" "compliance_checker" {
+  filename         = data.archive_file.lambda_code.output_path
+  function_name    = "compliance-checker-${var.environment_suffix}"
+  role             = aws_iam_role.lambda_role.arn
+  handler          = "lambda_function.lambda_handler"
+  source_code_hash = data.archive_file.lambda_code.output_base64sha256
+  runtime          = var.lambda_runtime
+  memory_size      = var.lambda_memory_size
+  timeout          = var.lambda_timeout
+
+  environment {
+    variables = {
+      SNS_TOPIC_ARN       = aws_sns_topic.compliance_notifications.arn
+      CONFIG_BUCKET       = aws_s3_bucket.config_bucket.id
+      ENVIRONMENT_SUFFIX  = var.environment_suffix
+      LOG_LEVEL           = "INFO"
+    }
+  }
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "compliance-checker-${var.environment_suffix}"
+    }
+  )
+
+  depends_on = [
+    aws_cloudwatch_log_group.lambda_logs,
+    aws_iam_role_policy.lambda_cloudwatch_policy,
+    aws_iam_role_policy.lambda_config_policy,
+    aws_iam_role_policy.lambda_sns_policy,
+    aws_iam_role_policy.lambda_s3_policy
+  ]
+}
+
+# Lambda permission for Config to invoke the function
+resource "aws_lambda_permission" "allow_config" {
+  statement_id  = "AllowExecutionFromConfig"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.compliance_checker.function_name
+  principal     = "config.amazonaws.com"
+  source_arn    = "arn:aws:config:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
+}
+
+# Lambda permission for EventBridge to invoke the function
+resource "aws_lambda_permission" "allow_eventbridge" {
+  statement_id  = "AllowExecutionFromEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.compliance_checker.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.config_compliance.arn
+}
+
+#############################################
+# EventBridge Rules
+#############################################
+
+# EventBridge rule to capture Config compliance events
+resource "aws_cloudwatch_event_rule" "config_compliance" {
+  name        = "config-compliance-change-${var.environment_suffix}"
+  description = "Capture Config compliance state changes"
+
+  event_pattern = jsonencode({
+    source      = ["aws.config"]
+    detail-type = ["Config Rules Compliance Change"]
+  })
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "config-compliance-change-${var.environment_suffix}"
+    }
+  )
+}
+
+# EventBridge target to invoke Lambda function
+resource "aws_cloudwatch_event_target" "lambda_target" {
+  rule      = aws_cloudwatch_event_rule.config_compliance.name
+  target_id = "ComplianceCheckerLambda"
+  arn       = aws_lambda_function.compliance_checker.arn
+}
+
+# EventBridge rule for periodic compliance checks
+resource "aws_cloudwatch_event_rule" "periodic_check" {
+  name                = "periodic-compliance-check-${var.environment_suffix}"
+  description         = "Trigger periodic compliance checks"
+  schedule_expression = "rate(6 hours)"
+
+  tags = merge(
+    var.tags,
+    {
+      Name = "periodic-compliance-check-${var.environment_suffix}"
+    }
+  )
+}
+
+# EventBridge target for periodic checks
+resource "aws_cloudwatch_event_target" "periodic_lambda_target" {
+  rule      = aws_cloudwatch_event_rule.periodic_check.name
+  target_id = "PeriodicComplianceCheck"
+  arn       = aws_lambda_function.compliance_checker.arn
+}
+
+# Lambda permission for periodic EventBridge rule
+resource "aws_lambda_permission" "allow_periodic_eventbridge" {
+  statement_id  = "AllowExecutionFromPeriodicEventBridge"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.compliance_checker.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.periodic_check.arn
+}
 ```
 
-## Main Stack Implementation (lib/tap_stack.py)
+## File: lambda_function.py
 
 ```python
-"""
-tap_stack.py
+# lambda_function.py
+# Lambda function to process Config compliance events and analyze snapshots
 
-Blue-Green Migration Infrastructure for Payment Processing System
-
-This implements a complete blue-green deployment strategy using Pulumi with Python:
-- Dual RDS Aurora MySQL 8.0 environments (blue and green)
-- Application Load Balancer with weighted target groups for traffic shifting
-- DynamoDB table with point-in-time recovery for session management
-- Lambda function for automated environment switching
-- Comprehensive CloudWatch monitoring and alarms
-- AWS Backup plans with 7-day retention
-- VPC with private subnets across 3 AZs
-- VPC endpoints for S3 and DynamoDB (no internet exposure)
-- KMS customer-managed encryption keys
-- Secrets Manager for database credentials with automatic rotation
-- All resources tagged with Environment, CostCenter, and MigrationPhase
-"""
-
-from typing import Optional, Dict, List
-import json
-import pulumi
-from pulumi import ResourceOptions, Output
-import pulumi_aws as aws
-
-
-class TapStackArgs:
-    """TapStackArgs defines the input arguments for the TapStack Pulumi component."""
-    
-    def __init__(
-        self,
-        environment_suffix: Optional[str] = None,
-        tags: Optional[dict] = None,
-        stack_prefix: Optional[str] = None
-    ):
-        self.environment_suffix = environment_suffix or 'dev'
-        self.tags = tags or {}
-        self.stack_prefix = stack_prefix or f'{self.environment_suffix}-payment-{self.environment_suffix}'
-
-
-class TapStack(pulumi.ComponentResource):
-    """
-    Main Pulumi component for blue-green payment processing infrastructure.
-    
-    Creates ~25+ resources including VPC, RDS clusters, ALB, Lambda, monitoring, and backup.
-    """
-    
-    def __init__(
-        self,
-        name: str,
-        args: TapStackArgs,
-        opts: Optional[ResourceOptions] = None
-    ):
-        super().__init__('tap:stack:TapStack', name, None, opts)
-        
-        self.environment_suffix = args.environment_suffix
-        self.stack_prefix = args.stack_prefix
-        
-        # Required tags per constraints
-        self.default_tags = {
-            'Environment': self.environment_suffix,
-            'CostCenter': 'payment-processing',
-            'MigrationPhase': 'blue-green',
-            'ManagedBy': 'Pulumi',
-            'Compliance': 'PCI-DSS',
-            **args.tags
-        }
-        
-        # Create infrastructure components
-        self.kms_key = self._create_kms_key()
-        self.vpc = self._create_vpc()
-        self.vpc_endpoints = self._create_vpc_endpoints()
-        self.dynamodb_table = self._create_dynamodb_table()
-        self.blue_db_secret = self._create_db_secret('blue')
-        self.green_db_secret = self._create_db_secret('green')
-        self.blue_env = self._create_environment('blue')
-        self.green_env = self._create_environment('green')
-        self.alb = self._create_alb()
-        self.switch_lambda = self._create_switch_lambda()
-        self.alarms = self._create_cloudwatch_alarms()
-        self.backup_plan = self._create_backup_plan()
-        self.active_env_param = self._create_active_env_param()
-        
-        # Register outputs
-        self.register_outputs({
-            'vpc_id': self.vpc['vpc'].id,
-            'alb_dns_name': self.alb['alb'].dns_name,
-            'blue_cluster_endpoint': self.blue_env['cluster'].endpoint,
-            'green_cluster_endpoint': self.green_env['cluster'].endpoint,
-            'active_environment': self.active_env_param.value
-        })
-    
-    def _create_kms_key(self) -> aws.kms.Key:
-        """Create KMS customer-managed key for encryption at rest (PCI DSS requirement)."""
-        key = aws.kms.Key(
-            f'payment-kms-{self.environment_suffix}',
-            description=f'KMS key for payment processing data encryption - {self.environment_suffix}',
-            deletion_window_in_days=7,
-            enable_key_rotation=True,
-            tags={**self.default_tags, 'Name': f'payment-kms-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.kms.Alias(
-            f'payment-kms-alias-{self.environment_suffix}',
-            name=f'alias/payment-{self.environment_suffix}',
-            target_key_id=key.id,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return key
-    
-    def _create_vpc(self) -> Dict:
-        """
-        Create VPC with private subnets across 3 availability zones.
-        
-        Architecture:
-        - VPC: 10.0.0.0/16
-        - 3 public subnets (10.0.0-2.0/24) for NAT/ALB
-        - 3 private subnets (10.0.10-12.0/24) for RDS/compute
-        - 3 NAT Gateways (one per AZ)
-        - Internet Gateway
-        """
-        vpc = aws.ec2.Vpc(
-            f'payment-vpc-{self.environment_suffix}',
-            cidr_block='10.0.0.0/16',
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags={**self.default_tags, 'Name': f'payment-vpc-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        igw = aws.ec2.InternetGateway(
-            f'payment-igw-{self.environment_suffix}',
-            vpc_id=vpc.id,
-            tags={**self.default_tags, 'Name': f'payment-igw-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        public_subnets = []
-        nat_gateways = []
-        azs = ['us-east-1a', 'us-east-1b', 'us-east-1c']
-        
-        for i, az in enumerate(azs):
-            public_subnet = aws.ec2.Subnet(
-                f'payment-public-subnet-{i}-{self.environment_suffix}',
-                vpc_id=vpc.id,
-                cidr_block=f'10.0.{i}.0/24',
-                availability_zone=az,
-                map_public_ip_on_launch=True,
-                tags={**self.default_tags, 'Name': f'payment-public-{az}-{self.environment_suffix}'},
-                opts=ResourceOptions(parent=self)
-            )
-            public_subnets.append(public_subnet)
-            
-            eip = aws.ec2.Eip(
-                f'payment-nat-eip-{i}-{self.environment_suffix}',
-                domain='vpc',
-                tags={**self.default_tags, 'Name': f'payment-nat-eip-{i}-{self.environment_suffix}'},
-                opts=ResourceOptions(parent=self)
-            )
-            
-            nat = aws.ec2.NatGateway(
-                f'payment-nat-{i}-{self.environment_suffix}',
-                subnet_id=public_subnet.id,
-                allocation_id=eip.id,
-                tags={**self.default_tags, 'Name': f'payment-nat-{i}-{self.environment_suffix}'},
-                opts=ResourceOptions(parent=self)
-            )
-            nat_gateways.append(nat)
-        
-        public_rt = aws.ec2.RouteTable(
-            f'payment-public-rt-{self.environment_suffix}',
-            vpc_id=vpc.id,
-            tags={**self.default_tags, 'Name': f'payment-public-rt-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.ec2.Route(
-            f'payment-public-route-{self.environment_suffix}',
-            route_table_id=public_rt.id,
-            destination_cidr_block='0.0.0.0/0',
-            gateway_id=igw.id,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        for i, subnet in enumerate(public_subnets):
-            aws.ec2.RouteTableAssociation(
-                f'payment-public-rta-{i}-{self.environment_suffix}',
-                subnet_id=subnet.id,
-                route_table_id=public_rt.id,
-                opts=ResourceOptions(parent=self)
-            )
-        
-        private_subnets = []
-        for i, az in enumerate(azs):
-            private_subnet = aws.ec2.Subnet(
-                f'payment-private-subnet-{i}-{self.environment_suffix}',
-                vpc_id=vpc.id,
-                cidr_block=f'10.0.{10+i}.0/24',
-                availability_zone=az,
-                tags={**self.default_tags, 'Name': f'payment-private-{az}-{self.environment_suffix}'},
-                opts=ResourceOptions(parent=self)
-            )
-            private_subnets.append(private_subnet)
-            
-            private_rt = aws.ec2.RouteTable(
-                f'payment-private-rt-{i}-{self.environment_suffix}',
-                vpc_id=vpc.id,
-                tags={**self.default_tags, 'Name': f'payment-private-rt-{i}-{self.environment_suffix}'},
-                opts=ResourceOptions(parent=self)
-            )
-            
-            aws.ec2.Route(
-                f'payment-private-route-{i}-{self.environment_suffix}',
-                route_table_id=private_rt.id,
-                destination_cidr_block='0.0.0.0/0',
-                nat_gateway_id=nat_gateways[i].id,
-                opts=ResourceOptions(parent=self)
-            )
-            
-            aws.ec2.RouteTableAssociation(
-                f'payment-private-rta-{i}-{self.environment_suffix}',
-                subnet_id=private_subnet.id,
-                route_table_id=private_rt.id,
-                opts=ResourceOptions(parent=self)
-            )
-        
-        return {
-            'vpc': vpc,
-            'public_subnets': public_subnets,
-            'private_subnets': private_subnets,
-            'nat_gateways': nat_gateways
-        }
-    
-    def _create_vpc_endpoints(self) -> Dict:
-        """Create VPC endpoints for S3 and DynamoDB (no internet exposure)."""
-        endpoint_sg = aws.ec2.SecurityGroup(
-            f'payment-endpoint-sg-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            description='Security group for VPC endpoints',
-            ingress=[{
-                'protocol': 'tcp',
-                'from_port': 443,
-                'to_port': 443,
-                'cidr_blocks': ['10.0.0.0/16']
-            }],
-            egress=[{
-                'protocol': '-1',
-                'from_port': 0,
-                'to_port': 0,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            tags={**self.default_tags, 'Name': f'payment-endpoint-sg-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        s3_endpoint = aws.ec2.VpcEndpoint(
-            f'payment-s3-endpoint-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            service_name='com.amazonaws.us-east-1.s3',
-            vpc_endpoint_type='Gateway',
-            tags={**self.default_tags, 'Name': f'payment-s3-endpoint-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        dynamodb_endpoint = aws.ec2.VpcEndpoint(
-            f'payment-dynamodb-endpoint-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            service_name='com.amazonaws.us-east-1.dynamodb',
-            vpc_endpoint_type='Gateway',
-            tags={**self.default_tags, 'Name': f'payment-dynamodb-endpoint-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return {
-            's3': s3_endpoint,
-            'dynamodb': dynamodb_endpoint,
-            'security_group': endpoint_sg
-        }
-    
-    def _create_dynamodb_table(self) -> aws.dynamodb.Table:
-        """Create DynamoDB table for session data with point-in-time recovery."""
-        table = aws.dynamodb.Table(
-            f'payment-sessions-{self.environment_suffix}',
-            name=f'payment-sessions-{self.environment_suffix}',
-            billing_mode='PAY_PER_REQUEST',
-            hash_key='session_id',
-            attributes=[{'name': 'session_id', 'type': 'S'}],
-            point_in_time_recovery={'enabled': True},
-            server_side_encryption={
-                'enabled': True,
-                'kms_key_arn': self.kms_key.arn
-            },
-            tags={**self.default_tags, 'Name': f'payment-sessions-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return table
-    
-    def _create_db_secret(self, env_name: str) -> aws.secretsmanager.Secret:
-        """Create Secrets Manager secret for database credentials with rotation."""
-        secret = aws.secretsmanager.Secret(
-            f'payment-db-{env_name}-{self.environment_suffix}',
-            name=f'payment-db-{env_name}-{self.environment_suffix}',
-            description=f'Database credentials for {env_name} environment',
-            kms_key_id=self.kms_key.id,
-            tags={**self.default_tags, 'Name': f'payment-db-{env_name}-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        secret_version = aws.secretsmanager.SecretVersion(
-            f'payment-db-{env_name}-version-{self.environment_suffix}',
-            secret_id=secret.id,
-            secret_string=pulumi.Output.secret(json.dumps({
-                'username': 'admin',
-                'password': f'TempPassword123!{env_name}',
-                'engine': 'mysql',
-                'host': 'pending',
-                'port': 3306,
-                'dbname': 'payments'
-            })),
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return secret
-    
-    def _create_environment(self, env_name: str) -> Dict:
-        """Create complete blue or green environment with RDS Aurora MySQL cluster."""
-        db_subnet_group = aws.rds.SubnetGroup(
-            f'payment-db-subnet-{env_name}-{self.environment_suffix}',
-            subnet_ids=[s.id for s in self.vpc['private_subnets']],
-            tags={**self.default_tags, 'Name': f'payment-db-subnet-{env_name}-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        db_sg = aws.ec2.SecurityGroup(
-            f'payment-db-sg-{env_name}-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            description=f'Security group for {env_name} RDS Aurora cluster',
-            ingress=[{
-                'protocol': 'tcp',
-                'from_port': 3306,
-                'to_port': 3306,
-                'cidr_blocks': ['10.0.0.0/16']
-            }],
-            egress=[{
-                'protocol': '-1',
-                'from_port': 0,
-                'to_port': 0,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            tags={**self.default_tags, 'Name': f'payment-db-sg-{env_name}-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        cluster = aws.rds.Cluster(
-            f'payment-cluster-{env_name}-{self.environment_suffix}',
-            cluster_identifier=f'payment-cluster-{env_name}-{self.environment_suffix}',
-            engine='aurora-mysql',
-            engine_version='8.0.mysql_aurora.3.02.0',
-            database_name='payments',
-            master_username='admin',
-            master_password=pulumi.Output.secret(f'TempPassword123!{env_name}'),
-            db_subnet_group_name=db_subnet_group.name,
-            vpc_security_group_ids=[db_sg.id],
-            storage_encrypted=True,
-            kms_key_id=self.kms_key.arn,
-            backup_retention_period=7,
-            preferred_backup_window='03:00-04:00',
-            preferred_maintenance_window='mon:04:00-mon:05:00',
-            skip_final_snapshot=True,
-            enabled_cloudwatch_logs_exports=['audit', 'error', 'general', 'slowquery'],
-            tags={**self.default_tags, 'Name': f'payment-cluster-{env_name}-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        instances = []
-        for i in range(2):
-            instance = aws.rds.ClusterInstance(
-                f'payment-instance-{env_name}-{i}-{self.environment_suffix}',
-                cluster_identifier=cluster.id,
-                identifier=f'payment-instance-{env_name}-{i}-{self.environment_suffix}',
-                instance_class='db.r6g.large',
-                engine='aurora-mysql',
-                engine_version='8.0.mysql_aurora.3.02.0',
-                publicly_accessible=False,
-                tags={**self.default_tags, 'Name': f'payment-instance-{env_name}-{i}-{self.environment_suffix}'},
-                opts=ResourceOptions(parent=self, depends_on=[cluster])
-            )
-            instances.append(instance)
-        
-        compute_sg = aws.ec2.SecurityGroup(
-            f'payment-compute-sg-{env_name}-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            description=f'Security group for {env_name} compute resources',
-            ingress=[{
-                'protocol': 'tcp',
-                'from_port': 8080,
-                'to_port': 8080,
-                'cidr_blocks': ['10.0.0.0/16']
-            }],
-            egress=[{
-                'protocol': '-1',
-                'from_port': 0,
-                'to_port': 0,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            tags={**self.default_tags, 'Name': f'payment-compute-sg-{env_name}-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return {
-            'cluster': cluster,
-            'instances': instances,
-            'db_subnet_group': db_subnet_group,
-            'db_sg': db_sg,
-            'compute_sg': compute_sg
-        }
-    
-    def _create_alb(self) -> Dict:
-        """Create Application Load Balancer with weighted target groups for blue-green deployment."""
-        alb_sg = aws.ec2.SecurityGroup(
-            f'payment-alb-sg-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            description='Security group for payment processing ALB',
-            ingress=[
-                {
-                    'protocol': 'tcp',
-                    'from_port': 80,
-                    'to_port': 80,
-                    'cidr_blocks': ['0.0.0.0/0']
-                },
-                {
-                    'protocol': 'tcp',
-                    'from_port': 443,
-                    'to_port': 443,
-                    'cidr_blocks': ['0.0.0.0/0']
-                }
-            ],
-            egress=[{
-                'protocol': '-1',
-                'from_port': 0,
-                'to_port': 0,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            tags={**self.default_tags, 'Name': f'payment-alb-sg-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        alb = aws.lb.LoadBalancer(
-            f'payment-alb-{self.environment_suffix}',
-            name=f'payment-alb-{self.environment_suffix}',
-            internal=False,
-            load_balancer_type='application',
-            security_groups=[alb_sg.id],
-            subnets=[s.id for s in self.vpc['public_subnets']],
-            enable_deletion_protection=False,
-            tags={**self.default_tags, 'Name': f'payment-alb-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        blue_tg = aws.lb.TargetGroup(
-            f'payment-tg-blue-{self.environment_suffix}',
-            name=f'payment-tg-blue-{self.environment_suffix}'[:32],
-            port=8080,
-            protocol='HTTP',
-            vpc_id=self.vpc['vpc'].id,
-            target_type='ip',
-            health_check={
-                'enabled': True,
-                'healthy_threshold': 2,
-                'interval': 30,
-                'matcher': '200',
-                'path': '/health',
-                'port': 'traffic-port',
-                'protocol': 'HTTP',
-                'timeout': 5,
-                'unhealthy_threshold': 3
-            },
-            deregistration_delay=30,
-            tags={**self.default_tags, 'Name': f'payment-tg-blue-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        green_tg = aws.lb.TargetGroup(
-            f'payment-tg-green-{self.environment_suffix}',
-            name=f'payment-tg-green-{self.environment_suffix}'[:32],
-            port=8080,
-            protocol='HTTP',
-            vpc_id=self.vpc['vpc'].id,
-            target_type='ip',
-            health_check={
-                'enabled': True,
-                'healthy_threshold': 2,
-                'interval': 30,
-                'matcher': '200',
-                'path': '/health',
-                'port': 'traffic-port',
-                'protocol': 'HTTP',
-                'timeout': 5,
-                'unhealthy_threshold': 3
-            },
-            deregistration_delay=30,
-            tags={**self.default_tags, 'Name': f'payment-tg-green-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        listener = aws.lb.Listener(
-            f'payment-alb-listener-{self.environment_suffix}',
-            load_balancer_arn=alb.arn,
-            port=80,
-            protocol='HTTP',
-            default_actions=[{
-                'type': 'forward',
-                'forward': {
-                    'target_groups': [
-                        {'arn': blue_tg.arn, 'weight': 100},
-                        {'arn': green_tg.arn, 'weight': 0}
-                    ],
-                    'target_group_sticky_config': {'enabled': False}
-                }
-            }],
-            tags={**self.default_tags, 'Name': f'payment-alb-listener-{self.environment_suffix}'},
-            opts=ResourceOptions(parent=self, depends_on=[blue_tg, green_tg])
-        )
-        
-        return {
-            'alb': alb,
-            'alb_sg': alb_sg,
-            'blue_tg': blue_tg,
-            'green_tg': green_tg,
-            'listener': listener
-        }
-    
-    def _create_switch_lambda(self) -> aws.lambda_.Function:
-        """Create Lambda function for environment switching with rollback capability (< 5 minutes)."""
-        lambda_role = aws.iam.Role(
-            f'payment-switch-lambda-role-{self.environment_suffix}',
-            assume_role_policy=json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Action': 'sts:AssumeRole',
-                    'Effect': 'Allow',
-                    'Principal': {'Service': 'lambda.amazonaws.com'}
-                }]
-            }),
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.iam.RolePolicyAttachment(
-            f'payment-switch-lambda-basic-{self.environment_suffix}',
-            role=lambda_role.name,
-            policy_arn='arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole',
-            opts=ResourceOptions(parent=self)
-        )
-        
-        switch_policy = aws.iam.RolePolicy(
-            f'payment-switch-lambda-policy-{self.environment_suffix}',
-            role=lambda_role.id,
-            policy=json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [
-                    {
-                        'Effect': 'Allow',
-                        'Action': [
-                            'elasticloadbalancing:ModifyListener',
-                            'elasticloadbalancing:DescribeListeners',
-                            'elasticloadbalancing:DescribeTargetGroups',
-                            'elasticloadbalancing:DescribeTargetHealth'
-                        ],
-                        'Resource': '*'
-                    },
-                    {
-                        'Effect': 'Allow',
-                        'Action': ['ssm:GetParameter', 'ssm:PutParameter'],
-                        'Resource': f'arn:aws:ssm:us-east-1:*:parameter/payment/active-environment-{self.environment_suffix}'
-                    },
-                    {
-                        'Effect': 'Allow',
-                        'Action': ['cloudwatch:PutMetricData'],
-                        'Resource': '*'
-                    }
-                ]
-            }),
-            opts=ResourceOptions(parent=self)
-        )
-        
-        lambda_code = """
 import json
 import boto3
 import os
+import logging
 from datetime import datetime
+from typing import Dict, List, Any
 
-elbv2 = boto3.client('elbv2')
-ssm = boto3.client('ssm')
-cloudwatch = boto3.client('cloudwatch')
+# Configure logging
+logger = logging.getLogger()
+log_level = os.environ.get('LOG_LEVEL', 'INFO')
+logger.setLevel(getattr(logging, log_level))
 
-LISTENER_ARN = os.environ['LISTENER_ARN']
-BLUE_TG_ARN = os.environ['BLUE_TG_ARN']
-GREEN_TG_ARN = os.environ['GREEN_TG_ARN']
-SSM_PARAM_NAME = os.environ['SSM_PARAM_NAME']
+# Initialize AWS clients
+config_client = boto3.client('config')
+sns_client = boto3.client('sns')
+s3_client = boto3.client('s3')
 
-def lambda_handler(event, context):
+# Environment variables
+SNS_TOPIC_ARN = os.environ.get('SNS_TOPIC_ARN')
+CONFIG_BUCKET = os.environ.get('CONFIG_BUCKET')
+ENVIRONMENT_SUFFIX = os.environ.get('ENVIRONMENT_SUFFIX', 'prod')
+
+
+def lambda_handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
+    """
+    Main Lambda handler for processing Config compliance events.
+
+    Args:
+        event: Event data from EventBridge or Config
+        context: Lambda context object
+
+    Returns:
+        Response dictionary with status and message
+    """
     try:
-        action = event.get('action', 'status')
-        response = elbv2.describe_listeners(ListenerArns=[LISTENER_ARN])
-        current_action = response['Listeners'][0]['DefaultActions'][0]
-        
-        if action == 'status':
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'current_config': current_action,
-                    'timestamp': datetime.utcnow().isoformat()
-                })
-            }
-        
-        elif action == 'switch':
-            target_env = event.get('target', 'green')
-            blue_weight = 0 if target_env == 'green' else 100
-            green_weight = 100 if target_env == 'green' else 0
-            
-            elbv2.modify_listener(
-                ListenerArn=LISTENER_ARN,
-                DefaultActions=[{
-                    'Type': 'forward',
-                    'ForwardConfig': {
-                        'TargetGroups': [
-                            {'TargetGroupArn': BLUE_TG_ARN, 'Weight': blue_weight},
-                            {'TargetGroupArn': GREEN_TG_ARN, 'Weight': green_weight}
-                        ]
-                    }
-                }]
-            )
-            
-            ssm.put_parameter(
-                Name=SSM_PARAM_NAME,
-                Value=target_env,
-                Type='String',
-                Overwrite=True
-            )
-            
-            cloudwatch.put_metric_data(
-                Namespace='Payment/Migration',
-                MetricData=[{
-                    'MetricName': 'EnvironmentSwitch',
-                    'Value': 1,
-                    'Unit': 'Count',
-                    'Dimensions': [{'Name': 'Environment', 'Value': target_env}]
-                }]
-            )
-            
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': f'Switched to {target_env} environment',
-                    'rollback_time_estimate': '< 5 minutes'
-                })
-            }
-        
-        elif action == 'gradual':
-            blue_weight = int(event.get('blue_weight', 50))
-            green_weight = 100 - blue_weight
-            
-            elbv2.modify_listener(
-                ListenerArn=LISTENER_ARN,
-                DefaultActions=[{
-                    'Type': 'forward',
-                    'ForwardConfig': {
-                        'TargetGroups': [
-                            {'TargetGroupArn': BLUE_TG_ARN, 'Weight': blue_weight},
-                            {'TargetGroupArn': GREEN_TG_ARN, 'Weight': green_weight}
-                        ]
-                    }
-                }]
-            )
-            
-            return {
-                'statusCode': 200,
-                'body': json.dumps({
-                    'message': 'Gradual shift applied',
-                    'blue_weight': blue_weight,
-                    'green_weight': green_weight
-                })
-            }
-        
+        logger.info(f"Received event: {json.dumps(event)}")
+
+        # Determine event source
+        if 'source' in event and event['source'] == 'aws.config':
+            # Config compliance change event
+            process_compliance_event(event)
+        elif 'source' in event and event['source'] == 'aws.events':
+            # Periodic check triggered by EventBridge
+            perform_periodic_compliance_check()
         else:
-            return {
-                'statusCode': 400,
-                'body': json.dumps({'error': f'Invalid action: {action}'})
-            }
-    
+            # Direct invocation - perform full compliance check
+            perform_periodic_compliance_check()
+
+        return {
+            'statusCode': 200,
+            'body': json.dumps('Compliance check completed successfully')
+        }
+
     except Exception as e:
+        logger.error(f"Error processing compliance check: {str(e)}", exc_info=True)
+        send_error_notification(str(e))
         return {
             'statusCode': 500,
-            'body': json.dumps({'error': str(e)})
+            'body': json.dumps(f'Error: {str(e)}')
         }
-"""
-        
-        switch_lambda = aws.lambda_.Function(
-            f'payment-switch-{self.environment_suffix}',
-            name=f'payment-switch-{self.environment_suffix}',
-            role=lambda_role.arn,
-            runtime='python3.11',
-            handler='index.lambda_handler',
-            code=pulumi.AssetArchive({
-                'index.py': pulumi.StringAsset(lambda_code)
-            }),
-            timeout=60,
-            memory_size=256,
-            environment={
-                'variables': {
-                    'LISTENER_ARN': self.alb['listener'].arn,
-                    'BLUE_TG_ARN': self.alb['blue_tg'].arn,
-                    'GREEN_TG_ARN': self.alb['green_tg'].arn,
-                    'SSM_PARAM_NAME': f'/payment/active-environment-{self.environment_suffix}'
+
+
+def process_compliance_event(event: Dict[str, Any]) -> None:
+    """
+    Process a Config compliance change event.
+
+    Args:
+        event: EventBridge event containing Config compliance change details
+    """
+    try:
+        detail = event.get('detail', {})
+        config_rule_name = detail.get('configRuleName', 'Unknown')
+        new_evaluation_result = detail.get('newEvaluationResult', {})
+        compliance_type = new_evaluation_result.get('complianceType', 'UNKNOWN')
+
+        logger.info(f"Processing compliance event for rule: {config_rule_name}")
+        logger.info(f"Compliance type: {compliance_type}")
+
+        if compliance_type == 'NON_COMPLIANT':
+            resource_type = new_evaluation_result.get('evaluationResultIdentifier', {}).get('evaluationResultQualifier', {}).get('resourceType', 'Unknown')
+            resource_id = new_evaluation_result.get('evaluationResultIdentifier', {}).get('evaluationResultQualifier', {}).get('resourceId', 'Unknown')
+
+            violation_details = {
+                'rule_name': config_rule_name,
+                'resource_type': resource_type,
+                'resource_id': resource_id,
+                'compliance_type': compliance_type,
+                'annotation': new_evaluation_result.get('annotation', 'No annotation provided'),
+                'timestamp': detail.get('resultRecordedTime', datetime.utcnow().isoformat())
+            }
+
+            logger.warning(f"Compliance violation detected: {json.dumps(violation_details)}")
+            send_compliance_notification(violation_details)
+        else:
+            logger.info(f"Resource is compliant: {config_rule_name}")
+
+    except Exception as e:
+        logger.error(f"Error processing compliance event: {str(e)}", exc_info=True)
+        raise
+
+
+def perform_periodic_compliance_check() -> None:
+    """
+    Perform a comprehensive periodic compliance check across all Config rules.
+    """
+    try:
+        logger.info("Starting periodic compliance check")
+
+        # Get all Config rules
+        config_rules = get_all_config_rules()
+        logger.info(f"Found {len(config_rules)} Config rules to check")
+
+        all_violations = []
+
+        # Check compliance for each rule
+        for rule in config_rules:
+            rule_name = rule['ConfigRuleName']
+            logger.info(f"Checking compliance for rule: {rule_name}")
+
+            violations = check_rule_compliance(rule_name)
+            if violations:
+                all_violations.extend(violations)
+                logger.warning(f"Found {len(violations)} violations for rule: {rule_name}")
+
+        # Send summary notification if violations found
+        if all_violations:
+            send_summary_notification(all_violations)
+            logger.warning(f"Total violations found: {len(all_violations)}")
+        else:
+            logger.info("No compliance violations found")
+
+    except Exception as e:
+        logger.error(f"Error during periodic compliance check: {str(e)}", exc_info=True)
+        raise
+
+
+def get_all_config_rules() -> List[Dict[str, Any]]:
+    """
+    Retrieve all Config rules in the account.
+
+    Returns:
+        List of Config rule dictionaries
+    """
+    try:
+        rules = []
+        paginator = config_client.get_paginator('describe_config_rules')
+
+        for page in paginator.paginate():
+            rules.extend(page.get('ConfigRules', []))
+
+        return rules
+
+    except Exception as e:
+        logger.error(f"Error retrieving Config rules: {str(e)}", exc_info=True)
+        raise
+
+
+def check_rule_compliance(rule_name: str) -> List[Dict[str, Any]]:
+    """
+    Check compliance status for a specific Config rule.
+
+    Args:
+        rule_name: Name of the Config rule to check
+
+    Returns:
+        List of non-compliant resources
+    """
+    try:
+        violations = []
+        paginator = config_client.get_paginator('get_compliance_details_by_config_rule')
+
+        for page in paginator.paginate(
+            ConfigRuleName=rule_name,
+            ComplianceTypes=['NON_COMPLIANT']
+        ):
+            evaluation_results = page.get('EvaluationResults', [])
+
+            for result in evaluation_results:
+                resource_id = result.get('EvaluationResultIdentifier', {}).get('EvaluationResultQualifier', {}).get('ResourceId', 'Unknown')
+                resource_type = result.get('EvaluationResultIdentifier', {}).get('EvaluationResultQualifier', {}).get('ResourceType', 'Unknown')
+
+                violation = {
+                    'rule_name': rule_name,
+                    'resource_type': resource_type,
+                    'resource_id': resource_id,
+                    'compliance_type': result.get('ComplianceType', 'UNKNOWN'),
+                    'annotation': result.get('Annotation', 'No annotation provided'),
+                    'config_rule_invoked_time': result.get('ConfigRuleInvokedTime', '').strftime('%Y-%m-%d %H:%M:%S') if result.get('ConfigRuleInvokedTime') else 'Unknown',
+                    'result_recorded_time': result.get('ResultRecordedTime', '').strftime('%Y-%m-%d %H:%M:%S') if result.get('ResultRecordedTime') else 'Unknown'
                 }
-            },
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self, depends_on=[lambda_role, switch_policy])
+
+                violations.append(violation)
+
+        return violations
+
+    except Exception as e:
+        logger.error(f"Error checking compliance for rule {rule_name}: {str(e)}", exc_info=True)
+        return []
+
+
+def send_compliance_notification(violation: Dict[str, Any]) -> None:
+    """
+    Send SNS notification for a single compliance violation.
+
+    Args:
+        violation: Dictionary containing violation details
+    """
+    try:
+        subject = f"[{ENVIRONMENT_SUFFIX.upper()}] Compliance Violation Detected: {violation['rule_name']}"
+
+        message = f"""
+Compliance Violation Alert
+
+Environment: {ENVIRONMENT_SUFFIX}
+Rule Name: {violation['rule_name']}
+Resource Type: {violation['resource_type']}
+Resource ID: {violation['resource_id']}
+Compliance Status: {violation['compliance_type']}
+Timestamp: {violation['timestamp']}
+
+Details:
+{violation['annotation']}
+
+Action Required:
+Please investigate and remediate this compliance violation immediately.
+
+---
+This is an automated notification from the AWS Infrastructure Compliance Checking System.
+"""
+
+        response = sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=subject,
+            Message=message
         )
-        
-        return switch_lambda
-    
-    def _create_cloudwatch_alarms(self) -> List[aws.cloudwatch.MetricAlarm]:
-        """Create CloudWatch alarms for database connections and response times."""
-        alarms = []
-        
-        blue_conn_alarm = aws.cloudwatch.MetricAlarm(
-            f'payment-blue-db-conn-{self.environment_suffix}',
-            name=f'payment-blue-db-conn-{self.environment_suffix}',
-            comparison_operator='GreaterThanThreshold',
-            evaluation_periods=2,
-            metric_name='DatabaseConnections',
-            namespace='AWS/RDS',
-            period=300,
-            statistic='Average',
-            threshold=80,
-            alarm_description='Blue environment database connections high',
-            dimensions={'DBClusterIdentifier': self.blue_env['cluster'].cluster_identifier},
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
+
+        logger.info(f"Notification sent successfully. MessageId: {response['MessageId']}")
+
+    except Exception as e:
+        logger.error(f"Error sending compliance notification: {str(e)}", exc_info=True)
+
+
+def send_summary_notification(violations: List[Dict[str, Any]]) -> None:
+    """
+    Send SNS notification with summary of multiple compliance violations.
+
+    Args:
+        violations: List of violation dictionaries
+    """
+    try:
+        subject = f"[{ENVIRONMENT_SUFFIX.upper()}] Compliance Summary: {len(violations)} Violations Found"
+
+        # Group violations by rule
+        violations_by_rule = {}
+        for violation in violations:
+            rule_name = violation['rule_name']
+            if rule_name not in violations_by_rule:
+                violations_by_rule[rule_name] = []
+            violations_by_rule[rule_name].append(violation)
+
+        message_parts = [
+            "Compliance Violations Summary Report",
+            f"\nEnvironment: {ENVIRONMENT_SUFFIX}",
+            f"Total Violations: {len(violations)}",
+            f"Rules with Violations: {len(violations_by_rule)}",
+            f"Report Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC",
+            "\n" + "="*80 + "\n"
+        ]
+
+        for rule_name, rule_violations in violations_by_rule.items():
+            message_parts.append(f"\nRule: {rule_name}")
+            message_parts.append(f"Violations: {len(rule_violations)}")
+            message_parts.append("-" * 40)
+
+            for i, violation in enumerate(rule_violations[:5], 1):  # Limit to first 5 per rule
+                message_parts.append(f"\n  {i}. Resource Type: {violation['resource_type']}")
+                message_parts.append(f"     Resource ID: {violation['resource_id']}")
+                message_parts.append(f"     Status: {violation['compliance_type']}")
+
+            if len(rule_violations) > 5:
+                message_parts.append(f"\n  ... and {len(rule_violations) - 5} more violations")
+
+            message_parts.append("")
+
+        message_parts.append("\n" + "="*80)
+        message_parts.append("\nAction Required:")
+        message_parts.append("Please review and remediate these compliance violations.")
+        message_parts.append("\nFor detailed information, check the AWS Config console or CloudWatch Logs.")
+        message_parts.append("\n---")
+        message_parts.append("This is an automated notification from the AWS Infrastructure Compliance Checking System.")
+
+        message = "\n".join(message_parts)
+
+        response = sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=subject,
+            Message=message
         )
-        alarms.append(blue_conn_alarm)
-        
-        green_conn_alarm = aws.cloudwatch.MetricAlarm(
-            f'payment-green-db-conn-{self.environment_suffix}',
-            name=f'payment-green-db-conn-{self.environment_suffix}',
-            comparison_operator='GreaterThanThreshold',
-            evaluation_periods=2,
-            metric_name='DatabaseConnections',
-            namespace='AWS/RDS',
-            period=300,
-            statistic='Average',
-            threshold=80,
-            alarm_description='Green environment database connections high',
-            dimensions={'DBClusterIdentifier': self.green_env['cluster'].cluster_identifier},
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
+
+        logger.info(f"Summary notification sent successfully. MessageId: {response['MessageId']}")
+
+    except Exception as e:
+        logger.error(f"Error sending summary notification: {str(e)}", exc_info=True)
+
+
+def send_error_notification(error_message: str) -> None:
+    """
+    Send SNS notification for Lambda execution errors.
+
+    Args:
+        error_message: Error message to include in notification
+    """
+    try:
+        subject = f"[{ENVIRONMENT_SUFFIX.upper()}] Compliance Checker Error"
+
+        message = f"""
+Compliance Checker Lambda Error
+
+Environment: {ENVIRONMENT_SUFFIX}
+Error Time: {datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')} UTC
+
+Error Details:
+{error_message}
+
+Action Required:
+Please investigate this error in CloudWatch Logs and resolve any issues with the compliance checking system.
+
+---
+This is an automated error notification from the AWS Infrastructure Compliance Checking System.
+"""
+
+        sns_client.publish(
+            TopicArn=SNS_TOPIC_ARN,
+            Subject=subject,
+            Message=message
         )
-        alarms.append(green_conn_alarm)
-        
-        alb_response_alarm = aws.cloudwatch.MetricAlarm(
-            f'payment-alb-response-{self.environment_suffix}',
-            name=f'payment-alb-response-{self.environment_suffix}',
-            comparison_operator='GreaterThanThreshold',
-            evaluation_periods=2,
-            metric_name='TargetResponseTime',
-            namespace='AWS/ApplicationELB',
-            period=60,
-            statistic='Average',
-            threshold=1.0,
-            alarm_description='ALB target response time high (> 1 second)',
-            dimensions={'LoadBalancer': self.alb['alb'].arn_suffix},
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
+
+        logger.info("Error notification sent successfully")
+
+    except Exception as e:
+        logger.error(f"Error sending error notification: {str(e)}", exc_info=True)
+
+
+def analyze_config_snapshot() -> Dict[str, Any]:
+    """
+    Analyze the latest Config snapshot from S3.
+
+    Returns:
+        Dictionary containing snapshot analysis results
+    """
+    try:
+        logger.info(f"Analyzing Config snapshots from bucket: {CONFIG_BUCKET}")
+
+        # List objects in the Config bucket
+        response = s3_client.list_objects_v2(
+            Bucket=CONFIG_BUCKET,
+            Prefix='AWSLogs/',
+            MaxKeys=10
         )
-        alarms.append(alb_response_alarm)
-        
-        dynamodb_throttle_alarm = aws.cloudwatch.MetricAlarm(
-            f'payment-ddb-throttle-{self.environment_suffix}',
-            name=f'payment-ddb-throttle-{self.environment_suffix}',
-            comparison_operator='GreaterThanThreshold',
-            evaluation_periods=1,
-            metric_name='UserErrors',
-            namespace='AWS/DynamoDB',
-            period=300,
-            statistic='Sum',
-            threshold=10,
-            alarm_description='DynamoDB throttling detected',
-            dimensions={'TableName': self.dynamodb_table.name},
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
-        )
-        alarms.append(dynamodb_throttle_alarm)
-        
-        return alarms
-    
-    def _create_backup_plan(self) -> Dict:
-        """Create AWS Backup plan with 7-day retention for both environments."""
-        backup_vault = aws.backup.Vault(
-            f'payment-backup-vault-{self.environment_suffix}',
-            name=f'payment-backup-vault-{self.environment_suffix}',
-            kms_key_arn=self.kms_key.arn,
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        backup_role = aws.iam.Role(
-            f'payment-backup-role-{self.environment_suffix}',
-            assume_role_policy=json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Action': 'sts:AssumeRole',
-                    'Effect': 'Allow',
-                    'Principal': {'Service': 'backup.amazonaws.com'}
-                }]
-            }),
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.iam.RolePolicyAttachment(
-            f'payment-backup-policy-{self.environment_suffix}',
-            role=backup_role.name,
-            policy_arn='arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup',
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.iam.RolePolicyAttachment(
-            f'payment-backup-restore-policy-{self.environment_suffix}',
-            role=backup_role.name,
-            policy_arn='arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores',
-            opts=ResourceOptions(parent=self)
-        )
-        
-        backup_plan = aws.backup.Plan(
-            f'payment-backup-plan-{self.environment_suffix}',
-            name=f'payment-backup-plan-{self.environment_suffix}',
-            rules=[{
-                'rule_name': 'daily-backup-7day-retention',
-                'target_vault_name': backup_vault.name,
-                'schedule': 'cron(0 2 * * ? *)',
-                'lifecycle': {'delete_after': 7},
-                'recovery_point_tags': {**self.default_tags, 'BackupType': 'Automated'}
-            }],
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self, depends_on=[backup_vault])
-        )
-        
-        blue_backup = aws.backup.Selection(
-            f'payment-backup-blue-{self.environment_suffix}',
-            name=f'payment-backup-blue-{self.environment_suffix}',
-            plan_id=backup_plan.id,
-            iam_role_arn=backup_role.arn,
-            resources=[self.blue_env['cluster'].arn],
-            opts=ResourceOptions(parent=self, depends_on=[backup_plan])
-        )
-        
-        green_backup = aws.backup.Selection(
-            f'payment-backup-green-{self.environment_suffix}',
-            name=f'payment-backup-green-{self.environment_suffix}',
-            plan_id=backup_plan.id,
-            iam_role_arn=backup_role.arn,
-            resources=[self.green_env['cluster'].arn],
-            opts=ResourceOptions(parent=self, depends_on=[backup_plan])
-        )
-        
+
+        if 'Contents' not in response:
+            logger.warning("No Config snapshots found in S3 bucket")
+            return {'status': 'no_snapshots', 'message': 'No snapshots available'}
+
+        # Get the most recent snapshot
+        objects = sorted(response['Contents'], key=lambda x: x['LastModified'], reverse=True)
+        latest_snapshot = objects[0]
+
+        logger.info(f"Latest snapshot: {latest_snapshot['Key']}, Last Modified: {latest_snapshot['LastModified']}")
+
         return {
-            'vault': backup_vault,
-            'plan': backup_plan,
-            'blue_selection': blue_backup,
-            'green_selection': green_backup
+            'status': 'success',
+            'latest_snapshot': latest_snapshot['Key'],
+            'last_modified': latest_snapshot['LastModified'].isoformat(),
+            'size_bytes': latest_snapshot['Size']
         }
-    
-    def _create_active_env_param(self) -> aws.ssm.Parameter:
-        """Create SSM parameter to track active environment."""
-        param = aws.ssm.Parameter(
-            f'payment-active-env-{self.environment_suffix}',
-            name=f'/payment/active-environment-{self.environment_suffix}',
-            type='String',
-            value='blue',
-            description='Tracks the currently active environment (blue or green)',
-            tags={**self.default_tags},
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return param
+
+    except Exception as e:
+        logger.error(f"Error analyzing Config snapshot: {str(e)}", exc_info=True)
+        return {'status': 'error', 'message': str(e)}
 ```
 
-## Entry Point (tap.py)
+## File: outputs.tf
 
-```python
-#!/usr/bin/env python3
-"""
-Pulumi application entry point for Payment Processing Blue-Green Migration.
-"""
-import os
-import pulumi
-from pulumi import Config
-from lib.tap_stack import TapStack, TapStackArgs
+```hcl
+# outputs.tf
+# Output values for the compliance checking system
 
-config = Config()
-environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'dev'
-stack_prefix = f'{environment_suffix}-payment-{environment_suffix}'
-
-default_tags = {
-    'Environment': environment_suffix,
-    'CostCenter': 'payment-processing',
-    'MigrationPhase': 'blue-green',
-    'Repository': os.getenv('REPOSITORY', 'payment-processing'),
-    'Author': os.getenv('COMMIT_AUTHOR', 'devops-team'),
-    'ManagedBy': 'Pulumi'
+output "config_bucket_name" {
+  description = "Name of the S3 bucket storing Config snapshots"
+  value       = aws_s3_bucket.config_bucket.id
 }
 
-stack = TapStack(
-    name='payment-migration-infra',
-    args=TapStackArgs(
-        environment_suffix=environment_suffix,
-        tags=default_tags,
-        stack_prefix=stack_prefix
-    )
-)
+output "config_bucket_arn" {
+  description = "ARN of the S3 bucket storing Config snapshots"
+  value       = aws_s3_bucket.config_bucket.arn
+}
 
-# Export key outputs
-pulumi.export('vpc_id', stack.vpc['vpc'].id)
-pulumi.export('alb_dns_name', stack.alb['alb'].dns_name)
-pulumi.export('blue_cluster_endpoint', stack.blue_env['cluster'].endpoint)
-pulumi.export('green_cluster_endpoint', stack.green_env['cluster'].endpoint)
-pulumi.export('dynamodb_table_name', stack.dynamodb_table.name)
-pulumi.export('switch_lambda_name', stack.switch_lambda.name)
-pulumi.export('active_environment_parameter', stack.active_env_param.name)
-pulumi.export('kms_key_id', stack.kms_key.id)
-pulumi.export('backup_vault_name', stack.backup_plan['vault'].name)
+output "config_recorder_name" {
+  description = "Name of the AWS Config recorder"
+  value       = aws_config_configuration_recorder.main.name
+}
 
-# Export connection information
-pulumi.export('connection_info', pulumi.Output.all(
-    stack.alb['alb'].dns_name,
-    stack.blue_env['cluster'].endpoint,
-    stack.green_env['cluster'].endpoint
-).apply(lambda args: {
-    'alb_url': f'http://{args[0]}',
-    'blue_database': args[1],
-    'green_database': args[2],
-    'active_environment': 'blue',
-    'migration_status': 'ready'
-}))
+output "config_recorder_arn" {
+  description = "ARN of the AWS Config recorder"
+  value       = aws_config_configuration_recorder.main.id
+}
+
+output "compliance_lambda_function_name" {
+  description = "Name of the compliance checker Lambda function"
+  value       = aws_lambda_function.compliance_checker.function_name
+}
+
+output "compliance_lambda_function_arn" {
+  description = "ARN of the compliance checker Lambda function"
+  value       = aws_lambda_function.compliance_checker.arn
+}
+
+output "sns_topic_arn" {
+  description = "ARN of the SNS topic for compliance notifications"
+  value       = aws_sns_topic.compliance_notifications.arn
+}
+
+output "sns_topic_name" {
+  description = "Name of the SNS topic for compliance notifications"
+  value       = aws_sns_topic.compliance_notifications.name
+}
+
+output "config_rules" {
+  description = "List of Config rule names"
+  value = [
+    aws_config_config_rule.s3_bucket_encryption.name,
+    aws_config_config_rule.rds_public_access.name,
+    aws_config_config_rule.rds_encryption.name,
+    aws_config_config_rule.ec2_detailed_monitoring.name
+  ]
+}
+
+output "cloudwatch_log_groups" {
+  description = "CloudWatch Log Groups for monitoring"
+  value = {
+    config_logs          = aws_cloudwatch_log_group.config_logs.name
+    lambda_logs          = aws_cloudwatch_log_group.lambda_logs.name
+    config_delivery_logs = aws_cloudwatch_log_group.config_delivery_logs.name
+  }
+}
+
+output "eventbridge_rules" {
+  description = "EventBridge rules for compliance monitoring"
+  value = {
+    compliance_change_rule = aws_cloudwatch_event_rule.config_compliance.name
+    periodic_check_rule    = aws_cloudwatch_event_rule.periodic_check.name
+  }
+}
+
+output "iam_roles" {
+  description = "IAM roles created for the compliance system"
+  value = {
+    config_role  = aws_iam_role.config_role.arn
+    lambda_role  = aws_iam_role.lambda_role.arn
+  }
+}
+
+output "environment_suffix" {
+  description = "Environment suffix used for resource naming"
+  value       = var.environment_suffix
+}
+
+output "aws_region" {
+  description = "AWS region where resources are deployed"
+  value       = var.aws_region
+}
 ```
 
-## Configuration Files
+## File: terraform.tfvars.example
 
-### Pulumi.yaml
+```hcl
+# terraform.tfvars.example
+# Example variable values - copy to terraform.tfvars and customize
 
-```yaml
-name: payment-migration-infra
-runtime:
-  name: python
-  options:
-    virtualenv: venv
-description: Blue-Green Migration Infrastructure for Payment Processing System
-main: tap.py
-config:
-  aws:region: us-east-1
-```
+# AWS region for deployment
+aws_region = "us-east-1"
 
-### requirements.txt
+# Unique environment suffix for resource naming
+environment_suffix = "prod"
 
-```
-pulumi>=3.0.0,<4.0.0
-pulumi-aws>=6.0.0,<7.0.0
-```
+# Config snapshot delivery frequency
+# Options: One_Hour, Three_Hours, Six_Hours, Twelve_Hours, TwentyFour_Hours
+config_snapshot_frequency = "TwentyFour_Hours"
 
-### lib/__init__.py
+# CloudWatch Logs retention period (days)
+cloudwatch_log_retention_days = 30
 
-```python
-"""Payment processing blue-green migration infrastructure package"""
+# Lambda function configuration
+lambda_memory_size = 256
+lambda_timeout     = 60
+lambda_runtime     = "python3.11"
 
-from .tap_stack import TapStack, TapStackArgs
+# Optional: Email address for compliance notifications
+# Leave empty to skip email subscription
+notification_email = ""
 
-__all__ = ['TapStack', 'TapStackArgs']
+# Common tags for all resources
+tags = {
+  Project     = "ComplianceChecking"
+  ManagedBy   = "Terraform"
+  Environment = "Production"
+  Owner       = "SecurityTeam"
+  CostCenter  = "Security"
+}
 ```
 
 ## Deployment Instructions
 
-1. Install dependencies:
+### Prerequisites
+
+1. AWS CLI configured with appropriate credentials
+2. Terraform >= 1.4.0 installed
+3. Appropriate IAM permissions to create Config, Lambda, SNS, S3, CloudWatch, and IAM resources
+
+### Deployment Steps
+
+1. **Initialize Terraform**:
+   ```bash
+   cd lib
+   terraform init
+   ```
+
+2. **Create terraform.tfvars**:
+   ```bash
+   cp terraform.tfvars.example terraform.tfvars
+   # Edit terraform.tfvars with your desired values
+   ```
+
+3. **Review the plan**:
+   ```bash
+   terraform plan -out=tfplan
+   ```
+
+4. **Apply the configuration**:
+   ```bash
+   terraform apply tfplan
+   ```
+
+5. **Confirm SNS subscription** (if email notification is configured):
+   - Check your email for SNS subscription confirmation
+   - Click the confirmation link
+
+### Verification
+
+After deployment, verify the system is working:
+
+1. **Check Config recorder status**:
+   ```bash
+   aws configservice describe-configuration-recorder-status
+   ```
+
+2. **View Config rules**:
+   ```bash
+   aws configservice describe-config-rules
+   ```
+
+3. **Test Lambda function**:
+   ```bash
+   aws lambda invoke \
+     --function-name compliance-checker-prod \
+     --payload '{}' \
+     response.json
+   cat response.json
+   ```
+
+4. **Monitor CloudWatch Logs**:
+   ```bash
+   aws logs tail /aws/lambda/compliance-checker-prod --follow
+   ```
+
+### Testing Compliance Detection
+
+To test the compliance detection system:
+
+1. **Create a non-compliant S3 bucket** (unencrypted):
+   ```bash
+   aws s3api create-bucket --bucket test-unencrypted-bucket-${RANDOM}
+   ```
+
+2. **Wait for Config to evaluate** (may take a few minutes)
+
+3. **Check for compliance notification** in SNS
+
+4. **View Lambda logs** for processing details
+
+### Cleanup
+
+To remove all resources:
+
 ```bash
-python3 -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
+terraform destroy
 ```
 
-2. Configure Pulumi:
-```bash
-pulumi stack init dev
-pulumi config set aws:region us-east-1
+Note: Ensure the Config S3 bucket is empty before destroying, or add `force_destroy = true` to the bucket resource.
+
+## Architecture Considerations
+
+### Security
+
+1. **IAM Least Privilege**: All IAM roles use specific permissions without wildcards
+2. **S3 Bucket Security**: Config bucket has encryption, versioning, and blocks public access
+3. **SNS Topic Policy**: Restricts publish access to Config and Lambda services only
+4. **CloudWatch Logs**: Centralized logging with 30-day retention for audit trails
+
+### Scalability
+
+1. **EventBridge Integration**: Asynchronous event processing with automatic scaling
+2. **Lambda Configuration**: 256MB memory and 60-second timeout handle large compliance checks
+3. **Config Snapshot Frequency**: Configurable delivery frequency (default: 24 hours)
+4. **Periodic Checks**: Additional scheduled checks every 6 hours
+
+### Cost Optimization
+
+1. **CloudWatch Logs Retention**: 30-day retention reduces long-term storage costs
+2. **Lambda Memory**: 256MB provides good performance-to-cost ratio
+3. **Config Resource Types**: Limited to S3, RDS, EC2 to control evaluation costs
+4. **SNS**: Pay-per-use pricing for notifications
+
+### Monitoring and Alerting
+
+1. **CloudWatch Logs**: Three separate log groups for Config, Lambda, and delivery
+2. **SNS Notifications**: Immediate alerts for compliance violations
+3. **EventBridge Rules**: Both real-time and periodic compliance checks
+4. **Lambda Error Handling**: Comprehensive error logging and notification
+
+## Compliance Rules Implemented
+
+### 1. S3 Bucket Encryption
+- **Rule**: s3-bucket-server-side-encryption-enabled
+- **Purpose**: Detects S3 buckets without server-side encryption
+- **Type**: AWS Managed Rule
+
+### 2. RDS Public Access
+- **Rule**: rds-instance-public-access-check
+- **Purpose**: Detects RDS instances accessible from the public internet
+- **Type**: AWS Managed Rule
+
+### 3. RDS Storage Encryption
+- **Rule**: rds-storage-encrypted
+- **Purpose**: Detects RDS instances without storage encryption at rest
+- **Type**: AWS Managed Rule
+
+### 4. EC2 Detailed Monitoring
+- **Rule**: ec2-instance-detailed-monitoring-enabled
+- **Purpose**: Ensures EC2 instances have detailed monitoring enabled
+- **Type**: AWS Managed Rule
+
+## Customization Options
+
+### Adding More Config Rules
+
+To add additional Config rules, add new resources in main.tf:
+
+```hcl
+resource "aws_config_config_rule" "custom_rule" {
+  name = "custom-rule-name-${var.environment_suffix}"
+
+  source {
+    owner             = "AWS"
+    source_identifier = "AWS_MANAGED_RULE_IDENTIFIER"
+  }
+
+  depends_on = [aws_config_configuration_recorder.main]
+}
 ```
 
-3. Deploy the stack:
-```bash
-pulumi up
+### Modifying Lambda Function
+
+The Lambda function code is in `lambda_function.py`. You can:
+- Add custom compliance checks
+- Modify notification formats
+- Integrate with additional AWS services
+- Add remediation logic
+
+### Adjusting Monitoring Frequency
+
+Modify the periodic check schedule in main.tf:
+
+```hcl
+resource "aws_cloudwatch_event_rule" "periodic_check" {
+  schedule_expression = "rate(1 hour)"  # Change frequency here
+}
 ```
 
-4. Switch environments using Lambda:
-```bash
-# Switch to green environment
-aws lambda invoke \
-  --function-name payment-switch-dev \
-  --payload '{"action": "switch", "target": "green"}' \
-  response.json
+## Troubleshooting
 
-# Gradual shift (50/50 split)
-aws lambda invoke \
-  --function-name payment-switch-dev \
-  --payload '{"action": "gradual", "blue_weight": 50}' \
-  response.json
+### Config Recorder Not Starting
 
-# Check current status
-aws lambda invoke \
-  --function-name payment-switch-dev \
-  --payload '{"action": "status"}' \
-  response.json
-```
+If the Config recorder fails to start:
+1. Verify IAM role has correct permissions
+2. Check S3 bucket policy allows Config service access
+3. Review CloudWatch Logs for error messages
 
-## Architecture Summary
+### Lambda Timeout Errors
 
-The implementation creates a complete blue-green deployment infrastructure:
+If Lambda times out during compliance checks:
+1. Increase `lambda_timeout` variable
+2. Increase `lambda_memory_size` for faster processing
+3. Reduce scope of compliance checks
 
-1. **Networking**: VPC with 3 AZs, 6 subnets (3 public, 3 private), 3 NAT Gateways, VPC endpoints for S3/DynamoDB
-2. **Database**: Two Aurora MySQL 8.0 clusters (blue and green), each with 2 instances across 3 AZs
-3. **Load Balancing**: ALB with weighted target groups supporting gradual traffic shifting
-4. **Session Management**: DynamoDB table with PITR for session data
-5. **Switching Logic**: Lambda function supporting full switch, gradual shift, and status checks
-6. **Monitoring**: CloudWatch alarms for database connections, response times, and throttling
-7. **Backup**: AWS Backup with 7-day retention for both environments
-8. **Security**: KMS encryption, Secrets Manager for credentials, VPC endpoints, security groups
-9. **Compliance**: PCI DSS ready with encryption, audit logging, and secure networking
+### No Notifications Received
 
-Total resources created: ~30+ AWS resources
+If SNS notifications aren't received:
+1. Confirm SNS subscription is active
+2. Check Lambda has SNS publish permissions
+3. Verify SNS topic policy allows Lambda to publish
+4. Review Lambda CloudWatch Logs for errors
 
-Rollback time: < 5 minutes via Lambda function
+## Maintenance
 
-All resources properly tagged with Environment, CostCenter, and MigrationPhase.
+### Regular Tasks
+
+1. **Review CloudWatch Logs**: Check for errors or anomalies weekly
+2. **Update Lambda Code**: Deploy updates to Lambda function as needed
+3. **Monitor Costs**: Review AWS Config and Lambda usage monthly
+4. **Test Notifications**: Periodically test SNS notification delivery
+5. **Update Config Rules**: Add new rules as compliance requirements evolve
+
+### Terraform State Management
+
+- Store Terraform state in S3 backend (configured in provider.tf)
+- Enable state locking with DynamoDB
+- Regular state backups recommended
+- Use workspaces for multiple environments
+
+## Additional Resources
+
+- [AWS Config Documentation](https://docs.aws.amazon.com/config/)
+- [AWS Config Managed Rules](https://docs.aws.amazon.com/config/latest/developerguide/managed-rules-by-aws-config.html)
+- [Terraform AWS Provider](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [Lambda Best Practices](https://docs.aws.amazon.com/lambda/latest/dg/best-practices.html)
