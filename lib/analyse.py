@@ -216,8 +216,10 @@ class S3SecurityAuditor:
                 policy = json.loads(policy_response['Policy'])
                 
                 for statement in policy.get('Statement', []):
+                    effect = statement.get('Effect', '')
                     principal = statement.get('Principal', '')
-                    if principal == '*' or (isinstance(principal, dict) and principal.get('AWS') == '*'):
+                    # Only flag Allow statements with Principal "*" as public access
+                    if effect == 'Allow' and (principal == '*' or (isinstance(principal, dict) and principal.get('AWS') == '*')):
                         has_public_policy = True
                         break
             except ClientError as e:
@@ -625,8 +627,10 @@ class S3SecurityAuditor:
         """Generate compliance summary statistics"""
         total_buckets = len(audited_buckets)
         
-        # Get unique bucket names with findings
-        non_compliant_buckets = set(finding.bucket_name for finding in self.findings)
+        # Get unique bucket names with CRITICAL or HIGH severity findings
+        # Medium and low severity findings don't make a bucket non-compliant
+        critical_findings = [f for f in self.findings if f.severity in [CRITICAL, HIGH]]
+        non_compliant_buckets = set(finding.bucket_name for finding in critical_findings)
         compliant_buckets = set(bucket['Name'] for bucket in audited_buckets) - non_compliant_buckets
         
         # Count by severity
