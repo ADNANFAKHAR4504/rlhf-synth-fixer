@@ -65,7 +65,7 @@ output "rds_endpoint" {
 
 output "rds_identifier" {
   description = "Identifier of the application database instance"
-  value       = aws_db_instance.app.id
+  value       = aws_db_instance.app.identifier
 }
 
 output "rds_master_secret_arn" {

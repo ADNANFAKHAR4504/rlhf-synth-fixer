@@ -53,13 +53,18 @@ const extractStringOutput = (
     return raw;
   }
 
-  if (
-    raw &&
-    typeof raw === "object" &&
-    "value" in raw &&
-    typeof (raw as Record<string, unknown>).value === "string"
-  ) {
-    return (raw as Record<string, unknown>).value as string;
+  if (raw && typeof raw === "object" && "value" in raw) {
+    const inner = (raw as Record<string, unknown>).value;
+    if (typeof inner === "string") {
+      return inner;
+    }
+    if (Array.isArray(inner)) {
+      return JSON.stringify(inner);
+    }
+  }
+
+  if (Array.isArray(raw)) {
+    return JSON.stringify(raw);
   }
 
   if (!required && raw == null) {
@@ -71,19 +76,46 @@ const extractStringOutput = (
   );
 };
 
-const parseJsonArrayOutput = (value: string): string[] => {
-  try {
-    const parsed = JSON.parse(value);
-    if (Array.isArray(parsed)) {
-      return parsed;
-    }
-  } catch {
-    // fall through
+const extractListOutput = (
+  outputs: FlatOutput,
+  key: string,
+  required = true
+): string[] => {
+  const raw = outputs[key];
+
+  if (Array.isArray(raw)) {
+    return raw as string[];
   }
-  if (!value) {
+
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // fall through
+    }
+    return raw.split(",").map((item) => item.trim());
+  }
+
+  if (raw && typeof raw === "object" && "value" in raw) {
+    const inner = (raw as Record<string, unknown>).value;
+    if (Array.isArray(inner)) {
+      return inner as string[];
+    }
+    if (typeof inner === "string") {
+      return extractListOutput({ [key]: inner }, key, required);
+    }
+  }
+
+  if (!required && raw == null) {
     return [];
   }
-  return value.split(",").map((item) => item.trim());
+
+  throw new Error(
+    `Output "${key}" is missing or not a list: ${JSON.stringify(raw)}`
+  );
 };
 
 const hitApplicationHealthEndpoint = async (
@@ -91,26 +123,29 @@ const hitApplicationHealthEndpoint = async (
   pathSuffix = "/health"
 ): Promise<{ protocol: string; status: number }> => {
   const protocols = ["https", "http"];
+  const paths = [pathSuffix, "/"];
   let lastError: unknown;
 
-  for (const protocol of protocols) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 10000);
-    try {
-      const response = await fetch(`${protocol}://${host}${pathSuffix}`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      if (response.status < 400) {
-        return { protocol, status: response.status };
+  for (const pathOption of paths) {
+    for (const protocol of protocols) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 10000);
+      try {
+        const response = await fetch(`${protocol}://${host}${pathOption}`, {
+          signal: controller.signal,
+        });
+        clearTimeout(timer);
+        if (response.status < 400) {
+          return { protocol, status: response.status };
+        }
+        lastError = new Error(
+          `Received non-OK status ${response.status} from ${protocol}://${host}${pathOption}`
+        );
+      } catch (error) {
+        lastError = error;
+      } finally {
+        clearTimeout(timer);
       }
-      lastError = new Error(
-        `Received non-OK status ${response.status} from ${protocol}://${host}${pathSuffix}`
-      );
-    } catch (error) {
-      lastError = error;
-    } finally {
-      clearTimeout(timer);
     }
   }
 
@@ -243,12 +278,8 @@ describe("Terraform infrastructure integration", () => {
       const vpcId = extractStringOutput(outputs, "vpc_id");
       expect(vpcId).toMatch(/^vpc-/);
 
-      const privateSubnets = parseJsonArrayOutput(
-        extractStringOutput(outputs, "private_subnet_ids")
-      );
-      const publicSubnets = parseJsonArrayOutput(
-        extractStringOutput(outputs, "public_subnet_ids")
-      );
+      const privateSubnets = extractListOutput(outputs, "private_subnet_ids");
+      const publicSubnets = extractListOutput(outputs, "public_subnet_ids");
 
       expect(privateSubnets.length).toBe(3);
       expect(publicSubnets.length).toBe(3);
