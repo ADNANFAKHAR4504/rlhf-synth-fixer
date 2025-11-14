@@ -39,7 +39,9 @@ describe("Terraform EMR stack conformance", () => {
 
   test("network security groups limit SSH and allow intra-cluster traffic", () => {
     expect(mainTf).toMatch(/resource\s+"aws_security_group"\s+"emr_master"/);
-    expect(mainTf).toMatch(/ingress[^}]*tcp[^}]*22[^}]*var\.corporate_cidr/s);
+    expect(mainTf).toMatch(/ingress[\s\S]*from_port\s*=\s*22/);
+    expect(mainTf).toMatch(/ingress[\s\S]*protocol\s*=\s*"tcp"/);
+    expect(mainTf).toMatch(/ingress[\s\S]*cidr_blocks\s*=\s*\[var\.corporate_cidr\]/);
     expect(mainTf).toMatch(/aws_security_group_rule"\s+"core_task_self"/);
   });
 
@@ -79,5 +81,27 @@ describe("Terraform EMR stack conformance", () => {
     expect(bootstrapSh).toMatch(/pandas==2\.0\.3/);
     expect(bootstrapSh).toMatch(/pyarrow==12\.0\.1/);
     expect(bootstrapSh).toMatch(/set -euo pipefail/);
+  });
+
+  test("module can synthesize network scaffolding when no VPC provided", () => {
+    expect(mainTf).toMatch(/resource\s+"aws_vpc"\s+"emr"/);
+    expect(mainTf).toMatch(/resource\s+"aws_internet_gateway"\s+"emr"/);
+    expect(mainTf).toMatch(/resource\s+"aws_nat_gateway"\s+"emr"/);
+    expect(mainTf).toMatch(/resource\s+"aws_subnet"\s+"public"/);
+    expect(mainTf).toMatch(/resource\s+"aws_subnet"\s+"private"/);
+    expect(mainTf).toMatch(/locals\s+\{\s*use_existing_vpc\s*=\s*length\(trimspace\(coalesce\(var\.vpc_id/);
+  });
+
+  test("TLS certificate is stored in S3 and referenced by security configuration", () => {
+    expect(mainTf).toMatch(/resource\s+"aws_s3_object"\s+"emr_tls_certificate"/);
+    expect(mainTf).toMatch(/CertificateProviderType\s*=\s*"PEM"/);
+    expect(mainTf).toMatch(/S3Object\s*=\s*"s3:\/\/\$\{aws_s3_bucket\.logs\.bucket\}\/\$\{aws_s3_object\.emr_tls_certificate\.key\}"/);
+  });
+
+  test("variables expose optional networking inputs with sensible defaults", () => {
+    expect(variablesTf).toMatch(/variable\s+"vpc_cidr"\s*{\s*description[\s\S]*default\s*=\s*"10\.60\.0\.0\/16"/);
+    expect(variablesTf).toMatch(/variable\s+"private_subnet_cidrs"/);
+    expect(variablesTf).toMatch(/variable\s+"availability_zones"/);
+    expect(variablesTf).toMatch(/validation\s*{\s*condition\s*=\s*var\.vpc_id == null \? true : \(var\.public_subnet_id != null/);
   });
 });
