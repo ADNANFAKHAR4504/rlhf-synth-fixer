@@ -193,6 +193,9 @@ class DRRegion(pulumi.ComponentResource):
     def _create_aurora_secondary(self, args: DRRegionArgs):
         """Create Aurora secondary cluster in global database."""
         # Secondary cluster
+        # NOTE: global_cluster_identifier can only be set during initial creation
+        # If the cluster already exists, this field cannot be modified
+        # Use ignore_changes to prevent Pulumi from trying to update this field
         self.aurora_cluster = aws.rds.Cluster(
             f'aurora-dr-{args.environment_suffix}',
             cluster_identifier=f'aurora-dr-{args.environment_suffix}',
@@ -206,7 +209,11 @@ class DRRegion(pulumi.ComponentResource):
             ),
             skip_final_snapshot=True,
             tags={**args.tags, 'Name': f'aurora-dr-{args.environment_suffix}'},
-            opts=ResourceOptions(parent=self, provider=self.provider)
+            opts=ResourceOptions(
+                parent=self,
+                provider=self.provider,
+                ignore_changes=["global_cluster_identifier"]  # Prevent updates to this immutable field
+            )
         )
 
         # DR cluster instance
