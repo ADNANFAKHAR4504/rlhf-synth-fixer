@@ -118,35 +118,43 @@ const extractListOutput = (
   );
 };
 
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
 const hitApplicationHealthEndpoint = async (
   host: string,
   pathSuffix = "/health"
 ): Promise<{ protocol: string; status: number }> => {
   const protocols = ["https", "http"];
   const paths = [pathSuffix, "/"];
+  const maxAttempts = 5;
+  const backoffMs = 2000;
   let lastError: unknown;
 
-  for (const pathOption of paths) {
-    for (const protocol of protocols) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 10000);
-      try {
-        const response = await fetch(`${protocol}://${host}${pathOption}`, {
-          signal: controller.signal,
-        });
-        clearTimeout(timer);
-        if (response.status < 400) {
-          return { protocol, status: response.status };
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    for (const pathOption of paths) {
+      for (const protocol of protocols) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 10000);
+        try {
+          const response = await fetch(`${protocol}://${host}${pathOption}`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (response.status < 400) {
+            return { protocol, status: response.status };
+          }
+          lastError = new Error(
+            `Received non-OK status ${response.status} from ${protocol}://${host}${pathOption}`
+          );
+        } catch (error) {
+          lastError = error;
+        } finally {
+          clearTimeout(timer);
         }
-        lastError = new Error(
-          `Received non-OK status ${response.status} from ${protocol}://${host}${pathOption}`
-        );
-      } catch (error) {
-        lastError = error;
-      } finally {
-        clearTimeout(timer);
       }
     }
+    await sleep(backoffMs * (attempt + 1));
   }
 
   throw lastError ?? new Error("Unable to reach application endpoint.");
