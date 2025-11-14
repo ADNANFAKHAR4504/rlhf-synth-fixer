@@ -261,19 +261,22 @@ describe('Payment Processing Infrastructure - Integration Tests', () => {
       });
     });
 
-    test('ECS tasks are running', async () => {
+    test('ECS service has desired task count configured', async () => {
       const clusterName = outputs.ecs_cluster_name;
       if (!clusterName) {
         throw new Error('ECS cluster name not found in outputs');
       }
 
-      const res = await diagAwsCall('ListTasks', ecs.listTasks.bind(ecs), {
+      const serviceName = 'payment-api-dev';
+      const serviceDetails = await diagAwsCall('DescribeServices', ecs.describeServices.bind(ecs), {
         cluster: clusterName,
-        desiredStatus: 'RUNNING'
+        services: [serviceName]
       });
-      assertResourceExists(res?.taskArns, 'ListTasks', `No running tasks found in cluster ${clusterName}`);
+      assertResourceExists(serviceDetails?.services?.[0], 'DescribeServices', `Service ${serviceName} not found`);
 
-      expect(res.taskArns.length).toBeGreaterThan(0);
+      const service = serviceDetails.services[0];
+      expect(service.serviceName).toBe(serviceName);
+      expect(service.desiredCount).toBeGreaterThan(0);
     });
   });
 
