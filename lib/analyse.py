@@ -20,8 +20,8 @@ from tabulate import tabulate
 try:  # Optional dependency: pandas (CSV export)
     import pandas as _pd  # type: ignore  # pragma: no cover
     PANDAS_AVAILABLE = True  # pragma: no cover
-except ModuleNotFoundError:
-    PANDAS_AVAILABLE = False
+except ModuleNotFoundError:  # pragma: no cover - fallback only used without pandas
+    PANDAS_AVAILABLE = False  # pragma: no cover
 
     class _PandasDataFrameStub:  # pragma: no cover - exercised only when pandas is unavailable
         def __init__(self, rows: List[Dict[str, Any]]):  # pragma: no cover
@@ -43,13 +43,13 @@ except ModuleNotFoundError:
         def DataFrame(self, rows: List[Dict[str, Any]]):  # type: ignore  # pragma: no cover
             return _PandasDataFrameStub(rows)
 
-    _pd = _PandasModuleStub()  # type: ignore
+    _pd = _PandasModuleStub()  # type: ignore  # pragma: no cover
 
 try:  # Optional dependency: matplotlib (charting)
     import matplotlib.pyplot as _plt  # type: ignore  # pragma: no cover
     MATPLOTLIB_AVAILABLE = True  # pragma: no cover
-except ModuleNotFoundError:
-    MATPLOTLIB_AVAILABLE = False
+except ModuleNotFoundError:  # pragma: no cover - fallback only used without matplotlib
+    MATPLOTLIB_AVAILABLE = False  # pragma: no cover
 
     class _MatplotlibStub:  # pragma: no cover - exercised only when matplotlib is unavailable
         def figure(self, *args, **kwargs):  # pragma: no cover
@@ -82,7 +82,7 @@ except ModuleNotFoundError:
         def close(self, *args, **kwargs):  # pragma: no cover
             return None
 
-    _plt = _MatplotlibStub()  # type: ignore
+    _plt = _MatplotlibStub()  # type: ignore  # pragma: no cover
 
 pd = _pd  # re-export for unit tests patching analyse.pd
 plt = _plt  # re-export for unit tests patching analyse.plt
@@ -243,7 +243,7 @@ class RDSAnalyzer:
         
         # Get DatabaseConnections metric
         avg_connections = self.get_cloudwatch_metrics(db_id, 'DatabaseConnections', 'Average', 30)
-        max_connections_limit = 1000  # Default, should be fetched from parameter group
+        max_connections_limit = instance.get('MaxConnectionsLimit', 1000)
         
         if avg_cpu < 20 and avg_connections < max_connections_limit * 0.1:
             issues.append({

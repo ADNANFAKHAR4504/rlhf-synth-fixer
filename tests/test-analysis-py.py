@@ -29,8 +29,11 @@ Reference: ``archive/analysis-py/Pr6246/tests/test-analysis-lambda.py`` demonstr
 the required structure, isolation, and validation depth for IaC analysis suites.
 """
 
+import contextlib
+import io
 import json
 import os
+import runpy
 import subprocess
 import sys
 import time
@@ -81,7 +84,6 @@ def isolated_rds_environment():
     """Ensure each test starts with a clean slate."""
     cleanup_rds_instances()
     yield
-    cleanup_rds_instances()
 
 
 def create_rds_instance(
@@ -102,7 +104,6 @@ def create_rds_instance(
         "BackupRetentionPeriod": 7,
         "MultiAZ": True,
         "StorageEncrypted": True,
-        "DBParameterGroups": [{"DBParameterGroupName": "custom", "ParameterApplyStatus": "in-sync"}],
     }
     if overrides:
         payload.update(overrides)
@@ -186,17 +187,29 @@ def run_analysis_script():
         os.remove(json_output)
 
     env = {**os.environ}
-    completed = subprocess.run(
-        [sys.executable, script],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-        env=env,
-    )
+    run_in_process = env.get("RUN_ANALYSIS_IN_PROCESS", "1") == "1"
+
+    if run_in_process:
+        stdout_buffer = io.StringIO()
+        stderr_buffer = io.StringIO()
+        with contextlib.redirect_stdout(stdout_buffer), contextlib.redirect_stderr(stderr_buffer):
+            runpy.run_path(script, run_name="__main__")
+        completed_stdout = stdout_buffer.getvalue()
+        completed_stderr = stderr_buffer.getvalue()
+    else:
+        completed = subprocess.run(
+            [sys.executable, script],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            env=env,
+        )
+        completed_stdout = completed.stdout
+        completed_stderr = completed.stderr
 
     if not os.path.exists(json_output):
-        print(f"STDOUT: {completed.stdout}")
-        print(f"STDERR: {completed.stderr}")
+        print(f"STDOUT: {completed_stdout}")
+        print(f"STDERR: {completed_stderr}")
         raise AssertionError("Analysis script did not generate aws_audit_results.json")
 
     with open(json_output, "r", encoding="utf-8") as handle:
@@ -266,3 +279,19 @@ def test_sensitive_workloads_require_encryption():
     # Ensure summary exists for downstream dashboards
     assert "summary" in results, "Summary section missing from audit output"
     assert results["summary"]["total_instances"] >= 1, "Summary total should reflect analyzed instances"
+
+
+def test_console_demo_data_available():
+    """Provision demo instances that remain for manual analysis console runs."""
+    identifiers = [
+        setup_underutilized_instance(),
+        setup_backup_disabled_instance(),
+        setup_production_single_az_instance(),
+        setup_sensitive_unencrypted_instance(),
+    ]
+
+    rds = boto_client("rds")
+    dbs = {db["DBInstanceIdentifier"] for db in rds.describe_db_instances().get("DBInstances", [])}
+
+    for identifier in identifiers:
+        assert identifier in dbs, f"{identifier} missing from Moto RDS dataset"
