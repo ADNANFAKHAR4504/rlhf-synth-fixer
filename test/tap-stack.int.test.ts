@@ -24,6 +24,7 @@ import {
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeInternetGatewaysCommand,
   DescribeSecurityGroupsCommand,
@@ -90,25 +91,37 @@ const outputs = JSON.parse(
   fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
 );
 
-// Read AWS region from lib/AWS_REGION file
-const awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+// Read AWS region from lib/AWS_REGION file or use default
+let awsRegion = 'us-east-1'; // Default region
+try {
+  awsRegion = fs.readFileSync('lib/AWS_REGION', 'utf8').trim();
+} catch (error) {
+  console.log('lib/AWS_REGION file not found, using default region: us-east-1');
+}
 
-// Initialize AWS SDK clients
-const s3Client = new S3Client({ region: awsRegion });
-const lambdaClient = new LambdaClient({ region: awsRegion });
-const iamClient = new IAMClient({ region: awsRegion });
-const ec2Client = new EC2Client({ region: awsRegion });
-const rdsClient = new RDSClient({ region: awsRegion });
-const secretsClient = new SecretsManagerClient({ region: awsRegion });
-const cloudwatchLogsClient = new CloudWatchLogsClient({ region: awsRegion });
-const cloudwatchClient = new CloudWatchClient({ region: awsRegion });
-const snsClient = new SNSClient({ region: awsRegion });
-const cloudtrailClient = new CloudTrailClient({ region: awsRegion });
-const configClient = new ConfigServiceClient({ region: awsRegion });
-const guarddutyClient = new GuardDutyClient({ region: awsRegion });
-const kmsClient = new KMSClient({ region: awsRegion });
-const eventBridgeClient = new EventBridgeClient({ region: awsRegion });
-const elbClient = new ElasticLoadBalancingV2Client({ region: awsRegion });
+// Initialize AWS SDK clients with request timeout
+const clientConfig = {
+  region: awsRegion,
+  requestHandler: {
+    requestTimeout: 60000, // 60 seconds timeout for requests
+  },
+};
+
+const s3Client = new S3Client(clientConfig);
+const lambdaClient = new LambdaClient(clientConfig);
+const iamClient = new IAMClient(clientConfig);
+const ec2Client = new EC2Client(clientConfig);
+const rdsClient = new RDSClient(clientConfig);
+const secretsClient = new SecretsManagerClient(clientConfig);
+const cloudwatchLogsClient = new CloudWatchLogsClient(clientConfig);
+const cloudwatchClient = new CloudWatchClient(clientConfig);
+const snsClient = new SNSClient(clientConfig);
+const cloudtrailClient = new CloudTrailClient(clientConfig);
+const configClient = new ConfigServiceClient(clientConfig);
+const guarddutyClient = new GuardDutyClient(clientConfig);
+const kmsClient = new KMSClient(clientConfig);
+const eventBridgeClient = new EventBridgeClient(clientConfig);
+const elbClient = new ElasticLoadBalancingV2Client(clientConfig);
 
 describe('TapStack Comprehensive Integration Tests', () => {
   // ===================================================================
@@ -323,7 +336,7 @@ describe('TapStack Comprehensive Integration Tests', () => {
       test('should verify VPC exists with correct configuration', async () => {
         const vpcId = outputs.VPCId;
 
-        // ACTION: Describe VPC
+        // ACTION 1: Describe VPC
         const response = await ec2Client.send(
           new DescribeVpcsCommand({
             VpcIds: [vpcId],
@@ -335,9 +348,27 @@ describe('TapStack Comprehensive Integration Tests', () => {
 
         const vpc = response.Vpcs![0];
         expect(vpc.State).toBe('available');
-        expect(vpc.EnableDnsHostnames).toBe(true);
-        expect(vpc.EnableDnsSupport).toBe(true);
         expect(vpc.CidrBlock).toBeDefined();
+
+        // ACTION 2: Check DNS support
+        const dnsSupportResponse = await ec2Client.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsSupport',
+          })
+        );
+
+        expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
+
+        // ACTION 3: Check DNS hostnames
+        const dnsHostnamesResponse = await ec2Client.send(
+          new DescribeVpcAttributeCommand({
+            VpcId: vpcId,
+            Attribute: 'enableDnsHostnames',
+          })
+        );
+
+        expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
       }, 60000);
 
       test('should verify all subnets exist in correct AZs', async () => {
@@ -466,20 +497,25 @@ describe('TapStack Comprehensive Integration Tests', () => {
       test('should verify RDS secret exists and contains credentials', async () => {
         const secretArn = outputs.RDSSecretArn;
 
-        // ACTION: Get secret value
-        const response = await secretsClient.send(
-          new GetSecretValueCommand({
-            SecretId: secretArn,
-          })
-        );
+        try {
+          // ACTION: Get secret value
+          const response = await secretsClient.send(
+            new GetSecretValueCommand({
+              SecretId: secretArn,
+            })
+          );
 
-        expect(response.SecretString).toBeDefined();
+          expect(response.SecretString).toBeDefined();
 
-        const secret = JSON.parse(response.SecretString!);
-        expect(secret.username).toBeDefined();
-        expect(secret.password).toBeDefined();
-        expect(secret.password.length).toBeGreaterThanOrEqual(32);
-      }, 60000);
+          const secret = JSON.parse(response.SecretString!);
+          expect(secret.username).toBeDefined();
+          expect(secret.password).toBeDefined();
+          expect(secret.password.length).toBeGreaterThanOrEqual(32);
+        } catch (error: any) {
+          console.error('Failed to retrieve RDS secret:', error.message);
+          throw error;
+        }
+      }, 120000);
     });
 
     describe('CloudWatch Logs Tests', () => {
@@ -727,25 +763,30 @@ describe('TapStack Comprehensive Integration Tests', () => {
         const secretArn = outputs.RDSSecretArn;
         const dbInstanceId = outputs.RDSInstanceId;
 
-        // CROSS-SERVICE ACTION 1: Get secret from Secrets Manager
-        const secretResponse = await secretsClient.send(
-          new GetSecretValueCommand({
-            SecretId: secretArn,
-          })
-        );
+        try {
+          // CROSS-SERVICE ACTION 1: Get secret from Secrets Manager
+          const secretResponse = await secretsClient.send(
+            new GetSecretValueCommand({
+              SecretId: secretArn,
+            })
+          );
 
-        expect(secretResponse.SecretString).toBeDefined();
-        const credentials = JSON.parse(secretResponse.SecretString!);
+          expect(secretResponse.SecretString).toBeDefined();
+          const credentials = JSON.parse(secretResponse.SecretString!);
 
-        // CROSS-SERVICE ACTION 2: Verify RDS instance exists
-        const rdsResponse = await rdsClient.send(
-          new DescribeDBInstancesCommand({
-            DBInstanceIdentifier: dbInstanceId,
-          })
-        );
+          // CROSS-SERVICE ACTION 2: Verify RDS instance exists
+          const rdsResponse = await rdsClient.send(
+            new DescribeDBInstancesCommand({
+              DBInstanceIdentifier: dbInstanceId,
+            })
+          );
 
-        expect(rdsResponse.DBInstances![0].MasterUsername).toBe(credentials.username);
-      }, 60000);
+          expect(rdsResponse.DBInstances![0].MasterUsername).toBe(credentials.username);
+        } catch (error: any) {
+          console.error('RDS → Secrets Manager integration test failed:', error.message);
+          throw error;
+        }
+      }, 120000);
     });
 
     describe('Lambda → KMS Integration', () => {
@@ -896,43 +937,48 @@ describe('TapStack Comprehensive Integration Tests', () => {
         const dbInstanceId = outputs.RDSInstanceId;
         const vpcId = outputs.VPCId;
 
-        // E2E Step 1: Get credentials from Secrets Manager
-        const secretResponse = await secretsClient.send(
-          new GetSecretValueCommand({
-            SecretId: secretArn,
-          })
-        );
+        try {
+          // E2E Step 1: Get credentials from Secrets Manager
+          const secretResponse = await secretsClient.send(
+            new GetSecretValueCommand({
+              SecretId: secretArn,
+            })
+          );
 
-        expect(secretResponse.SecretString).toBeDefined();
-        const credentials = JSON.parse(secretResponse.SecretString!);
-        expect(credentials.username).toBe('admin');
-        expect(credentials.password).toBeDefined();
+          expect(secretResponse.SecretString).toBeDefined();
+          const credentials = JSON.parse(secretResponse.SecretString!);
+          expect(credentials.username).toBe('admin');
+          expect(credentials.password).toBeDefined();
 
-        // E2E Step 2: Verify RDS instance is configured correctly
-        const rdsResponse = await rdsClient.send(
-          new DescribeDBInstancesCommand({
-            DBInstanceIdentifier: dbInstanceId,
-          })
-        );
+          // E2E Step 2: Verify RDS instance is configured correctly
+          const rdsResponse = await rdsClient.send(
+            new DescribeDBInstancesCommand({
+              DBInstanceIdentifier: dbInstanceId,
+            })
+          );
 
-        const dbInstance = rdsResponse.DBInstances![0];
-        expect(dbInstance.MasterUsername).toBe(credentials.username);
-        expect(dbInstance.StorageEncrypted).toBe(true);
-        expect(dbInstance.PubliclyAccessible).toBe(false);
+          const dbInstance = rdsResponse.DBInstances![0];
+          expect(dbInstance.MasterUsername).toBe(credentials.username);
+          expect(dbInstance.StorageEncrypted).toBe(true);
+          expect(dbInstance.PubliclyAccessible).toBe(false);
 
-        // E2E Step 3: Verify RDS is in correct VPC
-        const dbVpcId = dbInstance.DBSubnetGroup?.VpcId;
-        expect(dbVpcId).toBe(vpcId);
+          // E2E Step 3: Verify RDS is in correct VPC
+          const dbVpcId = dbInstance.DBSubnetGroup?.VpcId;
+          expect(dbVpcId).toBe(vpcId);
 
-        // E2E Step 4: Verify VPC configuration
-        const vpcResponse = await ec2Client.send(
-          new DescribeVpcsCommand({
-            VpcIds: [vpcId],
-          })
-        );
+          // E2E Step 4: Verify VPC configuration
+          const vpcResponse = await ec2Client.send(
+            new DescribeVpcsCommand({
+              VpcIds: [vpcId],
+            })
+          );
 
-        expect(vpcResponse.Vpcs![0].State).toBe('available');
-      }, 90000);
+          expect(vpcResponse.Vpcs![0].State).toBe('available');
+        } catch (error: any) {
+          console.error('E2E Database Workflow test failed:', error.message);
+          throw error;
+        }
+      }, 150000);
     });
 
     describe('Complete Storage Workflow', () => {
