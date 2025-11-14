@@ -1,171 +1,128 @@
-from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_kubernetes.provider import KubernetesProvider
+"""Main TAP Stack orchestrating all EKS infrastructure."""
 
-from .vpc_stack import VpcConstruct
-from .eks_cluster import EksClusterConstruct
-from .eks_node_groups import NodeGroupsConstruct
-from .kms_encryption import KmsEncryptionConstruct
-from .irsa_roles import IrsaRolesConstruct
-from .eks_addons import EksAddonsConstruct
-from .monitoring import MonitoringConstruct
-from .pod_security import PodSecurityConstruct
-from .secrets_manager import SecretsManagerConstruct
+from cdktf import TerraformStack, S3Backend
+from constructs import Construct
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from lib.vpc_stack import VpcStack
+from lib.kms_stack import KmsStack
+from lib.iam_stack import IamStack
+from lib.security_group_stack import SecurityGroupStack
+from lib.logging_stack import LoggingStack
+from lib.eks_cluster_stack import EksClusterStack
+from lib.node_group_stack import NodeGroupStack
+from lib.addons_stack import AddonsStack
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, ns: str, environment_suffix: str,
-                 state_bucket: str = None, state_bucket_region: str = None,
-                 aws_region: str = "us-east-2", default_tags: dict = None):
-        super().__init__(scope, ns)
+    """CDKTF Python stack for production EKS infrastructure."""
 
-        self.environment_suffix = environment_suffix
-        self.region = aws_region
+    def __init__(
+        self,
+        scope: Construct,
+        construct_id: str,
+        **kwargs
+    ):
+        """Initialize the TAP stack with EKS infrastructure."""
+        super().__init__(scope, construct_id)
 
-        # Use provided default_tags or fallback to defaults
-        if default_tags is None:
-            default_tags = {
-                "tags": {
-                    "Environment": environment_suffix,
-                    "ManagedBy": "CDKTF",
-                    "Project": "EKS-MultiTenant"
-                }
-            }
+        # Extract configuration from kwargs
+        environment_suffix = kwargs.get('environment_suffix', 'dev')
+        aws_region = kwargs.get('aws_region', 'us-east-1')
+        state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
+        default_tags = kwargs.get('default_tags', {})
 
-        # AWS Provider
-        AwsProvider(self, "aws",
-            region=self.region,
-            default_tags=[default_tags]
+        # Configure AWS Provider
+        AwsProvider(
+            self,
+            "aws",
+            region=aws_region,
+            default_tags=[default_tags],
         )
 
-        # VPC and Networking
-        self.vpc = VpcConstruct(self, "vpc",
-            environment_suffix=environment_suffix,
-            cidr_block="10.0.0.0/16",
-            availability_zones=["us-east-2a", "us-east-2b", "us-east-2c"],
-            region=self.region
+        # Configure S3 Backend with native state locking
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
         )
 
-        # KMS Encryption Keys
-        self.kms = KmsEncryptionConstruct(self, "kms",
+        # Add S3 state locking using escape hatch
+        self.add_override("terraform.backend.s3.use_lockfile", True)
+
+        # Create VPC infrastructure
+        vpc_stack = VpcStack(
+            self,
+            f"vpc-{environment_suffix}",
             environment_suffix=environment_suffix
         )
 
-        # EKS Cluster
-        self.eks_cluster = EksClusterConstruct(self, "eks-cluster",
-            environment_suffix=environment_suffix,
-            vpc_id=self.vpc.vpc_id,
-            private_subnet_ids=self.vpc.private_subnet_ids,
-            cluster_version="1.28",
-            kms_key_arn=self.kms.cluster_key_arn
-        )
-
-        # Configure Kubernetes Provider
-        KubernetesProvider(self, "kubernetes",
-            host=self.eks_cluster.endpoint,
-            cluster_ca_certificate=self.eks_cluster.ca_cert,
-            token=self.eks_cluster.token,
-            exec=[{
-                "apiVersion": "client.authentication.k8s.io/v1beta1",
-                "command": "aws",
-                "args": ["eks", "get-token", "--cluster-name", self.eks_cluster.cluster_name]
-            }]
-        )
-
-        # IRSA Roles
-        self.irsa = IrsaRolesConstruct(self, "irsa",
-            environment_suffix=environment_suffix,
-            oidc_provider_arn=self.eks_cluster.oidc_provider_arn,
-            oidc_provider_url=self.eks_cluster.oidc_provider_url
-        )
-
-        # Node Groups
-        self.node_groups = NodeGroupsConstruct(self, "node-groups",
-            environment_suffix=environment_suffix,
-            cluster_name=self.eks_cluster.cluster_name,
-            subnet_ids=self.vpc.private_subnet_ids,
-            node_role_arn=self.eks_cluster.node_role_arn
-        )
-
-        # EKS Managed Addons
-        self.addons = EksAddonsConstruct(self, "addons",
-            environment_suffix=environment_suffix,
-            cluster_name=self.eks_cluster.cluster_name,
-            ebs_csi_role_arn=self.irsa.ebs_csi_role_arn
-        )
-
-        # Monitoring
-        self.monitoring = MonitoringConstruct(self, "monitoring",
-            environment_suffix=environment_suffix,
-            cluster_name=self.eks_cluster.cluster_name
-        )
-
-        # Pod Security Standards
-        self.pod_security = PodSecurityConstruct(self, "pod-security",
+        # Create KMS keys
+        kms_stack = KmsStack(
+            self,
+            f"kms-{environment_suffix}",
             environment_suffix=environment_suffix
         )
 
-        # Secrets Manager Integration
-        self.secrets_manager = SecretsManagerConstruct(self, "secrets-manager",
+        # Create IAM roles
+        iam_stack = IamStack(
+            self,
+            f"iam-{environment_suffix}",
             environment_suffix=environment_suffix,
-            oidc_provider_arn=self.eks_cluster.oidc_provider_arn,
-            oidc_provider_url=self.eks_cluster.oidc_provider_url,
-            kms_key_arn=self.kms.cluster_key_arn
+            eks_key_arn=kms_stack.eks_key.arn
         )
 
-        # Outputs
-        TerraformOutput(self, "cluster_name",
-            value=self.eks_cluster.cluster_name,
-            description="EKS cluster name"
+        # Create security groups
+        sg_stack = SecurityGroupStack(
+            self,
+            f"security-groups-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            vpc_id=vpc_stack.vpc.id
         )
 
-        TerraformOutput(self, "cluster_endpoint",
-            value=self.eks_cluster.endpoint,
-            description="EKS cluster endpoint URL"
+        # Create logging infrastructure
+        logging_stack = LoggingStack(
+            self,
+            f"logging-{environment_suffix}",
+            environment_suffix=environment_suffix
         )
 
-        TerraformOutput(self, "vpc_id",
-            value=self.vpc.vpc_id,
-            description="VPC ID"
+        # Get all subnet IDs
+        all_subnet_ids = [s.id for s in vpc_stack.private_subnets + vpc_stack.public_subnets]
+
+        # Create EKS cluster
+        eks_cluster = EksClusterStack(
+            self,
+            f"eks-cluster-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            cluster_role_arn=iam_stack.cluster_role.arn,
+            eks_key_arn=kms_stack.eks_key.arn,
+            subnet_ids=all_subnet_ids,
+            cluster_sg_id=sg_stack.cluster_sg.id,
+            log_group_name=logging_stack.log_group.name
         )
 
-        TerraformOutput(self, "cluster_oidc_provider_arn",
-            value=self.eks_cluster.oidc_provider_arn,
-            description="OIDC provider ARN"
+        # Create node groups
+        private_subnet_ids = [s.id for s in vpc_stack.private_subnets]
+        node_groups = NodeGroupStack(
+            self,
+            f"node-groups-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            cluster_name=eks_cluster.cluster.name,
+            node_role_arn=iam_stack.node_role.arn,
+            subnet_ids=private_subnet_ids,
+            node_sg_id=sg_stack.node_sg.id,
+            ebs_key_arn=kms_stack.ebs_key.arn,
+            cluster_dependency=eks_cluster.cluster
         )
 
-        TerraformOutput(self, "cluster_autoscaler_role_arn",
-            value=self.irsa.autoscaler_role_arn,
-            description="Cluster autoscaler IAM role ARN"
-        )
-
-        TerraformOutput(self, "alb_controller_role_arn",
-            value=self.irsa.alb_controller_role_arn,
-            description="ALB controller IAM role ARN"
-        )
-
-        TerraformOutput(self, "external_dns_role_arn",
-            value=self.irsa.external_dns_role_arn,
-            description="External DNS IAM role ARN"
-        )
-
-        TerraformOutput(self, "ebs_csi_role_arn",
-            value=self.irsa.ebs_csi_role_arn,
-            description="EBS CSI driver IAM role ARN"
-        )
-
-        TerraformOutput(self, "external_secrets_role_arn",
-            value=self.secrets_manager.external_secrets_role_arn,
-            description="External secrets IAM role ARN"
-        )
-
-        TerraformOutput(self, "cluster_security_group_id",
-            value=self.eks_cluster.cluster_sg.id,
-            description="EKS cluster security group ID"
-        )
-
-        TerraformOutput(self, "region",
-            value=self.region,
-            description="AWS region"
+        # Install add-ons
+        addons = AddonsStack(
+            self,
+            f"addons-{environment_suffix}",
+            environment_suffix=environment_suffix,
+            cluster_name=eks_cluster.cluster.name,
+            node_groups_dependency=node_groups
         )
