@@ -229,9 +229,9 @@ class TestDMSConfiguration:
         for role_name, role_props in roles.items():
             if "dmsvpcrole" in role_name.lower():
                 vpc_role_found = True
-                # Verify it has the correct role name
+                # Verify it has the exact role name required by DMS
                 assert "RoleName" in role_props["Properties"]
-                assert "dms-vpc-role-" in role_props["Properties"]["RoleName"]
+                assert role_props["Properties"]["RoleName"] == "dms-vpc-role"
                 break
         assert vpc_role_found, "DMS VPC role not found"
         assert hasattr(tap_stack, "dms_vpc_role")
@@ -245,9 +245,9 @@ class TestDMSConfiguration:
         for role_name, role_props in roles.items():
             if "dmscloudwatchlogsrole" in role_name.lower():
                 logs_role_found = True
-                # Verify it has the correct role name
+                # Verify it has the exact role name required by DMS
                 assert "RoleName" in role_props["Properties"]
-                assert "dms-cloudwatch-logs-role-" in role_props["Properties"]["RoleName"]
+                assert role_props["Properties"]["RoleName"] == "dms-cloudwatch-logs-role"
                 break
         assert logs_role_found, "DMS CloudWatch logs role not found"
         assert hasattr(tap_stack, "dms_cloudwatch_logs_role")

@@ -79,9 +79,10 @@ dms_subnet_group.add_dependency(self.dms_vpc_role.node.default_child)
 
 1. **Always implement single-stack when specified**: The PROMPT.md explicitly required single-stack architecture with all resources
 2. **DMS requires prerequisite IAM roles**: These roles must exist before DMS can create VPC-related resources
-3. **Use CompositePrincipal for DMS**: Both regional and global service principals ensure compatibility
-4. **Add explicit dependencies**: The DMS subnet group must depend on the DMS VPC role
-5. **Check app.py deployment**: Ensure all required stacks are being deployed
+3. **DMS IAM roles require EXACT names**: The roles MUST be named exactly "dms-vpc-role" and "dms-cloudwatch-logs-role" without any suffix
+4. **Use CompositePrincipal for DMS**: Both regional and global service principals ensure compatibility
+5. **Add explicit dependencies**: The DMS subnet group must depend on the DMS VPC role
+6. **Check app.py deployment**: Ensure all required stacks are being deployed
 
 ---
 
@@ -135,3 +136,54 @@ Single-stack architecture was chosen for:
 2. **Verify architecture requirements**: Always check PROMPT.md for specific architecture patterns
 3. **Single-stack is often preferred**: For <100 resources, single-stack provides better atomicity
 4. **Update documentation after changes**: Keep IDEAL_RESPONSE.md in sync with code changes
+
+---
+
+## Issue 3: DMS IAM Role Name Must Be Exact Without Suffix
+
+### What Went Wrong
+
+After initial fix, deployment still failed with same error:
+```
+CREATE_FAILED | AWS::DMS::ReplicationSubnetGroup | dms-subnet-pr6185
+Resource handler returned message: "The IAM Role arn:aws:iam::***:role/dms-vpc-role is not configured properly."
+```
+
+**Evidence**:
+- Created role with name `dms-vpc-role-{environment_suffix}`
+- AWS DMS specifically looks for `arn:aws:iam::***:role/dms-vpc-role` (exact name)
+- DMS service has hardcoded dependency on these exact role names
+
+### Root Cause
+
+AWS DMS has a hardcoded requirement for specific IAM role names:
+- Must be exactly `dms-vpc-role` (not `dms-vpc-role-suffix`)
+- Must be exactly `dms-cloudwatch-logs-role` (not `dms-cloudwatch-logs-role-suffix`)
+
+These are service-linked-like roles that DMS expects to exist with exact names.
+
+### Correct Implementation
+
+```python
+# IMPORTANT: The role name MUST be exactly "dms-vpc-role" without any suffix
+self.dms_vpc_role = iam.Role(
+    self,
+    "dms-vpc-role",
+    role_name="dms-vpc-role",  # Must be exactly this name
+    assumed_by=iam.CompositePrincipal(
+        iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+        iam.ServicePrincipal("dms.amazonaws.com")
+    ),
+    managed_policies=[
+        iam.ManagedPolicy.from_aws_managed_policy_name(
+            "service-role/AmazonDMSVPCManagementRole"
+        )
+    ],
+)
+```
+
+### Key Learnings
+
+1. **Some AWS services require exact IAM role names**: DMS, unlike most services, requires specific role names
+2. **Service documentation is critical**: AWS DMS documentation specifies these exact role names
+3. **Don't apply environment suffixes to service-required roles**: These are account-level roles, not stack-specific

@@ -378,11 +378,11 @@ class TapStack(Stack):
         """Create DMS prerequisite IAM roles required for DMS to manage VPC resources"""
         # Create DMS VPC management role
         # AWS DMS requires this specific role name to manage VPC resources
-        # Note: Using both regional and global service principals for compatibility
+        # IMPORTANT: The role name MUST be exactly "dms-vpc-role" without any suffix
         self.dms_vpc_role = iam.Role(
             self,
             "dms-vpc-role",
-            role_name=f"dms-vpc-role-{self.environment_suffix}",
+            role_name="dms-vpc-role",  # Must be exactly this name
             assumed_by=iam.CompositePrincipal(
                 iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
                 iam.ServicePrincipal("dms.amazonaws.com")
@@ -396,10 +396,11 @@ class TapStack(Stack):
 
         # Create DMS CloudWatch Logs role
         # Note: Using both regional and global service principals for compatibility
+        # IMPORTANT: The role name MUST be exactly "dms-cloudwatch-logs-role" without any suffix
         self.dms_cloudwatch_logs_role = iam.Role(
             self,
             "dms-cloudwatch-logs-role",
-            role_name=f"dms-cloudwatch-logs-role-{self.environment_suffix}",
+            role_name="dms-cloudwatch-logs-role",  # Must be exactly this name
             assumed_by=iam.CompositePrincipal(
                 iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
                 iam.ServicePrincipal("dms.amazonaws.com")
