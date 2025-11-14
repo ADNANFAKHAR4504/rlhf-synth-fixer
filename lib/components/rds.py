@@ -45,23 +45,6 @@ class RdsComponent(ComponentResource):
             opts=child_opts,
         )
 
-        # Store password in secret
-        self.secret_version = aws.secretsmanager.SecretVersion(
-            f"rds-password-version-{environment}-{environment_suffix}",
-            secret_id=self.secret.id,
-            secret_string=json.dumps(
-                {
-                    "username": "admin",
-                    "password": password,
-                    "engine": "mysql",
-                    "host": "placeholder",
-                    "port": 3306,
-                    "dbname": f"appdb_{environment}",
-                }
-            ),
-            opts=child_opts,
-        )
-
         # Create security group for RDS
         self.rds_sg = aws.ec2.SecurityGroup(
             f"rds-sg-{environment}-{environment_suffix}",
@@ -123,12 +106,12 @@ class RdsComponent(ComponentResource):
             opts=child_opts,
         )
 
-        # Update secret with actual endpoint
-        self.secret_version_update = self.rds_instance.endpoint.apply(
+        # Store password in secret with actual endpoint after RDS is created
+        self.secret_version = self.rds_instance.endpoint.apply(
             lambda endpoint: aws.secretsmanager.SecretVersion(
-                f"rds-password-version-update-{environment}-{environment_suffix}",
+                f"rds-password-version-{environment}-{environment_suffix}",
                 secret_id=self.secret.id,
-                secret_string=pulumi.Output.json_dumps(
+                secret_string=json.dumps(
                     {
                         "username": "admin",
                         "password": password,
@@ -138,9 +121,7 @@ class RdsComponent(ComponentResource):
                         "dbname": f"appdb_{environment}",
                     }
                 ),
-                opts=ResourceOptions(
-                    parent=self, depends_on=[self.rds_instance, self.secret_version]
-                ),
+                opts=ResourceOptions(parent=self, depends_on=[self.rds_instance]),
             )
         )
 
