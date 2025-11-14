@@ -1,8 +1,6 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.eks_node_group import EksNodeGroup
 from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate
-from cdktf_cdktf_provider_aws.data_aws_subnet import DataAwsSubnet
-import json
 
 
 class EksNodeGroups(Construct):
@@ -10,17 +8,6 @@ class EksNodeGroups(Construct):
                  environment_suffix: str,
                  cluster_name: str, node_role_arn: str, subnet_ids: list):
         super().__init__(scope, id)
-
-        # Get subnet data sources
-        private_subnets = []
-        for idx, subnet_cidr in enumerate(["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]):
-            subnet = DataAwsSubnet(self, f"node_subnet_{idx}",
-                filter=[{
-                    "name": "cidr-block",
-                    "values": [subnet_cidr]
-                }]
-            )
-            private_subnets.append(subnet.id)
 
         # Launch Template for Critical Node Group
         critical_lt = LaunchTemplate(self, "critical_launch_template",
@@ -97,7 +84,7 @@ class EksNodeGroups(Construct):
             cluster_name=cluster_name,
             node_group_name=f"critical-{environment_suffix}",
             node_role_arn=node_role_arn,
-            subnet_ids=private_subnets,
+            subnet_ids=subnet_ids,
             scaling_config={
                 "desired_size": 2,
                 "min_size": 2,
@@ -123,7 +110,7 @@ class EksNodeGroups(Construct):
             cluster_name=cluster_name,
             node_group_name=f"non-critical-{environment_suffix}",
             node_role_arn=node_role_arn,
-            subnet_ids=private_subnets,
+            subnet_ids=subnet_ids,
             scaling_config={
                 "desired_size": 1,
                 "min_size": 1,

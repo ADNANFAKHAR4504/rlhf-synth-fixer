@@ -383,20 +383,22 @@ class TestEksNodeGroups:
         assert hasattr(ng, "non_critical_node_group_name")
         assert ng.non_critical_node_group_name is not None
 
-    def test_eks_node_groups_creates_subnet_data_sources(self):
-        """EksNodeGroups creates subnet data sources."""
+    def test_eks_node_groups_uses_provided_subnet_ids(self):
+        """EksNodeGroups uses provided subnet IDs."""
         app = App()
         stack = TerraformStack(app, "TestStack")
+        test_subnets = ["subnet-1", "subnet-2", "subnet-3"]
         ng = EksNodeGroups(
             stack, "test_ng",
             environment_suffix="test",
             cluster_name="test-cluster",
             node_role_arn="arn:aws:iam::123456789012:role/node-role",
-            subnet_ids=["subnet-1", "subnet-2"]
+            subnet_ids=test_subnets
         )
 
         synth = Testing.synth(stack)
         output_json = json.loads(synth)
 
-        data = output_json.get("data", {})
-        assert "aws_subnet" in data
+        node_groups = output_json.get("resource", {}).get("aws_eks_node_group", {})
+        for ng_config in node_groups.values():
+            assert ng_config.get("subnet_ids") == test_subnets

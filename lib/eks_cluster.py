@@ -1,7 +1,6 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.eks_cluster import EksCluster as AwsEksCluster
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.data_aws_subnet import DataAwsSubnet
 
 
 class EksCluster(Construct):
@@ -10,17 +9,6 @@ class EksCluster(Construct):
                  cluster_role_arn: str, security_group_ids: list,
                  subnet_ids: list, encryption_key_arn: str):
         super().__init__(scope, id)
-
-        # Get subnet data sources
-        private_subnets = []
-        for idx, subnet_cidr in enumerate(["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]):
-            subnet = DataAwsSubnet(self, f"private_subnet_{idx}",
-                filter=[{
-                    "name": "cidr-block",
-                    "values": [subnet_cidr]
-                }]
-            )
-            private_subnets.append(subnet.id)
 
         # CloudWatch Log Group for EKS logs
         log_group = CloudwatchLogGroup(self, "eks_log_group",
@@ -38,7 +26,7 @@ class EksCluster(Construct):
             role_arn=cluster_role_arn,
             version="1.28",
             vpc_config={
-                "subnet_ids": private_subnets,
+                "subnet_ids": subnet_ids,
                 "security_group_ids": security_group_ids,
                 "endpoint_private_access": True,
                 "endpoint_public_access": False

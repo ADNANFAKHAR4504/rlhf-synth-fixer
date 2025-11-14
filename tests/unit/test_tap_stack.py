@@ -218,8 +218,8 @@ class TestStackStructure:
         assert "--region us-east-1" in kubeconfig
         assert "--name" in kubeconfig
 
-    def test_tap_stack_data_sources_configured(self):
-        """TapStack configures AWS data sources."""
+    def test_tap_stack_uses_parameters_not_data_sources(self):
+        """TapStack uses provided parameters instead of data sources."""
         app = App()
         stack = TapStack(app, "TestTapStackData", environment_suffix="test")
 
@@ -227,9 +227,15 @@ class TestStackStructure:
         output_json = json.loads(synth)
 
         data = output_json.get("data", {})
+        resources = output_json.get("resource", {})
 
-        # Verify data sources exist
-        assert "aws_vpc" in data or "aws_subnet" in data
+        # Verify no VPC/subnet data sources (uses parameters instead)
+        assert "aws_vpc" not in data
+        assert "aws_subnet" not in data
+
+        # Verify resources are created
+        assert "aws_eks_cluster" in resources
+        assert "aws_security_group" in resources
 
 
 # add more test suites and cases as needed

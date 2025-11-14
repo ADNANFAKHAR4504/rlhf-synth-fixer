@@ -1,7 +1,6 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup
 from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
-from cdktf_cdktf_provider_aws.data_aws_vpc import DataAwsVpc
 
 
 class SecurityGroups(Construct):
@@ -9,19 +8,11 @@ class SecurityGroups(Construct):
                  environment_suffix: str, vpc_id: str, vpc_cidr: str):
         super().__init__(scope, id)
 
-        # Get VPC data source
-        vpc = DataAwsVpc(self, "vpc",
-            filter=[{
-                "name": "cidr",
-                "values": [vpc_cidr]
-            }]
-        )
-
         # EKS Cluster Security Group
         self.cluster_sg = SecurityGroup(self, "eks_cluster_sg",
             name=f"eks-cluster-sg-{environment_suffix}",
             description="Security group for EKS cluster control plane",
-            vpc_id=vpc.id,
+            vpc_id=vpc_id,
             tags={
                 "Name": f"eks-cluster-sg-{environment_suffix}",
                 "Environment": environment_suffix

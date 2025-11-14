@@ -200,24 +200,27 @@ class TestEksCluster:
             assert "api" in log_types
             assert "authenticator" in log_types
 
-    def test_eks_cluster_creates_subnet_data_sources(self):
-        """EksCluster creates subnet data sources."""
+    def test_eks_cluster_uses_provided_subnet_ids(self):
+        """EksCluster uses provided subnet IDs."""
         app = App()
         stack = TerraformStack(app, "TestStack")
+        test_subnets = ["subnet-1", "subnet-2", "subnet-3"]
         cluster = EksCluster(
             stack, "test_cluster",
             environment_suffix="test",
             cluster_role_arn="arn:aws:iam::123456789012:role/test-role",
             security_group_ids=["sg-12345"],
-            subnet_ids=["subnet-1", "subnet-2"],
+            subnet_ids=test_subnets,
             encryption_key_arn="arn:aws:kms:us-east-1:123456789012:key/test"
         )
 
         synth = Testing.synth(stack)
         output_json = json.loads(synth)
 
-        data = output_json.get("data", {})
-        assert "aws_subnet" in data
+        clusters = output_json.get("resource", {}).get("aws_eks_cluster", {})
+        for cluster_config in clusters.values():
+            vpc_config = cluster_config.get("vpc_config", {})
+            assert vpc_config.get("subnet_ids") == test_subnets
 
     def test_eks_cluster_exposes_cluster_name(self):
         """EksCluster exposes cluster_name property."""

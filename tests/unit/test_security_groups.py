@@ -30,22 +30,24 @@ class TestSecurityGroups:
         resources = output_json.get("resource", {})
         assert "aws_security_group" in resources
 
-    def test_security_groups_creates_vpc_data_source(self):
-        """SecurityGroups creates VPC data source."""
+    def test_security_groups_uses_provided_vpc_id(self):
+        """SecurityGroups uses provided VPC ID."""
         app = App()
         stack = TerraformStack(app, "TestStack")
+        test_vpc_id = "vpc-12345"
         sg = SecurityGroups(
             stack, "test_sg",
             environment_suffix="test",
-            vpc_id="vpc-12345",
+            vpc_id=test_vpc_id,
             vpc_cidr="10.0.0.0/16"
         )
 
         synth = Testing.synth(stack)
         output_json = json.loads(synth)
 
-        data = output_json.get("data", {})
-        assert "aws_vpc" in data
+        security_groups = output_json.get("resource", {}).get("aws_security_group", {})
+        for sg_config in security_groups.values():
+            assert sg_config.get("vpc_id") == test_vpc_id
 
     def test_security_groups_naming_convention(self):
         """SecurityGroups follows naming convention."""
