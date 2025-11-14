@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
+from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from lib.networking import NetworkingStack
@@ -105,4 +105,82 @@ class TapStack(TerraformStack):
             alb_security_group_id=alb.alb_security_group_id,
             vpc_id=networking.vpc_id,
             log_group_names=monitoring.log_group_names,
+        )
+
+        # Outputs for integration tests
+        TerraformOutput(
+            self,
+            "AlbDnsName",
+            value=alb.alb.dns_name,
+            description="ALB DNS name for HTTP access",
+        )
+
+        TerraformOutput(
+            self,
+            "AlbArn",
+            value=alb.alb.arn,
+            description="ALB ARN",
+        )
+
+        TerraformOutput(
+            self,
+            "TargetGroupArn",
+            value=alb.target_group_arn,
+            description="Target group ARN for payment-api",
+        )
+
+        TerraformOutput(
+            self,
+            "VpcId",
+            value=networking.vpc_id,
+            description="VPC ID",
+        )
+
+        TerraformOutput(
+            self,
+            "ClusterName",
+            value=ecs_cluster.cluster_name,
+            description="ECS cluster name",
+        )
+
+        TerraformOutput(
+            self,
+            "ClusterArn",
+            value=ecs_cluster.cluster_id,
+            description="ECS cluster ARN",
+        )
+
+        TerraformOutput(
+            self,
+            "PaymentApiServiceName",
+            value=f"payment-api-{environment_suffix}",
+            description="Payment API service name",
+        )
+
+        TerraformOutput(
+            self,
+            "FraudDetectionServiceName",
+            value=f"fraud-detection-{environment_suffix}",
+            description="Fraud detection service name",
+        )
+
+        TerraformOutput(
+            self,
+            "NotificationServiceName",
+            value=f"notification-service-{environment_suffix}",
+            description="Notification service name",
+        )
+
+        TerraformOutput(
+            self,
+            "Region",
+            value=aws_region,
+            description="AWS region",
+        )
+
+        TerraformOutput(
+            self,
+            "EnvironmentSuffix",
+            value=environment_suffix,
+            description="Environment suffix",
         )
