@@ -89,7 +89,7 @@ describe("Terraform EMR stack conformance", () => {
     expect(mainTf).toMatch(/resource\s+"aws_nat_gateway"\s+"emr"/);
     expect(mainTf).toMatch(/resource\s+"aws_subnet"\s+"public"/);
     expect(mainTf).toMatch(/resource\s+"aws_subnet"\s+"private"/);
-    expect(mainTf).toMatch(/locals\s+\{\s*use_existing_vpc\s*=\s*length\(trimspace\(coalesce\(var\.vpc_id/);
+    expect(mainTf).toMatch(/locals\s+\{\s*use_existing_vpc\s*=\s*var\.vpc_id != null/);
   });
 
   test("TLS certificate is stored in S3 and referenced by security configuration", () => {
