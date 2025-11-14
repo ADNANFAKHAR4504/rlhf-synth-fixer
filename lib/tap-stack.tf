@@ -25,7 +25,7 @@ variable "vpc_cidr" {
 variable "availability_zones" {
   description = "List of availability zones"
   type        = list(string)
-  default     = ["us-east-1a", "us-east-1b", "us-east-1c"]
+  default     = []
 }
 
 variable "custom_ami_id" {
@@ -64,6 +64,20 @@ data "aws_region" "current" {}
 
 data "aws_caller_identity" "current" {}
 
+# Get available availability zones dynamically
+data "aws_availability_zones" "available" {
+  state = "available"
+  filter {
+    name   = "opt-in-status"
+    values = ["opt-in-not-required"]
+  }
+}
+
+# Use dynamic AZs if not provided
+locals {
+  availability_zones = length(var.availability_zones) > 0 ? var.availability_zones : slice(data.aws_availability_zones.available.names, 0, 3)
+}
+
 # Get latest Deep Learning AMI
 data "aws_ami" "deep_learning" {
   most_recent = true
@@ -71,7 +85,12 @@ data "aws_ami" "deep_learning" {
 
   filter {
     name   = "name"
-    values = ["Deep Learning AMI Neuron (Ubuntu 22.04) 20250718*"]
+    values = ["Deep Learning AMI Neuron (Ubuntu 22.04)*"]
+  }
+  
+  filter {
+    name   = "state"
+    values = ["available"]
   }
 }
 
@@ -109,7 +128,7 @@ resource "aws_eip" "nat" {
   domain = "vpc"
 
   tags = {
-    Name        = "${var.project_name}-eip-nat-${var.availability_zones[count.index]}-${var.environment}"
+    Name        = "${var.project_name}-eip-nat-${local.availability_zones[count.index]}-${var.environment}"
     Environment = var.environment
     Project     = var.project_name
   }
@@ -122,10 +141,10 @@ resource "aws_subnet" "public" {
   count             = 3
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index)
-  availability_zone = var.availability_zones[count.index]
+  availability_zone = local.availability_zones[count.index]
 
   tags = {
-    Name        = "${var.project_name}-public-subnet-${var.availability_zones[count.index]}-${var.environment}"
+    Name        = "${var.project_name}-public-subnet-${local.availability_zones[count.index]}-${var.environment}"
     Environment = var.environment
     Project     = var.project_name
   }
@@ -136,10 +155,10 @@ resource "aws_subnet" "private" {
   count             = 3
   vpc_id            = aws_vpc.main.id
   cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 10)
-  availability_zone = var.availability_zones[count.index]
+  availability_zone = local.availability_zones[count.index]
 
   tags = {
-    Name        = "${var.project_name}-private-subnet-${var.availability_zones[count.index]}-${var.environment}"
+    Name        = "${var.project_name}-private-subnet-${local.availability_zones[count.index]}-${var.environment}"
     Environment = var.environment
     Project     = var.project_name
     Type        = "private"
@@ -153,7 +172,7 @@ resource "aws_nat_gateway" "main" {
   subnet_id     = aws_subnet.public[count.index].id
 
   tags = {
-    Name        = "${var.project_name}-nat-${var.availability_zones[count.index]}-${var.environment}"
+    Name        = "${var.project_name}-nat-${local.availability_zones[count.index]}-${var.environment}"
     Environment = var.environment
     Project     = var.project_name
   }
@@ -188,7 +207,7 @@ resource "aws_route_table" "private" {
   }
 
   tags = {
-    Name        = "${var.project_name}-private-rt-${var.availability_zones[count.index]}-${var.environment}"
+    Name        = "${var.project_name}-private-rt-${local.availability_zones[count.index]}-${var.environment}"
     Environment = var.environment
     Project     = var.project_name
   }
@@ -349,7 +368,7 @@ resource "aws_iam_role_policy" "ml_training_instance" {
           "logs:PutLogEvents",
           "logs:DescribeLogStreams"
         ]
-        Resource = "*"
+        Resource = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ml-training/*"
       },
       {
         Effect = "Allow"
@@ -423,6 +442,18 @@ resource "aws_s3_bucket" "model_artifacts" {
   }
 }
 
+# S3 Bucket for Access Logs
+resource "aws_s3_bucket" "access_logs" {
+  bucket = "ml-access-logs-${var.environment}-${data.aws_caller_identity.current.account_id}"
+
+  tags = {
+    Name        = "ml-access-logs-${var.environment}"
+    Environment = var.environment
+    Project     = var.project_name
+    Purpose     = "S3 Access Logs Storage"
+  }
+}
+
 # Bucket Versioning
 resource "aws_s3_bucket_versioning" "training_data" {
   bucket = aws_s3_bucket.training_data.id
@@ -433,6 +464,13 @@ resource "aws_s3_bucket_versioning" "training_data" {
 
 resource "aws_s3_bucket_versioning" "model_artifacts" {
   bucket = aws_s3_bucket.model_artifacts.id
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
   versioning_configuration {
     status = "Enabled"
   }
@@ -451,6 +489,16 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "training_data" {
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "model_artifacts" {
   bucket = aws_s3_bucket.model_artifacts.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
 
   rule {
     apply_server_side_encryption_by_default {
@@ -478,6 +526,15 @@ resource "aws_s3_bucket_public_access_block" "model_artifacts" {
   restrict_public_buckets = true
 }
 
+resource "aws_s3_bucket_public_access_block" "access_logs" {
+  bucket = aws_s3_bucket.access_logs.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
 # Lifecycle Rules
 resource "aws_s3_bucket_lifecycle_configuration" "training_data" {
   bucket = aws_s3_bucket.training_data.id
@@ -494,6 +551,15 @@ resource "aws_s3_bucket_lifecycle_configuration" "training_data" {
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "GLACIER"
+    }
+  }
+
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
     }
   }
 }
@@ -515,6 +581,30 @@ resource "aws_s3_bucket_lifecycle_configuration" "model_artifacts" {
       storage_class   = "GLACIER"
     }
   }
+
+  rule {
+    id     = "abort-incomplete-multipart"
+    status = "Enabled"
+    
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
+  }
+}
+
+# S3 Bucket Logging Configurations
+resource "aws_s3_bucket_logging" "training_data" {
+  bucket = aws_s3_bucket.training_data.id
+
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "training-data-access/"
+}
+
+resource "aws_s3_bucket_logging" "model_artifacts" {
+  bucket = aws_s3_bucket.model_artifacts.id
+
+  target_bucket = aws_s3_bucket.access_logs.id
+  target_prefix = "model-artifacts-access/"
 }
 
 # ===========================
@@ -868,10 +958,28 @@ resource "aws_ec2_fleet" "ml_training" {
 # CloudWatch Resources
 # ===========================
 
-# CloudWatch Log Group
+# KMS Key for CloudWatch Logs encryption
+resource "aws_kms_key" "cloudwatch_logs" {
+  description             = "KMS key for CloudWatch logs encryption"
+  deletion_window_in_days = 7
+
+  tags = {
+    Name        = "${var.project_name}-cloudwatch-logs-kms-${var.environment}"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+resource "aws_kms_alias" "cloudwatch_logs" {
+  name          = "alias/${var.project_name}-cloudwatch-logs-${var.environment}"
+  target_key_id = aws_kms_key.cloudwatch_logs.key_id
+}
+
+# CloudWatch Log Group with KMS encryption
 resource "aws_cloudwatch_log_group" "training_logs" {
   name              = "/aws/ml-training/${var.environment}"
   retention_in_days = 30
+  kms_key_id        = aws_kms_key.cloudwatch_logs.arn
 
   tags = {
     Name        = "${var.project_name}-training-logs-${var.environment}"

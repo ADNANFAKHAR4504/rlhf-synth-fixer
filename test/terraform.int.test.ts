@@ -55,9 +55,9 @@ import {
 } from '@aws-sdk/client-cloudwatch-logs';
 import fs from 'fs';
 
-// Configuration - These are coming from cfn-outputs after deployment
+// Configuration - These are coming from terraform outputs after deployment
 const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
+  fs.readFileSync('terraform-outputs.json', 'utf8')
 );
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
@@ -118,7 +118,7 @@ async function getActiveInstances(): Promise<string[]> {
 
     return instanceIds;
   } catch (error) {
-    console.log('No active instances found:', error);
+    // No active instances found
     return [];
   }
 }
@@ -254,7 +254,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
         expect(policyDocument).toContain('cloudwatch:PutMetricData');
       } catch (error) {
         // Policy name might be different, that's okay for this validation
-        console.log('Inline policy check skipped due to naming variation');
+        // Inline policy check skipped due to naming variation
       }
     }, 30000);
   });
@@ -436,7 +436,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
           }));
         }
       } catch (error) {
-        console.log('Cleanup error (acceptable):', error);
+        // Cleanup error (acceptable)
       }
     });
   });
@@ -532,7 +532,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
         expect(metricsResponse.$metadata.httpStatusCode).toBe(200);
       } catch (error) {
         // Metrics might not be available immediately, that's acceptable
-        console.log('Metrics retrieval delayed (acceptable):', error);
+        // Metrics retrieval delayed (acceptable)
       }
     }, 45000);
   });
@@ -546,7 +546,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length === 0) {
-        console.log('No active EC2 instances found. Skipping EC2-S3 interaction test.');
+        // No active EC2 instances found. Skipping EC2-S3 interaction test.
         return;
       }
 
@@ -580,7 +580,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping EC2-S3 test.');
+          // SSM Agent not configured. Skipping EC2-S3 test.
           return;
         }
         throw error;
@@ -593,7 +593,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length === 0) {
-        console.log('No active EC2 instances found. Skipping EC2-DynamoDB interaction test.');
+        // No active EC2 instances found. Skipping EC2-DynamoDB interaction test.
         return;
       }
 
@@ -622,7 +622,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping EC2-DynamoDB test.');
+          // SSM Agent not configured. Skipping EC2-DynamoDB test.
           return;
         }
         throw error;
@@ -635,7 +635,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length === 0) {
-        console.log('No active EC2 instances found. Skipping EC2-SSM interaction test.');
+        // No active EC2 instances found. Skipping EC2-SSM interaction test.
         return;
       }
 
@@ -664,7 +664,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping EC2-SSM test.');
+          // SSM Agent not configured. Skipping EC2-SSM test.
           return;
         }
         throw error;
@@ -677,7 +677,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length === 0) {
-        console.log('No active EC2 instances found. Skipping EC2-CloudWatch interaction test.');
+        // No active EC2 instances found. Skipping EC2-CloudWatch interaction test.
         return;
       }
 
@@ -703,7 +703,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping EC2-CloudWatch test.');
+          // SSM Agent not configured. Skipping EC2-CloudWatch test.
           return;
         }
         throw error;
@@ -720,7 +720,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length === 0) {
-        console.log('No active EC2 instances found. Skipping E2E training pipeline test.');
+        // No active EC2 instances found. Skipping E2E training pipeline test.
         return;
       }
 
@@ -843,7 +843,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
             Key: `experiments/${experimentId}/model_checkpoint.json`
           }));
         } catch (error) {
-          console.log('S3 artifacts verification failed (may be eventual consistency):', error);
+          // S3 artifacts verification failed (may be eventual consistency)
         }
 
         // Check DynamoDB record was created
@@ -857,12 +857,12 @@ describe('ML Training Infrastructure Integration Tests', () => {
           }));
           expect(dbResponse.Item?.status.S).toBe('completed');
         } catch (error) {
-          console.log('DynamoDB verification failed (may be eventual consistency):', error);
+          // DynamoDB verification failed (may be eventual consistency)
         }
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping E2E training pipeline test.');
+          // SSM Agent not configured. Skipping E2E training pipeline test.
           return;
         }
         throw error;
@@ -875,7 +875,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length < 2) {
-        console.log(`Only ${instanceIds.length} active instances found. Skipping multi-instance coordination test (requires 2+).`);
+        // Only limited active instances found. Skipping multi-instance coordination test (requires 2+).
         return;
       }
 
@@ -963,7 +963,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping multi-instance coordination test.');
+          // SSM Agent not configured. Skipping multi-instance coordination test.
           return;
         }
         throw error;
@@ -976,7 +976,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       const instanceIds = await getActiveInstances();
       
       if (instanceIds.length === 0) {
-        console.log('No active EC2 instances found. Skipping network isolation test.');
+        // No active EC2 instances found. Skipping network isolation test.
         return;
       }
 
@@ -1025,7 +1025,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
 
       } catch (error: any) {
         if (error.message?.includes('SSM Agent')) {
-          console.log('SSM Agent not configured. Skipping network isolation test.');
+          // SSM Agent not configured. Skipping network isolation test.
           return;
         }
         throw error;
@@ -1071,7 +1071,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
       );
       expect(mlAlarms.length).toBeGreaterThanOrEqual(0);
 
-      console.log('Complete infrastructure validation passed');
+      // Complete infrastructure validation passed
     }, 60000);
 
     test('should support full ML training workflow capabilities', async () => {
@@ -1167,7 +1167,7 @@ describe('ML Training Infrastructure Integration Tests', () => {
         }]
       }));
 
-      console.log('Functional ML training workflow validation passed');
+      // Functional ML training workflow validation passed
       
       // Cleanup
       await s3Client.send(new DeleteObjectCommand({ Bucket: trainingBucket, Key: datasetKey }));
