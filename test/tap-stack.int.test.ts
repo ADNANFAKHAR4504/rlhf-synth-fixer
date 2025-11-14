@@ -23,9 +23,11 @@ describe('Turn Around Prompt API Integration Tests', () => {
       // Load deployment outputs
       try {
         // Try multiple ways to find the API URL
+        const stackOutputs = outputs[`TapStack${testEnvironmentSuffix}`] || outputs;
         apiUrl =
-          outputs[`ApiUrl${testEnvironmentSuffix}`] ||
-          (Object.values(outputs).find(
+          stackOutputs[`ApiUrl${testEnvironmentSuffix}`] ||
+          stackOutputs[`WebhookApipr6140EndpointB0D81D81`] ||
+          (Object.values(stackOutputs).find(
             val => typeof val === 'string' && val.includes('execute-api')
           ) as string) ||
           '';
@@ -84,9 +86,10 @@ describe('Turn Around Prompt API Integration Tests', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(response.data).toHaveProperty('webhookId');
-        expect(response.data).toHaveProperty('processed', true);
+        expect(response.data).toHaveProperty('webhook_id');
+        expect(response.data).toHaveProperty('status', 'queued');
         expect(response.data).toHaveProperty('provider', 'stripe');
+        expect(response.data).toHaveProperty('event_type');
 
         console.log('Stripe webhook processed successfully:', response.data);
       } catch (error: any) {
@@ -154,9 +157,10 @@ describe('Turn Around Prompt API Integration Tests', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(response.data).toHaveProperty('webhookId');
-        expect(response.data).toHaveProperty('processed', true);
+        expect(response.data).toHaveProperty('webhook_id');
+        expect(response.data).toHaveProperty('status', 'queued');
         expect(response.data).toHaveProperty('provider', 'paypal');
+        expect(response.data).toHaveProperty('event_type');
 
         console.log('PayPal webhook processed successfully:', response.data);
       } catch (error: any) {
@@ -216,9 +220,10 @@ describe('Turn Around Prompt API Integration Tests', () => {
         );
 
         expect(response.status).toBe(200);
-        expect(response.data).toHaveProperty('webhookId');
-        expect(response.data).toHaveProperty('processed', true);
+        expect(response.data).toHaveProperty('webhook_id');
+        expect(response.data).toHaveProperty('status', 'queued');
         expect(response.data).toHaveProperty('provider', 'square');
+        expect(response.data).toHaveProperty('event_type');
 
         console.log('Square webhook processed successfully:', response.data);
       } catch (error: any) {

@@ -27,6 +27,9 @@ export class TapStack extends cdk.Stack {
   private createWebhookProcessingInfrastructure(
     environmentSuffix: string
   ): void {
+    // AWS Secrets Manager for webhook secrets
+    const { webhookSecrets } = this.createSecretsManager(environmentSuffix);
+
     // API Gateway for webhook ingestion
     const { apiGateway } = this.createApiGateway(environmentSuffix);
 
@@ -47,7 +50,8 @@ export class TapStack extends cdk.Stack {
       stripeQueue,
       paypalQueue,
       squareQueue,
-      eventBus
+      eventBus,
+      webhookSecrets
     );
 
     // Connect API Gateway to validator function
@@ -81,6 +85,11 @@ export class TapStack extends cdk.Stack {
     new cdk.CfnOutput(this, `ApiUrl${environmentSuffix}`, {
       value: apiGateway.url,
       description: 'Webhook API Gateway URL',
+    });
+
+    new cdk.CfnOutput(this, `WebhookSecretsArn${environmentSuffix}`, {
+      value: webhookSecrets.secretArn,
+      description: 'ARN of the webhook secrets in AWS Secrets Manager',
     });
   }
 
@@ -159,9 +168,10 @@ export class TapStack extends cdk.Stack {
       queueName: `webhook-processing-dlq-${environmentSuffix}.fifo`,
       fifo: true,
       retentionPeriod: cdk.Duration.days(14),
+      encryption: cdk.aws_sqs.QueueEncryption.SQS_MANAGED,
     });
 
-    // FIFO queues for each provider
+    // FIFO queues for each provider with explicit encryption
     const stripeQueue = new cdk.aws_sqs.Queue(
       this,
       `StripeWebhookQueue${environmentSuffix}`,
@@ -175,6 +185,7 @@ export class TapStack extends cdk.Stack {
           queue: dlq,
           maxReceiveCount: 3,
         },
+        encryption: cdk.aws_sqs.QueueEncryption.SQS_MANAGED,
       }
     );
 
@@ -191,6 +202,7 @@ export class TapStack extends cdk.Stack {
           queue: dlq,
           maxReceiveCount: 3,
         },
+        encryption: cdk.aws_sqs.QueueEncryption.SQS_MANAGED,
       }
     );
 
@@ -207,6 +219,7 @@ export class TapStack extends cdk.Stack {
           queue: dlq,
           maxReceiveCount: 3,
         },
+        encryption: cdk.aws_sqs.QueueEncryption.SQS_MANAGED,
       }
     );
 
@@ -225,13 +238,36 @@ export class TapStack extends cdk.Stack {
     return { eventBus };
   }
 
+  private createSecretsManager(environmentSuffix: string) {
+    // Create AWS Secrets Manager for webhook secrets
+    const webhookSecrets = new cdk.aws_secretsmanager.Secret(
+      this,
+      `WebhookSecrets${environmentSuffix}`,
+      {
+        secretName: `webhook-secrets-${environmentSuffix}`,
+        description: 'Webhook secrets for payment providers',
+        generateSecretString: {
+          secretStringTemplate: JSON.stringify({
+            stripe_webhook_secret: 'whsec_test_secret',
+            paypal_webhook_secret: 'paypal_test_secret',
+            square_webhook_secret: 'square_test_secret',
+          }),
+          generateStringKey: 'unused',
+        },
+      }
+    );
+
+    return { webhookSecrets };
+  }
+
   private createLambdaFunctions(
     environmentSuffix: string,
     table: cdk.aws_dynamodb.Table,
     stripeQueue: cdk.aws_sqs.Queue,
     paypalQueue: cdk.aws_sqs.Queue,
     squareQueue: cdk.aws_sqs.Queue,
-    eventBus: cdk.aws_events.EventBus
+    eventBus: cdk.aws_events.EventBus,
+    webhookSecrets: cdk.aws_secretsmanager.Secret
   ) {
     // IAM role for Lambda functions
     const lambdaRole = new cdk.aws_iam.Role(
@@ -246,6 +282,9 @@ export class TapStack extends cdk.Stack {
         ],
       }
     );
+
+    // Add permissions for Secrets Manager
+    webhookSecrets.grantRead(lambdaRole);
 
     // Add permissions
     table.grantWriteData(lambdaRole);
@@ -265,141 +304,50 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    // Webhook validator function
-    const validatorFunction = new cdk.aws_lambda.Function(
+    // Create Lambda log groups explicitly
+    const validatorLogGroup = new cdk.aws_logs.LogGroup(
+      this,
+      `WebhookValidatorLogs${environmentSuffix}`,
+      {
+        logGroupName: `/aws/lambda/webhook-validator-${environmentSuffix}`,
+        retention: cdk.aws_logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    const processorLogGroup = new cdk.aws_logs.LogGroup(
+      this,
+      `WebhookProcessorLogs${environmentSuffix}`,
+      {
+        logGroupName: `/aws/lambda/webhook-processor-${environmentSuffix}`,
+        retention: cdk.aws_logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      }
+    );
+
+    // Webhook validator function using Docker image from ECR
+    const validatorFunction = new cdk.aws_lambda.DockerImageFunction(
       this,
       `WebhookValidator${environmentSuffix}`,
       {
         functionName: `webhook-validator-${environmentSuffix}`,
-        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
-        code: cdk.aws_lambda.Code.fromInline(`
-const crypto = require('crypto');
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-
-const sqs = new SQSClient({});
-
-exports.handler = async (event) => {
-  console.log('Webhook validation event:', JSON.stringify(event, null, 2));
-
-  try {
-    const provider = event.pathParameters?.provider;
-    const body = JSON.parse(event.body || '{}');
-    const headers = event.headers || {};
-
-    // Validate webhook signature based on provider
-    const isValid = await validateWebhookSignature(provider, body, headers);
-
-    if (!isValid) {
-      return {
-        statusCode: 401,
-        body: JSON.stringify({ error: 'Invalid webhook signature' }),
-      };
-    }
-
-    // Generate unique webhook ID
-    const webhookId = \`wh_\${Date.now()}_\${crypto.randomBytes(8).toString('hex')}\`;
-
-    // Enrich webhook data
-    const enrichedData = {
-      webhook_id: webhookId,
-      provider,
-      event_type: body.event_type || body.type || 'unknown',
-      payload: body,
-      received_at: new Date().toISOString(),
-    };
-
-    // Send to appropriate SQS queue
-    const queueUrl = getQueueUrlForProvider(provider);
-    if (!queueUrl) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Unsupported provider' }),
-      };
-    }
-
-    await sqs.send(new SendMessageCommand({
-      QueueUrl: queueUrl,
-      MessageBody: JSON.stringify(enrichedData),
-      MessageGroupId: webhookId, // For FIFO deduplication
-    }));
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        message: 'Webhook validated and queued',
-        webhook_id: webhookId,
-      }),
-    };
-
-  } catch (error) {
-    console.error('Validation error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'Internal server error' }),
-    };
-  }
-};
-
-async function validateWebhookSignature(provider, body, headers) {
-  try {
-    switch (provider) {
-      case 'stripe':
-        return validateStripeSignature(body, headers);
-      case 'paypal':
-        return validatePaypalSignature(body, headers);
-      case 'square':
-        return validateSquareSignature(body, headers);
-      default:
-        console.warn(\`Unknown provider: \${provider}\`);
-        return false;
-    }
-  } catch (error) {
-    console.error(\`Signature validation error for \${provider}:\`, error);
-    return false;
-  }
-}
-
-function validateStripeSignature(body, headers) {
-  const signature = headers['stripe-signature'];
-  if (!signature) return false;
-  return signature.startsWith('t=') && signature.includes(',v1=');
-}
-
-function validatePaypalSignature(body, headers) {
-  const authAlgo = headers['paypal-auth-algo'];
-  const certUrl = headers['paypal-cert-url'];
-  const transmissionId = headers['paypal-transmission-id'];
-  return authAlgo && certUrl && transmissionId;
-}
-
-function validateSquareSignature(body, headers) {
-  const signature = headers['x-square-hmacsha256-signature'];
-  if (!signature) return false;
-  return signature.length > 0;
-}
-
-function getQueueUrlForProvider(provider) {
-  switch (provider) {
-    case 'stripe':
-      return process.env.STRIPE_QUEUE_URL;
-    case 'paypal':
-      return process.env.PAYPAL_QUEUE_URL;
-    case 'square':
-      return process.env.SQUARE_QUEUE_URL;
-    default:
-      return null;
-  }
-}
-      `),
-        handler: 'index.handler',
+        code: cdk.aws_lambda.DockerImageCode.fromEcr(
+          cdk.aws_ecr.Repository.fromRepositoryName(
+            this,
+            'WebhookLambdaRepo',
+            'webhook-lambda-pr6140'
+          ),
+          {
+            tag: 'latest',
+            cmd: ['app.handler'],
+          }
+        ),
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
         role: lambdaRole,
+        logGroup: validatorLogGroup,
         environment: {
-          STRIPE_WEBHOOK_SECRET: 'whsec_test_secret',
-          PAYPAL_WEBHOOK_SECRET: 'paypal_test_secret',
-          SQUARE_WEBHOOK_SECRET: 'square_test_secret',
+          WEBHOOK_SECRETS_ARN: webhookSecrets.secretArn,
           STRIPE_QUEUE_URL: stripeQueue.queueUrl,
           PAYPAL_QUEUE_URL: paypalQueue.queueUrl,
           SQUARE_QUEUE_URL: squareQueue.queueUrl,
@@ -407,64 +355,27 @@ function getQueueUrlForProvider(provider) {
       }
     );
 
-    // Webhook processor function
-    const processorFunction = new cdk.aws_lambda.Function(
+    // Webhook processor function using Docker image from ECR
+    const processorFunction = new cdk.aws_lambda.DockerImageFunction(
       this,
       `WebhookProcessor${environmentSuffix}`,
       {
         functionName: `webhook-processor-${environmentSuffix}`,
-        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
-        code: cdk.aws_lambda.Code.fromInline(`
-const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
-
-const dynamodb = new DynamoDBClient({});
-const eventbridge = new EventBridgeClient({});
-
-exports.handler = async (event) => {
-  console.log('Processing webhook:', JSON.stringify(event, null, 2));
-
-  for (const record of event.Records || []) {
-    try {
-      const webhookData = JSON.parse(record.body);
-
-      // Store in DynamoDB
-      await dynamodb.send(new PutItemCommand({
-        TableName: process.env.TABLE_NAME,
-        Item: {
-          webhook_id: { S: webhookData.webhook_id },
-          timestamp: { S: new Date().toISOString() },
-          provider: { S: webhookData.provider },
-          event_type: { S: webhookData.event_type },
-          payload: { S: JSON.stringify(webhookData.payload) },
-          status: { S: 'processed' },
-        },
-      }));
-
-      // Publish to EventBridge
-      await eventbridge.send(new PutEventsCommand({
-        Entries: [{
-          EventBusName: process.env.EVENT_BUS_NAME,
-          Source: 'webhook.processor',
-          DetailType: webhookData.event_type,
-          Detail: JSON.stringify(webhookData),
-        }],
-      }));
-
-      console.log('Webhook processed successfully:', webhookData.webhook_id);
-
-    } catch (error) {
-      console.error('Processing error:', error);
-      throw error;
-    }
-  }
-};
-      `),
-        handler: 'index.handler',
+        code: cdk.aws_lambda.DockerImageCode.fromEcr(
+          cdk.aws_ecr.Repository.fromRepositoryName(
+            this,
+            'WebhookLambdaRepoProcessor',
+            'webhook-lambda-pr6140'
+          ),
+          {
+            tag: 'latest',
+            cmd: ['processor.handler'],
+          }
+        ),
         timeout: cdk.Duration.minutes(5),
         memorySize: 1024,
         role: lambdaRole,
+        logGroup: processorLogGroup,
         environment: {
           TABLE_NAME: table.tableName,
           EVENT_BUS_NAME: eventBus.eventBusName,

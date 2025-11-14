@@ -8,6 +8,7 @@ RUN npm ci --only=production
 
 # Copy source code
 COPY app.js ./
+COPY processor.js ./
 
-# Set the CMD to your handler
+# Set the CMD to your handler (will be overridden by Lambda)
 CMD ["app.handler"]
