@@ -14,6 +14,7 @@ Metadata:
         Parameters:
           - ContainerImage
           - ContainerRegistryURL
+          - DeployECSService
           - DomainName
           - CertificateArn
       - Label:
@@ -118,6 +119,14 @@ Parameters:
       - 'false'
     Description: 'Set to true to create SSL certificate for dummy domain (requires domain validation)'
 
+  DeployECSService:
+    Type: String
+    Default: 'true'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Deploy ECS Service (set to false if container image is not ready)'
+
   DatabaseMasterUsername:
     Type: String
     Default: 'dbadmin'
@@ -180,9 +189,44 @@ Conditions:
   UseDefaultECR: !Equals [!Ref ContainerRegistryURL, '']
   HasBackupAccount: !Not [!Equals [!Ref BackupAccountId, '123456789012']]
   HasLambdaLayer: !Not [!Equals [!Ref LambdaLayerS3Bucket, '']]
+  ShouldDeployECS: !Equals [!Ref DeployECSService, 'true']
 
 # ==================== RESOURCES ====================
 Resources:
+  # ==================== ECR Repository ====================
+  ECRRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Ref ContainerImage
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      ImageTagMutability: MUTABLE
+      EncryptionConfiguration:
+        EncryptionType: AES256
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentName
+        - Key: iac-rlhf-amazon
+          Value: 'true'
+
   # ==================== KMS Keys ====================
   CloudWatchLogsKMSKey:
     Type: AWS::KMS::Key
@@ -706,6 +750,20 @@ Resources:
     Properties:
       VpcId: !Ref VPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.secretsmanager'
+      VpcEndpointType: Interface
+      PrivateDnsEnabled: true
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+      SecurityGroupIds:
+        - !Ref VPCEndpointSecurityGroup
+
+  CloudWatchLogsVPCEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub 'com.amazonaws.${AWS::Region}.logs'
       VpcEndpointType: Interface
       PrivateDnsEnabled: true
       SubnetIds:
@@ -1574,8 +1632,8 @@ Resources:
         - Name: transaction-processor
           Image: !If
             - UseDefaultECR
-            - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImage}:${EnvironmentName}'
-            - !Sub '${ContainerRegistryURL}/${ContainerImage}:${EnvironmentName}'
+            - !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ContainerImage}:latest'
+            - !Sub '${ContainerRegistryURL}/${ContainerImage}:latest'
           Essential: true
           User: '1000:1000'  # Non-root user
           LinuxParameters:
@@ -1596,6 +1654,8 @@ Resources:
               Value: !Ref AWS::Region
             - Name: LOG_LEVEL
               Value: !If [IsProduction, 'INFO', 'DEBUG']
+            - Name: STARTUP_DELAY_SECONDS
+              Value: '30'
           Secrets:
             - Name: DB_USERNAME
               ValueFrom: !Sub '${DatabaseSecret}:username::'
@@ -1607,14 +1667,6 @@ Resources:
               awslogs-group: !Ref ECSLogGroup
               awslogs-region: !Ref AWS::Region
               awslogs-stream-prefix: ecs
-          HealthCheck:
-            Command:
-              - CMD-SHELL
-              - 'curl -f http://localhost:8080/health || exit 1'
-            Interval: 30
-            Timeout: 10
-            Retries: 5
-            StartPeriod: 180
           StopTimeout: 30
       Tags:
         - Key: Environment
@@ -1732,7 +1784,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: '200'
+        HttpCode: '200-299'
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
@@ -1767,7 +1819,7 @@ Resources:
       HealthyThresholdCount: 2
       UnhealthyThresholdCount: 3
       Matcher:
-        HttpCode: '200'
+        HttpCode: '200-299'
       TargetGroupAttributes:
         - Key: deregistration_delay.timeout_seconds
           Value: '30'
@@ -1833,12 +1885,19 @@ Resources:
         
   ECSService:
     Type: AWS::ECS::Service
-    DependsOn: ALBListenerHTTP
+    Condition: ShouldDeployECS
+    DependsOn: 
+      - ALBListenerHTTP
+      - AuroraPrimaryInstance
+      - ECRApiVPCEndpoint
+      - ECRDkrVPCEndpoint
+      - CloudWatchLogsVPCEndpoint
+      - SecretsManagerVPCEndpoint
     Properties:
       ServiceName: !Sub '${EnvironmentName}-meridian-service'
       Cluster: !Ref ECSCluster
       TaskDefinition: !Ref TaskDefinition
-      DesiredCount: 3
+      DesiredCount: !If [IsProduction, 3, 2]
       LaunchType: FARGATE
       PlatformVersion: LATEST
       NetworkConfiguration:
@@ -1854,10 +1913,10 @@ Resources:
         - ContainerName: transaction-processor
           ContainerPort: 8080
           TargetGroupArn: !Ref ALBTargetGroup
-      HealthCheckGracePeriodSeconds: 60
+      HealthCheckGracePeriodSeconds: 180
       DeploymentConfiguration:
         MaximumPercent: 200
-        MinimumHealthyPercent: 100
+        MinimumHealthyPercent: 50
         DeploymentCircuitBreaker:
           Enable: true
           Rollback: true
@@ -1877,6 +1936,7 @@ Resources:
   # ==================== AUTO SCALING ====================
   ServiceScalingTarget:
     Type: AWS::ApplicationAutoScaling::ScalableTarget
+    Condition: ShouldDeployECS
     Properties:
       MaxCapacity: !If [IsProduction, 20, 10]
       MinCapacity: !If [IsProduction, 3, 2]
@@ -1887,6 +1947,7 @@ Resources:
 
   ServiceScalingPolicy:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: ShouldDeployECS
     Properties:
       PolicyName: !Sub '${EnvironmentName}-cpu-scaling-policy'
       PolicyType: TargetTrackingScaling
@@ -1900,6 +1961,7 @@ Resources:
 
   ServiceScalingPolicyMemory:
     Type: AWS::ApplicationAutoScaling::ScalingPolicy
+    Condition: ShouldDeployECS
     Properties:
       PolicyName: !Sub '${EnvironmentName}-memory-scaling-policy'
       PolicyType: TargetTrackingScaling
@@ -2015,6 +2077,7 @@ Resources:
   # CloudWatch Alarms
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: ShouldDeployECS
     Properties:
       AlarmName: !Sub '${EnvironmentName}-ecs-high-cpu'
       AlarmDescription: Alarm when ECS service CPU exceeds 80%
@@ -2075,6 +2138,7 @@ Resources:
   # ==================== ROLLBACK TRIGGERS ====================
   RollbackAlarm:
     Type: AWS::CloudWatch::Alarm
+    Condition: ShouldDeployECS
     Properties:
       AlarmName: !Sub '${EnvironmentName}-stack-rollback-trigger'
       AlarmDescription: Triggers CloudFormation stack rollback on critical failures
@@ -2125,10 +2189,20 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-database-subnet-ids'
 
+  # ECR Repository Output
+  ECRRepositoryURI:
+    Description: ECR Repository URI
+    Value: !Sub '${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${ECRRepository}'
+    Export:
+      Name: !Sub '${EnvironmentName}-ecr-repository-uri'
+
   # Load Balancer Outputs
   LoadBalancerURL:
     Description: Application Load Balancer URL
-    Value: !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+    Value: !If
+      - HasCertificate
+      - !Sub 'https://${ApplicationLoadBalancer.DNSName}'
+      - !Sub 'http://${ApplicationLoadBalancer.DNSName}'
     Export:
       Name: !Sub '${EnvironmentName}-alb-url'
 
@@ -2164,12 +2238,14 @@ Outputs:
       Name: !Sub '${EnvironmentName}-ecs-cluster-arn'
 
   ECSServiceName:
+    Condition: ShouldDeployECS
     Description: ECS Service Name
     Value: !GetAtt ECSService.Name
     Export:
       Name: !Sub '${EnvironmentName}-ecs-service-name'
 
   ECSServiceArn:
+    Condition: ShouldDeployECS
     Description: ECS Service ARN
     Value: !Ref ECSService
     Export:
