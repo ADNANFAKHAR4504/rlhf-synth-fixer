@@ -93,7 +93,8 @@ export const clusterOidcProviderArn = stack.oidcProviderArn;
 // To configure kubectl access, run:
 // aws eks update-kubeconfig --region <deploymentRegion> --name <clusterName>
 export const kubectlConfigCommand = stack.clusterName.apply(
-  (name) => `aws eks update-kubeconfig --region ${process.env.AWS_REGION || 'us-east-1'} --name ${name}`
+  name =>
+    `aws eks update-kubeconfig --region ${process.env.AWS_REGION || 'us-east-1'} --name ${name}`
 );
 
 // ----------------------------------------------------------------------------
@@ -138,7 +139,7 @@ export const resourceTags = defaultTags;
 // ----------------------------------------------------------------------------
 // Deployment Summary (JSON format for automation)
 // ----------------------------------------------------------------------------
-export const deploymentSummary = stack.clusterName.apply((name) => ({
+export const deploymentSummary = stack.clusterName.apply(name => ({
   deployment: {
     environment: environmentSuffix,
     region: process.env.AWS_REGION || 'us-east-1',
