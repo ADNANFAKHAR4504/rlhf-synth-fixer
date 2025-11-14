@@ -45,12 +45,15 @@ The template creates a complete transaction processing infrastructure with the f
 {
   "AWSTemplateFormatVersion": "2010-09-09",
   "Description": "Optimized transaction processing infrastructure with cost-efficient resource configurations and multi-region support",
-
   "Parameters": {
     "EnvironmentType": {
       "Type": "String",
       "Default": "development",
-      "AllowedValues": ["development", "staging", "production"],
+      "AllowedValues": [
+        "development",
+        "staging",
+        "production"
+      ],
       "Description": "Environment type for conditional resource deployment"
     },
     "EnvironmentSuffix": {
@@ -62,7 +65,11 @@ The template creates a complete transaction processing infrastructure with the f
     "LambdaMemorySize": {
       "Type": "Number",
       "Default": 1024,
-      "AllowedValues": [512, 1024, 2048],
+      "AllowedValues": [
+        512,
+        1024,
+        2048
+      ],
       "Description": "Memory allocation for Lambda functions in MB"
     },
     "DBUsername": {
@@ -71,33 +78,41 @@ The template creates a complete transaction processing infrastructure with the f
       "NoEcho": true,
       "MinLength": 1,
       "MaxLength": 16,
-      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+      "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
+      "Default": "admin"
     },
     "DBPasswordSecretArn": {
       "Type": "String",
       "Description": "ARN of AWS Secrets Manager secret containing database password",
-      "NoEcho": true
+      "NoEcho": true,
+      "Default": "arn:aws:secretsmanager:us-east-1:342597974367:secret:db-secret-dev-12345-9658546-4eIjmA"
     },
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
-      "Description": "VPC ID for resource deployment"
+      "Description": "VPC ID for resource deployment",
+      "Default": "vpc-02ef1cb3524a4fc25"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "Private subnet IDs for RDS and Lambda deployment"
+      "Description": "Private subnet IDs for RDS and Lambda deployment",
+      "Default": "subnet-0c9618f134225ba7a"
     },
     "DBSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
-      "Description": "Subnet IDs for RDS subnet group (minimum 2 AZs for Multi-AZ)"
+      "Description": "Subnet IDs for RDS subnet group (minimum 2 AZs for Multi-AZ)",
+      "Default": "subnet-0e07058745f368ba2"
     }
   },
-
   "Conditions": {
     "IsProduction": {
-      "Fn::Equals": [{ "Ref": "EnvironmentType" }, "production"]
+      "Fn::Equals": [
+        {
+          "Ref": "EnvironmentType"
+        },
+        "production"
+      ]
     }
   },
-
   "Resources": {
     "LambdaExecutionManagedPolicy": {
       "Type": "AWS::IAM::ManagedPolicy",
@@ -147,21 +162,28 @@ The template creates a complete transaction processing infrastructure with the f
             },
             {
               "Effect": "Allow",
-              "Action": ["rds:DescribeDBInstances", "rds:DescribeDBClusters"],
+              "Action": [
+                "rds:DescribeDBInstances",
+                "rds:DescribeDBClusters"
+              ],
               "Resource": {
                 "Fn::Sub": "arn:aws:rds:${AWS::Region}:${AWS::AccountId}:db:*"
               }
             },
             {
               "Effect": "Allow",
-              "Action": ["secretsmanager:GetSecretValue"],
+              "Action": [
+                "secretsmanager:GetSecretValue"
+              ],
               "Resource": {
                 "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:*"
               }
             },
             {
               "Effect": "Allow",
-              "Action": ["kms:Decrypt"],
+              "Action": [
+                "kms:Decrypt"
+              ],
               "Resource": {
                 "Fn::Sub": "arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*"
               }
@@ -170,7 +192,6 @@ The template creates a complete transaction processing infrastructure with the f
         }
       }
     },
-
     "TransactionProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -189,20 +210,27 @@ The template creates a complete transaction processing infrastructure with the f
             }
           ]
         },
-        "ManagedPolicyArns": [{ "Ref": "LambdaExecutionManagedPolicy" }],
+        "ManagedPolicyArns": [
+          {
+            "Ref": "LambdaExecutionManagedPolicy"
+          }
+        ],
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "PaymentProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -221,20 +249,27 @@ The template creates a complete transaction processing infrastructure with the f
             }
           ]
         },
-        "ManagedPolicyArns": [{ "Ref": "LambdaExecutionManagedPolicy" }],
+        "ManagedPolicyArns": [
+          {
+            "Ref": "LambdaExecutionManagedPolicy"
+          }
+        ],
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "OrderProcessorRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
@@ -253,20 +288,27 @@ The template creates a complete transaction processing infrastructure with the f
             }
           ]
         },
-        "ManagedPolicyArns": [{ "Ref": "LambdaExecutionManagedPolicy" }],
+        "ManagedPolicyArns": [
+          {
+            "Ref": "LambdaExecutionManagedPolicy"
+          }
+        ],
         "Tags": [
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "DBSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -274,13 +316,17 @@ The template creates a complete transaction processing infrastructure with the f
           "Fn::Sub": "rds-security-group-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for RDS database access",
-        "VpcId": { "Ref": "VpcId" },
+        "VpcId": {
+          "Ref": "VpcId"
+        },
         "SecurityGroupIngress": [
           {
             "IpProtocol": "tcp",
             "FromPort": 3306,
             "ToPort": 3306,
-            "SourceSecurityGroupId": { "Ref": "LambdaSecurityGroup" }
+            "SourceSecurityGroupId": {
+              "Ref": "LambdaSecurityGroup"
+            }
           }
         ],
         "Tags": [
@@ -292,16 +338,19 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "LambdaSecurityGroup": {
       "Type": "AWS::EC2::SecurityGroup",
       "Properties": {
@@ -309,7 +358,9 @@ The template creates a complete transaction processing infrastructure with the f
           "Fn::Sub": "lambda-security-group-${EnvironmentSuffix}"
         },
         "GroupDescription": "Security group for Lambda functions",
-        "VpcId": { "Ref": "VpcId" },
+        "VpcId": {
+          "Ref": "VpcId"
+        },
         "SecurityGroupEgress": [
           {
             "IpProtocol": "-1",
@@ -325,16 +376,19 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "DBSubnetGroup": {
       "Type": "AWS::RDS::DBSubnetGroup",
       "Properties": {
@@ -342,7 +396,9 @@ The template creates a complete transaction processing infrastructure with the f
           "Fn::Sub": "rds-subnet-group-${EnvironmentSuffix}"
         },
         "DBSubnetGroupDescription": "Subnet group for RDS Multi-AZ deployment",
-        "SubnetIds": { "Ref": "DBSubnetIds" },
+        "SubnetIds": {
+          "Ref": "DBSubnetIds"
+        },
         "Tags": [
           {
             "Key": "Name",
@@ -352,16 +408,19 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "TransactionDatabase": {
       "Type": "AWS::RDS::DBInstance",
       "DeletionPolicy": "Snapshot",
@@ -377,16 +436,28 @@ The template creates a complete transaction processing infrastructure with the f
         "StorageType": "gp3",
         "StorageEncrypted": true,
         "MultiAZ": true,
-        "MasterUsername": { "Ref": "DBUsername" },
+        "MasterUsername": {
+          "Ref": "DBUsername"
+        },
         "MasterUserPassword": {
           "Fn::Sub": "{{resolve:secretsmanager:${DBPasswordSecretArn}:SecretString:password}}"
         },
-        "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
-        "VPCSecurityGroups": [{ "Ref": "DBSecurityGroup" }],
+        "DBSubnetGroupName": {
+          "Ref": "DBSubnetGroup"
+        },
+        "VPCSecurityGroups": [
+          {
+            "Ref": "DBSecurityGroup"
+          }
+        ],
         "BackupRetentionPeriod": 7,
         "PreferredBackupWindow": "03:00-04:00",
         "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
-        "EnableCloudwatchLogsExports": ["error", "general", "slowquery"],
+        "EnableCloudwatchLogsExports": [
+          "error",
+          "general",
+          "slowquery"
+        ],
         "DeletionProtection": false,
         "PubliclyAccessible": false,
         "Tags": [
@@ -398,16 +469,19 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "TransactionDatabaseReadReplica": {
       "Type": "AWS::RDS::DBInstance",
       "Condition": "IsProduction",
@@ -417,7 +491,9 @@ The template creates a complete transaction processing infrastructure with the f
         "DBInstanceIdentifier": {
           "Fn::Sub": "transaction-db-replica-${EnvironmentSuffix}"
         },
-        "SourceDBInstanceIdentifier": { "Ref": "TransactionDatabase" },
+        "SourceDBInstanceIdentifier": {
+          "Ref": "TransactionDatabase"
+        },
         "DBInstanceClass": "db.t3.large",
         "PubliclyAccessible": false,
         "Tags": [
@@ -429,16 +505,19 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "SessionTable": {
       "Type": "AWS::DynamoDB::Table",
       "DeletionPolicy": "Retain",
@@ -497,16 +576,19 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       }
     },
-
     "TransactionProcessorLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "DeletionPolicy": "Delete",
@@ -518,7 +600,6 @@ The template creates a complete transaction processing infrastructure with the f
         "RetentionInDays": 14
       }
     },
-
     "TransactionProcessorFunction": {
       "Type": "AWS::Lambda::Function",
       "DeletionPolicy": "Delete",
@@ -530,29 +611,50 @@ The template creates a complete transaction processing infrastructure with the f
         "Runtime": "python3.11",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": ["TransactionProcessorRole", "Arn"]
+          "Fn::GetAtt": [
+            "TransactionProcessorRole",
+            "Arn"
+          ]
         },
-        "MemorySize": { "Ref": "LambdaMemorySize" },
+        "MemorySize": {
+          "Ref": "LambdaMemorySize"
+        },
         "Timeout": 30,
         "Environment": {
           "Variables": {
             "DB_HOST": {
-              "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Address"]
+              "Fn::GetAtt": [
+                "TransactionDatabase",
+                "Endpoint.Address"
+              ]
             },
             "DB_PORT": {
-              "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Port"]
+              "Fn::GetAtt": [
+                "TransactionDatabase",
+                "Endpoint.Port"
+              ]
             },
             "DB_NAME": "transactions",
             "SESSION_TABLE": {
               "Fn::Sub": "session-table-${EnvironmentSuffix}"
             },
-            "ENVIRONMENT": { "Ref": "EnvironmentType" },
-            "REGION": { "Ref": "AWS::Region" }
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentType"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            }
           }
         },
         "VpcConfig": {
-          "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
-          "SubnetIds": { "Ref": "PrivateSubnetIds" }
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          }
         },
         "Code": {
           "ZipFile": "import json\nimport os\nimport boto3\n\ndef handler(event, context):\n    print(f'Processing transaction in region {os.environ[\"REGION\"]}')\n    return {\n        'statusCode': 200,\n        'body': json.dumps({'message': 'Transaction processed successfully'})\n    }\n"
@@ -566,17 +668,22 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       },
-      "DependsOn": ["TransactionProcessorLogGroup"]
+      "DependsOn": [
+        "TransactionProcessorLogGroup"
+      ]
     },
-
     "PaymentProcessorLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "DeletionPolicy": "Delete",
@@ -588,7 +695,6 @@ The template creates a complete transaction processing infrastructure with the f
         "RetentionInDays": 14
       }
     },
-
     "PaymentProcessorFunction": {
       "Type": "AWS::Lambda::Function",
       "DeletionPolicy": "Delete",
@@ -600,29 +706,50 @@ The template creates a complete transaction processing infrastructure with the f
         "Runtime": "python3.11",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": ["PaymentProcessorRole", "Arn"]
+          "Fn::GetAtt": [
+            "PaymentProcessorRole",
+            "Arn"
+          ]
         },
-        "MemorySize": { "Ref": "LambdaMemorySize" },
+        "MemorySize": {
+          "Ref": "LambdaMemorySize"
+        },
         "Timeout": 30,
         "Environment": {
           "Variables": {
             "DB_HOST": {
-              "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Address"]
+              "Fn::GetAtt": [
+                "TransactionDatabase",
+                "Endpoint.Address"
+              ]
             },
             "DB_PORT": {
-              "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Port"]
+              "Fn::GetAtt": [
+                "TransactionDatabase",
+                "Endpoint.Port"
+              ]
             },
             "DB_NAME": "transactions",
             "SESSION_TABLE": {
               "Fn::Sub": "session-table-${EnvironmentSuffix}"
             },
-            "ENVIRONMENT": { "Ref": "EnvironmentType" },
-            "REGION": { "Ref": "AWS::Region" }
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentType"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            }
           }
         },
         "VpcConfig": {
-          "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
-          "SubnetIds": { "Ref": "PrivateSubnetIds" }
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          }
         },
         "Code": {
           "ZipFile": "import json\nimport os\nimport boto3\n\ndef handler(event, context):\n    print(f'Processing payment in region {os.environ[\"REGION\"]}')\n    return {\n        'statusCode': 200,\n        'body': json.dumps({'message': 'Payment processed successfully'})\n    }\n"
@@ -636,17 +763,22 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       },
-      "DependsOn": ["PaymentProcessorLogGroup"]
+      "DependsOn": [
+        "PaymentProcessorLogGroup"
+      ]
     },
-
     "OrderProcessorLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "DeletionPolicy": "Delete",
@@ -658,7 +790,6 @@ The template creates a complete transaction processing infrastructure with the f
         "RetentionInDays": 14
       }
     },
-
     "OrderProcessorFunction": {
       "Type": "AWS::Lambda::Function",
       "DeletionPolicy": "Delete",
@@ -670,29 +801,50 @@ The template creates a complete transaction processing infrastructure with the f
         "Runtime": "python3.11",
         "Handler": "index.handler",
         "Role": {
-          "Fn::GetAtt": ["OrderProcessorRole", "Arn"]
+          "Fn::GetAtt": [
+            "OrderProcessorRole",
+            "Arn"
+          ]
         },
-        "MemorySize": { "Ref": "LambdaMemorySize" },
+        "MemorySize": {
+          "Ref": "LambdaMemorySize"
+        },
         "Timeout": 30,
         "Environment": {
           "Variables": {
             "DB_HOST": {
-              "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Address"]
+              "Fn::GetAtt": [
+                "TransactionDatabase",
+                "Endpoint.Address"
+              ]
             },
             "DB_PORT": {
-              "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Port"]
+              "Fn::GetAtt": [
+                "TransactionDatabase",
+                "Endpoint.Port"
+              ]
             },
             "DB_NAME": "transactions",
             "SESSION_TABLE": {
               "Fn::Sub": "session-table-${EnvironmentSuffix}"
             },
-            "ENVIRONMENT": { "Ref": "EnvironmentType" },
-            "REGION": { "Ref": "AWS::Region" }
+            "ENVIRONMENT": {
+              "Ref": "EnvironmentType"
+            },
+            "REGION": {
+              "Ref": "AWS::Region"
+            }
           }
         },
         "VpcConfig": {
-          "SecurityGroupIds": [{ "Ref": "LambdaSecurityGroup" }],
-          "SubnetIds": { "Ref": "PrivateSubnetIds" }
+          "SecurityGroupIds": [
+            {
+              "Ref": "LambdaSecurityGroup"
+            }
+          ],
+          "SubnetIds": {
+            "Ref": "PrivateSubnetIds"
+          }
         },
         "Code": {
           "ZipFile": "import json\nimport os\nimport boto3\n\ndef handler(event, context):\n    print(f'Processing order in region {os.environ[\"REGION\"]}')\n    return {\n        'statusCode': 200,\n        'body': json.dumps({'message': 'Order processed successfully'})\n    }\n"
@@ -706,23 +858,31 @@ The template creates a complete transaction processing infrastructure with the f
           },
           {
             "Key": "Environment",
-            "Value": { "Ref": "EnvironmentType" }
+            "Value": {
+              "Ref": "EnvironmentType"
+            }
           },
           {
             "Key": "EnvironmentSuffix",
-            "Value": { "Ref": "EnvironmentSuffix" }
+            "Value": {
+              "Ref": "EnvironmentSuffix"
+            }
           }
         ]
       },
-      "DependsOn": ["OrderProcessorLogGroup"]
+      "DependsOn": [
+        "OrderProcessorLogGroup"
+      ]
     }
   },
-
   "Outputs": {
     "DatabaseEndpoint": {
       "Description": "RDS database endpoint address",
       "Value": {
-        "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Address"]
+        "Fn::GetAtt": [
+          "TransactionDatabase",
+          "Endpoint.Address"
+        ]
       },
       "Export": {
         "Name": {
@@ -733,7 +893,10 @@ The template creates a complete transaction processing infrastructure with the f
     "DatabasePort": {
       "Description": "RDS database endpoint port",
       "Value": {
-        "Fn::GetAtt": ["TransactionDatabase", "Endpoint.Port"]
+        "Fn::GetAtt": [
+          "TransactionDatabase",
+          "Endpoint.Port"
+        ]
       },
       "Export": {
         "Name": {
@@ -745,7 +908,10 @@ The template creates a complete transaction processing infrastructure with the f
       "Condition": "IsProduction",
       "Description": "RDS read replica endpoint address (production only)",
       "Value": {
-        "Fn::GetAtt": ["TransactionDatabaseReadReplica", "Endpoint.Address"]
+        "Fn::GetAtt": [
+          "TransactionDatabaseReadReplica",
+          "Endpoint.Address"
+        ]
       },
       "Export": {
         "Name": {
@@ -767,7 +933,10 @@ The template creates a complete transaction processing infrastructure with the f
     "TransactionProcessorArn": {
       "Description": "Transaction processor Lambda function ARN",
       "Value": {
-        "Fn::GetAtt": ["TransactionProcessorFunction", "Arn"]
+        "Fn::GetAtt": [
+          "TransactionProcessorFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -778,7 +947,10 @@ The template creates a complete transaction processing infrastructure with the f
     "PaymentProcessorArn": {
       "Description": "Payment processor Lambda function ARN",
       "Value": {
-        "Fn::GetAtt": ["PaymentProcessorFunction", "Arn"]
+        "Fn::GetAtt": [
+          "PaymentProcessorFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -789,7 +961,10 @@ The template creates a complete transaction processing infrastructure with the f
     "OrderProcessorArn": {
       "Description": "Order processor Lambda function ARN",
       "Value": {
-        "Fn::GetAtt": ["OrderProcessorFunction", "Arn"]
+        "Fn::GetAtt": [
+          "OrderProcessorFunction",
+          "Arn"
+        ]
       },
       "Export": {
         "Name": {
@@ -810,15 +985,21 @@ The template creates a complete transaction processing infrastructure with the f
     },
     "StackRegion": {
       "Description": "AWS Region where stack is deployed",
-      "Value": { "Ref": "AWS::Region" }
+      "Value": {
+        "Ref": "AWS::Region"
+      }
     },
     "EnvironmentType": {
       "Description": "Environment type for this deployment",
-      "Value": { "Ref": "EnvironmentType" }
+      "Value": {
+        "Ref": "EnvironmentType"
+      }
     },
     "EnvironmentSuffix": {
       "Description": "Environment suffix for resource naming",
-      "Value": { "Ref": "EnvironmentSuffix" }
+      "Value": {
+        "Ref": "EnvironmentSuffix"
+      }
     }
   }
 }
