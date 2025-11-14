@@ -1,7 +1,5 @@
-name: multi-region-dr-postgres
-runtime: python
+name: TapStack
+runtime:
+  name: python
 description: Multi-region disaster recovery solution for PostgreSQL database with automatic failover
-config:
-  environmentSuffix:
-    description: Environment suffix for resource naming (e.g., prod, staging, dev)
-    default: dev
+main: tap.py
