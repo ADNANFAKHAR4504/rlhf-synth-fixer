@@ -149,7 +149,7 @@ const hitApplicationHealthEndpoint = async (
           });
           clearTimeout(timer);
           if (response.status < 400) {
-              return { protocol, status: response.status, success: true };
+            return { protocol, status: response.status, success: true };
           }
           lastResponse = {
             protocol,
@@ -231,7 +231,7 @@ describe("Terraform infrastructure integration", () => {
       const elbv2 = new ElasticLoadBalancingV2Client({ region });
       const result = await elbv2.send(
         new DescribeTargetHealthCommand({
-          TargetGroupArn: outputs.alb_target_group_arn as string,
+          TargetGroupArn: extractStringOutput(outputs, "alb_target_group_arn"),
         })
       );
       const descriptions = result.TargetHealthDescriptions ?? [];
