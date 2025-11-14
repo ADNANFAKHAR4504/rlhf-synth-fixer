@@ -130,7 +130,7 @@ pulumi.export("environment", environment)
 pulumi.export("stack", stack)
 ```
 
-## File: components/__init__.py
+## File: lib/components/__init__.py
 
 ```python
 """
@@ -138,7 +138,7 @@ Reusable infrastructure components for multi-environment deployment
 """
 ```
 
-## File: components/vpc.py
+## File: lib/components/vpc.py
 
 ```python
 """
@@ -309,7 +309,7 @@ class VpcComponent(ComponentResource):
         )
 ```
 
-## File: components/alb.py
+## File: lib/components/alb.py
 
 ```python
 """
@@ -436,7 +436,7 @@ class AlbComponent(ComponentResource):
         )
 ```
 
-## File: components/asg.py
+## File: lib/components/asg.py
 
 ```python
 """
@@ -586,7 +586,7 @@ echo "<h1>Hello from $(hostname -f)</h1>" > /var/www/html/index.html
         )
 ```
 
-## File: components/rds.py
+## File: lib/components/rds.py
 
 ```python
 """
@@ -751,7 +751,7 @@ class RdsComponent(ComponentResource):
         )
 ```
 
-## File: components/s3.py
+## File: lib/components/s3.py
 
 ```python
 """
@@ -1017,11 +1017,11 @@ pulumi destroy
 
 The infrastructure is organized into reusable components:
 
-- `components/vpc.py`: VPC with subnets, route tables, IGW, and NAT Gateway
-- `components/alb.py`: Application Load Balancer with target group
-- `components/asg.py`: Auto Scaling Group with launch template
-- `components/rds.py`: RDS MySQL with Secrets Manager integration
-- `components/s3.py`: S3 bucket with versioning and encryption
+- `lib/components/vpc.py`: VPC with subnets, route tables, IGW, and NAT Gateway
+- `lib/components/alb.py`: Application Load Balancer with target group
+- `lib/components/asg.py`: Auto Scaling Group with launch template
+- `lib/components/rds.py`: RDS MySQL with Secrets Manager integration
+- `lib/components/s3.py`: S3 bucket with versioning and encryption
 
 ## Security
 

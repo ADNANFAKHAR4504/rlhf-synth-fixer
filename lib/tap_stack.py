@@ -13,11 +13,11 @@ from typing import Optional
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
-from components.vpc import VpcComponent
-from components.alb import AlbComponent
-from components.asg import AsgComponent
-from components.rds import RdsComponent
-from components.s3 import S3Component
+from lib.components.vpc import VpcComponent
+from lib.components.alb import AlbComponent
+from lib.components.asg import AsgComponent
+from lib.components.rds import RdsComponent
+from lib.components.s3 import S3Component
 
 
 class TapStackArgs:

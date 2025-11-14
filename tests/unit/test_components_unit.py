@@ -15,31 +15,31 @@ class TestComponentConfiguration(unittest.TestCase):
 
     def test_vpc_component_file_exists(self):
         """Test VPC component file exists."""
-        self.assertTrue(os.path.exists("components/vpc.py"))
+        self.assertTrue(os.path.exists("lib/components/vpc.py"))
 
     def test_alb_component_file_exists(self):
         """Test ALB component file exists."""
-        self.assertTrue(os.path.exists("components/alb.py"))
+        self.assertTrue(os.path.exists("lib/components/alb.py"))
 
     def test_asg_component_file_exists(self):
         """Test ASG component file exists."""
-        self.assertTrue(os.path.exists("components/asg.py"))
+        self.assertTrue(os.path.exists("lib/components/asg.py"))
 
     def test_rds_component_file_exists(self):
         """Test RDS component file exists."""
-        self.assertTrue(os.path.exists("components/rds.py"))
+        self.assertTrue(os.path.exists("lib/components/rds.py"))
 
     def test_s3_component_file_exists(self):
         """Test S3 component file exists."""
-        self.assertTrue(os.path.exists("components/s3.py"))
+        self.assertTrue(os.path.exists("lib/components/s3.py"))
 
     def test_component_imports(self):
         """Test that all components can be imported."""
-        from components.vpc import VpcComponent
-        from components.alb import AlbComponent
-        from components.asg import AsgComponent
-        from components.rds import RdsComponent
-        from components.s3 import S3Component
+        from lib.components.vpc import VpcComponent
+        from lib.components.alb import AlbComponent
+        from lib.components.asg import AsgComponent
+        from lib.components.rds import RdsComponent
+        from lib.components.s3 import S3Component
 
         # Verify classes are defined
         self.assertTrue(callable(VpcComponent))
@@ -77,11 +77,11 @@ class TestMainProgram(unittest.TestCase):
         # Check for required imports
         self.assertIn('import pulumi', content)
         self.assertIn('import pulumi_aws', content)
-        self.assertIn('from components.vpc import VpcComponent', content)
-        self.assertIn('from components.alb import AlbComponent', content)
-        self.assertIn('from components.asg import AsgComponent', content)
-        self.assertIn('from components.rds import RdsComponent', content)
-        self.assertIn('from components.s3 import S3Component', content)
+        self.assertIn('from lib.components.vpc import VpcComponent', content)
+        self.assertIn('from lib.components.alb import AlbComponent', content)
+        self.assertIn('from lib.components.asg import AsgComponent', content)
+        self.assertIn('from lib.components.rds import RdsComponent', content)
+        self.assertIn('from lib.components.s3 import S3Component', content)
 
     def test_main_program_config_usage(self):
         """Test main program reads configuration."""
@@ -110,7 +110,7 @@ class TestVpcComponent(unittest.TestCase):
 
     def test_vpc_component_class_definition(self):
         """Test VPC component has proper class structure."""
-        with open("components/vpc.py", 'r') as f:
+        with open("lib/components/vpc.py", 'r') as f:
             content = f.read()
 
         # Verify class definition
@@ -120,7 +120,7 @@ class TestVpcComponent(unittest.TestCase):
 
     def test_vpc_component_creates_subnets(self):
         """Test VPC component creates public and private subnets."""
-        with open("components/vpc.py", 'r') as f:
+        with open("lib/components/vpc.py", 'r') as f:
             content = f.read()
 
         self.assertIn('public_subnets', content)
@@ -129,7 +129,7 @@ class TestVpcComponent(unittest.TestCase):
 
     def test_vpc_component_creates_nat_gateway(self):
         """Test VPC component creates NAT gateway."""
-        with open("components/vpc.py", 'r') as f:
+        with open("lib/components/vpc.py", 'r') as f:
             content = f.read()
 
         self.assertIn('NatGateway', content)
@@ -137,7 +137,7 @@ class TestVpcComponent(unittest.TestCase):
 
     def test_vpc_component_uses_environment_suffix(self):
         """Test VPC component uses environment suffix in naming."""
-        with open("components/vpc.py", 'r') as f:
+        with open("lib/components/vpc.py", 'r') as f:
             content = f.read()
 
         self.assertIn('environment_suffix', content)
@@ -148,7 +148,7 @@ class TestAlbComponent(unittest.TestCase):
 
     def test_alb_component_class_definition(self):
         """Test ALB component has proper class structure."""
-        with open("components/alb.py", 'r') as f:
+        with open("lib/components/alb.py", 'r') as f:
             content = f.read()
 
         self.assertIn('class AlbComponent', content)
@@ -156,7 +156,7 @@ class TestAlbComponent(unittest.TestCase):
 
     def test_alb_component_creates_security_group(self):
         """Test ALB component creates security group."""
-        with open("components/alb.py", 'r') as f:
+        with open("lib/components/alb.py", 'r') as f:
             content = f.read()
 
         self.assertIn('SecurityGroup', content)
@@ -165,7 +165,7 @@ class TestAlbComponent(unittest.TestCase):
 
     def test_alb_component_creates_load_balancer(self):
         """Test ALB component creates load balancer."""
-        with open("components/alb.py", 'r') as f:
+        with open("lib/components/alb.py", 'r') as f:
             content = f.read()
 
         self.assertIn('LoadBalancer', content)
@@ -173,7 +173,7 @@ class TestAlbComponent(unittest.TestCase):
 
     def test_alb_component_creates_target_group(self):
         """Test ALB component creates target group."""
-        with open("components/alb.py", 'r') as f:
+        with open("lib/components/alb.py", 'r') as f:
             content = f.read()
 
         self.assertIn('TargetGroup', content)
@@ -181,7 +181,7 @@ class TestAlbComponent(unittest.TestCase):
 
     def test_alb_component_deletion_protection_disabled(self):
         """Test ALB has deletion protection disabled."""
-        with open("components/alb.py", 'r') as f:
+        with open("lib/components/alb.py", 'r') as f:
             content = f.read()
 
         self.assertIn('enable_deletion_protection=False', content)
@@ -192,7 +192,7 @@ class TestAsgComponent(unittest.TestCase):
 
     def test_asg_component_class_definition(self):
         """Test ASG component has proper class structure."""
-        with open("components/asg.py", 'r') as f:
+        with open("lib/components/asg.py", 'r') as f:
             content = f.read()
 
         self.assertIn('class AsgComponent', content)
@@ -200,7 +200,7 @@ class TestAsgComponent(unittest.TestCase):
 
     def test_asg_component_creates_launch_template(self):
         """Test ASG component creates launch template."""
-        with open("components/asg.py", 'r') as f:
+        with open("lib/components/asg.py", 'r') as f:
             content = f.read()
 
         self.assertIn('LaunchTemplate', content)
@@ -209,7 +209,7 @@ class TestAsgComponent(unittest.TestCase):
 
     def test_asg_component_creates_auto_scaling_group(self):
         """Test ASG component creates auto scaling group."""
-        with open("components/asg.py", 'r') as f:
+        with open("lib/components/asg.py", 'r') as f:
             content = f.read()
 
         self.assertIn('autoscaling.Group', content)
@@ -219,7 +219,7 @@ class TestAsgComponent(unittest.TestCase):
 
     def test_asg_component_has_user_data(self):
         """Test ASG component includes user data script."""
-        with open("components/asg.py", 'r') as f:
+        with open("lib/components/asg.py", 'r') as f:
             content = f.read()
 
         self.assertIn('user_data', content)
@@ -230,7 +230,7 @@ class TestRdsComponent(unittest.TestCase):
 
     def test_rds_component_class_definition(self):
         """Test RDS component has proper class structure."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('class RdsComponent', content)
@@ -238,7 +238,7 @@ class TestRdsComponent(unittest.TestCase):
 
     def test_rds_component_creates_secret(self):
         """Test RDS component creates Secrets Manager secret."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('secretsmanager.Secret', content)
@@ -246,7 +246,7 @@ class TestRdsComponent(unittest.TestCase):
 
     def test_rds_component_creates_database(self):
         """Test RDS component creates RDS instance."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('rds.Instance', content)
@@ -255,14 +255,14 @@ class TestRdsComponent(unittest.TestCase):
 
     def test_rds_component_skip_final_snapshot(self):
         """Test RDS instance is configured for clean deletion."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('skip_final_snapshot=True', content)
 
     def test_rds_component_generates_random_password(self):
         """Test RDS component generates random password."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('password', content)
@@ -274,7 +274,7 @@ class TestS3Component(unittest.TestCase):
 
     def test_s3_component_class_definition(self):
         """Test S3 component has proper class structure."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('class S3Component', content)
@@ -282,14 +282,14 @@ class TestS3Component(unittest.TestCase):
 
     def test_s3_component_creates_bucket(self):
         """Test S3 component creates bucket."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('s3.Bucket', content)
 
     def test_s3_component_enables_versioning(self):
         """Test S3 component enables versioning."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('BucketVersioning', content)
@@ -297,7 +297,7 @@ class TestS3Component(unittest.TestCase):
 
     def test_s3_component_enables_encryption(self):
         """Test S3 component enables encryption."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('BucketServerSideEncryptionConfiguration', content)
@@ -305,7 +305,7 @@ class TestS3Component(unittest.TestCase):
 
     def test_s3_component_blocks_public_access(self):
         """Test S3 component blocks public access."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('BucketPublicAccessBlock', content)
@@ -318,7 +318,7 @@ class TestResourceNaming(unittest.TestCase):
 
     def test_vpc_uses_environment_suffix(self):
         """Test VPC resources use environment suffix."""
-        with open("components/vpc.py", 'r') as f:
+        with open("lib/components/vpc.py", 'r') as f:
             content = f.read()
 
         # Verify environment_suffix parameter exists
@@ -328,7 +328,7 @@ class TestResourceNaming(unittest.TestCase):
 
     def test_alb_uses_environment_suffix(self):
         """Test ALB resources use environment suffix."""
-        with open("components/alb.py", 'r') as f:
+        with open("lib/components/alb.py", 'r') as f:
             content = f.read()
 
         self.assertIn('environment_suffix', content)
@@ -336,7 +336,7 @@ class TestResourceNaming(unittest.TestCase):
 
     def test_asg_uses_environment_suffix(self):
         """Test ASG resources use environment suffix."""
-        with open("components/asg.py", 'r') as f:
+        with open("lib/components/asg.py", 'r') as f:
             content = f.read()
 
         self.assertIn('environment_suffix', content)
@@ -344,7 +344,7 @@ class TestResourceNaming(unittest.TestCase):
 
     def test_rds_uses_environment_suffix(self):
         """Test RDS resources use environment suffix."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('environment_suffix', content)
@@ -352,7 +352,7 @@ class TestResourceNaming(unittest.TestCase):
 
     def test_s3_uses_environment_suffix(self):
         """Test S3 resources use environment suffix."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('environment_suffix', content)
@@ -373,9 +373,9 @@ class TestTagging(unittest.TestCase):
 
     def test_components_accept_tags(self):
         """Test all components accept tags parameter."""
-        for component_file in ["components/vpc.py", "components/alb.py",
-                               "components/asg.py", "components/rds.py",
-                               "components/s3.py"]:
+        for component_file in ["lib/components/vpc.py", "lib/components/alb.py",
+                               "lib/components/asg.py", "lib/components/rds.py",
+                               "lib/components/s3.py"]:
             with open(component_file, 'r') as f:
                 content = f.read()
 
@@ -387,7 +387,7 @@ class TestSecurityConfiguration(unittest.TestCase):
 
     def test_rds_password_not_hardcoded(self):
         """Test RDS password is generated, not hardcoded."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         # Should have password generation
@@ -398,7 +398,7 @@ class TestSecurityConfiguration(unittest.TestCase):
 
     def test_rds_uses_secrets_manager(self):
         """Test RDS stores credentials in Secrets Manager."""
-        with open("components/rds.py", 'r') as f:
+        with open("lib/components/rds.py", 'r') as f:
             content = f.read()
 
         self.assertIn('secretsmanager', content)
@@ -406,14 +406,14 @@ class TestSecurityConfiguration(unittest.TestCase):
 
     def test_s3_encryption_enabled(self):
         """Test S3 buckets have encryption enabled."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('BucketServerSideEncryptionConfiguration', content)
 
     def test_s3_public_access_blocked(self):
         """Test S3 buckets block public access."""
-        with open("components/s3.py", 'r') as f:
+        with open("lib/components/s3.py", 'r') as f:
             content = f.read()
 
         self.assertIn('BucketPublicAccessBlock', content)

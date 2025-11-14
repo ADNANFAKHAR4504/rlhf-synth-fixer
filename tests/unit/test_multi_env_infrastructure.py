@@ -46,7 +46,7 @@ class TestVpcComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_vpc_component_creation(self):
         """Test VPC component creates all required resources."""
-        from components.vpc import VpcComponent
+        from lib.components.vpc import VpcComponent
 
         # Create VPC component with test parameters
         vpc = VpcComponent(
@@ -65,7 +65,7 @@ class TestVpcComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_vpc_cidr_configuration(self):
         """Test VPC CIDR block configuration."""
-        from components.vpc import VpcComponent
+        from lib.components.vpc import VpcComponent
 
         cidr_block = "10.1.0.0/16"
         vpc = VpcComponent(
@@ -82,7 +82,7 @@ class TestVpcComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_vpc_tagging(self):
         """Test VPC resource tagging."""
-        from components.vpc import VpcComponent
+        from lib.components.vpc import VpcComponent
 
         test_tags = {
             "Environment": "prod",
@@ -107,7 +107,7 @@ class TestAlbComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_alb_component_creation(self):
         """Test ALB component creates load balancer and target group."""
-        from components.alb import AlbComponent
+        from lib.components.alb import AlbComponent
 
         # Mock VPC ID and subnet IDs
         mock_vpc_id = pulumi.Output.from_input("vpc-12345")
@@ -134,7 +134,7 @@ class TestAlbComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_alb_security_group(self):
         """Test ALB security group configuration."""
-        from components.alb import AlbComponent
+        from lib.components.alb import AlbComponent
 
         mock_vpc_id = pulumi.Output.from_input("vpc-test")
         mock_subnet_ids = pulumi.Output.from_input(["subnet-1", "subnet-2"])
@@ -157,7 +157,7 @@ class TestAsgComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_asg_component_creation(self):
         """Test ASG component creates auto scaling group."""
-        from components.asg import AsgComponent
+        from lib.components.asg import AsgComponent
 
         # Mock dependencies
         mock_vpc_id = pulumi.Output.from_input("vpc-12345")
@@ -187,7 +187,7 @@ class TestAsgComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_asg_scaling_parameters(self):
         """Test ASG scaling configuration."""
-        from components.asg import AsgComponent
+        from lib.components.asg import AsgComponent
 
         mock_vpc_id = pulumi.Output.from_input("vpc-test")
         mock_subnet_ids = pulumi.Output.from_input(["subnet-1"])
@@ -218,7 +218,7 @@ class TestRdsComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_rds_component_creation(self):
         """Test RDS component creates database instance."""
-        from components.rds import RdsComponent
+        from lib.components.rds import RdsComponent
 
         mock_vpc_id = pulumi.Output.from_input("vpc-12345")
         mock_subnet_ids = pulumi.Output.from_input(["subnet-1", "subnet-2"])
@@ -243,7 +243,7 @@ class TestRdsComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_rds_multi_az_configuration(self):
         """Test RDS Multi-AZ configuration."""
-        from components.rds import RdsComponent
+        from lib.components.rds import RdsComponent
 
         mock_vpc_id = pulumi.Output.from_input("vpc-prod")
         mock_subnet_ids = pulumi.Output.from_input(["subnet-1", "subnet-2"])
@@ -265,7 +265,7 @@ class TestRdsComponent(unittest.TestCase):
     @pulumi.runtime.test
     def test_rds_secrets_manager_integration(self):
         """Test RDS password storage in Secrets Manager."""
-        from components.rds import RdsComponent
+        from lib.components.rds import RdsComponent
 
         mock_vpc_id = pulumi.Output.from_input("vpc-test")
         mock_subnet_ids = pulumi.Output.from_input(["subnet-1", "subnet-2"])
@@ -291,7 +291,7 @@ class TestS3Component(unittest.TestCase):
     @pulumi.runtime.test
     def test_s3_component_creation(self):
         """Test S3 component creates bucket with security features."""
-        from components.s3 import S3Component
+        from lib.components.s3 import S3Component
 
         s3 = S3Component(
             "test-s3",
@@ -307,7 +307,7 @@ class TestS3Component(unittest.TestCase):
     @pulumi.runtime.test
     def test_s3_bucket_naming(self):
         """Test S3 bucket naming convention."""
-        from components.s3 import S3Component
+        from lib.components.s3 import S3Component
 
         # Test different environments
         for env, suffix in [("dev", "dev001"), ("staging", "stg001"), ("prod", "prd001")]:
@@ -323,7 +323,7 @@ class TestS3Component(unittest.TestCase):
     @pulumi.runtime.test
     def test_s3_encryption_configuration(self):
         """Test S3 bucket encryption settings."""
-        from components.s3 import S3Component
+        from lib.components.s3 import S3Component
 
         s3 = S3Component(
             "test-s3-encryption",
@@ -370,11 +370,11 @@ class TestMainProgram(unittest.TestCase):
     def test_component_imports(self):
         """Test that all components can be imported."""
         try:
-            from components.vpc import VpcComponent
-            from components.alb import AlbComponent
-            from components.asg import AsgComponent
-            from components.rds import RdsComponent
-            from components.s3 import S3Component
+            from lib.components.vpc import VpcComponent
+            from lib.components.alb import AlbComponent
+            from lib.components.asg import AsgComponent
+            from lib.components.rds import RdsComponent
+            from lib.components.s3 import S3Component
 
             # Verify classes are importable
             self.assertTrue(callable(VpcComponent))

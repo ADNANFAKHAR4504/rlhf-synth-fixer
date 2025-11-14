@@ -28,7 +28,8 @@ Each environment includes:
 
 All code is in the working directory with the following structure:
 - `__main__.py` - Main Pulumi program
-- `components/` - Reusable VPC, ALB, ASG, RDS, S3 components
+- `lib/tap_stack.py` - TapStack ComponentResource orchestrating infrastructure
+- `lib/components/` - Reusable VPC, ALB, ASG, RDS, S3 components
 - `Pulumi.yaml` - Project configuration (FIXED: removed invalid config block)
 - `Pulumi.{dev,staging,prod}.yaml` - Environment-specific configurations
 - `tests/unit/` - 53 comprehensive unit tests
