@@ -1,6 +1,5 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.eks_addon import EksAddon
-from cdktf_cdktf_provider_kubernetes.manifest import Manifest
 
 
 class EksAddonsConstruct(Construct):
@@ -28,6 +27,16 @@ class EksAddonsConstruct(Construct):
             tags={"Name": f"eks-kube-proxy-{environment_suffix}"}
         )
 
+        # VPC CNI Addon
+        self.vpc_cni = EksAddon(self, "vpc-cni",
+            cluster_name=cluster_name,
+            addon_name="vpc-cni",
+            addon_version="v1.15.5-eksbuild.1",
+            resolve_conflicts_on_create="OVERWRITE",
+            resolve_conflicts_on_update="OVERWRITE",
+            tags={"Name": f"eks-vpc-cni-{environment_suffix}"}
+        )
+
         # EBS CSI Driver Addon with IRSA role
         ebs_addon_config = {
             "cluster_name": cluster_name,
@@ -42,15 +51,3 @@ class EksAddonsConstruct(Construct):
             ebs_addon_config["service_account_role_arn"] = ebs_csi_role_arn
 
         self.ebs_csi = EksAddon(self, "ebs-csi", **ebs_addon_config)
-
-        # Calico CNI Installation (via manifest)
-        # Note: Calico requires cluster to be ready, installed as Kubernetes manifest
-        self.calico_operator = Manifest(self, "calico-operator",
-            manifest={
-                "apiVersion": "v1",
-                "kind": "Namespace",
-                "metadata": {
-                    "name": "tigera-operator"
-                }
-            }
-        )
