@@ -223,7 +223,7 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
 
     test('should have expected number of resources', () => {
       const resourceCount = Object.keys(template.Resources).length;
-      expect(resourceCount).toBe(45);
+      expect(resourceCount).toBe(48);
     });
   });
 
