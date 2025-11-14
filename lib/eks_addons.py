@@ -36,7 +36,7 @@ class EksAddons(Construct):
         self.kube_proxy = EksAddon(self, "kube_proxy",
             cluster_name=cluster_name,
             addon_name="kube-proxy",
-            addon_version="v1.28.2-eksbuild.2",
+            addon_version="v1.29.0-eksbuild.1",
             resolve_conflicts_on_create="OVERWRITE",
             resolve_conflicts_on_update="PRESERVE",
             tags={

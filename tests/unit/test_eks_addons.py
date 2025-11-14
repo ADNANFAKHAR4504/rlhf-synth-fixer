@@ -117,7 +117,7 @@ class TestEksAddons:
         for addon_config in eks_addons.values():
             if addon_config.get("addon_name") == "kube-proxy":
                 version = addon_config.get("addon_version", "")
-                assert "v1.28" in version
+                assert "v1.29" in version
 
     def test_eks_addons_resolve_conflicts_on_create(self):
         """EksAddons sets resolve_conflicts_on_create to OVERWRITE."""

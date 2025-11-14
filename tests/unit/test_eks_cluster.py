@@ -111,7 +111,7 @@ class TestEksCluster:
 
         clusters = output_json.get("resource", {}).get("aws_eks_cluster", {})
         for cluster_config in clusters.values():
-            assert cluster_config.get("version") == "1.28"
+            assert cluster_config.get("version") == "1.29"
 
     def test_eks_cluster_vpc_config_private_access(self):
         """EksCluster enables private endpoint access."""

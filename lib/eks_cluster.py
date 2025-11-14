@@ -24,7 +24,7 @@ class EksCluster(Construct):
         self.cluster = AwsEksCluster(self, "eks_cluster",
             name=f"eks-cluster-{environment_suffix}",
             role_arn=cluster_role_arn,
-            version="1.28",
+            version="1.29",
             vpc_config={
                 "subnet_ids": subnet_ids,
                 "security_group_ids": security_group_ids,
