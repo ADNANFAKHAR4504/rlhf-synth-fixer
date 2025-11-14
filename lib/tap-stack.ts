@@ -193,7 +193,6 @@ export class TapStack extends TerraformStack {
       },
       tags: {
         Name: `eks-${environmentSuffix}-spot-nodes`,
-        config: `eks-${generalNodeGroupConfig}`,
       },
     };
 
