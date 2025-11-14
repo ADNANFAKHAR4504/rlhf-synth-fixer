@@ -133,19 +133,19 @@ EKSOIDCProvider:
 EKSContainerInsightsLogGroup:
   Type: AWS::Logs::LogGroup
   Properties:
-    LogGroupName: !Sub '/aws/eks/${EKSCluster}/cluster'
+    LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/cluster'
     RetentionInDays: 7
 
 EKSApplicationLogGroup:
   Type: AWS::Logs::LogGroup
   Properties:
-    LogGroupName: !Sub '/aws/eks/${EKSCluster}/application'
+    LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application'
     RetentionInDays: 7
 
 EKSDataPlaneLogGroup:
   Type: AWS::Logs::LogGroup
   Properties:
-    LogGroupName: !Sub '/aws/eks/${EKSCluster}/dataplane'
+    LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane'
     RetentionInDays: 7
 ```
 **Impact**: HIGH - No monitoring or observability without logs

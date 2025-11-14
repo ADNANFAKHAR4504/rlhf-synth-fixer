@@ -220,7 +220,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: '10.0.48.0/20'
+      CidrBlock: '10.0.128.0/20'
       AvailabilityZone: !Select [0, !GetAZs '']
       Tags:
         - Key: Name
@@ -232,7 +232,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: '10.0.64.0/20'
+      CidrBlock: '10.0.144.0/20'
       AvailabilityZone: !Select [1, !GetAZs '']
       Tags:
         - Key: Name
@@ -244,7 +244,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref VPC
-      CidrBlock: '10.0.80.0/20'
+      CidrBlock: '10.0.160.0/20'
       AvailabilityZone: !Select [2, !GetAZs '']
       Tags:
         - Key: Name
@@ -470,7 +470,7 @@ Resources:
   EKSContainerInsightsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/eks/${EKSCluster}/cluster'
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/cluster'
       RetentionInDays: 7
       Tags:
         - Key: Name
@@ -482,7 +482,7 @@ Resources:
   EKSApplicationLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/eks/${EKSCluster}/application'
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application'
       RetentionInDays: 7
       Tags:
         - Key: Name
@@ -494,7 +494,7 @@ Resources:
   EKSDataPlaneLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/eks/${EKSCluster}/dataplane'
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane'
       RetentionInDays: 7
       Tags:
         - Key: Name
@@ -623,9 +623,9 @@ Outputs:
 
 ### 6. CloudWatch Container Insights
 - **Three Log Groups** created:
-  - `/aws/eks/${EKSCluster}/cluster` - Cluster logs
-  - `/aws/eks/${EKSCluster}/application` - Application logs
-  - `/aws/eks/${EKSCluster}/dataplane` - DataPlane logs
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/cluster` - Cluster logs
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application` - Application logs
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane` - DataPlane logs
 - **7-day retention** for cost optimization
 - Enables comprehensive monitoring and observability
 
