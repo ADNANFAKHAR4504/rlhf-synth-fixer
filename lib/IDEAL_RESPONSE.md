@@ -470,7 +470,7 @@ Resources:
   EKSContainerInsightsLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/cluster'
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance'
       RetentionInDays: 7
       Tags:
         - Key: Name
@@ -623,7 +623,7 @@ Outputs:
 
 ### 6. CloudWatch Container Insights
 - **Three Log Groups** created:
-  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/cluster` - Cluster logs
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance` - Performance logs
   - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application` - Application logs
   - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane` - DataPlane logs
 - **7-day retention** for cost optimization

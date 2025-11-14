@@ -133,7 +133,7 @@ EKSOIDCProvider:
 EKSContainerInsightsLogGroup:
   Type: AWS::Logs::LogGroup
   Properties:
-    LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/cluster'
+    LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance'
     RetentionInDays: 7
 
 EKSApplicationLogGroup:
