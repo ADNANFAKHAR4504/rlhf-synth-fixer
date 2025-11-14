@@ -13,6 +13,15 @@ class EksNodeGroups(Construct):
         critical_lt = LaunchTemplate(self, "critical_launch_template",
             name=f"eks-critical-lt-{environment_suffix}",
             description="Launch template for critical workloads node group",
+            block_device_mappings=[{
+                "device_name": "/dev/xvda",
+                "ebs": {
+                    "volume_size": 20,
+                    "volume_type": "gp3",
+                    "encrypted": "true",
+                    "delete_on_termination": "true"
+                }
+            }],
             metadata_options={
                 "http_endpoint": "enabled",
                 "http_tokens": "required",  # IMDSv2
@@ -31,6 +40,15 @@ class EksNodeGroups(Construct):
         non_critical_lt = LaunchTemplate(self, "non_critical_launch_template",
             name=f"eks-non-critical-lt-{environment_suffix}",
             description="Launch template for non-critical workloads node group",
+            block_device_mappings=[{
+                "device_name": "/dev/xvda",
+                "ebs": {
+                    "volume_size": 20,
+                    "volume_type": "gp3",
+                    "encrypted": "true",
+                    "delete_on_termination": "true"
+                }
+            }],
             metadata_options={
                 "http_endpoint": "enabled",
                 "http_tokens": "required",  # IMDSv2
@@ -59,7 +77,6 @@ class EksNodeGroups(Construct):
             instance_types=["t4g.large"],
             capacity_type="ON_DEMAND",
             ami_type="AL2_ARM_64",
-            disk_size=20,
             launch_template={
                 "id": critical_lt.id,
                 "version": "$Latest"
@@ -86,7 +103,6 @@ class EksNodeGroups(Construct):
             instance_types=["t4g.medium"],
             capacity_type="SPOT",
             ami_type="AL2_ARM_64",
-            disk_size=20,
             launch_template={
                 "id": non_critical_lt.id,
                 "version": "$Latest"
