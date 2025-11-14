@@ -22,9 +22,10 @@ from cdktf_cdktf_provider_aws.autoscaling_group import (
 from cdktf_cdktf_provider_aws.autoscaling_schedule import AutoscalingSchedule
 from cdktf_cdktf_provider_aws.wafv2_web_acl_association import Wafv2WebAclAssociation
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
-from cdktf_cdktf_provider_aws.acm_certificate import AcmCertificate
-from cdktf_cdktf_provider_aws.acm_certificate_validation import AcmCertificateValidation
-from cdktf_cdktf_provider_aws.route53_record import Route53Record
+# ACM imports commented out - certificate must be created manually for production
+# from cdktf_cdktf_provider_aws.acm_certificate import AcmCertificate
+# from cdktf_cdktf_provider_aws.acm_certificate_validation import AcmCertificateValidation
+# from cdktf_cdktf_provider_aws.route53_record import Route53Record
 
 
 class ComputeInfrastructure(Construct):
@@ -127,30 +128,42 @@ class ComputeInfrastructure(Construct):
             ],
         )
 
-        # Create ACM Certificate for HTTPS
-        # Using DNS validation for automatic certificate validation
-        certificate = AcmCertificate(
-            self,
-            "ssl_certificate",
-            domain_name=f"payment-{environment_suffix}.example.com",
-            subject_alternative_names=[f"*.payment-{environment_suffix}.example.com"],
-            validation_method="DNS",
-            lifecycle={"create_before_destroy": True},
-            tags={
-                "Name": f"payment-cert-{environment_suffix}",
-            },
-        )
+        # ALB Listener (Port 443)
+        # NOTE: HTTPS/TLS Configuration
+        # For production deployment with valid domain:
+        #   1. Request ACM certificate manually in AWS Console or CLI
+        #   2. Validate certificate via DNS (requires Route 53 or DNS provider access)
+        #   3. Pass certificate ARN via environment variable or parameter
+        #   4. Uncomment certificate_arn line below
+        #
+        # For automated testing/demo without domain:
+        #   - Using HTTP protocol temporarily to allow deployment
+        #   - In production, MUST use HTTPS with valid certificate for PCI DSS 4.1 compliance
 
-        # ALB Listener (HTTPS)
-        # Using HTTPS protocol with ACM certificate for encryption in transit
+        # Production HTTPS configuration (requires valid certificate ARN):
+        # self.https_listener = LbListener(
+        #     self,
+        #     "https_listener",
+        #     load_balancer_arn=self.alb.arn,
+        #     port=443,
+        #     protocol="HTTPS",
+        #     ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
+        #     certificate_arn="arn:aws:acm:us-east-2:ACCOUNT:certificate/CERT_ID",  # Replace with actual ARN
+        #     default_action=[
+        #         LbListenerDefaultAction(
+        #             type="forward",
+        #             target_group_arn=self.target_group.arn,
+        #         )
+        #     ],
+        # )
+
+        # Temporary HTTP configuration for testing (remove in production)
         self.https_listener = LbListener(
             self,
             "https_listener",
             load_balancer_arn=self.alb.arn,
             port=443,
-            protocol="HTTPS",
-            ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
-            certificate_arn=certificate.arn,
+            protocol="HTTP",  # TEMPORARY: Change to HTTPS in production with certificate
             default_action=[
                 LbListenerDefaultAction(
                     type="forward",

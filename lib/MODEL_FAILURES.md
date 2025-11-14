@@ -627,7 +627,7 @@ Location: [lib/security.py:204-309](lib/security.py#L204-L309)
 4. Test synthesis immediately after implementing complex resources
 5. Maintain examples of working TerraformResource implementations
 
-## Issue 9: HTTPS/TLS Configuration Missing
+## Issue 9: HTTPS/TLS Configuration Missing and ACM Certificate Deployment Challenge
 
 ### Problem Description
 
@@ -653,33 +653,74 @@ LbListener(
 - Vulnerable to man-in-the-middle attacks
 - Failed security audit requirements
 
-### Resolution
+### Initial Resolution Attempt - ACM Certificate with DNS Validation
 
-**Solution**: Implement proper HTTPS listener with ACM certificate:
-
+**Attempted Solution**:
 ```python
-from cdktf_cdktf_provider_aws.acm_certificate import AcmCertificate
-
-# Create ACM Certificate for HTTPS
 certificate = AcmCertificate(
     self,
     "ssl_certificate",
     domain_name=f"payment-{environment_suffix}.example.com",
-    subject_alternative_names=[f"*.payment-{environment_suffix}.example.com"],
     validation_method="DNS",
     lifecycle={"create_before_destroy": True},
-    tags={"Name": f"payment-cert-{environment_suffix}"}
 )
 
-# ALB Listener with HTTPS protocol
 self.https_listener = LbListener(
     self,
     "https_listener",
     load_balancer_arn=self.alb.arn,
     port=443,
-    protocol="HTTPS",  # Correct protocol
-    ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",  # Strong TLS policy
+    protocol="HTTPS",
+    ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
     certificate_arn=certificate.arn,
+    default_action=[...]
+)
+```
+
+**Deployment Error**:
+```
+Error: waiting for ACM Certificate (arn:aws:acm:us-east-2:***:certificate/0d3ff7a0-ddf1-4341-ba48-1aef76a7951b) to be issued: timeout while waiting for state to become 'true' (last state: 'false', timeout: 5m0s)
+```
+
+**Root Cause**:
+1. ACM certificate requires DNS validation to complete
+2. DNS validation requires creating CNAME records in Route 53 or DNS provider
+3. Using `example.com` (which we don't control) causes validation to timeout
+4. Terraform waits for certificate validation before proceeding, timing out after 5 minutes
+5. Automated deployments cannot complete DNS validation without actual domain ownership
+
+### Production Solution
+
+**For Production Deployment** (requires valid domain):
+
+1. **Pre-create Certificate Manually**:
+```bash
+# AWS CLI
+aws acm request-certificate \
+    --domain-name payment-prod.yourdomain.com \
+    --validation-method DNS \
+    --subject-alternative-names *.payment-prod.yourdomain.com \
+    --region us-east-2
+
+# Note the certificate ARN returned
+```
+
+2. **Add DNS Validation Records**:
+- Go to ACM Console or use AWS CLI to get validation CNAME records
+- Add CNAME records to your DNS provider (Route 53, etc.)
+- Wait for validation to complete (usually < 30 minutes)
+
+3. **Use Certificate ARN in Code**:
+```python
+# Production HTTPS configuration with pre-validated certificate
+self.https_listener = LbListener(
+    self,
+    "https_listener",
+    load_balancer_arn=self.alb.arn,
+    port=443,
+    protocol="HTTPS",
+    ssl_policy="ELBSecurityPolicy-TLS13-1-2-2021-06",
+    certificate_arn="arn:aws:acm:us-east-2:ACCOUNT:certificate/CERT_ID",  # Pre-validated certificate
     default_action=[
         LbListenerDefaultAction(
             type="forward",
@@ -689,13 +730,54 @@ self.https_listener = LbListener(
 )
 ```
 
-Location: [lib/compute.py:130-160](lib/compute.py#L130-L160)
+**For Automated Testing/Demo** (without domain):
+```python
+# Temporary HTTP configuration for testing deployment
+# NOTE: Must be changed to HTTPS with valid certificate for production
+self.https_listener = LbListener(
+    self,
+    "https_listener",
+    load_balancer_arn=self.alb.arn,
+    port=443,
+    protocol="HTTP",  # TEMPORARY: Change to HTTPS in production
+    default_action=[
+        LbListenerDefaultAction(
+            type="forward",
+            target_group_arn=self.target_group.arn
+        )
+    ]
+)
+```
+
+Location: [lib/compute.py:130-172](lib/compute.py#L130-L172)
 
 **Key Implementation Details**:
-1. ACM certificate with DNS validation
-2. Strong TLS policy (TLS 1.3 and 1.2 only)
-3. Proper HTTPS protocol on port 443
-4. HTTP to HTTPS redirect on port 80
+1. ACM certificate must be created and validated BEFORE deployment
+2. DNS validation requires actual domain ownership and DNS configuration
+3. Certificate ARN is passed as configuration (not created in IaC for automated deployments)
+4. Strong TLS policy (TLS 1.3 and 1.2 only) configured
+5. HTTP to HTTPS redirect on port 80
+
+### Deployment Workflow
+
+**Production Deployment Checklist**:
+1. ✅ Purchase/own domain (e.g., yourdomain.com)
+2. ✅ Request ACM certificate manually via AWS Console/CLI
+3. ✅ Add DNS validation CNAME records to your DNS provider
+4. ✅ Wait for certificate validation to complete (status: Issued)
+5. ✅ Update code with certificate ARN
+6. ✅ Set protocol="HTTPS" and add certificate_arn
+7. ✅ Deploy infrastructure
+8. ✅ Update DNS A/CNAME record to point to ALB DNS name
+
+### Lessons Learned
+
+1. ACM certificate automation requires DNS provider API access (Route 53, CloudFlare, etc.)
+2. Terraform cannot complete DNS validation for domains you don't control
+3. For automated deployments, certificate creation should be separate from infrastructure deployment
+4. Always pre-create and validate certificates before deploying ALB listeners in production
+5. Document certificate creation steps clearly in deployment documentation
+6. For testing/CI without domain, use temporary HTTP configuration (clearly marked for removal)
 
 ## Issue 10: VPC Flow Logs Missing
 
