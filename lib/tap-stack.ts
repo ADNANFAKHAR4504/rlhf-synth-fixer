@@ -337,8 +337,14 @@ export class TapStack extends cdk.Stack {
       encryption: sqs.QueueEncryption.SQS_MANAGED,
     });
 
-    this.exportToParameterStore('order-processing-dlq-url', this.orderProcessingDlq.queueUrl);
-    this.exportToParameterStore('order-processing-dlq-arn', this.orderProcessingDlq.queueArn);
+    this.exportToParameterStore(
+      'order-processing-dlq-url',
+      this.orderProcessingDlq.queueUrl
+    );
+    this.exportToParameterStore(
+      'order-processing-dlq-arn',
+      this.orderProcessingDlq.queueArn
+    );
 
     // Create main queue
     const queue = new sqs.Queue(this, 'OrderProcessingQueue', {
@@ -587,7 +593,9 @@ export class TapStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    driftAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.driftTopic));
+    driftAlarm.addAlarmAction(
+      new cloudwatch_actions.SnsAction(this.driftTopic)
+    );
 
     // Create dashboard
     this.dashboard = new cloudwatch.Dashboard(
