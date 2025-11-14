@@ -1,5 +1,5 @@
 {
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
@@ -23,5 +23,10 @@
     "CloudWatch",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
