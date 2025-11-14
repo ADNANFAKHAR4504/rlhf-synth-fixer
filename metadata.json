@@ -7,6 +7,8 @@
   "team": "synth",
   "startedAt": "2025-11-14T06:20:30+00:00",
   "subtask": "EKS",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
   "subject_labels": [
     "aws",
     "infrastructure",

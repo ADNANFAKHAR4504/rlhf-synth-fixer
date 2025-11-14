@@ -701,7 +701,6 @@
     },
     "EKSNodeGroup": {
       "Type": "AWS::EKS::Nodegroup",
-      "DependsOn": ["EKSCluster"],
       "Properties": {
         "NodegroupName": {
           "Fn::Sub": "eks-nodegroup-${EnvironmentSuffix}"
