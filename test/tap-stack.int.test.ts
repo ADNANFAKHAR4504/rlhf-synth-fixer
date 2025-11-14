@@ -1,5 +1,4 @@
 import * as fs from 'fs';
-import * as https from 'https';
 
 const outputs = JSON.parse(
   fs.readFileSync(
@@ -16,7 +15,7 @@ describe('Transaction Processing Infrastructure Integration Tests', () => {
     it('should have API invoke URL', () => {
       expect(apiInvokeUrl).toBeDefined();
       expect(apiInvokeUrl).toContain('execute-api');
-      expect(apiInvokeUrl).toContain('us-east-1');
+      expect(apiInvokeUrl).toContain('eu-south-2');
     });
 
     it('should have API key value', () => {
@@ -84,8 +83,8 @@ describe('Transaction Processing Infrastructure Integration Tests', () => {
       expect(snsTopicArn).toMatch(/^arn:aws:sns:[a-z0-9-]+:\d+:.+$/);
     });
 
-    it('should include us-east-1 region in SNS ARN', () => {
-      expect(snsTopicArn).toContain('us-east-1');
+    it('should include eu-south-2 region in SNS ARN', () => {
+      expect(snsTopicArn).toContain('eu-south-2');
     });
   });
 
