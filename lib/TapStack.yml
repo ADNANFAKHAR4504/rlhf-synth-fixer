@@ -2346,6 +2346,18 @@ Outputs:
     Export:
       Name: !Sub '${EnvironmentName}-backup-plan-id'
 
+  BackupVaultName:
+    Description: Backup Vault Name
+    Value: !Sub '${EnvironmentName}-meridian-backup-vault'
+    Export:
+      Name: !Sub '${EnvironmentName}-backup-vault-name'
+
+  BackupRoleArn:
+    Description: Backup Role ARN
+    Value: !GetAtt BackupRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-backup-role-arn'
+
   # Log Groups
   ECSLogGroupArn:
     Description: ECS CloudWatch Log Group ARN

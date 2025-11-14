@@ -4261,6 +4261,31 @@
                 }
             }
         },
+        "BackupVaultName": {
+            "Description": "Backup Vault Name",
+            "Value": {
+                "Fn::Sub": "${EnvironmentName}-meridian-backup-vault"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-backup-vault-name"
+                }
+            }
+        },
+        "BackupRoleArn": {
+            "Description": "Backup Role ARN",
+            "Value": {
+                "Fn::GetAtt": [
+                    "BackupRole",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-backup-role-arn"
+                }
+            }
+        },
         "ECSLogGroupArn": {
             "Description": "ECS CloudWatch Log Group ARN",
             "Value": {
