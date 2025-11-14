@@ -149,25 +149,31 @@ class TapStack(TerraformStack):
         )
 
         # Create DB Subnet Group
+        # DB Subnet Group requires at least 2 subnets in different AZs (Aurora requirement)
         db_subnet_group = DbSubnetGroup(
             self,
             "aurora_subnet_group",
-            name=f"aurora-subnet-group-{environment_suffix}",
+            name=f"aurora-subnet-group-{environment_suffix}".lower(),  # Must be lowercase
             subnet_ids=[subnet_1.id, subnet_2.id],
+            description=f"Subnet group for Aurora cluster in {environment_suffix}",
             tags={
-                "Name": f"aurora-subnet-group-{environment_suffix}"
+                "Name": f"aurora-subnet-group-{environment_suffix}",
+                "Environment": environment_suffix
             }
         )
 
         # Create Security Group for Aurora
+        # Security group names should follow AWS naming conventions
         aurora_sg = SecurityGroup(
             self,
             "aurora_security_group",
             name=f"aurora-sg-{environment_suffix}",
-            description="Security group for Aurora PostgreSQL cluster",
+            description="Security group for Aurora PostgreSQL 16.9 cluster",
             vpc_id=vpc.id,
             tags={
-                "Name": f"aurora-sg-{environment_suffix}"
+                "Name": f"aurora-sg-{environment_suffix}",
+                "Environment": environment_suffix,
+                "ManagedBy": "CDKTF"
             }
         )
         
@@ -199,10 +205,12 @@ class TapStack(TerraformStack):
 
         # Create IAM Role for RDS Enhanced Monitoring
         # Must be created with proper trust policy and permissions
+        # Role name must be unique and follow IAM naming conventions
         rds_monitoring_role = IamRole(
             self,
             "rds_monitoring_role",
             name=f"rds-monitoring-role-{environment_suffix}",
+            path="/service-role/",  # Best practice for service roles
             assume_role_policy="""{
   "Version": "2012-10-17",
   "Statement": [
@@ -217,7 +225,8 @@ class TapStack(TerraformStack):
 }""",
             tags={
                 "Name": f"rds-monitoring-role-{environment_suffix}",
-                "Environment": environment_suffix
+                "Environment": environment_suffix,
+                "ManagedBy": "CDKTF"
             }
         )
         
@@ -230,11 +239,12 @@ class TapStack(TerraformStack):
         )
         
         # Create RDS Cluster Parameter Group for Aurora PostgreSQL 16.9
+        # Parameter group names must be lowercase
         cluster_parameter_group = RdsClusterParameterGroup(
             self,
             "aurora_cluster_parameter_group",
-            name=f"aurora-postgres16-cluster-pg-{environment_suffix}",
-            family="aurora-postgresql16",
+            name=f"aurora-postgres16-cluster-pg-{environment_suffix}".lower(),
+            family="aurora-postgresql16",  # Correct family for PostgreSQL 16.x
             description="Custom cluster parameter group for Aurora PostgreSQL 16.9",
             parameter=[
                 RdsClusterParameterGroupParameter(
@@ -259,16 +269,18 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"aurora-postgres16-cluster-pg-{environment_suffix}"
+                "Name": f"aurora-postgres16-cluster-pg-{environment_suffix}",
+                "Environment": environment_suffix
             }
         )
 
         # Create DB Parameter Group for Aurora PostgreSQL 16.9 instances
+        # Parameter group names must be lowercase
         db_parameter_group = DbParameterGroup(
             self,
             "aurora_db_parameter_group",
-            name=f"aurora-postgres16-db-pg-{environment_suffix}",
-            family="aurora-postgresql16",
+            name=f"aurora-postgres16-db-pg-{environment_suffix}".lower(),
+            family="aurora-postgresql16",  # Correct family for PostgreSQL 16.x
             description="Custom DB parameter group for Aurora PostgreSQL 16.9 instances",
             parameter=[
                 DbParameterGroupParameter(
@@ -313,13 +325,20 @@ class TapStack(TerraformStack):
                 )
             ],
             tags={
-                "Name": f"aurora-postgres16-db-pg-{environment_suffix}"
+                "Name": f"aurora-postgres16-db-pg-{environment_suffix}",
+                "Environment": environment_suffix
             }
         )
 
         # Create Aurora PostgreSQL 16.9 Cluster
-        # Database name must start with a letter and contain only alphanumeric characters
-        db_name = f"tapdb{environment_suffix.replace('-', '').replace('_', '')}"
+        # Database name must start with a letter, max 63 chars, and contain only alphanumeric and underscores
+        # Sanitize environment_suffix to ensure valid database name
+        safe_suffix = environment_suffix.replace('-', '').replace('_', '')[:10]  # Limit length
+        db_name = f"tapdb{safe_suffix}" if safe_suffix else "tapdb"
+        
+        # Ensure database name starts with letter and is valid
+        if not db_name[0].isalpha():
+            db_name = f"db{db_name}"
         
         aurora_cluster = RdsCluster(
             self,
@@ -327,9 +346,9 @@ class TapStack(TerraformStack):
             cluster_identifier=f"aurora-postgres-{environment_suffix}",
             engine="aurora-postgresql",
             engine_version="16.9",
-            database_name=db_name,
-            master_username="postgres",
-            master_password="ChangeMe123!",  # In production, use Secrets Manager
+            database_name=db_name[:63],  # PostgreSQL max database name length
+            master_username="postgresadmin",  # Changed from 'postgres' (reserved)
+            master_password="TempPassword123!ChangeMe",  # More secure default
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[aurora_sg.id],
             db_cluster_parameter_group_name=cluster_parameter_group.name,
@@ -341,17 +360,20 @@ class TapStack(TerraformStack):
             skip_final_snapshot=True,
             apply_immediately=True,
             tags={
-                "Name": f"aurora-postgres-{environment_suffix}"
+                "Name": f"aurora-postgres-{environment_suffix}",
+                "Environment": environment_suffix
             }
         )
 
         # Create Aurora PostgreSQL 16.9 Cluster Instance (Writer)
+        # Note: Using db.r6g instances (Graviton2) - ensure region supports them
+        # Alternative: db.r5.large, db.t3.medium for broader region support
         RdsClusterInstance(
             self,
             "aurora_postgres_instance_1",
             identifier=f"aurora-postgres-{environment_suffix}-instance-1",
             cluster_identifier=aurora_cluster.id,
-            instance_class="db.r6g.large",
+            instance_class="db.r6g.large",  # Graviton2 - verify region availability
             engine="aurora-postgresql",
             engine_version="16.9",
             db_parameter_group_name=db_parameter_group.name,
@@ -361,8 +383,11 @@ class TapStack(TerraformStack):
             monitoring_interval=60,
             monitoring_role_arn=rds_monitoring_role.arn,
             tags={
-                "Name": f"aurora-postgres-{environment_suffix}-instance-1"
-            }
+                "Name": f"aurora-postgres-{environment_suffix}-instance-1",
+                "Environment": environment_suffix
+            },
+            # Add depends_on to ensure proper creation order
+            depends_on=[cluster_parameter_group, db_parameter_group, rds_monitoring_role]
         )
 
         # ? Add your stack instantiations here
