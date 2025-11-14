@@ -140,13 +140,15 @@ resource "aws_ssm_parameter" "vpc_id" {
 }
 
 data "aws_ssm_parameter" "vpc_id" {
-  count = var.vpc_id_parameter_name != "" ? 1 : 0
+  count = var.vpc_id_parameter_name != "" && !var.manage_vpc_ssm_parameter ? 1 : 0
   name  = var.vpc_id_parameter_name
-
-  depends_on = var.manage_vpc_ssm_parameter && var.vpc_id_parameter_name != "" ? [aws_ssm_parameter.vpc_id] : []
 }
 
 locals {
-  vpc_id = var.vpc_id_parameter_name != "" ? data.aws_ssm_parameter.vpc_id[0].value : local.base_vpc_id
+  vpc_id = var.vpc_id_parameter_name != "" ? (
+    var.manage_vpc_ssm_parameter
+    ? aws_ssm_parameter.vpc_id[0].value
+    : data.aws_ssm_parameter.vpc_id[0].value
+  ) : local.base_vpc_id
 }
 
