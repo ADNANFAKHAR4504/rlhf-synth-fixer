@@ -543,10 +543,9 @@ Reason: {reason}
                 "Contribution": {
                     "Keys": ["$2"],
                     "Filters": [{
-                        "Field": "$4",
-                        "Equals": "429"
-                    }],
-                    "Operation": "Count"
+                        "Match": "$4",
+                        "EqualTo": 429
+                    }]
                 },
                 "AggregateOn": "Count"
             }
