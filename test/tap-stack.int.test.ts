@@ -170,18 +170,21 @@ describe("TapStack — Live Integration Tests", () => {
     expect(hasNatDefault).toBe(true);
   });
 
-  /* 6 */ it("ALB found by DNS name and has 3 subnets and SG attached", async () => {
-    const dnsName = outputs.AlbDnsName;
-    const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({ Names: [dnsName] })));
-    expect(lbs.LoadBalancers?.[0]?.DNSName).toBe(dnsName);
-    const lb = lbs.LoadBalancers![0];
-    expect(lb.AvailabilityZones?.length).toBeGreaterThanOrEqual(2);
-    expect((lb.SecurityGroups || []).length).toBeGreaterThanOrEqual(1);
+  /* 6 */ it("ALB found by ARN and DNS name matches, has SG and multiple AZs", async () => {
+    // FIX: use AlbArn (Describe by ARN), not DNS 'Name' which must be <=32 chars.
+    const lbArn = outputs.AlbArn;
+    const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] })));
+    const lb = lbs.LoadBalancers?.[0];
+    expect(lb?.LoadBalancerArn).toBe(lbArn);
+    expect(lb?.DNSName).toBe(outputs.AlbDnsName);
+    expect((lb?.SecurityGroups || []).length).toBeGreaterThanOrEqual(1);
+    expect((lb?.AvailabilityZones || []).length).toBeGreaterThanOrEqual(2);
   });
 
   /* 7 */ it("ALB Security Group allows 80/443 from 0.0.0.0/0", async () => {
-    const dnsName = outputs.AlbDnsName;
-    const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({ Names: [dnsName] })));
+    // FIX: look up LB by ARN, then fetch its SGs
+    const lbArn = outputs.AlbArn;
+    const lbs = await retry(() => elbv2.send(new DescribeLoadBalancersCommand({ LoadBalancerArns: [lbArn] })));
     const sgIds = lbs.LoadBalancers?.[0]?.SecurityGroups || [];
     expect(sgIds.length).toBeGreaterThanOrEqual(1);
 
@@ -357,11 +360,6 @@ describe("TapStack — Live Integration Tests", () => {
       `service/${cluster}/${outputs.FraudServiceName}`,
       `service/${cluster}/${outputs.ReportingServiceName}`,
     ];
-    const resp = await retry(() => aas.send(new DescribeScalingPoliciesCommand({
-      ServiceNamespace: "ecs",
-      ResourceId: ids[0], // query one-by-one for reliability
-    })));
-    // If policies are spread, query each
     const all: any[] = [];
     for (const id of ids) {
       const r = await retry(() => aas.send(new DescribeScalingPoliciesCommand({ ServiceNamespace: "ecs", ResourceId: id })));
