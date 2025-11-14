@@ -95,7 +95,7 @@ The template creates a complete transaction processing infrastructure with the f
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
       "Description": "Private subnet IDs for RDS and Lambda deployment",
-      "Default": "subnet-0c9618f134225ba7a"
+      "Default": "subnet-071df9a9810c38aa4,subnet-020e0aafba890431d,subnet-052da3c0a8cae05b8"
     },
     "DBSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
