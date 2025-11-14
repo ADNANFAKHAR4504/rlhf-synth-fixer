@@ -191,7 +191,10 @@ class TestStackStructure:
 
         # Verify node groups exist
         assert "aws_eks_node_group" in resources
-        assert "aws_launch_template" in resources
+        node_groups = resources.get("aws_eks_node_group", {})
+        # Verify disk size is set for all node groups
+        for ng_config in node_groups.values():
+            assert ng_config.get("disk_size") == 20
 
     def test_tap_stack_creates_eks_addons(self):
         """TapStack creates EKS add-ons."""

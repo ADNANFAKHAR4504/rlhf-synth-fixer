@@ -1,6 +1,5 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.eks_node_group import EksNodeGroup
-from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate
 
 
 class EksNodeGroups(Construct):
@@ -8,60 +7,6 @@ class EksNodeGroups(Construct):
                  environment_suffix: str,
                  cluster_name: str, node_role_arn: str, subnet_ids: list):
         super().__init__(scope, id)
-
-        # Launch Template for Critical Node Group
-        critical_lt = LaunchTemplate(self, "critical_launch_template",
-            name=f"eks-critical-lt-{environment_suffix}",
-            description="Launch template for critical workloads node group",
-            block_device_mappings=[{
-                "device_name": "/dev/xvda",
-                "ebs": {
-                    "volume_size": 20,
-                    "volume_type": "gp3",
-                    "encrypted": "true",
-                    "delete_on_termination": "true"
-                }
-            }],
-            metadata_options={
-                "http_endpoint": "enabled",
-                "http_tokens": "required",  # IMDSv2
-                "http_put_response_hop_limit": 1
-            },
-            monitoring={
-                "enabled": True
-            },
-            tags={
-                "Name": f"eks-critical-lt-{environment_suffix}",
-                "Environment": environment_suffix
-            }
-        )
-
-        # Launch Template for Non-Critical Node Group
-        non_critical_lt = LaunchTemplate(self, "non_critical_launch_template",
-            name=f"eks-non-critical-lt-{environment_suffix}",
-            description="Launch template for non-critical workloads node group",
-            block_device_mappings=[{
-                "device_name": "/dev/xvda",
-                "ebs": {
-                    "volume_size": 20,
-                    "volume_type": "gp3",
-                    "encrypted": "true",
-                    "delete_on_termination": "true"
-                }
-            }],
-            metadata_options={
-                "http_endpoint": "enabled",
-                "http_tokens": "required",  # IMDSv2
-                "http_put_response_hop_limit": 1
-            },
-            monitoring={
-                "enabled": True
-            },
-            tags={
-                "Name": f"eks-non-critical-lt-{environment_suffix}",
-                "Environment": environment_suffix
-            }
-        )
 
         # Critical Workloads Node Group (On-Demand t4g.large)
         self.critical_node_group = EksNodeGroup(self, "critical_node_group",
@@ -77,10 +22,7 @@ class EksNodeGroups(Construct):
             instance_types=["t4g.large"],
             capacity_type="ON_DEMAND",
             ami_type="AL2_ARM_64",
-            launch_template={
-                "id": critical_lt.id,
-                "version": "$Latest"
-            },
+            disk_size=20,
             tags={
                 "Name": f"eks-critical-ng-{environment_suffix}",
                 "Environment": environment_suffix,
@@ -103,10 +45,7 @@ class EksNodeGroups(Construct):
             instance_types=["t4g.medium"],
             capacity_type="SPOT",
             ami_type="AL2_ARM_64",
-            launch_template={
-                "id": non_critical_lt.id,
-                "version": "$Latest"
-            },
+            disk_size=20,
             tags={
                 "Name": f"eks-non-critical-ng-{environment_suffix}",
                 "Environment": environment_suffix,

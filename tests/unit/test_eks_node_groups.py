@@ -31,8 +31,8 @@ class TestEksNodeGroups:
         resources = output_json.get("resource", {})
         assert "aws_eks_node_group" in resources
 
-    def test_eks_node_groups_creates_launch_templates(self):
-        """EksNodeGroups creates launch templates."""
+    def test_eks_node_groups_has_disk_size(self):
+        """EksNodeGroups creates node groups with disk size."""
         app = App()
         stack = TerraformStack(app, "TestStack")
         ng = EksNodeGroups(
@@ -46,8 +46,9 @@ class TestEksNodeGroups:
         synth = Testing.synth(stack)
         output_json = json.loads(synth)
 
-        resources = output_json.get("resource", {})
-        assert "aws_launch_template" in resources
+        node_groups = output_json.get("resource", {}).get("aws_eks_node_group", {})
+        for ng_config in node_groups.values():
+            assert ng_config.get("disk_size") == 20
 
     def test_eks_node_groups_creates_two_node_groups(self):
         """EksNodeGroups creates both critical and non-critical node groups."""
@@ -270,68 +271,20 @@ class TestEksNodeGroups:
         for ng_config in node_groups.values():
             assert ng_config.get("ami_type") == "AL2_ARM_64"
 
-    def test_eks_node_groups_launch_template_imdsv2(self):
-        """EksNodeGroups launch templates enforce IMDSv2."""
-        app = App()
-        stack = TerraformStack(app, "TestStack")
-        ng = EksNodeGroups(
-            stack, "test_ng",
-            environment_suffix="test",
-            cluster_name="test-cluster",
-            node_role_arn="arn:aws:iam::123456789012:role/node-role",
-            subnet_ids=["subnet-1", "subnet-2"]
-        )
+    # def test_eks_node_groups_launch_template_imdsv2(self):
+    #     """EksNodeGroups launch templates enforce IMDSv2."""
+    #     # NOTE: Launch templates removed in favor of direct disk_size on node groups
+    #     pass
 
-        synth = Testing.synth(stack)
-        output_json = json.loads(synth)
+    # def test_eks_node_groups_launch_template_ebs_encryption(self):
+    #     """EksNodeGroups launch templates enable EBS encryption."""
+    #     # NOTE: Launch templates removed in favor of direct disk_size on node groups
+    #     pass
 
-        launch_templates = output_json.get("resource", {}).get("aws_launch_template", {})
-        for lt_config in launch_templates.values():
-            metadata_opts = lt_config.get("metadata_options", {})
-            assert metadata_opts.get("http_tokens") == "required"
-            assert metadata_opts.get("http_endpoint") == "enabled"
-
-    def test_eks_node_groups_launch_template_ebs_encryption(self):
-        """EksNodeGroups launch templates enable EBS encryption."""
-        app = App()
-        stack = TerraformStack(app, "TestStack")
-        ng = EksNodeGroups(
-            stack, "test_ng",
-            environment_suffix="test",
-            cluster_name="test-cluster",
-            node_role_arn="arn:aws:iam::123456789012:role/node-role",
-            subnet_ids=["subnet-1", "subnet-2"]
-        )
-
-        synth = Testing.synth(stack)
-        output_json = json.loads(synth)
-
-        launch_templates = output_json.get("resource", {}).get("aws_launch_template", {})
-        for lt_config in launch_templates.values():
-            block_devices = lt_config.get("block_device_mappings", [])
-            for device in block_devices:
-                ebs = device.get("ebs", {})
-                assert ebs.get("encrypted") == "true"
-
-    def test_eks_node_groups_launch_template_monitoring(self):
-        """EksNodeGroups launch templates enable detailed monitoring."""
-        app = App()
-        stack = TerraformStack(app, "TestStack")
-        ng = EksNodeGroups(
-            stack, "test_ng",
-            environment_suffix="test",
-            cluster_name="test-cluster",
-            node_role_arn="arn:aws:iam::123456789012:role/node-role",
-            subnet_ids=["subnet-1", "subnet-2"]
-        )
-
-        synth = Testing.synth(stack)
-        output_json = json.loads(synth)
-
-        launch_templates = output_json.get("resource", {}).get("aws_launch_template", {})
-        for lt_config in launch_templates.values():
-            monitoring = lt_config.get("monitoring", {})
-            assert monitoring.get("enabled") is True
+    # def test_eks_node_groups_launch_template_monitoring(self):
+    #     """EksNodeGroups launch templates enable detailed monitoring."""
+    #     # NOTE: Launch templates removed in favor of direct disk_size on node groups
+    #     pass
 
     def test_eks_node_groups_cluster_autoscaler_tags(self):
         """EksNodeGroups includes cluster autoscaler tags."""
