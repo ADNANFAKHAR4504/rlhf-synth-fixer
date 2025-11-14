@@ -23,7 +23,7 @@
     "CloudWatch",
     "IAM"
   ],
-  "region": "us-east-1",
+  "region": "us-west-2",
   "training_quality": 8,
   "errors_fixed": 5,
   "synth_status": "passed",

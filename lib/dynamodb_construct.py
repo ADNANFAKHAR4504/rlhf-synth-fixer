@@ -11,7 +11,7 @@ class DynamoDbConstruct(Construct):
 
         self.table = DynamodbTable(
             self, "payment-transactions",
-            name=f"payment-transactions-{environment_suffix}-lm",
+            name=f"payment-transactions-{environment_suffix}-no",
             billing_mode="PAY_PER_REQUEST",
             hash_key="transaction_id",
             attribute=[
@@ -33,7 +33,7 @@ class DynamoDbConstruct(Construct):
                 "kms_key_arn": kms_key_id
             },
             tags={
-                "Name": f"payment-transactions-{environment_suffix}-lm",
+                "Name": f"payment-transactions-{environment_suffix}-no",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"

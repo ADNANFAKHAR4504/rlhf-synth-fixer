@@ -24,10 +24,10 @@ class ApiGatewayConstruct(Construct):
         # REST API
         api = ApiGatewayRestApi(
             self, "api",
-            name=f"payment-api-{environment_suffix}-lm",
+            name=f"payment-api-{environment_suffix}-no",
             description="Payment processing API",
             tags={
-                "Name": f"payment-api-{environment_suffix}-lm",
+                "Name": f"payment-api-{environment_suffix}-no",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -86,7 +86,7 @@ class ApiGatewayConstruct(Construct):
             rest_api_id=api.id,
             stage_name="prod",
             tags={
-                "Name": f"payment-api-prod-{environment_suffix}-lm",
+                "Name": f"payment-api-prod-{environment_suffix}-no",
                 "Environment": environment_suffix
             }
         )
