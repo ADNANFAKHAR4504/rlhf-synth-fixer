@@ -31,7 +31,7 @@ export class TapStack extends cdk.Stack {
     const { webhookSecrets } = this.createSecretsManager(environmentSuffix);
 
     // API Gateway for webhook ingestion
-    const { apiGateway } = this.createApiGateway(environmentSuffix);
+    const { apiGateway, requestValidator } = this.createApiGateway(environmentSuffix);
 
     // DynamoDB for transaction store
     const { table } = this.createDynamoDbTable(environmentSuffix);
@@ -55,7 +55,11 @@ export class TapStack extends cdk.Stack {
     );
 
     // Connect API Gateway to validator function
-    this.connectApiGatewayToLambda(apiGateway, validatorFunction);
+    this.connectApiGatewayToLambda(
+      apiGateway,
+      validatorFunction,
+      requestValidator
+    );
 
     // Connect SQS to processor function
     this.connectSqsToLambda(
@@ -143,6 +147,7 @@ export class TapStack extends cdk.Stack {
         billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
         pointInTimeRecovery: true,
         encryption: cdk.aws_dynamodb.TableEncryption.AWS_MANAGED,
+        removalPolicy: cdk.RemovalPolicy.RETAIN,
       }
     );
 
@@ -269,10 +274,10 @@ export class TapStack extends cdk.Stack {
     eventBus: cdk.aws_events.EventBus,
     webhookSecrets: cdk.aws_secretsmanager.Secret
   ) {
-    // IAM role for Lambda functions
-    const lambdaRole = new cdk.aws_iam.Role(
+    // Validator role - only needs Secrets Manager + SQS send
+    const validatorRole = new cdk.aws_iam.Role(
       this,
-      `WebhookLambdaRole${environmentSuffix}`,
+      `WebhookValidatorRole${environmentSuffix}`,
       {
         assumedBy: new cdk.aws_iam.ServicePrincipal('lambda.amazonaws.com'),
         managedPolicies: [
@@ -283,21 +288,33 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Add permissions for Secrets Manager
-    webhookSecrets.grantRead(lambdaRole);
+    // Add permissions for validator: Secrets Manager and SQS send
+    webhookSecrets.grantRead(validatorRole);
+    stripeQueue.grantSendMessages(validatorRole);
+    paypalQueue.grantSendMessages(validatorRole);
+    squareQueue.grantSendMessages(validatorRole);
 
-    // Add permissions
-    table.grantWriteData(lambdaRole);
-    stripeQueue.grantSendMessages(lambdaRole);
-    paypalQueue.grantSendMessages(lambdaRole);
-    squareQueue.grantSendMessages(lambdaRole);
+    // Processor role - only needs SQS consume + DynamoDB + EventBridge
+    const processorRole = new cdk.aws_iam.Role(
+      this,
+      `WebhookProcessorRole${environmentSuffix}`,
+      {
+        assumedBy: new cdk.aws_iam.ServicePrincipal('lambda.amazonaws.com'),
+        managedPolicies: [
+          cdk.aws_iam.ManagedPolicy.fromAwsManagedPolicyName(
+            'service-role/AWSLambdaBasicExecutionRole'
+          ),
+        ],
+      }
+    );
 
-    // Lambda needs consume permissions for event source mappings
-    stripeQueue.grantConsumeMessages(lambdaRole);
-    paypalQueue.grantConsumeMessages(lambdaRole);
-    squareQueue.grantConsumeMessages(lambdaRole);
+    // Add permissions for processor: SQS consume + DynamoDB + EventBridge
+    stripeQueue.grantConsumeMessages(processorRole);
+    paypalQueue.grantConsumeMessages(processorRole);
+    squareQueue.grantConsumeMessages(processorRole);
+    table.grantWriteData(processorRole);
 
-    lambdaRole.addToPolicy(
+    processorRole.addToPolicy(
       new cdk.aws_iam.PolicyStatement({
         actions: ['events:PutEvents'],
         resources: [eventBus.eventBusArn],
@@ -344,7 +361,8 @@ export class TapStack extends cdk.Stack {
         ),
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
-        role: lambdaRole,
+        architecture: cdk.aws_lambda.Architecture.ARM_64,
+        role: validatorRole,
         logGroup: validatorLogGroup,
         environment: {
           WEBHOOK_SECRETS_ARN: webhookSecrets.secretArn,
@@ -374,7 +392,8 @@ export class TapStack extends cdk.Stack {
         ),
         timeout: cdk.Duration.minutes(5),
         memorySize: 1024,
-        role: lambdaRole,
+        architecture: cdk.aws_lambda.Architecture.ARM_64,
+        role: processorRole,
         logGroup: processorLogGroup,
         environment: {
           TABLE_NAME: table.tableName,
@@ -388,18 +407,42 @@ export class TapStack extends cdk.Stack {
 
   private connectApiGatewayToLambda(
     apiGateway: cdk.aws_apigateway.RestApi,
-    validatorFunction: cdk.aws_lambda.Function
+    validatorFunction: cdk.aws_lambda.Function,
+    requestValidator: cdk.aws_apigateway.RequestValidator
   ): void {
+    // Create request model with JSON schema
+    const webhookModel = apiGateway.addModel('WebhookModel', {
+      contentType: 'application/json',
+      modelName: 'WebhookPayload',
+      schema: {
+        schema: cdk.aws_apigateway.JsonSchemaVersion.DRAFT4,
+        title: 'webhookPayload',
+        type: cdk.aws_apigateway.JsonSchemaType.OBJECT,
+        properties: {
+          provider: { type: cdk.aws_apigateway.JsonSchemaType.STRING },
+          event_type: { type: cdk.aws_apigateway.JsonSchemaType.STRING },
+          data: { type: cdk.aws_apigateway.JsonSchemaType.OBJECT },
+          id: { type: cdk.aws_apigateway.JsonSchemaType.STRING },
+          type: { type: cdk.aws_apigateway.JsonSchemaType.STRING },
+        },
+        required: ['provider', 'event_type', 'data'],
+      },
+    });
+
     // Create webhook endpoints for each provider
     const webhooksResource = apiGateway.root.addResource('webhooks');
     const providerResource = webhooksResource.addResource('{provider}');
 
-    // Add method with IAM authorization
+    // Add method with IAM authorization and request validation
     providerResource.addMethod(
       'POST',
       new cdk.aws_apigateway.LambdaIntegration(validatorFunction),
       {
         authorizationType: cdk.aws_apigateway.AuthorizationType.IAM,
+        requestValidator: requestValidator,
+        requestModels: {
+          'application/json': webhookModel,
+        },
       }
     );
   }
@@ -442,7 +485,7 @@ export class TapStack extends cdk.Stack {
       `ApiGateway4xxErrors${environmentSuffix}`,
       {
         alarmName: `webhook-api-4xx-errors-${environmentSuffix}`,
-        alarmDescription: 'API Gateway 4XX errors above 1%',
+        alarmDescription: 'API Gateway 4XX errors above 1 per 5 minute period',
         metric: new cdk.aws_cloudwatch.Metric({
           namespace: 'AWS/ApiGateway',
           metricName: '4XXError',
@@ -461,7 +504,7 @@ export class TapStack extends cdk.Stack {
       `ApiGateway5xxErrors${environmentSuffix}`,
       {
         alarmName: `webhook-api-5xx-errors-${environmentSuffix}`,
-        alarmDescription: 'API Gateway 5XX errors above 1%',
+        alarmDescription: 'API Gateway 5XX errors above 1 per 5 minute period',
         metric: new cdk.aws_cloudwatch.Metric({
           namespace: 'AWS/ApiGateway',
           metricName: '5XXError',
