@@ -17,8 +17,6 @@ terraform {
   # Partial backend config: values are injected at `terraform init` time
   # backend "s3" {}
 
-  # Local backend for validation
-  backend "local" {}
 }
 
 # Primary AWS provider for general resources
