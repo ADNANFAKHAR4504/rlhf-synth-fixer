@@ -1,6 +1,5 @@
 # Compiled JavaScript files (but keep config files)
 /bin/*.js
-/bin/*.js
 ./lib/*.js
 /lib/*.js
 /test/*.js
@@ -96,13 +95,10 @@ bin/.terraform.lock.hcl
 src/main/java/imports/
 src/main/resources/imports/
 src/main/resources/
-
-__pycache__/
 .pulumi/
 
 tasks-status.md
 worktree/
-bin/.terraform.lock.hcl
 bin/tfplan
 
 build
@@ -112,6 +108,8 @@ build
 .claude/tasks.csv.lock/
 .claude/open_pr_status.json
 .claude/synth_pr_status.json
+.claude/synth_pr_status.json.backup
+.claude/synth_pr_status.json.lock/
 .sherlock/data
 .sherlock/reports
 
@@ -137,7 +135,6 @@ replay_pid*
 
 # Java JAR files (but keep Gradle wrapper)
 *.jar
-!gradle/wrapper/gradle-wrapper.jar
 
 # Java test reports
 build/reports/
@@ -149,3 +146,6 @@ turing-iac-review-app/tasks.json
 turing-iac-review-app/aws-nuke-config-runtime.yaml
 turing-iac-review-app/task_reports.csv
 turing-iac-review-app/aws-nuke-report-batch*tasks.csv.lock/
+
+# Synth Files
+tasks.csv

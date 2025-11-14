@@ -80,6 +80,41 @@ if verify_count != original_count:
 
 ## Critical Quality Requirements (MUST READ FIRST)
 
+### 0. Task Description Validation (CRITICAL - NEW)
+
+**Symptom**: Task h1w06e requested "migrate infrastructure from us-east-1 to us-east-1" (same region)
+
+**Root Cause**: Task description contains logically impossible requirements
+
+**Impact**:
+- Multi-region migration cannot occur within same region
+- VPC peering fails between same-region VPCs with overlapping CIDRs
+- Cross-region replication becomes meaningless
+- Wastes development time on undeployable architecture
+
+**Prevention**:
+- **VALIDATE task description for logical consistency BEFORE code generation**
+- Multi-region tasks MUST specify different source and target regions
+- Check for contradictory requirements (e.g., "import existing VPC" + "create from scratch")
+- Flag tasks with placeholder dependencies (Lambda code, ACM certificates)
+
+**Quick Validation Checklist**:
+```bash
+# For multi-region tasks, verify:
+grep -i "region" lib/PROMPT.md | grep -E "(us-east-1|us-west-2|eu-west-1)"
+# Should show DIFFERENT regions for source and target
+
+# For "import existing" tasks, verify:
+grep -i "import\|existing\|data source" lib/PROMPT.md
+# If found, ensure task is designed for existing infra or make it optional
+```
+
+**Resolution**: Mark task as "error" and document issue for task quality improvement
+
+**Applies to**: ALL tasks, validated in Phase 1.5
+
+---
+
 ### 1. Platform and Language Compliance (CRITICAL)
 
 **Symptom**: Task requires Pulumi+Go but generated code is CDK+TypeScript, or task requires Terraform but code is in Pulumi

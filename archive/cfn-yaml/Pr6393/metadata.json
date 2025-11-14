@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-12T13:55:15+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "eks-cluster-management"
+  ],
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "po_id": "101912514",
+  "aws_services": [
+    "Amazon EKS",
+    "Amazon EC2",
+    "AWS IAM",
+    "Amazon CloudWatch",
+    "AWS KMS",
+    "Amazon VPC"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

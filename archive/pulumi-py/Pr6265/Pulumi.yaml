@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: python
+description: Multi-Region Disaster Recovery Trading Platform Infrastructure
+main: tap.py

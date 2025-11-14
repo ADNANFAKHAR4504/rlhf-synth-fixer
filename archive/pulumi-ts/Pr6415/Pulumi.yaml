@@ -1,0 +1,4 @@
+name: TapStack
+runtime: nodejs
+description: Multi-Service ECS Fargate Application Deployment
+main: index.ts
