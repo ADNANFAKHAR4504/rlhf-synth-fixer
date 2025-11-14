@@ -37,7 +37,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault)
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA)
 from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
     S3BucketVersioningA, S3BucketVersioningVersioningConfiguration)
 from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
@@ -759,7 +759,7 @@ class TapStack(TerraformStack):
             bucket=s3_bucket_us.id,
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                         sse_algorithm="AES256"
                     )
                 )
@@ -796,7 +796,7 @@ class TapStack(TerraformStack):
             bucket=s3_bucket_eu.id,
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                         sse_algorithm="AES256"
                     )
                 )
