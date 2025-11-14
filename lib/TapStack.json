@@ -74,8 +74,8 @@
             ]
         },
         "Region": {
-            "TargetRegion": "eu-south-2",
-            "RegionName": "Europe (Spain)",
+            "TargetRegion": "eu-south-1",
+            "RegionName": "Europe (Milan)",
             "RegionFile": "lib/AWS_REGION"
         }
     },
@@ -119,7 +119,7 @@
                     },
                     {
                         "Key": "TargetRegion",
-                        "Value": "eu-south-2"
+                        "Value": "eu-south-1"
                     }
                 ]
             }

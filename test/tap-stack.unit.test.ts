@@ -34,12 +34,12 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
 
     test('should have region configuration in metadata', () => {
       expect(template.Metadata.Region).toBeDefined();
-      expect(template.Metadata.Region.TargetRegion).toBe('eu-south-2');
-      expect(template.Metadata.Region.RegionName).toBe('Europe (Spain)');
+      expect(template.Metadata.Region.TargetRegion).toBe('eu-south-1');
+      expect(template.Metadata.Region.RegionName).toBe('Europe (Milan)');
     });
 
-    test('AWS_REGION file should contain eu-south-2', () => {
-      expect(awsRegion).toBe('eu-south-2');
+    test('AWS_REGION file should contain eu-south-1', () => {
+      expect(awsRegion).toBe('eu-south-1');
     });
   });
 
@@ -241,12 +241,12 @@ describe('Secure VPC Foundation CloudFormation Template', () => {
       expect(tagKeys).toContain('TargetRegion');
     });
 
-    test('VPC should have target region tag for Spain', () => {
+    test('VPC should have target region tag for Milan', () => {
       const vpc = template.Resources.VPC;
       const tags = vpc.Properties.Tags;
       const targetRegionTag = tags.find((t: any) => t.Key === 'TargetRegion');
       expect(targetRegionTag).toBeDefined();
-      expect(targetRegionTag.Value).toBe('eu-south-2');
+      expect(targetRegionTag.Value).toBe('eu-south-1');
     });
 
     test('export names should follow naming convention', () => {

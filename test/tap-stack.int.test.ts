@@ -263,7 +263,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(tagKeys).toContain('TargetRegion');
 
       const targetRegionTag = tags.find(t => t.Key === 'TargetRegion');
-      expect(targetRegionTag?.Value).toBe('eu-south-2');
+      expect(targetRegionTag?.Value).toBe('eu-south-1');
     });
   });
 
