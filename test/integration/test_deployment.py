@@ -169,8 +169,9 @@ class TestS3Deployment:
         # Check encryption configuration
         try:
             response = s3.get_bucket_encryption(Bucket=bucket_name)
-            assert "Rules" in response
-            assert len(response["Rules"]) > 0
+            assert "ServerSideEncryptionConfiguration" in response
+            assert "Rules" in response["ServerSideEncryptionConfiguration"]
+            assert len(response["ServerSideEncryptionConfiguration"]["Rules"]) > 0
         except ClientError as e:
             if (
                 e.response["Error"]["Code"]
