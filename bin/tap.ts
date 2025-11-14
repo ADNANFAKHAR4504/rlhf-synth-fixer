@@ -55,4 +55,3 @@ new TapStack(
 
 // Import and re-export outputs from the actual infrastructure
 export * from '../lib/index';
-
