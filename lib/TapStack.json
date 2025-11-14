@@ -1088,7 +1088,7 @@
             "DeletionPolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "vpc-flow-logs-${EnvironmentSuffix}"
+                    "Fn::Sub": "vpc-flow-logs-${AWS::Region}-${EnvironmentSuffix}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1138,7 +1138,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "vpc-flow-logs-${EnvironmentSuffix}"
+                            "Fn::Sub": "vpc-flow-logs-${AWS::Region}-${EnvironmentSuffix}"
                         }
                     },
                     {

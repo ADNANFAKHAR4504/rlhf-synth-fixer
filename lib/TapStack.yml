@@ -547,7 +547,7 @@ Resources:
     Type: AWS::S3::Bucket
     DeletionPolicy: Delete
     Properties:
-      BucketName: !Sub 'vpc-flow-logs-${EnvironmentSuffix}'
+      BucketName: !Sub 'vpc-flow-logs-${AWS::Region}-${EnvironmentSuffix}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -574,7 +574,7 @@ Resources:
             ExpirationInDays: 365
       Tags:
         - Key: Name
-          Value: !Sub 'vpc-flow-logs-${EnvironmentSuffix}'
+          Value: !Sub 'vpc-flow-logs-${AWS::Region}-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentName
         - Key: Project
