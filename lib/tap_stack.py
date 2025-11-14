@@ -497,6 +497,7 @@ class TapStack(pulumi.ComponentResource):
             instance_class="db.t3.medium",
             storage_encrypted=True,
             kms_key_id=self.dr_kms.arn,
+            db_subnet_group_name=self.dr_subnet_group.name,
             vpc_security_group_ids=[self.dr_sg.id],
             publicly_accessible=False,
             monitoring_interval=60,
@@ -518,7 +519,7 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(
                 provider=self.dr_provider,
                 parent=self,
-                depends_on=[self.primary_db]
+                depends_on=[self.primary_db, self.dr_subnet_group]
             )
         )
 
