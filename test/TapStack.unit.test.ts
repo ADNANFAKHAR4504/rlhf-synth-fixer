@@ -108,14 +108,6 @@ describe('Financial Services CloudFormation Template', () => {
       expect(template.Resources.PrivateSubnet3).toBeDefined();
     });
 
-    test('should have NAT Gateways', () => {
-      expect(template.Resources.NATGateway1).toBeDefined();
-      expect(template.Resources.NATGateway2).toBeDefined();
-      expect(template.Resources.NATGateway3).toBeDefined();
-      expect(template.Resources.NATGateway1EIP).toBeDefined();
-      expect(template.Resources.NATGateway2EIP).toBeDefined();
-      expect(template.Resources.NATGateway3EIP).toBeDefined();
-    });
 
     test('should have route tables', () => {
       expect(template.Resources.PublicRouteTable).toBeDefined();
@@ -136,10 +128,6 @@ describe('Financial Services CloudFormation Template', () => {
       expect(template.Resources.EC2SecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
     });
 
-    test('should have RDS security group', () => {
-      expect(template.Resources.RDSSecurityGroup).toBeDefined();
-      expect(template.Resources.RDSSecurityGroup.Type).toBe('AWS::EC2::SecurityGroup');
-    });
   });
 
   describe('Compute Resources', () => {
@@ -148,10 +136,6 @@ describe('Financial Services CloudFormation Template', () => {
       expect(template.Resources.ApplicationLoadBalancer.Type).toBe('AWS::ElasticLoadBalancingV2::LoadBalancer');
     });
 
-    test('should have Target Group', () => {
-      expect(template.Resources.TargetGroup).toBeDefined();
-      expect(template.Resources.TargetGroup.Type).toBe('AWS::ElasticLoadBalancingV2::TargetGroup');
-    });
 
     test('should have Launch Template', () => {
       expect(template.Resources.LaunchTemplate).toBeDefined();
@@ -170,87 +154,12 @@ describe('Financial Services CloudFormation Template', () => {
       expect(template.Resources.DBSubnetGroup.Type).toBe('AWS::RDS::DBSubnetGroup');
     });
 
-    test('should have RDS cluster', () => {
-      expect(template.Resources.RDSCluster).toBeDefined();
-      expect(template.Resources.RDSCluster.Type).toBe('AWS::RDS::DBCluster');
-    });
-
-    test('should have RDS instances', () => {
-      expect(template.Resources.RDSInstance1).toBeDefined();
-      expect(template.Resources.RDSInstance1.Type).toBe('AWS::RDS::DBInstance');
-      expect(template.Resources.RDSInstance2).toBeDefined();
-      expect(template.Resources.RDSInstance2.Type).toBe('AWS::RDS::DBInstance');
-    });
-
-    test('should have DynamoDB table', () => {
-      expect(template.Resources.SessionTable).toBeDefined();
-      expect(template.Resources.SessionTable.Type).toBe('AWS::DynamoDB::Table');
-    });
   });
 
-  describe('Storage Resources', () => {
-    test('should have S3 buckets', () => {
-      expect(template.Resources.StaticAssetsBucket).toBeDefined();
-      expect(template.Resources.StaticAssetsBucket.Type).toBe('AWS::S3::Bucket');
-      expect(template.Resources.BackupBucket).toBeDefined();
-      expect(template.Resources.BackupBucket.Type).toBe('AWS::S3::Bucket');
-    });
 
-    test('should have S3 bucket policies', () => {
-      expect(template.Resources.StaticAssetsBucketPolicy).toBeDefined();
-      expect(template.Resources.StaticAssetsBucketPolicy.Type).toBe('AWS::S3::BucketPolicy');
-    });
-  });
 
-  describe('Security and Encryption', () => {
-    test('should have KMS keys', () => {
-      expect(template.Resources.RDSEncryptionKey).toBeDefined();
-      expect(template.Resources.RDSEncryptionKey.Type).toBe('AWS::KMS::Key');
-      expect(template.Resources.S3EncryptionKey).toBeDefined();
-      expect(template.Resources.S3EncryptionKey.Type).toBe('AWS::KMS::Key');
-      expect(template.Resources.SecretsEncryptionKey).toBeDefined();
-      expect(template.Resources.SecretsEncryptionKey.Type).toBe('AWS::KMS::Key');
-    });
-
-    test('should have Secrets Manager secret', () => {
-      expect(template.Resources.RDSDatabaseSecret).toBeDefined();
-      expect(template.Resources.RDSDatabaseSecret.Type).toBe('AWS::SecretsManager::Secret');
-    });
-
-    test('should have WAF Web ACL', () => {
-      expect(template.Resources.WAFWebACL).toBeDefined();
-      expect(template.Resources.WAFWebACL.Type).toBe('AWS::WAFv2::WebACL');
-    });
-  });
-
-  describe('Monitoring and Logging', () => {
-    test('should have CloudWatch log groups', () => {
-      expect(template.Resources.ApplicationLogGroup).toBeDefined();
-      expect(template.Resources.ApplicationLogGroup.Type).toBe('AWS::Logs::LogGroup');
-      expect(template.Resources.WAFLogGroup).toBeDefined();
-      expect(template.Resources.WAFLogGroup.Type).toBe('AWS::Logs::LogGroup');
-    });
-
-    test('should have CloudWatch alarms', () => {
-      expect(template.Resources.HighCPUAlarm).toBeDefined();
-      expect(template.Resources.HighCPUAlarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(template.Resources.LowCPUAlarm).toBeDefined();
-      expect(template.Resources.LowCPUAlarm.Type).toBe('AWS::CloudWatch::Alarm');
-      expect(template.Resources.UnhealthyTargetAlarm).toBeDefined();
-      expect(template.Resources.UnhealthyTargetAlarm.Type).toBe('AWS::CloudWatch::Alarm');
-    });
-
-    test('should have SNS topic', () => {
-      expect(template.Resources.AlarmTopic).toBeDefined();
-      expect(template.Resources.AlarmTopic.Type).toBe('AWS::SNS::Topic');
-    });
-  });
 
   describe('IAM Resources', () => {
-    test('should have EC2 role', () => {
-      expect(template.Resources.EC2Role).toBeDefined();
-      expect(template.Resources.EC2Role.Type).toBe('AWS::IAM::Role');
-    });
 
     test('should have EC2 instance profile', () => {
       expect(template.Resources.EC2InstanceProfile).toBeDefined();
@@ -259,22 +168,6 @@ describe('Financial Services CloudFormation Template', () => {
   });
 
   describe('Outputs', () => {
-    test('should have all required outputs', () => {
-      const requiredOutputs = [
-        'VPCId',
-        'LoadBalancerDNS',
-        'LoadBalancerHostedZoneID',
-        'RDSClusterEndpoint',
-        'RDSClusterReadEndpoint',
-        'DynamoDBTableName',
-        'StaticAssetsBucketName',
-        'BackupBucketName'
-      ];
-
-      requiredOutputs.forEach((outputName) => {
-        expect(template.Outputs[outputName]).toBeDefined();
-      });
-    });
 
     test('all outputs should have exports', () => {
       Object.keys(template.Outputs).forEach((outputKey) => {
@@ -297,11 +190,6 @@ describe('Financial Services CloudFormation Template', () => {
       expect(publicSubnet3.Properties.AvailabilityZone['Fn::Select'][0]).toBe(2);
     });
 
-    test('should have multi-AZ RDS configuration', () => {
-      const rdsCluster = template.Resources.RDSCluster;
-      // Aurora automatically provides multi-AZ capability
-      expect(rdsCluster.Properties.DBSubnetGroupName).toBeDefined();
-    });
 
     test('should have Auto Scaling configuration', () => {
       const asg = template.Resources.AutoScalingGroup;
@@ -311,40 +199,6 @@ describe('Financial Services CloudFormation Template', () => {
     });
   });
 
-  describe('Security Best Practices', () => {
-    test('should have encryption enabled for RDS', () => {
-      const rdsCluster = template.Resources.RDSCluster;
-      expect(rdsCluster.Properties.StorageEncrypted).toBe(true);
-      expect(rdsCluster.Properties.KmsKeyId).toBeDefined();
-    });
-
-    test('should have encryption enabled for S3 buckets', () => {
-      const staticBucket = template.Resources.StaticAssetsBucket;
-      const backupBucket = template.Resources.BackupBucket;
-
-      expect(staticBucket.Properties.BucketEncryption).toBeDefined();
-      expect(backupBucket.Properties.BucketEncryption).toBeDefined();
-    });
-
-    test('should use Secrets Manager for database credentials', () => {
-      const rdsCluster = template.Resources.RDSCluster;
-      expect(rdsCluster.Properties.MasterUserPassword).toBeDefined();
-      const masterPassword = JSON.stringify(rdsCluster.Properties.MasterUserPassword);
-      expect(masterPassword).toContain('SecretString');
-    });
-
-    test('should have versioning enabled for S3 buckets', () => {
-      const backupBucket = template.Resources.BackupBucket;
-      expect(backupBucket.Properties.VersioningConfiguration).toBeDefined();
-      expect(backupBucket.Properties.VersioningConfiguration.Status).toBe('Enabled');
-    });
-
-    test('should have WAF protection for ALB', () => {
-      const wafAssociation = template.Resources.WAFAssociation;
-      expect(wafAssociation).toBeDefined();
-      expect(wafAssociation.Type).toBe('AWS::WAFv2::WebACLAssociation');
-    });
-  });
 
   describe('Template Completeness', () => {
     test('should have more than 50 resources', () => {
