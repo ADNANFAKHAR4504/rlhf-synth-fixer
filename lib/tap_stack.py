@@ -1,9 +1,8 @@
 """tap_stack.py
-Main orchestration stack for Multi-Region DR Payment Processing Infrastructure.
+Main orchestration stack for Single-Region Payment Processing Infrastructure.
 
-NOTE: For multi-region deployments, stacks cannot be nested.
-All infrastructure stacks must be created at the app level in tap.py.
-This stack serves as a coordination point only.
+All infrastructure stacks are created at the app level in tap.py.
+This stack aggregates outputs from all component stacks for easier access.
 """
 
 from typing import Optional
@@ -27,15 +26,19 @@ class TapStackProps(cdk.StackProps):
 
 class TapStack(cdk.Stack):
     """
-    Main coordination stack for multi-region disaster recovery deployment.
+    Main coordination stack for single-region payment processing deployment.
 
-    This stack does NOT instantiate other stacks as nested stacks.
+    This stack aggregates outputs from all component stacks deployed in us-east-1.
     All actual infrastructure stacks are created at the app level in tap.py.
 
-    For multi-region architecture:
-    - Primary region stacks (us-east-1)
-    - Secondary region stacks (us-east-2)
-    - Global resources (Route 53)
+    Component stacks include:
+    - VPC Stack (networking infrastructure)
+    - Database Stack (Aurora PostgreSQL, DynamoDB)
+    - Lambda Stack (payment validation, transaction processing, notifications)
+    - API Gateway Stack (REST API)
+    - Storage Stack (S3 bucket)
+    - Monitoring Stack (CloudWatch alarms, SNS topics)
+    - Parameter Store Stack (configuration management)
 
     Args:
         scope (Construct): The parent construct (app)
@@ -62,7 +65,7 @@ class TapStack(cdk.Stack):
             self,
             "EnvironmentSuffix",
             value=environment_suffix,
-            description="Environment suffix for multi-region DR deployment",
+            description="Environment suffix for resource identification",
             export_name=f"environment-suffix-{environment_suffix}"
         )
 
@@ -137,12 +140,10 @@ class TapStack(cdk.Stack):
         )
 
         # All infrastructure stacks are created in tap.py at app level:
-        # - VpcStack (primary and secondary)
-        # - DatabaseStack (primary and secondary)
-        # - LambdaStack (primary and secondary)
-        # - ApiStack (primary and secondary)
-        # - StorageStack (primary and secondary with CRR)
-        # - Route53Stack (global)
-        # - MonitoringStack (primary and secondary)
-        # - ParameterStoreStack (primary and secondary)
-        # - FailoverStack (global)
+        # - VpcStack (us-east-1 networking)
+        # - DatabaseStack (Aurora PostgreSQL, DynamoDB)
+        # - LambdaStack (payment functions)
+        # - ApiStack (REST API Gateway)
+        # - StorageStack (S3 bucket)
+        # - MonitoringStack (CloudWatch, SNS)
+        # - ParameterStoreStack (SSM parameters)
