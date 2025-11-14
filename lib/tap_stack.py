@@ -533,16 +533,18 @@ Reason: {reason}
                     "Version": 1
                 },
                 "LogGroupNames": [log_group_name],
-                "LogFormat": "JSON",
+                "LogFormat": "CLF",
                 "Fields": {
-                    "1": "$.eventName",
-                    "2": "$.errorCode"
+                    "1": "$1",
+                    "2": "$2",
+                    "3": "$3",
+                    "4": "$4"
                 },
                 "Contribution": {
-                    "Keys": ["$.eventName"],
+                    "Keys": ["$2"],
                     "Filters": [{
-                        "Match": "$.errorCode",
-                        "EqualTo": ["Throttling"]
+                        "Match": "$4",
+                        "EqualTo": ["429"]
                     }]
                 },
                 "AggregateOn": "Count"
