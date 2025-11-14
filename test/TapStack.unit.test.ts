@@ -5,7 +5,7 @@ describe('Trading Platform DR CloudFormation Template', () => {
   let template: any;
 
   beforeAll(() => {
-    const templatePath = path.join(__dirname, '..', 'lib', 'trading-platform-dr-primary.json');
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
     const templateContent = fs.readFileSync(templatePath, 'utf-8');
     template = JSON.parse(templateContent);
   });

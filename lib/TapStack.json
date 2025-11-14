@@ -46,13 +46,15 @@
     },
     "HostedZoneId": {
       "Type": "String",
-      "Description": "Route53 Hosted Zone ID for DNS records",
-      "AllowedPattern": "^Z[A-Z0-9]{12,}$"
+      "Description": "Route53 Hosted Zone ID for DNS records (leave empty to skip Route53 configuration)",
+      "Default": "",
+      "AllowedPattern": "^(Z[A-Z0-9]{12,})?$"
     },
     "DomainName": {
       "Type": "String",
-      "Description": "Domain name for the trading platform",
-      "AllowedPattern": "^[a-z0-9.-]+$"
+      "Description": "Domain name for the trading platform (leave empty to skip Route53 configuration)",
+      "Default": "",
+      "AllowedPattern": "^([a-z0-9.-]+)?$"
     },
     "HealthCheckPath": {
       "Type": "String",
@@ -62,6 +64,7 @@
     "AlertEmail": {
       "Type": "String",
       "Description": "Email address for CloudWatch alarms",
+      "Default": "devops@example.com",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
     }
   },
@@ -83,6 +86,32 @@
         {
           "Label": { "default": "DNS and Monitoring" },
           "Parameters": ["HostedZoneId", "DomainName", "HealthCheckPath", "AlertEmail"]
+        }
+      ]
+    }
+  },
+  "Conditions": {
+    "HasRoute53Config": {
+      "Fn::And": [
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                { "Ref": "HostedZoneId" },
+                ""
+              ]
+            }
+          ]
+        },
+        {
+          "Fn::Not": [
+            {
+              "Fn::Equals": [
+                { "Ref": "DomainName" },
+                ""
+              ]
+            }
+          ]
         }
       ]
     }
@@ -796,6 +825,7 @@
     },
     "Route53HealthCheck": {
       "Type": "AWS::Route53::HealthCheck",
+      "Condition": "HasRoute53Config",
       "Properties": {
         "HealthCheckConfig": {
           "Type": "HTTP",
@@ -815,6 +845,7 @@
     },
     "Route53Record": {
       "Type": "AWS::Route53::RecordSet",
+      "Condition": "HasRoute53Config",
       "Properties": {
         "HostedZoneId": { "Ref": "HostedZoneId" },
         "Name": { "Ref": "DomainName" },
@@ -874,6 +905,7 @@
       }
     },
     "HealthCheckId": {
+      "Condition": "HasRoute53Config",
       "Description": "Route53 Health Check ID",
       "Value": { "Ref": "Route53HealthCheck" },
       "Export": {
