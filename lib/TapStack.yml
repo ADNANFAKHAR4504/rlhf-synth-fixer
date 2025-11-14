@@ -1580,9 +1580,6 @@ Resources:
           User: '1000:1000'  # Non-root user
           LinuxParameters:
             InitProcessEnabled: true
-            Capabilities:
-              Drop:
-                - ALL
           PortMappings:
             - ContainerPort: 8080
               Protocol: tcp
