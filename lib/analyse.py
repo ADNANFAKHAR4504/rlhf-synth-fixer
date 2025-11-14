@@ -156,10 +156,12 @@ class S3SecurityAuditor:
             except ClientError as e:
                 if e.response['Error']['Code'] == 'NoSuchTagSet':
                     pass  # No tags, include in audit
+                elif e.response['Error']['Code'] in ['AccessDenied', 'NoSuchBucket']:
+                    logger.warning(f"Access error for {bucket_name}: {e}")
                 else:
-                    logger.warning(f"Error checking tags for bucket {bucket_name}: {e}")
-            except Exception as e:
-                logger.warning(f"Error checking tags for bucket {bucket_name}: {e}")
+                    logger.error(f"Unexpected AWS error for {bucket_name}: {e}")
+            except (BotoCoreError, AttributeError) as e:
+                logger.error(f"Error checking tags for {bucket_name}: {e}")
             
             buckets_to_audit.append(bucket)
         

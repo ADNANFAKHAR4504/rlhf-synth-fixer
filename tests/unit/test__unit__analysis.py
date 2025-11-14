@@ -100,7 +100,7 @@ class TestS3SecurityAuditor:
 
         # Mock missing encryption
         mock_s3_client.get_bucket_encryption.side_effect = ClientError(
-            {'Error': {'Code': 'ServerSideEncryptionConfigurationNotFound'}}, 'GetBucketEncryption'
+            {'Error': {'Code': 'ServerSideEncryptionConfigurationNotFoundError'}}, 'GetBucketEncryption'
         )
 
         auditor = S3SecurityAuditor()
@@ -330,7 +330,7 @@ def setup_compliant_bucket():
             }
         )
 
-        # Set secure transport policy
+        # Set secure transport policy (deny non-HTTPS, no public access)
         policy = {
             "Version": "2012-10-17",
             "Statement": [
@@ -355,138 +355,16 @@ def setup_compliant_bucket():
             Bucket="compliant-test-bucket",
             Policy=json.dumps(policy)
         )
-    except Exception as e:
-        print(f"Error creating compliant bucket: {e}")
-    finally:
-        # Restore environment variable
-        if old_endpoint:
-            os.environ['AWS_ENDPOINT_URL'] = old_endpoint
 
-
-def setup_unencrypted_bucket():
-    """Create a bucket without encryption for testing"""
-    # Temporarily clear AWS_ENDPOINT_URL to use moto
-    old_endpoint = os.environ.get('AWS_ENDPOINT_URL')
-    if 'AWS_ENDPOINT_URL' in os.environ:
-        del os.environ['AWS_ENDPOINT_URL']
-
-    try:
-        s3 = boto3.client(
-            "s3",
-            region_name="us-east-1",
-            aws_access_key_id="test",
-            aws_secret_access_key="test",
-        )
-
-        # Create bucket without encryption
-        s3.create_bucket(Bucket="unencrypted-test-bucket")
-    except Exception as e:
-        print(f"Error creating unencrypted bucket: {e}")
-    finally:
-        # Restore environment variable
-        if old_endpoint:
-            os.environ['AWS_ENDPOINT_URL'] = old_endpoint
-
-
-def setup_bucket_without_secure_transport():
-    """Create a bucket without secure transport policy"""
-    # Temporarily clear AWS_ENDPOINT_URL to use moto
-    old_endpoint = os.environ.get('AWS_ENDPOINT_URL')
-    if 'AWS_ENDPOINT_URL' in os.environ:
-        del os.environ['AWS_ENDPOINT_URL']
-
-    try:
-        s3 = boto3.client(
-            "s3",
-            region_name="us-east-1",
-            aws_access_key_id="test",
-            aws_secret_access_key="test",
-        )
-
-        # Create bucket
-        s3.create_bucket(Bucket="insecure-test-bucket")
-
-        # Set policy without secure transport requirement
-        policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": "*",
-                    "Action": "s3:GetObject"
-                    # Missing aws:SecureTransport condition
-                }
-            ]
-        }
-
-        s3.put_bucket_policy(
-            Bucket="insecure-test-bucket",
-            Policy=json.dumps(policy)
-        )
-    except Exception as e:
-        print(f"Error creating insecure bucket: {e}")
-    finally:
-        # Restore environment variable
-        if old_endpoint:
-            os.environ['AWS_ENDPOINT_URL'] = old_endpoint
-
-
-def setup_compliant_bucket():
-    """Create a fully compliant bucket for testing"""
-    # Temporarily clear AWS_ENDPOINT_URL to use moto
-    old_endpoint = os.environ.get('AWS_ENDPOINT_URL')
-    if 'AWS_ENDPOINT_URL' in os.environ:
-        del os.environ['AWS_ENDPOINT_URL']
-
-    try:
-        s3 = boto3.client(
-            "s3",
-            region_name="us-east-1",
-            aws_access_key_id="test",
-            aws_secret_access_key="test",
-        )
-
-        # Create bucket
-        s3.create_bucket(Bucket="compliant-test-bucket")
-
-        # Set encryption
-        s3.put_bucket_encryption(
+        # Enable server access logging
+        s3.put_bucket_logging(
             Bucket="compliant-test-bucket",
-            ServerSideEncryptionConfiguration={
-                'Rules': [
-                    {
-                        'ApplyServerSideEncryptionByDefault': {
-                            'SSEAlgorithm': 'AES256'
-                        }
-                    }
-                ]
+            BucketLoggingStatus={
+                'LoggingEnabled': {
+                    'TargetBucket': 'compliant-test-bucket',  # Self-logging for test
+                    'TargetPrefix': 'access-logs/'
+                }
             }
-        )
-
-        # Set secure transport policy
-        policy = {
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Deny",
-                    "Principal": "*",
-                    "Action": "s3:*",
-                    "Resource": [
-                        "arn:aws:s3:::compliant-test-bucket",
-                        "arn:aws:s3:::compliant-test-bucket/*"
-                    ],
-                    "Condition": {
-                        "Bool": {
-                            "aws:SecureTransport": "false"
-                        }
-                    }
-                }
-            ]
-        }
-
-        s3.put_bucket_policy(
-            Bucket="compliant-test-bucket",
-            Policy=json.dumps(policy)
         )
     except Exception as e:
         print(f"Error creating compliant bucket: {e}")
@@ -669,22 +547,24 @@ def test_json_output_structure():
         results = run_analysis_script()
 
         # Check top-level keys
-        assert "audit_timestamp" in results, "audit_timestamp key missing from JSON"
-        assert "region" in results, "region key missing from JSON"
         assert "findings" in results, "findings key missing from JSON"
         assert "compliance_summary" in results, "compliance_summary key missing from JSON"
 
+        # Check compliance_summary structure
+        summary = results["compliance_summary"]
+        assert "audit_timestamp" in summary, "audit_timestamp key missing from compliance_summary"
+        assert "region" in summary, "region key missing from compliance_summary"
+
         # Check data types
-        assert isinstance(results["audit_timestamp"], str), "audit_timestamp should be a string"
-        assert isinstance(results["region"], str), "region should be a string"
+        assert isinstance(summary["audit_timestamp"], str), "audit_timestamp should be a string"
+        assert isinstance(summary["region"], str), "region should be a string"
         assert isinstance(results["findings"], list), "findings should be a list"
         assert isinstance(results["compliance_summary"], dict), "compliance_summary should be a dict"
 
         # Check region matches expected
-        assert results["region"] == "us-east-1", f"Expected region 'us-east-1', got {results['region']}"
+        assert summary["region"] == "us-east-1", f"Expected region 'us-east-1', got {summary['region']}"
 
         # Check compliance summary structure
-        summary = results["compliance_summary"]
         assert "total_buckets_audited" in summary, "total_buckets_audited missing from summary"
         assert "compliant_buckets" in summary, "compliant_buckets missing from summary"
         assert "non_compliant_buckets" in summary, "non_compliant_buckets missing from summary"
@@ -707,7 +587,7 @@ def test_comprehensive_security_audit():
         results = run_analysis_script()
 
         # Save the analysis results to a file that can be read later
-        results_file = os.path.join(os.path.dirname(__file__), "..", "lib", "test-s3-results.json")
+        results_file = os.path.join(os.path.dirname(__file__), "test-s3-results.json")
         with open(results_file, 'w') as f:
             json.dump(results, f, indent=2, default=str)
         print(f"\n✓ Saved comprehensive S3 audit results to {results_file}")
