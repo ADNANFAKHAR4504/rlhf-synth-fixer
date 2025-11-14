@@ -388,12 +388,6 @@ resource "aws_emr_security_configuration" "main" {
           AwsKmsKey                 = aws_kms_key.emr.arn
         }
       }
-      InTransitEncryptionConfiguration = {
-        TLSCertificateConfiguration = {
-          CertificateProviderType = "PEM"
-          S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_certificate.key}"
-        }
-      }
     }
   })
 }
@@ -407,35 +401,6 @@ resource "aws_s3_object" "bootstrap_script" {
   key    = "bootstrap/install-analytics-libs.sh"
   source = "${path.module}/bootstrap.sh"
   etag   = filemd5("${path.module}/bootstrap.sh")
-}
-
-resource "aws_s3_object" "emr_tls_certificate" {
-  bucket       = aws_s3_bucket.logs.id
-  key          = "security/emr-cluster.pem"
-  content_type = "application/x-pem-file"
-  content      = <<-EOT
------BEGIN CERTIFICATE-----
-MIIDVDCCAjygAwIBAgIUUD1MEyorde0x4tq5wO7iXKcBPiMwDQYJKoZIhvcNAQEL
-BQAwRzELMAkGA1UEBhMCVVMxCzAJBgNVBAgMAkNBMQ8wDQYDVQQHDAZTdW5ueTEQ
-MA4GA1UECgwHU3BhcmtsZTEPMA0GA1UEAwwGRW1yQ0EwHhcNMjQxMTAxMDAwMDAw
-WhcNMzQxMDI5MDAwMDAwWjBHMQswCQYDVQQGEwJVUzELMAkGA1UECAwCQ0ExDzAN
-BgNVBAcMBlN1bm55MRAwDgYDVQQKDAdTcGFya2xlMQ8wDQYDVQQDDAZFbXJDQTCC
-ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBALaNT9l9XMYCzCYbezk6C8PX
-wojaXwft+jrWbVQf1jGwxNUX6jMl8SeQI5ThQex4MXZQ70YIkoccG4ap54FlIrLc
-PnALoWdO52LGjY5cKNqZb3EOKTqKEF/iIhKKuYFX5rVNA4nA8pmJ+eJdChDgF7iA
-fhVQeMMUuaXetRkzqX7nTo8gEz+pX4Y0tk0W8ww0PCvHETPVmHqFDCyGoK5exYhA
-XWlx3hpxPhMkuV3ynslNG05PoD4hGEoTOeGoB19s+yGAV9ApG4f8FgbgT2/LOWBR
-XN4g14n4FEBA1/shFZuh4ARlpVBLxAP5EflPGcyonRmeRdGPzKT4K77Y/it3bVsC
-AwEAAaNTMFEwHQYDVR0OBBYEFLqznuJ1PUqz4LCMK9uIMP9r5BwIMB8GA1UdIwQY
-MBaAFLqznuJ1PUqz4LCMK9uIMP9r5BwIMA8GA1UdEwEB/wQFMAMBAf8wDQYJKoZI
-hvcNAQELBQADggEBADEb8zzmFqmPuS7xJYAE7mefQmlkHT/ogGJVKRlULHn6ud+G
-Tx4F20yR38G5dc1QOueHE2qXXgZyRdfQ1VoA0kTFcB7MXNfa0MzASJKuVdzm6hmK
-QDihsp5ZULr6GPLXss7Go7WuS+daOg3Hjtw0YqKbuJBpMsWHDuoDxLKNY7TK9b+I
-4V0dDVemGGSxIHiOaFguQ+r7G1YQpk72V3nex3hjgPqyBcUS2uXfdY6XjSfFlIY8
-jbTt3bnVwwDUD2dD+BRg0yH196zCkHiTuI1xVW0ZvqvJ1P0z3PCNN7WTR2GXRf9F
-gf/xMA3BiWVYr6nO0wxx1qaUSvWtNfC7omMotxA=
------END CERTIFICATE-----
-EOT
 }
 
 locals {

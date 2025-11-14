@@ -92,10 +92,10 @@ describe("Terraform EMR stack conformance", () => {
     expect(mainTf).toMatch(/locals\s+\{\s*use_existing_vpc\s*=\s*var\.vpc_id != null/);
   });
 
-  test("TLS certificate is stored in S3 and referenced by security configuration", () => {
-    expect(mainTf).toMatch(/resource\s+"aws_s3_object"\s+"emr_tls_certificate"/);
-    expect(mainTf).toMatch(/CertificateProviderType\s*=\s*"PEM"/);
-    expect(mainTf).toMatch(/S3Object\s*=\s*"s3:\/\/\$\{aws_s3_bucket\.logs\.bucket\}\/\$\{aws_s3_object\.emr_tls_certificate\.key\}"/);
+  test("in-transit and at-rest encryption are enabled for the cluster", () => {
+    expect(mainTf).toMatch(/EnableInTransitEncryption\s*=\s*true/);
+    expect(mainTf).toMatch(/EnableAtRestEncryption\s*=\s*true/);
+    expect(mainTf).toMatch(/LocalDiskEncryptionConfiguration/);
   });
 
   test("variables expose optional networking inputs with sensible defaults", () => {
