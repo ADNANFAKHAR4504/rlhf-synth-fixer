@@ -62,7 +62,7 @@ class TestMainProgram(unittest.TestCase):
 
     def test_entry_point_exists(self):
         """Test entry point file exists."""
-        self.assertTrue(os.path.exists("__main__.py"))
+        self.assertTrue(os.path.exists("lib/__main__.py"))
 
     def test_tap_stack_exists(self):
         """Test TapStack class exists in lib folder."""
@@ -85,7 +85,7 @@ class TestMainProgram(unittest.TestCase):
 
     def test_main_program_config_usage(self):
         """Test main program reads configuration."""
-        with open("__main__.py", 'r') as f:
+        with open("lib/__main__.py", 'r') as f:
             content = f.read()
 
         # Verify configuration is read
@@ -94,7 +94,7 @@ class TestMainProgram(unittest.TestCase):
 
     def test_main_program_exports(self):
         """Test main program exports required outputs."""
-        with open("__main__.py", 'r') as f:
+        with open("lib/__main__.py", 'r') as f:
             content = f.read()
 
         # Check for stack exports
@@ -364,7 +364,7 @@ class TestTagging(unittest.TestCase):
 
     def test_main_program_defines_common_tags(self):
         """Test main program defines common tags."""
-        with open("__main__.py", 'r') as f:
+        with open("lib/__main__.py", 'r') as f:
             content = f.read()
 
         self.assertIn('common_tags', content)
