@@ -385,3 +385,8 @@ output "availability_zones" {
   description = "List of availability zones used"
   value       = local.availability_zones
 }
+
+output "e2e_key_name" {
+  description = "Name of the SSH key pair created for E2E instance access"
+  value       = aws_key_pair.e2e_key.key_name
+}
