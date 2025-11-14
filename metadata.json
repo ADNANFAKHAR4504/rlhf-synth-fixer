@@ -1,13 +1,16 @@
 {
   "platform": "cdk",
   "language": "ts",
+  "subject": "cdk-ts",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-11-14T15:31:14Z",
   "po_id": "9gd2j2",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "aws_services": [
     "AWS Lambda",
     "Amazon DynamoDB",
