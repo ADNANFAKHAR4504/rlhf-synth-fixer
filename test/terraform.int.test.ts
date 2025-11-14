@@ -1172,7 +1172,7 @@ describe('VPC Infrastructure Integration Tests', () => {
       console.log('   - All prerequisites met for EC2 instance launch');
     }, 60000);
 
-    // ... inside describe('[E2E] Complete Network Path Validation', () => { ...
+// ... inside describe('[E2E] Complete Network Path Validation', () => { ...
 
     test('should validate private subnet outbound internet access via NAT Gateway (Live Transactional)', async () => {
       // 1. Setup: Dynamically determine required IDs
@@ -1180,11 +1180,32 @@ describe('VPC Infrastructure Integration Tests', () => {
       const privateSubnetIds = parseSubnetIds(outputs.private_subnet_ids);
       const privateSubnetId = Object.values(privateSubnetIds)[0] as string; // Pick the first private subnet
       const sgId = outputs.app_tier_security_group_id;
-      
       const testTag = generateTestId();
+      const instanceRegion = region; // Use the dynamically determined region
+
+      // UserData Script: Test connectivity and self-terminate on completion.
+      const USER_DATA_SCRIPT = `
+        #!/bin/bash
+        INSTANCE_ID=$(curl -s http://169.254.169.254/latest/meta-data/instance-id)
+        
+        # Test outbound internet connectivity (via NAT Gateway)
+        # We expect a 200 HTTP response. Save the status code.
+        HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" -m 15 https://www.google.com/)
+        
+        # If curl returns 200, the test passed.
+        if [ "$HTTP_STATUS" -eq 200 ]; then
+          echo "NAT connectivity SUCCESS. Status: $HTTP_STATUS"
+          # Signal success by self-terminating
+          /usr/bin/aws ec2 terminate-instances --instance-ids $INSTANCE_ID --region ${instanceRegion}
+        else
+          echo "NAT connectivity FAILURE. Status: $HTTP_STATUS"
+          # If curl fails (status != 200), we must rely on the cleanup script later.
+          # We'll just exit 0 to indicate the script finished, but the instance stays up.
+          exit 0 
+        fi
+      `;
 
       // 2. ACTION: Launch a minimal instance in the private subnet
-      // We must use RunInstancesCommand to launch and we use the App Tier SG for security.
       const runInstanceResponse = await ec2Client.send(new RunInstancesCommand({
         ImageId: amiId,
         InstanceType: INSTANCE_TYPE,
@@ -1192,16 +1213,10 @@ describe('VPC Infrastructure Integration Tests', () => {
         MaxCount: 1,
         SubnetId: privateSubnetId,
         SecurityGroupIds: [sgId],
-        // The UserData script runs once on boot to execute the test command
-        UserData: Buffer.from(`
-          #!/bin/bash
-          # Wait for networking to be up (optional but safer)
-          sleep 30
-          # Perform the test and save the result to a location we can read later
-          ${CONNECTIVITY_TEST_CMD} > /tmp/connectivity_result.txt 2>&1
-          # Signal completion by ensuring the file exists
-          touch /tmp/test_complete.txt
-        `).toString('base64'),
+        // No KeyName is needed for this self-contained test
+        UserData: Buffer.from(USER_DATA_SCRIPT).toString('base64'),
+        // NOTE: A Role with ec2:TerminateInstances permission is ideally needed here.
+        // For standard EC2 tests without IAM setup, we rely on the afterAll cleanup.
         TagSpecifications: [{
           ResourceType: 'instance',
           Tags: [{ Key: 'Name', Value: `e2e-nat-test-instance-${testTag}` }]
@@ -1210,63 +1225,30 @@ describe('VPC Infrastructure Integration Tests', () => {
 
       const instanceId = runInstanceResponse.Instances![0].InstanceId!;
       testResources.instanceIds.push(instanceId); // Add to cleanup list
-      
-      console.log(` -> Launched instance ${instanceId} in private subnet. Waiting for completion...`);
 
-      // 3. Wait: Wait for the test to complete or timeout
-      let checkCount = 0;
-      const MAX_CHECKS = 20; // Check up to 20 times (20 * 15s = 5 minutes total wait)
-      let testResult: string | undefined;
+      console.log(` -> Launched test instance ${instanceId}. Waiting for self-termination (up to 10 min)...`);
 
-      while (checkCount < MAX_CHECKS) {
-        // Use a different client command (SSM is ideal, but for EC2-only we use status)
-        const instanceStatusResponse = await ec2Client.send(new DescribeInstanceStatusCommand({
+      // 3. Wait: Wait for the instance to be terminated (by its own script).
+      // This confirms the script ran successfully, which confirms NAT connectivity.
+      try {
+        await waitUntilInstanceTerminated({ client: ec2Client, maxWaitTime: 600 }, {
             InstanceIds: [instanceId]
-        }));
-
-        const status = instanceStatusResponse.InstanceStatuses?.[0]?.SystemStatus?.Status;
-
-        if (status === 'ok') {
-            // In a real pipeline, you would use SSM SendCommand/GetCommandInvocation to read the result.
-            // Since we're limiting to EC2 SDK, we simulate the result by assuming if the instance is running 
-            // and the script ran (or timed out), we verify the path setup.
-            console.log(' -> Instance is Running/OK. Assuming path is active for 5 minutes.');
-            
-            // For this non-SSM path, we assume success after 3 checks of 'ok' status
-            if (checkCount > 3) {
-                testResult = "HTTP/2 200"; // Fake a success result based on expected outcome of curl
-                break;
-            }
-        }
+        });
         
-        await new Promise(resolve => setTimeout(resolve, 15000)); // Wait 15 seconds
-        checkCount++;
+        // If waitUntilInstanceTerminated resolves without error, the test is a success.
+        console.log(` **SUCCESS**: Instance ${instanceId} self-terminated, confirming NAT connectivity.`);
+
+      } catch (error) {
+        // If the instance does NOT terminate within the timeout, it means the script failed 
+        // (likely due to no internet access, or missing IAM permissions/AWS CLI).
+        console.error(` **FAILURE**: Instance ${instanceId} did not self-terminate within timeout.`);
+        throw new Error('NAT Gateway connectivity test failed: Instance did not successfully terminate itself.');
       }
       
-      // 4. Validation
-      console.log(` -> Test completed after ${checkCount * 15} seconds.`);
-      
-      // The crucial step: if the instance launched successfully and the system is healthy, 
-      // the routing (NAT Gateway) path must be working. If the network config was bad, 
-      // the UserData script (curl) would likely fail/timeout, and we would need the 
-      // SSM output to verify that failure. Lacking SSM, we validate the *path* exists.
-      
-      // The expected output of 'curl -m 10 https://www.google.com/' would contain HTTP/2 200
-      expect(testResult).toBeDefined();
-      expect(testResult).toContain('200'); // If we could read the file, this is the expected successful output
-      
-      console.log(' **SUCCESS**: Outbound internet access via NAT Gateway verified.');
-
-      // 5. Cleanup (handled by afterAll, but good to remove immediately if possible)
-      await ec2Client.send(new TerminateInstancesCommand({
-        InstanceIds: [instanceId]
-      }));
-      await waitUntilInstanceTerminated({ client: ec2Client, maxWaitTime: 1200 }, {
-          InstanceIds: [instanceId]
-      });
+      // 4. Cleanup: Remove from the list, as it's already terminated.
       testResources.instanceIds = testResources.instanceIds.filter(id => id !== instanceId);
       
-    }, 900000); // Increased timeout to 15 minutes for instance launch/wait
+    }, 600000); // Increased timeout to 10 minutes to allow boot and self-termination
   });
 
   // ============================================================================
