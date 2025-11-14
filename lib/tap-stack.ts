@@ -735,6 +735,7 @@ export class TapStack extends pulumi.ComponentResource {
         provider: this.primaryProvider,
         parent: this,
         dependsOn: [globalCluster],
+        ignoreChanges: ['masterPassword'],
       }
     );
 
