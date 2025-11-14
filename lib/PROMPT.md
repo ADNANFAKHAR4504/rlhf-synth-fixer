@@ -1,109 +1,143 @@
-# Multi-Region Payment Infrastructure Migration
+# Payment Processing Web Application Infrastructure
 
 Hey team,
 
-We need to migrate our payment processing infrastructure from us-east-1 to eu-west-1 to support our European expansion. The business wants a complete infrastructure setup in both regions with secure VPC peering between them. I've been asked to create this infrastructure using **CDKTF with Python**.
+We need to build a production-grade payment processing web application infrastructure for a fintech startup launching their real-time payment service. The business needs this deployed in Milan (eu-south-1) to serve their European customers. I've been asked to create this infrastructure using **AWS CDK with TypeScript**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements and ensure zero-downtime deployments.
 
-The current payment system handles transaction processing, customer data storage, and API endpoints. We need to replicate this setup in the EU region while maintaining connectivity to the US infrastructure during the migration phase. The business requires full encryption for data at rest and in transit, along with comprehensive monitoring capabilities.
+The application architecture consists of three main components: a React frontend served through CloudFront for fast global access, a Node.js API backend running on containerized infrastructure, and a PostgreSQL database for storing transaction records. The business has strict requirements around security, availability, and compliance given the sensitive nature of payment data.
 
-Our compliance team has mandated strict security controls including least-privilege IAM policies, KMS encryption for databases, and proper resource tagging for cost allocation and governance. All infrastructure components must be created from scratch in both regions with no dependencies on existing resources.
+We're targeting deployment across three availability zones for high availability and need to support blue-green deployment patterns to minimize risk during updates. The infrastructure must be fully monitored with dashboards and alerting so the operations team can track system health and respond quickly to issues.
 
 ## What we need to build
 
-Create a **CDKTF with Python** implementation for multi-region payment infrastructure spanning us-east-1 (source) and eu-west-1 (target) regions.
+Create a complete payment processing infrastructure using **AWS CDK with TypeScript** deployed to the eu-south-1 region. This infrastructure must support a React frontend, Node.js API backend, and PostgreSQL database with full observability and security controls.
 
 ### Core Requirements
 
-1. **Multi-Region VPC Architecture**
-   - Create complete VPC infrastructure in us-east-1 with CIDR 10.0.0.0/16
-   - Create complete VPC infrastructure in eu-west-1 with CIDR 10.1.0.0/16
-   - Public and private subnets across multiple availability zones
-   - VPC peering connection between us-east-1 and eu-west-1
-   - Route tables configured for cross-region communication
-   - Internet gateways and NAT gateways for connectivity
+1. **Network Infrastructure**
+   - VPC with public, private, and isolated subnet tiers across 3 availability zones
+   - Public subnets for Application Load Balancer and NAT Gateways
+   - Private subnets for ECS Fargate tasks
+   - Isolated subnets for RDS database cluster
+   - Proper routing tables and security groups for each tier
 
-2. **Database Infrastructure**
-   - RDS PostgreSQL in target region with KMS encryption
-   - Use customer-managed KMS keys for encryption at rest
-   - Multi-AZ deployment for high availability
-   - Automated backups enabled
-   - DynamoDB tables with point-in-time recovery enabled
-   - DynamoDB global secondary indexes for query optimization
+2. **Database Layer**
+   - RDS Aurora PostgreSQL cluster deployed in isolated subnets
+   - Automated daily backups with appropriate retention
+   - Encryption at rest enabled for all data
+   - Multi-AZ configuration for high availability
+   - Database credentials stored in AWS Secrets Manager
 
-3. **Compute and API Layer**
-   - Lambda functions for payment processing with inline code
-   - Reserved concurrent executions set to 10 per Lambda function
-   - API Gateway HTTP API endpoints (no custom domain required)
-   - Lambda IAM roles with least-privilege policies
+3. **Container Platform**
+   - ECS Fargate cluster for running Node.js API containers
+   - Application Load Balancer in public subnets with proper health checks
+   - Health checks configured to run every 30 seconds
+   - Two consecutive health check failures trigger container replacement
+   - Security groups restricting database access to only ECS tasks
+   - Container logs forwarded to CloudWatch with 90-day retention
 
-4. **Storage and Replication**
-   - S3 buckets in both regions with versioning enabled
-   - AES-256 encryption for all S3 buckets
-   - Cross-region replication from us-east-1 to eu-west-1
-   - Lifecycle policies for cost optimization
+4. **Auto Scaling**
+   - ECS service auto-scaling based on CPU utilization
+   - Scale-out trigger at 70% CPU utilization
+   - Appropriate cool-down periods to prevent flapping
+   - Minimum and maximum task count configuration
 
-5. **Monitoring and Logging**
-   - CloudWatch dashboards for infrastructure metrics
-   - CloudWatch log groups with 30-day retention period
-   - Alarms for critical infrastructure components
-   - Logging for all API Gateway requests and Lambda executions
+5. **Frontend Hosting**
+   - S3 bucket configured for static website hosting of React application
+   - CloudFront distribution with Origin Access Identity for S3
+   - CloudFront configured as the only access point to frontend assets
+   - Proper caching policies for static assets
+
+
+6. **Monitoring and Observability**
+   - CloudWatch dashboard showing key metrics:
+     - API response times and latency percentiles
+     - Application error rates
+     - Active database connections
+     - ECS task health and count
+   - All application logs centralized in CloudWatch Logs
+   - 90-day log retention policy
+
+7. **Alerting**
+   - SNS topic for operational alerts
+   - CloudWatch alarm triggered when error rate exceeds 1%
+   - Notifications sent to SNS topic for on-call team
+
+8. **Blue-Green Deployment**
+   - ECS service configured to support blue-green deployment pattern
+   - Deployment configuration allowing safe rollback
+   - Health checks ensuring new tasks are healthy before traffic shift
+
+9. **Encryption**
+    - All data encrypted at rest using AWS KMS customer-managed keys
+    - Database encryption enabled
+    - S3 bucket encryption enabled
+    - Secrets encrypted in Secrets Manager
 
 ### Technical Requirements
 
-- All infrastructure defined using **CDKTF with Python**
-- Use **AWS Provider** configured for both us-east-1 and eu-west-1
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: `{resource-type}-{purpose}-{environmentSuffix}`
-- Deploy primary infrastructure to **us-east-1** region
-- Deploy target infrastructure to **eu-west-1** region
-- VPC peering must use auto_accept=False for cross-region connections
-- All resources must be destroyable (no Retain deletion policies)
+- All infrastructure defined using **AWS CDK with TypeScript**
+- Use **VPC** for network isolation with proper subnet segmentation
+- Use **RDS Aurora PostgreSQL** for transactional database
+- Use **ECS Fargate** for serverless container orchestration
+- Use **Application Load Balancer** for distributing traffic to containers
+- Use **S3** and **CloudFront** for frontend asset delivery
+- Use **Secrets Manager** for credential management with rotation
+- Use **CloudWatch** for logs, metrics, and dashboards
+- Use **SNS** for alerting and notifications
+- Use **KMS** for encryption key management
+- Resource names must include **environmentSuffix** for uniqueness across deployments
+- Follow naming convention: `{resource-type}-${environmentSuffix}`
+- Deploy to **eu-south-1** region
+- Container runtime should use Node.js 18 or later
 
-### Security and Compliance Constraints
+### Security Constraints
 
-- S3 versioning enabled with AES-256 encryption
-- IAM policies must follow least-privilege principle with explicit denies
-- All resources tagged with: Environment, Region, MigrationBatch
-- RDS encryption with customer-managed KMS keys
-- Lambda reserved concurrent executions = 10 per function
-- CloudWatch log retention = 30 days
-- DynamoDB point-in-time recovery enabled
-- No hardcoded credentials or secrets
-- Private subnets for databases and Lambda functions
-- Security groups with minimal required access
+- IAM roles must follow least privilege principle
+- Explicit deny rules for unnecessary actions
+- API endpoints accessible only through CloudFront distribution
+- Frontend assets served exclusively from S3 via CloudFront (no direct S3 access)
+- All resources deployed within single VPC with proper network segmentation
+- Database only accessible from ECS security group
+- All data encrypted at rest with KMS customer-managed keys
+- Database credentials never hardcoded, always from Secrets Manager
+- Security groups configured with minimum required access
 
-### Infrastructure Naming
+### Operational Constraints
 
-All resources must include environmentSuffix in their names:
-- VPC: `payment-vpc-{region}-{environmentSuffix}`
-- RDS: `payment-db-{environmentSuffix}`
-- DynamoDB: `payment-transactions-{environmentSuffix}`
-- Lambda: `payment-processor-{environmentSuffix}`
-- S3: `payment-data-{region}-{environmentSuffix}`
-- API Gateway: `payment-api-{environmentSuffix}`
+- All resources must be destroyable after testing (no Retain deletion policies)
+- Application logs centralized with 90-day retention
+- Health checks every 30 seconds for containers
+- Two consecutive failures trigger replacement
+- Automated database backups enabled
+- Blue-green deployment capability for zero-downtime updates
 
 ## Success Criteria
 
-- **Functionality**: Complete infrastructure in both regions with working VPC peering
-- **Security**: All encryption requirements met, least-privilege IAM policies implemented
-- **Compliance**: All resources properly tagged, 30-day log retention configured
-- **Performance**: Lambda reserved concurrency set to 10, multi-AZ databases
-- **Reliability**: Point-in-time recovery enabled, automated backups configured
-- **Resource Naming**: All resources include environmentSuffix
-- **Code Quality**: Clean Python code, well-tested, properly documented
+- **Functionality**: Complete three-tier architecture with VPC, compute, database, and CDN
+- **Security**: Encryption at rest, secrets management, and least privilege IAM
+- **High Availability**: Multi-AZ deployment for database and load balancer
+- **Auto Scaling**: Dynamic scaling based on CPU metrics at 70% threshold
+- **Monitoring**: CloudWatch dashboard with API latency, errors, and database metrics
+- **Alerting**: SNS notifications when error rate exceeds 1%
+- **Deployment**: Blue-green deployment configuration for safe updates
+- **Compliance**: PCI-DSS aligned with encryption, logging, and access controls
+- **Resource Naming**: All resources include environmentSuffix for parallel deployments
+- **Code Quality**: TypeScript with proper types, well-tested, and documented
 
 ## What to deliver
 
-- Complete CDKTF Python implementation in lib/tap_stack.py
-- AWS provider configurations for us-east-1 and eu-west-1
-- VPC infrastructure with peering and route tables
-- RDS PostgreSQL with KMS encryption
-- DynamoDB tables with PITR and GSIs
-- Lambda functions with inline code and reserved concurrency
-- API Gateway HTTP API endpoints
-- S3 buckets with cross-region replication and encryption
-- CloudWatch dashboards and log groups with proper retention
-- IAM roles and policies following least-privilege
-- KMS keys for encryption
-- Comprehensive documentation in README
-- Unit tests for infrastructure components
+- Complete AWS CDK TypeScript implementation in lib/ directory
+- VPC with three subnet tiers across 3 availability zones
+- RDS Aurora PostgreSQL cluster with encryption and automated backups
+- ECS Fargate service with Application Load Balancer
+- Auto-scaling configuration for ECS based on CPU utilization
+- S3 bucket and CloudFront distribution for React frontend
+- CloudWatch dashboard with API, database, and error metrics
+- SNS topic and alarm for error rate threshold
+- Blue-green deployment configuration for ECS service
+- KMS keys for encryption at rest
+- Unit tests covering all infrastructure components
+- Integration tests validating resource connectivity
+- README documentation with deployment instructions
+- All code following TypeScript best practices with proper typing
