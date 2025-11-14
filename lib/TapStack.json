@@ -26,15 +26,6 @@
             "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
             "Description": "Database admin username"
         },
-        "DBPassword": {
-            "Type": "String",
-            "Default": "TempPassword123",
-            "NoEcho": true,
-            "MinLength": 8,
-            "MaxLength": 41,
-            "AllowedPattern": "[a-zA-Z0-9]*",
-            "Description": "Database admin password"
-        },
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
@@ -127,8 +118,7 @@
                         "default": "Security Configuration"
                     },
                     "Parameters": [
-                        "DBUsername",
-                        "DBPassword"
+                        "DBUsername"
                     ]
                 }
             ]
@@ -1812,9 +1802,15 @@
                 "Name": {
                     "Fn::Sub": "/ecommerce/database/credentials-${Environment}"
                 },
-                "Description": "RDS Database Credentials",
-                "SecretString": {
-                    "Fn::Sub": "{\n  \"username\": \"${DBUsername}\",\n  \"password\": \"${DBPassword}\"\n}\n"
+                "Description": "RDS Database Credentials with auto-generated password",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
                 },
                 "Tags": [
                     {
@@ -2241,7 +2237,7 @@
                 "AutoScalingGroupName": {
                     "Ref": "AutoScalingGroup"
                 },
-                "Cooldown": 300,
+                "Cooldown": 600,
                 "ScalingAdjustment": 1
             }
         },
@@ -2252,7 +2248,7 @@
                 "AutoScalingGroupName": {
                     "Ref": "AutoScalingGroup"
                 },
-                "Cooldown": 300,
+                "Cooldown": 600,
                 "ScalingAdjustment": -1
             }
         },
@@ -2361,6 +2357,7 @@
                 "KmsKeyId": {
                     "Ref": "MasterKMSKey"
                 },
+                "MultiAZ": true,
                 "MasterUsername": {
                     "Fn::Sub": "{{resolve:secretsmanager:${DBSecret}:SecretString:username}}"
                 },
@@ -2434,7 +2431,7 @@
                 "LogGroupName": {
                     "Fn::Sub": "/aws/lambda/ECommerce-Function-${Environment}"
                 },
-                "RetentionInDays": 14
+                "RetentionInDays": 30
             }
         },
         "LambdaFunction": {
@@ -2453,7 +2450,7 @@
                     ]
                 },
                 "Code": {
-                    "ZipFile": "import json\nimport logging\nimport os\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {json.dumps(event)}\")\n    \n    response = {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'E-Commerce Lambda Function',\n            'environment': os.environ.get('ENVIRONMENT', 'Unknown')\n        })\n    }\n    \n    logger.info(f\"Response: {json.dumps(response)}\")\n    return response\n"
+                    "ZipFile": "import json\nimport logging\nimport os\n\nlogger = logging.getLogger()\nlogger.setLevel(logging.INFO)\n\ndef lambda_handler(event, context):\n    logger.info(f\"Received event: {json.dumps(event)}\")\n\n    response = {\n        'statusCode': 200,\n        'body': json.dumps({\n            'message': 'E-Commerce Lambda Function',\n            'environment': os.environ.get('ENVIRONMENT', 'Unknown')\n        })\n    }\n\n    logger.info(f\"Response: {json.dumps(response)}\")\n    return response\n"
                 },
                 "Environment": {
                     "Variables": {
@@ -2483,7 +2480,7 @@
                         }
                     ]
                 },
-                "Timeout": 30,
+                "Timeout": 60,
                 "MemorySize": 256,
                 "Tags": [
                     {
