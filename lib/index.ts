@@ -1,9 +1,9 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 const config = new pulumi.Config();
 const environmentSuffix = config.get('environmentSuffix') || 'dev';
-const region = 'us-east-1';
+const region = 'eu-south-2';
 
 // KMS Key for Lambda encryption
 const kmsKey = new aws.kms.Key(`transaction-kms-${environmentSuffix}`, {
@@ -538,10 +538,23 @@ const apiDeployment = new aws.apigateway.Deployment(
   `api-deployment-${environmentSuffix}`,
   {
     restApi: api.id,
-    stageName: environmentSuffix,
   },
   {
     dependsOn: [lambdaPermission],
+  }
+);
+
+// API Gateway Stage
+const apiStage = new aws.apigateway.Stage(
+  `api-stage-${environmentSuffix}`,
+  {
+    restApi: api.id,
+    deployment: apiDeployment.id,
+    stageName: environmentSuffix,
+    tags: {
+      Name: `api-stage-${environmentSuffix}`,
+      Environment: environmentSuffix,
+    },
   }
 );
 
@@ -553,7 +566,7 @@ const usagePlan = new aws.apigateway.UsagePlan(
     apiStages: [
       {
         apiId: api.id,
-        stage: environmentSuffix,
+        stage: apiStage.stageName,
       },
     ],
     throttleSettings: {
@@ -570,7 +583,7 @@ const usagePlan = new aws.apigateway.UsagePlan(
     },
   },
   {
-    dependsOn: [apiDeployment],
+    dependsOn: [apiStage],
   }
 );
 
@@ -592,8 +605,8 @@ new aws.apigateway.UsagePlanKey(`usage-plan-key-${environmentSuffix}`, {
 });
 
 // Exports
-export const apiUrl = pulumi.interpolate`${api.executionArn}/${apiDeployment.stageName}/transaction`;
-export const apiInvokeUrl = pulumi.interpolate`https://${api.id}.execute-api.${region}.amazonaws.com/${apiDeployment.stageName}/transaction`;
+export const apiUrl = pulumi.interpolate`${api.executionArn}/${apiStage.stageName}/transaction`;
+export const apiInvokeUrl = pulumi.interpolate`https://${api.id}.execute-api.${region}.amazonaws.com/${apiStage.stageName}/transaction`;
 export const apiKeyValue = apiKey.value;
 export const transactionTableName = transactionTable.name;
 export const snsTopicArn = notificationTopic.arn;
