@@ -477,35 +477,6 @@
         "VersioningConfiguration": {
           "Status": "Enabled"
         },
-        "ReplicationConfiguration": {
-          "Role": { "Fn::GetAtt": ["S3ReplicationRole", "Arn"] },
-          "Rules": [
-            {
-              "Id": "ReplicateAll",
-              "Status": "Enabled",
-              "Priority": 1,
-              "Filter": {},
-              "Destination": {
-                "Bucket": { "Fn::Sub": "arn:aws:s3:::trading-data-${EnvironmentSuffix}-${AWS::AccountId}-replica" },
-                "ReplicationTime": {
-                  "Status": "Enabled",
-                  "Time": {
-                    "Minutes": 15
-                  }
-                },
-                "Metrics": {
-                  "Status": "Enabled",
-                  "EventThreshold": {
-                    "Minutes": 15
-                  }
-                }
-              },
-              "DeleteMarkerReplication": {
-                "Status": "Enabled"
-              }
-            }
-          ]
-        },
         "BucketEncryption": {
           "ServerSideEncryptionConfiguration": [
             {
@@ -526,27 +497,6 @@
             "Key": "Name",
             "Value": { "Fn::Sub": "trading-data-${EnvironmentSuffix}" }
           }
-        ]
-      }
-    },
-    "S3ReplicationRole": {
-      "Type": "AWS::IAM::Role",
-      "Properties": {
-        "RoleName": { "Fn::Sub": "trading-s3-replication-role-${EnvironmentSuffix}" },
-        "AssumeRolePolicyDocument": {
-          "Version": "2012-10-17",
-          "Statement": [
-            {
-              "Effect": "Allow",
-              "Principal": {
-                "Service": "s3.amazonaws.com"
-              },
-              "Action": "sts:AssumeRole"
-            }
-          ]
-        },
-        "ManagedPolicyArns": [
-          "arn:aws:iam::aws:policy/AmazonS3FullAccess"
         ]
       }
     },
