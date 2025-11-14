@@ -2,7 +2,7 @@
 
 This implementation creates a production-grade, highly available web application infrastructure for financial services transaction processing across 3 availability zones in us-east-1.
 
-## File: lib/template.json
+## File: lib/TapStack.json
 
 ```json
 {
@@ -1333,7 +1333,7 @@ The template supports blue-green deployments through:
 ```bash
 aws cloudformation create-stack \
   --stack-name financial-app-prod \
-  --template-body file://template.json \
+  --template-body file://lib/TapStack.json \
   --parameters \
     ParameterKey=EnvironmentSuffix,ParameterValue=prod \
     ParameterKey=Environment,ParameterValue=production \

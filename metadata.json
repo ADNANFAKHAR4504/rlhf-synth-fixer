@@ -1,13 +1,15 @@
 {
   "task_id": "101912468",
   "po_id": "101912468",
-  "platform": "CloudFormation",
-  "language": "JSON",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-13T10:14:59.681699Z",
   "subtask": "AWS CloudFormation",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
   "subject_labels": [
     "aws",
     "infrastructure",
