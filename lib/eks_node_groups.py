@@ -18,15 +18,6 @@ class EksNodeGroups(Construct):
                 "http_tokens": "required",  # IMDSv2
                 "http_put_response_hop_limit": 1
             },
-            block_device_mappings=[{
-                "device_name": "/dev/xvda",
-                "ebs": {
-                    "volume_size": 20,
-                    "volume_type": "gp3",
-                    "encrypted": "true",
-                    "delete_on_termination": "true"
-                }
-            }],
             monitoring={
                 "enabled": True
             },
@@ -45,15 +36,6 @@ class EksNodeGroups(Construct):
                 "http_tokens": "required",  # IMDSv2
                 "http_put_response_hop_limit": 1
             },
-            block_device_mappings=[{
-                "device_name": "/dev/xvda",
-                "ebs": {
-                    "volume_size": 20,
-                    "volume_type": "gp3",
-                    "encrypted": "true",
-                    "delete_on_termination": "true"
-                }
-            }],
             monitoring={
                 "enabled": True
             },
@@ -77,6 +59,7 @@ class EksNodeGroups(Construct):
             instance_types=["t4g.large"],
             capacity_type="ON_DEMAND",
             ami_type="AL2_ARM_64",
+            disk_size=20,
             launch_template={
                 "id": critical_lt.id,
                 "version": "$Latest"
@@ -103,6 +86,7 @@ class EksNodeGroups(Construct):
             instance_types=["t4g.medium"],
             capacity_type="SPOT",
             ami_type="AL2_ARM_64",
+            disk_size=20,
             launch_template={
                 "id": non_critical_lt.id,
                 "version": "$Latest"
