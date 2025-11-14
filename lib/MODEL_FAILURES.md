@@ -2,6 +2,8 @@
 
 This document details all the fixes and improvements made from MODEL_RESPONSE to IDEAL_RESPONSE.
 
+**Note**: The implementation has been updated to create complete VPC infrastructure (VPC, subnets, IGW, NAT Gateway) rather than accepting VPC parameters. This provides a fully self-contained infrastructure deployment.
+
 ## Critical Security Failures Fixed
 
 ### 1. Private Endpoint Access Configuration

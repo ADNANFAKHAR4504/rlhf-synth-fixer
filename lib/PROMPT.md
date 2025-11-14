@@ -44,9 +44,12 @@ Your organization is expanding its microservices architecture and needs a manage
 - Ensure roles follow AWS security best practices
 
 ### 7. Networking
+- Create VPC with CIDR 10.0.0.0/16
+- Create 3 public subnets and 3 private subnets across different availability zones
+- Deploy Internet Gateway for public subnet connectivity
+- Deploy NAT Gateway in public subnet for private subnet egress
 - All worker nodes must be deployed in private subnets only
-- Ensure egress traffic routes through NAT gateways
-- Configure appropriate security groups for cluster and node communication
+- Configure appropriate route tables and security groups for cluster and node communication
 
 ## Technical Constraints
 
@@ -62,25 +65,26 @@ Your organization is expanding its microservices architecture and needs a manage
 
 ## Environment
 
-Production-grade EKS cluster deployment in eu-central-1 region using CloudFormation YAML. Requires existing VPC with at least 3 private subnets across different availability zones. AWS CLI must be configured with appropriate permissions for EKS, EC2, IAM, and KMS services. The infrastructure includes EKS control plane, managed node groups with Graviton2 instances, OIDC provider for IRSA, KMS key for secrets encryption, and CloudWatch Container Insights for monitoring. All components deployed within private subnets with egress through NAT gateways.
+Production-grade EKS cluster deployment in eu-central-1 region using CloudFormation YAML. Creates complete VPC infrastructure with public and private subnets across 3 availability zones. AWS CLI must be configured with appropriate permissions for EKS, EC2, IAM, VPC, and KMS services. The infrastructure includes VPC with IGW and NAT Gateway, EKS control plane, managed node groups with Graviton2 instances, OIDC provider for IRSA, KMS key for secrets encryption, and CloudWatch Container Insights for monitoring. All worker nodes deployed within private subnets with egress through NAT gateways.
 
 ## Expected Deliverables
 
 1. Complete CloudFormation YAML template (lib/TapStack.yml) that provisions:
+   - VPC with public and private subnets across 3 availability zones
+   - Internet Gateway and NAT Gateway for connectivity
    - Amazon EKS cluster with private endpoint access
    - KMS key for secrets encryption
    - OIDC identity provider
    - Managed node group with Graviton2 instances
    - Auto-scaling configuration
    - CloudWatch Container Insights
-   - All necessary IAM roles and policies
+   - All necessary IAM roles, policies, and security groups
 
 2. CloudFormation Parameters:
    - EnvironmentSuffix (for resource naming)
-   - VPC ID
-   - Private subnet IDs (minimum 3)
    - Kubernetes version (default: 1.28)
    - Node instance type (default: t4g.medium)
+   - Min/Max/Desired node counts for auto-scaling
 
 3. CloudFormation Outputs:
    - EKS cluster endpoint
