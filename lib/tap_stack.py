@@ -680,7 +680,7 @@ def handler(event, context):
         rds_instance = DbInstance(
             self,
             "rds-postgresql",
-            identifier=f"payment-db-{environment_suffix}",
+            identifier=f"payment-db-{environment_suffix}-xy",
             engine="postgres",
             engine_version="17.4",
             instance_class="db.t3.micro",
@@ -697,7 +697,7 @@ def handler(event, context):
             skip_final_snapshot=True,
             tags={
                 **common_tags,
-                "Name": f"payment-db-{environment_suffix}",
+                "Name": f"payment-db-{environment_suffix}-xy",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
