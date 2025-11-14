@@ -25,5 +25,11 @@
     "IAM"
   ],
   "training_quality": 9,
-  "background": "Enterprise-grade TAP stack implementation requiring secure, highly available web application infrastructure on AWS with comprehensive security, encryption, monitoring, and compliance features including multi-AZ deployment, KMS encryption, AWS Config tracking, and proper IAM least privilege implementation."
+  "background": "Enterprise-grade TAP stack implementation requiring secure, highly available web application infrastructure on AWS with comprehensive security, encryption, monitoring, and compliance features including multi-AZ deployment, KMS encryption, AWS Config tracking, and proper IAM least privilege implementation.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
 }
