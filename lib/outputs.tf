@@ -143,4 +143,14 @@ output "database_secret_name" {
   description = "Name of the database credentials secret consumed by workloads."
   value       = local.database_secret_name
 }
+
+output "frontend_service_name" {
+  description = "ClusterIP service fronting the payments frontend workload."
+  value       = kubernetes_service.frontend.metadata[0].name
+}
+
+output "backend_service_name" {
+  description = "ClusterIP service fronting the payments backend workload."
+  value       = kubernetes_service.backend.metadata[0].name
+}
  

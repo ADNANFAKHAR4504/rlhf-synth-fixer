@@ -17,6 +17,8 @@ import { GetTopicAttributesCommand, SNSClient } from "@aws-sdk/client-sns";
 import fs from "fs";
 import path from "path";
 
+import { buildServiceUrl } from "../lib/app-config";
+
 const outputsPath = path.resolve(__dirname, "../cfn-outputs/all-outputs.json");
 const isCI = process.env.CI === "true";
 
@@ -183,6 +185,8 @@ describe("Payments EKS stack integration", () => {
     const kmsKeyArn: string = outputs!.kms_key_arn;
     const topicArn: string = outputs!.alerts_topic_arn;
     const secretName: string = outputs!.database_secret_name;
+    const frontendService: string = outputs!.frontend_service_name;
+    const backendService: string = outputs!.backend_service_name;
 
     const logGroupResponse = await logs.send(
       new DescribeLogGroupsCommand({ logGroupNamePrefix: logGroupName, limit: 1 }),
@@ -208,6 +212,19 @@ describe("Payments EKS stack integration", () => {
       new GetTopicAttributesCommand({ TopicArn: topicArn }),
     );
     expect(topicResponse.Attributes?.TopicArn).toBe(topicArn);
+
+    expect(frontendService).toMatch(/^payments-frontend-svc-/);
+    expect(backendService).toMatch(/^payments-backend-svc-/);
+
+    const expectedFrontendUrl = buildServiceUrl({
+      name: "payments-frontend-svc",
+      namespace: outputs!.payments_namespace,
+      port: 80,
+      environmentSuffix: outputs!.environment_suffix,
+    });
+    expect(expectedFrontendUrl).toContain(
+      `${frontendService}.${outputs!.payments_namespace}`,
+    );
   });
 
   test("IRSA roles trust Kubernetes service accounts", async () => {

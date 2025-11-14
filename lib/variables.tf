@@ -7,6 +7,7 @@ variable "aws_region" {
 variable "environment_suffix" {
   description = "Unique suffix appended to resource names and tags to ensure environment isolation."
   type        = string
+  default     = "prod"
 }
 
 variable "cluster_name_prefix" {
