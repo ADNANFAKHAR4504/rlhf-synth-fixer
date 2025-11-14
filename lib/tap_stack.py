@@ -237,8 +237,8 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Database Parameter Group
-        # Note: Only specify apply_method for static parameters (pending-reboot)
-        # Dynamic parameters will use immediate apply by default
+        # Note: Use ignore_changes to prevent parameter updates after initial creation
+        # This avoids conflicts when AWS detects static vs dynamic parameter mismatches
         self.parameter_group = aws.rds.ParameterGroup(
             f"postgres-params-{self.environment_suffix}",
             name=f"postgres15-replication-{self.environment_suffix}",
@@ -260,9 +260,11 @@ class TapStack(pulumi.ComponentResource):
                     name="max_wal_senders",
                     value="10"
                 ),
+                # wal_keep_size may be static in PostgreSQL 15, set to pending-reboot to be safe
                 aws.rds.ParameterGroupParameterArgs(
                     name="wal_keep_size",
-                    value="1024"
+                    value="1024",
+                    apply_method="pending-reboot"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="log_statement",
@@ -277,7 +279,11 @@ class TapStack(pulumi.ComponentResource):
                 "Name": f"postgres-params-{self.environment_suffix}",
                 "Environment": self.environment_suffix
             },
-            opts=ResourceOptions(provider=self.primary_provider, parent=self)
+            opts=ResourceOptions(
+                provider=self.primary_provider,
+                parent=self,
+                ignore_changes=["parameters"]  # Prevent parameter updates after initial creation
+            )
         )
 
         # Secrets Manager for database credentials
