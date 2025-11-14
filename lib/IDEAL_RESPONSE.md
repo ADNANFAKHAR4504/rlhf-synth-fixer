@@ -28,9 +28,7 @@ The template creates a complete production-ready infrastructure including:
           "Label": {
             "default": "Environment Configuration"
           },
-          "Parameters": [
-            "EnvironmentSuffix"
-          ]
+          "Parameters": ["EnvironmentSuffix"]
         },
         {
           "Label": {
@@ -346,10 +344,7 @@ The template creates a complete production-ready infrastructure including:
       "DeletionPolicy": "Delete",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": [
-            "NatGateway1EIP",
-            "AllocationId"
-          ]
+          "Fn::GetAtt": ["NatGateway1EIP", "AllocationId"]
         },
         "SubnetId": {
           "Ref": "PublicSubnet1"
@@ -369,10 +364,7 @@ The template creates a complete production-ready infrastructure including:
       "DeletionPolicy": "Delete",
       "Properties": {
         "AllocationId": {
-          "Fn::GetAtt": [
-            "NatGateway2EIP",
-            "AllocationId"
-          ]
+          "Fn::GetAtt": ["NatGateway2EIP", "AllocationId"]
         },
         "SubnetId": {
           "Ref": "PublicSubnet2"
@@ -787,9 +779,7 @@ The template creates a complete production-ready infrastructure including:
           "Fn::Sub": "fargate-task-${EnvironmentSuffix}"
         },
         "NetworkMode": "awsvpc",
-        "RequiresCompatibilities": [
-          "FARGATE"
-        ],
+        "RequiresCompatibilities": ["FARGATE"],
         "Cpu": {
           "Ref": "TaskCpu"
         },
@@ -797,16 +787,10 @@ The template creates a complete production-ready infrastructure including:
           "Ref": "TaskMemory"
         },
         "ExecutionRoleArn": {
-          "Fn::GetAtt": [
-            "ECSTaskExecutionRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["ECSTaskExecutionRole", "Arn"]
         },
         "TaskRoleArn": {
-          "Fn::GetAtt": [
-            "ECSTaskRole",
-            "Arn"
-          ]
+          "Fn::GetAtt": ["ECSTaskRole", "Arn"]
         },
         "ContainerDefinitions": [
           {
@@ -965,10 +949,7 @@ The template creates a complete production-ready infrastructure including:
     "ALBDNSName": {
       "Description": "DNS name of the Application Load Balancer",
       "Value": {
-        "Fn::GetAtt": [
-          "ApplicationLoadBalancer",
-          "DNSName"
-        ]
+        "Fn::GetAtt": ["ApplicationLoadBalancer", "DNSName"]
       },
       "Export": {
         "Name": {
@@ -990,10 +971,7 @@ The template creates a complete production-ready infrastructure including:
     "ECSServiceName": {
       "Description": "Name of the ECS Service",
       "Value": {
-        "Fn::GetAtt": [
-          "ECSService",
-          "Name"
-        ]
+        "Fn::GetAtt": ["ECSService", "Name"]
       },
       "Export": {
         "Name": {
@@ -1014,6 +992,7 @@ The template creates a complete production-ready infrastructure including:
 ## Key Features
 
 ### 1. Networking (Multi-AZ)
+
 - **VPC**: Isolated network with customizable CIDR block
 - **Public Subnets**: 2 subnets across different AZs for ALB
 - **Private Subnets**: 2 subnets across different AZs for ECS tasks
@@ -1021,29 +1000,34 @@ The template creates a complete production-ready infrastructure including:
 - **Internet Gateway**: For public internet access
 
 ### 2. Load Balancing
+
 - **Application Load Balancer**: Distributes traffic across ECS tasks
 - **Target Group**: IP-based targeting for Fargate tasks
 - **Health Checks**: Monitors task health on HTTP endpoint
 - **Listener**: Routes HTTP traffic on port 80
 
 ### 3. ECS Fargate
+
 - **Cluster**: Manages container orchestration with Container Insights enabled
 - **Task Definition**: Defines container specifications (CPU, memory, image)
 - **Service**: Maintains desired count of tasks with ALB integration
 - **Launch Type**: FARGATE for serverless container execution
 
 ### 4. Security
+
 - **ALB Security Group**: Allows HTTP (80) from internet, egress to tasks
 - **ECS Task Security Group**: Only accepts traffic from ALB
 - **IAM Roles**: Separate execution and task roles with least privilege
 - **Private Subnets**: Tasks run in private subnets with no direct internet access
 
 ### 5. Monitoring & Logging
+
 - **CloudWatch Logs**: Centralized container log aggregation
 - **Container Insights**: Enhanced monitoring for ECS cluster
 - **Log Retention**: 7 days to balance cost and compliance
 
 ### 6. High Availability
+
 - **Multi-AZ Deployment**: Resources spread across 2 availability zones
 - **Multiple Task Replicas**: Minimum 2 tasks ensure redundancy
 - **ALB Health Checks**: Automatic task replacement on failure
@@ -1051,33 +1035,33 @@ The template creates a complete production-ready infrastructure including:
 
 ## Parameters
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| EnvironmentSuffix | Suffix for all resource names | dev |
-| VpcCIDR | VPC CIDR block | 10.0.0.0/16 |
-| PublicSubnet1CIDR | Public subnet 1 CIDR | 10.0.1.0/24 |
-| PublicSubnet2CIDR | Public subnet 2 CIDR | 10.0.2.0/24 |
-| PrivateSubnet1CIDR | Private subnet 1 CIDR | 10.0.11.0/24 |
-| PrivateSubnet2CIDR | Private subnet 2 CIDR | 10.0.12.0/24 |
-| ContainerImage | Docker image to deploy | nginx:latest |
-| ContainerPort | Container listening port | 80 |
-| TaskCpu | CPU units for task | 256 |
-| TaskMemory | Memory in MB for task | 512 |
-| DesiredCount | Number of task replicas | 2 |
+| Parameter          | Description                   | Default      |
+| ------------------ | ----------------------------- | ------------ |
+| EnvironmentSuffix  | Suffix for all resource names | dev          |
+| VpcCIDR            | VPC CIDR block                | 10.0.0.0/16  |
+| PublicSubnet1CIDR  | Public subnet 1 CIDR          | 10.0.1.0/24  |
+| PublicSubnet2CIDR  | Public subnet 2 CIDR          | 10.0.2.0/24  |
+| PrivateSubnet1CIDR | Private subnet 1 CIDR         | 10.0.11.0/24 |
+| PrivateSubnet2CIDR | Private subnet 2 CIDR         | 10.0.12.0/24 |
+| ContainerImage     | Docker image to deploy        | nginx:latest |
+| ContainerPort      | Container listening port      | 80           |
+| TaskCpu            | CPU units for task            | 256          |
+| TaskMemory         | Memory in MB for task         | 512          |
+| DesiredCount       | Number of task replicas       | 2            |
 
 ## Outputs
 
-| Output | Description |
-|--------|-------------|
-| VpcId | VPC identifier |
-| PublicSubnet1Id | Public subnet 1 identifier |
-| PublicSubnet2Id | Public subnet 2 identifier |
+| Output           | Description                 |
+| ---------------- | --------------------------- |
+| VpcId            | VPC identifier              |
+| PublicSubnet1Id  | Public subnet 1 identifier  |
+| PublicSubnet2Id  | Public subnet 2 identifier  |
 | PrivateSubnet1Id | Private subnet 1 identifier |
 | PrivateSubnet2Id | Private subnet 2 identifier |
-| ALBDNSName | Load balancer DNS name |
-| ECSClusterName | ECS cluster name |
-| ECSServiceName | ECS service name |
-| ApplicationURL | Full application URL |
+| ALBDNSName       | Load balancer DNS name      |
+| ECSClusterName   | ECS cluster name            |
+| ECSServiceName   | ECS service name            |
+| ApplicationURL   | Full application URL        |
 
 ## Deployment
 
@@ -1106,6 +1090,7 @@ aws cloudformation describe-stacks \
 ## Cost Considerations
 
 The template creates several billable resources:
+
 - **NAT Gateways**: ~$0.045/hour each (2 total)
 - **ALB**: ~$0.0225/hour + data processing
 - **ECS Fargate**: Based on vCPU and memory (2 tasks minimum)
