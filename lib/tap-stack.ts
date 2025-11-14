@@ -108,6 +108,12 @@ export class TapStack extends cdk.Stack {
     });
 
     const container = taskDefinition.addContainer('Container', {
+      // NOTE: This references 'latest' tag. Before scaling up the service,
+      // ensure you have pushed a Docker image to the ECR repository:
+      // 1. Build: docker build -t tap-repo-${environmentSuffix} .
+      // 2. Tag: docker tag tap-repo-${environmentSuffix}:latest <ecr-uri>:latest
+      // 3. Push: docker push <ecr-uri>:latest
+      // For production, consider using a specific tag (e.g., 'v1') instead of 'latest'
       image: ecs.ContainerImage.fromEcrRepository(ecrRepository, 'latest'),
       logging: ecs.LogDrivers.awsLogs({
         logGroup: logGroup,
@@ -198,12 +204,17 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 ECS Service Configuration
+    // IMPORTANT: Service starts with desiredCount: 0 to allow stack deployment
+    // even when ECR image doesn't exist yet. After pushing an image to ECR:
+    // 1. Verify image exists: aws ecr list-images --repository-name tap-repo-${environmentSuffix}
+    // 2. Scale up service: aws ecs update-service --cluster tap-cluster-${environmentSuffix} --service tap-service-${environmentSuffix} --desired-count 2
+    // Or use CodeDeploy for blue/green deployment once image is available
     const service = new ecs.FargateService(this, 'Service', {
       serviceName: `tap-service-${environmentSuffix}`,
       cluster: cluster,
       taskDefinition: taskDefinition,
-      desiredCount: 2,
-      minHealthyPercent: 100,
+      desiredCount: 0, // Start with 0 - prevents deployment failure when ECR image is missing
+      minHealthyPercent: 0, // Allow 0% during initial deployment
       maxHealthyPercent: 200,
       vpcSubnets: {
         subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
@@ -211,6 +222,7 @@ export class TapStack extends cdk.Stack {
       deploymentController: {
         type: ecs.DeploymentControllerType.CODE_DEPLOY,
       },
+      healthCheckGracePeriod: cdk.Duration.seconds(300), // Extended grace period for container startup
     });
 
     service.attachToApplicationTargetGroup(blueTargetGroup);
@@ -266,7 +278,7 @@ export class TapStack extends cdk.Stack {
 
     // 🔹 Auto Scaling Configuration
     const scalingTarget = service.autoScaleTaskCount({
-      minCapacity: 2,
+      minCapacity: 0, // Start with 0, can be increased after image is pushed
       maxCapacity: 10,
     });
 

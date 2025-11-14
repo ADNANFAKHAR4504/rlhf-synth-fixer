@@ -1,109 +1,66 @@
----
+I need to set up an ECS Fargate infrastructure for our trading analytics application. We're running into issues with downtime during deployments, and the team wants to implement blue/green deployments to eliminate that.
 
-#### **Prompt:**
+Here's what we're working with: a containerized application that processes real-time market data. It needs to stay up 24/7, so we can't afford any downtime when we push updates. We've decided to go with ECS Fargate since we don't want to manage servers ourselves.
 
-> You are a senior AWS CDK engineer specializing in **ECS Fargate blue/green deployments** for high-availability financial systems using **TypeScript (CDK v2)**.
-> Analyze the spec and produce a **complete CDK application** that deploys a fully automated ECS Fargate infrastructure with **zero-downtime updates** via CodeDeploy, ECR integration, auto-scaling, and observability through CloudWatch and Container Insights.
->
-> **Deliverables**
->
-> * `main.ts` — CDK app entrypoint defining environment, stack instantiation, and tagging.
-> * `tapstack.ts` — Full stack including VPC, ECS cluster, ECR repo, ALB setup, task definition, ECS service, CodeDeploy configuration, auto-scaling, and monitoring — all properly wired.
->
-> ---
->
-> ### 📘 Input Specification
->
-> ```json
-> {
->   "problem": "Create a CDK program to deploy a containerized trading analytics application on ECS Fargate with blue/green deployment capabilities. The configuration must: 1. Define a VPC with 3 availability zones, each containing public and private subnets. 2. Create an ECS cluster optimized for Fargate workloads with Container Insights enabled. 3. Set up an ECR repository with image scanning on push and lifecycle policies to retain only the last 10 images. 4. Define an ECS task definition with 2GB memory, 1024 CPU units, and CloudWatch log driver configuration. 5. Configure an Application Load Balancer with health check endpoints and two target groups for blue/green switching. 6. Create an ECS service with CodeDeploy integration for blue/green deployments and 5-minute deployment timeout. 7. Implement auto-scaling policies that scale out at 70% CPU utilization and scale in at 30%. 8. Set up CloudWatch alarms for high CPU usage (>80%), unhealthy task count, and deployment failures. 9. Configure IAM roles with least-privilege access for ECS task execution and CodeDeploy operations. 10. Output the ALB DNS name, ECR repository URI, and CodeDeploy application name for CI/CD integration.",
->   "background": "A financial services company needs to deploy their trading analytics application with zero-downtime deployments to meet strict SLA requirements. The application processes real-time market data and must maintain continuous availability during updates. They've chosen ECS Fargate for container orchestration to eliminate infrastructure management overhead.",
->   "environment": "Production ECS Fargate cluster deployed in us-east-1 across 3 availability zones. Infrastructure includes Application Load Balancer for traffic distribution, ECR for container registry, CodeDeploy for blue/green deployments, and CloudWatch for monitoring. VPC configured with public subnets for ALB and private subnets for ECS tasks. NAT Gateways provide outbound internet access for containers. Requires CDK 2.x with TypeScript, Docker installed for local testing, and AWS CLI configured with appropriate permissions for ECS, ECR, CodeDeploy, and networking resources.",
->   "constraints": [
->     "Use TypeScript as the CDK implementation language",
->     "Deploy only in us-east-1 region for low-latency access to market data feeds",
->     "Implement blue/green deployments using CodeDeploy for zero-downtime updates",
->     "Use Application Load Balancer with target group switching for traffic management",
->     "Configure ECS service auto-scaling based on CPU utilization (scale between 2-10 tasks)",
->     "Store container images in ECR with vulnerability scanning enabled",
->     "Implement health checks with 30-second intervals and 2 consecutive failures threshold",
->     "Use Fargate Spot for non-production environments to reduce costs by 70%",
->     "Configure CloudWatch Container Insights for detailed container metrics",
->     "Set memory limits to 2GB and CPU to 1024 units per container"
->   ]
-> }
-> ```
->
-> ---
->
-> ### 🧩 Output Requirements
->
-> 1. Use **AWS CDK v2 (TypeScript)** modules:
->
->    * `aws-ec2`, `aws-ecs`, `aws-ecr`, `aws-ecs-patterns` (optional), `aws-elasticloadbalancingv2`, `aws-codedeploy`, `aws-cloudwatch`, `aws-cloudwatch-actions`, `aws-iam`, `aws-logs`.
-> 2. Implement and correctly **wire** all components:
->
->    * **VPC**
->
->      * 3 AZs, public and private subnets; NAT gateways for private subnets; tagging for clarity.
->    * **ECS Cluster**
->
->      * Fargate-only cluster in `us-east-1`; **Container Insights enabled**; logging with retention policy.
->    * **ECR Repository**
->
->      * Image scanning on push; lifecycle policy retaining **10 images max**; repository URI output.
->    * **Task Definition**
->
->      * 2GB memory, 1024 CPU; container using CloudWatch log driver (with log retention = 30 days).
->      * Env vars, health check endpoint `/health`, and secrets from SSM (placeholder).
->    * **Application Load Balancer (ALB)**
->
->      * Public-facing; 2 **target groups** (`blue` and `green`); 30s health checks; 2 consecutive failure threshold.
->      * Listener rules route all traffic initially to blue; CodeDeploy swaps on deployment.
->    * **ECS Service + CodeDeploy**
->
->      * Service configured for **blue/green deployment** with `CodeDeployEcsApplication` and `EcsDeploymentGroup`.
->      * 5-minute deployment timeout; rollback on failure.
->      * Minimum healthy percent 100%, maximum 200%.
->    * **Auto Scaling**
->
->      * Min 2 tasks, max 10 tasks; scale-out at 70% CPU, scale-in at 30%.
->    * **CloudWatch Monitoring**
->
->      * Alarms:
->
->        * CPU > 80% (scale-out alert).
->        * Unhealthy tasks > 0.
->        * Deployment failure events.
->      * SNS topic (optional) for alarms.
->      * Container Insights metrics enabled.
->    * **IAM Roles**
->
->      * ECS task execution role (pull from ECR, write to CW logs).
->      * CodeDeploy service role (allow ECS, ALB, CloudWatch interactions).
-> 3. **Optional Enhancements:**
->
->    * Use **Fargate Spot** for staging/non-prod tasks to cut costs by ~70%.
->    * Add **CloudWatch Dashboard** visualizing CPU, memory, task count, and deployment health.
-> 4. Global Tags: `Environment=Production`, `Service=TradingAnalytics`, `ManagedBy=CDK`.
-> 5. CDK Outputs:
->
->    * ALB DNS name
->    * ECR repository URI
->    * CodeDeploy application name
-> 6. Inline section comments:
->    `// 🔹 VPC`, `// 🔹 ECS Cluster`, `// 🔹 ECR`, `// 🔹 Task Definition`, `// 🔹 ALB`, `// 🔹 CodeDeploy`, `// 🔹 Auto Scaling`, `// 🔹 Monitoring`.
-> 7. Output **only two files** — `main.ts` and `tapstack.ts` — in fenced code blocks.
->
-> ---
->
-> ### 🎯 Goal
->
-> Deliver a **zero-downtime ECS Fargate deployment system** that:
->
-> * Enables **blue/green switching** via CodeDeploy
-> * Supports **automatic rollback and scaling**
-> * Provides **observability and alerting** via CloudWatch and Container Insights
-> * Uses **ECR scanning, health checks, and IAM hardening** for operational resilience
+The infrastructure needs to be deployed in us-east-1 because that's where our market data feeds are, and latency matters for this use case. We need it spread across 3 availability zones for redundancy.
 
----
+Here's the breakdown of what I need:
+
+**Networking:**
+- A VPC with 3 availability zones
+- Public subnets for the load balancer
+- Private subnets for the ECS tasks
+- NAT gateways so containers can pull images and make outbound calls
+
+**Container Infrastructure:**
+- An ECS cluster set up for Fargate workloads
+- Container Insights enabled so we can see what's happening inside the containers
+- An ECR repository to store our Docker images
+- Image scanning on push to catch vulnerabilities early
+- Lifecycle policy to keep only the last 10 images (we don't need to keep everything)
+
+**Application Configuration:**
+- Task definition with 2GB memory and 1024 CPU units
+- CloudWatch logging configured with 30-day retention
+- Health check endpoint at /health
+- Container listening on port 8080
+
+**Load Balancing:**
+- Application Load Balancer that's internet-facing
+- Two target groups (blue and green) for the blue/green switching
+- Health checks every 30 seconds, 2 consecutive failures before marking unhealthy
+- Initially route traffic to the blue target group
+
+**Deployment:**
+- ECS service integrated with CodeDeploy for blue/green deployments
+- 5-minute timeout for deployments
+- Automatic rollback if something goes wrong
+- Service should start with 0 tasks initially (we'll push the image separately)
+
+**Scaling:**
+- Auto-scaling between 2 and 10 tasks
+- Scale out when CPU hits 70%
+- Scale in when CPU drops below 30%
+- Cooldown periods to prevent thrashing
+
+**Monitoring:**
+- Alarm when CPU usage goes above 80%
+- Alarm when we have unhealthy tasks
+- Alarm when deployments fail
+- SNS topic to send notifications
+- All alarms should trigger notifications
+
+**Security:**
+- IAM roles with least privilege
+- Task execution role that can pull from ECR and write to CloudWatch
+- CodeDeploy role with permissions to manage ECS and ALB
+- Security groups restricting traffic appropriately
+
+**Outputs:**
+- ALB DNS name (so we know where to point our domain)
+- ECR repository URI (for CI/CD to push images)
+- CodeDeploy application name (for deployment automation)
+
+I'm using AWS CDK v2 with TypeScript. The stack should be named TapStack, and I need to support an environment suffix (like 'dev', 'staging', 'prod') that gets added to resource names.
+
+Can you help me build this out? I want to make sure everything is wired together correctly and follows AWS best practices.
