@@ -34,8 +34,100 @@ export class NodeGroupsStack extends pulumi.ComponentResource {
       tags,
     } = args;
 
-    // Note: Using EKS-optimized AMI (default) instead of custom AMI
-    // to avoid user data configuration issues with Bottlerocket
+    // Create custom launch template for general workloads with Bottlerocket AMI
+    // Includes encrypted EBS volumes (gp3), IMDSv2 enforcement, and security best practices
+    const generalLaunchTemplate = new aws.ec2.LaunchTemplate(
+      `eks-general-lt-${environmentSuffix}`,
+      {
+        namePrefix: `eks-general-${environmentSuffix}-`,
+        blockDeviceMappings: [
+          {
+            deviceName: '/dev/xvda',
+            ebs: {
+              volumeSize: 100,
+              volumeType: 'gp3',
+              iops: 3000,
+              throughput: 125,
+              encrypted: true,
+              deleteOnTermination: true,
+            },
+          },
+        ],
+        metadataOptions: {
+          httpTokens: 'required', // Enforce IMDSv2
+          httpPutResponseHopLimit: 1,
+          httpEndpoint: 'enabled',
+        },
+        monitoring: {
+          enabled: true,
+        },
+        tagSpecifications: [
+          {
+            resourceType: 'instance',
+            tags: pulumi.all([tags]).apply(([t]) => ({
+              ...t,
+              Name: `eks-general-node-${environmentSuffix}`,
+              NodeGroup: 'general',
+            })),
+          },
+          {
+            resourceType: 'volume',
+            tags: pulumi.all([tags]).apply(([t]) => ({
+              ...t,
+              Name: `eks-general-volume-${environmentSuffix}`,
+            })),
+          },
+        ],
+      },
+      { parent: this }
+    );
+
+    // Create custom launch template for compute workloads with Bottlerocket AMI
+    const computeLaunchTemplate = new aws.ec2.LaunchTemplate(
+      `eks-compute-lt-${environmentSuffix}`,
+      {
+        namePrefix: `eks-compute-${environmentSuffix}-`,
+        blockDeviceMappings: [
+          {
+            deviceName: '/dev/xvda',
+            ebs: {
+              volumeSize: 100,
+              volumeType: 'gp3',
+              iops: 3000,
+              throughput: 125,
+              encrypted: true,
+              deleteOnTermination: true,
+            },
+          },
+        ],
+        metadataOptions: {
+          httpTokens: 'required', // Enforce IMDSv2
+          httpPutResponseHopLimit: 1,
+          httpEndpoint: 'enabled',
+        },
+        monitoring: {
+          enabled: true,
+        },
+        tagSpecifications: [
+          {
+            resourceType: 'instance',
+            tags: pulumi.all([tags]).apply(([t]) => ({
+              ...t,
+              Name: `eks-compute-node-${environmentSuffix}`,
+              NodeGroup: 'compute',
+            })),
+          },
+          {
+            resourceType: 'volume',
+            tags: pulumi.all([tags]).apply(([t]) => ({
+              ...t,
+              Name: `eks-compute-volume-${environmentSuffix}`,
+            })),
+          },
+        ],
+      },
+      { parent: this }
+    );
 
     // Create security group for nodes
     const nodeSecurityGroup = new aws.ec2.SecurityGroup(
@@ -98,11 +190,8 @@ export class NodeGroupsStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Note: Removed custom launch templates to use EKS-managed configuration
-    // with default EKS-optimized AMI. Custom launch templates with Bottlerocket
-    // require complex user data configuration for cluster joining.
-
-    // Create general workloads node group
+    // Create general workloads node group with Bottlerocket AMI
+    // Uses custom launch template for encrypted EBS volumes and IMDSv2
     const generalNodeGroup = new aws.eks.NodeGroup(
       `eks-general-ng-${environmentSuffix}`,
       {
@@ -111,14 +200,23 @@ export class NodeGroupsStack extends pulumi.ComponentResource {
         nodeRoleArn: nodeRole.apply(r => r.arn),
         subnetIds: privateSubnetIds,
         instanceTypes: ['t3.large'],
-        diskSize: 100,
+        amiType: 'BOTTLEROCKET_x86_64', // Use Bottlerocket AMI for enhanced security
+        capacityType: 'ON_DEMAND',
+        launchTemplate: {
+          id: generalLaunchTemplate.id,
+          version: generalLaunchTemplate.latestVersion.apply(v => v.toString()),
+        },
         scalingConfig: {
           minSize: 2,
           maxSize: 10,
           desiredSize: 2,
         },
+        updateConfig: {
+          maxUnavailable: 1,
+        },
         labels: {
           workload: 'general',
+          'bottlerocket.aws/platform': 'aws-k8s',
         },
         tags: pulumi.all([tags, clusterName]).apply(([t, cn]) => ({
           ...t,
@@ -126,12 +224,14 @@ export class NodeGroupsStack extends pulumi.ComponentResource {
           [`k8s.io/cluster-autoscaler/${cn}`]: 'owned',
           'k8s.io/cluster-autoscaler/node-template/label/workload': 'general',
           priority: '10',
+          AMI: 'Bottlerocket',
         })),
       },
       { parent: this }
     );
 
-    // Create compute-intensive workloads node group
+    // Create compute-intensive workloads node group with Bottlerocket AMI
+    // Uses custom launch template for encrypted EBS volumes and IMDSv2
     const computeNodeGroup = new aws.eks.NodeGroup(
       `eks-compute-ng-${environmentSuffix}`,
       {
@@ -140,14 +240,23 @@ export class NodeGroupsStack extends pulumi.ComponentResource {
         nodeRoleArn: nodeRole.apply(r => r.arn),
         subnetIds: privateSubnetIds,
         instanceTypes: ['c5.2xlarge'],
-        diskSize: 100,
+        amiType: 'BOTTLEROCKET_x86_64', // Use Bottlerocket AMI for enhanced security
+        capacityType: 'ON_DEMAND',
+        launchTemplate: {
+          id: computeLaunchTemplate.id,
+          version: computeLaunchTemplate.latestVersion.apply(v => v.toString()),
+        },
         scalingConfig: {
           minSize: 1,
           maxSize: 5,
           desiredSize: 1,
         },
+        updateConfig: {
+          maxUnavailable: 1,
+        },
         labels: {
           workload: 'compute',
+          'bottlerocket.aws/platform': 'aws-k8s',
         },
         tags: pulumi.all([tags, clusterName]).apply(([t, cn]) => ({
           ...t,
@@ -155,6 +264,7 @@ export class NodeGroupsStack extends pulumi.ComponentResource {
           [`k8s.io/cluster-autoscaler/${cn}`]: 'owned',
           'k8s.io/cluster-autoscaler/node-template/label/workload': 'compute',
           priority: '5',
+          AMI: 'Bottlerocket',
         })),
       },
       { parent: this }

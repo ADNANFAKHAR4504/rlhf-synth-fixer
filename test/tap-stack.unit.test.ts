@@ -302,6 +302,10 @@ describe("NodeGroupsStack", () => {
     (aws.ec2.getSubnet as any) = jest.fn().mockResolvedValue({ vpcId: 'vpc-1' });
     (aws.ec2.SecurityGroup as any) = jest.fn(() => ({ id: createMockOutput('sg-1') }));
     (aws.ec2.SecurityGroupRule as any) = jest.fn();
+    (aws.ec2.LaunchTemplate as any) = jest.fn(() => ({
+      id: createMockOutput('lt-1'),
+      latestVersion: createMockOutput('1')
+    }));
     (aws.eks.NodeGroup as any) = jest.fn((name) => ({ nodeGroupName: createMockOutput(name) }));
   });
 
@@ -341,7 +345,117 @@ describe("NodeGroupsStack", () => {
     expect(aws.ec2.SecurityGroupRule).toHaveBeenCalledTimes(3);
   });
 
-  it("creates general node group with t3.large", () => {
+  it("creates general launch template with encrypted gp3 volumes", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith(
+      'eks-general-lt-dev',
+      expect.objectContaining({
+        blockDeviceMappings: expect.arrayContaining([
+          expect.objectContaining({
+            deviceName: '/dev/xvda',
+            ebs: expect.objectContaining({
+              volumeSize: 100,
+              volumeType: 'gp3',
+              encrypted: true,
+              deleteOnTermination: true,
+            }),
+          }),
+        ]),
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("creates compute launch template with encrypted gp3 volumes", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith(
+      'eks-compute-lt-dev',
+      expect.objectContaining({
+        blockDeviceMappings: expect.arrayContaining([
+          expect.objectContaining({
+            deviceName: '/dev/xvda',
+            ebs: expect.objectContaining({
+              volumeSize: 100,
+              volumeType: 'gp3',
+              encrypted: true,
+            }),
+          }),
+        ]),
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("enforces IMDSv2 in general launch template", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith(
+      'eks-general-lt-dev',
+      expect.objectContaining({
+        metadataOptions: expect.objectContaining({
+          httpTokens: 'required',
+          httpPutResponseHopLimit: 1,
+          httpEndpoint: 'enabled',
+        }),
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("enforces IMDSv2 in compute launch template", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.ec2.LaunchTemplate).toHaveBeenCalledWith(
+      'eks-compute-lt-dev',
+      expect.objectContaining({
+        metadataOptions: expect.objectContaining({
+          httpTokens: 'required',
+          httpPutResponseHopLimit: 1,
+        }),
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("creates 2 launch templates", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.ec2.LaunchTemplate).toHaveBeenCalledTimes(2);
+  });
+
+  it("creates general node group with t3.large and Bottlerocket AMI", () => {
     new NodeGroupsStack('test', {
       environmentSuffix: 'dev',
       clusterName: mockClusterName,
@@ -352,12 +466,15 @@ describe("NodeGroupsStack", () => {
     });
     expect(aws.eks.NodeGroup).toHaveBeenCalledWith(
       'eks-general-ng-dev',
-      expect.objectContaining({ instanceTypes: ['t3.large'] }),
+      expect.objectContaining({
+        instanceTypes: ['t3.large'],
+        amiType: 'BOTTLEROCKET_x86_64',
+      }),
       expect.any(Object)
     );
   });
 
-  it("creates compute node group with c5.2xlarge", () => {
+  it("creates compute node group with c5.2xlarge and Bottlerocket AMI", () => {
     new NodeGroupsStack('test', {
       environmentSuffix: 'dev',
       clusterName: mockClusterName,
@@ -368,7 +485,52 @@ describe("NodeGroupsStack", () => {
     });
     expect(aws.eks.NodeGroup).toHaveBeenCalledWith(
       'eks-compute-ng-dev',
-      expect.objectContaining({ instanceTypes: ['c5.2xlarge'] }),
+      expect.objectContaining({
+        instanceTypes: ['c5.2xlarge'],
+        amiType: 'BOTTLEROCKET_x86_64',
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("general node group uses launch template", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.eks.NodeGroup).toHaveBeenCalledWith(
+      'eks-general-ng-dev',
+      expect.objectContaining({
+        launchTemplate: expect.objectContaining({
+          id: expect.any(Object),
+          version: expect.any(Object),
+        }),
+      }),
+      expect.any(Object)
+    );
+  });
+
+  it("compute node group uses launch template", () => {
+    new NodeGroupsStack('test', {
+      environmentSuffix: 'dev',
+      clusterName: mockClusterName,
+      nodeRole: mockNodeRole,
+      privateSubnetIds: mockSubnets,
+      clusterSecurityGroup: mockSg,
+      tags: {},
+    });
+    expect(aws.eks.NodeGroup).toHaveBeenCalledWith(
+      'eks-compute-ng-dev',
+      expect.objectContaining({
+        launchTemplate: expect.objectContaining({
+          id: expect.any(Object),
+          version: expect.any(Object),
+        }),
+      }),
       expect.any(Object)
     );
   });
