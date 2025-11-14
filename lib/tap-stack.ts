@@ -31,7 +31,8 @@ export class TapStack extends cdk.Stack {
     const { webhookSecrets } = this.createSecretsManager(environmentSuffix);
 
     // API Gateway for webhook ingestion
-    const { apiGateway, requestValidator } = this.createApiGateway(environmentSuffix);
+    const { apiGateway, requestValidator } =
+      this.createApiGateway(environmentSuffix);
 
     // DynamoDB for transaction store
     const { table } = this.createDynamoDbTable(environmentSuffix);
