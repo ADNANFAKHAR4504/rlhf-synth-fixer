@@ -5,9 +5,9 @@
   "team": "synth-2",
   "turn_type": "single",
   "startedAt": "2025-11-13T09:10:40.390400",
-  "subtask": "Failure Recovery Automation",
+  "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Failure Recovery and High Availability"
+    "Failure Recovery Automation"
   ],
   "po_id": "1s1zk2",
   "aws_services": [
