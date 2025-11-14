@@ -1,6 +1,6 @@
 # Amazon EKS Cluster Infrastructure - IDEAL RESPONSE
 
-This document captures the authoritative source code for the `lib/` directory in Markdown so reviewers can inspect the current implementation without opening separate files.
+This document captures the authoritative source code for the `lib/` directory in Markdown so reviewers can inspect the current implementation without opening separate files
 
 ## Architecture Overview
 - Production-grade Amazon EKS cluster with managed node group and full VPC networking
