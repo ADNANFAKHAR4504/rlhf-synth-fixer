@@ -68,7 +68,7 @@ export class ComputeStack extends cdk.Stack {
         resources: ['*'],
         conditions: {
           StringNotEquals: {
-            'aws:RequestedRegion': ['us-east-1', 'us-east-2'],
+            'aws:RequestedRegion': ['us-east-1'],
           },
         },
       })
@@ -126,11 +126,12 @@ export class ComputeStack extends cdk.Stack {
 
     this.albDnsName = alb.loadBalancerDnsName;
 
-    // Export ALB DNS via SSM for cross-region reference
+    // Export ALB DNS via SSM
     new ssm.StringParameter(this, `AlbDnsParameter-${environmentSuffix}`, {
-      parameterName: `/dr/${environmentSuffix}/alb-dns/${this.region}`,
+      parameterName: `/dr/${environmentSuffix}/alb-dns`,
       stringValue: this.albDnsName,
-      description: `ALB DNS name for DR in ${this.region}`,
+      description: `ALB DNS name for ${environmentSuffix}`,
+      simpleName: false,
     });
 
     const targetGroup = new elbv2.ApplicationTargetGroup(
@@ -178,9 +179,9 @@ export class ComputeStack extends cdk.Stack {
         taskDefinition,
         serviceName: `dr-service-${environmentSuffix}-${this.region}`,
         desiredCount: 2,
-        assignPublicIp: false,
+        assignPublicIp: true,
         securityGroups: [serviceSg],
-        vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_ISOLATED },
+        vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
         healthCheckGracePeriod: cdk.Duration.seconds(60),
       }
     );

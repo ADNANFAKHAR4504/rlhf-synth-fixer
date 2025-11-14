@@ -7,7 +7,6 @@ import { StorageStack } from './stacks/storage-stack';
 import { ComputeStack } from './stacks/compute-stack';
 import { MonitoringStack } from './stacks/monitoring-stack';
 import { BackupStack } from './stacks/backup-stack';
-import { FailoverStack } from './stacks/failover-stack';
 
 interface TapStackProps extends cdk.StackProps {
   environmentSuffix?: string;
@@ -22,168 +21,52 @@ export class TapStack extends cdk.Stack {
       this.node.tryGetContext('environmentSuffix') ||
       'dev';
 
-    const primaryRegion = 'us-east-1';
-    const secondaryRegion = 'us-east-2';
-
     // KMS keys for encryption
-    const primaryKms = new KmsStack(this, `KmsPrimary-${environmentSuffix}`, {
+    const kms = new KmsStack(this, `Kms-${environmentSuffix}`, {
       environmentSuffix,
-      env: { region: primaryRegion },
     });
-
-    const secondaryKms = new KmsStack(
-      this,
-      `KmsSecondary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        env: { region: secondaryRegion },
-      }
-    );
 
     // Network infrastructure
-    const primaryNetwork = new NetworkStack(
-      this,
-      `NetworkPrimary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        env: { region: primaryRegion },
-      }
-    );
-
-    const secondaryNetwork = new NetworkStack(
-      this,
-      `NetworkSecondary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        env: { region: secondaryRegion },
-      }
-    );
+    const network = new NetworkStack(this, `Network-${environmentSuffix}`, {
+      environmentSuffix,
+    });
 
     // Monitoring and SNS
-    const primaryMonitoring = new MonitoringStack(
+    const monitoring = new MonitoringStack(
       this,
-      `MonitoringPrimary-${environmentSuffix}`,
+      `Monitoring-${environmentSuffix}`,
       {
         environmentSuffix,
-        env: { region: primaryRegion },
       }
     );
 
-    const secondaryMonitoring = new MonitoringStack(
-      this,
-      `MonitoringSecondary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        env: { region: secondaryRegion },
-      }
-    );
+    // Database
+    const database = new DatabaseStack(this, `Database-${environmentSuffix}`, {
+      environmentSuffix,
+      vpc: network.vpc,
+      kmsKey: kms.key,
+    });
 
-    // Databases
-    const primaryDatabase = new DatabaseStack(
-      this,
-      `DatabasePrimary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        vpc: primaryNetwork.vpc,
-        kmsKey: primaryKms.key,
-        env: { region: primaryRegion },
-      }
-    );
-
-    const secondaryDatabase = new DatabaseStack(
-      this,
-      `DatabaseSecondary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        vpc: secondaryNetwork.vpc,
-        kmsKey: secondaryKms.key,
-        env: { region: secondaryRegion },
-      }
-    );
-
-    // Storage with replication
-    const primaryStorage = new StorageStack(
-      this,
-      `StoragePrimary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        kmsKey: primaryKms.key,
-        secondaryRegion: secondaryRegion,
-        // Note: DynamoDB Global Tables don't support customer-managed KMS for replicas
-        // across different nested stacks due to CloudFormation cross-stack reference limitations
-        // The replica will use AWS-managed encryption
-        isPrimary: true,
-        env: { region: primaryRegion },
-      }
-    );
-
-    const secondaryStorage = new StorageStack(
-      this,
-      `StorageSecondary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        kmsKey: secondaryKms.key,
-        isPrimary: false,
-        env: { region: secondaryRegion },
-      }
-    );
-
-    // Primary storage replicates to secondary bucket, so secondary must be created first
-    primaryStorage.addDependency(secondaryStorage);
+    // Storage
+    const storage = new StorageStack(this, `Storage-${environmentSuffix}`, {
+      environmentSuffix,
+      kmsKey: kms.key,
+      isPrimary: false,
+    });
 
     // Compute
-    const primaryCompute = new ComputeStack(
-      this,
-      `ComputePrimary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        vpc: primaryNetwork.vpc,
-        dynamoTable: primaryStorage.dynamoTable,
-        alarmTopic: primaryMonitoring.alarmTopic,
-        env: { region: primaryRegion },
-      }
-    );
-
-    const secondaryCompute = new ComputeStack(
-      this,
-      `ComputeSecondary-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        vpc: secondaryNetwork.vpc,
-        dynamoTable: secondaryStorage.dynamoTable,
-        alarmTopic: secondaryMonitoring.alarmTopic,
-        env: { region: secondaryRegion },
-      }
-    );
+    new ComputeStack(this, `Compute-${environmentSuffix}`, {
+      environmentSuffix,
+      vpc: network.vpc,
+      dynamoTable: storage.dynamoTable,
+      alarmTopic: monitoring.alarmTopic,
+    });
 
     // Backups
-    new BackupStack(this, `BackupPrimary-${environmentSuffix}`, {
+    new BackupStack(this, `Backup-${environmentSuffix}`, {
       environmentSuffix,
-      dbCluster: primaryDatabase.cluster,
-      dynamoTable: primaryStorage.dynamoTable,
-      env: { region: primaryRegion },
+      dbCluster: database.cluster,
+      dynamoTable: storage.dynamoTable,
     });
-
-    new BackupStack(this, `BackupSecondary-${environmentSuffix}`, {
-      environmentSuffix,
-      dbCluster: secondaryDatabase.cluster,
-      dynamoTable: secondaryStorage.dynamoTable,
-      env: { region: secondaryRegion },
-    });
-
-    // Failover orchestration
-    const failoverStack = new FailoverStack(
-      this,
-      `Failover-${environmentSuffix}`,
-      {
-        environmentSuffix,
-        primaryAlbDns: primaryCompute.albDnsName,
-        secondaryRegion: secondaryRegion,
-        alarmTopic: primaryMonitoring.alarmTopic,
-        env: { region: primaryRegion },
-      }
-    );
-    // Failover stack depends on secondary compute for SSM parameter lookup
-    failoverStack.addDependency(secondaryCompute);
   }
 }

@@ -14,20 +14,21 @@ export class KmsStack extends cdk.Stack {
     super(scope, id, props);
 
     this.key = new kms.Key(this, `Key-${props.environmentSuffix}`, {
-      alias: `alias/dr-${props.environmentSuffix}-${this.region}`,
+      alias: `alias/dr-${props.environmentSuffix}`,
       description: `DR encryption key for ${props.environmentSuffix}`,
       enableKeyRotation: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Export KMS key ARN via SSM for cross-region reference
+    // Export KMS key ARN via SSM
     new ssm.StringParameter(
       this,
       `KmsArnParameter-${props.environmentSuffix}`,
       {
-        parameterName: `/dr/${props.environmentSuffix}/kms-key-arn/${this.region}`,
+        parameterName: `/dr/${props.environmentSuffix}/kms-key-arn`,
         stringValue: this.key.keyArn,
-        description: `KMS Key ARN for DR in ${this.region}`,
+        description: `KMS Key ARN for ${props.environmentSuffix}`,
+        simpleName: false,
       }
     );
 

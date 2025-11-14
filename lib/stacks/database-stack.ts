@@ -2,7 +2,6 @@ import * as cdk from 'aws-cdk-lib';
 import * as rds from 'aws-cdk-lib/aws-rds';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as kms from 'aws-cdk-lib/aws-kms';
-import * as logs from 'aws-cdk-lib/aws-logs';
 import { Construct } from 'constructs';
 
 interface DatabaseStackProps extends cdk.StackProps {
@@ -40,7 +39,7 @@ export class DatabaseStack extends cdk.Stack {
       `Cluster-${environmentSuffix}`,
       {
         engine: rds.DatabaseClusterEngine.auroraPostgres({
-          version: rds.AuroraPostgresEngineVersion.VER_15_5,
+          version: rds.AuroraPostgresEngineVersion.VER_15_6,
         }),
         writer: rds.ClusterInstance.serverlessV2(`Writer-${environmentSuffix}`),
         readers: [
@@ -59,8 +58,6 @@ export class DatabaseStack extends cdk.Stack {
           retention: cdk.Duration.days(7),
           preferredWindow: '03:00-04:00',
         },
-        cloudwatchLogsExports: ['postgresql'],
-        cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
         clusterIdentifier: `dr-aurora-${environmentSuffix}-${this.region}`,
         removalPolicy: cdk.RemovalPolicy.DESTROY,
       }
