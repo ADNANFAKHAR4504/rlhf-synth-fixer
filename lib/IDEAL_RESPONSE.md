@@ -11,12 +11,12 @@ Parameters:
       - staging
       - production
     Description: Environment name
-  
+
   OwnerEmail:
     Type: String
     Default: admin@example.com
     Description: Owner email for tagging
-  
+
   DBUsername:
     Type: String
     Default: dbadmin
@@ -25,16 +25,7 @@ Parameters:
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
     Description: Database admin username
-  
-  DBPassword:
-    Type: String
-    Default: TempPassword123
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9]*'
-    Description: Database admin password
-  
+
   LatestAmiId:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
@@ -99,7 +90,6 @@ Metadata:
           default: Security Configuration
         Parameters:
           - DBUsername
-          - DBPassword
 
 Resources:
   # ==================== EC2 Key Pair ====================
@@ -615,7 +605,7 @@ Resources:
           - Sid: ELBAccessLogsPolicy
             Effect: Allow
             Principal:
-              AWS: !Sub 
+              AWS: !Sub
                 - 'arn:aws:iam::${AccountId}:root'
                 - AccountId: !FindInMap [RegionToELBAccountId, !Ref 'AWS::Region', AccountId]
             Action: 's3:PutObject'
@@ -960,12 +950,13 @@ Resources:
     Type: AWS::SecretsManager::Secret
     Properties:
       Name: !Sub '/ecommerce/database/credentials-${Environment}'
-      Description: RDS Database Credentials
-      SecretString: !Sub |
-        {
-          "username": "${DBUsername}",
-          "password": "${DBPassword}"
-        }
+      Description: RDS Database Credentials with auto-generated password
+      GenerateSecretString:
+        SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
+        GenerateStringKey: password
+        PasswordLength: 32
+        ExcludeCharacters: '"@/\'
+        RequireEachIncludedType: true
       Tags:
         - Key: Environment
           Value: !Ref Environment
@@ -1135,10 +1126,10 @@ Resources:
             set -euo pipefail
             yum update -y
             yum install -y python3 python3-pip awscli amazon-cloudwatch-agent
-            
+
             pip3 install --upgrade pip
             pip3 install boto3 psycopg2-binary
-            
+
             cat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json <<EOF
             {
               "metrics": {
@@ -1186,11 +1177,11 @@ Resources:
               }
             }
             EOF
-            
+
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a fetch-config -m ec2 \
               -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json -s
-            
+
             cat > /home/ec2-user/server.py <<'EOF'
             import http.server
             import socketserver
@@ -1199,15 +1190,15 @@ Resources:
             import boto3
             import psycopg2
             import json
-            
+
             ENVIRONMENT = os.environ.get("ENVIRONMENT", "production")
             AWS_REGION = os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
             DB_SECRET_ARN = os.environ.get("DB_SECRET_ARN", "")
             DB_ENDPOINT_PARAMETER = os.environ.get("DB_ENDPOINT_PARAMETER", "/ecommerce/database/endpoint")
-            
+
             ssm = boto3.client("ssm", region_name=AWS_REGION)
             secrets = boto3.client("secretsmanager", region_name=AWS_REGION)
-            
+
             def get_db_connection():
                 endpoint = ssm.get_parameter(Name=DB_ENDPOINT_PARAMETER)["Parameter"]["Value"]
                 secret_value = secrets.get_secret_value(SecretId=DB_SECRET_ARN)
@@ -1220,7 +1211,7 @@ Resources:
                     connect_timeout=5,
                     sslmode="require"
                 )
-            
+
             class Handler(http.server.SimpleHTTPRequestHandler):
                 def do_GET(self):
                     if self.path == "/":
@@ -1240,7 +1231,7 @@ Resources:
                         self.handle_db_test()
                     else:
                         super().do_GET()
-            
+
                 def handle_db_test(self):
                     self.send_response(200)
                     self.send_header("Content-type", "application/json")
@@ -1262,23 +1253,23 @@ Resources:
                         }
                     self.end_headers()
                     self.wfile.write(json.dumps(response).encode())
-            
+
             if __name__ == "__main__":
                 PORT = 80
                 with socketserver.TCPServer(("", PORT), Handler) as httpd:
                     print(f"Server running on port {PORT}")
                     httpd.serve_forever()
             EOF
-            
+
             chown ec2-user:ec2-user /home/ec2-user/server.py
             chmod +x /home/ec2-user/server.py
-            
+
             REGION=$(curl -s http://169.254.169.254/latest/meta-data/placement/region)
             export ENVIRONMENT="${Environment}"
             export AWS_DEFAULT_REGION=$REGION
             export DB_SECRET_ARN="${DBSecret}"
             export DB_ENDPOINT_PARAMETER="/ecommerce/database/endpoint"
-            
+
             nohup python3 /home/ec2-user/server.py > /home/ec2-user/server.log 2>&1 &
         TagSpecifications:
           - ResourceType: instance
@@ -1346,7 +1337,7 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: 300
+      Cooldown: 600
       ScalingAdjustment: 1
 
   ScaleDownPolicy:
@@ -1354,7 +1345,7 @@ Resources:
     Properties:
       AdjustmentType: ChangeInCapacity
       AutoScalingGroupName: !Ref AutoScalingGroup
-      Cooldown: 300
+      Cooldown: 600
       ScalingAdjustment: -1
 
   CPUAlarmHigh:
@@ -1422,6 +1413,7 @@ Resources:
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !Ref MasterKMSKey
+      MultiAZ: true
       MasterUsername: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:username}}'
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBSecret}:SecretString:password}}'
       VPCSecurityGroups:
@@ -1461,7 +1453,7 @@ Resources:
     UpdateReplacePolicy: Delete
     Properties:
       LogGroupName: !Sub '/aws/lambda/ECommerce-Function-${Environment}'
-      RetentionInDays: 14
+      RetentionInDays: 30
 
   LambdaFunction:
     Type: AWS::Lambda::Function
@@ -1476,13 +1468,13 @@ Resources:
           import json
           import logging
           import os
-          
+
           logger = logging.getLogger()
           logger.setLevel(logging.INFO)
-          
+
           def lambda_handler(event, context):
               logger.info(f"Received event: {json.dumps(event)}")
-              
+
               response = {
                   'statusCode': 200,
                   'body': json.dumps({
@@ -1490,7 +1482,7 @@ Resources:
                       'environment': os.environ.get('ENVIRONMENT', 'Unknown')
                   })
               }
-              
+
               logger.info(f"Response: {json.dumps(response)}")
               return response
       Environment:
@@ -1503,7 +1495,7 @@ Resources:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
-      Timeout: 30
+      Timeout: 60
       MemorySize: 256
       Tags:
         - Key: Environment
