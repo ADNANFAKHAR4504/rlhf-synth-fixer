@@ -7,7 +7,7 @@ This Pulumi Python program deploys a production-ready Amazon EKS cluster with ad
 The infrastructure includes:
 
 1. **VPC Infrastructure**: 3 private subnets across different availability zones with NAT gateways
-2. **EKS Cluster**: Version 1.28 with private endpoint access and control plane logging
+2. **EKS Cluster**: Version 1.29 with private endpoint access and control plane logging
 3. **Node Groups**: Managed node groups using Bottlerocket AMI (t3.large, min=3, max=10, desired=5)
 4. **Security**: KMS envelope encryption, Pod Security Standards, NetworkPolicies
 5. **IRSA**: OIDC provider for IAM Roles for Service Accounts

@@ -1,6 +1,6 @@
 """EKS Module for creating EKS cluster and node groups.
 
-This module creates an EKS cluster with version 1.28, private endpoint access,
+This module creates an EKS cluster with version 1.29, private endpoint access,
 control plane logging, OIDC provider, and managed node groups using Bottlerocket AMI.
 """
 
@@ -18,7 +18,7 @@ def create_eks_cluster(
     security_group_ids: list = None
 ) -> aws.eks.Cluster:
     """
-    Create EKS cluster with version 1.28 and private endpoint.
+    Create EKS cluster with version 1.29 and private endpoint.
 
     Args:
         environment_suffix: Unique suffix for resource naming
@@ -35,7 +35,7 @@ def create_eks_cluster(
     cluster = aws.eks.Cluster(
         f"eks-cluster-{environment_suffix}",
         name=cluster_name,
-        version="1.28",
+        version="1.29",
         role_arn=cluster_role.arn,
         vpc_config=aws.eks.ClusterVpcConfigArgs(
             subnet_ids=private_subnet_ids,
@@ -125,14 +125,14 @@ def create_node_group(
     Returns:
         EKS Node Group resource
     """
-    # Get latest Bottlerocket AMI for EKS 1.28
+    # Get latest Bottlerocket AMI for EKS 1.29
     bottlerocket_ami = aws.ec2.get_ami(
         most_recent=True,
         owners=["amazon"],
         filters=[
             aws.ec2.GetAmiFilterArgs(
                 name="name",
-                values=["bottlerocket-aws-k8s-1.28-x86_64-*"]
+                values=["bottlerocket-aws-k8s-1.29-x86_64-*"]
             ),
             aws.ec2.GetAmiFilterArgs(
                 name="virtualization-type",

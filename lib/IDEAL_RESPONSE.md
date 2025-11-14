@@ -5,7 +5,7 @@ This document describes the ideal infrastructure solution for deploying a produc
 ## Architecture Overview
 
 The solution deploys:
-- **EKS Cluster**: Kubernetes 1.28 with private endpoint and comprehensive control plane logging
+- **EKS Cluster**: Kubernetes 1.29 with private endpoint and comprehensive control plane logging
 - **VPC**: 3 private subnets + 3 public subnets across 3 AZs with NAT gateways
 - **Node Groups**: Bottlerocket AMI with autoscaling (min=3, max=10, desired=5 t3.large instances)
 - **IRSA**: OIDC provider enabling IAM roles for service accounts
@@ -65,7 +65,7 @@ def create_kms_key(environment_suffix: str, account_id: str) -> aws.kms.Key:
 ```python
 def create_eks_cluster(...) -> aws.eks.Cluster:
     """
-    Creates EKS 1.28 cluster with:
+    Creates EKS 1.29 cluster with:
     - Private endpoint access (also public for initial setup)
     - All control plane logs enabled: api, audit, authenticator, controllerManager, scheduler
     - KMS envelope encryption for secrets
