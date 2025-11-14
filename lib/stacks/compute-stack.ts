@@ -68,7 +68,7 @@ export class ComputeStack extends cdk.Stack {
         resources: ['*'],
         conditions: {
           StringNotEquals: {
-            'aws:RequestedRegion': ['us-east-1'],
+            'aws:RequestedRegion': [this.region],
           },
         },
       })

@@ -18,6 +18,9 @@ export class NetworkStack extends cdk.Stack {
     this.vpc = new ec2.Vpc(this, `VPC-${environmentSuffix}`, {
       vpcName: `dr-vpc-${environmentSuffix}-${this.region}`,
       maxAzs: 3,
+      // Cost optimization: No NAT Gateways ($0.045/hour + data transfer costs)
+      // Using VPC endpoints instead for S3, DynamoDB, ECR, and CloudWatch Logs access
+      // Trade-off: Private subnets are isolated without internet access
       natGateways: 0,
       subnetConfiguration: [
         {

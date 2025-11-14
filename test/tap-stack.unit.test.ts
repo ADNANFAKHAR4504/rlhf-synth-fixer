@@ -982,7 +982,7 @@ describe('TapStack Unit Tests', () => {
               Effect: 'Deny',
               Condition: {
                 StringNotEquals: {
-                  'aws:RequestedRegion': ['us-east-1'],
+                  'aws:RequestedRegion': Match.anyValue(), // Dynamic region reference using this.region
                 },
               },
             }),

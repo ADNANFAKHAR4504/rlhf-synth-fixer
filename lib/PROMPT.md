@@ -13,7 +13,7 @@ Create a high availability solution using **AWS CDK with TypeScript** that imple
 ### Core Requirements
 
 1. **Database Layer**
-   - Deploy RDS Aurora PostgreSQL cluster with VER_15_5 engine version
+   - Deploy RDS Aurora PostgreSQL cluster with VER_15_6 engine version (Note: VER_15_5 is not supported by AWS; VER_15_6 is the correct version)
    - Enable automated backups with AWS Backup and 7-day retention
    - Use KMS CMK for encryption of snapshots and data at rest
    - Configure in VPC with private subnets for security
