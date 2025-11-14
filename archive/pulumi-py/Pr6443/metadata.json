@@ -7,7 +7,7 @@
   "startedAt": "2025-11-13T03:28:00-08:00",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
-    "Failure Recovery and High Availability"
+    "Failure Recovery Automation"
   ],
   "aws_services": [
     "Aurora",
