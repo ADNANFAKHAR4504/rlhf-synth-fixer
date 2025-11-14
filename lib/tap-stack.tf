@@ -963,22 +963,6 @@ resource "aws_kms_key" "cloudwatch_logs" {
   description             = "KMS key for CloudWatch logs encryption"
   deletion_window_in_days = 7
 
-  tags = {
-    Name        = "${var.project_name}-cloudwatch-logs-kms-${var.environment}"
-    Environment = var.environment
-    Project     = var.project_name
-  }
-}
-
-resource "aws_kms_alias" "cloudwatch_logs" {
-  name          = "alias/${var.project_name}-cloudwatch-logs-${var.environment}"
-  target_key_id = aws_kms_key.cloudwatch_logs.key_id
-}
-
-resource "aws_kms_key" "cloudwatch_logs" {
-  description             = "KMS key for CloudWatch logs encryption"
-  deletion_window_in_days = 7
-
   policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -1021,6 +1005,10 @@ resource "aws_kms_key" "cloudwatch_logs" {
   }
 }
 
+resource "aws_kms_alias" "cloudwatch_logs" {
+  name          = "alias/${var.project_name}-cloudwatch-logs-${var.environment}"
+  target_key_id = aws_kms_key.cloudwatch_logs.key_id
+}
 
 # CloudWatch Log Group with KMS encryption
 resource "aws_cloudwatch_log_group" "training_logs" {
