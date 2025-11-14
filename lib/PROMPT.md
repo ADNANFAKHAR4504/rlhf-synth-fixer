@@ -1,47 +1,124 @@
-# Task: Blue-Green Migration Strategy for Payment Processing System
+# Amazon EKS Cluster Deployment with Enhanced Security
 
-## Platform & Language
-**MANDATORY:** This task MUST be implemented using **Pulumi with Python**.
+## Overview
 
-## Background
-A financial services company needs to migrate their legacy on-premises payment processing system to AWS. The current system handles credit card transactions and requires strict compliance with PCI DSS standards. The migration must be performed with zero downtime using a blue-green deployment strategy.
+Create infrastructure using **CloudFormation with YAML** to deploy a production-ready Amazon EKS cluster with enhanced security controls and comprehensive monitoring capabilities.
 
-## Problem Statement
-Create a CloudFormation template to implement a blue-green migration strategy for a payment processing system.
+## Business Context
 
-## Requirements
+Your organization is expanding its microservices architecture and needs a managed Kubernetes cluster on AWS. The platform team requires a standardized EKS deployment that can be replicated across multiple AWS accounts with consistent security and networking configurations.
 
-The configuration must implement the following:
+## Infrastructure Requirements
 
-1. Define two identical environments (blue and green) with RDS Aurora clusters in private subnets
-2. Create an Application Load Balancer with weighted target groups for traffic shifting
-3. Configure DynamoDB tables with point-in-time recovery for session data
-4. Implement CloudFormation custom resources for pre-migration data validation
-5. Set up CloudWatch alarms for database connection counts and response times
-6. Create Lambda functions to handle environment switching logic
-7. Configure AWS Backup plans with 7-day retention for both environments
-8. Implement stack outputs that display current active environment and migration status
+### 1. EKS Cluster Configuration
+- Create an EKS cluster with Kubernetes version 1.28 or higher
+- Configure private endpoint access only for enhanced security
+- Set up OIDC identity provider for IAM Roles for Service Accounts (IRSA)
+- Enable envelope encryption for Kubernetes secrets using AWS KMS
 
-## Environment Details
-Blue-green migration infrastructure deployed in us-east-1 across 3 availability zones. Uses RDS Aurora MySQL 8.0 for transaction data and DynamoDB for session management. Requires VPC with private subnets, NAT gateways for outbound traffic, and VPC endpoints for S3 and DynamoDB. AWS account must have KMS key creation permissions and Secrets Manager access. CloudFormation stack will manage approximately 25 resources including load balancers, auto-scaling groups, and security configurations.
+### 2. KMS Encryption
+- Create a dedicated KMS key for envelope encryption of Kubernetes secrets
+- Configure appropriate key policies for EKS cluster access
+- Enable key rotation for security compliance
 
-## Constraints
+### 3. Managed Node Group
+- Deploy a managed node group using only Graviton2 instance types (ARM64 architecture)
+- Use t4g.medium as the default instance type for cost optimization
+- Configure auto-scaling with minimum 2 and maximum 10 nodes
+- Deploy all worker nodes in private subnets only with no direct internet access
+- Ensure nodes have appropriate IAM roles with least-privilege policies
 
-1. All data must be encrypted at rest using AWS KMS customer-managed keys
-2. Database credentials must be stored in AWS Secrets Manager with automatic rotation enabled
-3. The template must support rollback to the previous environment within 5 minutes
-4. Network traffic between components must use VPC endpoints to avoid internet exposure
-5. All resources must be tagged with Environment, CostCenter, and MigrationPhase tags
-6. The template must use CloudFormation drift detection compatible resources only
-7. Parameter validation must enforce naming conventions matching ^(dev|staging|prod)-payment-[a-z0-9]{8}$
+### 4. IRSA (IAM Roles for Service Accounts)
+- Set up OIDC identity provider for the EKS cluster
+- Enable pod-level AWS permissions through IRSA
+- Configure trust relationships for Kubernetes service accounts
 
-## Expected Output
-A CloudFormation YAML template that enables controlled migration between blue and green environments with automated rollback capabilities and comprehensive monitoring.
+### 5. Monitoring and Observability
+- Enable CloudWatch Container Insights for comprehensive cluster monitoring
+- Configure appropriate CloudWatch log groups for EKS cluster logs
+- Set up metrics collection for nodes and pods
 
-## Region
-us-east-1 (default)
+### 6. IAM Roles and Policies
+- Create EKS cluster IAM role with least-privilege policies
+- Create node group IAM role with necessary permissions
+- Ensure roles follow AWS security best practices
 
-## Subject Labels
-- aws
-- infrastructure
-- environment-migration
+### 7. Networking
+- All worker nodes must be deployed in private subnets only
+- Ensure egress traffic routes through NAT gateways
+- Configure appropriate security groups for cluster and node communication
+
+## Technical Constraints
+
+- EKS cluster must use Kubernetes version 1.28 or higher
+- Worker nodes must use only Graviton2 (ARM64) instances for cost optimization
+- Enable IRSA (IAM Roles for Service Accounts) for pod-level AWS permissions
+- Configure OIDC provider for the EKS cluster
+- Use only private subnets for worker nodes with no direct internet access
+- Enable EKS managed node groups with auto-scaling between 2-10 nodes
+- Configure CloudWatch Container Insights for cluster monitoring
+- Implement envelope encryption for Kubernetes secrets using AWS KMS
+- Set cluster endpoint access to private-only for enhanced security
+
+## Environment
+
+Production-grade EKS cluster deployment in us-east-1 region using CloudFormation YAML. Requires existing VPC with at least 3 private subnets across different availability zones. AWS CLI must be configured with appropriate permissions for EKS, EC2, IAM, and KMS services. The infrastructure includes EKS control plane, managed node groups with Graviton2 instances, OIDC provider for IRSA, KMS key for secrets encryption, and CloudWatch Container Insights for monitoring. All components deployed within private subnets with egress through NAT gateways.
+
+## Expected Deliverables
+
+1. Complete CloudFormation YAML template (lib/TapStack.yml) that provisions:
+   - Amazon EKS cluster with private endpoint access
+   - KMS key for secrets encryption
+   - OIDC identity provider
+   - Managed node group with Graviton2 instances
+   - Auto-scaling configuration
+   - CloudWatch Container Insights
+   - All necessary IAM roles and policies
+
+2. CloudFormation Parameters:
+   - EnvironmentSuffix (for resource naming)
+   - VPC ID
+   - Private subnet IDs (minimum 3)
+   - Kubernetes version (default: 1.28)
+   - Node instance type (default: t4g.medium)
+
+3. CloudFormation Outputs:
+   - EKS cluster endpoint
+   - OIDC issuer URL
+   - Node group ARN
+   - Cluster name
+   - KMS key ID
+
+4. Unit tests verifying:
+   - EKS cluster is created with correct configuration
+   - KMS encryption is enabled
+   - OIDC provider is configured
+   - Node group uses Graviton2 instances
+   - CloudWatch Container Insights is enabled
+   - All resources use EnvironmentSuffix for naming
+
+5. Integration tests validating:
+   - EKS cluster is accessible and healthy
+   - Node group has expected capacity
+   - CloudWatch logs are being collected
+   - OIDC provider is properly configured
+
+## AWS Services Required
+
+- Amazon EKS (Elastic Kubernetes Service)
+- Amazon EC2 (for node groups)
+- AWS IAM (Identity and Access Management)
+- AWS KMS (Key Management Service)
+- Amazon CloudWatch (Container Insights and logging)
+- Amazon VPC (Virtual Private Cloud)
+
+## Success Criteria
+
+- All CloudFormation resources deploy successfully
+- EKS cluster is accessible via private endpoint
+- Node group auto-scales between 2-10 nodes
+- CloudWatch Container Insights shows cluster metrics
+- All security controls are properly configured
+- Unit tests achieve 90%+ code coverage
+- Integration tests pass successfully
+- Infrastructure follows AWS Well-Architected Framework best practices

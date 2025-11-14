@@ -1,31 +1,25 @@
 {
-  "task_id": "101912456",
-  "po_id": "101912456",
-  "platform": "pulumi",
-  "language": "py",
+  "task_id": "101912444",
+  "po_id": "101912444",
+  "platform": "cfn",
+  "language": "yaml",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
-  "startedAt": "2025-11-14T00:55:26Z",
-  "subtask": "Failure Recovery and High Availability",
+  "startedAt": "2025-11-14T06:21:14+00:00",
+  "subtask": "Amazon EKS",
   "subject_labels": [
     "aws",
     "infrastructure",
-    "environment-migration"
+    "eks-cluster-management"
   ],
   "aws_services": [
-    "VPC",
+    "EKS",
     "EC2",
-    "RDS",
-    "DynamoDB",
-    "ELB",
-    "Lambda",
     "IAM",
     "KMS",
-    "Secrets Manager",
     "CloudWatch",
-    "AWS Backup",
-    "SSM"
+    "VPC"
   ],
   "training_quality": 10
 }
