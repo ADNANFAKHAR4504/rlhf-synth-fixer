@@ -4,9 +4,12 @@ import sys
 import os
 import json
 import subprocess
+import builtins
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
+from types import ModuleType
 from unittest.mock import MagicMock, patch
-from botocore.exceptions import ClientError
+from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 
 import pytest
 import boto3
@@ -15,7 +18,108 @@ from moto import mock_aws
 # Add parent directory to path to import the analysis module
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
-from analyse import S3SecurityAuditor, Finding
+from analyse import (
+    HIGH_OBJECT_COUNT,
+    LARGE_BUCKET_SIZE_GB,
+    Finding,
+    main,
+    run_s3_security_audit,
+    S3SecurityAuditor,
+)
+
+
+def make_client_error(code: str, operation: str) -> ClientError:
+    """Helper to create a ClientError with a specific error code."""
+    return ClientError({'Error': {'Code': code, 'Message': code}}, operation)
+
+
+@pytest.fixture
+def auditor_with_mocks():
+    """Provide an S3SecurityAuditor with mocked boto3 clients."""
+    with patch('analyse.boto3.client') as mock_client:
+        mock_s3 = MagicMock()
+        mock_cloudwatch = MagicMock()
+        mock_client.side_effect = [mock_s3, mock_cloudwatch]
+        mock_s3.list_buckets.return_value = {'Buckets': []}
+        auditor = S3SecurityAuditor()
+        yield auditor, mock_s3, mock_cloudwatch
+
+
+@contextmanager
+def stub_visualization_modules():
+    """Create lightweight stand-ins for plotly and jinja2 so charts can render."""
+    fake_jinja2 = ModuleType("jinja2")
+
+    class FakeTemplate:
+        def __init__(self, text):
+            self.text = text
+
+        def render(self, **kwargs):
+            return "rendered html"
+
+    fake_jinja2.Template = FakeTemplate
+
+    class FakeFigure:
+        def __init__(self, data=None):
+            self.data = data or []
+
+        def update_layout(self, **kwargs):
+            self.layout = kwargs
+
+    fake_go = ModuleType("plotly.graph_objects")
+    fake_go.Figure = FakeFigure
+    fake_go.Bar = lambda **kwargs: ('bar', kwargs)
+    fake_go.Pie = lambda **kwargs: ('pie', kwargs)
+
+    fake_io = ModuleType("plotly.io")
+    fake_io.to_html = lambda fig, include_plotlyjs='cdn', div_id='': f"<div id='{div_id}'></div>"
+
+    fake_plotly = ModuleType("plotly")
+    fake_plotly.graph_objects = fake_go
+    fake_plotly.io = fake_io
+
+    modules = {
+        'jinja2': fake_jinja2,
+        'plotly': fake_plotly,
+        'plotly.graph_objects': fake_go,
+        'plotly.io': fake_io,
+    }
+
+    with patch.dict(sys.modules, modules, clear=False):
+        yield
+
+
+@contextmanager
+def force_plotly_import_failure():
+    """Force ImportError for plotly modules to exercise fallback code paths."""
+    real_import = builtins.__import__
+
+    def _fake_import(name, *args, **kwargs):
+        if name.startswith('plotly'):
+            raise ImportError("plotly unavailable")
+        return real_import(name, *args, **kwargs)
+
+    with patch('builtins.__import__', side_effect=_fake_import):
+        yield
+
+
+def minimal_summary():
+    """Create a smallest valid compliance summary for report helpers."""
+    return {
+        'total_buckets_audited': 0,
+        'compliant_buckets': 0,
+        'non_compliant_buckets': 0,
+        'compliant_bucket_names': [],
+        'non_compliant_bucket_names': [],
+        'findings_by_severity': {},
+        'findings_by_issue_type': {},
+        'framework_compliance': {
+            'SOC2': {'compliant': 0, 'non_compliant': 0},
+            'GDPR': {'compliant': 0, 'non_compliant': 0},
+        },
+        'audit_timestamp': '',
+        'region': 'us-east-1',
+    }
 
 
 class TestS3SecurityAuditor:
@@ -640,3 +744,447 @@ def test_comprehensive_security_audit():
             print(f"  {issue_type}: {count}")
         print(f"Findings by Severity: {summary['findings_by_severity']}")
         print("="*50 + "\n")
+
+
+# =========================================================================
+# Additional targeted unit tests to improve coverage
+# =========================================================================
+
+def test_cache_bucket_details_handles_errors(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    mock_s3.get_bucket_tagging.side_effect = make_client_error('AccessDenied', 'GetBucketTagging')
+    mock_s3.get_bucket_location.side_effect = make_client_error('AccessDenied', 'GetBucketLocation')
+
+    auditor._cache_bucket_details('cache-bucket')
+    # Second call should return early and avoid hitting AWS again
+    auditor._cache_bucket_details('cache-bucket')
+
+    cached = auditor.bucket_cache['cache-bucket']
+    assert cached['tags'] == {}
+    assert cached['region'] == 'us-east-1'
+    assert mock_s3.get_bucket_tagging.call_count == 1
+
+
+def test_versioning_and_replication_checks(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'critical-bucket'
+    auditor.bucket_cache[bucket] = {
+        'arn': f'arn:aws:s3:::{bucket}',
+        'tags': {'DataClassification': 'Critical'}
+    }
+
+    mock_s3.get_bucket_versioning.return_value = {'Status': 'Suspended'}
+    auditor._check_versioning(bucket)
+    assert any(f.issue_type == 'NO_VERSIONING' for f in auditor.findings)
+
+    mock_s3.get_bucket_replication.side_effect = make_client_error(
+        'ReplicationConfigurationNotFoundError',
+        'GetBucketReplication'
+    )
+    auditor._check_replication(bucket)
+    assert any(f.issue_type == 'NO_REPLICATION' for f in auditor.findings)
+
+
+def test_logging_and_lifecycle_checks(auditor_with_mocks):
+    auditor, mock_s3, mock_cloudwatch = auditor_with_mocks
+    bucket = 'large-logs-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+
+    mock_s3.get_bucket_logging.return_value = {}
+    auditor._check_logging(bucket)
+    assert any(f.issue_type == 'NO_LOGGING' for f in auditor.findings)
+
+    mock_cloudwatch.get_metric_statistics.return_value = {
+        'Datapoints': [{'Average': (LARGE_BUCKET_SIZE_GB + 5) * (1024 ** 3)}]
+    }
+    mock_s3.get_bucket_lifecycle_configuration.side_effect = make_client_error(
+        'NoSuchLifecycleConfiguration',
+        'GetBucketLifecycleConfiguration'
+    )
+    auditor._check_lifecycle_policies(bucket)
+    assert any(f.issue_type == 'NO_LIFECYCLE' for f in auditor.findings)
+
+
+def test_object_lock_and_mfa_delete_checks(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+
+    compliance_bucket = 'compliance-bucket'
+    auditor.bucket_cache[compliance_bucket] = {
+        'arn': f'arn:aws:s3:::{compliance_bucket}',
+        'tags': {'RequireCompliance': 'true'}
+    }
+    mock_s3.get_object_lock_configuration.side_effect = make_client_error(
+        'ObjectLockConfigurationNotFoundError',
+        'GetObjectLockConfiguration'
+    )
+    auditor._check_object_lock(compliance_bucket)
+
+    financial_bucket = 'financial-records'
+    auditor.bucket_cache[financial_bucket] = {
+        'arn': f'arn:aws:s3:::{financial_bucket}',
+        'tags': {}
+    }
+    mock_s3.get_bucket_versioning.return_value = {'Status': 'Enabled', 'MFADelete': 'Disabled'}
+    auditor._check_mfa_delete(financial_bucket)
+
+    issue_types = [f.issue_type for f in auditor.findings]
+    assert 'NO_OBJECT_LOCK' in issue_types
+    assert 'NO_MFA_DELETE' in issue_types
+
+
+def test_access_logging_and_kms_checks(auditor_with_mocks):
+    auditor, mock_s3, mock_cloudwatch = auditor_with_mocks
+    bucket = 'vpc-sensitive-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {'Environment': 'prod'}}
+
+    mock_cloudwatch.get_metric_statistics.return_value = {
+        'Datapoints': [{'Average': HIGH_OBJECT_COUNT + 1000}]
+    }
+    mock_s3.get_bucket_logging.return_value = {'LoggingEnabled': {'TargetBucket': bucket}}
+    auditor._check_access_logging_destination(bucket)
+
+    mock_s3.get_bucket_encryption.return_value = {
+        'ServerSideEncryptionConfiguration': {
+            'Rules': [{
+                'ApplyServerSideEncryptionByDefault': {'SSEAlgorithm': 'AES256'}
+            }]
+        }
+    }
+    auditor._check_kms_encryption_for_vpc(bucket)
+
+    issue_types = [f.issue_type for f in auditor.findings]
+    assert 'SELF_LOGGING' in issue_types
+    assert 'WEAK_ENCRYPTION' in issue_types
+
+
+def test_glacier_transition_detection(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'archive-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+
+    old_object = {'LastModified': datetime.now(timezone.utc) - timedelta(days=120)}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = [{'Contents': [old_object]}]
+    mock_s3.get_paginator.return_value = mock_paginator
+
+    mock_s3.get_bucket_lifecycle_configuration.side_effect = make_client_error(
+        'NoSuchLifecycleConfiguration',
+        'GetBucketLifecycleConfiguration'
+    )
+
+    auditor._check_glacier_transitions(bucket)
+    assert any(f.issue_type == 'NO_COLD_STORAGE' for f in auditor.findings)
+
+
+def test_reporting_helpers_and_charts(tmp_path, auditor_with_mocks):
+    auditor, _, _ = auditor_with_mocks
+    auditor.findings = [
+        Finding(
+            bucket_name='bucket-critical',
+            bucket_arn='arn:aws:s3:::bucket-critical',
+            issue_type='PUBLIC_ACCESS',
+            severity='CRITICAL',
+            compliance_frameworks=['SOC2', 'GDPR'],
+            current_config='public',
+            required_config='private',
+            remediation_steps='fix'
+        ),
+        Finding(
+            bucket_name='bucket-medium',
+            bucket_arn='arn:aws:s3:::bucket-medium',
+            issue_type='NO_LOGGING',
+            severity='MEDIUM',
+            compliance_frameworks=['SOC2', 'GDPR'],
+            current_config='off',
+            required_config='on',
+            remediation_steps='turn on'
+        ),
+    ]
+
+    audited = [{'Name': 'bucket-critical'}, {'Name': 'bucket-medium'}]
+    summary = auditor._generate_compliance_summary(audited)
+
+    json_path = tmp_path / 'report.json'
+    auditor.save_json_report(summary, filename=str(json_path))
+    assert json_path.exists()
+
+    # Ensure print_findings iterates through severities without raising
+    auditor.print_findings()
+
+    with stub_visualization_modules():
+        severity_html = auditor._create_severity_chart(summary)
+        compliance_html = auditor._create_compliance_chart(summary)
+        issue_html = auditor._create_issue_type_chart(summary)
+
+        assert '<div' in severity_html
+        assert '<div' in compliance_html
+        assert '<div' in issue_html
+
+        html_path = tmp_path / 'report.html'
+        auditor.save_html_report(auditor.findings, summary, filename=str(html_path))
+        assert html_path.exists()
+
+
+def test_cache_bucket_details_populates_tags(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    mock_s3.get_bucket_tagging.return_value = {'TagSet': [{'Key': 'Env', 'Value': 'Prod'}]}
+    mock_s3.get_bucket_location.return_value = {'LocationConstraint': 'eu-west-1'}
+
+    auditor._cache_bucket_details('tagged-bucket')
+
+    cached = auditor.bucket_cache['tagged-bucket']
+    assert cached['tags'] == {'Env': 'Prod'}
+    assert cached['region'] == 'eu-west-1'
+
+
+def test_get_buckets_to_audit_handles_failures(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    mock_s3.list_buckets.side_effect = Exception("boom")
+
+    assert auditor._get_buckets_to_audit() == []
+
+
+def test_get_buckets_to_audit_exclusions_and_warnings(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    old_date = datetime.now(timezone.utc) - timedelta(days=90)
+    mock_s3.list_buckets.return_value = {
+        'Buckets': [
+            {'Name': 'excluded-bucket', 'CreationDate': old_date},
+            {'Name': 'denied-bucket', 'CreationDate': old_date},
+            {'Name': 'throttled-bucket', 'CreationDate': old_date},
+            {'Name': 'error-bucket', 'CreationDate': old_date},
+        ]
+    }
+
+    mock_s3.get_bucket_tagging.side_effect = [
+        {'TagSet': [{'Key': 'ExcludeFromAudit', 'Value': 'true'}]},
+        make_client_error('AccessDenied', 'GetBucketTagging'),
+        make_client_error('Throttling', 'GetBucketTagging'),
+        BotoCoreError(),
+    ]
+
+    buckets = auditor._get_buckets_to_audit()
+    assert len(buckets) == 3
+    assert {'Name': 'excluded-bucket', 'CreationDate': old_date} not in buckets
+
+
+def test_auditor_init_handles_missing_credentials():
+    with patch('analyse.boto3.client', side_effect=NoCredentialsError()):
+        with pytest.raises(NoCredentialsError):
+            S3SecurityAuditor()
+
+
+def test_auditor_init_handles_client_errors():
+    mock_s3 = MagicMock()
+    mock_cloudwatch = MagicMock()
+    error = make_client_error('AccessDenied', 'ListBuckets')
+    mock_s3.list_buckets.side_effect = error
+
+    with patch('analyse.boto3.client', side_effect=[mock_s3, mock_cloudwatch]):
+        with pytest.raises(ClientError):
+            S3SecurityAuditor()
+
+
+def test_public_access_policy_error_logging(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'policy-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+    mock_s3.get_bucket_acl.return_value = {'Grants': []}
+    mock_s3.get_bucket_policy.side_effect = make_client_error('AccessDenied', 'GetBucketPolicy')
+
+    auditor._check_public_access(bucket)
+    assert auditor.findings == []
+
+
+def test_encryption_and_logging_error_branches(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'error-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+
+    mock_s3.get_bucket_encryption.side_effect = make_client_error('AccessDenied', 'GetBucketEncryption')
+    auditor._check_encryption(bucket)
+    mock_s3.get_bucket_encryption.side_effect = Exception("boom")
+    auditor._check_encryption(bucket)
+
+    mock_s3.get_bucket_logging.side_effect = Exception("log error")
+    auditor._check_logging(bucket)
+
+
+def test_lifecycle_and_replication_error_branches(auditor_with_mocks):
+    auditor, mock_s3, mock_cloudwatch = auditor_with_mocks
+    bucket = 'critical-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {'DataClassification': 'Critical'}}
+
+    mock_cloudwatch.get_metric_statistics.return_value = {
+        'Datapoints': [{'Average': (LARGE_BUCKET_SIZE_GB + 10) * (1024 ** 3)}]
+    }
+    mock_s3.get_bucket_lifecycle_configuration.side_effect = make_client_error(
+        'AccessDenied', 'GetBucketLifecycleConfiguration'
+    )
+    auditor._check_lifecycle_policies(bucket)
+
+    mock_cloudwatch.get_metric_statistics.side_effect = Exception("cw error")
+    auditor._check_lifecycle_policies(bucket)
+
+    mock_s3.get_bucket_replication.side_effect = make_client_error('AccessDenied', 'GetBucketReplication')
+    auditor._check_replication(bucket)
+    mock_s3.get_bucket_replication.side_effect = Exception("replication boom")
+    auditor._check_replication(bucket)
+
+
+def test_secure_transport_error_logging(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'transport-bucket'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+    mock_s3.get_bucket_policy.side_effect = make_client_error('AccessDenied', 'GetBucketPolicy')
+    auditor._check_secure_transport(bucket)
+
+    mock_s3.get_bucket_policy.side_effect = Exception("policy boom")
+    auditor._check_secure_transport(bucket)
+
+
+def test_object_lock_additional_paths(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'compliance-2'
+    auditor.bucket_cache[bucket] = {
+        'arn': f'arn:aws:s3:::{bucket}',
+        'tags': {'RequireCompliance': 'true'}
+    }
+    mock_s3.get_object_lock_configuration.return_value = {
+        'ObjectLockConfiguration': {'ObjectLockEnabled': 'Disabled'}
+    }
+    auditor._check_object_lock(bucket)
+    assert any(f.issue_type == 'NO_OBJECT_LOCK' for f in auditor.findings)
+
+
+def test_mfa_and_access_logging_error_paths(auditor_with_mocks):
+    auditor, mock_s3, mock_cloudwatch = auditor_with_mocks
+    bucket = 'financial-error'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+    mock_s3.get_bucket_versioning.side_effect = Exception("mfa error")
+    auditor._check_mfa_delete(bucket)
+
+    mock_cloudwatch.get_metric_statistics.side_effect = Exception("cw failure")
+    auditor._check_access_logging_destination(bucket)
+
+
+def test_kms_error_path(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'vpc-error'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+    mock_s3.get_bucket_encryption.side_effect = Exception("kms error")
+    auditor._check_kms_encryption_for_vpc(bucket)
+
+
+def test_glacier_transition_additional_paths(auditor_with_mocks):
+    auditor, mock_s3, _ = auditor_with_mocks
+    bucket = 'archive-extra'
+    auditor.bucket_cache[bucket] = {'arn': f'arn:aws:s3:::{bucket}', 'tags': {}}
+
+    old_object = {'LastModified': datetime.now(timezone.utc) - timedelta(days=120)}
+    mock_paginator = MagicMock()
+    mock_paginator.paginate.return_value = [{'Contents': [old_object]}]
+    mock_s3.get_paginator.return_value = mock_paginator
+    mock_s3.get_bucket_lifecycle_configuration.return_value = {
+        'Rules': [{'Transitions': [{'StorageClass': 'STANDARD'}]}]
+    }
+    auditor._check_glacier_transitions(bucket)
+
+    mock_s3.get_paginator.side_effect = Exception("timeout")
+    auditor._check_glacier_transitions(bucket)
+
+
+def test_print_findings_when_empty(auditor_with_mocks):
+    auditor, _, _ = auditor_with_mocks
+    auditor.findings = []
+    auditor.print_findings()
+
+
+def test_save_html_report_handles_missing_dependencies(tmp_path, auditor_with_mocks):
+    auditor, _, _ = auditor_with_mocks
+    summary = minimal_summary()
+
+    real_import = builtins.__import__
+
+    def failing_import(name, *args, **kwargs):
+        if name.startswith('jinja2') or name.startswith('plotly'):
+            raise ImportError("missing dependency")
+        return real_import(name, *args, **kwargs)
+
+    with patch('builtins.__import__', side_effect=failing_import):
+        auditor.save_html_report([], summary, filename=str(tmp_path / 'unused.html'))
+
+
+def test_save_html_report_missing_template_path(tmp_path, auditor_with_mocks):
+    auditor, _, _ = auditor_with_mocks
+    summary = minimal_summary()
+
+    with stub_visualization_modules():
+        with patch('analyse.os.path.exists', return_value=False):
+            auditor.save_html_report([], summary, filename=str(tmp_path / 'unused.html'))
+
+
+def test_save_html_report_file_open_error(tmp_path, auditor_with_mocks):
+    auditor, _, _ = auditor_with_mocks
+    summary = minimal_summary()
+
+    with stub_visualization_modules():
+        with patch('analyse.os.path.exists', return_value=True):
+            with patch('builtins.open', side_effect=FileNotFoundError):
+                auditor.save_html_report([], summary, filename=str(tmp_path / 'unused.html'))
+
+
+def test_chart_helpers_handle_missing_plotly(auditor_with_mocks):
+    auditor, _, _ = auditor_with_mocks
+    summary = minimal_summary()
+
+    with force_plotly_import_failure():
+        sev = auditor._create_severity_chart(summary)
+        comp = auditor._create_compliance_chart(summary)
+        issue = auditor._create_issue_type_chart(summary)
+
+    assert sev.startswith('<!--')
+    assert comp.startswith('<!--')
+    assert issue.startswith('<!--')
+
+
+def test_run_s3_security_audit_success_and_html_warning():
+    summary = minimal_summary()
+    summary['total_buckets_audited'] = 1
+    fake_auditor = MagicMock()
+    fake_auditor.run_audit.return_value = ([], summary)
+    fake_auditor.save_html_report.side_effect = Exception("html fail")
+
+    with patch('analyse.S3SecurityAuditor', return_value=fake_auditor):
+        assert run_s3_security_audit() == 0
+        assert fake_auditor.print_findings.called
+        assert fake_auditor.save_json_report.called
+
+
+def test_run_s3_security_audit_returns_nonzero_on_critical():
+    summary = minimal_summary()
+    critical_finding = Finding(
+        bucket_name='b',
+        bucket_arn='arn',
+        issue_type='PUBLIC_ACCESS',
+        severity='CRITICAL',
+        compliance_frameworks=['SOC2'],
+        current_config='',
+        required_config='',
+        remediation_steps='',
+    )
+    fake_auditor = MagicMock()
+    fake_auditor.run_audit.return_value = ([critical_finding], summary)
+
+    with patch('analyse.S3SecurityAuditor', return_value=fake_auditor):
+        assert run_s3_security_audit() == 1
+
+
+def test_run_s3_security_audit_handles_fatal_error():
+    with patch('analyse.S3SecurityAuditor', side_effect=Exception("boom")):
+        assert run_s3_security_audit() == 2
+
+
+def test_main_propagates_run_result():
+    with patch('analyse.run_s3_security_audit', return_value=42):
+        assert main() == 42
