@@ -14,48 +14,56 @@ Create a migration infrastructure using **AWS CDK with Python** for payment proc
 
 ### Core Requirements
 
-1. **Multi-Stack Architecture**
-   - Define separate CDK stacks for source and target environments
-   - Use CDK multi-stack patterns for cross-stack references
-   - Enable independent deployment and rollback capabilities
-   - Share resources securely between stacks (VPC, security groups, secrets)
+1. **Single-Stack Architecture**
+   - Define all infrastructure resources in a single CDK stack
+   - Include source and target database instances in the same stack
+   - Create all DMS replication resources within the main stack
+   - Consolidate Route53 traffic management in the main stack
+   - Enable efficient resource management and deployment
 
 2. **Database Layer**
-   - Deploy RDS PostgreSQL instances in both environments
+   - Deploy source and target RDS PostgreSQL instances within the same stack
    - Instance type: db.r5.large with 100GB storage
    - Enable encryption at rest for both instances
    - Configure automated backups and point-in-time recovery
    - Use AWS Secrets Manager for database credentials (no hardcoded passwords)
    - Apply security groups with least privilege access
+   - Configure logical replication parameters for DMS support
 
 3. **Data Replication with AWS DMS**
-   - Create DMS replication instance for continuous data sync
+   - Create DMS prerequisite IAM roles (dms-vpc-role, dms-cloudwatch-logs-role) in the main stack
+   - Create DMS replication instance for continuous data sync within the stack
    - Configure source and target endpoints using Secrets Manager integration
    - Set up replication tasks with full load and CDC (Change Data Capture)
    - Implement table mappings for payment-related tables
    - Enable CloudWatch logging for replication monitoring
-   - CRITICAL: Use secrets_manager_secret_id parameter for endpoint authentication
+   - CRITICAL: Use postgre_sql_settings property with secrets_manager_secret_id parameter
+   - Use CompositePrincipal with both regional and global DMS service principals
 
 4. **Storage Layer**
-   - Deploy S3 buckets in both environments for transaction logs
-   - Configure cross-region replication for audit trail consistency
+   - Deploy source and target S3 buckets in the same stack for transaction logs
+   - Configure S3 replication between source and target buckets
    - Enable versioning and encryption on all buckets
-   - Set lifecycle policies for cost optimization
+   - Set lifecycle policies for cost optimization (Glacier after 90 days)
    - Implement bucket policies for secure access
+   - Create IAM role for S3 replication with appropriate permissions
 
 5. **Application Services**
-   - Deploy ECS Fargate clusters in both environments
-   - Configure Application Load Balancers for service access
-   - Use container images from ECR with proper tagging
-   - Implement auto-scaling based on CPU and memory metrics
-   - Configure health checks and target group routing
+   - Deploy ECS Fargate cluster within the main stack
+   - Configure Application Load Balancer for service access
+   - Use nginx:latest container image for demo purposes
+   - Implement auto-scaling based on CPU (70%) and memory (80%) metrics
+   - Configure health checks on path "/" with proper timeouts
+   - Container port, target group port, and security group rules must all use port 80
+   - Use task-level IAM roles with access to Secrets Manager and S3
 
 6. **Traffic Management**
-   - Create Route 53 hosted zone with weighted routing policy
-   - Initial configuration: 100% traffic to source environment
-   - Enable health checks for automatic failover capability
-   - Support gradual traffic shifting during migration
-   - Configure TTL for rapid DNS propagation
+   - Create Route 53 hosted zone within the main stack using .internal domain
+   - Configure HTTP health checks for the ALB on port 80, path "/"
+   - Create A records pointing to the ALB DNS name
+   - Health checks should monitor ALB availability every 30 seconds
+   - Set failure threshold to 3 for health check failures
+   - Provide commands in CloudFormation outputs for traffic management
 
 7. **Observability and Monitoring**
    - Create CloudWatch dashboard with key migration metrics
@@ -74,55 +82,69 @@ Create a migration infrastructure using **AWS CDK with Python** for payment proc
 
 ### Technical Requirements
 
-- All infrastructure defined using **AWS CDK with Python**
-- Use **RDS PostgreSQL** for relational database with encryption
-- Use **AWS DMS** for continuous database replication with Secrets Manager
-- Use **S3** with cross-region replication for storage layer
-- Use **ECS Fargate** and **ALB** for containerized application services
-- Use **Route 53** for DNS-based traffic management
-- Use **CloudWatch** for metrics, logs, and dashboards
-- Use **AWS Secrets Manager** for credential management with 30-day rotation
+- All infrastructure defined using **AWS CDK with Python** in a **single stack**
+- Stack name format: `TapStack{environmentSuffix}` (e.g., TapStackpr6185)
+- Use **RDS PostgreSQL 14** for relational database with encryption
+- Use **AWS DMS 3.5.4** for continuous database replication with Secrets Manager
+- Use **S3** with replication between source and target buckets
+- Use **ECS Fargate** and **ALB** for containerized application services (nginx:latest)
+- Use **Route 53** for DNS health checks and A records
+- Use **CloudWatch** for metrics, logs, dashboards, and alarms
+- Use **AWS Secrets Manager** for credential management (password generation)
 - Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: resource-type-environment-suffix
-- Deploy to **us-east-1** region
-- Use CDK Constructs pattern (not Stack classes in lib/)
-- Implement proper VPC networking with public and private subnets
+- Follow naming convention: resource-type-{source|target}-environmentSuffix
+- Deploy to **us-east-1** region (configurable via CDK_DEFAULT_REGION)
+- Single TapStack class in lib/tap_stack.py containing all resources
+- Implement proper VPC networking with public and private subnets (2 AZs)
+- DMS IAM roles must use CompositePrincipal (regional + global service principals)
 
 ### Constraints
 
 - DO NOT use hardcoded passwords anywhere in the code
 - ALL database credentials must use AWS Secrets Manager integration
-- DMS endpoints must use secrets_manager_secret_id parameter
-- All resources must be fully destroyable (no Retain deletion policies)
-- Implement encryption for all data at rest and in transit
+- DMS endpoints must use `postgre_sql_settings` property (NOT top-level parameters)
+- DMS endpoints must use `secrets_manager_secret_id` and `secrets_manager_access_role_arn`
+- All resources must be fully destroyable (RemovalPolicy.DESTROY for dev/test)
+- Implement encryption for all data at rest (RDS, S3) and in transit
 - Apply resource tagging: Environment, MigrationPhase, CostCenter
-- Use CDK Aspects to enforce encryption across all resources
+- Use CDK Aspects (EncryptionAspect) to enforce S3 bucket encryption
 - CloudWatch alarms must trigger for DMS replication lag greater than 60 seconds
-- S3 buckets must have versioning enabled before cross-region replication
-- ECS tasks must use task-level IAM roles with least privilege
-- Security groups must follow principle of least privilege
-- Include proper error handling and logging throughout
+- S3 buckets must have versioning enabled for replication to work
+- ECS tasks must use task-level IAM roles with least privilege (S3, Secrets Manager access)
+- Security groups must follow principle of least privilege (separate groups for RDS, DMS, ECS, ALB)
+- Container port (80), target group port (80), and security group rules (80) must align
+- Health check path must be "/" for nginx:latest container
+- Import aws_route53_targets as separate module (NOT route53.targets)
 - Code must be production-ready and deployment-tested
+- Must create approximately 85-90 resources in the single stack
 
 ## Success Criteria
 
-- **Functionality**: Complete migration infrastructure deploys successfully in both environments
+- **Functionality**: Complete migration infrastructure deploys successfully in a single stack (~85 resources)
 - **Security**: All credentials stored in Secrets Manager, no hardcoded passwords, encryption enabled
-- **Replication**: DMS successfully replicates data with lag under 60 seconds
-- **Observability**: CloudWatch dashboard displays all critical metrics in real-time
+- **Replication**: DMS successfully replicates data between source and target databases
+- **Observability**: CloudWatch dashboard displays all critical metrics with proper alarms
 - **Resource Naming**: All resources include environmentSuffix in their names
 - **Destroyability**: All resources can be deleted without manual intervention
 - **Code Quality**: Clean Python code following CDK best practices, well-documented, deployable
+- **Stack Architecture**: Single TapStack{environmentSuffix} containing all infrastructure resources
+- **Resource Count**: Approximately 85-90 CloudFormation resources in deployed stack
 
 ## What to deliver
 
-- Complete AWS CDK Python implementation with proper project structure
-- RDS PostgreSQL instances in both environments with Secrets Manager integration
-- AWS DMS replication infrastructure with continuous sync capability
-- S3 buckets with cross-region replication configured
-- ECS Fargate services behind Application Load Balancers
-- Route 53 weighted routing configuration for traffic management
-- CloudWatch dashboard with replication lag, database, and service metrics
-- Migration runbook exported as CloudFormation stack outputs
-- Proper VPC networking with security groups and IAM roles
-- Unit tests and deployment documentation
+- Complete AWS CDK Python implementation in a **single stack** with proper project structure
+- app.py file creating one TapStack instance with environment suffix
+- lib/tap_stack.py containing all infrastructure resources in TapStack class
+- Source and target RDS PostgreSQL 14 instances with Secrets Manager integration
+- DMS IAM roles (dms-vpc-role, dms-cloudwatch-logs-role) with CompositePrincipal
+- AWS DMS replication infrastructure (replication instance, endpoints, tasks)
+- Source and target S3 buckets with replication configuration
+- ECS Fargate cluster and service behind Application Load Balancer
+- Route 53 hosted zone with health checks and A records
+- CloudWatch dashboard with 6 widgets (DMS lag, DB metrics, ECS, ALB)
+- CloudWatch alarms for DMS lag, database CPU, and ECS health
+- 33+ CloudFormation outputs for operational management
+- Proper VPC networking (2 AZs) with 4 security groups and IAM roles
+- EncryptionAspect to enforce S3 encryption
+- Unit tests (69+ tests) covering all infrastructure components
+- Integration tests (21+ tests) validating deployed AWS resources
