@@ -1,25 +1,4 @@
-# Network data sources and security groups for the EKS deployment
-
-data "aws_ssm_parameter" "vpc_id" {
-  name = var.vpc_id_parameter_name
-}
-
-data "aws_subnets" "private" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_ssm_parameter.vpc_id.value]
-  }
-
-  filter {
-    name   = "availability-zone"
-    values = var.availability_zones
-  }
-
-  filter {
-    name   = "tag:${var.private_subnet_tag_key}"
-    values = [var.private_subnet_tag_value]
-  }
-}
+# Network security groups for the EKS deployment
 
 locals {
   kubernetes_control_plane_ports = [
@@ -56,7 +35,7 @@ locals {
 resource "aws_security_group" "eks_cluster" {
   name        = "${local.cluster_name}-cp-sg"
   description = "Control plane security group for ${local.cluster_name}"
-  vpc_id      = data.aws_ssm_parameter.vpc_id.value
+  vpc_id      = local.vpc_id
 
   tags = merge(local.common_tags, {
     Name                                          = "${local.cluster_name}-cp-sg"
@@ -71,7 +50,7 @@ resource "aws_security_group" "eks_cluster" {
 resource "aws_security_group" "eks_nodes" {
   name        = "${local.cluster_name}-node-sg"
   description = "Worker node security group for ${local.cluster_name}"
-  vpc_id      = data.aws_ssm_parameter.vpc_id.value
+  vpc_id      = local.vpc_id
 
   egress {
     description = "Allow HTTPS egress to AWS services"

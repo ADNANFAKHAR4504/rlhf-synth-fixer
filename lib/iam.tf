@@ -2,8 +2,29 @@
 
 data "aws_caller_identity" "current" {}
 
-data "aws_secretsmanager_secret" "database" {
-  name = local.database_secret_name
+locals {
+  use_existing_db_secret = var.existing_database_secret_arn != ""
+}
+
+resource "aws_secretsmanager_secret" "database" {
+  count = local.use_existing_db_secret ? 0 : 1
+
+  name                    = local.database_secret_name
+  recovery_window_in_days = 0
+  description             = "Credentials for the payments application datastore"
+
+  tags = local.common_tags
+}
+
+resource "aws_secretsmanager_secret_version" "database" {
+  count = local.use_existing_db_secret ? 0 : 1
+
+  secret_id     = aws_secretsmanager_secret.database[0].id
+  secret_string = var.database_secret_string
+}
+
+locals {
+  database_secret_arn = local.use_existing_db_secret ? var.existing_database_secret_arn : aws_secretsmanager_secret.database[0].arn
 }
 
 data "aws_iam_policy_document" "eks_cluster_trust" {
@@ -178,7 +199,7 @@ data "aws_iam_policy_document" "app_irsa" {
       "secretsmanager:GetSecretValue",
       "secretsmanager:DescribeSecret"
     ]
-    resources = [data.aws_secretsmanager_secret.database.arn]
+    resources = [local.database_secret_arn]
   }
 }
 

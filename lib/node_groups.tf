@@ -3,7 +3,7 @@ resource "aws_eks_node_group" "frontend" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = local.frontend_node_group_name
   node_role_arn   = aws_iam_role.frontend_nodes.arn
-  subnet_ids      = data.aws_subnets.private.ids
+  subnet_ids      = local.private_subnet_ids
   version         = aws_eks_cluster.main.version
 
   scaling_config {
@@ -54,7 +54,7 @@ resource "aws_eks_node_group" "backend" {
   cluster_name    = aws_eks_cluster.main.name
   node_group_name = local.backend_node_group_name
   node_role_arn   = aws_iam_role.backend_nodes.arn
-  subnet_ids      = data.aws_subnets.private.ids
+  subnet_ids      = local.private_subnet_ids
   version         = aws_eks_cluster.main.version
 
   scaling_config {
