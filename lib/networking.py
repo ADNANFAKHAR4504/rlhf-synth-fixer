@@ -12,6 +12,10 @@ from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociati
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import (
     DataAwsAvailabilityZones,
 )
+from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
+from cdktf_cdktf_provider_aws.vpc_endpoint_route_table_association import (
+    VpcEndpointRouteTableAssociation,
+)
 
 
 class NetworkingInfrastructure(Construct):
@@ -165,6 +169,27 @@ class NetworkingInfrastructure(Construct):
                 subnet_id=subnet.id,
                 route_table_id=private_rt.id,
             )
+
+        # VPC Gateway Endpoint for S3
+        # This keeps S3 traffic within AWS network instead of going through NAT Gateway
+        s3_endpoint = VpcEndpoint(
+            self,
+            "s3_endpoint",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{region}.s3",
+            vpc_endpoint_type="Gateway",
+            tags={
+                "Name": f"payment-s3-endpoint-{environment_suffix}",
+            },
+        )
+
+        # Associate S3 endpoint with private route table
+        VpcEndpointRouteTableAssociation(
+            self,
+            "s3_endpoint_rt_assoc",
+            route_table_id=private_rt.id,
+            vpc_endpoint_id=s3_endpoint.id,
+        )
 
     @property
     def vpc_id(self) -> str:

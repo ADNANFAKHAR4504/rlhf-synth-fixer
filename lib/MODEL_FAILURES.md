@@ -440,6 +440,98 @@ Location: [lib/networking.py:106-167](lib/networking.py#L106-L167)
 4. Monitor NAT Gateway data processing costs in production
 5. Consider using AWS PrivateLink for third-party services
 
+## Issue 8: CDKTF WAF Configuration - Dictionary vs. Class-Based Approach
+
+### Problem Description
+
+**Severity**: Medium - Synthesis Error
+
+When implementing AWS WAF Web ACL with CDKTF Python, initial attempts to use strongly-typed class imports failed with import errors.
+
+**Error Messages**:
+```
+ImportError: cannot import name 'Wafv2WebAclRuleStatement' from 'cdktf_cdktf_provider_aws.wafv2_web_acl'
+TypeError: Wafv2WebAclVisibilityConfig.__init__() got an unexpected keyword argument 'cloudwatchMetricsEnabled'
+```
+
+### Initial (Failed) Approach
+
+Attempted to import all WAF configuration classes:
+```python
+from cdktf_cdktf_provider_aws.wafv2_web_acl import (
+    Wafv2WebAcl,
+    Wafv2WebAclDefaultAction,
+    Wafv2WebAclRule,
+    Wafv2WebAclRuleStatement,  # Does not exist
+    Wafv2WebAclRuleStatementManagedRuleGroupStatement,  # Does not exist
+    Wafv2WebAclVisibilityConfig,
+    Wafv2WebAclRuleOverrideAction,
+)
+```
+
+**Why This Failed**:
+- CDKTF AWS provider doesn't export all nested configuration classes
+- Some configuration objects must be provided as dictionaries, not class instances
+- Mixing camelCase and snake_case incorrectly based on nesting level
+
+### Correct Solution
+
+Use dictionary-based configuration for nested objects with proper case conventions:
+
+```python
+from cdktf_cdktf_provider_aws.wafv2_web_acl import Wafv2WebAcl
+
+waf_acl = Wafv2WebAcl(
+    self,
+    "waf_acl",
+    name=f"payment-waf-{environment_suffix}",
+    scope="REGIONAL",
+    default_action={"allow": {}},
+    rule=[
+        {
+            "name": "AWSManagedRulesCommonRuleSet",
+            "priority": 1,
+            "overrideAction": {"none": {}},  # camelCase for nested dicts
+            "statement": {
+                "managedRuleGroupStatement": {  # camelCase
+                    "vendorName": "AWS",  # camelCase
+                    "name": "AWSManagedRulesCommonRuleSet"
+                }
+            },
+            "visibilityConfig": {  # camelCase in nested dict
+                "cloudwatchMetricsEnabled": True,  # camelCase
+                "metricName": "CommonRuleSetMetric",
+                "sampledRequestsEnabled": True
+            }
+        }
+    ],
+    visibility_config={  # snake_case at top level
+        "cloudwatch_metrics_enabled": True,  # snake_case
+        "metric_name": f"payment-waf-{environment_suffix}",
+        "sampled_requests_enabled": True
+    }
+)
+```
+
+Location: [lib/security.py:203-280](lib/security.py#L203-L280)
+
+### Lessons Learned
+
+1. CDKTF doesn't always export all nested TypeScript classes to Python
+2. Use dictionary-based configuration for complex nested structures
+3. Top-level parameters use snake_case (Python convention)
+4. Nested dictionary keys use camelCase (matching Terraform AWS provider)
+5. Check CDKTF provider documentation for parameter naming conventions
+6. Test synthesis after each configuration change
+
+### Prevention Strategy
+
+1. Start with simple configuration and add complexity incrementally
+2. Use dictionary-based approach for deeply nested configurations
+3. Check function signatures with `inspect.signature()` to verify parameter names
+4. Refer to Terraform AWS provider documentation for structure
+5. Use AWS Console or CLI examples as reference for valid configurations
+
 ## General Lessons and Best Practices
 
 ### 1. CDKTF vs. Terraform Differences

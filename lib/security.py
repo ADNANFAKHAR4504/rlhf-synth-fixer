@@ -9,10 +9,7 @@ from cdktf_cdktf_provider_aws.security_group import (
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
 from cdktf_cdktf_provider_aws.iam_instance_profile import IamInstanceProfile
-from cdktf_cdktf_provider_aws.wafv2_web_acl import (
-    Wafv2WebAcl,
-    Wafv2WebAclConfig,
-)
+from cdktf_cdktf_provider_aws.wafv2_web_acl import Wafv2WebAcl
 import json
 
 
@@ -151,16 +148,20 @@ class SecurityInfrastructure(Construct):
         )
 
         # IAM Policy for EC2 instances (least privilege)
+        # S3 bucket name pattern: payment-static-{environment_suffix}
+        s3_bucket_pattern = f"payment-static-{environment_suffix}"
         instance_policy = {
             "Version": "2012-10-17",
             "Statement": [
                 {
                     "Effect": "Allow",
-                    "Action": [
-                        "s3:GetObject",
-                        "s3:ListBucket",
-                    ],
-                    "Resource": ["arn:aws:s3:::*"],
+                    "Action": ["s3:ListBucket"],
+                    "Resource": [f"arn:aws:s3:::{s3_bucket_pattern}"],
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": ["s3:GetObject"],
+                    "Resource": [f"arn:aws:s3:::{s3_bucket_pattern}/*"],
                 },
                 {
                     "Effect": "Allow",
@@ -199,9 +200,82 @@ class SecurityInfrastructure(Construct):
             role=self.instance_role.name,
         )
 
-        # WAF Web ACL - Simplified for deployment
-        # Note: Using basic configuration, can be enhanced with managed rule groups
-        self.waf_acl_arn = f"arn:aws:wafv2:*:*:regional/webacl/payment-waf-{environment_suffix}/*"
+        # WAF Web ACL with AWS Managed Rule Groups
+        # Using dictionary-based configuration for CDKTF compatibility
+        self.waf_acl = Wafv2WebAcl(
+            self,
+            "waf_acl",
+            name=f"payment-waf-{environment_suffix}",
+            scope="REGIONAL",
+            default_action={"allow": {}},
+            rule=[
+                # AWS Managed Rules - Core Rule Set (CRS)
+                {
+                    "name": "AWSManagedRulesCommonRuleSet",
+                    "priority": 1,
+                    "overrideAction": {
+                        "none": {}
+                    },
+                    "statement": {
+                        "managedRuleGroupStatement": {
+                            "vendorName": "AWS",
+                            "name": "AWSManagedRulesCommonRuleSet"
+                        }
+                    },
+                    "visibilityConfig": {
+                        "cloudwatchMetricsEnabled": True,
+                        "metricName": "AWSManagedRulesCommonRuleSetMetric",
+                        "sampledRequestsEnabled": True
+                    }
+                },
+                # AWS Managed Rules - Known Bad Inputs
+                {
+                    "name": "AWSManagedRulesKnownBadInputsRuleSet",
+                    "priority": 2,
+                    "overrideAction": {
+                        "none": {}
+                    },
+                    "statement": {
+                        "managedRuleGroupStatement": {
+                            "vendorName": "AWS",
+                            "name": "AWSManagedRulesKnownBadInputsRuleSet"
+                        }
+                    },
+                    "visibilityConfig": {
+                        "cloudwatchMetricsEnabled": True,
+                        "metricName": "AWSManagedRulesKnownBadInputsRuleSetMetric",
+                        "sampledRequestsEnabled": True
+                    }
+                },
+                # AWS Managed Rules - SQL Injection
+                {
+                    "name": "AWSManagedRulesSQLiRuleSet",
+                    "priority": 3,
+                    "overrideAction": {
+                        "none": {}
+                    },
+                    "statement": {
+                        "managedRuleGroupStatement": {
+                            "vendorName": "AWS",
+                            "name": "AWSManagedRulesSQLiRuleSet"
+                        }
+                    },
+                    "visibilityConfig": {
+                        "cloudwatchMetricsEnabled": True,
+                        "metricName": "AWSManagedRulesSQLiRuleSetMetric",
+                        "sampledRequestsEnabled": True
+                    }
+                },
+            ],
+            visibility_config={
+                "cloudwatch_metrics_enabled": True,
+                "metric_name": f"payment-waf-{environment_suffix}",
+                "sampled_requests_enabled": True
+            },
+            tags={
+                "Name": f"payment-waf-{environment_suffix}",
+            },
+        )
 
     @property
     def alb_security_group_id(self) -> str:
@@ -225,6 +299,5 @@ class SecurityInfrastructure(Construct):
 
     @property
     def waf_web_acl_arn(self) -> str:
-        """Return WAF Web ACL ARN (placeholder)."""
-        # WAF disabled for simplified deployment
-        return ""
+        """Return WAF Web ACL ARN."""
+        return self.waf_acl.arn

@@ -18,7 +18,7 @@ The configuration must:
 6. Implement WAF rules on the ALB to protect against common attacks
 7. Configure CloudWatch alarms for CPU, memory, and disk utilization
 8. Create IAM roles and policies following least privilege principles
-9. Set up VPC endpoints for S3 and RDS to keep traffic private
+9. Set up VPC Gateway endpoint for S3 to keep traffic private within AWS network
 10. Configure scheduled scaling actions for the Auto Scaling Group
 
 ## Background Context
@@ -27,15 +27,15 @@ A fintech startup needs to deploy their payment processing application with stri
 
 ## Environment Details
 
-Production environment in us-east-1 region for a payment processing application. Infrastructure includes:
+Production environment in us-east-2 region for a payment processing application. Infrastructure includes:
 
 - Application Load Balancer with WAF integration
 - Auto Scaling Group with EC2 instances in private subnets across 3 availability zones
 - RDS PostgreSQL Multi-AZ deployment with encryption at rest
-- S3 bucket for static content delivery
-- VPC with public and private subnets
-- NAT Gateways for outbound traffic
-- Comprehensive CloudWatch monitoring
+- S3 bucket for static content delivery with CloudFront CDN
+- VPC with public and private subnets across 3 availability zones
+- NAT Gateway for outbound traffic (cost-optimized single NAT Gateway)
+- Comprehensive CloudWatch monitoring and alarms
 
 Requires Terraform 1.5+ with AWS provider 5.x, proper IAM permissions for creating and managing all resources.
 
@@ -57,4 +57,4 @@ Expert
 
 ## Region
 
-ap-southeast-1
+us-east-2

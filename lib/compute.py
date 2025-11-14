@@ -140,14 +140,14 @@ class ComputeInfrastructure(Construct):
             ],
         )
 
-        # Associate WAF with ALB - Disabled for simplified deployment
-        # if waf_web_acl_arn:
-        #     Wafv2WebAclAssociation(
-        #         self,
-        #         "waf_association",
-        #         resource_arn=self.alb.arn,
-        #         web_acl_arn=waf_web_acl_arn,
-        #     )
+        # Associate WAF with ALB
+        if waf_web_acl_arn:
+            Wafv2WebAclAssociation(
+                self,
+                "waf_association",
+                resource_arn=self.alb.arn,
+                web_acl_arn=waf_web_acl_arn,
+            )
 
         # Get latest Amazon Linux 2023 AMI
         ami = DataAwsAmi(

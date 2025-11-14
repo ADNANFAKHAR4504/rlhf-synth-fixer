@@ -4,8 +4,11 @@ from constructs import Construct
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.db_parameter_group import DbParameterGroup
-import random
-import string
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import (
+    SecretsmanagerSecretVersion,
+)
+import json
 
 
 class DatabaseInfrastructure(Construct):
@@ -72,12 +75,24 @@ class DatabaseInfrastructure(Construct):
             },
         )
 
-        # Generate a random password for the database
-        # Note: In production, use AWS Secrets Manager
-        password_chars = string.ascii_letters + string.digits
-        db_password = "".join(random.choice(password_chars) for _ in range(16))
+        # Create Secrets Manager secret for database credentials
+        db_secret = SecretsmanagerSecret(
+            self,
+            "db_secret",
+            name=f"payment-db-credentials-{environment_suffix}",
+            description="RDS PostgreSQL database credentials for payment processing",
+            tags={
+                "Name": f"payment-db-credentials-{environment_suffix}",
+            },
+        )
+
+        # Store initial credentials in Secrets Manager
+        # Use managed_master_user_password to auto-generate password
+        db_username = "dbadmin"
+        db_name = "paymentdb"
 
         # RDS PostgreSQL instance with Multi-AZ
+        # Use managed master user password feature for secure password generation
         self.db_instance = DbInstance(
             self,
             "db_instance",
@@ -90,9 +105,10 @@ class DatabaseInfrastructure(Construct):
             storage_type="gp3",
             storage_encrypted=True,
             multi_az=True,
-            db_name="paymentdb",
-            username="dbadmin",
-            password=db_password,
+            db_name=db_name,
+            username=db_username,
+            manage_master_user_password=True,
+            master_user_secret_kms_key_id=None,  # Use default AWS managed key
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[db_security_group_id],
             parameter_group_name=db_param_group.name,
