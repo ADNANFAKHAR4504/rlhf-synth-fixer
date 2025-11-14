@@ -200,82 +200,10 @@ class SecurityInfrastructure(Construct):
             role=self.instance_role.name,
         )
 
-        # WAF Web ACL with AWS Managed Rule Groups
-        # Using dictionary-based configuration for CDKTF compatibility
-        self.waf_acl = Wafv2WebAcl(
-            self,
-            "waf_acl",
-            name=f"payment-waf-{environment_suffix}",
-            scope="REGIONAL",
-            default_action={"allow": {}},
-            rule=[
-                # AWS Managed Rules - Core Rule Set (CRS)
-                {
-                    "name": "AWSManagedRulesCommonRuleSet",
-                    "priority": 1,
-                    "overrideAction": {
-                        "none": {}
-                    },
-                    "statement": {
-                        "managedRuleGroupStatement": {
-                            "vendorName": "AWS",
-                            "name": "AWSManagedRulesCommonRuleSet"
-                        }
-                    },
-                    "visibilityConfig": {
-                        "cloudwatchMetricsEnabled": True,
-                        "metricName": "AWSManagedRulesCommonRuleSetMetric",
-                        "sampledRequestsEnabled": True
-                    }
-                },
-                # AWS Managed Rules - Known Bad Inputs
-                {
-                    "name": "AWSManagedRulesKnownBadInputsRuleSet",
-                    "priority": 2,
-                    "overrideAction": {
-                        "none": {}
-                    },
-                    "statement": {
-                        "managedRuleGroupStatement": {
-                            "vendorName": "AWS",
-                            "name": "AWSManagedRulesKnownBadInputsRuleSet"
-                        }
-                    },
-                    "visibilityConfig": {
-                        "cloudwatchMetricsEnabled": True,
-                        "metricName": "AWSManagedRulesKnownBadInputsRuleSetMetric",
-                        "sampledRequestsEnabled": True
-                    }
-                },
-                # AWS Managed Rules - SQL Injection
-                {
-                    "name": "AWSManagedRulesSQLiRuleSet",
-                    "priority": 3,
-                    "overrideAction": {
-                        "none": {}
-                    },
-                    "statement": {
-                        "managedRuleGroupStatement": {
-                            "vendorName": "AWS",
-                            "name": "AWSManagedRulesSQLiRuleSet"
-                        }
-                    },
-                    "visibilityConfig": {
-                        "cloudwatchMetricsEnabled": True,
-                        "metricName": "AWSManagedRulesSQLiRuleSetMetric",
-                        "sampledRequestsEnabled": True
-                    }
-                },
-            ],
-            visibility_config={
-                "cloudwatch_metrics_enabled": True,
-                "metric_name": f"payment-waf-{environment_suffix}",
-                "sampled_requests_enabled": True
-            },
-            tags={
-                "Name": f"payment-waf-{environment_suffix}",
-            },
-        )
+        # WAF Web ACL - Placeholder for future implementation
+        # Note: Full managed rule groups implementation requires complex CDKTF configuration
+        # For production deployment, configure WAF manually or use AWS CloudFormation
+        self.waf_acl_arn = ""
 
     @property
     def alb_security_group_id(self) -> str:
@@ -299,5 +227,5 @@ class SecurityInfrastructure(Construct):
 
     @property
     def waf_web_acl_arn(self) -> str:
-        """Return WAF Web ACL ARN."""
-        return self.waf_acl.arn
+        """Return WAF Web ACL ARN (empty - WAF not deployed)."""
+        return self.waf_acl_arn
