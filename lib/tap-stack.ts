@@ -31,11 +31,11 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    
+
     // Make AWS_REGION_OVERRIDE testable by using props
     const AWS_REGION_OVERRIDE = props?.regionOverride || '';
     const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
-      
+
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
@@ -192,7 +192,6 @@ export class TapStack extends TerraformStack {
         environment: environmentSuffix,
       },
       tags: {
-        
         Name: `eks-${environmentSuffix}-spot-nodes`,
         config: `eks-${generalNodeGroupConfig}`,
       },
@@ -202,6 +201,12 @@ export class TapStack extends TerraformStack {
       this,
       'spot-node-group',
       spotNodeGroupConfig
+    );
+
+    const generalNodeGroup = new EksNodeGroup(
+      this,
+      'general-node-group',
+      generalNodeGroupConfig
     );
 
     new TerraformOutput(this, 'vpc-id', {
@@ -358,6 +363,11 @@ export class TapStack extends TerraformStack {
     new TerraformOutput(this, 'spot-node-group-status', {
       value: spotNodeGroup.nodeGroup.status,
       description: 'Spot node group status',
+    });
+
+    new TerraformOutput(this, 'general-node-group-status', {
+      value: generalNodeGroup.nodeGroup.status,
+      description: 'General node group status',
     });
 
     // Additional useful outputs
