@@ -1,38 +1,55 @@
-from constructs import Construct
-from cdktf import App, TerraformStack, TerraformOutput, Fn
-from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.eip import Eip
-from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.vpc_peering_connection import VpcPeeringConnection
-from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import VpcPeeringConnectionAccepter
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
-from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+import json
+
+from cdktf import App, Fn, TerraformOutput, TerraformStack
+from cdktf_cdktf_provider_aws.apigatewayv2_api import Apigatewayv2Api
+from cdktf_cdktf_provider_aws.apigatewayv2_integration import \
+    Apigatewayv2Integration
+from cdktf_cdktf_provider_aws.apigatewayv2_route import Apigatewayv2Route
+from cdktf_cdktf_provider_aws.apigatewayv2_stage import Apigatewayv2Stage
+from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import \
+    CloudwatchMetricAlarm
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex, DynamodbTablePointInTimeRecovery
-from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA, S3BucketVersioningVersioningConfiguration
-from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import S3BucketServerSideEncryptionConfigurationA, S3BucketServerSideEncryptionConfigurationRuleA, S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
-from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import S3BucketReplicationConfiguration, S3BucketReplicationConfigurationRule, S3BucketReplicationConfigurationRuleDestination
+from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex,
+    DynamodbTablePointInTimeRecovery)
+from cdktf_cdktf_provider_aws.eip import Eip
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy import IamRolePolicy
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
-from cdktf_cdktf_provider_aws.apigatewayv2_api import Apigatewayv2Api
-from cdktf_cdktf_provider_aws.apigatewayv2_stage import Apigatewayv2Stage
-from cdktf_cdktf_provider_aws.apigatewayv2_integration import Apigatewayv2Integration
-from cdktf_cdktf_provider_aws.apigatewayv2_route import Apigatewayv2Route
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-from cdktf_cdktf_provider_aws.cloudwatch_dashboard import CloudwatchDashboard
-from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
-import json
+from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
+from cdktf_cdktf_provider_aws.provider import AwsProvider
+from cdktf_cdktf_provider_aws.route_table import RouteTable, RouteTableRoute
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
+    S3BucketReplicationConfiguration, S3BucketReplicationConfigurationRule,
+    S3BucketReplicationConfigurationRuleDestination)
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault)
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import (
+    S3BucketVersioningA, S3BucketVersioningVersioningConfiguration)
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from cdktf_cdktf_provider_aws.vpc_peering_connection import \
+    VpcPeeringConnection
+from cdktf_cdktf_provider_aws.vpc_peering_connection_accepter import \
+    VpcPeeringConnectionAccepterA
+from constructs import Construct
 
 
 class TapStack(TerraformStack):
@@ -472,7 +489,7 @@ class TapStack(TerraformStack):
             provider=provider_us_east_1
         )
 
-        vpc_peering_accepter = VpcPeeringConnectionAccepter(
+        vpc_peering_accepter = VpcPeeringConnectionAccepterA(
             self,
             "vpc-peering-accepter",
             vpc_peering_connection_id=vpc_peering.id,
