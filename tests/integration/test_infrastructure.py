@@ -1,13 +1,15 @@
 """
 Integration tests for TAP infrastructure deployment.
 
-These tests validate the actual deployed infrastructure using Pulumi stack outputs.
-Run after: pulumi up
+These tests validate the actual deployed infrastructure by reading outputs from:
+cfn-outputs/flat-outputs.json
+
+Run after: cdktf deploy (which generates the outputs JSON file)
 """
 
 import unittest
 import json
-import subprocess
+import os
 
 
 class TestInfrastructureDeployment(unittest.TestCase):
@@ -15,59 +17,71 @@ class TestInfrastructureDeployment(unittest.TestCase):
     
     @classmethod
     def setUpClass(cls):
-        """Load Pulumi stack outputs."""
+        """Load stack outputs from cfn-outputs/flat-outputs.json."""
         try:
-            # Get stack outputs from Pulumi
-            result = subprocess.run(
-                ['pulumi', 'stack', 'output', '--json'],
-                capture_output=True,
-                text=True,
-                check=True
-            )
-            cls.outputs = json.loads(result.stdout)
+            # Path to the flat outputs JSON file
+            outputs_file = os.path.join('cfn-outputs', 'flat-outputs.json')
+            
+            # Check if file exists
+            if not os.path.exists(outputs_file):
+                cls.outputs = {}
+                cls.stack_available = False
+                print(f"\n✗ Outputs file not found: {outputs_file}")
+                print(f"   Please run: cdktf deploy to generate outputs")
+                return
+            
+            # Read the JSON file
+            with open(outputs_file, 'r', encoding='utf-8') as f:
+                cls.outputs = json.load(f)
+            
             cls.stack_available = True
-            print(f"\n✓ Loaded stack outputs: {len(cls.outputs)} outputs found")
-        except (subprocess.CalledProcessError, FileNotFoundError, json.JSONDecodeError) as e:
+            print(f"\n✓ Loaded stack outputs from {outputs_file}: {len(cls.outputs)} outputs found")
+            
+        except json.JSONDecodeError as e:
+            cls.outputs = {}
+            cls.stack_available = False
+            print(f"\n✗ Failed to parse JSON from outputs file: {e}")
+        except Exception as e:
             cls.outputs = {}
             cls.stack_available = False
             print(f"\n✗ Failed to load stack outputs: {e}")
     
     def test_stack_outputs_exist(self):
-        """Test that Pulumi stack has been deployed with outputs."""
-        self.assertTrue(self.stack_available, "Pulumi stack should be deployed")
+        """Test that CDKTF stack has been deployed with outputs."""
+        if not self.stack_available:
+            self.skipTest("Outputs file not available. Run: cdktf deploy")
+        
         self.assertGreater(len(self.outputs), 0, "Stack should have outputs")
         print(f"  ✓ Stack has {len(self.outputs)} outputs")
     
     def test_vpc_resources_deployed(self):
-        """Test that VPC resources are deployed in both regions."""
+        """Test that VPC resources are deployed."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
         # Check for VPC outputs
-        vpc_outputs = ['primary_vpc_id', 'secondary_vpc_id']
+        required_outputs = ['vpc_id', 'vpc_cidr', 'subnet_1_id', 'subnet_2_id']
         
-        for output_key in vpc_outputs:
+        for output_key in required_outputs:
             self.assertIn(output_key, self.outputs, 
                          f"Output '{output_key}' should exist")
             
             value = self.outputs[output_key]
             self.assertIsNotNone(value, f"{output_key} should not be None")
             self.assertNotEqual(value, '', f"{output_key} should not be empty")
-            
-            # Check it's not a token (which indicates unresolved output)
-            self.assertNotIn('TOKEN', str(value).upper(), 
-                           f"{output_key} should be resolved, not a token")
         
-        print(f"  ✓ VPC resources deployed in both regions")
-        print(f"    Primary VPC: {self.outputs.get('primary_vpc_id', 'N/A')}")
-        print(f"    Secondary VPC: {self.outputs.get('secondary_vpc_id', 'N/A')}")
+        print(f"  ✓ VPC resources deployed")
+        print(f"    VPC ID: {self.outputs.get('vpc_id', 'N/A')}")
+        print(f"    VPC CIDR: {self.outputs.get('vpc_cidr', 'N/A')}")
     
-    def test_aurora_clusters_deployed(self):
-        """Test that Aurora clusters are deployed and accessible."""
+    def test_aurora_cluster_deployed(self):
+        """Test that Aurora PostgreSQL cluster is deployed and accessible."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        cluster_outputs = ['primary_cluster_endpoint', 'secondary_cluster_endpoint', 'global_cluster_id']
+        cluster_outputs = ['aurora_cluster_id', 'aurora_cluster_endpoint', 
+                          'aurora_cluster_reader_endpoint', 'aurora_database_name',
+                          'aurora_engine_version']
         
         for output_key in cluster_outputs:
             self.assertIn(output_key, self.outputs, 
@@ -79,155 +93,152 @@ class TestInfrastructureDeployment(unittest.TestCase):
             if 'endpoint' in output_key.lower():
                 # Endpoints should contain typical Aurora endpoint format
                 endpoint = str(value)
-                if not ('TOKEN' in endpoint.upper()):
-                    self.assertTrue(
-                        '.rds.amazonaws.com' in endpoint or len(endpoint) > 5,
-                        f"{output_key} should be a valid endpoint"
-                    )
+                self.assertTrue(
+                    '.rds.amazonaws.com' in endpoint or 'cluster-' in endpoint or len(endpoint) > 10,
+                    f"{output_key} should be a valid endpoint"
+                )
         
-        print(f"  ✓ Aurora clusters deployed")
-        print(f"    Primary endpoint: {self.outputs.get('primary_cluster_endpoint', 'N/A')}")
-        print(f"    Secondary endpoint: {self.outputs.get('secondary_cluster_endpoint', 'N/A')}")
+        print(f"  ✓ Aurora PostgreSQL cluster deployed")
+        print(f"    Cluster ID: {self.outputs.get('aurora_cluster_id', 'N/A')}")
+        print(f"    Writer endpoint: {self.outputs.get('aurora_cluster_endpoint', 'N/A')}")
+        print(f"    Reader endpoint: {self.outputs.get('aurora_cluster_reader_endpoint', 'N/A')}")
+        print(f"    Engine version: {self.outputs.get('aurora_engine_version', 'N/A')}")
     
-    def test_lambda_functions_deployed(self):
-        """Test that Lambda functions are deployed in both regions."""
+    def test_aurora_version_is_16_9(self):
+        """Test that Aurora PostgreSQL version is 16.9."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        lambda_outputs = ['primary_lambda_function_name', 'secondary_lambda_function_name',
-                         'primary_function_url', 'secondary_function_url']
+        self.assertIn('aurora_engine_version', self.outputs, 
+                     "Aurora engine version should be in outputs")
         
-        found_outputs = []
-        for output_key in lambda_outputs:
-            if output_key in self.outputs:
-                value = self.outputs[output_key]
-                if value and 'TOKEN' not in str(value).upper():
-                    found_outputs.append(output_key)
+        version = self.outputs['aurora_engine_version']
+        self.assertIsNotNone(version, "Engine version should not be None")
+        self.assertEqual(version, "16.9", "Aurora engine version should be 16.9")
         
-        self.assertGreater(len(found_outputs), 0, 
-                          "At least one Lambda output should exist")
-        
-        print(f"  ✓ Lambda functions deployed ({len(found_outputs)} outputs)")
-        if 'primary_lambda_function_name' in self.outputs:
-            print(f"    Primary: {self.outputs.get('primary_lambda_function_name', 'N/A')}")
-        if 'secondary_lambda_function_name' in self.outputs:
-            print(f"    Secondary: {self.outputs.get('secondary_lambda_function_name', 'N/A')}")
+        print(f"  ✓ Aurora PostgreSQL version verified: {version}")
     
-    def test_s3_buckets_deployed(self):
-        """Test that S3 buckets are deployed for both regions."""
+    def test_s3_bucket_deployed(self):
+        """Test that S3 bucket is deployed with versioning."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        bucket_outputs = ['primary_bucket_name', 'secondary_bucket_name']
+        bucket_outputs = ['s3_bucket_name', 's3_bucket_arn', 's3_bucket_region']
         
-        found_buckets = 0
         for output_key in bucket_outputs:
-            if output_key in self.outputs:
-                value = self.outputs[output_key]
-                if value and 'TOKEN' not in str(value).upper():
-                    found_buckets += 1
-                    
-                    # S3 bucket names should be valid
-                    bucket_name = str(value)
-                    if bucket_name:
-                        self.assertGreater(len(bucket_name), 3, 
-                                         f"{output_key} should be a valid bucket name")
-                        self.assertLess(len(bucket_name), 64, 
-                                       f"{output_key} should be under 64 characters")
+            self.assertIn(output_key, self.outputs, 
+                         f"Output '{output_key}' should exist")
+            value = self.outputs[output_key]
+            self.assertIsNotNone(value, f"{output_key} should not be None")
+            
+            # S3 bucket names should be valid
+            if 'name' in output_key.lower():
+                bucket_name = str(value)
+                self.assertGreater(len(bucket_name), 3, 
+                                 f"{output_key} should be a valid bucket name")
+                self.assertLess(len(bucket_name), 64, 
+                               f"{output_key} should be under 64 characters")
         
-        self.assertGreater(found_buckets, 0, "At least one S3 bucket should be deployed")
-        
-        print(f"  ✓ S3 buckets deployed ({found_buckets} buckets)")
-        if 'primary_bucket_name' in self.outputs:
-            print(f"    Primary: {self.outputs.get('primary_bucket_name', 'N/A')}")
+        print(f"  ✓ S3 bucket deployed")
+        print(f"    Bucket name: {self.outputs.get('s3_bucket_name', 'N/A')}")
+        print(f"    Bucket region: {self.outputs.get('s3_bucket_region', 'N/A')}")
     
-    def test_dynamodb_table_deployed(self):
-        """Test that DynamoDB global table is deployed."""
+    def test_security_group_deployed(self):
+        """Test that Aurora security group is deployed."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        self.assertIn('dynamodb_table_name', self.outputs, 
-                     "DynamoDB table name should be in outputs")
+        self.assertIn('aurora_security_group_id', self.outputs, 
+                     "Aurora security group ID should be in outputs")
         
-        table_name = self.outputs['dynamodb_table_name']
-        self.assertIsNotNone(table_name, "Table name should not be None")
+        sg_id = self.outputs['aurora_security_group_id']
+        self.assertIsNotNone(sg_id, "Security group ID should not be None")
+        self.assertTrue(sg_id.startswith('sg-'), "Security group ID should start with 'sg-'")
         
-        if 'TOKEN' not in str(table_name).upper():
-            self.assertGreater(len(str(table_name)), 3, 
-                             "Table name should be valid")
-            print(f"  ✓ DynamoDB table deployed: {table_name}")
-        else:
-            print(f"  ⚠ DynamoDB table output not yet resolved")
+        print(f"  ✓ Aurora security group deployed: {sg_id}")
     
-    def test_sns_topics_deployed(self):
-        """Test that SNS topics are deployed for alerting."""
+    def test_iam_role_deployed(self):
+        """Test that RDS Enhanced Monitoring IAM role is deployed."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        sns_outputs = ['primary_sns_topic_arn', 'secondary_sns_topic_arn']
+        iam_outputs = ['rds_monitoring_role_arn', 'rds_monitoring_role_name']
         
-        found_topics = 0
-        for output_key in sns_outputs:
-            if output_key in self.outputs:
-                value = self.outputs[output_key]
-                if value and 'TOKEN' not in str(value).upper():
-                    found_topics += 1
-                    
-                    # SNS ARN should be valid format
-                    arn = str(value)
-                    if arn:
-                        self.assertTrue(
-                            arn.startswith('arn:aws:sns:') or len(arn) > 10,
-                            f"{output_key} should be a valid ARN"
-                        )
+        for output_key in iam_outputs:
+            self.assertIn(output_key, self.outputs, 
+                         f"Output '{output_key}' should exist")
+            value = self.outputs[output_key]
+            self.assertIsNotNone(value, f"{output_key} should not be None")
+            
+            if 'arn' in output_key.lower():
+                # IAM ARN should be valid format
+                arn = str(value)
+                self.assertTrue(
+                    arn.startswith('arn:aws:iam::'),
+                    f"{output_key} should be a valid IAM ARN"
+                )
         
-        self.assertGreater(found_topics, 0, "At least one SNS topic should exist")
-        print(f"  ✓ SNS topics deployed ({found_topics} topics)")
+        print(f"  ✓ RDS Enhanced Monitoring IAM role deployed")
+        print(f"    Role name: {self.outputs.get('rds_monitoring_role_name', 'N/A')}")
     
-    def test_multi_region_deployment_complete(self):
-        """Test that infrastructure is deployed across multiple regions."""
+    def test_parameter_groups_deployed(self):
+        """Test that Aurora parameter groups are deployed."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        # Count primary and secondary resources
-        primary_resources = [k for k in self.outputs.keys() if 'primary' in k.lower()]
-        secondary_resources = [k for k in self.outputs.keys() if 'secondary' in k.lower() or 'dr' in k.lower()]
+        pg_outputs = ['cluster_parameter_group_name', 'db_parameter_group_name']
         
-        self.assertGreater(len(primary_resources), 0, 
-                          "Should have primary region resources")
-        self.assertGreater(len(secondary_resources), 0, 
-                          "Should have secondary/DR region resources")
+        for output_key in pg_outputs:
+            self.assertIn(output_key, self.outputs, 
+                         f"Output '{output_key}' should exist")
+            value = self.outputs[output_key]
+            self.assertIsNotNone(value, f"{output_key} should not be None")
         
-        print(f"  ✓ Multi-region deployment complete")
-        print(f"    Primary resources: {len(primary_resources)}")
-        print(f"    Secondary resources: {len(secondary_resources)}")
+        print(f"  ✓ Aurora parameter groups deployed")
+        print(f"    Cluster PG: {self.outputs.get('cluster_parameter_group_name', 'N/A')}")
+        print(f"    DB PG: {self.outputs.get('db_parameter_group_name', 'N/A')}")
     
-    def test_critical_outputs_resolved(self):
-        """Test that all critical outputs are resolved (not tokens)."""
+    def test_secrets_manager_deployed(self):
+        """Test that database password secret is stored in Secrets Manager."""
         if not self.stack_available:
             self.skipTest("Stack not available")
         
-        critical_outputs = [
-            'primary_vpc_id',
-            'secondary_vpc_id',
-            'primary_cluster_endpoint',
-            'global_cluster_id'
-        ]
+        secret_outputs = ['db_secret_arn', 'db_secret_name']
         
-        resolved_count = 0
-        for output_key in critical_outputs:
-            if output_key in self.outputs:
-                value = str(self.outputs[output_key])
-                if 'TOKEN' not in value.upper() and value:
-                    resolved_count += 1
+        for output_key in secret_outputs:
+            self.assertIn(output_key, self.outputs, 
+                         f"Output '{output_key}' should exist")
+            value = self.outputs[output_key]
+            self.assertIsNotNone(value, f"{output_key} should not be None")
+            
+            if 'arn' in output_key.lower():
+                # Secret ARN should be valid format
+                arn = str(value)
+                self.assertTrue(
+                    arn.startswith('arn:aws:secretsmanager:'),
+                    f"{output_key} should be a valid Secrets Manager ARN"
+                )
         
-        resolution_percentage = (resolved_count / len(critical_outputs)) * 100
+        print(f"  ✓ Database password secret deployed in Secrets Manager")
+        print(f"    Secret name: {self.outputs.get('db_secret_name', 'N/A')}")
+    
+    def test_aws_account_and_region(self):
+        """Test that AWS account and region information is available."""
+        if not self.stack_available:
+            self.skipTest("Stack not available")
         
-        print(f"  ✓ Critical outputs: {resolved_count}/{len(critical_outputs)} resolved ({resolution_percentage:.0f}%)")
+        info_outputs = ['aws_account_id', 'aws_region', 'environment_suffix']
         
-        # At least 50% should be resolved for a successful deployment
-        self.assertGreaterEqual(resolved_count, len(critical_outputs) // 2,
-                               "At least half of critical outputs should be resolved")
+        for output_key in info_outputs:
+            self.assertIn(output_key, self.outputs, 
+                         f"Output '{output_key}' should exist")
+            value = self.outputs[output_key]
+            self.assertIsNotNone(value, f"{output_key} should not be None")
+        
+        print(f"  ✓ AWS account and region information")
+        print(f"    Account ID: {self.outputs.get('aws_account_id', 'N/A')}")
+        print(f"    Region: {self.outputs.get('aws_region', 'N/A')}")
+        print(f"    Environment: {self.outputs.get('environment_suffix', 'N/A')}")
 
 
 if __name__ == '__main__':

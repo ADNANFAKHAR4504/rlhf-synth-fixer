@@ -1,0 +1,16 @@
+./archive/
+.github/
+.claude/
+.sherlock/
+.vscode/
+.idea/
+.pytest_cache/
+.coverage/
+coverage.xml
+cov.json
+coverage
+.terraform/
+.terraform.lock.hcl
+.terraform.lock.hcl
+.terraform.lock.hcl
+.terraform.lock.hcl
