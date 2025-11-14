@@ -337,7 +337,7 @@ describe('tap-stack.tf Unit Tests', () => {
     test('should create S3 buckets for training data and model artifacts', () => {
       const s3Buckets = terraformConfig.resources.filter(r => r.type === 'aws_s3_bucket');
       
-      expect(s3Buckets).toHaveLength(2);
+      expect(s3Buckets).toHaveLength(3);
 
       const trainingDataBucket = s3Buckets.find(b => b.name === 'training_data');
       const modelArtifactsBucket = s3Buckets.find(b => b.name === 'model_artifacts');
@@ -355,7 +355,7 @@ describe('tap-stack.tf Unit Tests', () => {
         r.type === 'aws_s3_bucket_versioning'
       );
 
-      expect(versioningConfigs).toHaveLength(2);
+      expect(versioningConfigs).toHaveLength(3);
 
       versioningConfigs.forEach(config => {
         expect(config.config.content).toContain('status = "Enabled"');
@@ -367,7 +367,7 @@ describe('tap-stack.tf Unit Tests', () => {
         r.type === 'aws_s3_bucket_server_side_encryption_configuration'
       );
 
-      expect(encryptionConfigs).toHaveLength(2);
+      expect(encryptionConfigs).toHaveLength(3);
 
       encryptionConfigs.forEach(config => {
         expect(config.config.content).toContain('sse_algorithm = "AES256"');
@@ -379,7 +379,7 @@ describe('tap-stack.tf Unit Tests', () => {
         r.type === 'aws_s3_bucket_public_access_block'
       );
 
-      expect(publicAccessBlocks).toHaveLength(2);
+      expect(publicAccessBlocks).toHaveLength(3);
 
       publicAccessBlocks.forEach(block => {
         const content = block.config.content;

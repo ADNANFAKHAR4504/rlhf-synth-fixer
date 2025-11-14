@@ -87,7 +87,7 @@ data "aws_ami" "deep_learning" {
     name   = "name"
     values = ["Deep Learning AMI Neuron (Ubuntu 22.04)*"]
   }
-  
+
   filter {
     name   = "state"
     values = ["available"]
@@ -557,7 +557,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "training_data" {
   rule {
     id     = "abort-incomplete-multipart"
     status = "Enabled"
-    
+
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
     }
@@ -585,7 +585,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "model_artifacts" {
   rule {
     id     = "abort-incomplete-multipart"
     status = "Enabled"
-    
+
     abort_incomplete_multipart_upload {
       days_after_initiation = 7
     }
@@ -974,6 +974,53 @@ resource "aws_kms_alias" "cloudwatch_logs" {
   name          = "alias/${var.project_name}-cloudwatch-logs-${var.environment}"
   target_key_id = aws_kms_key.cloudwatch_logs.key_id
 }
+
+resource "aws_kms_key" "cloudwatch_logs" {
+  description             = "KMS key for CloudWatch logs encryption"
+  deletion_window_in_days = 7
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Sid    = "EnableRootPermissions",
+        Effect = "Allow",
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        },
+        Action   = "kms:*",
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowCloudWatchLogsUsage",
+        Effect = "Allow",
+        Principal = {
+          Service = "logs.${data.aws_region.current.name}.amazonaws.com"
+        },
+        Action = [
+          "kms:Encrypt",
+          "kms:Decrypt",
+          "kms:GenerateDataKey*",
+          "kms:DescribeKey",
+          "kms:ReEncrypt*"
+        ],
+        Resource = "*",
+        Condition = {
+          ArnEquals = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:/aws/ml-training/${var.environment}"
+          }
+        }
+      }
+    ]
+  })
+
+  tags = {
+    Name        = "${var.project_name}-cloudwatch-logs-kms-${var.environment}"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
 
 # CloudWatch Log Group with KMS encryption
 resource "aws_cloudwatch_log_group" "training_logs" {
