@@ -1,0 +1,33 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912441",
+  "team": "synth",
+  "startedAt": "2025-11-12T16:29:39+00:00",
+  "subtask": "Create a Terraform configuration to implement a compliance validation and remediation module for AWS infrastructure.",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "infrastructure-analysis-/-qa"
+  ],
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "aws_services": [
+    "S3",
+    "KMS",
+    "IAM",
+    "Config",
+    "Lambda",
+    "EventBridge",
+    "SNS",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

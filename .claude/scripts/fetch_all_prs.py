@@ -129,7 +129,18 @@ for pr in all_pr_data:
         'assignee': assignee_names,
         'status': status,
         'failure_reason': reason if reason else None,
-        'last_updated_at': last_updated
+        'last_updated_at': last_updated,
+        # Agent status fields for parallel execution
+        'agent_status': 'pending',  # pending, in_progress, fixed, failed, skipped
+        'assigned_agent': None,
+        'fix_plan': None,
+        'root_cause_analysis': None,
+        'solution_approach': None,
+        'fix_progress': None,
+        'started_at': None,
+        'completed_at': None,
+        'fix_iterations': 0,
+        'github_checks_passed': False
     })
 
 # Calculate statistics
