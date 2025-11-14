@@ -7,6 +7,7 @@ from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
 from cdktf_cdktf_provider_aws.nat_gateway import NatGateway
 from cdktf_cdktf_provider_aws.eip import Eip
 from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 
@@ -134,16 +135,21 @@ class NetworkingStack(Construct):
             self,
             "public_route_table",
             vpc_id=self.vpc.id,
-            route=[{
-                "cidr_block": "0.0.0.0/0",
-                "gateway_id": igw.id,
-            }],
             tags={
                 "Name": f"payment-public-rt-{environment_suffix}",
                 "Environment": "production",
                 "Team": "payments",
                 "CostCenter": "engineering",
             },
+        )
+
+        # Add route to internet gateway
+        Route(
+            self,
+            "public_route_igw",
+            route_table_id=public_rt.id,
+            destination_cidr_block="0.0.0.0/0",
+            gateway_id=igw.id,
         )
 
         # Associate public subnets with public route table
@@ -161,16 +167,21 @@ class NetworkingStack(Construct):
                 self,
                 f"private_route_table_{i}",
                 vpc_id=self.vpc.id,
-                route=[{
-                    "cidr_block": "0.0.0.0/0",
-                    "nat_gateway_id": nat_gateways[i].id,
-                }],
                 tags={
                     "Name": f"payment-private-rt-{i}-{environment_suffix}",
                     "Environment": "production",
                     "Team": "payments",
                     "CostCenter": "engineering",
                 },
+            )
+
+            # Add route to NAT gateway
+            Route(
+                self,
+                f"private_route_nat_{i}",
+                route_table_id=private_rt.id,
+                destination_cidr_block="0.0.0.0/0",
+                nat_gateway_id=nat_gateways[i].id,
             )
 
             RouteTableAssociation(

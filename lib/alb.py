@@ -3,7 +3,7 @@
 from constructs import Construct
 from cdktf_cdktf_provider_aws.lb import Lb
 from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup
-from cdktf_cdktf_provider_aws.lb_listener import LbListener
+from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
 from cdktf_cdktf_provider_aws.security_group import SecurityGroup
 from cdktf_cdktf_provider_aws.security_group_rule import SecurityGroupRule
 
@@ -19,7 +19,6 @@ class AlbStack(Construct):
         environment_suffix: str,
         vpc_id: str,
         public_subnet_ids: list,
-        certificate_arn: str,
     ):
         super().__init__(scope, construct_id)
 
@@ -38,13 +37,13 @@ class AlbStack(Construct):
             },
         )
 
-        # Allow inbound HTTPS traffic
+        # Allow inbound HTTP traffic
         SecurityGroupRule(
             self,
-            "alb_ingress_https",
+            "alb_ingress_http",
             type="ingress",
-            from_port=443,
-            to_port=443,
+            from_port=80,
+            to_port=80,
             protocol="tcp",
             cidr_blocks=["0.0.0.0/0"],
             security_group_id=self.alb_sg.id,
@@ -55,8 +54,8 @@ class AlbStack(Construct):
             self,
             "alb_egress_ecs",
             type="egress",
-            from_port=8080,
-            to_port=8080,
+            from_port=80,
+            to_port=80,
             protocol="tcp",
             cidr_blocks=["10.0.0.0/16"],
             security_group_id=self.alb_sg.id,
@@ -83,8 +82,8 @@ class AlbStack(Construct):
         self.target_group = LbTargetGroup(
             self,
             "payment_api_tg",
-            name=f"payment-api-tg-{environment_suffix}",
-            port=8080,
+            name=f"payment-api-tg-80-{environment_suffix}",
+            port=80,
             protocol="HTTP",
             vpc_id=vpc_id,
             target_type="ip",
@@ -94,7 +93,7 @@ class AlbStack(Construct):
                 "unhealthy_threshold": 3,
                 "timeout": 5,
                 "interval": 30,
-                "path": "/health",
+                "path": "/",
                 "protocol": "HTTP",
             },
             tags={
@@ -103,21 +102,24 @@ class AlbStack(Construct):
                 "Team": "payments",
                 "CostCenter": "engineering",
             },
+            lifecycle={
+                "create_before_destroy": True,
+            },
         )
 
-        # Create HTTPS listener
-        LbListener(
+        # Create HTTP listener
+        self.http_listener = LbListener(
             self,
-            "https_listener",
+            "http_listener",
             load_balancer_arn=self.alb.arn,
-            port=443,
-            protocol="HTTPS",
-            ssl_policy="ELBSecurityPolicy-TLS-1-2-2017-01",
-            certificate_arn=certificate_arn,
-            default_action=[{
-                "type": "forward",
-                "target_group_arn": self.target_group.arn,
-            }],
+            port=80,
+            protocol="HTTP",
+            default_action=[
+                LbListenerDefaultAction(
+                    type="forward",
+                    target_group_arn=self.target_group.arn,
+                )
+            ],
         )
 
     @property

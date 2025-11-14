@@ -34,18 +34,18 @@ class EcsServicesStack(Construct):
 
         self.services_config = {
             "payment-api": {
-                "port": 8080,
-                "image": f"123456789012.dkr.ecr.{aws_region}.amazonaws.com/payment-api:latest",
+                "port": 80,
+                "image": "public.ecr.aws/nginx/nginx:latest",
                 "attach_alb": True,
             },
             "fraud-detection": {
-                "port": 8081,
-                "image": f"123456789012.dkr.ecr.{aws_region}.amazonaws.com/fraud-detection:latest",
+                "port": 80,
+                "image": "public.ecr.aws/nginx/nginx:latest",
                 "attach_alb": False,
             },
             "notification-service": {
-                "port": 8082,
-                "image": f"123456789012.dkr.ecr.{aws_region}.amazonaws.com/notification-service:latest",
+                "port": 80,
+                "image": "public.ecr.aws/nginx/nginx:latest",
                 "attach_alb": False,
             },
         }
@@ -70,25 +70,24 @@ class EcsServicesStack(Construct):
             self,
             "ecs_ingress_alb",
             type="ingress",
-            from_port=8080,
-            to_port=8080,
+            from_port=80,
+            to_port=80,
             protocol="tcp",
             source_security_group_id=alb_security_group_id,
             security_group_id=self.ecs_sg.id,
         )
 
-        # Allow inter-service communication
-        for port in [8080, 8081, 8082]:
-            SecurityGroupRule(
-                self,
-                f"ecs_ingress_{port}",
-                type="ingress",
-                from_port=port,
-                to_port=port,
-                protocol="tcp",
-                self_attribute=True,
-                security_group_id=self.ecs_sg.id,
-            )
+        # Allow inter-service communication on port 80
+        SecurityGroupRule(
+            self,
+            "ecs_ingress_80",
+            type="ingress",
+            from_port=80,
+            to_port=80,
+            protocol="tcp",
+            self_attribute=True,
+            security_group_id=self.ecs_sg.id,
+        )
 
         # Allow outbound traffic
         SecurityGroupRule(
@@ -155,7 +154,7 @@ class EcsServicesStack(Construct):
                 },
             },
             "healthCheck": {
-                "command": ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"],
+                "command": ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"],
                 "interval": 30,
                 "timeout": 5,
                 "retries": 3,

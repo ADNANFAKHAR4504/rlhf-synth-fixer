@@ -46,6 +46,9 @@ class IamRolesStack(Construct):
         )
 
         # Task execution policy - ECR and CloudWatch permissions
+        # Convert log group ARNs to include wildcard for log streams
+        log_stream_arns = [f"{arn}:*" for arn in log_group_arns]
+
         execution_policy = json.dumps({
             "Version": "2012-10-17",
             "Statement": [
@@ -65,7 +68,7 @@ class IamRolesStack(Construct):
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                     ],
-                    "Resource": log_group_arns
+                    "Resource": log_stream_arns
                 }
             ]
         })
@@ -102,7 +105,7 @@ class IamRolesStack(Construct):
                         "logs:CreateLogStream",
                         "logs:PutLogEvents"
                     ],
-                    "Resource": log_group_arns
+                    "Resource": log_stream_arns
                 }
             ]
         })

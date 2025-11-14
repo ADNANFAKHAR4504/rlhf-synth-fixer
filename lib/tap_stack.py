@@ -81,32 +81,13 @@ class TapStack(TerraformStack):
             environment_suffix=environment_suffix,
         )
 
-        # Create a self-signed certificate for HTTPS
-        from cdktf_cdktf_provider_aws.acm_certificate import AcmCertificate
-        from cdktf_cdktf_provider_aws.acm_certificate_validation import AcmCertificateValidation
-
-        certificate = AcmCertificate(
-            self,
-            "alb_certificate",
-            domain_name=f"payment-api-{environment_suffix}.example.com",
-            validation_method="DNS",
-            subject_alternative_names=[f"*.payment-api-{environment_suffix}.example.com"],
-            tags={
-                "Name": f"payment-api-cert-{environment_suffix}",
-                "Environment": "production",
-                "Team": "payments",
-                "CostCenter": "engineering",
-            },
-        )
-
-        # Create Application Load Balancer Stack
+        # Create Application Load Balancer Stack (HTTP only for simplicity)
         alb = AlbStack(
             self,
             "alb",
             environment_suffix=environment_suffix,
             vpc_id=networking.vpc_id,
             public_subnet_ids=networking.public_subnet_ids,
-            certificate_arn=certificate.arn,
         )
 
         # Create ECS Services Stack
