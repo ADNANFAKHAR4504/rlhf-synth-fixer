@@ -237,17 +237,20 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # Database Parameter Group
+        # Note: Only specify apply_method for static parameters (pending-reboot)
+        # Dynamic parameters will use immediate apply by default
         self.parameter_group = aws.rds.ParameterGroup(
             f"postgres-params-{self.environment_suffix}",
             name=f"postgres15-replication-{self.environment_suffix}",
             family="postgres15",
             description=f"PostgreSQL 15 parameters optimized for replication - {self.environment_suffix}",
             parameters=[
+                # Dynamic parameters - use immediate apply by default (no apply_method needed)
                 aws.rds.ParameterGroupParameterArgs(
                     name="max_connections",
-                    value="200",
-                    apply_method="immediate"
+                    value="200"
                 ),
+                # Static parameter - requires reboot
                 aws.rds.ParameterGroupParameterArgs(
                     name="shared_buffers",
                     value="{DBInstanceClassMemory/4096}",
@@ -255,23 +258,19 @@ class TapStack(pulumi.ComponentResource):
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="max_wal_senders",
-                    value="10",
-                    apply_method="immediate"
+                    value="10"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="wal_keep_size",
-                    value="1024",
-                    apply_method="immediate"
+                    value="1024"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="log_statement",
-                    value="all",
-                    apply_method="immediate"
+                    value="all"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="log_min_duration_statement",
-                    value="1000",
-                    apply_method="immediate"
+                    value="1000"
                 )
             ],
             tags={
