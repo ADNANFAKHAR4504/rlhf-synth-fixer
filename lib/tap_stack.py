@@ -53,11 +53,20 @@ from constructs import Construct
 
 
 class TapStack(TerraformStack):
-    def __init__(self, scope: Construct, ns: str):
+    def __init__(
+        self, 
+        scope: Construct, 
+        ns: str,
+        environment_suffix: str = "dev-001",
+        state_bucket: str = None,
+        state_bucket_region: str = None,
+        aws_region: str = None,
+        default_tags: dict = None
+    ):
         super().__init__(scope, ns)
 
-        # Environment suffix for resource naming
-        environment_suffix = "dev-001"
+        # Environment suffix for resource naming (use passed parameter or default)
+        environment_suffix = environment_suffix
 
         # Common tags
         common_tags = {
