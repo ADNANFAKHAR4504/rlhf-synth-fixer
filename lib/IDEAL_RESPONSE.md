@@ -79,7 +79,7 @@ The template creates a complete transaction processing infrastructure with the f
       "MinLength": 1,
       "MaxLength": 16,
       "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*",
-      "Default": "admin"
+      "Default": "RdsUser"
     },
     "DBPasswordSecretArn": {
       "Type": "String",
@@ -100,7 +100,7 @@ The template creates a complete transaction processing infrastructure with the f
     "DBSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
       "Description": "Subnet IDs for RDS subnet group (minimum 2 AZs for Multi-AZ)",
-      "Default": "subnet-0e07058745f368ba2"
+      "Default": "subnet-09322d03ef64aecb2,subnet-020e0aafba890431d,subnet-0c9618f134225ba7a"
     }
   },
   "Conditions": {

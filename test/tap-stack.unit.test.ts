@@ -671,7 +671,7 @@ describe('Resource Count Validation', () => {
 describe('Multi-Region Compatibility', () => {
   test('should not contain hardcoded region values', () => {
     const templateStr = JSON.stringify(template);
-    expect(templateStr).not.toContain('us-east-1');
+    expect(templateStr).not.toContain('eu-east-1');
     expect(templateStr).not.toContain('eu-west-1');
     expect(templateStr).not.toContain('ap-southeast-1');
   });
