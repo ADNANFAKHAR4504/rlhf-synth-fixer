@@ -483,17 +483,14 @@
                 }
             }
         },
-        "InstanceStateName": {
-            "Description": "State name of the EC2 instance",
+        "InstanceState": {
+            "Description": "State of the EC2 instance",
             "Value": {
-                "Fn::GetAtt": [
-                    "WebServerInstance",
-                    "State.Name"
-                ]
+                "Ref": "WebServerInstance"
             },
             "Export": {
                 "Name": {
-                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance-state-name"
+                    "Fn::Sub": "${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance-state"
                 }
             }
         },

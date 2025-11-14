@@ -271,11 +271,11 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance-az'
   
-  InstanceStateName:
-    Description: 'State name of the EC2 instance'
-    Value: !GetAtt WebServerInstance.State.Name
+  InstanceState:
+    Description: 'State of the EC2 instance'
+    Value: !Ref WebServerInstance
     Export:
-      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance-state-name'
+      Name: !Sub '${AWS::StackName}-${AWS::Region}-${EnvironmentSuffix}-instance-state'
   
   # AMI and Instance Type Information
   InstanceImageId:
