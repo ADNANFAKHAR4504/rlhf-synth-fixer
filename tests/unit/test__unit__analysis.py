@@ -13,7 +13,6 @@ from unittest.mock import MagicMock, patch, mock_open, call
 from io import StringIO
 
 import pytest
-import numpy as np
 
 # Add parent directory to path to import the analysis module
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))

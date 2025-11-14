@@ -4,18 +4,88 @@ RDS Performance Analysis Tool
 Analyzes RDS databases for performance, cost optimization, and compliance issues.
 """
 
+import csv
 import json
 import logging
 import os
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Tuple, Any, Optional
-import pandas as pd
-import matplotlib.pyplot as plt
+from statistics import fmean
+from typing import Any, Dict, List, Optional, Tuple
+
 import boto3
 from botocore.exceptions import ClientError
-import numpy as np
 from tabulate import tabulate
+
+try:  # Optional dependency: pandas (CSV export)
+    import pandas as _pd  # type: ignore  # pragma: no cover
+    PANDAS_AVAILABLE = True  # pragma: no cover
+except ModuleNotFoundError:
+    PANDAS_AVAILABLE = False
+
+    class _PandasDataFrameStub:  # pragma: no cover - exercised only when pandas is unavailable
+        def __init__(self, rows: List[Dict[str, Any]]):  # pragma: no cover
+            self._rows = rows
+
+        def to_csv(self, filename: str, index: bool = False):  # pragma: no cover
+            if not self._rows:
+                with open(filename, 'w', encoding='utf-8') as handle:
+                    handle.write('')
+                return
+
+            fieldnames = list(self._rows[0].keys())
+            with open(filename, 'w', newline='', encoding='utf-8') as csv_file:
+                writer = csv.DictWriter(csv_file, fieldnames=fieldnames)
+                writer.writeheader()
+                writer.writerows(self._rows)
+
+    class _PandasModuleStub:  # pragma: no cover - exercised only when pandas is unavailable
+        def DataFrame(self, rows: List[Dict[str, Any]]):  # type: ignore  # pragma: no cover
+            return _PandasDataFrameStub(rows)
+
+    _pd = _PandasModuleStub()  # type: ignore
+
+try:  # Optional dependency: matplotlib (charting)
+    import matplotlib.pyplot as _plt  # type: ignore  # pragma: no cover
+    MATPLOTLIB_AVAILABLE = True  # pragma: no cover
+except ModuleNotFoundError:
+    MATPLOTLIB_AVAILABLE = False
+
+    class _MatplotlibStub:  # pragma: no cover - exercised only when matplotlib is unavailable
+        def figure(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def hist(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def xlabel(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def ylabel(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def title(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def axvline(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def legend(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def grid(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def savefig(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+        def close(self, *args, **kwargs):  # pragma: no cover
+            return None
+
+    _plt = _MatplotlibStub()  # type: ignore
+
+pd = _pd  # re-export for unit tests patching analyse.pd
+plt = _plt  # re-export for unit tests patching analyse.plt
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -47,6 +117,11 @@ LATEST_ENGINE_VERSIONS = {
     'postgres': '15.5',
     'mariadb': '10.11.6'
 }
+
+
+def _safe_mean(values: List[float]) -> float:
+    """Numeric average helper that does not require numpy."""
+    return fmean(values) if values else 0.0
 
 class RDSAnalyzer:
     def __init__(self, region='us-east-1'):
@@ -116,7 +191,7 @@ class RDSAnalyzer:
             
             if response['Datapoints']:
                 values = [point[stat] for point in response['Datapoints']]
-                return np.mean(values) if stat == 'Average' else max(values)
+                return _safe_mean(values) if stat == 'Average' else max(values)
             return 0.0
         except ClientError as e:
             logger.warning(f"Error fetching metric {metric_name} for {db_identifier}: {e}")
@@ -530,7 +605,7 @@ class RDSAnalyzer:
 
         # 4. SUMMARY TABLE
         total_savings = sum(r['cost_optimization']['potential_savings'] for r in results)
-        avg_score = np.mean([r['performance_score'] for r in results])
+        avg_score = _safe_mean([r['performance_score'] for r in results])
         total_issues = sum(len(r['issues']) for r in results)
 
         print("\n\nSUMMARY")
@@ -550,7 +625,7 @@ class RDSAnalyzer:
     def save_json_report(self, results: List[Dict], filename: str = 'rds_performance_report.json'):
         """Save detailed JSON report."""
         total_instances = len(results)
-        avg_score = np.mean([r['performance_score'] for r in results]) if results else 0
+        avg_score = _safe_mean([r['performance_score'] for r in results]) if results else 0
         total_savings = sum(r['cost_optimization']['potential_savings'] for r in results)
 
         report = {
@@ -597,6 +672,13 @@ class RDSAnalyzer:
                 'MonthlySavings': round(result['cost_optimization']['potential_savings'], 2)
             })
         
+        if not rightsizing_data:
+            logger.info("No rightsizing opportunities detected; skipping CSV export")
+            return
+
+        if not PANDAS_AVAILABLE:
+            logger.warning("pandas not available; falling back to lightweight CSV writer")
+
         df = pd.DataFrame(rightsizing_data)
         df.to_csv(filename, index=False)
         logger.info(f"Rightsizing CSV saved to {filename}")
@@ -604,14 +686,26 @@ class RDSAnalyzer:
     def save_performance_distribution(self, results: List[Dict], filename: str = 'performance_distribution.png'):
         """Save performance score distribution chart."""
         scores = [r['performance_score'] for r in results]
-        
+        if not scores:
+            logger.info("No performance scores available; skipping chart generation")
+            return
+
+        if not MATPLOTLIB_AVAILABLE:
+            logger.warning("matplotlib not available; generating performance chart via stub implementation")
+
+        mean_score = _safe_mean(scores)
         plt.figure(figsize=(10, 6))
         plt.hist(scores, bins=20, edgecolor='black', alpha=0.7)
         plt.xlabel('Performance Score')
         plt.ylabel('Number of Instances')
         plt.title('RDS Performance Score Distribution')
-        plt.axvline(np.mean(scores), color='red', linestyle='dashed', linewidth=2, 
-                   label=f'Average: {np.mean(scores):.1f}')
+        plt.axvline(
+            mean_score,
+            color='red',
+            linestyle='dashed',
+            linewidth=2,
+            label=f'Average: {mean_score:.1f}',
+        )
         plt.legend()
         plt.grid(True, alpha=0.3)
         plt.savefig(filename, dpi=300, bbox_inches='tight')
