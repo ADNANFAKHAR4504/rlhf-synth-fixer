@@ -93,9 +93,10 @@ export class TapStack extends cdk.Stack {
         {
           name: 'Private',
           // Use PRIVATE_ISOLATED for dev (natGateways: 0) or PRIVATE_WITH_EGRESS for staging/prod
-          subnetType: this.environmentConfig.vpcConfig.natGateways === 0
-            ? ec2.SubnetType.PRIVATE_ISOLATED
-            : ec2.SubnetType.PRIVATE_WITH_EGRESS,
+          subnetType:
+            this.environmentConfig.vpcConfig.natGateways === 0
+              ? ec2.SubnetType.PRIVATE_ISOLATED
+              : ec2.SubnetType.PRIVATE_WITH_EGRESS,
           cidrMask: 24,
         },
       ],
