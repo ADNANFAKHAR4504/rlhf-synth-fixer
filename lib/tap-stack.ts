@@ -23,20 +23,19 @@ interface TapStackProps {
   stateBucketRegion?: string;
   awsRegion?: string;
   defaultTags?: AwsProviderDefaultTags[];
+  regionOverride?: string; // Add this to make it testable
 }
-
-// If you need to override the AWS Region for the terraform provider for any particular task,
-// you can set it here. Otherwise, it will default to 'us-east-1'.
-const AWS_REGION_OVERRIDE = '';
 
 export class TapStack extends TerraformStack {
   constructor(scope: Construct, id: string, props?: TapStackProps) {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-    const awsRegion = AWS_REGION_OVERRIDE
-      ? AWS_REGION_OVERRIDE
-      : props?.awsRegion || 'us-east-1';
+
+    // Make AWS_REGION_OVERRIDE testable by using props
+    const AWS_REGION_OVERRIDE = props?.regionOverride || '';
+    const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
+
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
@@ -65,7 +64,6 @@ export class TapStack extends TerraformStack {
       Project: 'tap-stack',
     };
 
-    // Get availability zones
     const azs = new aws.dataAwsAvailabilityZones.DataAwsAvailabilityZones(
       this,
       'azs',
@@ -77,7 +75,10 @@ export class TapStack extends TerraformStack {
     // 1. Create VPC with networking components
     const networkingConfig: NetworkingConfig = {
       vpcCidr: '10.0.0.0/16',
-      availabilityZones: [azs.names[0], azs.names[1]],
+      availabilityZones: [
+        Fn.element(azs.names, 0), // Gets the first element (index 0)
+        Fn.element(azs.names, 1), // Gets the second element (index 1)
+      ],
       publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
       privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
       tags: commonTags,

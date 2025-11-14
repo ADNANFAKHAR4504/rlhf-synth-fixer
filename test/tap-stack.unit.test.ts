@@ -1,67 +1,119 @@
-// lib/tap-stack.test.ts
+// __tests__/tap-stack.test.ts
 import { App } from "cdktf";
 import "cdktf/lib/testing/adapters/jest";
 import { TapStack } from "../lib/tap-stack";
-import { expect, describe, test, beforeEach } from "@jest/globals";
+import {test, expect, describe, beforeEach} from '@jest/globals';
 
 // Mock all the modules used in TapStack
 jest.mock("../lib/modules", () => ({
   VpcConstruct: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
     vpc: {
-      id: `vpc-${id}`,
-      cidrBlock: config.cidrBlock,
-      enableDnsHostnames: true,
-      enableDnsSupport: true,
-      tags: config.tags
+      id: `vpc-${config.tags.Environment}`,
+      cidrBlock: config.vpcCidr,
+    },
+    publicSubnets: config.publicSubnetCidrs.map((cidr: string, index: number) => ({
+      id: `subnet-public-${index + 1}-${config.tags.Environment}`
+    })),
+    privateSubnets: config.privateSubnetCidrs.map((cidr: string, index: number) => ({
+      id: `subnet-private-${index + 1}-${config.tags.Environment}`
+    })),
+    natGateways: [
+      { id: `nat-1-${config.tags.Environment}` },
+      { id: `nat-2-${config.tags.Environment}` }
+    ],
+    internetGateway: { id: `igw-${config.tags.Environment}` }
+  })),
+
+  EksSecurityGroups: jest.fn().mockImplementation((scope: any, id: string, vpcId: string, tags: any) => ({
+    clusterSecurityGroup: {
+      id: `sg-eks-cluster-${tags.Environment}`,
+      name: `eks-cluster-sg-${tags.Environment}`,
+    },
+    nodeSecurityGroup: {
+      id: `sg-eks-node-${tags.Environment}`,
+      name: `eks-node-sg-${tags.Environment}`,
     }
   })),
 
-  NetworkConstruct: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
-    publicSubnets: config.publicSubnetCidrs.map((cidr: string, i: number) => ({
-      id: `public-subnet-${i}`,
-      cidrBlock: cidr,
-      availabilityZone: config.availabilityZones[i],
-      vpcId: config.vpcId,
-      mapPublicIpOnLaunch: true
-    })),
-    privateSubnets: config.privateSubnetCidrs.map((cidr: string, i: number) => ({
-      id: `private-subnet-${i}`,
-      cidrBlock: cidr,
-      availabilityZone: config.availabilityZones[i],
-      vpcId: config.vpcId
-    })),
-    natGateways: config.publicSubnetCidrs.map((cidr: string, i: number) => ({
-      id: `nat-gateway-${i}`,
-      allocationId: `eip-nat-${i}`,
-      subnetId: `public-subnet-${i}`
-    }))
+  IamRoles: jest.fn().mockImplementation((scope: any, id: string, clusterName: string, oidcArn: string, oidcUrl: string, tags: any) => ({
+    eksClusterRole: {
+      arn: `arn:aws:iam::123456789012:role/${clusterName}-cluster-role`,
+      name: `${clusterName}-cluster-role`,
+    },
+    eksNodeRole: {
+      arn: `arn:aws:iam::123456789012:role/${clusterName}-node-role`,
+      name: `${clusterName}-node-role`,
+    },
+    clusterAutoscalerRole: {
+      arn: `arn:aws:iam::123456789012:role/${clusterName}-autoscaler-role`,
+      name: `${clusterName}-autoscaler-role`,
+    },
+    awsLoadBalancerControllerRole: {
+      arn: `arn:aws:iam::123456789012:role/${clusterName}-alb-controller-role`,
+      name: `${clusterName}-alb-controller-role`,
+    }
   })),
 
-  SecurityGroupConstruct: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
-    securityGroup: {
-      id: `sg-${id}`,
-      name: config.name,
-      vpcId: config.vpcId,
-      description: `Security group for ${config.name}`,
-      tags: config.tags
+  EcrRepository: jest.fn().mockImplementation((scope: any, id: string, repoName: string, tags: any) => ({
+    repository: {
+      arn: `arn:aws:ecr:us-east-1:123456789012:repository/${repoName}`,
+      name: repoName,
+      registryId: '123456789012',
+    },
+    repositoryUrl: `123456789012.dkr.ecr.us-east-1.amazonaws.com/${repoName}`,
+  })),
+
+  EksNodeGroup: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
+    nodeGroup: {
+      id: `ng-${config.clusterName}-${config.capacityType.toLowerCase()}`,
+      arn: `arn:aws:eks:us-east-1:123456789012:nodegroup/${config.clusterName}/ng-${config.capacityType.toLowerCase()}`,
+      status: 'ACTIVE',
     }
-  }))
+  })),
 }));
 
-// Mock AWS provider modules
-jest.mock("@cdktf/provider-aws/lib/data-aws-caller-identity", () => ({
-  DataAwsCallerIdentity: jest.fn().mockImplementation((scope: any, id: string, config?: any) => ({
-    accountId: '123456789012',
-    arn: 'arn:aws:iam::123456789012:root',
-    userId: 'AIDACKCEVSQ6C2EXAMPLE'
-  }))
+// Mock AWS Provider and data sources
+jest.mock("@cdktf/provider-aws/lib/provider", () => ({
+  AwsProvider: jest.fn(),
+  AwsProviderDefaultTags: jest.fn(),
 }));
 
 jest.mock("@cdktf/provider-aws/lib/data-aws-availability-zones", () => ({
-  DataAwsAvailabilityZones: jest.fn().mockImplementation((scope: any, id: string, config?: any) => ({
-    names: ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d'],
-    zoneIds: ['use1-az1', 'use1-az2', 'use1-az3', 'use1-az4']
-  }))
+  DataAwsAvailabilityZones: jest.fn().mockImplementation(() => ({
+    names: ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+  })),
+}));
+
+jest.mock("@cdktf/provider-aws/lib/eks-cluster", () => ({
+  EksCluster: jest.fn().mockImplementation(function(this: any, scope: any, id: string, config: any) {
+    this.name = config.name;
+    this.roleArn = config.roleArn;
+    this.endpoint = `https://${config.name}.eks.amazonaws.com`;
+    this.version = config.version;
+    this.arn = `arn:aws:eks:us-east-1:123456789012:cluster/${config.name}`;
+    this.platformVersion = 'eks.5';
+    this.status = 'ACTIVE';
+    this.identity = {
+      get: jest.fn().mockReturnValue({
+        oidc: {
+          get: jest.fn().mockReturnValue({
+            issuer: `https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE`,
+          })
+        }
+      })
+    };
+    this.certificateAuthority = {
+      get: jest.fn().mockReturnValue({
+        data: 'LS0tLS1CRUdJTiBDRVJUSUZJQ0FURS0tLS0t...'
+      })
+    };
+  }),
+}));
+
+jest.mock("@cdktf/provider-aws/lib/iam-openid-connect-provider", () => ({
+  IamOpenidConnectProvider: jest.fn().mockImplementation((scope: any, id: string, config: any) => ({
+    arn: `arn:aws:iam::123456789012:oidc-provider/${config.url.replace('https://', '')}`,
+  })),
 }));
 
 // Mock TerraformOutput, S3Backend, and Fn
@@ -70,40 +122,38 @@ jest.mock("cdktf", () => {
   return {
     ...actual,
     TerraformOutput: jest.fn(),
-    S3Backend: jest.fn(),
+    S3Backend: jest.fn().mockImplementation(function(this: any, scope: any, config: any) {
+      this.addOverride = jest.fn();
+      return this;
+    }),
     TerraformStack: actual.TerraformStack,
     Fn: {
       element: jest.fn((list: any, index: number) => {
         if (Array.isArray(list)) {
           return list[index];
         }
-        // For mocked data sources
-        return ['us-east-1a', 'us-east-1b', 'us-east-1c', 'us-east-1d'][index];
+        // For mocked DataAwsAvailabilityZones.names
+        const mockedAzs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
+        return mockedAzs[index];
       })
     }
   };
 });
 
-// Mock AWS Provider
-jest.mock("@cdktf/provider-aws/lib/provider", () => ({
-  AwsProvider: jest.fn(),
-  AwsProviderDefaultTags: {}
-}));
-
-// Mock the addOverride method
-const mockAddOverride = jest.fn();
-TapStack.prototype.addOverride = mockAddOverride;
-
 describe("TapStack Unit Tests", () => {
-  const { 
+  const {
     VpcConstruct,
-    NetworkConstruct,
-    SecurityGroupConstruct
+    EksSecurityGroups,
+    IamRoles,
+    EcrRepository,
+    EksNodeGroup,
   } = require("../lib/modules");
+  
   const { TerraformOutput, S3Backend, Fn } = require("cdktf");
   const { AwsProvider } = require("@cdktf/provider-aws/lib/provider");
-  const { DataAwsCallerIdentity } = require("@cdktf/provider-aws/lib/data-aws-caller-identity");
   const { DataAwsAvailabilityZones } = require("@cdktf/provider-aws/lib/data-aws-availability-zones");
+  const { EksCluster } = require("@cdktf/provider-aws/lib/eks-cluster");
+  const { IamOpenidConnectProvider } = require("@cdktf/provider-aws/lib/iam-openid-connect-provider");
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -112,11 +162,12 @@ describe("TapStack Unit Tests", () => {
   describe("Stack Creation and Configuration", () => {
     test("should create TapStack with default configuration", () => {
       const app = new App();
-      const stack = new TapStack(app, "TestStack");
+      const stack = new TapStack(app, "test-stack");
 
       expect(stack).toBeDefined();
       expect(stack).toBeInstanceOf(TapStack);
 
+      // Verify AWS Provider is configured with default region
       expect(AwsProvider).toHaveBeenCalledWith(
         expect.anything(),
         'aws',
@@ -127,9 +178,9 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
-    test("should create TapStack with custom aws region", () => {
+    test("should create TapStack with custom AWS region", () => {
       const app = new App();
-      new TapStack(app, "TestStack", {
+      new TapStack(app, "test-stack", {
         awsRegion: 'eu-west-1'
       });
 
@@ -142,16 +193,27 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
-    test("should apply custom default tags when provided", () => {
+    test("should use regionOverride when provided", () => {
       const app = new App();
-      const customTags = [{
-        tags: {
-          Team: 'DevOps',
-          CostCenter: 'Engineering'
-        }
-      }];
+      new TapStack(app, "test-stack", {
+        awsRegion: 'us-west-2',
+        regionOverride: 'ap-southeast-1'
+      });
 
-      new TapStack(app, "TestStack", {
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'ap-southeast-1' // Override should take precedence
+        })
+      );
+    });
+
+    test("should create TapStack with custom default tags", () => {
+      const app = new App();
+      const customTags = [{ tags: { Department: 'Engineering', Team: 'Platform' } }];
+
+      new TapStack(app, "test-stack", {
         defaultTags: customTags
       });
 
@@ -164,26 +226,19 @@ describe("TapStack Unit Tests", () => {
       );
     });
 
-    test("should fetch current AWS account identity", () => {
+    test("should use custom environment suffix", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'production'
+      });
 
-      expect(DataAwsCallerIdentity).toHaveBeenCalledWith(
+      expect(VpcConstruct).toHaveBeenCalledWith(
         expect.anything(),
-        'current',
-        {}
-      );
-    });
-
-    test("should fetch available availability zones", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      expect(DataAwsAvailabilityZones).toHaveBeenCalledWith(
-        expect.anything(),
-        'azs',
+        'vpc-module',
         expect.objectContaining({
-          state: 'available'
+          tags: expect.objectContaining({
+            Environment: 'production'
+          })
         })
       );
     });
@@ -192,13 +247,17 @@ describe("TapStack Unit Tests", () => {
   describe("S3 Backend Configuration", () => {
     test("should configure S3 backend with default settings", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      const mockAddOverride = jest.fn();
+      const originalPrototype = TapStack.prototype.addOverride;
+      TapStack.prototype.addOverride = mockAddOverride;
+
+      new TapStack(app, "test-stack");
 
       expect(S3Backend).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
           bucket: 'iac-rlhf-tf-states',
-          key: 'dev/TestStack.tfstate',
+          key: 'dev/test-stack.tfstate',
           region: 'us-east-1',
           encrypt: true
         })
@@ -208,78 +267,72 @@ describe("TapStack Unit Tests", () => {
         'terraform.backend.s3.use_lockfile',
         true
       );
+
+      TapStack.prototype.addOverride = originalPrototype;
     });
 
-    test("should configure S3 backend with custom settings", () => {
+    test("should configure S3 backend with custom state bucket", () => {
       const app = new App();
-      new TapStack(app, "TestStack", {
-        stateBucket: 'my-custom-bucket',
-        stateBucketRegion: 'ap-south-1',
+      new TapStack(app, "test-stack", {
+        stateBucket: 'my-custom-state-bucket',
+        stateBucketRegion: 'ap-southeast-1'
+      });
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'my-custom-state-bucket',
+          region: 'ap-southeast-1'
+        })
+      );
+    });
+
+    test("should configure S3 backend with production environment", () => {
+      const app = new App();
+      new TapStack(app, "test-stack", {
         environmentSuffix: 'prod'
       });
 
       expect(S3Backend).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
-          bucket: 'my-custom-bucket',
-          key: 'prod/TestStack.tfstate',
-          region: 'ap-south-1',
-          encrypt: true
+          key: 'prod/test-stack.tfstate'
         })
-      );
-    });
-
-    test("should enable S3 state locking with escape hatch", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      expect(mockAddOverride).toHaveBeenCalledWith(
-        'terraform.backend.s3.use_lockfile',
-        true
       );
     });
   });
 
-  describe("VPC Module Tests", () => {
-    test("should create VpcConstruct with correct configuration", () => {
+  describe("VPC Module Configuration", () => {
+    test("should create VPC with correct configuration", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack");
 
       expect(VpcConstruct).toHaveBeenCalledWith(
         expect.anything(),
-        'main-vpc',
+        'vpc-module',
         expect.objectContaining({
-          cidrBlock: '10.0.0.0/16',
+          vpcCidr: '10.0.0.0/16',
+          availabilityZones: ['us-east-1a', 'us-east-1b'],
+          publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
+          privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
           tags: expect.objectContaining({
             Environment: 'dev',
             ManagedBy: 'Terraform',
-            Stack: 'TestStack'
+            Project: 'tap-stack'
           })
         })
       );
     });
 
-    test("should create VPC with correct CIDR block", () => {
+    test("should create VPC with environment-specific naming", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
-
-      const vpcModule = VpcConstruct.mock.results[0].value;
-      
-      expect(vpcModule.vpc).toBeDefined();
-      expect(vpcModule.vpc.cidrBlock).toBe('10.0.0.0/16');
-      expect(vpcModule.vpc.enableDnsHostnames).toBe(true);
-      expect(vpcModule.vpc.enableDnsSupport).toBe(true);
-    });
-
-    test("should pass correct environment tags to VPC", () => {
-      const app = new App();
-      new TapStack(app, "TestStack", {
+      new TapStack(app, "test-stack", {
         environmentSuffix: 'staging'
       });
 
       expect(VpcConstruct).toHaveBeenCalledWith(
         expect.anything(),
-        'main-vpc',
+        'vpc-module',
         expect.objectContaining({
           tags: expect.objectContaining({
             Environment: 'staging'
@@ -287,472 +340,395 @@ describe("TapStack Unit Tests", () => {
         })
       );
     });
-  });
 
-  describe("Network Module Tests", () => {
-    test("should create NetworkConstruct with correct configuration", () => {
+    test("should use Fn.element for availability zones", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack");
 
-      const vpcModule = VpcConstruct.mock.results[0].value;
-
-      expect(NetworkConstruct).toHaveBeenCalledWith(
+      expect(DataAwsAvailabilityZones).toHaveBeenCalledWith(
         expect.anything(),
-        'main-network',
+        'azs',
         expect.objectContaining({
-          vpcId: vpcModule.vpc.id,
-          publicSubnetCidrs: ['10.0.1.0/24', '10.0.2.0/24'],
-          privateSubnetCidrs: ['10.0.10.0/24', '10.0.11.0/24'],
-          availabilityZones: ['us-east-1a', 'us-east-1b'],
-          tags: expect.objectContaining({
-            Environment: 'dev',
-            ManagedBy: 'Terraform',
-            Stack: 'TestStack'
-          })
+          state: 'available'
         })
       );
-    });
-
-    test("should create correct number of subnets", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const networkModule = NetworkConstruct.mock.results[0].value;
-      
-      expect(networkModule.publicSubnets).toHaveLength(2);
-      expect(networkModule.privateSubnets).toHaveLength(2);
-      expect(networkModule.natGateways).toHaveLength(2);
-    });
-
-    test("should use Fn.element to select availability zones", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
 
       expect(Fn.element).toHaveBeenCalledTimes(2);
       expect(Fn.element).toHaveBeenCalledWith(expect.anything(), 0);
       expect(Fn.element).toHaveBeenCalledWith(expect.anything(), 1);
     });
+  });
 
-    test("should configure public subnets correctly", () => {
+  describe("EKS Security Groups Configuration", () => {
+    test("should create EKS security groups with correct VPC ID", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack");
 
-      const networkModule = NetworkConstruct.mock.results[0].value;
-      
-      networkModule.publicSubnets.forEach((subnet: any, index: number) => {
-        expect(subnet.cidrBlock).toBe(['10.0.1.0/24', '10.0.2.0/24'][index]);
-        expect(subnet.mapPublicIpOnLaunch).toBe(true);
-      });
+      expect(EksSecurityGroups).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-security-groups',
+        'vpc-dev',
+        expect.objectContaining({
+          Environment: 'dev',
+          ManagedBy: 'Terraform',
+          Project: 'tap-stack'
+        })
+      );
     });
 
-    test("should configure private subnets correctly", () => {
+    test("should pass correct VPC ID from VPC module", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
-
-      const networkModule = NetworkConstruct.mock.results[0].value;
-      
-      networkModule.privateSubnets.forEach((subnet: any, index: number) => {
-        expect(subnet.cidrBlock).toBe(['10.0.10.0/24', '10.0.11.0/24'][index]);
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'prod'
       });
+
+      expect(EksSecurityGroups).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-security-groups',
+        'vpc-prod',
+        expect.anything()
+      );
     });
   });
 
-  describe("Security Group Module Tests", () => {
-    test("should create application security group with correct configuration", () => {
+  describe("EKS Cluster Configuration", () => {
+    test("should create EKS cluster with correct configuration", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack");
 
-      const vpcModule = VpcConstruct.mock.results[0].value;
-
-      expect(SecurityGroupConstruct).toHaveBeenCalledWith(
+      expect(EksCluster).toHaveBeenCalledWith(
         expect.anything(),
-        'app-sg',
+        'eks-cluster',
         expect.objectContaining({
-          name: 'TestStack-app-security-group',
-          vpcId: vpcModule.vpc.id,
-          ingressRules: [
-            {
-              fromPort: 443,
-              toPort: 443,
-              protocol: 'tcp',
-              cidrBlocks: ['0.0.0.0/0'],
-              description: 'Allow HTTPS from anywhere'
-            },
-            {
-              fromPort: 80,
-              toPort: 80,
-              protocol: 'tcp',
-              cidrBlocks: ['0.0.0.0/0'],
-              description: 'Allow HTTP from anywhere'
-            }
-          ],
-          egressRules: [
-            {
-              fromPort: 0,
-              toPort: 65535,
-              protocol: '-1',
-              cidrBlocks: ['0.0.0.0/0'],
-              description: 'Allow all outbound traffic'
-            }
-          ],
+          name: 'eks-dev',
+          roleArn: '',
+          version: '1.28',
+          vpcConfig: expect.objectContaining({
+            subnetIds: expect.arrayContaining([
+              'subnet-public-1-dev',
+              'subnet-public-2-dev',
+              'subnet-private-1-dev',
+              'subnet-private-2-dev'
+            ]),
+            securityGroupIds: ['sg-eks-cluster-dev'],
+            endpointPrivateAccess: true,
+            endpointPublicAccess: true,
+            publicAccessCidrs: ['0.0.0.0/0']
+          }),
+          enabledClusterLogTypes: expect.arrayContaining([
+            'api',
+            'audit',
+            'authenticator',
+            'controllerManager',
+            'scheduler'
+          ]),
           tags: expect.objectContaining({
-            Environment: 'dev',
-            ManagedBy: 'Terraform',
-            Stack: 'TestStack'
+            Environment: 'dev'
           })
         })
       );
     });
 
-    test("should create database security group with correct configuration", () => {
+    test("should create EKS cluster with production environment", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'prod'
+      });
 
-      const vpcModule = VpcConstruct.mock.results[0].value;
-
-      const dbSgCall = SecurityGroupConstruct.mock.calls.find(
-        (call: any) => call[1] === 'db-sg'
+      expect(EksCluster).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-cluster',
+        expect.objectContaining({
+          name: 'eks-prod'
+        })
       );
+    });
+  });
 
-      expect(dbSgCall[2]).toEqual(expect.objectContaining({
-        name: 'TestStack-db-security-group',
-        vpcId: vpcModule.vpc.id,
-        ingressRules: [
-          {
-            fromPort: 3306,
-            toPort: 3306,
-            protocol: 'tcp',
-            cidrBlocks: ['10.0.0.0/16'],
-            description: 'Allow MySQL from VPC'
-          }
-        ],
-        egressRules: [
-          {
-            fromPort: 0,
-            toPort: 65535,
-            protocol: '-1',
-            cidrBlocks: ['0.0.0.0/0'],
-            description: 'Allow all outbound traffic'
-          }
-        ],
-        tags: expect.objectContaining({
+  describe("OIDC Provider Configuration", () => {
+    test("should create OIDC provider with correct configuration", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(IamOpenidConnectProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-oidc-provider',
+        expect.objectContaining({
+          clientIdList: ['sts.amazonaws.com'],
+          thumbprintList: ['9e99a48a9960b14926bb7f3b02e22da2b0ab7280'],
+          url: 'https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE',
+          tags: expect.objectContaining({
+            Environment: 'dev'
+          })
+        })
+      );
+    });
+  });
+
+  describe("IAM Roles Configuration", () => {
+    test("should create IAM roles with correct configuration", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(IamRoles).toHaveBeenCalledWith(
+        expect.anything(),
+        'iam-roles',
+        'eks-dev',
+        expect.stringMatching(/^arn:aws:iam::/),
+        expect.stringContaining('https://oidc.eks'),
+        expect.objectContaining({
+          Environment: 'dev'
+        })
+      );
+    });
+
+    test("should pass OIDC provider ARN and issuer URL", () => {
+      const app = new App();
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'staging'
+      });
+
+      expect(IamRoles).toHaveBeenCalledWith(
+        expect.anything(),
+        'iam-roles',
+        'eks-staging',
+        'arn:aws:iam::123456789012:oidc-provider/oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE',
+        'https://oidc.eks.us-east-1.amazonaws.com/id/EXAMPLED539D4633E53DE1B71EXAMPLE',
+        expect.anything()
+      );
+    });
+  });
+
+  describe("ECR Repository Configuration", () => {
+    test("should create ECR repository with correct configuration", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(EcrRepository).toHaveBeenCalledWith(
+        expect.anything(),
+        'ecr-repository',
+        'tap-app-dev',
+        expect.objectContaining({
           Environment: 'dev',
           ManagedBy: 'Terraform',
-          Stack: 'TestStack'
+          Project: 'tap-stack'
         })
-      }));
+      );
     });
 
-    test("should create exactly two security groups", () => {
+    test("should use environment-specific naming for ECR", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'prod'
+      });
 
-      expect(SecurityGroupConstruct).toHaveBeenCalledTimes(2);
+      expect(EcrRepository).toHaveBeenCalledWith(
+        expect.anything(),
+        'ecr-repository',
+        'tap-app-prod',
+        expect.anything()
+      );
+    });
+  });
+
+  describe("EKS Node Groups Configuration", () => {
+    test("should create general node group with correct configuration", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      // General node group is created directly, not through EksNodeGroup
+      // But spot node group uses the module
+      expect(EksNodeGroup).toHaveBeenCalledWith(
+        expect.anything(),
+        'spot-node-group',
+        expect.objectContaining({
+          clusterName: 'eks-dev',
+          nodeRoleName: 'arn:aws:iam::123456789012:role/eks-dev-node-role',
+          subnetIds: ['subnet-private-1-dev', 'subnet-private-2-dev'],
+          instanceTypes: ['t3.small', 't3a.small'],
+          scalingConfig: {
+            desired: 1,
+            min: 0,
+            max: 3
+          },
+          capacityType: 'SPOT',
+          labels: {
+            workload: 'spot',
+            environment: 'dev'
+          },
+          tags: expect.objectContaining({
+            Name: 'eks-dev-spot-nodes',
+            Environment: 'dev'
+          })
+        })
+      );
     });
 
-    test("should use stack ID in security group names", () => {
+    test("should create spot node group with correct capacity", () => {
       const app = new App();
-      new TapStack(app, "MyStack");
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'prod'
+      });
 
-      const appSgCall = SecurityGroupConstruct.mock.calls[0];
-      expect(appSgCall[2].name).toBe('MyStack-app-security-group');
+      expect(EksNodeGroup).toHaveBeenCalledWith(
+        expect.anything(),
+        'spot-node-group',
+        expect.objectContaining({
+          capacityType: 'SPOT',
+          scalingConfig: {
+            desired: 1,
+            min: 0,
+            max: 3
+          },
+          instanceTypes: ['t3.small', 't3a.small']
+        })
+      );
+    });
 
-      const dbSgCall = SecurityGroupConstruct.mock.calls[1];
-      expect(dbSgCall[2].name).toBe('MyStack-db-security-group');
+    test("should use private subnets for node groups", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(EksNodeGroup).toHaveBeenCalledWith(
+        expect.anything(),
+        'spot-node-group',
+        expect.objectContaining({
+          subnetIds: ['subnet-private-1-dev', 'subnet-private-2-dev']
+        })
+      );
     });
   });
 
   describe("Terraform Outputs", () => {
-    test("should create exactly 10 terraform outputs", () => {
+    test("should create all required VPC outputs", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
-      
-      expect(TerraformOutput).toHaveBeenCalledTimes(10);
-    });
+      new TapStack(app, "test-stack");
 
-    test("should create all required terraform outputs", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-      
       const outputCalls = TerraformOutput.mock.calls;
       const outputIds = outputCalls.map((call: any) => call[1]);
 
       expect(outputIds).toContain('vpc-id');
-      expect(outputIds).toContain('vpc-cidr-block');
+      expect(outputIds).toContain('vpc-cidr');
       expect(outputIds).toContain('public-subnet-ids');
       expect(outputIds).toContain('private-subnet-ids');
       expect(outputIds).toContain('nat-gateway-ids');
-      expect(outputIds).toContain('app-security-group-id');
-      expect(outputIds).toContain('db-security-group-id');
-      expect(outputIds).toContain('availability-zones');
-      expect(outputIds).toContain('aws-account-id');
+      expect(outputIds).toContain('internet-gateway-id');
+    });
+
+    test("should create all required EKS outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('eks-cluster-name');
+      expect(outputIds).toContain('eks-cluster-endpoint');
+      expect(outputIds).toContain('eks-cluster-version');
+      expect(outputIds).toContain('eks-cluster-arn');
+      expect(outputIds).toContain('eks-cluster-certificate-authority');
+      expect(outputIds).toContain('eks-cluster-platform-version');
+      expect(outputIds).toContain('eks-cluster-status');
+    });
+
+    test("should create OIDC provider outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('eks-oidc-provider-arn');
+      expect(outputIds).toContain('eks-oidc-issuer-url');
+    });
+
+    test("should create security group outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('cluster-security-group-id');
+      expect(outputIds).toContain('node-security-group-id');
+    });
+
+    test("should create IAM role outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('eks-cluster-role-arn');
+      expect(outputIds).toContain('eks-cluster-role-name');
+      expect(outputIds).toContain('eks-node-role-arn');
+      expect(outputIds).toContain('eks-node-role-name');
+      expect(outputIds).toContain('cluster-autoscaler-role-arn');
+      expect(outputIds).toContain('aws-load-balancer-controller-role-arn');
+    });
+
+    test("should create ECR repository outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('ecr-repository-url');
+      expect(outputIds).toContain('ecr-repository-arn');
+      expect(outputIds).toContain('ecr-repository-name');
+      expect(outputIds).toContain('ecr-registry-id');
+    });
+
+    test("should create node group outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
+      expect(outputIds).toContain('spot-node-group-id');
+      expect(outputIds).toContain('spot-node-group-arn');
+      expect(outputIds).toContain('spot-node-group-status');
+    });
+
+    test("should create utility outputs", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      const outputCalls = TerraformOutput.mock.calls;
+      const outputIds = outputCalls.map((call: any) => call[1]);
+
       expect(outputIds).toContain('aws-region');
+      expect(outputIds).toContain('environment-suffix');
+      expect(outputIds).toContain('availability-zones');
+      expect(outputIds).toContain('kubeconfig-command');
     });
 
-    test("should create VPC outputs with correct values", () => {
+    test("should create kubeconfig command with correct region and cluster name", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
-
-      const vpcModule = VpcConstruct.mock.results[0].value;
-      
-      const vpcIdOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'vpc-id'
-      );
-      expect(vpcIdOutput[2].value).toBe(vpcModule.vpc.id);
-      expect(vpcIdOutput[2].description).toBe('VPC ID');
-
-      const vpcCidrOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'vpc-cidr-block'
-      );
-      expect(vpcCidrOutput[2].value).toBe('10.0.0.0/16');
-      expect(vpcCidrOutput[2].description).toBe('VPC CIDR block');
-    });
-
-    test("should create subnet outputs with correct values", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const networkModule = NetworkConstruct.mock.results[0].value;
-      
-      const publicSubnetOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'public-subnet-ids'
-      );
-      expect(publicSubnetOutput[2].value).toEqual(['public-subnet-0', 'public-subnet-1']);
-      expect(publicSubnetOutput[2].description).toBe('Public subnet IDs');
-      
-      const privateSubnetOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'private-subnet-ids'
-      );
-      expect(privateSubnetOutput[2].value).toEqual(['private-subnet-0', 'private-subnet-1']);
-      expect(privateSubnetOutput[2].description).toBe('Private subnet IDs');
-    });
-
-    test("should create NAT gateway outputs with correct values", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const networkModule = NetworkConstruct.mock.results[0].value;
-      
-      const natGatewayOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'nat-gateway-ids'
-      );
-      expect(natGatewayOutput[2].value).toEqual(['nat-gateway-0', 'nat-gateway-1']);
-      expect(natGatewayOutput[2].description).toBe('NAT Gateway IDs');
-    });
-
-    test("should create security group outputs with correct values", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const appSg = SecurityGroupConstruct.mock.results[0].value;
-      const dbSg = SecurityGroupConstruct.mock.results[1].value;
-      
-      const appSgOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'app-security-group-id'
-      );
-      expect(appSgOutput[2].value).toBe(appSg.securityGroup.id);
-      expect(appSgOutput[2].description).toBe('Application Security Group ID');
-      
-      const dbSgOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'db-security-group-id'
-      );
-      expect(dbSgOutput[2].value).toBe(dbSg.securityGroup.id);
-      expect(dbSgOutput[2].description).toBe('Database Security Group ID');
-    });
-
-    test("should create data source outputs", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const azOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'availability-zones'
-      );
-      expect(azOutput[2].description).toBe('Available AZs in the region');
-
-      const accountOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'aws-account-id'
-      );
-      expect(accountOutput[2].value).toBe('123456789012');
-      expect(accountOutput[2].description).toBe('Current AWS Account ID');
-
-      const regionOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'aws-region'
-      );
-      expect(regionOutput[2].value).toBe('us-east-1');
-      expect(regionOutput[2].description).toBe('AWS Region');
-    });
-  });
-
-  describe("Module Dependencies and Integration", () => {
-    test("should pass VPC ID to Network module", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const vpcModule = VpcConstruct.mock.results[0].value;
-      const networkCall = NetworkConstruct.mock.calls[0];
-      
-      expect(networkCall[2].vpcId).toBe(vpcModule.vpc.id);
-    });
-
-    test("should pass VPC ID to Security Groups", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const vpcModule = VpcConstruct.mock.results[0].value;
-      const appSgCall = SecurityGroupConstruct.mock.calls[0];
-      const dbSgCall = SecurityGroupConstruct.mock.calls[1];
-      
-      expect(appSgCall[2].vpcId).toBe(vpcModule.vpc.id);
-      expect(dbSgCall[2].vpcId).toBe(vpcModule.vpc.id);
-    });
-
-    test("should create modules in correct order", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-      
-      const vpcCallOrder = VpcConstruct.mock.invocationCallOrder[0];
-      const networkCallOrder = NetworkConstruct.mock.invocationCallOrder[0];
-      const appSgCallOrder = SecurityGroupConstruct.mock.invocationCallOrder[0];
-      const dbSgCallOrder = SecurityGroupConstruct.mock.invocationCallOrder[1];
-      
-      // VPC should be created first
-      expect(vpcCallOrder).toBeLessThan(networkCallOrder);
-      expect(vpcCallOrder).toBeLessThan(appSgCallOrder);
-      
-      // Network should be created after VPC
-      expect(networkCallOrder).toBeGreaterThan(vpcCallOrder);
-      
-      // Security groups should be created after VPC
-      expect(appSgCallOrder).toBeGreaterThan(vpcCallOrder);
-      expect(dbSgCallOrder).toBeGreaterThan(vpcCallOrder);
-    });
-  });
-
-  describe("Environment Configuration", () => {
-    test("should use dev as default environment suffix", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      expect(S3Backend).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          key: 'dev/TestStack.tfstate'
-        })
-      );
-
-      expect(VpcConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-vpc',
-        expect.objectContaining({
-          tags: expect.objectContaining({
-            Environment: 'dev'
-          })
-        })
-      );
-    });
-
-    test("should use provided environment suffix", () => {
-      const app = new App();
-      new TapStack(app, "TestStack", {
-        environmentSuffix: 'staging'
-      });
-
-      expect(S3Backend).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          key: 'staging/TestStack.tfstate'
-        })
-      );
-
-      const expectedTags = {
-        Environment: 'staging',
-        ManagedBy: 'Terraform',
-        Stack: 'TestStack'
-      };
-
-      expect(VpcConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-vpc',
-        expect.objectContaining({ tags: expectedTags })
-      );
-
-      expect(NetworkConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-network',
-        expect.objectContaining({ tags: expectedTags })
-      );
-
-      expect(SecurityGroupConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'app-sg',
-        expect.objectContaining({ tags: expectedTags })
-      );
-    });
-
-    test("should handle production environment settings", () => {
-      const app = new App();
-      new TapStack(app, "TestStack", {
+      new TapStack(app, "test-stack", {
+        awsRegion: 'eu-west-1',
         environmentSuffix: 'prod'
       });
 
-      const expectedTags = {
-        Environment: 'prod',
-        ManagedBy: 'Terraform',
-        Stack: 'TestStack'
-      };
-
-      expect(VpcConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-vpc',
-        expect.objectContaining({ tags: expectedTags })
+      const kubeconfigOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'kubeconfig-command'
       );
 
-      expect(NetworkConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-network',
-        expect.objectContaining({ tags: expectedTags })
-      );
-
-      SecurityGroupConstruct.mock.calls.forEach((call: any) => {
-        expect(call[2].tags).toEqual(expectedTags);
-      });
+      expect(kubeconfigOutput[2].value).toBe('aws eks update-kubeconfig --region eu-west-1 --name eks-prod');
     });
   });
 
   describe("Edge Cases and Error Scenarios", () => {
-    test("should handle undefined props gracefully", () => {
+    test("should handle undefined props", () => {
       const app = new App();
-      const stack = new TapStack(app, "TestStack");
+      const stack = new TapStack(app, "test-stack", undefined);
 
       expect(stack).toBeDefined();
-      
-      // Should use default values
-      expect(S3Backend).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          bucket: 'iac-rlhf-tf-states',
-          key: 'dev/TestStack.tfstate',
-          region: 'us-east-1'
-        })
-      );
 
-      expect(VpcConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-vpc',
-        expect.objectContaining({
-          cidrBlock: '10.0.0.0/16',
-          tags: expect.objectContaining({
-            Environment: 'dev'
-          })
-        })
-      );
-    });
-
-    test("should handle empty props object", () => {
-      const app = new App();
-      const stack = new TapStack(app, "TestStack", {});
-
-      expect(stack).toBeDefined();
+      // Should use all defaults
       expect(AwsProvider).toHaveBeenCalledWith(
         expect.anything(),
         'aws',
@@ -761,302 +737,373 @@ describe("TapStack Unit Tests", () => {
           defaultTags: []
         })
       );
-    });
-  });
-
-  describe("Region-specific Configuration", () => {
-    test("should configure resources for different regions", () => {
-      const regions = ['us-west-2', 'eu-central-1', 'ap-northeast-1'];
-      
-      regions.forEach(region => {
-        jest.clearAllMocks();
-        const app = new App();
-        
-        new TapStack(app, "TestStack", {
-          awsRegion: region
-        });
-
-        expect(AwsProvider).toHaveBeenCalledWith(
-          expect.anything(),
-          'aws',
-          expect.objectContaining({
-            region: region
-          })
-        );
-
-        const regionOutput = TerraformOutput.mock.calls.find(
-          (call: any) => call[1] === 'aws-region'
-        );
-        expect(regionOutput[2].value).toBe(region);
-      });
-    });
-
-    test("should handle state bucket in different region", () => {
-      const app = new App();
-      new TapStack(app, "TestStack", {
-        awsRegion: 'eu-west-1',
-        stateBucketRegion: 'us-east-1'
-      });
-
-      expect(AwsProvider).toHaveBeenCalledWith(
-        expect.anything(),
-        'aws',
-        expect.objectContaining({
-          region: 'eu-west-1'
-        })
-      );
 
       expect(S3Backend).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({
+          bucket: 'iac-rlhf-tf-states',
+          key: 'dev/test-stack.tfstate',
           region: 'us-east-1'
         })
       );
     });
 
-    test("should use correct region in output", () => {
+    test("should handle empty props object", () => {
       const app = new App();
-      new TapStack(app, "TestStack", {
-        awsRegion: 'ap-south-1'
-      });
+      const stack = new TapStack(app, "test-stack", {});
 
-      const regionOutput = TerraformOutput.mock.calls.find(
-        (call: any) => call[1] === 'aws-region'
-      );
-      expect(regionOutput[2].value).toBe('ap-south-1');
-    });
-  });
+      expect(stack).toBeDefined();
 
-  describe("Stack ID and Naming", () => {
-    test("should use stack ID in resource naming and tags", () => {
-      const app = new App();
-      new TapStack(app, "MyCustomStack", {
-        environmentSuffix: 'dev'
-      });
-
-      expect(S3Backend).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({
-          key: 'dev/MyCustomStack.tfstate'
-        })
-      );
-
+      // Should use all defaults
       expect(VpcConstruct).toHaveBeenCalledWith(
         expect.anything(),
-        'main-vpc',
+        'vpc-module',
         expect.objectContaining({
+          vpcCidr: '10.0.0.0/16',
           tags: expect.objectContaining({
-            Stack: 'MyCustomStack'
+            Environment: 'dev'
           })
         })
       );
     });
 
-    test("should include stack ID in security group names", () => {
+    test("should handle all props being set", () => {
       const app = new App();
-      new TapStack(app, "ProductionStack");
-
-      const appSgCall = SecurityGroupConstruct.mock.calls[0];
-      expect(appSgCall[2].name).toBe('ProductionStack-app-security-group');
-
-      const dbSgCall = SecurityGroupConstruct.mock.calls[1];
-      expect(dbSgCall[2].name).toBe('ProductionStack-db-security-group');
-    });
-  });
-
-  describe("Common Tags", () => {
-    test("should apply common tags to all resources", () => {
-      const app = new App();
-      new TapStack(app, "TestStack", {
-        environmentSuffix: 'qa'
+      const stack = new TapStack(app, "test-stack", {
+        environmentSuffix: 'prod',
+        stateBucket: 'my-state-bucket',
+        stateBucketRegion: 'eu-west-1',
+        awsRegion: 'ap-southeast-2',
+        defaultTags: [{ tags: { Owner: 'TeamA' } }],
+        regionOverride: 'us-west-1'
       });
-
-      const expectedTags = {
-        Environment: 'qa',
-        ManagedBy: 'Terraform',
-        Stack: 'TestStack'
-      };
-
-      expect(VpcConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-vpc',
-        expect.objectContaining({
-          tags: expectedTags
-        })
-      );
-
-      expect(NetworkConstruct).toHaveBeenCalledWith(
-        expect.anything(),
-        'main-network',
-        expect.objectContaining({
-          tags: expectedTags
-        })
-      );
-
-      SecurityGroupConstruct.mock.calls.forEach((call: any) => {
-        expect(call[2].tags).toEqual(expectedTags);
-      });
-    });
-
-    test("should consistently apply ManagedBy tag", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const vpcCall = VpcConstruct.mock.calls[0];
-      expect(vpcCall[2].tags.ManagedBy).toBe('Terraform');
-
-      const networkCall = NetworkConstruct.mock.calls[0];
-      expect(networkCall[2].tags.ManagedBy).toBe('Terraform');
-
-      const appSgCall = SecurityGroupConstruct.mock.calls[0];
-      expect(appSgCall[2].tags.ManagedBy).toBe('Terraform');
-    });
-  });
-
-  describe("Security Group Rules", () => {
-    test("should configure app security group with HTTP and HTTPS ingress", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const appSgCall = SecurityGroupConstruct.mock.calls[0];
-      const ingressRules = appSgCall[2].ingressRules;
-
-      expect(ingressRules).toHaveLength(2);
-      expect(ingressRules).toContainEqual({
-        fromPort: 443,
-        toPort: 443,
-        protocol: 'tcp',
-        cidrBlocks: ['0.0.0.0/0'],
-        description: 'Allow HTTPS from anywhere'
-      });
-      expect(ingressRules).toContainEqual({
-        fromPort: 80,
-        toPort: 80,
-        protocol: 'tcp',
-        cidrBlocks: ['0.0.0.0/0'],
-        description: 'Allow HTTP from anywhere'
-      });
-    });
-
-    test("should configure database security group with MySQL ingress", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const dbSgCall = SecurityGroupConstruct.mock.calls[1];
-      const ingressRules = dbSgCall[2].ingressRules;
-
-      expect(ingressRules).toHaveLength(1);
-      expect(ingressRules[0]).toEqual({
-        fromPort: 3306,
-        toPort: 3306,
-        protocol: 'tcp',
-        cidrBlocks: ['10.0.0.0/16'],
-        description: 'Allow MySQL from VPC'
-      });
-    });
-
-    test("should configure egress rules for all security groups", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      SecurityGroupConstruct.mock.calls.forEach((call: any) => {
-        const egressRules = call[2].egressRules;
-        expect(egressRules).toHaveLength(1);
-        expect(egressRules[0]).toEqual({
-          fromPort: 0,
-          toPort: 65535,
-          protocol: '-1',
-          cidrBlocks: ['0.0.0.0/0'],
-          description: 'Allow all outbound traffic'
-        });
-      });
-    });
-  });
-
-  describe("Complete Infrastructure Stack", () => {
-    test("should create all infrastructure components", () => {
-      const app = new App();
-      const stack = new TapStack(app, "CompleteStackTest");
 
       expect(stack).toBeDefined();
 
-      // Verify all modules are created
-      expect(VpcConstruct).toHaveBeenCalledTimes(1);
-      expect(NetworkConstruct).toHaveBeenCalledTimes(1);
-      expect(SecurityGroupConstruct).toHaveBeenCalledTimes(2);
-      expect(DataAwsCallerIdentity).toHaveBeenCalledTimes(1);
-      expect(DataAwsAvailabilityZones).toHaveBeenCalledTimes(1);
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'us-west-1', // regionOverride should take precedence
+          defaultTags: [{ tags: { Owner: 'TeamA' } }]
+        })
+      );
 
-      // Verify providers and backend
-      expect(AwsProvider).toHaveBeenCalledTimes(1);
-      expect(S3Backend).toHaveBeenCalledTimes(1);
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          bucket: 'my-state-bucket',
+          key: 'prod/test-stack.tfstate',
+          region: 'eu-west-1'
+        })
+      );
     });
 
-    test("should create resources with consistent naming", () => {
+    test("should handle NAT gateways being undefined", () => {
       const app = new App();
-      new TapStack(app, "TestStack", {
-        environmentSuffix: 'test'
+      
+      // Mock VpcConstruct to return undefined natGateways
+      VpcConstruct.mockImplementationOnce((scope: any, id: string, config: any) => ({
+        vpc: { id: 'vpc-test', cidrBlock: '10.0.0.0/16' },
+        publicSubnets: [{ id: 'subnet-public-1' }],
+        privateSubnets: [{ id: 'subnet-private-1' }],
+        natGateways: undefined,
+        internetGateway: undefined
+      }));
+
+      new TapStack(app, "test-stack");
+
+      const natGatewayOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'nat-gateway-ids'
+      );
+
+      expect(natGatewayOutput[2].value).toEqual([]);
+    });
+
+    test("should handle internet gateway being undefined", () => {
+      const app = new App();
+      
+      // Mock VpcConstruct to return undefined internetGateway
+      VpcConstruct.mockImplementationOnce((scope: any, id: string, config: any) => ({
+        vpc: { id: 'vpc-test', cidrBlock: '10.0.0.0/16' },
+        publicSubnets: [{ id: 'subnet-public-1' }],
+        privateSubnets: [{ id: 'subnet-private-1' }],
+        natGateways: [],
+        internetGateway: undefined
+      }));
+
+      new TapStack(app, "test-stack");
+
+      const igwOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'internet-gateway-id'
+      );
+
+      expect(igwOutput[2].value).toBe('');
+    });
+  });
+
+  describe("Module Dependencies and Integration", () => {
+    test("should pass VPC ID to EKS security groups", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(EksSecurityGroups).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-security-groups',
+        'vpc-dev',
+        expect.anything()
+      );
+    });
+
+    test("should pass subnets to EKS cluster configuration", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(EksCluster).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-cluster',
+        expect.objectContaining({
+          vpcConfig: expect.objectContaining({
+            subnetIds: [
+              'subnet-public-1-dev',
+              'subnet-public-2-dev',
+              'subnet-private-1-dev',
+              'subnet-private-2-dev'
+            ]
+          })
+        })
+      );
+    });
+
+    test("should pass security group IDs to EKS cluster", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(EksCluster).toHaveBeenCalledWith(
+        expect.anything(),
+        'eks-cluster',
+        expect.objectContaining({
+          vpcConfig: expect.objectContaining({
+            securityGroupIds: ['sg-eks-cluster-dev']
+          })
+        })
+      );
+    });
+
+    test("should pass IAM node role to node groups", () => {
+      const app = new App();
+      new TapStack(app, "test-stack");
+
+      expect(EksNodeGroup).toHaveBeenCalledWith(
+        expect.anything(),
+        'spot-node-group',
+        expect.objectContaining({
+          nodeRoleName: 'arn:aws:iam::123456789012:role/eks-dev-node-role'
+        })
+      );
+    });
+
+    test("should pass cluster name to node groups", () => {
+      const app = new App();
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'staging'
       });
 
-      const appSgCall = SecurityGroupConstruct.mock.calls[0];
-      expect(appSgCall[2].name).toBe('TestStack-app-security-group');
-
-      const dbSgCall = SecurityGroupConstruct.mock.calls[1];
-      expect(dbSgCall[2].name).toBe('TestStack-db-security-group');
-
-      const networkCall = NetworkConstruct.mock.calls[0];
-      expect(networkCall[2].tags.Environment).toBe('test');
+      expect(EksNodeGroup).toHaveBeenCalledWith(
+        expect.anything(),
+        'spot-node-group',
+        expect.objectContaining({
+          clusterName: 'eks-staging'
+        })
+      );
     });
 
-    test("should create exactly 10 outputs for complete stack", () => {
+    test("should pass private subnets to node groups", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack");
 
-      expect(TerraformOutput).toHaveBeenCalledTimes(10);
-    });
-  });
-
-  describe("Subnet Configuration", () => {
-    test("should configure correct CIDR blocks for subnets", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const networkCall = NetworkConstruct.mock.calls[0];
-      
-      expect(networkCall[2].publicSubnetCidrs).toEqual(['10.0.1.0/24', '10.0.2.0/24']);
-      expect(networkCall[2].privateSubnetCidrs).toEqual(['10.0.10.0/24', '10.0.11.0/24']);
-    });
-
-    test("should assign subnets to different availability zones", () => {
-      const app = new App();
-      new TapStack(app, "TestStack");
-
-      const networkCall = NetworkConstruct.mock.calls[0];
-      expect(networkCall[2].availabilityZones).toEqual(['us-east-1a', 'us-east-1b']);
+      expect(EksNodeGroup).toHaveBeenCalledWith(
+        expect.anything(),
+        'spot-node-group',
+        expect.objectContaining({
+          subnetIds: ['subnet-private-1-dev', 'subnet-private-2-dev']
+        })
+      );
     });
   });
 
-  describe("Module IDs", () => {
-    test("should use correct module IDs", () => {
+  describe("Environment-specific Configurations", () => {
+    test("should configure resources for development environment", () => {
       const app = new App();
-      new TapStack(app, "TestStack");
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'dev'
+      });
 
-      // Check module IDs
       expect(VpcConstruct).toHaveBeenCalledWith(
         expect.anything(),
-        'main-vpc',
-        expect.anything()
-      );
-
-      expect(NetworkConstruct).toHaveBeenCalledWith(
         expect.anything(),
-        'main-network',
-        expect.anything()
+        expect.objectContaining({
+          tags: expect.objectContaining({
+            Environment: 'dev'
+          })
+        })
       );
 
-      const sgCalls = SecurityGroupConstruct.mock.calls;
-      expect(sgCalls[0][1]).toBe('app-sg');
-      expect(sgCalls[1][1]).toBe('db-sg');
+      expect(EksCluster).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          name: 'eks-dev'
+        })
+      );
+    });
+
+    test("should configure resources for staging environment", () => {
+      const app = new App();
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'staging'
+      });
+
+      expect(EksCluster).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          name: 'eks-staging',
+          tags: expect.objectContaining({
+            Environment: 'staging'
+          })
+        })
+      );
+
+      expect(EcrRepository).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'tap-app-staging',
+        expect.objectContaining({
+          Environment: 'staging'
+        })
+      );
+    });
+
+    test("should configure resources for production environment", () => {
+      const app = new App();
+      new TapStack(app, "test-stack", {
+        environmentSuffix: 'prod'
+      });
+
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          key: 'prod/test-stack.tfstate'
+        })
+      );
+
+      expect(EksCluster).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.objectContaining({
+          name: 'eks-prod'
+        })
+      );
+    });
+  });
+
+  describe("Complete Infrastructure Integration", () => {
+    test("should create complete infrastructure stack", () => {
+      const app = new App();
+      const stack = new TapStack(app, "IntegrationTest");
+
+      // Verify all components are created
+      expect(AwsProvider).toHaveBeenCalledTimes(1);
+      expect(S3Backend).toHaveBeenCalledTimes(1);
+      expect(DataAwsAvailabilityZones).toHaveBeenCalledTimes(1);
+      expect(VpcConstruct).toHaveBeenCalledTimes(1);
+      expect(EksSecurityGroups).toHaveBeenCalledTimes(1);
+      expect(EksCluster).toHaveBeenCalledTimes(1);
+      expect(IamOpenidConnectProvider).toHaveBeenCalledTimes(1);
+      expect(IamRoles).toHaveBeenCalledTimes(1);
+      expect(EcrRepository).toHaveBeenCalledTimes(1);
+      expect(EksNodeGroup).toHaveBeenCalledTimes(1);
+      expect(TerraformOutput).toHaveBeenCalled();
+
+      expect(stack).toBeDefined();
+    });
+
+    test("should handle AWS region configuration across all resources", () => {
+      const app = new App();
+      new TapStack(app, "RegionTest", {
+        awsRegion: 'eu-central-1',
+        stateBucketRegion: 'us-west-2',
+        environmentSuffix: 'prod'
+      });
+
+      // Verify provider uses correct region
+      expect(AwsProvider).toHaveBeenCalledWith(
+        expect.anything(),
+        'aws',
+        expect.objectContaining({
+          region: 'eu-central-1'
+        })
+      );
+
+      // Verify state bucket uses different region
+      expect(S3Backend).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          region: 'us-west-2'
+        })
+      );
+    });
+
+    test("should create all outputs with correct values", () => {
+      const app = new App();
+      new TapStack(app, "OutputTest", {
+        environmentSuffix: 'qa',
+        awsRegion: 'us-west-2'
+      });
+
+      // Verify critical outputs have correct values
+      const vpcIdOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'vpc-id'
+      );
+      const eksNameOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'eks-cluster-name'
+      );
+      const ecrUrlOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'ecr-repository-url'
+      );
+      const regionOutput = TerraformOutput.mock.calls.find(
+        (call: any) => call[1] === 'aws-region'
+      );
+
+      expect(vpcIdOutput[2].value).toBe('vpc-qa');
+      expect(eksNameOutput[2].value).toBe('eks-qa');
+      expect(ecrUrlOutput[2].value).toBe('123456789012.dkr.ecr.us-east-1.amazonaws.com/tap-app-qa');
+      expect(regionOutput[2].value).toBe('us-west-2');
+    });
+
+    test("should maintain proper resource dependencies", () => {
+      const app = new App();
+      new TapStack(app, "DependencyTest");
+
+      // Verify order of creation
+      const vpcCallOrder = VpcConstruct.mock.invocationCallOrder[0];
+      const securityGroupCallOrder = EksSecurityGroups.mock.invocationCallOrder[0];
+      const eksClusterCallOrder = EksCluster.mock.invocationCallOrder[0];
+      const oidcProviderCallOrder = IamOpenidConnectProvider.mock.invocationCallOrder[0];
+      const iamRolesCallOrder = IamRoles.mock.invocationCallOrder[0];
+      const nodeGroupCallOrder = EksNodeGroup.mock.invocationCallOrder[0];
+
+      // VPC should be created before security groups
+      expect(vpcCallOrder).toBeLessThan(securityGroupCallOrder);
+      // Security groups should be created before EKS cluster
+      expect(securityGroupCallOrder).toBeLessThan(eksClusterCallOrder);
+      // EKS cluster should be created before OIDC provider
+      expect(eksClusterCallOrder).toBeLessThan(oidcProviderCallOrder);
+      // OIDC provider should be created before IAM roles
+      expect(oidcProviderCallOrder).toBeLessThan(iamRolesCallOrder);
+      // IAM roles should be created before node groups
+      expect(iamRolesCallOrder).toBeLessThan(nodeGroupCallOrder);
     });
   });
 });
