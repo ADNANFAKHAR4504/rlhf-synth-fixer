@@ -570,8 +570,8 @@ describe('Trading Platform DR CloudFormation Template', () => {
       const rds = template.Resources.RDSDatabase;
       const password = JSON.stringify(rds.Properties.MasterUserPassword);
       expect(password).toContain('resolve:secretsmanager');
-      expect(password).toContain('trading-db-password');
-      expect(password).toContain('EnvironmentSuffix');
+      expect(password).toContain('RDSDatabaseSecret');
+      expect(password).toContain('SecretString:password');
     });
 
     test('should not enable deletion protection on resources', () => {
