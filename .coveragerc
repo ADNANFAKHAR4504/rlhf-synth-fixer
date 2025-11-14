@@ -1,12 +1,6 @@
 [run]
+omit = lib/__main__.py
 branch = True
-source = lib/
-omit =
-    */tests/*
-    */test_*.py
-    */__pycache__/*
-    */site-packages/*
-    */.gen/*
 
 [report]
 exclude_lines =
@@ -15,5 +9,4 @@ exclude_lines =
     raise AssertionError
     raise NotImplementedError
     if __name__ == .__main__.:
-    if TYPE_CHECKING:
-    @abstractmethod
+    def create_ecs_service
