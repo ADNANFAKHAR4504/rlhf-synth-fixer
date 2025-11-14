@@ -42,6 +42,14 @@ Parameters:
       - 'false'
     Description: Create GuardDuty detector (only 1 detector allowed per region)
 
+  CreateALB:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Create Application Load Balancer (requires Internet Gateway to be created first)
+
   VPCCidrBlock:
     Type: String
     Default: '10.0.0.0/16'
@@ -77,6 +85,7 @@ Conditions:
   ShouldCreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
   ShouldCreateAWSConfig: !Equals [!Ref CreateAWSConfig, 'true']
   ShouldCreateGuardDuty: !Equals [!Ref CreateGuardDuty, 'true']
+  ShouldCreateALB: !Equals [!Ref CreateALB, 'true']
 
 Resources:
   # ==========================================
@@ -1038,6 +1047,8 @@ Resources:
 
   ALBLogsBucket:
     Type: AWS::S3::Bucket
+    Condition: ShouldCreateALB
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub 'tapstack-alb-logs-${AWS::AccountId}-${AWS::Region}'
       BucketEncryption:
@@ -1057,8 +1068,16 @@ Resources:
             Status: Enabled
             ExpirationInDays: 30
 
+  EmptyALBLogsBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateALB
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ALBLogsBucket
+
   ALBLogsBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateALB
     Properties:
       Bucket: !Ref ALBLogsBucket
       PolicyDocument:
@@ -1073,7 +1092,12 @@ Resources:
 
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
-    DependsOn: ALBLogsBucketPolicy
+    Condition: ShouldCreateALB
+    DependsOn:
+      - ALBLogsBucketPolicy
+      - PublicRoute
+      - PublicSubnet1RouteTableAssociation
+      - PublicSubnet2RouteTableAssociation
     Properties:
       Name: !Sub '${AWS::StackName}-ALB'
       Type: application
@@ -1096,6 +1120,7 @@ Resources:
 
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
+    Condition: ShouldCreateALB
     Properties:
       GroupName: !Sub '${AWS::StackName}-ALBSG'
       GroupDescription: Security group for ALB
