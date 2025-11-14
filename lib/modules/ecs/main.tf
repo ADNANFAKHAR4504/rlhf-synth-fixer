@@ -197,6 +197,26 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Allow Task Execution Role to read SSM parameters (for secrets)
+resource "aws_iam_role_policy" "ecs_task_execution_ssm" {
+  name = "payment-ecs-task-execution-ssm-${var.environment}"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/payment/${var.environment}/*"
+      }
+    ]
+  })
+}
+
 # ECS Task Role
 resource "aws_iam_role" "ecs_task" {
   name = "payment-ecs-task-${var.environment}"
