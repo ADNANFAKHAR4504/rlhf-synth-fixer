@@ -9,7 +9,9 @@
   "po_id": "9gd2j2",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Cloud Environment Setup"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "aws_services": [
     "AWS Lambda",

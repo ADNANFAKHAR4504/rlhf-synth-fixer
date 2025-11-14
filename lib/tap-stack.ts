@@ -25,8 +25,11 @@ export class TapStack extends cdk.Stack {
   public readonly tradeDataBucket: s3.Bucket;
   public readonly ordersTable: dynamodb.Table;
   public readonly orderProcessingQueue: sqs.Queue;
+  public orderProcessingDlq: sqs.Queue;
   public readonly orderProcessingFunction: lambda.Function;
   public readonly api: apigateway.RestApi;
+  public driftTopic: sns.Topic;
+  public dashboard: cloudwatch.Dashboard;
 
   private readonly environmentConfig: EnvironmentConfig;
   private readonly environmentSuffix: string;
@@ -58,11 +61,117 @@ export class TapStack extends cdk.Stack {
     // Create monitoring resources
     this.createMonitoring();
 
-    // Export API endpoint
+    // Export all infrastructure outputs
+    this.exportOutputs();
+  }
+
+  private exportOutputs(): void {
+    // VPC Outputs
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: this.vpc.vpcId,
+      description: 'VPC ID',
+      exportName: `vpc-id-${this.environmentSuffix}`,
+    });
+
+    this.vpc.publicSubnets.forEach((subnet, index) => {
+      new cdk.CfnOutput(this, `PublicSubnet${index + 1}Id`, {
+        value: subnet.subnetId,
+        description: `Public Subnet ${index + 1} ID`,
+      });
+    });
+
+    this.vpc.privateSubnets.forEach((subnet, index) => {
+      new cdk.CfnOutput(this, `PrivateSubnet${index + 1}Id`, {
+        value: subnet.subnetId,
+        description: `Private Subnet ${index + 1} ID`,
+      });
+    });
+
+    // S3 Bucket Outputs
+    new cdk.CfnOutput(this, 'TradeDataBucketName', {
+      value: this.tradeDataBucket.bucketName,
+      description: 'S3 bucket name for trade data',
+      exportName: `trade-data-bucket-name-${this.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'TradeDataBucketArn', {
+      value: this.tradeDataBucket.bucketArn,
+      description: 'S3 bucket ARN for trade data',
+    });
+
+    // DynamoDB Table Outputs
+    new cdk.CfnOutput(this, 'OrdersTableName', {
+      value: this.ordersTable.tableName,
+      description: 'DynamoDB table name for orders',
+      exportName: `orders-table-name-${this.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'OrdersTableArn', {
+      value: this.ordersTable.tableArn,
+      description: 'DynamoDB table ARN for orders',
+    });
+
+    new cdk.CfnOutput(this, 'OrdersTableStreamArn', {
+      value: this.ordersTable.tableStreamArn || 'N/A',
+      description: 'DynamoDB table stream ARN for orders',
+    });
+
+    // SQS Queue Outputs
+    new cdk.CfnOutput(this, 'OrderProcessingQueueUrl', {
+      value: this.orderProcessingQueue.queueUrl,
+      description: 'SQS queue URL for order processing',
+    });
+
+    new cdk.CfnOutput(this, 'OrderProcessingQueueArn', {
+      value: this.orderProcessingQueue.queueArn,
+      description: 'SQS queue ARN for order processing',
+      exportName: `order-processing-queue-arn-${this.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'OrderProcessingDlqUrl', {
+      value: this.orderProcessingDlq.queueUrl,
+      description: 'SQS DLQ URL for order processing',
+    });
+
+    new cdk.CfnOutput(this, 'OrderProcessingDlqArn', {
+      value: this.orderProcessingDlq.queueArn,
+      description: 'SQS DLQ ARN for order processing',
+    });
+
+    // Lambda Function Outputs
+    new cdk.CfnOutput(this, 'OrderProcessingFunctionArn', {
+      value: this.orderProcessingFunction.functionArn,
+      description: 'Lambda function ARN for order processing',
+      exportName: `order-processing-function-arn-${this.environmentSuffix}`,
+    });
+
+    // API Gateway Outputs
     new cdk.CfnOutput(this, 'ApiEndpoint', {
       value: this.api.url,
       description: 'API Gateway endpoint URL',
       exportName: `trading-api-endpoint-${this.environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiId', {
+      value: this.api.restApiId,
+      description: 'API Gateway ID',
+    });
+
+    new cdk.CfnOutput(this, 'ApiStage', {
+      value: this.api.deploymentStage.stageName,
+      description: 'API Gateway stage name',
+    });
+
+    // Monitoring Outputs
+    new cdk.CfnOutput(this, 'DashboardName', {
+      value: this.dashboard.dashboardName,
+      description: 'CloudWatch Dashboard name',
+    });
+
+    new cdk.CfnOutput(this, 'DriftTopicArn', {
+      value: this.driftTopic.topicArn,
+      description: 'SNS topic ARN for drift detection alerts',
+      exportName: `drift-topic-arn-${this.environmentSuffix}`,
     });
   }
 
@@ -222,14 +331,14 @@ export class TapStack extends cdk.Stack {
 
   private createSqsQueues(): sqs.Queue {
     // Create DLQ
-    const dlq = new sqs.Queue(this, 'OrderProcessingDlq', {
+    this.orderProcessingDlq = new sqs.Queue(this, 'OrderProcessingDlq', {
       queueName: this.getResourceName('order-processing-dlq'),
       retentionPeriod: cdk.Duration.days(14),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
     });
 
-    this.exportToParameterStore('order-processing-dlq-url', dlq.queueUrl);
-    this.exportToParameterStore('order-processing-dlq-arn', dlq.queueArn);
+    this.exportToParameterStore('order-processing-dlq-url', this.orderProcessingDlq.queueUrl);
+    this.exportToParameterStore('order-processing-dlq-arn', this.orderProcessingDlq.queueArn);
 
     // Create main queue
     const queue = new sqs.Queue(this, 'OrderProcessingQueue', {
@@ -242,7 +351,7 @@ export class TapStack extends cdk.Stack {
       ),
       encryption: sqs.QueueEncryption.SQS_MANAGED,
       deadLetterQueue: {
-        queue: dlq,
+        queue: this.orderProcessingDlq,
         maxReceiveCount: this.environmentConfig.sqsConfig.maxReceiveCount,
       },
     });
@@ -449,13 +558,13 @@ export class TapStack extends cdk.Stack {
 
   private createMonitoring(): void {
     // Create SNS topic for drift detection
-    const driftTopic = new sns.Topic(this, 'DriftDetectionTopic', {
+    this.driftTopic = new sns.Topic(this, 'DriftDetectionTopic', {
       topicName: this.getResourceName('drift-detection'),
       displayName: 'CloudFormation Drift Detection Alerts',
     });
 
     // Add email subscription
-    driftTopic.addSubscription(
+    this.driftTopic.addSubscription(
       new subscriptions.EmailSubscription(
         `ops-${this.environmentSuffix}@example.com`
       )
@@ -478,10 +587,10 @@ export class TapStack extends cdk.Stack {
       treatMissingData: cloudwatch.TreatMissingData.NOT_BREACHING,
     });
 
-    driftAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(driftTopic));
+    driftAlarm.addAlarmAction(new cloudwatch_actions.SnsAction(this.driftTopic));
 
     // Create dashboard
-    const dashboard = new cloudwatch.Dashboard(
+    this.dashboard = new cloudwatch.Dashboard(
       this,
       'TradingPlatformDashboard',
       {
@@ -490,7 +599,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Add widgets
-    dashboard.addWidgets(
+    this.dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'API Gateway Requests',
         left: [
@@ -504,7 +613,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    dashboard.addWidgets(
+    this.dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'Lambda Invocations',
         left: [
@@ -518,7 +627,7 @@ export class TapStack extends cdk.Stack {
       })
     );
 
-    dashboard.addWidgets(
+    this.dashboard.addWidgets(
       new cloudwatch.GraphWidget({
         title: 'DynamoDB Read/Write Capacity',
         left: [
@@ -539,7 +648,7 @@ export class TapStack extends cdk.Stack {
     );
 
     // Export monitoring resources
-    this.exportToParameterStore('drift-topic-arn', driftTopic.topicArn);
-    this.exportToParameterStore('dashboard-name', dashboard.dashboardName);
+    this.exportToParameterStore('drift-topic-arn', this.driftTopic.topicArn);
+    this.exportToParameterStore('dashboard-name', this.dashboard.dashboardName);
   }
 }

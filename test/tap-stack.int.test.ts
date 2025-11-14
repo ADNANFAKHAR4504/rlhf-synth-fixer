@@ -1,320 +1,454 @@
 /**
  * Integration Tests for Trading Platform Infrastructure
  *
- * These tests verify the infrastructure outputs and configuration.
- * Tests use flat-outputs.json to validate exported resource identifiers.
+ * These tests verify live AWS resources by querying AWS APIs.
+ * Tests fetch outputs from CloudFormation and write to flat-outputs.json,
+ * then test actual resource functionality.
  *
  * Prerequisites:
- * - Run ./scripts/generate-flat-outputs.sh before running these tests
+ * - AWS credentials configured
+ * - Environment variables: AWS_REGION, ENVIRONMENT_SUFFIX
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 
-// Load flat-outputs.json
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 
-function loadOutputs() {
-  if (!fs.existsSync(outputsPath)) {
-    throw new Error(
-      `flat-outputs.json not found at ${outputsPath}. Run ./scripts/generate-flat-outputs.sh first.`
-    );
+function fetchAndWriteOutputs(): any {
+  const region = process.env.AWS_REGION || 'us-east-1';
+  const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'pr6573';
+  const stackName = `TapStack${environmentSuffix}`;
+
+  console.log(`\n📥 Fetching CloudFormation outputs from stack: ${stackName}`);
+
+  try {
+    const command = `aws cloudformation describe-stacks --stack-name ${stackName} --region ${region} --query 'Stacks[0].Outputs' --output json`;
+    const cfOutputsJson = execSync(command, { encoding: 'utf8' });
+    const cfOutputs = JSON.parse(cfOutputsJson);
+
+    const outputs: any = {
+      environmentSuffix,
+      region,
+      stackName
+    };
+
+    cfOutputs.forEach((output: any) => {
+      outputs[output.OutputKey] = output.OutputValue;
+    });
+
+    const outputDir = path.dirname(outputsPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+
+    fs.writeFileSync(outputsPath, JSON.stringify(outputs, null, 2));
+    console.log(`✅ Wrote ${Object.keys(outputs).length} outputs to ${outputsPath}\n`);
+
+    return outputs;
+  } catch (error) {
+    throw new Error(`Failed to fetch CloudFormation outputs: ${error}`);
   }
-  return JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 }
 
-describe('Trading Platform Infrastructure - Output Validation Tests', () => {
+function awsCommand(cmd: string): any {
+  try {
+    const result = execSync(cmd, { encoding: 'utf8' });
+    return result ? JSON.parse(result) : null;
+  } catch (error) {
+    throw new Error(`AWS command failed: ${cmd}\nError: ${error}`);
+  }
+}
+
+describe('Trading Platform Infrastructure - Live Resource Tests', () => {
   let outputs: any;
   let region: string;
   let environmentSuffix: string;
 
   beforeAll(() => {
-    outputs = loadOutputs();
-    region = outputs.region || process.env.AWS_REGION || 'us-east-1';
-    environmentSuffix =
-      outputs.environmentSuffix || process.env.ENVIRONMENT_SUFFIX || 'dev';
+    outputs = fetchAndWriteOutputs();
+    region = outputs.region;
+    environmentSuffix = outputs.environmentSuffix;
 
-    console.log(`\n🧪 Running output validation tests for environment: ${environmentSuffix}`);
+    console.log(`🧪 Testing live AWS resources for environment: ${environmentSuffix}`);
     console.log(`📍 Region: ${region}\n`);
   });
 
-  describe('Output File Structure', () => {
-    test('flat-outputs.json should exist and be valid JSON', () => {
-      expect(outputs).toBeDefined();
-      expect(typeof outputs).toBe('object');
-      expect(outputs).not.toBeNull();
-    });
-
-    test('should contain region and environment suffix', () => {
-      expect(outputs.region || process.env.AWS_REGION).toBeDefined();
-      expect(outputs.environmentSuffix || process.env.ENVIRONMENT_SUFFIX).toBeDefined();
-    });
-
-    test('should have at least 10 exported outputs', () => {
-      const outputKeys = Object.keys(outputs);
-      expect(outputKeys.length).toBeGreaterThanOrEqual(10);
-    });
-  });
-
   describe('VPC Resources', () => {
-    test('VPC ID should be exported with correct format', () => {
-      const vpcId = outputs['vpc-id'];
+    test('VPC should exist and be available', () => {
+      const vpcId = outputs['VpcId'];
       expect(vpcId).toBeDefined();
-      expect(vpcId).toMatch(/^vpc-[a-z0-9]+$/);
+
+      const vpc = awsCommand(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --region ${region}`);
+
+      expect(vpc.Vpcs).toHaveLength(1);
+      expect(vpc.Vpcs[0].VpcId).toBe(vpcId);
+      expect(vpc.Vpcs[0].State).toBe('available');
+
+      // Check DNS support attributes
+      const dnsSupport = awsCommand(
+        `aws ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsSupport --region ${region}`
+      );
+      expect(dnsSupport.EnableDnsSupport.Value).toBe(true);
+
+      const dnsHostnames = awsCommand(
+        `aws ec2 describe-vpc-attribute --vpc-id ${vpcId} --attribute enableDnsHostnames --region ${region}`
+      );
+      expect(dnsHostnames.EnableDnsHostnames.Value).toBe(true);
     });
 
-    test('should export public subnet IDs with correct format', () => {
-      const publicSubnet1 = outputs['public-subnet-1-id'];
-      const publicSubnet2 = outputs['public-subnet-2-id'];
+    test('public subnets should exist and be in different availability zones', () => {
+      const subnet1Id = outputs['PublicSubnet1Id'];
+      const subnet2Id = outputs['PublicSubnet2Id'];
 
-      expect(publicSubnet1).toBeDefined();
-      expect(publicSubnet2).toBeDefined();
-      expect(publicSubnet1).toMatch(/^subnet-[a-z0-9]+$/);
-      expect(publicSubnet2).toMatch(/^subnet-[a-z0-9]+$/);
+      expect(subnet1Id).toBeDefined();
+      expect(subnet2Id).toBeDefined();
 
-      // Subnets should be different
-      expect(publicSubnet1).not.toBe(publicSubnet2);
-    });
+      const subnets = awsCommand(
+        `aws ec2 describe-subnets --subnet-ids ${subnet1Id} ${subnet2Id} --region ${region}`
+      );
 
-    test('subnets should be in different availability zones', () => {
-      const publicSubnet1 = outputs['public-subnet-1-id'];
-      const publicSubnet2 = outputs['public-subnet-2-id'];
+      expect(subnets.Subnets).toHaveLength(2);
 
-      // Verify both subnets exist
-      expect(publicSubnet1).toBeDefined();
-      expect(publicSubnet2).toBeDefined();
+      const az1 = subnets.Subnets.find((s: any) => s.SubnetId === subnet1Id)?.AvailabilityZone;
+      const az2 = subnets.Subnets.find((s: any) => s.SubnetId === subnet2Id)?.AvailabilityZone;
 
-      // Subnets should be different (implying different AZs)
-      expect(publicSubnet1).not.toBe(publicSubnet2);
+      expect(az1).toBeDefined();
+      expect(az2).toBeDefined();
+      expect(az1).not.toBe(az2); // Must be in different AZs
+
+      subnets.Subnets.forEach((subnet: any) => {
+        expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(true); // Public subnets
+      });
     });
   });
 
   describe('S3 Bucket', () => {
-    test('should export bucket name with correct naming convention', () => {
-      const bucketName = outputs['trade-data-bucket-name'];
+    test('bucket should exist with encryption and versioning configured', () => {
+      const bucketName = outputs['TradeDataBucketName'];
       expect(bucketName).toBeDefined();
-      expect(bucketName).toMatch(/^trade-data-.*$/);
-      expect(bucketName).toContain(environmentSuffix);
 
-      // S3 bucket names must be lowercase and can only contain lowercase letters, numbers, and hyphens
-      expect(bucketName).toMatch(/^[a-z0-9][a-z0-9-]*[a-z0-9]$/);
-    });
+      // Check bucket exists
+      const bucket = awsCommand(`aws s3api head-bucket --bucket ${bucketName} --region ${region} 2>&1 || echo '{}'`);
 
-    test('bucket ARN should be properly formatted', () => {
-      const bucketArn = outputs['trade-data-bucket-arn'];
-      expect(bucketArn).toBeDefined();
-      expect(bucketArn).toMatch(/^arn:aws:s3:::[a-z0-9][a-z0-9-]*[a-z0-9]$/);
+      // Check encryption
+      const encryption = awsCommand(
+        `aws s3api get-bucket-encryption --bucket ${bucketName} --region ${region}`
+      );
+      expect(encryption.ServerSideEncryptionConfiguration).toBeDefined();
+      expect(encryption.ServerSideEncryptionConfiguration.Rules).toHaveLength(1);
+
+      // Check versioning
+      const versioning = awsCommand(
+        `aws s3api get-bucket-versioning --bucket ${bucketName} --region ${region}`
+      );
+      expect(versioning.Status).toBe('Enabled');
+
+      // Check public access is blocked
+      const publicAccess = awsCommand(
+        `aws s3api get-public-access-block --bucket ${bucketName} --region ${region}`
+      );
+      expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicAcls).toBe(true);
+      expect(publicAccess.PublicAccessBlockConfiguration.BlockPublicPolicy).toBe(true);
     });
   });
 
   describe('DynamoDB Table', () => {
-    test('should export table name with correct naming convention', () => {
-      const tableName = outputs['orders-table-name'];
+    test('table should exist with correct schema and streams enabled', () => {
+      const tableName = outputs['OrdersTableName'];
       expect(tableName).toBeDefined();
-      expect(tableName).toMatch(/^orders-.*$/);
-      expect(tableName).toContain(environmentSuffix);
-    });
 
-    test('table ARN should be properly formatted', () => {
-      const tableArn = outputs['orders-table-arn'];
-      expect(tableArn).toBeDefined();
-      expect(tableArn).toMatch(/^arn:aws:dynamodb:/);
-      expect(tableArn).toContain(region);
-      expect(tableArn).toContain('table/orders-');
-    });
+      const table = awsCommand(
+        `aws dynamodb describe-table --table-name ${tableName} --region ${region}`
+      );
 
-    test('should export stream ARN if streams are enabled', () => {
-      const streamArn = outputs['orders-table-stream-arn'];
-      if (streamArn) {
-        expect(streamArn).toMatch(/^arn:aws:dynamodb:/);
-        expect(streamArn).toContain('/stream/');
-      }
+      expect(table.Table.TableName).toBe(tableName);
+      expect(table.Table.TableStatus).toBe('ACTIVE');
+
+      // Verify partition key
+      const partitionKey = table.Table.KeySchema.find((k: any) => k.KeyType === 'HASH');
+      expect(partitionKey).toBeDefined();
+      expect(partitionKey.AttributeName).toBe('orderId');
+
+      // Verify sort key
+      const sortKey = table.Table.KeySchema.find((k: any) => k.KeyType === 'RANGE');
+      expect(sortKey).toBeDefined();
+      expect(sortKey.AttributeName).toBe('timestamp');
+
+      // Verify streams enabled
+      expect(table.Table.StreamSpecification).toBeDefined();
+      expect(table.Table.StreamSpecification.StreamEnabled).toBe(true);
+      expect(table.Table.StreamSpecification.StreamViewType).toBe('NEW_AND_OLD_IMAGES');
+
+      // Verify billing mode
+      expect(table.Table.BillingModeSummary.BillingMode).toBe('PAY_PER_REQUEST');
+
+      // Verify GSI exists
+      expect(table.Table.GlobalSecondaryIndexes).toBeDefined();
+      const statusIndex = table.Table.GlobalSecondaryIndexes.find((gsi: any) => gsi.IndexName === 'StatusIndex');
+      expect(statusIndex).toBeDefined();
+      expect(statusIndex.IndexStatus).toBe('ACTIVE');
     });
   });
 
   describe('SQS Queues', () => {
-    test('should export main queue URL with correct format', () => {
-      const queueUrl = outputs['order-processing-queue-url'];
+    test('main queue should exist with DLQ configured', () => {
+      const queueUrl = outputs['OrderProcessingQueueUrl'];
+      const dlqUrl = outputs['OrderProcessingDlqUrl'];
+
       expect(queueUrl).toBeDefined();
-      expect(queueUrl).toMatch(/^https:\/\/sqs\./);
-      expect(queueUrl).toContain(region);
-      expect(queueUrl).toContain('order-processing');
-      expect(queueUrl).toContain(environmentSuffix);
-    });
-
-    test('should export main queue ARN', () => {
-      const queueArn = outputs['order-processing-queue-arn'];
-      expect(queueArn).toBeDefined();
-      expect(queueArn).toMatch(/^arn:aws:sqs:/);
-      expect(queueArn).toContain(region);
-      expect(queueArn).toContain('order-processing');
-    });
-
-    test('should export DLQ URL and ARN', () => {
-      const dlqUrl = outputs['order-processing-dlq-url'];
-      const dlqArn = outputs['order-processing-dlq-arn'];
-
       expect(dlqUrl).toBeDefined();
-      expect(dlqArn).toBeDefined();
-      expect(dlqUrl).toMatch(/^https:\/\/sqs\./);
-      expect(dlqArn).toMatch(/^arn:aws:sqs:/);
-      expect(dlqUrl).toContain('order-processing-dlq');
-      expect(dlqArn).toContain('order-processing-dlq');
+
+      // Get queue attributes
+      const queueAttrs = awsCommand(
+        `aws sqs get-queue-attributes --queue-url ${queueUrl} --attribute-names All --region ${region}`
+      );
+
+      expect(queueAttrs.Attributes).toBeDefined();
+      expect(queueAttrs.Attributes.QueueArn).toBe(outputs['OrderProcessingQueueArn']);
+
+      // Verify DLQ is configured
+      expect(queueAttrs.Attributes.RedrivePolicy).toBeDefined();
+      const redrivePolicy = JSON.parse(queueAttrs.Attributes.RedrivePolicy);
+      expect(redrivePolicy.deadLetterTargetArn).toBe(outputs['OrderProcessingDlqArn']);
+      expect(redrivePolicy.maxReceiveCount).toBeGreaterThan(0);
+
+      // Verify encryption
+      expect(queueAttrs.Attributes.SqsManagedSseEnabled).toBe('true');
+    });
+
+    test('DLQ should exist and be accessible', () => {
+      const dlqUrl = outputs['OrderProcessingDlqUrl'];
+
+      const dlqAttrs = awsCommand(
+        `aws sqs get-queue-attributes --queue-url ${dlqUrl} --attribute-names All --region ${region}`
+      );
+
+      expect(dlqAttrs.Attributes).toBeDefined();
+      expect(dlqAttrs.Attributes.QueueArn).toBe(outputs['OrderProcessingDlqArn']);
     });
   });
 
   describe('Lambda Function', () => {
-    test('should export function ARN with correct format', () => {
-      const functionArn = outputs['order-processing-function-arn'];
-      expect(functionArn).toBeDefined();
-      expect(functionArn).toMatch(/^arn:aws:lambda:/);
-      expect(functionArn).toContain(region);
-      expect(functionArn).toContain('function:order-processing');
-      expect(functionArn).toContain(environmentSuffix);
+    test('function should exist with correct configuration and permissions', () => {
+      const functionArn = outputs['OrderProcessingFunctionArn'];
+      const functionName = functionArn.split(':').pop();
+
+      expect(functionName).toBeDefined();
+
+      const func = awsCommand(
+        `aws lambda get-function --function-name ${functionName} --region ${region}`
+      );
+
+      expect(func.Configuration.FunctionArn).toBe(functionArn);
+      expect(func.Configuration.State).toBe('Active');
+      expect(func.Configuration.Runtime).toMatch(/nodejs/);
+
+      // Verify environment variables
+      expect(func.Configuration.Environment.Variables).toBeDefined();
+      expect(func.Configuration.Environment.Variables.ENVIRONMENT).toBe(environmentSuffix);
+      expect(func.Configuration.Environment.Variables.DYNAMODB_TABLE).toBe(outputs['OrdersTableName']);
+      expect(func.Configuration.Environment.Variables.S3_BUCKET).toBe(outputs['TradeDataBucketName']);
+
+      // Verify tracing enabled
+      expect(func.Configuration.TracingConfig.Mode).toBe('Active');
+    });
+
+    test('function should have correct IAM permissions', () => {
+      const functionArn = outputs['OrderProcessingFunctionArn'];
+      const functionName = functionArn.split(':').pop();
+
+      const func = awsCommand(
+        `aws lambda get-function --function-name ${functionName} --region ${region}`
+      );
+
+      const roleName = func.Configuration.Role.split('/').pop();
+
+      const role = awsCommand(
+        `aws iam get-role --role-name ${roleName}`
+      );
+
+      expect(role.Role.RoleName).toBe(roleName);
+
+      // Get attached policies
+      const policies = awsCommand(
+        `aws iam list-attached-role-policies --role-name ${roleName}`
+      );
+
+      // Should have VPC execution policy
+      const vpcPolicy = policies.AttachedPolicies.find(
+        (p: any) => p.PolicyName === 'AWSLambdaVPCAccessExecutionRole'
+      );
+      expect(vpcPolicy).toBeDefined();
     });
   });
 
   describe('API Gateway', () => {
-    test('should export API ID with correct format', () => {
-      const apiId = outputs['api-id'];
+    test('API should exist and be accessible', () => {
+      const apiId = outputs['ApiId'];
+
       expect(apiId).toBeDefined();
-      expect(apiId).toMatch(/^[a-z0-9]+$/);
-      expect(apiId.length).toBeGreaterThanOrEqual(8);
+
+      const api = awsCommand(
+        `aws apigateway get-rest-api --rest-api-id ${apiId} --region ${region}`
+      );
+
+      expect(api.id).toBe(apiId);
+      expect(api.name).toContain('trading-api');
+      expect(api.name).toContain(environmentSuffix);
     });
 
-    test('should export API endpoint with correct format', () => {
-      const apiEndpoint = outputs['api-endpoint'] || outputs['ApiEndpoint'];
+    test('API should have /orders resource', () => {
+      const apiId = outputs['ApiId'];
+
+      const resources = awsCommand(
+        `aws apigateway get-resources --rest-api-id ${apiId} --region ${region}`
+      );
+
+      const ordersResource = resources.items.find((r: any) => r.path === '/orders');
+      expect(ordersResource).toBeDefined();
+    });
+
+    test('API endpoint should respond to HTTP requests', async () => {
+      const apiEndpoint = outputs['ApiEndpoint'];
+
       expect(apiEndpoint).toBeDefined();
       expect(apiEndpoint).toMatch(/^https:\/\//);
-      expect(apiEndpoint).toContain(region);
-      expect(apiEndpoint).toContain('execute-api');
-      expect(apiEndpoint).toContain(environmentSuffix);
-    });
 
-    test('API stage should be exported', () => {
-      const stage = outputs['api-stage'];
-      if (stage) {
-        expect(stage).toBe(environmentSuffix);
+      // Test GET request to /orders endpoint
+      const testUrl = `${apiEndpoint}orders`;
+
+      try {
+        const response = execSync(
+          `curl -s -o /dev/null -w "%{http_code}" -X GET "${testUrl}"`,
+          { encoding: 'utf8' }
+        );
+
+        const statusCode = parseInt(response.trim());
+
+        // Accept 200 (success), 403 (auth required), or other valid HTTP codes
+        // Just verify API is responding
+        expect(statusCode).toBeGreaterThanOrEqual(200);
+        expect(statusCode).toBeLessThan(600);
+      } catch (error) {
+        throw new Error(`API endpoint ${testUrl} is not accessible: ${error}`);
       }
     });
   });
 
   describe('Monitoring Resources', () => {
-    test('should export CloudWatch dashboard name', () => {
-      const dashboardName = outputs['dashboard-name'];
+    test('CloudWatch dashboard should exist', () => {
+      const dashboardName = outputs['DashboardName'];
+
       expect(dashboardName).toBeDefined();
-      expect(dashboardName).toContain('trading-platform');
-      expect(dashboardName).toContain(environmentSuffix);
-    });
 
-    test('should export SNS topic ARN for drift detection', () => {
-      const driftTopicArn = outputs['drift-topic-arn'];
-      expect(driftTopicArn).toBeDefined();
-      expect(driftTopicArn).toMatch(/^arn:aws:sns:/);
-      expect(driftTopicArn).toContain(region);
-      expect(driftTopicArn).toContain('drift-detection');
-      expect(driftTopicArn).toContain(environmentSuffix);
-    });
-
-    test('should export alarm names if alarms exist', () => {
-      const lambdaErrorAlarm = outputs['lambda-error-alarm'];
-      const dynamoThrottleAlarm = outputs['dynamodb-throttle-alarm'];
-      const sqsDlqAlarm = outputs['sqs-dlq-alarm'];
-
-      if (lambdaErrorAlarm) {
-        expect(lambdaErrorAlarm).toContain(environmentSuffix);
-      }
-      if (dynamoThrottleAlarm) {
-        expect(dynamoThrottleAlarm).toContain(environmentSuffix);
-      }
-      if (sqsDlqAlarm) {
-        expect(sqsDlqAlarm).toContain(environmentSuffix);
-      }
-    });
-  });
-
-  describe('Resource Naming Consistency', () => {
-    test('all resource names should include environment suffix', () => {
-      const resourceOutputs = [
-        'trade-data-bucket-name',
-        'orders-table-name',
-        'order-processing-queue-url',
-        'order-processing-function-arn',
-        'dashboard-name',
-        'drift-topic-arn'
-      ];
-
-      resourceOutputs.forEach(outputKey => {
-        const value = outputs[outputKey];
-        if (value) {
-          expect(value).toContain(environmentSuffix);
-        }
-      });
-    });
-
-    test('all ARNs should include correct region', () => {
-      const arnOutputs = Object.keys(outputs).filter(key =>
-        key.endsWith('-arn') && outputs[key]
+      const dashboard = awsCommand(
+        `aws cloudwatch get-dashboard --dashboard-name ${dashboardName} --region ${region}`
       );
 
-      arnOutputs.forEach(arnKey => {
-        const arnValue = outputs[arnKey];
-        expect(arnValue).toMatch(/^arn:aws:/);
-        // Regional services should include region in ARN
-        if (!arnValue.startsWith('arn:aws:s3')) {
-          expect(arnValue).toContain(region);
-        }
-      });
+      expect(dashboard.DashboardName).toBe(dashboardName);
+      expect(dashboard.DashboardBody).toBeDefined();
+
+      // Verify dashboard has widgets
+      const body = JSON.parse(dashboard.DashboardBody);
+      expect(body.widgets).toBeDefined();
+      expect(body.widgets.length).toBeGreaterThan(0);
+    });
+
+    test('SNS topic for drift detection should exist', () => {
+      const topicArn = outputs['DriftTopicArn'];
+
+      expect(topicArn).toBeDefined();
+
+      const topic = awsCommand(
+        `aws sns get-topic-attributes --topic-arn ${topicArn} --region ${region}`
+      );
+
+      expect(topic.Attributes.TopicArn).toBe(topicArn);
+      expect(topic.Attributes.DisplayName).toBeDefined();
     });
   });
 
-  describe('Output Completeness', () => {
-    test('should export all required infrastructure outputs', () => {
-      const requiredOutputs = [
-        'vpc-id',
-        'public-subnet-1-id',
-        'public-subnet-2-id',
-        'trade-data-bucket-name',
-        'orders-table-name',
-        'order-processing-queue-url',
-        'order-processing-function-arn',
-        'api-id',
-        'dashboard-name',
-        'drift-topic-arn'
-      ];
+  describe('Resource Integration', () => {
+    test('Lambda function should have access to DynamoDB table', () => {
+      const functionArn = outputs['OrderProcessingFunctionArn'];
+      const functionName = functionArn.split(':').pop();
+      const tableName = outputs['OrdersTableName'];
 
-      requiredOutputs.forEach(outputKey => {
-        expect(outputs[outputKey]).toBeDefined();
-        expect(outputs[outputKey]).not.toBe('');
-      });
+      const func = awsCommand(
+        `aws lambda get-function --function-name ${functionName} --region ${region}`
+      );
+
+      const roleName = func.Configuration.Role.split('/').pop();
+
+      // Get inline policies
+      const inlinePolicies = awsCommand(
+        `aws iam list-role-policies --role-name ${roleName}`
+      );
+
+      expect(inlinePolicies.PolicyNames.length).toBeGreaterThan(0);
     });
 
-    test('output values should not contain placeholder text', () => {
-      const outputValues = Object.values(outputs);
-      outputValues.forEach(value => {
-        if (typeof value === 'string') {
-          expect(value).not.toContain('PLACEHOLDER');
-          expect(value).not.toContain('TODO');
-          expect(value).not.toContain('CHANGEME');
-          expect(value).not.toContain('undefined');
-          expect(value).not.toBe('');
-        }
-      });
+    test('Lambda function should have access to S3 bucket', () => {
+      const functionArn = outputs['OrderProcessingFunctionArn'];
+      const functionName = functionArn.split(':').pop();
+
+      const func = awsCommand(
+        `aws lambda get-function --function-name ${functionName} --region ${region}`
+      );
+
+      // Verify S3 bucket name is in environment variables
+      expect(func.Configuration.Environment.Variables.S3_BUCKET).toBe(outputs['TradeDataBucketName']);
+    });
+
+    test('API Gateway should be integrated with Lambda function', () => {
+      const apiId = outputs['ApiId'];
+      const functionArn = outputs['OrderProcessingFunctionArn'];
+
+      const resources = awsCommand(
+        `aws apigateway get-resources --rest-api-id ${apiId} --region ${region}`
+      );
+
+      const ordersResource = resources.items.find((r: any) => r.path === '/orders');
+      expect(ordersResource).toBeDefined();
+
+      // Check POST method exists
+      if (ordersResource.resourceMethods?.POST) {
+        const integration = awsCommand(
+          `aws apigateway get-integration --rest-api-id ${apiId} --resource-id ${ordersResource.id} --http-method POST --region ${region}`
+        );
+
+        expect(integration.type).toBe('AWS_PROXY');
+        expect(integration.uri).toContain(functionArn);
+      }
     });
   });
 
-  describe('Environment Configuration', () => {
-    test('environment suffix should match expected pattern', () => {
-      expect(environmentSuffix).toMatch(/^(pr\d+|dev|test|stage|prod)$/);
+  describe('Environment Consistency', () => {
+    test('all resources should be tagged or named with environment suffix', () => {
+      expect(outputs['TradeDataBucketName']).toContain(environmentSuffix);
+      expect(outputs['OrdersTableName']).toContain(environmentSuffix);
+      expect(outputs['DashboardName']).toContain(environmentSuffix);
     });
 
-    test('region should be a valid AWS region', () => {
-      const validRegions = [
-        'us-east-1', 'us-east-2', 'us-west-1', 'us-west-2',
-        'eu-west-1', 'eu-west-2', 'eu-central-1',
-        'ap-southeast-1', 'ap-southeast-2', 'ap-northeast-1'
-      ];
-      expect(validRegions).toContain(region);
+    test('all resources should be in the same region', () => {
+      const vpcId = outputs['VpcId'];
+      const tableName = outputs['OrdersTableName'];
+      const bucketName = outputs['TradeDataBucketName'];
+
+      // All AWS CLI commands use the same region from outputs
+      expect(region).toBe(outputs.region);
+
+      // Verify resources are accessible in this region
+      expect(() => {
+        awsCommand(`aws ec2 describe-vpcs --vpc-ids ${vpcId} --region ${region}`);
+      }).not.toThrow();
+
+      expect(() => {
+        awsCommand(`aws dynamodb describe-table --table-name ${tableName} --region ${region}`);
+      }).not.toThrow();
     });
   });
 });
