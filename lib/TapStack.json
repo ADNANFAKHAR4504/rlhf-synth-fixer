@@ -46,7 +46,7 @@
     "VpcId": {
       "Type": "AWS::EC2::VPC::Id",
       "Description": "VPC ID for resource deployment",
-      "Default": "vpc-02ef1cb3524a4fc25"
+      "Default": "vpc-0a0b77fc646b1223c"
     },
     "PrivateSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
@@ -56,7 +56,7 @@
     "DBSubnetIds": {
       "Type": "List<AWS::EC2::Subnet::Id>",
       "Description": "Subnet IDs for RDS subnet group (minimum 2 AZs for Multi-AZ)",
-      "Default": "subnet-09322d03ef64aecb2,subnet-020e0aafba890431d,subnet-0c9618f134225ba7a"
+      "Default": "subnet-071df9a9810c38aa4,subnet-020e0aafba890431d,subnet-052da3c0a8cae05b8"
     }
   },
   "Conditions": {
