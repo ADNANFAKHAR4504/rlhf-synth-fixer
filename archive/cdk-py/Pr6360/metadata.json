@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T15:14:50+05:30",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": [
+    "Failure Recovery"
+  ],
+  "po_id": "b9r72s",
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "Route53",
+    "CloudWatch Logs"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

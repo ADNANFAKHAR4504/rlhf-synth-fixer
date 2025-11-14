@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T19:29:30+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "harn4",
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "ECR",
+    "ALB",
+    "RDS",
+    "Secrets Manager",
+    "CloudFront",
+    "API Gateway",
+    "IAM",
+    "CloudWatch",
+    "Auto Scaling",
+    "SSM Parameter Store"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

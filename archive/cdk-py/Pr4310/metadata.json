@@ -1,0 +1,35 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "moderate",
+  "team": "synth",
+  "startedAt": "2025-10-14T03:32:50+05:30",
+  "subtask": "Application Deployment",
+  "background": "SmartFactory Inc. operates medical device manufacturing facilities that generate sensitive IoT sensor data. They need a compliant infrastructure to collect, process, and store this data while maintaining audit trails for regulatory compliance.",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "2464881093",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "Aurora",
+    "ElastiCache",
+    "Kinesis",
+    "KMS",
+    "CloudWatch",
+    "IAM",
+    "SecretsManager"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

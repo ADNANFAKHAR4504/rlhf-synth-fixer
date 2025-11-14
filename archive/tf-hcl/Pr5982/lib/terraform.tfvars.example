@@ -1,0 +1,35 @@
+# Copy this file to terraform.tfvars and customize for your environment
+
+aws_region         = "us-east-1"
+environment_suffix = "migration"
+
+# VPC Configuration
+vpc_cidr            = "10.0.0.0/16"
+availability_zones  = ["us-east-1a", "us-east-1b", "us-east-1c"]
+onprem_cidr         = "192.168.0.0/16"
+
+# Database Configuration
+db_master_username = "admin"
+db_master_password = "CHANGE-ME-SECURE-PASSWORD"
+
+# On-Premises Configuration
+onprem_db_endpoint  = "onprem-db.example.com"
+onprem_db_username  = "migration_user"
+onprem_db_password  = "CHANGE-ME-SECURE-PASSWORD"
+onprem_syslog_endpoint = "syslog.onprem.example.com"
+
+# Application Configuration
+payment_app_image = "your-registry.com/payment-app:latest"
+payment_app_port  = 8080
+
+# Traffic Distribution (Blue-Green)
+blue_target_weight  = 100  # Start with 100% on blue
+green_target_weight = 0    # Green starts at 0%
+
+# Tags
+cost_center     = "FinTech-Payments"
+migration_phase = "preparation"  # preparation, migration, cutover, complete
+
+# Direct Connect (optional)
+# direct_connect_gateway_id = "dx-gw-xxxxxxxxx"
+# direct_connect_vif_id     = "dxvif-xxxxxxxxx"

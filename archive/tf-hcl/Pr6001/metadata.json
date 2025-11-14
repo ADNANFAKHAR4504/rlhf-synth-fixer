@@ -1,0 +1,47 @@
+{
+  "task_id": "ankk1",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101",
+  "team": "synth",
+  "aws_services": [
+    "acm",
+    "appmesh",
+    "athena",
+    "backup",
+    "cloudwatch",
+    "cur",
+    "ec2",
+    "eks",
+    "glue",
+    "guardduty",
+    "iam",
+    "kms",
+    "lambda",
+    "s3",
+    "securityhub",
+    "service-discovery",
+    "sns",
+    "sqs",
+    "vpc"
+  ],
+  "subject_labels": [
+    "kubernetes",
+    "eks",
+    "node-groups",
+    "irsa",
+    "vpc",
+    "security"
+  ],
+  "startedAt": "2025-11-06T22:32:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

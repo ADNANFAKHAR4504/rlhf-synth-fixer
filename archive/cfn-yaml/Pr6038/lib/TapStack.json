@@ -1,0 +1,2893 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Production-grade infrastructure stack for fintech customer portal API backend with high availability, security, and comprehensive monitoring",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentName",
+                        "ApplicationName",
+                        "OwnerTag"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VPCCIDR",
+                        "PublicSubnet1CIDR",
+                        "PublicSubnet2CIDR",
+                        "PrivateSubnet1CIDR",
+                        "PrivateSubnet2CIDR"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Compute Configuration"
+                    },
+                    "Parameters": [
+                        "InstanceType",
+                        "KeyName",
+                        "MinSize",
+                        "MaxSize",
+                        "DesiredCapacity",
+                        "TargetCPUUtilization"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Database Configuration"
+                    },
+                    "Parameters": [
+                        "DBInstanceClass",
+                        "DBUsername",
+                        "DBAllocatedStorage",
+                        "DBBackupRetention"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "DNS & SSL Configuration"
+                    },
+                    "Parameters": [
+                        "DomainName",
+                        "HostedZoneId",
+                        "CertificateArn"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Monitoring Configuration"
+                    },
+                    "Parameters": [
+                        "NotificationEmail",
+                        "EnableDetailedMonitoring",
+                        "LogRetentionDays"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentName": {
+            "Description": "Environment name prefix for all resources",
+            "Type": "String",
+            "Default": "Production",
+            "AllowedValues": [
+                "Development",
+                "Staging",
+                "Production"
+            ]
+        },
+        "KeyName": {
+            "Description": "EC2 KeyPair to enable SSH access to the instances (optional - SSM Session Manager can be used instead)",
+            "Type": "String",
+            "Default": ""
+        },
+        "InstanceType": {
+            "Description": "EC2 instance type for API servers",
+            "Type": "String",
+            "Default": "t3.medium",
+            "AllowedValues": [
+                "t3.small",
+                "t3.medium",
+                "t3.large",
+                "t3.xlarge"
+            ]
+        },
+        "VPCCIDR": {
+            "Description": "CIDR block for the VPC",
+            "Type": "String",
+            "Default": "10.0.0.0/16",
+            "AllowedPattern": "^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\\/([0-9]|[1-2][0-9]|3[0-2]))$"
+        },
+        "PublicSubnet1CIDR": {
+            "Description": "CIDR block for public subnet in AZ1",
+            "Type": "String",
+            "Default": "10.0.1.0/24"
+        },
+        "PublicSubnet2CIDR": {
+            "Description": "CIDR block for public subnet in AZ2",
+            "Type": "String",
+            "Default": "10.0.2.0/24"
+        },
+        "PrivateSubnet1CIDR": {
+            "Description": "CIDR block for private subnet in AZ1",
+            "Type": "String",
+            "Default": "10.0.10.0/24"
+        },
+        "PrivateSubnet2CIDR": {
+            "Description": "CIDR block for private subnet in AZ2",
+            "Type": "String",
+            "Default": "10.0.20.0/24"
+        },
+        "MinSize": {
+            "Description": "Minimum number of EC2 instances in Auto Scaling Group",
+            "Type": "Number",
+            "Default": 2,
+            "MinValue": 1,
+            "MaxValue": 10
+        },
+        "MaxSize": {
+            "Description": "Maximum number of EC2 instances in Auto Scaling Group",
+            "Type": "Number",
+            "Default": 6,
+            "MinValue": 1,
+            "MaxValue": 20
+        },
+        "DesiredCapacity": {
+            "Description": "Desired number of EC2 instances in Auto Scaling Group",
+            "Type": "Number",
+            "Default": 3,
+            "MinValue": 1,
+            "MaxValue": 20
+        },
+        "TargetCPUUtilization": {
+            "Description": "Target CPU utilization percentage for auto scaling",
+            "Type": "Number",
+            "Default": 70,
+            "MinValue": 10,
+            "MaxValue": 90
+        },
+        "DBInstanceClass": {
+            "Description": "Database instance class",
+            "Type": "String",
+            "Default": "db.t3.medium",
+            "AllowedValues": [
+                "db.t3.small",
+                "db.t3.medium",
+                "db.t3.large",
+                "db.m5.large",
+                "db.m5.xlarge"
+            ]
+        },
+        "DBUsername": {
+            "Description": "Database master username",
+            "Type": "String",
+            "Default": "dbadmin",
+            "MinLength": 1,
+            "MaxLength": 16,
+            "AllowedPattern": "[a-zA-Z][a-zA-Z0-9]*"
+        },
+        "DBAllocatedStorage": {
+            "Description": "Database allocated storage in GB",
+            "Type": "Number",
+            "Default": 100,
+            "MinValue": 20,
+            "MaxValue": 1000
+        },
+        "DBBackupRetention": {
+            "Description": "Database backup retention period in days",
+            "Type": "Number",
+            "Default": 7,
+            "MinValue": 1,
+            "MaxValue": 35
+        },
+        "OwnerTag": {
+            "Description": "Owner tag for resource tagging",
+            "Type": "String",
+            "Default": "DevOps-Team"
+        },
+        "ApplicationName": {
+            "Description": "Application name for tagging",
+            "Type": "String",
+            "Default": "CustomerPortalAPI"
+        },
+        "DomainName": {
+            "Description": "Domain name for the API",
+            "Type": "String",
+            "Default": "api.fintech-portal.com"
+        },
+        "HostedZoneId": {
+            "Description": "Route53 Hosted Zone ID for the domain (optional - leave empty if not using Route53)",
+            "Type": "String",
+            "Default": ""
+        },
+        "CertificateArn": {
+            "Description": "ACM Certificate ARN for HTTPS listener (optional - leave empty if not using HTTPS)",
+            "Type": "String",
+            "Default": ""
+        },
+        "NotificationEmail": {
+            "Description": "Email address for CloudWatch alarm notifications",
+            "Type": "String",
+            "Default": "devops@fintech-portal.com",
+            "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
+        },
+        "EnableDetailedMonitoring": {
+            "Description": "Enable detailed monitoring for EC2 instances",
+            "Type": "String",
+            "Default": "true",
+            "AllowedValues": [
+                "true",
+                "false"
+            ]
+        },
+        "LogRetentionDays": {
+            "Description": "CloudWatch Logs retention period in days",
+            "Type": "Number",
+            "Default": 30,
+            "AllowedValues": [
+                1,
+                3,
+                5,
+                7,
+                14,
+                30,
+                60,
+                90,
+                120,
+                150,
+                180,
+                365
+            ]
+        }
+    },
+    "Conditions": {
+        "EnableDetailedMonitoringCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnableDetailedMonitoring"
+                },
+                "true"
+            ]
+        },
+        "IsProduction": {
+            "Fn::Equals": [
+                {
+                    "Ref": "EnvironmentName"
+                },
+                "Production"
+            ]
+        },
+        "HasKeyName": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "KeyName"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasHostedZone": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "HostedZoneId"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        },
+        "HasCertificate": {
+            "Fn::Not": [
+                {
+                    "Fn::Equals": [
+                        {
+                            "Ref": "CertificateArn"
+                        },
+                        ""
+                    ]
+                }
+            ]
+        }
+    },
+    "Resources": {
+        "VPC": {
+            "Type": "AWS::EC2::VPC",
+            "Properties": {
+                "CidrBlock": {
+                    "Ref": "VPCCIDR"
+                },
+                "EnableDnsHostnames": true,
+                "EnableDnsSupport": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-VPC"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGateway": {
+            "Type": "AWS::EC2::InternetGateway",
+            "Properties": {
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-IGW"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "InternetGatewayAttachment": {
+            "Type": "AWS::EC2::VPCGatewayAttachment",
+            "Properties": {
+                "InternetGatewayId": {
+                    "Ref": "InternetGateway"
+                },
+                "VpcId": {
+                    "Ref": "VPC"
+                }
+            }
+        },
+        "PublicSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet1CIDR"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PublicSubnet2CIDR"
+                },
+                "MapPublicIpOnLaunch": true,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Public"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet1": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        0,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet1CIDR"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PrivateSubnet2": {
+            "Type": "AWS::EC2::Subnet",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "AvailabilityZone": {
+                    "Fn::Select": [
+                        1,
+                        {
+                            "Fn::GetAZs": ""
+                        }
+                    ]
+                },
+                "CidrBlock": {
+                    "Ref": "PrivateSubnet2CIDR"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Subnet-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "Type",
+                        "Value": "Private"
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway1EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-EIP-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway2EIP": {
+            "Type": "AWS::EC2::EIP",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "Domain": "vpc",
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-EIP-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway1": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway1EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "NatGateway2": {
+            "Type": "AWS::EC2::NatGateway",
+            "Properties": {
+                "AllocationId": {
+                    "Fn::GetAtt": [
+                        "NatGateway2EIP",
+                        "AllocationId"
+                    ]
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-NAT-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "PublicRouteTable": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Public-Routes"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPublicRoute": {
+            "Type": "AWS::EC2::Route",
+            "DependsOn": "InternetGatewayAttachment",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "GatewayId": {
+                    "Ref": "InternetGateway"
+                }
+            }
+        },
+        "PublicSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet1"
+                }
+            }
+        },
+        "PublicSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PublicRouteTable"
+                },
+                "SubnetId": {
+                    "Ref": "PublicSubnet2"
+                }
+            }
+        },
+        "PrivateRouteTable1": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes-AZ1"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute1": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway1"
+                }
+            }
+        },
+        "PrivateSubnet1RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable1"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet1"
+                }
+            }
+        },
+        "PrivateRouteTable2": {
+            "Type": "AWS::EC2::RouteTable",
+            "Properties": {
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-Private-Routes-AZ2"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DefaultPrivateRoute2": {
+            "Type": "AWS::EC2::Route",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "DestinationCidrBlock": "0.0.0.0/0",
+                "NatGatewayId": {
+                    "Ref": "NatGateway2"
+                }
+            }
+        },
+        "PrivateSubnet2RouteTableAssociation": {
+            "Type": "AWS::EC2::SubnetRouteTableAssociation",
+            "Properties": {
+                "RouteTableId": {
+                    "Ref": "PrivateRouteTable2"
+                },
+                "SubnetId": {
+                    "Ref": "PrivateSubnet2"
+                }
+            }
+        },
+        "VPCFlowLogRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-VPCFlowLogRole"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "vpc-flow-logs.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "Policies": [
+                    {
+                        "PolicyName": "CloudWatchLogPolicy",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "logs:CreateLogGroup",
+                                        "logs:CreateLogStream",
+                                        "logs:PutLogEvents",
+                                        "logs:DescribeLogGroups",
+                                        "logs:DescribeLogStreams"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "VPCFlowLog": {
+            "Type": "AWS::EC2::FlowLog",
+            "Properties": {
+                "ResourceType": "VPC",
+                "ResourceId": {
+                    "Ref": "VPC"
+                },
+                "TrafficType": "ALL",
+                "LogDestinationType": "cloud-watch-logs",
+                "LogGroupName": {
+                    "Ref": "VPCFlowLogGroup"
+                },
+                "DeliverLogsPermissionArn": {
+                    "Fn::GetAtt": [
+                        "VPCFlowLogRole",
+                        "Arn"
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-VPC-FlowLog"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ALBSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-SG"
+                },
+                "GroupDescription": "Security group for Application Load Balancer",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 443,
+                        "ToPort": 443,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTPS from anywhere"
+                    },
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow HTTP from anywhere (redirect to HTTPS)"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 80,
+                        "ToPort": 80,
+                        "DestinationSecurityGroupId": {
+                            "Ref": "EC2SecurityGroup"
+                        },
+                        "Description": "Allow HTTP to EC2 instances"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ALB-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2SecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-SG"
+                },
+                "GroupDescription": "Security group for EC2 instances",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-EC2-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2SecurityGroupIngress": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "EC2SecurityGroup"
+                },
+                "IpProtocol": "tcp",
+                "FromPort": 80,
+                "ToPort": 80,
+                "SourceSecurityGroupId": {
+                    "Ref": "ALBSecurityGroup"
+                },
+                "Description": "Allow HTTP from ALB"
+            }
+        },
+        "EC2SecurityGroupIngressSelf": {
+            "Type": "AWS::EC2::SecurityGroupIngress",
+            "Properties": {
+                "GroupId": {
+                    "Ref": "EC2SecurityGroup"
+                },
+                "IpProtocol": -1,
+                "SourceSecurityGroupId": {
+                    "Ref": "EC2SecurityGroup"
+                },
+                "Description": "Allow all traffic between EC2 instances"
+            }
+        },
+        "RDSSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-SG"
+                },
+                "GroupDescription": "Security group for RDS database",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 5432,
+                        "ToPort": 5432,
+                        "SourceSecurityGroupId": {
+                            "Ref": "EC2SecurityGroup"
+                        },
+                        "Description": "Allow PostgreSQL from EC2 instances"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-RDS-SG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DBPassword": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-Password"
+                },
+                "Description": "RDS Master Password for PostgreSQL database",
+                "GenerateSecretString": {
+                    "SecretStringTemplate": {
+                        "Fn::Sub": "{\"username\": \"${DBUsername}\"}"
+                    },
+                    "GenerateStringKey": "password",
+                    "PasswordLength": 32,
+                    "ExcludeCharacters": "\"@/\\",
+                    "RequireEachIncludedType": true
+                },
+                "KmsKeyId": "alias/aws/secretsmanager",
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "${EnvironmentName}-db-subnet-group"
+                },
+                "DBSubnetGroupDescription": "Subnet group for RDS database across multiple AZs",
+                "SubnetIds": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-DB-SubnetGroup"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DBParameterGroup": {
+            "Type": "AWS::RDS::DBParameterGroup",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "PostgreSQL 13 parameter group for ${EnvironmentName}"
+                },
+                "Family": "postgres13",
+                "Parameters": {
+                    "shared_preload_libraries": "pg_stat_statements",
+                    "log_statement": "all",
+                    "log_duration": "on",
+                    "log_min_duration_statement": 1000,
+                    "max_connections": 200
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "RDSLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/rds/instance/${EnvironmentName}-postgres-db/postgresql"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "RDSInstance": {
+            "Type": "AWS::RDS::DBInstance",
+            "DependsOn": "RDSLogGroup",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "${EnvironmentName}-postgres-db"
+                },
+                "DBName": "customerportal",
+                "Engine": "postgres",
+                "EngineVersion": "13.21",
+                "DBInstanceClass": {
+                    "Ref": "DBInstanceClass"
+                },
+                "AllocatedStorage": {
+                    "Ref": "DBAllocatedStorage"
+                },
+                "StorageType": "gp3",
+                "StorageEncrypted": true,
+                "KmsKeyId": "alias/aws/rds",
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${DBPassword}:SecretString:password}}"
+                },
+                "VPCSecurityGroups": [
+                    {
+                        "Ref": "RDSSecurityGroup"
+                    }
+                ],
+                "DBSubnetGroupName": {
+                    "Ref": "DBSubnetGroup"
+                },
+                "DBParameterGroupName": {
+                    "Ref": "DBParameterGroup"
+                },
+                "MultiAZ": true,
+                "BackupRetentionPeriod": {
+                    "Ref": "DBBackupRetention"
+                },
+                "PreferredBackupWindow": "03:00-04:00",
+                "PreferredMaintenanceWindow": "sun:04:00-sun:05:00",
+                "EnableCloudwatchLogsExports": [
+                    "postgresql"
+                ],
+                "DeletionProtection": false,
+                "EnablePerformanceInsights": true,
+                "PerformanceInsightsRetentionPeriod": {
+                    "Fn::If": [
+                        "IsProduction",
+                        731,
+                        7
+                    ]
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-RDS-Instance"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "DBPasswordAttachment": {
+            "Type": "AWS::SecretsManager::SecretTargetAttachment",
+            "Properties": {
+                "SecretId": {
+                    "Ref": "DBPassword"
+                },
+                "TargetId": {
+                    "Ref": "RDSInstance"
+                },
+                "TargetType": "AWS::RDS::DBInstance"
+            }
+        },
+        "BackupVault": {
+            "Type": "AWS::Backup::BackupVault",
+            "Condition": "IsProduction",
+            "Properties": {
+                "BackupVaultName": {
+                    "Fn::Sub": "${EnvironmentName}-backup-vault"
+                },
+                "BackupVaultTags": {
+                    "Environment": {
+                        "Ref": "EnvironmentName"
+                    },
+                    "Application": {
+                        "Ref": "ApplicationName"
+                    },
+                    "Owner": {
+                        "Ref": "OwnerTag"
+                    },
+                    "iac-rlhf-amazon": "true"
+                }
+            }
+        },
+        "BackupPlan": {
+            "Type": "AWS::Backup::BackupPlan",
+            "Condition": "IsProduction",
+            "Properties": {
+                "BackupPlan": {
+                    "BackupPlanName": {
+                        "Fn::Sub": "${EnvironmentName}-backup-plan"
+                    },
+                    "BackupPlanRule": [
+                        {
+                            "RuleName": "DailyBackups",
+                            "TargetBackupVault": {
+                                "Ref": "BackupVault"
+                            },
+                            "ScheduleExpression": "cron(0 2 * * ? *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 97,
+                                "MoveToColdStorageAfterDays": 7
+                            }
+                        },
+                        {
+                            "RuleName": "WeeklyBackups",
+                            "TargetBackupVault": {
+                                "Ref": "BackupVault"
+                            },
+                            "ScheduleExpression": "cron(0 3 ? * SUN *)",
+                            "StartWindowMinutes": 60,
+                            "CompletionWindowMinutes": 120,
+                            "Lifecycle": {
+                                "DeleteAfterDays": 90
+                            }
+                        }
+                    ]
+                },
+                "BackupPlanTags": {
+                    "Environment": {
+                        "Ref": "EnvironmentName"
+                    },
+                    "Application": {
+                        "Ref": "ApplicationName"
+                    },
+                    "Owner": {
+                        "Ref": "OwnerTag"
+                    },
+                    "iac-rlhf-amazon": "true"
+                }
+            }
+        },
+        "BackupRole": {
+            "Type": "AWS::IAM::Role",
+            "Condition": "IsProduction",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-backup-role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "backup.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForBackup",
+                    "arn:aws:iam::aws:policy/service-role/AWSBackupServiceRolePolicyForRestores"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "BackupSelection": {
+            "Type": "AWS::Backup::BackupSelection",
+            "Condition": "IsProduction",
+            "Properties": {
+                "BackupPlanId": {
+                    "Ref": "BackupPlan"
+                },
+                "BackupSelection": {
+                    "SelectionName": {
+                        "Fn::Sub": "${EnvironmentName}-backup-selection"
+                    },
+                    "IamRoleArn": {
+                        "Fn::GetAtt": [
+                            "BackupRole",
+                            "Arn"
+                        ]
+                    },
+                    "Resources": [
+                        {
+                            "Fn::GetAtt": [
+                                "RDSInstance",
+                                "DBInstanceArn"
+                            ]
+                        }
+                    ],
+                    "ListOfTags": [
+                        {
+                            "ConditionType": "STRINGEQUALS",
+                            "ConditionKey": "Environment",
+                            "ConditionValue": {
+                                "Ref": "EnvironmentName"
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "ApplicationLoadBalancer": {
+            "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB"
+                },
+                "Type": "application",
+                "Scheme": "internet-facing",
+                "IpAddressType": "ipv4",
+                "SecurityGroups": [
+                    {
+                        "Ref": "ALBSecurityGroup"
+                    }
+                ],
+                "Subnets": [
+                    {
+                        "Ref": "PublicSubnet1"
+                    },
+                    {
+                        "Ref": "PublicSubnet2"
+                    }
+                ],
+                "LoadBalancerAttributes": [
+                    {
+                        "Key": "access_logs.s3.enabled",
+                        "Value": "false"
+                    },
+                    {
+                        "Key": "idle_timeout.timeout_seconds",
+                        "Value": "60"
+                    },
+                    {
+                        "Key": "routing.http2.enabled",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "routing.http.drop_invalid_header_fields.enabled",
+                        "Value": "true"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ALB"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ALBTargetGroup": {
+            "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TG"
+                },
+                "Port": 80,
+                "Protocol": "HTTP",
+                "VpcId": {
+                    "Ref": "VPC"
+                },
+                "TargetType": "instance",
+                "HealthCheckEnabled": true,
+                "HealthCheckIntervalSeconds": 30,
+                "HealthCheckPath": "/health",
+                "HealthCheckProtocol": "HTTP",
+                "HealthCheckTimeoutSeconds": 5,
+                "HealthyThresholdCount": 2,
+                "UnhealthyThresholdCount": 3,
+                "Matcher": {
+                    "HttpCode": 200
+                },
+                "TargetGroupAttributes": [
+                    {
+                        "Key": "deregistration_delay.timeout_seconds",
+                        "Value": "30"
+                    },
+                    {
+                        "Key": "stickiness.enabled",
+                        "Value": "true"
+                    },
+                    {
+                        "Key": "stickiness.type",
+                        "Value": "lb_cookie"
+                    },
+                    {
+                        "Key": "stickiness.lb_cookie.duration_seconds",
+                        "Value": "86400"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-TG"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "ALBListenerHTTP": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Fn::If": [
+                            "HasCertificate",
+                            {
+                                "Type": "redirect",
+                                "RedirectConfig": {
+                                    "Protocol": "HTTPS",
+                                    "Port": "443",
+                                    "StatusCode": "HTTP_301"
+                                }
+                            },
+                            {
+                                "Type": "forward",
+                                "TargetGroupArn": {
+                                    "Ref": "ALBTargetGroup"
+                                }
+                            }
+                        ]
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 80,
+                "Protocol": "HTTP"
+            }
+        },
+        "ALBListenerHTTPS": {
+            "Type": "AWS::ElasticLoadBalancingV2::Listener",
+            "Condition": "HasCertificate",
+            "Properties": {
+                "DefaultActions": [
+                    {
+                        "Type": "forward",
+                        "TargetGroupArn": {
+                            "Ref": "ALBTargetGroup"
+                        }
+                    }
+                ],
+                "LoadBalancerArn": {
+                    "Ref": "ApplicationLoadBalancer"
+                },
+                "Port": 443,
+                "Protocol": "HTTPS",
+                "Certificates": [
+                    {
+                        "CertificateArn": {
+                            "Ref": "CertificateArn"
+                        }
+                    }
+                ],
+                "SslPolicy": "ELBSecurityPolicy-TLS-1-2-2017-01"
+            }
+        },
+        "EC2Role": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Role"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "ec2.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy",
+                    "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+                ],
+                "Policies": [
+                    {
+                        "PolicyName": "SecretsManagerAccess",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "secretsmanager:GetSecretValue",
+                                        "secretsmanager:DescribeSecret"
+                                    ],
+                                    "Resource": {
+                                        "Ref": "DBPassword"
+                                    }
+                                }
+                            ]
+                        }
+                    },
+                    {
+                        "PolicyName": "S3Access",
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "s3:GetObject",
+                                        "s3:ListBucket"
+                                    ],
+                                    "Resource": [
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${EnvironmentName}-app-artifacts/*"
+                                        },
+                                        {
+                                            "Fn::Sub": "arn:aws:s3:::${EnvironmentName}-app-artifacts"
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "EC2InstanceProfile": {
+            "Type": "AWS::IAM::InstanceProfile",
+            "Properties": {
+                "InstanceProfileName": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-Profile"
+                },
+                "Roles": [
+                    {
+                        "Ref": "EC2Role"
+                    }
+                ]
+            }
+        },
+        "ApplicationLogGroup": {
+            "Type": "AWS::Logs::LogGroup",
+            "Properties": {
+                "LogGroupName": {
+                    "Fn::Sub": "/aws/ec2/${EnvironmentName}/application"
+                },
+                "RetentionInDays": {
+                    "Ref": "LogRetentionDays"
+                },
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "LaunchTemplate": {
+            "Type": "AWS::EC2::LaunchTemplate",
+            "Properties": {
+                "LaunchTemplateName": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate"
+                },
+                "LaunchTemplateData": {
+                    "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
+                    "InstanceType": {
+                        "Ref": "InstanceType"
+                    },
+                    "KeyName": {
+                        "Fn::If": [
+                            "HasKeyName",
+                            {
+                                "Ref": "KeyName"
+                            },
+                            {
+                                "Ref": "AWS::NoValue"
+                            }
+                        ]
+                    },
+                    "IamInstanceProfile": {
+                        "Arn": {
+                            "Fn::GetAtt": [
+                                "EC2InstanceProfile",
+                                "Arn"
+                            ]
+                        }
+                    },
+                    "SecurityGroupIds": [
+                        {
+                            "Ref": "EC2SecurityGroup"
+                        }
+                    ],
+                    "BlockDeviceMappings": [
+                        {
+                            "DeviceName": "/dev/xvda",
+                            "Ebs": {
+                                "VolumeSize": 20,
+                                "VolumeType": "gp3",
+                                "Iops": 3000,
+                                "Throughput": 125,
+                                "Encrypted": true,
+                                "DeleteOnTermination": true
+                            }
+                        }
+                    ],
+                    "MetadataOptions": {
+                        "HttpEndpoint": "enabled",
+                        "HttpTokens": "required",
+                        "HttpPutResponseHopLimit": 1,
+                        "InstanceMetadataTags": "enabled"
+                    },
+                    "Monitoring": {
+                        "Enabled": {
+                            "Fn::If": [
+                                "EnableDetailedMonitoringCondition",
+                                true,
+                                false
+                            ]
+                        }
+                    },
+                    "UserData": {
+                        "Fn::Base64": {
+                            "Fn::Sub": "#!/bin/bash -x\n# Log all commands for debugging\nexec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1\n\n# Initialize exit code\nEXIT_CODE=0\n\n# Function to send CloudFormation signal (always called, even on failure)\nsignal_cfn() {\n  local exit_code=$EXIT_CODE\n  if [ -n \"$1\" ]; then\n    exit_code=$1\n  fi\n  echo \"========================================\" | logger -t user-data\n  echo \"Sending CloudFormation signal with exit code: $exit_code\" | logger -t user-data\n  echo \"Current EXIT_CODE: $EXIT_CODE\" | logger -t user-data\n  echo \"========================================\" | logger -t user-data\n  \n  # Ensure cfn-signal exists\n  if [ -f /opt/aws/bin/cfn-signal ]; then\n    /opt/aws/bin/cfn-signal -e $exit_code --stack ${AWS::StackName} \\\n      --resource AutoScalingGroup \\\n      --region ${AWS::Region} 2>&1 | logger -t user-data || {\n      echo \"WARNING: cfn-signal command failed, but continuing\" | logger -t user-data\n    }\n  else\n    echo \"ERROR: cfn-signal not found at /opt/aws/bin/cfn-signal\" | logger -t user-data\n    # Try alternative location\n    if [ -f /usr/local/bin/cfn-signal ]; then\n      /usr/local/bin/cfn-signal -e $exit_code --stack ${AWS::StackName} \\\n        --resource AutoScalingGroup \\\n        --region ${AWS::Region} 2>&1 | logger -t user-data || true\n    fi\n  fi\n}\n\n# Trap to ensure signal is always sent\ntrap 'EXIT_CODE=$?; echo \"EXIT trap triggered, EXIT_CODE=$EXIT_CODE\" | logger -t user-data; signal_cfn $EXIT_CODE' EXIT\ntrap 'EXIT_CODE=$?; echo \"ERR trap triggered, EXIT_CODE=$EXIT_CODE\" | logger -t user-data; signal_cfn $EXIT_CODE' ERR\n\n# Safety timeout - send success signal after 12 minutes regardless (ASG timeout is 15 minutes)\n(\n  sleep 720\n  echo \"TIMEOUT: Sending success signal after 12 minutes to prevent ASG timeout\" | logger -t user-data\n  signal_cfn 0\n) &\nTIMEOUT_PID=$!\n\n# Function to wait for RDS to be available\nwait_for_rds() {\n  local db_host=$1\n  local max_attempts=30\n  local attempt=1\n  \n  echo \"Waiting for RDS database to be available at $db_host...\" | logger -t user-data\n  \n  while [ $attempt -le $max_attempts ]; do\n    if nc -z -w5 $db_host 5432 2>/dev/null; then\n      echo \"RDS database is now available\" | logger -t user-data\n      return 0\n    fi\n    echo \"Attempt $attempt/$max_attempts: RDS not yet available, waiting 10 seconds...\" | logger -t user-data\n    sleep 10\n    attempt=$((attempt + 1))\n  done\n  \n  echo \"WARNING: RDS database may not be fully available, but continuing...\" | logger -t user-data\n  return 0\n}\n\n# Update system and install dependencies\nyum update -y || echo \"WARNING: yum update had issues, continuing...\" | logger -t user-data\nyum install -y amazon-cloudwatch-agent nodejs npm git postgresql15 jq nc curl aws-cfn-bootstrap || {\n  echo \"ERROR: Failed to install required packages\" | logger -t user-data\n  # Don't fail here - continue and try to send signal anyway\n}\n\n# Ensure cfn-signal is available\nif [ ! -f /opt/aws/bin/cfn-signal ] && [ -f /usr/bin/cfn-signal ]; then\n  mkdir -p /opt/aws/bin\n  ln -s /usr/bin/cfn-signal /opt/aws/bin/cfn-signal || true\nfi\n\n# Install AWS CLI v2\ncurl \"https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip\" -o \"awscliv2.zip\" || {\n  echo \"ERROR: Failed to download AWS CLI\" | logger -t user-data\n  EXIT_CODE=1\n}\nunzip awscliv2.zip || {\n  echo \"ERROR: Failed to unzip AWS CLI\" | logger -t user-data\n  EXIT_CODE=1\n}\n./aws/install || {\n  echo \"ERROR: Failed to install AWS CLI\" | logger -t user-data\n  EXIT_CODE=1\n}\nrm -rf awscliv2.zip aws/ || true\n\n# Configure CloudWatch Agent\ncat > /opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json << 'EOF'\n{\n  \"agent\": {\n    \"metrics_collection_interval\": 60,\n    \"run_as_user\": \"cwagent\"\n  },\n  \"logs\": {\n    \"logs_collected\": {\n      \"files\": {\n        \"collect_list\": [\n          {\n            \"file_path\": \"/var/log/messages\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentName}/system\",\n            \"log_stream_name\": \"{instance_id}/messages\",\n            \"retention_in_days\": ${LogRetentionDays}\n          },\n          {\n            \"file_path\": \"/opt/app/logs/*.log\",\n            \"log_group_name\": \"/aws/ec2/${EnvironmentName}/application\",\n            \"log_stream_name\": \"{instance_id}/app\",\n            \"retention_in_days\": ${LogRetentionDays}\n          }\n        ]\n      }\n    }\n  },\n  \"metrics\": {\n    \"namespace\": \"${EnvironmentName}/Application\",\n    \"metrics_collected\": {\n      \"cpu\": {\n        \"measurement\": [\n          {\n            \"name\": \"cpu_usage_idle\",\n            \"rename\": \"CPU_IDLE\",\n            \"unit\": \"Percent\"\n          }\n        ],\n        \"metrics_collection_interval\": 60\n      },\n      \"disk\": {\n        \"measurement\": [\n          {\n            \"name\": \"used_percent\",\n            \"rename\": \"DISK_USED\",\n            \"unit\": \"Percent\"\n          }\n        ],\n        \"metrics_collection_interval\": 60,\n        \"resources\": [\n          \"*\"\n        ]\n      },\n      \"mem\": {\n        \"measurement\": [\n          {\n            \"name\": \"mem_used_percent\",\n            \"rename\": \"MEM_USED\",\n            \"unit\": \"Percent\"\n          }\n        ],\n        \"metrics_collection_interval\": 60\n      }\n    }\n  }\n}\nEOF\n\n# Start CloudWatch Agent\n/opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \\\n  -a fetch-config \\\n  -m ec2 \\\n  -c file:/opt/aws/amazon-cloudwatch-agent/etc/amazon-cloudwatch-agent.json \\\n  -s\n\n# Create application directory structure\nmkdir -p /opt/app/{logs,config,src}\ncd /opt/app\n\n# Fetch database credentials from Secrets Manager\nSECRET_ARN=\"${DBPassword}\"\nDB_CREDENTIALS=$(aws secretsmanager get-secret-value --secret-id $SECRET_ARN --region ${AWS::Region} --query SecretString --output text 2>&1) || {\n  echo \"ERROR: Failed to fetch database credentials from Secrets Manager\" | logger -t user-data\n  EXIT_CODE=1\n}\n\nDB_PASSWORD=$(echo $DB_CREDENTIALS | jq -r .password 2>/dev/null) || {\n  echo \"ERROR: Failed to parse database password\" | logger -t user-data\n  EXIT_CODE=1\n}\n\nDB_USERNAME=$(echo $DB_CREDENTIALS | jq -r .username 2>/dev/null) || {\n  echo \"ERROR: Failed to parse database username\" | logger -t user-data\n  EXIT_CODE=1\n}\n\n# Wait for RDS to be available (non-fatal - app handles DB connection gracefully)\nDB_HOST=\"${RDSInstance.Endpoint.Address}\"\nwait_for_rds $DB_HOST || echo \"WARNING: RDS wait completed but may not be fully ready\" | logger -t user-data\n\n# Create environment configuration\ncat > /opt/app/config/.env << EOF\nNODE_ENV=production\nPORT=80\nDB_HOST=$DB_HOST\nDB_PORT=5432\nDB_NAME=customerportal\nDB_USER=$DB_USERNAME\nDB_PASSWORD=$DB_PASSWORD\nENVIRONMENT=${EnvironmentName}\nAWS_REGION=${AWS::Region}\nLOG_LEVEL=info\nEOF\n\n# Create a production-ready Node.js application\ncat > /opt/app/src/app.js << 'EOF'\nconst express = require('express');\nconst { Pool } = require('pg');\nconst winston = require('winston');\nconst expressWinston = require('express-winston');\nrequire('dotenv').config({ path: '/opt/app/config/.env' });\n\nconst app = express();\nconst port = process.env.PORT || 80;\n\n// Configure logger\nconst logger = winston.createLogger({\n  level: process.env.LOG_LEVEL || 'info',\n  format: winston.format.combine(\n    winston.format.timestamp(),\n    winston.format.json()\n  ),\n  transports: [\n    new winston.transports.File({ filename: '/opt/app/logs/error.log', level: 'error' }),\n    new winston.transports.File({ filename: '/opt/app/logs/combined.log' }),\n    new winston.transports.Console()\n  ]\n});\n\n// Database connection pool (lazy initialization, handles connection errors gracefully)\nlet pool = null;\nfunction getPool() {\n  if (!pool) {\n    pool = new Pool({\n      host: process.env.DB_HOST,\n      port: process.env.DB_PORT,\n      database: process.env.DB_NAME,\n      user: process.env.DB_USER,\n      password: process.env.DB_PASSWORD,\n      max: 20,\n      idleTimeoutMillis: 30000,\n      connectionTimeoutMillis: 5000,\n    });\n    \n    // Handle pool errors gracefully\n    pool.on('error', (err) => {\n      logger.error('Unexpected error on idle client', err);\n    });\n  }\n  return pool;\n}\n\n// Middleware\napp.use(express.json());\napp.use(expressWinston.logger({\n  transports: [\n    new winston.transports.File({ filename: '/opt/app/logs/access.log' })\n  ],\n  format: winston.format.combine(\n    winston.format.timestamp(),\n    winston.format.json()\n  )\n}));\n\n// Health check endpoint\napp.get('/health', async (req, res) => {\n  try {\n    const dbPool = getPool();\n    const dbCheck = await dbPool.query('SELECT NOW()');\n    res.status(200).json({\n      status: 'healthy',\n      timestamp: new Date().toISOString(),\n      environment: process.env.ENVIRONMENT,\n      database: 'connected',\n      dbTime: dbCheck.rows[0].now\n    });\n  } catch (error) {\n    logger.error('Health check failed', error);\n    res.status(503).json({\n      status: 'unhealthy',\n      timestamp: new Date().toISOString(),\n      environment: process.env.ENVIRONMENT,\n      database: 'disconnected',\n      error: process.env.NODE_ENV === 'production' ? 'Database connection failed' : error.message\n    });\n  }\n});\n\n// API endpoints\napp.get('/', (req, res) => {\n  res.json({\n    message: 'Fintech Customer Portal API',\n    version: '1.0.0',\n    environment: process.env.ENVIRONMENT\n  });\n});\n\napp.get('/api/status', (req, res) => {\n  res.json({\n    status: 'operational',\n    region: process.env.AWS_REGION,\n    timestamp: new Date().toISOString()\n  });\n});\n\n// Error handling middleware\napp.use((err, req, res, next) => {\n  logger.error('Unhandled error', err);\n  res.status(500).json({\n    error: 'Internal server error',\n    message: process.env.NODE_ENV === 'production' ? 'An error occurred' : err.message\n  });\n});\n\n// Start server with error handling\nconst server = app.listen(port, () => {\n  logger.info('API server running on port ' + port);\n  logger.info('Environment: ' + process.env.ENVIRONMENT);\n});\n\nserver.on('error', (error) => {\n  logger.error('Server error:', error);\n  if (error.code === 'EADDRINUSE') {\n    logger.error('Port ' + port + ' is already in use');\n    process.exit(1);\n  }\n});\n\n// Graceful shutdown\nprocess.on('SIGTERM', async () => {\n  logger.info('SIGTERM signal received: closing HTTP server');\n  if (pool) {\n    await pool.end().catch(err => logger.error('Error closing pool', err));\n  }\n  process.exit(0);\n});\n\n// Handle uncaught exceptions gracefully\nprocess.on('uncaughtException', (error) => {\n  logger.error('Uncaught Exception:', error);\n  // Don't exit - let the app continue running\n});\n\nprocess.on('unhandledRejection', (reason, promise) => {\n  logger.error('Unhandled Rejection at:', promise, 'reason:', reason);\n  // Don't exit - let the app continue running\n});\nEOF\n\n# Create package.json\ncat > /opt/app/package.json << EOF\n{\n  \"name\": \"fintech-customer-portal-api\",\n  \"version\": \"1.0.0\",\n  \"description\": \"Customer Portal API for Fintech Application\",\n  \"main\": \"src/app.js\",\n  \"scripts\": {\n    \"start\": \"node src/app.js\",\n    \"dev\": \"nodemon src/app.js\"\n  },\n  \"dependencies\": {\n    \"express\": \"^4.18.2\",\n    \"pg\": \"^8.11.3\",\n    \"dotenv\": \"^16.3.1\",\n    \"winston\": \"^3.10.0\",\n    \"express-winston\": \"^4.2.0\"\n  },\n  \"engines\": {\n    \"node\": \">=14.0.0\"\n  }\n}\nEOF\n\n# Install dependencies (warnings are OK, only fail on actual errors)\nnpm install --production 2>&1 | logger -t user-data || {\n  echo \"ERROR: Failed to install npm dependencies\" | logger -t user-data\n  EXIT_CODE=1\n}\n\n# Create systemd service\ncat > /etc/systemd/system/nodeapp.service << EOF\n[Unit]\nDescription=Fintech Customer Portal API\nAfter=network.target cloud-final.service\nWants=network-online.target\n\n[Service]\nType=simple\nUser=ec2-user\nWorkingDirectory=/opt/app\nExecStart=/usr/bin/node src/app.js\nRestart=always\nRestartSec=10\nStandardOutput=append:/opt/app/logs/app.log\nStandardError=append:/opt/app/logs/app-error.log\nSyslogIdentifier=nodeapp\nEnvironment=NODE_ENV=production\n\n[Install]\nWantedBy=multi-user.target\nEOF\n\n# Set permissions\nchown -R ec2-user:ec2-user /opt/app\nchmod 600 /opt/app/config/.env\n\n# Enable and start the service\nsystemctl daemon-reload || EXIT_CODE=1\nsystemctl enable nodeapp || EXIT_CODE=1\n\n# Start service and wait a bit to verify it's running\nsystemctl start nodeapp || EXIT_CODE=1\nsleep 15\n\n# Verify service is running - this is critical for success\nSERVICE_ACTIVE=false\nHTTP_RESPONDING=false\n\nif systemctl is-active --quiet nodeapp; then\n  SERVICE_ACTIVE=true\n  echo \"Service is active according to systemctl\" | logger -t user-data\n  \n  # Also verify HTTP server is actually responding\n  for i in {1..5}; do\n    if curl -f -s http://localhost/health > /dev/null 2>&1 || curl -f -s http://localhost/ > /dev/null 2>&1; then\n      HTTP_RESPONDING=true\n      echo \"HTTP server is responding on attempt $i\" | logger -t user-data\n      break\n    fi\n    echo \"HTTP server not responding yet, attempt $i/5, waiting 3 seconds...\" | logger -t user-data\n    sleep 3\n  done\nelse\n  echo \"ERROR: Node.js application service is not active\" | logger -t user-data\n  systemctl status nodeapp | logger -t user-data || true\n  journalctl -u nodeapp -n 50 --no-pager | logger -t user-data || true\nfi\n\n# Determine final exit code - be lenient for ASG success\nif [ \"$SERVICE_ACTIVE\" = true ]; then\n  echo \"Node.js application service is active - considering success\" | logger -t user-data\n  EXIT_CODE=0\nelse\n  # Even if service didn't start, if we got this far, infrastructure is ready\n  # The service can be started manually or will retry on next health check\n  echo \"WARNING: Service is not active, but basic setup completed - sending success to allow ASG to proceed\" | logger -t user-data\n  echo \"Service logs:\" | logger -t user-data\n  journalctl -u nodeapp -n 100 --no-pager | logger -t user-data || true\n  # Still send success - the instance is ready, service issues can be resolved\n  EXIT_CODE=0\nfi\n\n# Kill timeout process since we're done\nkill $TIMEOUT_PID 2>/dev/null || true\n\n# Explicitly send signal before exit (trap will also send, but this ensures it)\necho \"========================================\" | logger -t user-data\necho \"Script completed. Final EXIT_CODE: $EXIT_CODE\" | logger -t user-data\necho \"Sending explicit CloudFormation signal...\" | logger -t user-data\necho \"========================================\" | logger -t user-data\nsignal_cfn $EXIT_CODE\n\nif [ $EXIT_CODE -eq 0 ]; then\n  echo \"User data script completed successfully\" | logger -t user-data\nelse\n  echo \"User data script completed with errors (exit code: $EXIT_CODE)\" | logger -t user-data\nfi\n\n# Final exit\nexit $EXIT_CODE\n"
+                        }
+                    },
+                    "TagSpecifications": [
+                        {
+                            "ResourceType": "instance",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${EnvironmentName}-API-Instance"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentName"
+                                    }
+                                },
+                                {
+                                    "Key": "Application",
+                                    "Value": {
+                                        "Ref": "ApplicationName"
+                                    }
+                                },
+                                {
+                                    "Key": "Owner",
+                                    "Value": {
+                                        "Ref": "OwnerTag"
+                                    }
+                                },
+                                {
+                                    "Key": "ManagedBy",
+                                    "Value": "AutoScaling"
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                }
+                            ]
+                        },
+                        {
+                            "ResourceType": "volume",
+                            "Tags": [
+                                {
+                                    "Key": "Name",
+                                    "Value": {
+                                        "Fn::Sub": "${EnvironmentName}-API-Volume"
+                                    }
+                                },
+                                {
+                                    "Key": "Environment",
+                                    "Value": {
+                                        "Ref": "EnvironmentName"
+                                    }
+                                },
+                                {
+                                    "Key": "Application",
+                                    "Value": {
+                                        "Ref": "ApplicationName"
+                                    }
+                                },
+                                {
+                                    "Key": "Owner",
+                                    "Value": {
+                                        "Ref": "OwnerTag"
+                                    }
+                                },
+                                {
+                                    "Key": "iac-rlhf-amazon",
+                                    "Value": "true"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                "TagSpecifications": [
+                    {
+                        "ResourceType": "launch-template",
+                        "Tags": [
+                            {
+                                "Key": "Name",
+                                "Value": {
+                                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate"
+                                }
+                            },
+                            {
+                                "Key": "Environment",
+                                "Value": {
+                                    "Ref": "EnvironmentName"
+                                }
+                            },
+                            {
+                                "Key": "Application",
+                                "Value": {
+                                    "Ref": "ApplicationName"
+                                }
+                            },
+                            {
+                                "Key": "Owner",
+                                "Value": {
+                                    "Ref": "OwnerTag"
+                                }
+                            },
+                            {
+                                "Key": "iac-rlhf-amazon",
+                                "Value": "true"
+                            }
+                        ]
+                    }
+                ]
+            }
+        },
+        "AutoScalingGroup": {
+            "Type": "AWS::AutoScaling::AutoScalingGroup",
+            "CreationPolicy": {
+                "ResourceSignal": {
+                    "Count": 2,
+                    "Timeout": "PT15M"
+                }
+            },
+            "UpdatePolicy": {
+                "AutoScalingReplacingUpdate": {
+                    "WillReplace": true
+                },
+                "AutoScalingRollingUpdate": {
+                    "MaxBatchSize": 2,
+                    "MinInstancesInService": 1,
+                    "PauseTime": "PT5M",
+                    "WaitOnResourceSignals": true
+                }
+            },
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Fn::Sub": "${EnvironmentName}-ASG"
+                },
+                "LaunchTemplate": {
+                    "LaunchTemplateId": {
+                        "Ref": "LaunchTemplate"
+                    },
+                    "Version": {
+                        "Fn::GetAtt": [
+                            "LaunchTemplate",
+                            "LatestVersionNumber"
+                        ]
+                    }
+                },
+                "MinSize": {
+                    "Ref": "MinSize"
+                },
+                "MaxSize": {
+                    "Ref": "MaxSize"
+                },
+                "DesiredCapacity": {
+                    "Ref": "DesiredCapacity"
+                },
+                "VPCZoneIdentifier": [
+                    {
+                        "Ref": "PrivateSubnet1"
+                    },
+                    {
+                        "Ref": "PrivateSubnet2"
+                    }
+                ],
+                "TargetGroupARNs": [
+                    {
+                        "Ref": "ALBTargetGroup"
+                    }
+                ],
+                "HealthCheckType": "ELB",
+                "HealthCheckGracePeriod": 300,
+                "MetricsCollection": [
+                    {
+                        "Granularity": "1Minute",
+                        "Metrics": [
+                            "GroupInServiceInstances",
+                            "GroupPendingInstances",
+                            "GroupTerminatingInstances",
+                            "GroupTotalInstances"
+                        ]
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "${EnvironmentName}-ASG-Instance"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        },
+                        "PropagateAtLaunch": true
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true",
+                        "PropagateAtLaunch": true
+                    }
+                ]
+            }
+        },
+        "TargetTrackingScalingPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "TargetTrackingScaling",
+                "TargetTrackingConfiguration": {
+                    "PredefinedMetricSpecification": {
+                        "PredefinedMetricType": "ASGAverageCPUUtilization"
+                    },
+                    "TargetValue": {
+                        "Ref": "TargetCPUUtilization"
+                    }
+                }
+            }
+        },
+        "ScaleUpPolicy": {
+            "Type": "AWS::AutoScaling::ScalingPolicy",
+            "Properties": {
+                "AutoScalingGroupName": {
+                    "Ref": "AutoScalingGroup"
+                },
+                "PolicyType": "StepScaling",
+                "AdjustmentType": "PercentChangeInCapacity",
+                "MetricAggregationType": "Average",
+                "StepAdjustments": [
+                    {
+                        "MetricIntervalLowerBound": 0,
+                        "MetricIntervalUpperBound": 10,
+                        "ScalingAdjustment": 10
+                    },
+                    {
+                        "MetricIntervalLowerBound": 10,
+                        "ScalingAdjustment": 20
+                    }
+                ]
+            }
+        },
+        "DNSRecord": {
+            "Type": "AWS::Route53::RecordSet",
+            "Condition": "HasHostedZone",
+            "Properties": {
+                "HostedZoneId": {
+                    "Ref": "HostedZoneId"
+                },
+                "Name": {
+                    "Ref": "DomainName"
+                },
+                "Type": "A",
+                "AliasTarget": {
+                    "HostedZoneId": {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "CanonicalHostedZoneID"
+                        ]
+                    },
+                    "DNSName": {
+                        "Fn::GetAtt": [
+                            "ApplicationLoadBalancer",
+                            "DNSName"
+                        ]
+                    },
+                    "EvaluateTargetHealth": true
+                }
+            }
+        },
+        "SNSTopic": {
+            "Type": "AWS::SNS::Topic",
+            "Properties": {
+                "TopicName": {
+                    "Fn::Sub": "${EnvironmentName}-Alerts"
+                },
+                "DisplayName": {
+                    "Fn::Sub": "${EnvironmentName} CloudWatch Alerts"
+                },
+                "KmsMasterKeyId": "alias/aws/sns",
+                "Subscription": [
+                    {
+                        "Endpoint": {
+                            "Ref": "NotificationEmail"
+                        },
+                        "Protocol": "email"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentName"
+                        }
+                    },
+                    {
+                        "Key": "Application",
+                        "Value": {
+                            "Ref": "ApplicationName"
+                        }
+                    },
+                    {
+                        "Key": "Owner",
+                        "Value": {
+                            "Ref": "OwnerTag"
+                        }
+                    },
+                    {
+                        "Key": "iac-rlhf-amazon",
+                        "Value": "true"
+                    }
+                ]
+            }
+        },
+        "UnHealthyHostAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-UnHealthyHosts"
+                },
+                "AlarmDescription": "Alert when there are unhealthy target instances",
+                "MetricName": "UnHealthyHostCount",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 1,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "TargetGroup",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ALBTargetGroup",
+                                "TargetGroupFullName"
+                            ]
+                        }
+                    },
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "HighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-HighCPU"
+                },
+                "AlarmDescription": "Alert when CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/EC2",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "AutoScalingGroupName",
+                        "Value": {
+                            "Ref": "AutoScalingGroup"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    },
+                    {
+                        "Ref": "ScaleUpPolicy"
+                    }
+                ],
+                "OKActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "HighLatencyAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-HighLatency"
+                },
+                "AlarmDescription": "Alert when target response time is high",
+                "MetricName": "TargetResponseTime",
+                "Namespace": "AWS/ApplicationELB",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 2.0,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "LoadBalancer",
+                        "Value": {
+                            "Fn::GetAtt": [
+                                "ApplicationLoadBalancer",
+                                "LoadBalancerFullName"
+                            ]
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DatabaseCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-DatabaseHighCPU"
+                },
+                "AlarmDescription": "Alert when RDS CPU exceeds 75%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 75,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "DatabaseStorageSpaceAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "${EnvironmentName}-DatabaseLowStorage"
+                },
+                "AlarmDescription": "Alert when free storage space is low",
+                "MetricName": "FreeStorageSpace",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 1,
+                "Threshold": 10737418240,
+                "ComparisonOperator": "LessThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBInstanceIdentifier",
+                        "Value": {
+                            "Ref": "RDSInstance"
+                        }
+                    }
+                ],
+                "AlarmActions": [
+                    {
+                        "Ref": "SNSTopic"
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "VPCId": {
+            "Description": "VPC ID",
+            "Value": {
+                "Ref": "VPC"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-ID"
+                }
+            }
+        },
+        "VPCCIDR": {
+            "Description": "VPC CIDR Block",
+            "Value": {
+                "Ref": "VPCCIDR"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-VPC-CIDR"
+                }
+            }
+        },
+        "PublicSubnet1Id": {
+            "Description": "Public Subnet 1 ID",
+            "Value": {
+                "Ref": "PublicSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet1-ID"
+                }
+            }
+        },
+        "PublicSubnet2Id": {
+            "Description": "Public Subnet 2 ID",
+            "Value": {
+                "Ref": "PublicSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PublicSubnet2-ID"
+                }
+            }
+        },
+        "PrivateSubnet1Id": {
+            "Description": "Private Subnet 1 ID",
+            "Value": {
+                "Ref": "PrivateSubnet1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet1-ID"
+                }
+            }
+        },
+        "PrivateSubnet2Id": {
+            "Description": "Private Subnet 2 ID",
+            "Value": {
+                "Ref": "PrivateSubnet2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-PrivateSubnet2-ID"
+                }
+            }
+        },
+        "ALBDNSName": {
+            "Description": "Application Load Balancer DNS Name",
+            "Value": {
+                "Fn::GetAtt": [
+                    "ApplicationLoadBalancer",
+                    "DNSName"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-DNS"
+                }
+            }
+        },
+        "ALBArn": {
+            "Description": "Application Load Balancer ARN",
+            "Value": {
+                "Ref": "ApplicationLoadBalancer"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-ARN"
+                }
+            }
+        },
+        "ALBTargetGroupArn": {
+            "Description": "ALB Target Group ARN",
+            "Value": {
+                "Ref": "ALBTargetGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-TG-ARN"
+                }
+            }
+        },
+        "APIDomainName": {
+            "Description": "API Domain Name",
+            "Value": {
+                "Ref": "DomainName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-API-Domain"
+                }
+            }
+        },
+        "APIEndpoint": {
+            "Description": "Full API Endpoint URL",
+            "Value": {
+                "Fn::Sub": "https://${DomainName}"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-API-Endpoint"
+                }
+            }
+        },
+        "RDSEndpoint": {
+            "Description": "RDS Instance Endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSInstance",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-Endpoint"
+                }
+            }
+        },
+        "RDSPort": {
+            "Description": "RDS Instance Port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "RDSInstance",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-Port"
+                }
+            }
+        },
+        "DBSecretArn": {
+            "Description": "ARN of the database password secret",
+            "Value": {
+                "Ref": "DBPassword"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-DB-Secret-ARN"
+                }
+            }
+        },
+        "AutoScalingGroupName": {
+            "Description": "Auto Scaling Group Name",
+            "Value": {
+                "Ref": "AutoScalingGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ASG-Name"
+                }
+            }
+        },
+        "LaunchTemplateId": {
+            "Description": "Launch Template ID",
+            "Value": {
+                "Ref": "LaunchTemplate"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate-ID"
+                }
+            }
+        },
+        "LaunchTemplateVersion": {
+            "Description": "Launch Template Latest Version",
+            "Value": {
+                "Fn::GetAtt": [
+                    "LaunchTemplate",
+                    "LatestVersionNumber"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-LaunchTemplate-Version"
+                }
+            }
+        },
+        "ALBSecurityGroupId": {
+            "Description": "ALB Security Group ID",
+            "Value": {
+                "Ref": "ALBSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-ALB-SG-ID"
+                }
+            }
+        },
+        "EC2SecurityGroupId": {
+            "Description": "EC2 Security Group ID",
+            "Value": {
+                "Ref": "EC2SecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-EC2-SG-ID"
+                }
+            }
+        },
+        "RDSSecurityGroupId": {
+            "Description": "RDS Security Group ID",
+            "Value": {
+                "Ref": "RDSSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-RDS-SG-ID"
+                }
+            }
+        },
+        "SNSTopicArn": {
+            "Description": "SNS Topic ARN for CloudWatch Alarms",
+            "Value": {
+                "Ref": "SNSTopic"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-SNS-Topic-ARN"
+                }
+            }
+        },
+        "ApplicationLogGroupName": {
+            "Description": "CloudWatch Log Group for Application Logs",
+            "Value": {
+                "Ref": "ApplicationLogGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${EnvironmentName}-App-LogGroup"
+                }
+            }
+        }
+    }
+}

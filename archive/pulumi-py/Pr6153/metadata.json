@@ -1,0 +1,38 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000875",
+  "team": "synth",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Multi-Environment Deployment",
+    "Infrastructure Consistency",
+    "Pulumi IaC",
+    "VPC Networking",
+    "Database Management",
+    "Serverless Architecture"
+  ],
+  "startedAt": "2025-11-10T05:16:42+00:00",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "RDS",
+    "S3",
+    "Systems Manager",
+    "IAM",
+    "CloudWatch"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

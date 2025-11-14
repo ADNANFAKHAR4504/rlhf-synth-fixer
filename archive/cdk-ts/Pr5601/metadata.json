@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "typescript",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000266",
+  "team": "1",
+  "startedAt": "2025-11-01T22:08:03.017Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS PostgreSQL",
+    "S3",
+    "IAM",
+    "CloudWatch Logs",
+    "CloudWatch Alarms",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "Route53",
+    "Systems Manager Parameter Store",
+    "Secrets Manager",
+    "SNS",
+    "VPC Flow Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

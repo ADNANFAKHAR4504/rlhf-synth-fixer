@@ -6,7 +6,6 @@ name = "pypi"
 [packages]
 aws-cdk-aws-lambda-python-alpha = "*"
 cdktf = "0.21.0"
-cdktf-cdktf-provider-aws = "21.9.1"
 pulumi_random = "*"
 pulumi = "*"
 pulumi-aws = "*"
@@ -19,6 +18,8 @@ aws-cdk-lib = "*"
 constructs = "*"
 cfn-lint = "*"
 cfn-flip = "*"
+tabulate = "*"
+cdktf-cdktf-provider-aws = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -32,19 +33,20 @@ cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
 pillow = "*"
-pytest-cov = "*"
 psycopg2-binary = "*"
+pytest-cov = "*"
+yamllint = "*"
 
 [requires]
-python_version = "3.12.11"
+python_version = "3.12"
 
 [scripts]
 # Validation
 cfn-validate-yaml = "cfn-lint lib/TapStack.yml"
-cfn-validate-json = "cfn-lint lib/TapStack.json"
+cfn-validate-json = "cfn-lint lib/*.json"
 cfn-flip-to-json = "cfn-flip  lib/TapStack.yml"
 cfn-flip-to-yaml = "cfn-flip -y lib/TapStack.json"
-test-py-unit = "python -m pytest -s tests/unit/ --cov=lib/ --cov-report=term-missing --cov-report=json:cov.json --cov-fail-under=90 --cov-branch -l --testdox"
+test-py-unit = "python -m pytest -s tests/unit/ --cov=lib --cov-report=term-missing --cov-report=json:cov.json --cov-fail-under=90 --cov-branch -l --testdox --cov-config=.coveragerc"
 test-py-integration = "python -m pytest -s tests/integration/ --no-cov"
 pulumi-login = "pulumi login \"$PULUMI_BACKEND_URL\""
 pulumi-create-stack = "pulumi stack select \"${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}\" --create"

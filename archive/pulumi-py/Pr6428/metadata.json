@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912428",
+  "team": "synth",
+  "startedAt": "2025-11-12T00:00:00Z",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
+  "aws_services": [
+    "CloudWatch",
+    "DynamoDB",
+    "EC2",
+    "IAM",
+    "Kinesis",
+    "Lambda",
+    "S3",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
