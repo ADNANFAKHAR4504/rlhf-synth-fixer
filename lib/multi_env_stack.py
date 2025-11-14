@@ -7,7 +7,7 @@ from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret import DataAwsSecre
 from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret_version import DataAwsSecretsmanagerSecretVersion
 from cdktf_cdktf_provider_aws.db_instance import DbInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
-from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate, LaunchTemplateIamInstanceProfile
+from cdktf_cdktf_provider_aws.launch_template import LaunchTemplate, LaunchTemplateIamInstanceProfile, LaunchTemplateTagSpecifications
 from cdktf_cdktf_provider_aws.autoscaling_group import AutoscalingGroup, AutoscalingGroupTag
 from cdktf_cdktf_provider_aws.autoscaling_attachment import AutoscalingAttachment
 from cdktf_cdktf_provider_aws.lb import Lb
@@ -36,7 +36,7 @@ class MultiEnvStack(TerraformStack):
         self.environment = environment
         self.environment_suffix = environment_suffix
         self.config = config
-        region = config.get('region', 'ap-southeast-1')
+        region = config.get('region', 'us-east-1')
 
         # Common tags for all resources
         common_tags = {
@@ -59,12 +59,18 @@ class MultiEnvStack(TerraformStack):
             default=True
         )
 
-        # Get subnets
+        # Get subnets (excluding us-east-1e which doesn't support t3.micro)
         subnets = DataAwsSubnets(self, "subnets",
-            filter=[{
-                "name": "vpc-id",
-                "values": [vpc_data.id]
-            }]
+            filter=[
+                {
+                    "name": "vpc-id",
+                    "values": [vpc_data.id]
+                },
+                {
+                    "name": "availability-zone",
+                    "values": ["us-east-1a", "us-east-1b", "us-east-1c", "us-east-1d", "us-east-1f"]
+                }
+            ]
         )
 
         # Get database password from Secrets Manager
@@ -116,8 +122,8 @@ class MultiEnvStack(TerraformStack):
         db = DbInstance(self, "postgres",
             identifier=f"postgres-{environment_suffix}",
             engine="postgres",
-            engine_version="15.4",
-            instance_class=db_config.get('instance_class', 't3.micro'),
+            engine_version="15.8",
+            instance_class=db_config.get('instance_class', 'db.t3.micro'),
             allocated_storage=20,
             storage_encrypted=True,
             username="dbadmin",
@@ -213,7 +219,7 @@ class MultiEnvStack(TerraformStack):
         launch_template = LaunchTemplate(self, "launch_template",
             name=f"launch-template-{environment_suffix}",
             description=f"Launch template for {environment} environment",
-            image_id=config.get('ami_id', 'ami-0c802847a7dd848c0'),  # Amazon Linux 2023 ap-southeast-1
+            image_id=config.get('ami_id', 'ami-0cae6d6fe6048ca2c'),  # Amazon Linux 2023 us-east-1
             instance_type=config.get('instance_type', 't3.micro'),
             vpc_security_group_ids=[ec2_sg.id],
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
@@ -223,19 +229,22 @@ class MultiEnvStack(TerraformStack):
                 "http_tokens": "required",
                 "http_put_response_hop_limit": 1
             },
-            tag_specifications=[{
-                "resource_type": "instance",
-                "tags": {
-                    **common_tags,
-                    "Name": f"ec2-instance-{environment_suffix}"
-                }
-            }, {
-                "resource_type": "volume",
-                "tags": {
-                    **common_tags,
-                    "Name": f"ec2-volume-{environment_suffix}"
-                }
-            }],
+            tag_specifications=[
+                LaunchTemplateTagSpecifications(
+                    resource_type="instance",
+                    tags={
+                        **common_tags,
+                        "Name": f"ec2-instance-{environment_suffix}"
+                    }
+                ),
+                LaunchTemplateTagSpecifications(
+                    resource_type="volume",
+                    tags={
+                        **common_tags,
+                        "Name": f"ec2-volume-{environment_suffix}"
+                    }
+                )
+            ],
             tags={
                 **common_tags,
                 "Name": f"launch-template-{environment_suffix}"

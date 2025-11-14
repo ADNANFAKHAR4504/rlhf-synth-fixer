@@ -42,7 +42,7 @@ class MultiEnvStack(TerraformStack):
         self.environment = environment
         self.environment_suffix = environment_suffix
         self.config = config
-        region = config.get('region', 'ap-southeast-1')
+        region = config.get('region', 'us-east-1')
 
         # Common tags for all resources
         common_tags = {
@@ -219,7 +219,7 @@ class MultiEnvStack(TerraformStack):
         launch_template = LaunchTemplate(self, "launch_template",
             name=f"launch-template-{environment_suffix}",
             description=f"Launch template for {environment} environment",
-            image_id=config.get('ami_id', 'ami-0c802847a7dd848c0'),  # Amazon Linux 2023 ap-southeast-1
+            image_id=config.get('ami_id', 'ami-0cae6d6fe6048ca2c'),  # Amazon Linux 2023 us-east-1
             instance_type=config.get('instance_type', 't3.micro'),
             vpc_security_group_ids=[ec2_sg.id],
             iam_instance_profile=LaunchTemplateIamInstanceProfile(
@@ -476,8 +476,8 @@ environment_suffix = os.environ.get('ENVIRONMENT_SUFFIX', 'test-001')
 # Environment configurations
 configs = {
     'dev': {
-        'region': 'ap-southeast-1',
-        'ami_id': 'ami-0c802847a7dd848c0',  # Amazon Linux 2023 ap-southeast-1
+        'region': 'us-east-1',
+        'ami_id': 'ami-0cae6d6fe6048ca2c',  # Amazon Linux 2023 us-east-1
         'instance_type': 't3.micro',
         'database': {
             'instance_class': 't3.micro',
@@ -495,8 +495,8 @@ configs = {
         'alb_allowed_cidrs': ['0.0.0.0/0']
     },
     'staging': {
-        'region': 'ap-southeast-1',
-        'ami_id': 'ami-0c802847a7dd848c0',  # Amazon Linux 2023 ap-southeast-1
+        'region': 'us-east-1',
+        'ami_id': 'ami-0cae6d6fe6048ca2c',  # Amazon Linux 2023 us-east-1
         'instance_type': 't3.small',
         'database': {
             'instance_class': 't3.small',
@@ -514,8 +514,8 @@ configs = {
         'alb_allowed_cidrs': ['0.0.0.0/0']
     },
     'prod': {
-        'region': 'ap-southeast-1',
-        'ami_id': 'ami-0c802847a7dd848c0',  # Amazon Linux 2023 ap-southeast-1
+        'region': 'us-east-1',
+        'ami_id': 'ami-0cae6d6fe6048ca2c',  # Amazon Linux 2023 us-east-1
         'instance_type': 't3.small',
         'database': {
             'instance_class': 't3.large',
@@ -585,7 +585,7 @@ class TestMultiEnvStack:
         """Test that dev stack creates successfully"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -599,7 +599,7 @@ class TestMultiEnvStack:
         """Test that prod stack creates successfully"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.large', 'multi_az': True},
             'autoscaling': {'min_size': 3, 'max_size': 10, 'desired': 5},
             'storage': {'versioning': True},
@@ -613,7 +613,7 @@ class TestMultiEnvStack:
         """Test that RDS instance is created with correct configuration"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -642,7 +642,7 @@ class TestMultiEnvStack:
         # Test dev - Multi-AZ disabled
         app_dev = Testing.app()
         config_dev = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -657,7 +657,7 @@ class TestMultiEnvStack:
         # Test prod - Multi-AZ enabled
         app_prod = Testing.app()
         config_prod = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.large', 'multi_az': True},
             'autoscaling': {'min_size': 3, 'max_size': 10, 'desired': 5},
             'storage': {'versioning': True},
@@ -673,7 +673,7 @@ class TestMultiEnvStack:
         """Test that Auto Scaling Group is created with correct capacity"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 2, 'max_size': 4, 'desired': 2},
             'storage': {'versioning': False},
@@ -696,7 +696,7 @@ class TestMultiEnvStack:
         """Test that Application Load Balancer is created"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -716,7 +716,7 @@ class TestMultiEnvStack:
         # Test dev - no versioning
         app_dev = Testing.app()
         config_dev = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -731,7 +731,7 @@ class TestMultiEnvStack:
         # Test prod - versioning enabled
         app_prod = Testing.app()
         config_prod = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.large', 'multi_az': True},
             'autoscaling': {'min_size': 3, 'max_size': 10, 'desired': 5},
             'storage': {'versioning': True},
@@ -747,7 +747,7 @@ class TestMultiEnvStack:
         """Test that all resources include environment suffix in names"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -776,7 +776,7 @@ class TestMultiEnvStack:
         """Test that all resources have required tags"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -802,7 +802,7 @@ class TestMultiEnvStack:
         """Test that security groups have proper CIDR restrictions"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -832,7 +832,7 @@ class TestMultiEnvStack:
         """Test that S3 bucket has encryption enabled"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -849,7 +849,7 @@ class TestMultiEnvStack:
         """Test that stack creates all required outputs"""
         app = Testing.app()
         config = {
-            'region': 'ap-southeast-1',
+            'region': 'us-east-1',
             'database': {'instance_class': 't3.micro', 'multi_az': False},
             'autoscaling': {'min_size': 1, 'max_size': 2, 'desired': 1},
             'storage': {'versioning': False},
@@ -973,21 +973,21 @@ The stack requires two environment variables:
 The `lib/tap_stack.py` file contains configurations for each environment:
 
 #### Development
-- Region: ap-southeast-1
+- Region: us-east-1
 - Database: t3.micro, single AZ
 - ASG: min 1, max 2, desired 1
 - Instance Type: t3.micro
 - S3 Versioning: Disabled
 
 #### Staging
-- Region: ap-southeast-1
+- Region: us-east-1
 - Database: t3.small, single AZ
 - ASG: min 2, max 4, desired 2
 - Instance Type: t3.small
 - S3 Versioning: Disabled
 
 #### Production
-- Region: ap-southeast-1
+- Region: us-east-1
 - Database: t3.large, Multi-AZ
 - ASG: min 3, max 10, desired 5
 - Instance Type: t3.small

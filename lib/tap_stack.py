@@ -33,12 +33,12 @@ class TapStack(TerraformStack):
                                                             'iac-rlhf-tf-states')
         self.state_bucket_region = (state_bucket_region or
                                      os.environ.get('TERRAFORM_STATE_BUCKET_REGION', 'us-east-1'))
-        self.aws_region = aws_region or os.environ.get('AWS_REGION', 'ap-southeast-1')
+        self.aws_region = aws_region or os.environ.get('AWS_REGION', 'us-east-1')
 
         # Configure S3 backend for state management
         S3Backend(self,
             bucket=self.state_bucket,
-            key=f"cdktf/{stack_id}/terraform.tfstate",
+            key=f"{self.environment_suffix}/terraform.tfstate",
             region=self.state_bucket_region,
             encrypt=True,
             dynamodb_table="terraform-state-lock"
@@ -51,10 +51,10 @@ class TapStack(TerraformStack):
         configs = {
             'dev': {
                 'region': self.aws_region,
-                'ami_id': 'ami-0c802847a7dd848c0',  # Amazon Linux 2023 ap-southeast-1
+                'ami_id': 'ami-0cae6d6fe6048ca2c',  # Amazon Linux 2023 us-east-1
                 'instance_type': 't3.micro',
                 'database': {
-                    'instance_class': 't3.micro',
+                    'instance_class': 'db.t3.micro',
                     'multi_az': False
                 },
                 'autoscaling': {
@@ -70,10 +70,10 @@ class TapStack(TerraformStack):
             },
             'staging': {
                 'region': self.aws_region,
-                'ami_id': 'ami-0c802847a7dd848c0',  # Amazon Linux 2023 ap-southeast-1
+                'ami_id': 'ami-0cae6d6fe6048ca2c',  # Amazon Linux 2023 us-east-1
                 'instance_type': 't3.small',
                 'database': {
-                    'instance_class': 't3.small',
+                    'instance_class': 'db.t3.small',
                     'multi_az': False
                 },
                 'autoscaling': {
@@ -89,10 +89,10 @@ class TapStack(TerraformStack):
             },
             'prod': {
                 'region': self.aws_region,
-                'ami_id': 'ami-0c802847a7dd848c0',  # Amazon Linux 2023 ap-southeast-1
+                'ami_id': 'ami-0cae6d6fe6048ca2c',  # Amazon Linux 2023 us-east-1
                 'instance_type': 't3.small',
                 'database': {
-                    'instance_class': 't3.large',
+                    'instance_class': 'db.t3.small',
                     'multi_az': True
                 },
                 'autoscaling': {

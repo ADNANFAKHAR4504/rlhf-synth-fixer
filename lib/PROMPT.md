@@ -4,7 +4,7 @@ CRITICAL REQUIREMENT: This task MUST be implemented using **CDKTF with Python**
 
 Platform: cdktf
 Language: python
-Region: ap-southeast-1
+Region: us-east-1
 
 ## Background
 
@@ -64,7 +64,7 @@ The system must support environment-specific configurations for database sizing,
 - Configure DynamoDB table for state locking
 - Resource names must include environmentSuffix variable for uniqueness
 - Follow naming convention: resource-type-environment-suffix
-- Deploy to ap-southeast-1 region by default
+- Deploy to us-east-1 region by default
 - Support region override through configuration
 
 ### Resource Management

@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "python tap.py",
+  "app": "pipenv run python3 tap.py",
   "projectId": "multi-env-infrastructure",
   "sendCrashReports": "false",
   "terraformProviders": [
