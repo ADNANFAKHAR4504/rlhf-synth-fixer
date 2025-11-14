@@ -121,11 +121,11 @@ Parameters:
 
   DeployECSService:
     Type: String
-    Default: 'true'
+    Default: 'false'
     AllowedValues:
       - 'true'
       - 'false'
-    Description: 'Deploy ECS Service (set to false if container image is not ready)'
+    Description: 'Deploy ECS Service. Set to true ONLY after container image has been pushed to ECR. The template does not create container images - only the infrastructure to run them.'
 
   DatabaseMasterUsername:
     Type: String
