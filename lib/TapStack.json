@@ -403,8 +403,28 @@
         ]
       }
     },
+    "RDSDatabaseSecret": {
+      "Type": "AWS::SecretsManager::Secret",
+      "Properties": {
+        "Name": { "Fn::Sub": "trading-db-password-${EnvironmentSuffix}" },
+        "Description": "RDS MySQL password for trading platform",
+        "GenerateSecretString": {
+          "SecretStringTemplate": "{\"username\": \"admin\"}",
+          "GenerateStringKey": "password",
+          "PasswordLength": 32,
+          "ExcludeCharacters": " \"@/\\"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": { "Fn::Sub": "trading-db-password-${EnvironmentSuffix}" }
+          }
+        ]
+      }
+    },
     "RDSDatabase": {
       "Type": "AWS::RDS::DBInstance",
+      "DependsOn": "RDSDatabaseSecret",
       "Properties": {
         "DBInstanceIdentifier": { "Fn::Sub": "trading-db-${EnvironmentSuffix}" },
         "AllocatedStorage": "100",
@@ -412,7 +432,7 @@
         "Engine": "mysql",
         "EngineVersion": "8.0.37",
         "MasterUsername": "admin",
-        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:trading-db-password-${EnvironmentSuffix}:SecretString:password}}" },
+        "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:${RDSDatabaseSecret}:SecretString:password}}" },
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
         "VPCSecurityGroups": [{ "Ref": "RDSSecurityGroup" }],
         "MultiAZ": true,
@@ -610,7 +630,7 @@
                   "Action": [
                     "secretsmanager:GetSecretValue"
                   ],
-                  "Resource": { "Fn::Sub": "arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:trading-db-password-${EnvironmentSuffix}-*" }
+                  "Resource": { "Ref": "RDSDatabaseSecret" }
                 }
               ]
             }
