@@ -53,6 +53,6 @@ new TapStack(
   { provider }
 );
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Import and re-export outputs from the actual infrastructure
+export * from '../lib/index';
+

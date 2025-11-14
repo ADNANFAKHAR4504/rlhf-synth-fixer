@@ -545,18 +545,15 @@ const apiDeployment = new aws.apigateway.Deployment(
 );
 
 // API Gateway Stage
-const apiStage = new aws.apigateway.Stage(
-  `api-stage-${environmentSuffix}`,
-  {
-    restApi: api.id,
-    deployment: apiDeployment.id,
-    stageName: environmentSuffix,
-    tags: {
-      Name: `api-stage-${environmentSuffix}`,
-      Environment: environmentSuffix,
-    },
-  }
-);
+const apiStage = new aws.apigateway.Stage(`api-stage-${environmentSuffix}`, {
+  restApi: api.id,
+  deployment: apiDeployment.id,
+  stageName: environmentSuffix,
+  tags: {
+    Name: `api-stage-${environmentSuffix}`,
+    Environment: environmentSuffix,
+  },
+});
 
 // API Gateway Usage Plan
 const usagePlan = new aws.apigateway.UsagePlan(
