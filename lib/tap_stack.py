@@ -1,4 +1,6 @@
 import json
+import os
+import zipfile
 
 from cdktf import App, Fn, TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.apigatewayv2_api import Apigatewayv2Api
@@ -67,6 +69,21 @@ class TapStack(TerraformStack):
 
         # Environment suffix for resource naming (use passed parameter or default)
         environment_suffix = environment_suffix
+
+        # Create a minimal Lambda function zip if it doesn't exist
+        lambda_zip_path = "lambda_function.zip"
+        if not os.path.exists(lambda_zip_path):
+            lambda_code = '''import json
+
+def handler(event, context):
+    """Lambda function handler for payment processing"""
+    return {
+        'statusCode': 200,
+        'body': json.dumps({'message': 'Payment processor lambda function'})
+    }
+'''
+            with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                zipf.writestr('index.py', lambda_code)
 
         # Common tags
         common_tags = {
