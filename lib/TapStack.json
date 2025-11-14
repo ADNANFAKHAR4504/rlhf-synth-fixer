@@ -381,7 +381,7 @@
         "AllocatedStorage": "100",
         "DBInstanceClass": { "Ref": "DBInstanceClass" },
         "Engine": "mysql",
-        "EngineVersion": "8.0.35",
+        "EngineVersion": "8.0.37",
         "MasterUsername": "admin",
         "MasterUserPassword": { "Fn::Sub": "{{resolve:secretsmanager:trading-db-password-${EnvironmentSuffix}:SecretString:password}}" },
         "DBSubnetGroupName": { "Ref": "DBSubnetGroup" },
@@ -651,16 +651,14 @@
       "Properties": {
         "LaunchTemplateName": { "Fn::Sub": "trading-launch-template-${EnvironmentSuffix}" },
         "LaunchTemplateData": {
-          "ImageId": { "Fn::Sub": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}" },
+          "ImageId": "{{resolve:ssm:/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2}}",
           "InstanceType": { "Ref": "InstanceType" },
           "IamInstanceProfile": {
             "Arn": { "Fn::GetAtt": ["EC2InstanceProfile", "Arn"] }
           },
           "SecurityGroupIds": [{ "Ref": "EC2SecurityGroup" }],
           "UserData": {
-            "Fn::Base64": {
-              "Fn::Sub": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Install trading application\necho 'Trading Platform Application' > /var/www/html/index.html\n"
-            }
+            "Fn::Base64": "#!/bin/bash\nyum update -y\nyum install -y amazon-cloudwatch-agent\n# Install trading application\necho 'Trading Platform Application' > /var/www/html/index.html\n"
           },
           "TagSpecifications": [
             {
