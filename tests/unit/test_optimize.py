@@ -558,7 +558,7 @@ class TestApplyOptimizations:
             )
 
             optimizer._apply_aurora_optimization(optimization)
-            assert mock_rds.modify_current_db_cluster_capacity.called
+            assert mock_rds.modify_db_cluster.called
 
     @mark.it("applies ElastiCache optimization")
     def test_apply_elasticache_optimization(self):
@@ -1244,7 +1244,7 @@ class TestApplyOptimizationsFlow:
         """Test applying optimizations handles errors"""
         with patch("lib.optimize.boto3") as mock_boto:
             mock_rds = MagicMock()
-            mock_rds.modify_current_db_cluster_capacity.side_effect = Exception(
+            mock_rds.modify_db_cluster.side_effect = Exception(
                 "AWS Error"
             )
             mock_boto.client.return_value = mock_rds
@@ -1550,3 +1550,219 @@ class TestMainFunction:
                 with pytest.raises(SystemExit) as exc_info:
                     main()
                 assert exc_info.value.code == 1
+
+
+@mark.describe("Stack Output Loading Edge Cases")
+class TestStackOutputLoading:
+    """Test stack output loading edge cases"""
+
+    @mark.it("handles empty stacks response")
+    def test_empty_stacks_response(self):
+        """Test handling of empty stacks response"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_cfn = MagicMock()
+            mock_cfn.describe_stacks.return_value = {"Stacks": []}
+            mock_boto.client.return_value = mock_cfn
+
+            optimizer = AWSOptimizer(environment_suffix="test")
+            assert optimizer.stack_outputs == {}
+
+    @mark.it("handles validation error for non-existent stack")
+    def test_validation_error(self):
+        """Test handling of ValidationError for non-existent stack"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_cfn = MagicMock()
+            error_response = {"Error": {"Code": "ValidationError", "Message": "Stack does not exist"}}
+            mock_cfn.describe_stacks.side_effect = ClientError(error_response, "DescribeStacks")
+            mock_boto.client.return_value = mock_cfn
+
+            optimizer = AWSOptimizer(environment_suffix="test")
+            assert optimizer.stack_outputs == {}
+
+    @mark.it("handles other client errors")
+    def test_other_client_error(self):
+        """Test handling of other ClientError types"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_cfn = MagicMock()
+            error_response = {"Error": {"Code": "AccessDenied", "Message": "Access denied"}}
+            mock_cfn.describe_stacks.side_effect = ClientError(error_response, "DescribeStacks")
+            mock_boto.client.return_value = mock_cfn
+
+            optimizer = AWSOptimizer(environment_suffix="test")
+            assert optimizer.stack_outputs == {}
+
+    @mark.it("handles unexpected exceptions")
+    def test_unexpected_exception(self):
+        """Test handling of unexpected exceptions during stack loading"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_cfn = MagicMock()
+            mock_cfn.describe_stacks.side_effect = Exception("Unexpected error")
+            mock_boto.client.return_value = mock_cfn
+
+            optimizer = AWSOptimizer(environment_suffix="test")
+            assert optimizer.stack_outputs == {}
+
+
+@mark.describe("Edge Cases and Error Paths")
+class TestEdgeCasesAndErrors:
+    """Test edge cases and error handling paths"""
+
+    @mark.it("handles analyze_and_optimize with exception in analysis")
+    def test_analyze_with_exception(self):
+        """Test that exceptions in analyze are properly caught"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_client = MagicMock()
+            mock_client.describe_stacks.return_value = {"Stacks": []}
+            mock_client.describe_db_clusters.side_effect = Exception("Analysis error")
+            mock_boto.client.return_value = mock_client
+
+            optimizer = AWSOptimizer(environment_suffix="test", dry_run=True)
+            
+            with pytest.raises(Exception):
+                optimizer.analyze_and_optimize()
+
+    @mark.it("covers lambda function ARN extraction from outputs")
+    def test_lambda_arn_extraction(self):
+        """Test Lambda function name extraction from ARN in stack outputs"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_client = MagicMock()
+            
+            # Mock CloudFormation with Lambda ARNs
+            mock_client.describe_stacks.return_value = {
+                "Stacks": [{
+                    "Outputs": [
+                        {"OutputKey": "ProcessorLambdaArn", "OutputValue": "arn:aws:lambda:us-east-1:123:function:my-processor"},
+                        {"OutputKey": "AnalyzerLambdaArn", "OutputValue": "arn:aws:lambda:us-east-1:123:function:my-analyzer"},
+                    ]
+                }]
+            }
+            
+            # Mock Lambda responses
+            mock_client.get_function_configuration.return_value = {
+                "MemorySize": 512,
+                "Timeout": 30,
+            }
+            # Mock metrics with proper structure
+            mock_client.get_metric_statistics.return_value = {
+                "Datapoints": [{"Average": 100, "Sum": 0}]
+            }
+            
+            mock_boto.client.return_value = mock_client
+
+            optimizer = AWSOptimizer(environment_suffix="test", dry_run=True)
+            optimizer._analyze_lambda()
+            
+            # Verify Lambda functions were analyzed using ARN-extracted names
+            assert mock_client.get_function_configuration.called
+
+    @mark.it("covers S3 bucket discovery from outputs")
+    def test_s3_bucket_from_outputs(self):
+        """Test S3 bucket discovery from stack outputs"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_client = MagicMock()
+            
+            # Mock CloudFormation with S3 bucket names
+            mock_client.describe_stacks.return_value = {
+                "Stacks": [{
+                    "Outputs": [
+                        {"OutputKey": "MediaBucketName", "OutputValue": "my-media-bucket"},
+                    ]
+                }]
+            }
+            
+            # Mock S3 responses
+            mock_client.get_bucket_lifecycle_configuration.side_effect = ClientError(
+                {"Error": {"Code": "NoSuchLifecycleConfiguration"}}, "GetBucketLifecycle"
+            )
+            mock_client.get_metric_statistics.return_value = {"Datapoints": []}
+            
+            mock_boto.client.return_value = mock_client
+
+            optimizer = AWSOptimizer(environment_suffix="test", dry_run=True)
+            optimizer._analyze_s3()
+            
+            # Should not raise exception
+            assert True
+
+    @mark.it("covers optimization confirmation rejection")
+    def test_optimization_confirmation_no(self):
+        """Test user rejecting optimization confirmation"""
+        with patch("lib.optimize.boto3") as mock_boto, \
+             patch("builtins.input", return_value="no"):
+            
+            mock_client = MagicMock()
+            mock_client.describe_stacks.return_value = {"Stacks": []}
+            mock_boto.client.return_value = mock_client
+
+            optimizer = AWSOptimizer(environment_suffix="test", dry_run=False)
+            optimizer.optimizations = [
+                ResourceConfiguration(
+                    resource_type="test",
+                    resource_id="test-1",
+                    current_config={},
+                    optimized_config={},
+                    metrics={},
+                    current_cost=100.0,
+                    optimized_cost=50.0,
+                    savings=50.0,
+                )
+            ]
+            
+            report = optimizer._generate_report()
+            result = optimizer._confirm_optimizations(report)
+            
+            assert result is False
+
+    @mark.it("covers cost calculation with zero pricing")
+    def test_cost_calculation_edge_cases(self):
+        """Test cost calculation with edge cases"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_client = MagicMock()
+            mock_client.describe_stacks.return_value = {"Stacks": []}
+            mock_client.get_products.return_value = {"PriceList": []}
+            mock_boto.client.return_value = mock_client
+
+            optimizer = AWSOptimizer(environment_suffix="test", dry_run=True)
+            
+            # Test Aurora cost calculation with valid config
+            aurora_config = {
+                "min_capacity": 0.5, 
+                "max_capacity": 1.0,
+                "reader_instances": 1,
+                "backup_retention": 7
+            }
+            cost = optimizer._calculate_aurora_cost(aurora_config)
+            assert cost >= 0
+
+    @mark.it("covers no optimizations found path")
+    def test_no_optimizations_found(self):
+        """Test when no optimizations are needed"""
+        with patch("lib.optimize.boto3") as mock_boto:
+            mock_client = MagicMock()
+            mock_client.describe_stacks.return_value = {"Stacks": []}
+            
+            # Mock all resources as not found
+            mock_client.describe_db_clusters.side_effect = ClientError(
+                {"Error": {"Code": "DBClusterNotFoundFault"}}, "DescribeDBClusters"
+            )
+            mock_client.describe_replication_groups.side_effect = ClientError(
+                {"Error": {"Code": "ReplicationGroupNotFoundFault"}}, "DescribeReplicationGroups"
+            )
+            mock_client.describe_services.side_effect = ClientError(
+                {"Error": {"Code": "ClusterNotFoundException"}}, "DescribeServices"
+            )
+            mock_client.describe_table.side_effect = ClientError(
+                {"Error": {"Code": "ResourceNotFoundException"}}, "DescribeTable"
+            )
+            mock_client.get_function_configuration.side_effect = ClientError(
+                {"Error": {"Code": "ResourceNotFoundException"}}, "GetFunctionConfiguration"
+            )
+            mock_client.list_buckets.return_value = {"Buckets": []}
+            
+            mock_boto.client.return_value = mock_client
+
+            optimizer = AWSOptimizer(environment_suffix="test", dry_run=False)
+            report = optimizer.analyze_and_optimize()
+            
+            assert len(optimizer.optimizations) == 0
+            assert report.total_monthly_savings == 0.0

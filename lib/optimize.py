@@ -10,7 +10,7 @@ import logging
 import sys
 import time
 from dataclasses import asdict, dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -88,6 +88,7 @@ class AWSOptimizer:
         self.original_configs: Dict[str, Any] = {}
 
         # Initialize AWS clients
+        self.cfn_client = boto3.client('cloudformation', config=boto_config)
         self.rds_client = boto3.client('rds', config=boto_config)
         self.elasticache_client = boto3.client('elasticache', config=boto_config)
         self.ecs_client = boto3.client('ecs', config=boto_config)
@@ -97,8 +98,44 @@ class AWSOptimizer:
         self.cloudwatch_client = boto3.client('cloudwatch', config=boto_config)
         self.pricing_client = boto3.client('pricing', region_name='us-east-1')
 
+        # Discover resources from CloudFormation stack outputs
+        self.stack_outputs = {}
+        self._load_stack_outputs()
+
         logger.info("Initialized optimizer for environment: %s", environment_suffix)
         logger.info("Dry run mode: %s", dry_run)
+
+    def _load_stack_outputs(self):
+        """Load CloudFormation stack outputs to discover resource names."""
+        stack_name = f"TapStack{self.environment_suffix}"
+        
+        try:
+            logger.info("Loading outputs from CloudFormation stack: %s", stack_name)
+            response = self.cfn_client.describe_stacks(StackName=stack_name)
+            
+            if not response['Stacks']:
+                logger.warning("Stack %s not found", stack_name)
+                return
+            
+            stack = response['Stacks'][0]
+            outputs = stack.get('Outputs', [])
+            
+            # Parse outputs into a dictionary
+            for output in outputs:
+                key = output['OutputKey']
+                value = output['OutputValue']
+                self.stack_outputs[key] = value
+                logger.info("Found output: %s = %s", key, value)
+            
+            logger.info("Loaded %d outputs from stack", len(self.stack_outputs))
+            
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ValidationError':
+                logger.warning("Stack %s does not exist, will use default resource naming", stack_name)
+            else:
+                logger.error("Error loading stack outputs: %s", str(e))
+        except Exception as e:
+            logger.error("Unexpected error loading stack outputs: %s", str(e))
 
     def analyze_and_optimize(self) -> OptimizationReport:
         """Main optimization workflow."""
@@ -128,6 +165,11 @@ class AWSOptimizer:
 
             # Apply optimizations if not dry run
             if not self.dry_run:
+                # Skip if no optimizations found
+                if len(self.optimizations) == 0:
+                    logger.info("No optimizations found to apply")
+                    return report
+
                 if self._confirm_optimizations(report):
                     self._apply_optimizations()
                     logger.info("Optimizations applied successfully")
@@ -148,7 +190,8 @@ class AWSOptimizer:
         """Analyze Aurora Serverless v2 cluster utilization."""
         logger.info("Analyzing Aurora Serverless v2 cluster...")
 
-        cluster_id = f"tap-aurora-{self.environment_suffix}"
+        # Try to get cluster ID from stack outputs, fall back to naming convention
+        cluster_id = self.stack_outputs.get('AuroraClusterIdentifier', f"tap-aurora-{self.environment_suffix}")
 
         try:
             # Get cluster details
@@ -205,7 +248,8 @@ class AWSOptimizer:
         """Analyze ElastiCache Redis cluster utilization."""
         logger.info("Analyzing ElastiCache Redis cluster...")
 
-        replication_group_id = f"tap-redis-{self.environment_suffix}"
+        # Try to get replication group ID from stack outputs, fall back to naming convention
+        replication_group_id = self.stack_outputs.get('RedisClusterIdentifier', f"tap-redis-{self.environment_suffix}")
 
         try:
             # Get replication group details
@@ -261,8 +305,9 @@ class AWSOptimizer:
         """Analyze ECS Fargate service utilization."""
         logger.info("Analyzing ECS Fargate service...")
 
-        cluster_name = f"tap-ecs-{self.environment_suffix}"
-        service_name = f"tap-service-{self.environment_suffix}"
+        # Try to get cluster and service names from stack outputs, fall back to naming convention
+        cluster_name = self.stack_outputs.get('ECSClusterName', f"tap-ecs-{self.environment_suffix}")
+        service_name = self.stack_outputs.get('ECSServiceName', f"tap-service-{self.environment_suffix}")
 
         try:
             # Get service details
@@ -324,7 +369,8 @@ class AWSOptimizer:
         """Analyze DynamoDB table utilization."""
         logger.info("Analyzing DynamoDB table...")
 
-        table_name = f"tap-table-{self.environment_suffix}"
+        # Try to get table name from stack outputs, fall back to naming convention
+        table_name = self.stack_outputs.get('DynamoDBTableName', f"tap-table-{self.environment_suffix}")
 
         try:
             # Get table details
@@ -383,11 +429,24 @@ class AWSOptimizer:
         """Analyze Lambda functions utilization."""
         logger.info("Analyzing Lambda functions...")
 
-        function_names = [
-            f"tap-processor-{self.environment_suffix}",
-            f"tap-analyzer-{self.environment_suffix}",
-            f"tap-reporter-{self.environment_suffix}"
-        ]
+        # Try to get function ARNs from stack outputs, fall back to naming convention
+        function_names = []
+        
+        # Check for Lambda function outputs in stack
+        for key in ['ProcessorLambdaArn', 'AnalyzerLambdaArn', 'ReporterLambdaArn']:
+            if key in self.stack_outputs:
+                # Extract function name from ARN
+                arn = self.stack_outputs[key]
+                function_name = arn.split(':')[-1]
+                function_names.append(function_name)
+        
+        # If no outputs found, use naming convention
+        if not function_names:
+            function_names = [
+                f"tap-processor-{self.environment_suffix}",
+                f"tap-analyzer-{self.environment_suffix}",
+                f"tap-reporter-{self.environment_suffix}"
+            ]
 
         for function_name in function_names:
             try:
@@ -447,21 +506,32 @@ class AWSOptimizer:
         """Analyze S3 buckets storage optimization."""
         logger.info("Analyzing S3 buckets...")
 
-        bucket_purposes = ["media", "logs", "backups"]
+        # Try to get bucket names from stack outputs, fall back to discovery
+        bucket_names = []
+        
+        # Check for S3 bucket outputs in stack
+        for key in ['MediaBucketName', 'LogsBucketName', 'BackupsBucketName']:
+            if key in self.stack_outputs:
+                bucket_names.append(self.stack_outputs[key])
+        
+        # If no outputs found, discover buckets by prefix
+        if not bucket_names:
+            bucket_purposes = ["media", "logs", "backups"]
+            
+            for purpose in bucket_purposes:
+                try:
+                    # List buckets with prefix
+                    response = self.s3_client.list_buckets()
+                    
+                    for bucket in response['Buckets']:
+                        if f"tap-{purpose}-{self.environment_suffix}" in bucket['Name']:
+                            bucket_names.append(bucket['Name'])
+                            break
+                except Exception as e:
+                    logger.error("Error discovering S3 bucket for %s: %s", purpose, str(e))
 
-        for purpose in bucket_purposes:
+        for bucket_name in bucket_names:
             try:
-                # List buckets with prefix
-                response = self.s3_client.list_buckets()
-                bucket_name = None
-
-                for bucket in response['Buckets']:
-                    if f"tap-{purpose}-{self.environment_suffix}" in bucket['Name']:
-                        bucket_name = bucket['Name']
-                        break
-
-                if not bucket_name:
-                    continue
 
                 # Get bucket lifecycle configuration
                 try:
@@ -518,7 +588,7 @@ class AWSOptimizer:
 
     def _get_aurora_metrics(self, cluster_id: str) -> Dict[str, float]:
         """Get Aurora cluster CloudWatch metrics."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         metrics = {}
@@ -568,7 +638,7 @@ class AWSOptimizer:
 
     def _get_redis_metrics(self, replication_group_id: str) -> Dict[str, float]:
         """Get ElastiCache Redis CloudWatch metrics."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         metrics = {}
@@ -637,7 +707,7 @@ class AWSOptimizer:
 
     def _get_ecs_metrics(self, cluster_name: str, service_name: str) -> Dict[str, float]:
         """Get ECS service CloudWatch metrics."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         metrics = {}
@@ -690,7 +760,7 @@ class AWSOptimizer:
 
     def _get_dynamodb_metrics(self, table_name: str) -> Dict[str, float]:
         """Get DynamoDB table CloudWatch metrics."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         metrics = {}
@@ -741,7 +811,7 @@ class AWSOptimizer:
 
     def _get_lambda_metrics(self, function_name: str) -> Dict[str, float]:
         """Get Lambda function CloudWatch metrics."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         metrics = {}
@@ -814,7 +884,7 @@ class AWSOptimizer:
 
     def _get_s3_metrics(self, bucket_name: str) -> Dict[str, float]:
         """Get S3 bucket CloudWatch metrics."""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=30)
 
         metrics = {}
@@ -1371,7 +1441,7 @@ class AWSOptimizer:
         }
 
         report = OptimizationReport(
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             status=OptimizationStatus.COMPLETED if not self.dry_run else OptimizationStatus.PENDING,
             dry_run=self.dry_run,
             analyzed_resources=[opt.resource_id for opt in self.optimizations],
@@ -1384,7 +1454,7 @@ class AWSOptimizer:
         )
 
         # Save report to file
-        report_filename = f"optimization_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.json"
+        report_filename = f"optimization_report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.json"
         with open(report_filename, 'w', encoding='utf-8') as f:
             json.dump(asdict(report), f, indent=2, default=str)
 
