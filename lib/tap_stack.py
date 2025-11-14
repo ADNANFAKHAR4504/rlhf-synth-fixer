@@ -91,7 +91,7 @@ class TapStack(TerraformStack):
             environment_suffix=environment_suffix,
             vpc_id=vpc.vpc_id,
             private_subnet_ids=vpc.private_subnet_ids,
-            cluster_version="1.28",
+            cluster_version="1.29",
             kms_key_arn=kms.cluster_key_arn,
             logs_kms_key_arn=kms.logs_key_arn
         )

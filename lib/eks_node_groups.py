@@ -11,7 +11,7 @@ class NodeGroupsConstruct(Construct):
         # Get Bottlerocket AMI
         # Error: Hardcoded AMI parameter path might not exist
         bottlerocket_ami = DataAwsSsmParameter(self, "bottlerocket-ami",
-            name="/aws/service/bottlerocket/aws-k8s-1.28/x86_64/latest/image_id"
+            name="/aws/service/bottlerocket/aws-k8s-1.29/x86_64/latest/image_id"
         )
 
         # Critical Node Group - On-Demand
