@@ -71,7 +71,10 @@ class TapStack(TerraformStack):
         environment_suffix = environment_suffix
 
         # Create a minimal Lambda function zip if it doesn't exist
-        lambda_zip_path = "lambda_function.zip"
+        # Use the Lambda function zip from lib folder (same directory as this file)
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        lambda_zip_path = os.path.join(script_dir, "lambda_function.zip")
+        
         if not os.path.exists(lambda_zip_path):
             lambda_code = '''import json
 
@@ -987,8 +990,8 @@ def handler(event, context):
             role=lambda_role.arn,
             handler="index.handler",
             runtime="python3.11",
-            filename="lambda_function.zip",
-            source_code_hash="${filebase64sha256(\"lambda_function.zip\")}",
+            filename="../../../lib/lambda_function.zip",
+            source_code_hash=Fn.filebase64sha256("../../../lib/lambda_function.zip"),
             timeout=30,
             memory_size=256,
             reserved_concurrent_executions=10,
