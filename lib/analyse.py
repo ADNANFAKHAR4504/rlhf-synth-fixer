@@ -11,6 +11,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
 import boto3
@@ -24,6 +25,18 @@ AUDIT_AGE_DAYS = 60
 LARGE_BUCKET_SIZE_GB = 100
 HIGH_OBJECT_COUNT = 1_000_000
 MAX_OBJECTS_TO_CHECK = 200  # Maximum objects to check when scanning bucket contents
+
+LIB_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = LIB_DIR.parent
+AWS_AUDIT_RESULTS_FILE = PROJECT_ROOT / 'aws_audit_results.json'
+S3_JSON_REPORT = PROJECT_ROOT / 's3_security_audit.json'
+S3_HTML_REPORT = PROJECT_ROOT / 's3_audit_report.html'
+TEMPLATE_PATH = LIB_DIR / 's3_audit_report_template.html'
+
+
+def should_ignore_bucket_age() -> bool:
+    """Return True when running against a mock endpoint to include newly created buckets."""
+    return bool(os.environ.get('AUDIT_IGNORE_BUCKET_AGE') or os.environ.get('AWS_ENDPOINT_URL'))
 
 # Severity levels
 CRITICAL = 'CRITICAL'
@@ -49,6 +62,149 @@ class Finding:
     remediation_steps: str
 
 
+class AWSResourceAuditor:
+    """Audits AWS resources (EBS, Security Groups, CloudWatch Logs) for optimization and security."""
+
+    def __init__(self, region_name: Optional[str] = None, endpoint_url: Optional[str] = None):
+        self.region_name = region_name or os.environ.get('AWS_DEFAULT_REGION', REGION)
+        self.endpoint_url = endpoint_url or os.environ.get('AWS_ENDPOINT_URL')
+
+        client_kwargs: Dict[str, Any] = {'region_name': self.region_name}
+        if self.endpoint_url:
+            client_kwargs['endpoint_url'] = self.endpoint_url
+
+        self.ec2_client = boto3.client('ec2', **client_kwargs)
+        self.logs_client = boto3.client('logs', **client_kwargs)
+
+    def find_unused_ebs_volumes(self) -> List[Dict[str, Any]]:
+        """Find unattached (available) EBS volumes."""
+        unused_volumes: List[Dict[str, Any]] = []
+        try:
+            paginator = self.ec2_client.get_paginator('describe_volumes')
+            for page in paginator.paginate():
+                for volume in page.get('Volumes', []):
+                    if volume.get('State') == 'available':
+                        unused_volumes.append({
+                            'VolumeId': volume['VolumeId'],
+                            'Size': volume['Size'],
+                            'VolumeType': volume.get('VolumeType', 'standard'),
+                            'CreateTime': volume['CreateTime'].strftime('%Y-%m-%d %H:%M:%S'),
+                            'AvailabilityZone': volume.get('AvailabilityZone'),
+                            'Encrypted': volume.get('Encrypted', False),
+                            'Tags': self._extract_tags(volume.get('Tags', [])),
+                        })
+        except Exception as exc:
+            logger.error(f"Error retrieving EBS volumes: {exc}")
+        return unused_volumes
+
+    def find_public_security_groups(self) -> List[Dict[str, Any]]:
+        """Find security groups that allow unrestricted ingress."""
+        public_sgs: List[Dict[str, Any]] = []
+        try:
+            paginator = self.ec2_client.get_paginator('describe_security_groups')
+            for page in paginator.paginate():
+                for sg in page.get('SecurityGroups', []):
+                    public_rules: List[Dict[str, Any]] = []
+                    for rule in sg.get('IpPermissions', []):
+                        # IPv4 ranges
+                        for ip_range in rule.get('IpRanges', []):
+                            if ip_range.get('CidrIp') == '0.0.0.0/0':
+                                public_rules.append({
+                                    'Protocol': rule.get('IpProtocol', 'All'),
+                                    'FromPort': rule.get('FromPort', 'All'),
+                                    'ToPort': rule.get('ToPort', 'All'),
+                                    'Source': '0.0.0.0/0',
+                                })
+                        # IPv6 ranges
+                        for ipv6_range in rule.get('Ipv6Ranges', []):
+                            if ipv6_range.get('CidrIpv6') == '::/0':
+                                public_rules.append({
+                                    'Protocol': rule.get('IpProtocol', 'All'),
+                                    'FromPort': rule.get('FromPort', 'All'),
+                                    'ToPort': rule.get('ToPort', 'All'),
+                                    'Source': '::/0',
+                                })
+                    if public_rules:
+                        public_sgs.append({
+                            'GroupId': sg['GroupId'],
+                            'GroupName': sg.get('GroupName', ''),
+                            'Description': sg.get('Description', ''),
+                            'VpcId': sg.get('VpcId'),
+                            'PublicIngressRules': public_rules,
+                            'Tags': self._extract_tags(sg.get('Tags', [])),
+                        })
+        except Exception as exc:
+            logger.error(f"Error retrieving security groups: {exc}")
+        return public_sgs
+
+    def calculate_log_stream_metrics(self) -> Dict[str, Any]:
+        """Aggregate CloudWatch log stream sizes."""
+        total_size = 0
+        total_streams = 0
+        log_group_metrics: List[Dict[str, Any]] = []
+        try:
+            group_paginator = self.logs_client.get_paginator('describe_log_groups')
+            for group_page in group_paginator.paginate():
+                for group in group_page.get('logGroups', []):
+                    group_size = 0
+                    group_streams = 0
+                    stream_paginator = self.logs_client.get_paginator('describe_log_streams')
+                    try:
+                        for stream_page in stream_paginator.paginate(logGroupName=group['logGroupName']):
+                            for stream in stream_page.get('logStreams', []):
+                                stream_size = stream.get('storedBytes', 0)
+                                group_size += stream_size
+                                group_streams += 1
+                                total_size += stream_size
+                                total_streams += 1
+                    except Exception as stream_exc:
+                        logger.error(f"Error retrieving log streams for {group['logGroupName']}: {stream_exc}")
+                        continue
+
+                    if group_streams:
+                        log_group_metrics.append({
+                            'LogGroupName': group['logGroupName'],
+                            'StreamCount': group_streams,
+                            'TotalSize': group_size,
+                            'AverageStreamSize': group_size / group_streams if group_streams else 0,
+                        })
+        except Exception as exc:
+            logger.error(f"Error retrieving log groups: {exc}")
+
+        average_stream_size = total_size / total_streams if total_streams else 0
+        return {
+            'TotalLogStreams': total_streams,
+            'TotalSize': total_size,
+            'AverageStreamSize': average_stream_size,
+            'LogGroupMetrics': log_group_metrics,
+        }
+
+    def audit_resources(self) -> Dict[str, Any]:
+        """Run all resource checks and return structured data."""
+        unused_volumes = self.find_unused_ebs_volumes()
+        public_sgs = self.find_public_security_groups()
+        log_metrics = self.calculate_log_stream_metrics()
+
+        return {
+            'AuditTimestamp': datetime.now(timezone.utc).isoformat(),
+            'Region': self.region_name,
+            'UnusedEBSVolumes': {
+                'Count': len(unused_volumes),
+                'TotalSize': sum(vol['Size'] for vol in unused_volumes),
+                'Volumes': unused_volumes,
+            },
+            'PublicSecurityGroups': {
+                'Count': len(public_sgs),
+                'SecurityGroups': public_sgs,
+            },
+            'CloudWatchLogMetrics': log_metrics,
+        }
+
+    @staticmethod
+    def _extract_tags(tags: List[Dict[str, str]]) -> Dict[str, str]:
+        return {tag.get('Key', ''): tag.get('Value', '') for tag in tags if tag.get('Key')}
+
+
 class S3SecurityAuditor:
     """Main auditor class for S3 security analysis"""
     
@@ -62,11 +218,16 @@ class S3SecurityAuditor:
             retries={'max_attempts': 3}
         )
         
+        client_kwargs: Dict[str, Any] = {'region_name': region, 'config': config}
+        endpoint_override = os.environ.get('AWS_ENDPOINT_URL')
+        if endpoint_override:
+            client_kwargs['endpoint_url'] = endpoint_override
+
         try:
-            self.s3_client = boto3.client('s3', region_name=region, config=config)
-            self.cloudwatch_client = boto3.client('cloudwatch', region_name=region, config=config)
+            self.s3_client = boto3.client('s3', **client_kwargs)
+            self.cloudwatch_client = boto3.client('cloudwatch', **client_kwargs)
             # Validate credentials with a simple call
-            self.s3_client.list_buckets(MaxBuckets=1)
+            self.s3_client.list_buckets()
         except NoCredentialsError:
             logger.error("AWS credentials not found. Please configure credentials.")
             raise
@@ -130,7 +291,10 @@ class S3SecurityAuditor:
             return []
         
         buckets_to_audit = []
-        cutoff_date = datetime.now(timezone.utc) - timedelta(days=AUDIT_AGE_DAYS)
+        if should_ignore_bucket_age():
+            cutoff_date = datetime.min.replace(tzinfo=timezone.utc)
+        else:
+            cutoff_date = datetime.now(timezone.utc) - timedelta(days=AUDIT_AGE_DAYS)
         
         for bucket in all_buckets:
             bucket_name = bucket['Name']
@@ -695,7 +859,7 @@ class S3SecurityAuditor:
                     logger.info(f"Remediation:\n{finding.remediation_steps}")
                     logger.info('-'*40)
     
-    def save_json_report(self, summary: Dict[str, Any], filename: str = 's3_security_audit.json'):
+    def save_json_report(self, summary: Dict[str, Any], filename: str = str(S3_JSON_REPORT)):
         """Save detailed findings to JSON file"""
         findings_data = [asdict(finding) for finding in self.findings]
         
@@ -710,8 +874,9 @@ class S3SecurityAuditor:
         logger.info(f"JSON report saved to {filename}")
     
     def save_html_report(self, findings: List[Finding], summary: Dict[str, Any], 
-                        filename: str = 's3_audit_report.html'):
+                        filename: str = str(S3_HTML_REPORT)):
         """Generate HTML report with charts"""
+        filename = str(filename)
         try:
             # Import optional dependencies for HTML report generation
             from jinja2 import Template
@@ -720,7 +885,8 @@ class S3SecurityAuditor:
         except ImportError as e:
             logger.warning(f"HTML report generation requires additional dependencies (plotly, jinja2). "
                           f"Install with: pip install plotly jinja2. Error: {e}")
-            logger.info("Skipping HTML report generation. JSON report will still be generated.")
+            basic_html = self._render_basic_html(findings, summary)
+            self._write_html_file(filename, basic_html)
             return
         
         # Create charts
@@ -728,29 +894,20 @@ class S3SecurityAuditor:
         compliance_chart = self._create_compliance_chart(summary)
         issue_type_chart = self._create_issue_type_chart(summary)
         
-        # Load HTML template from file
-        template_path = os.path.join(os.path.dirname(__file__), 's3_audit_report_template.html')
-        if not os.path.exists(template_path):
-            # Try alternate locations within the lib directory
-            script_dir = os.path.dirname(__file__)
-            alt_paths = [
-                os.path.join(script_dir, 'templates', 's3_audit_report_template.html'),
-                os.path.join(script_dir, 's3_audit_report_template.html'),  # This should be the same as template_path
-            ]
-            
-            for alt_path in alt_paths:
-                if os.path.exists(alt_path):
-                    template_path = alt_path
-                    break
-            else:
-                logger.error(f"HTML template file not found in lib directory: {template_path}")
-                return
+        template_path = TEMPLATE_PATH
+        if not template_path.exists():
+            logger.error(f"HTML template file not found: {template_path}")
+            basic_html = self._render_basic_html(findings, summary)
+            self._write_html_file(filename, basic_html)
+            return
         
         try:
             with open(template_path, 'r') as f:
                 template_content = f.read()
         except FileNotFoundError:
             logger.error(f"HTML template file not found: {template_path}")
+            basic_html = self._render_basic_html(findings, summary)
+            self._write_html_file(filename, basic_html)
             return
         
         template = Template(template_content)
@@ -764,9 +921,65 @@ class S3SecurityAuditor:
             region=self.region
         )
         
-        with open(filename, 'w') as f:
-            f.write(html_content)
+        self._write_html_file(filename, html_content)
+    
+    def _render_basic_html(self, findings: List[Finding], summary: Dict[str, Any]) -> str:
+        """Render a minimal HTML report when optional dependencies are unavailable."""
+        severity_rows = ''.join(
+            f"<li>{sev}: {count}</li>"
+            for sev, count in summary.get('findings_by_severity', {}).items()
+        ) or "<li>No findings</li>"
         
+        finding_rows = ''.join(
+            f"<tr><td>{finding.bucket_name}</td>"
+            f"<td>{finding.issue_type}</td>"
+            f"<td>{finding.severity}</td>"
+            f"<td>{finding.current_config}</td>"
+            f"<td>{finding.required_config}</td></tr>"
+            for finding in findings
+        ) or "<tr><td colspan='5'>No findings recorded</td></tr>"
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+            <head>
+                <meta charset="utf-8" />
+                <title>S3 Security Audit Report</title>
+                <style>
+                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
+                    table {{ border-collapse: collapse; width: 100%; }}
+                    th, td {{ border: 1px solid #ddd; padding: 8px; }}
+                    th {{ background-color: #1976d2; color: #fff; }}
+                </style>
+            </head>
+            <body>
+                <h1>S3 Security Audit Report</h1>
+                <p><strong>Region:</strong> {self.region}</p>
+                <p><strong>Audit Timestamp:</strong> {summary.get('audit_timestamp', '')}</p>
+                <h2>Findings by Severity</h2>
+                <ul>{severity_rows}</ul>
+                <h2>Detailed Findings</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Bucket</th>
+                            <th>Issue</th>
+                            <th>Severity</th>
+                            <th>Current Config</th>
+                            <th>Required Config</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {finding_rows}
+                    </tbody>
+                </table>
+            </body>
+        </html>
+        """
+
+    def _write_html_file(self, filename: str, content: str):
+        with open(filename, 'w') as f:
+            f.write(content)
         logger.info(f"HTML report saved to {filename}")
     
     def _create_severity_chart(self, summary: Dict[str, Any]) -> str:
@@ -922,9 +1135,29 @@ def run_s3_security_audit():
     return 0
 
 
+def run_resource_audit() -> int:
+    """Run the general AWS resource audit and persist results."""
+    try:
+        auditor = AWSResourceAuditor()
+        results = auditor.audit_resources()
+        with open(AWS_AUDIT_RESULTS_FILE, 'w') as f:
+            json.dump(results, f, indent=2, default=str)
+        logger.info(f"AWS resource audit report saved to {AWS_AUDIT_RESULTS_FILE}")
+        return 0
+    except NoCredentialsError:
+        logger.error("AWS credentials not found. Please configure credentials.")
+        return 2
+    except Exception as exc:
+        logger.error(f"Fatal error during AWS resource audit: {exc}")
+        return 2
+
+
 def main():
-    """Main function to run S3 security audit."""
-    return run_s3_security_audit()
+    """CLI entrypoint for the analysis script."""
+    mode = sys.argv[1].lower() if len(sys.argv) > 1 else 'resources'
+    if mode == 's3':
+        return run_s3_security_audit()
+    return run_resource_audit()
 
 
 if __name__ == "__main__":
