@@ -561,6 +561,14 @@ class TapStack(pulumi.ComponentResource):
         )
 
         # CloudWatch Alarm - Replication Lag
+        # Note: This alarm monitors the replica DB in DR region, so it must use dr_provider
+        # The alarm must be created in the same region as the metric (us-west-2)
+        # Use a fresh ResourceOptions to avoid any provider inheritance issues
+        replication_alarm_opts = ResourceOptions(
+            provider=self.dr_provider,
+            parent=self,
+            depends_on=[self.replica_db]  # Ensure replica DB exists before creating alarm
+        )
         self.replication_lag_alarm = aws.cloudwatch.MetricAlarm(
             f"replication-lag-alarm-{self.environment_suffix}",
             name=f"trading-db-replication-lag-{self.environment_suffix}",
@@ -582,7 +590,7 @@ class TapStack(pulumi.ComponentResource):
                 "Environment": self.environment_suffix,
                 "Severity": "critical"
             },
-            opts=ResourceOptions(provider=self.dr_provider, parent=self)
+            opts=replication_alarm_opts
         )
 
         # CloudWatch Alarm - Primary DB Storage Space
