@@ -1,0 +1,26 @@
+{
+  "platform": "Pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "4xq66w",
+  "team": "synth",
+  "startedAt": "2025-11-14T20:45:41+05:30",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": [
+    "Failure Recovery and High Availability"
+  ],
+  "aws_services": [
+    "Aurora PostgreSQL",
+    "Lambda",
+    "API Gateway",
+    "Route 53",
+    "S3",
+    "DynamoDB",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "VPC"
+  ],
+  "training_quality": 9
+}
