@@ -169,7 +169,6 @@ cluster-certificate = "{cert_data}"
         f"eks-node-launch-template-{environment_suffix}",
         name=f"eks-node-lt-{environment_suffix}",
         image_id=bottlerocket_ami.id,
-        instance_type="t3.large",
         user_data=user_data,
         tag_specifications=[
             aws.ec2.LaunchTemplateTagSpecificationArgs(
