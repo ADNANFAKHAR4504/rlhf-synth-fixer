@@ -119,9 +119,20 @@ if [ "$PLATFORM" = "cdk" ]; then
           if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
             echo "{}" > cfn-outputs/flat-outputs.json
           fi
+          # Create both full keys and cleaned keys (for test compatibility)
           jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${stack}-outputs.json" | while IFS='=' read -r key value; do
+            # Add the full key as-is
             jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
             mv temp-flat.json cfn-outputs/flat-outputs.json
+            
+            # Also add a cleaned key (remove construct path prefix and CDK hash suffix)
+            # Pattern: PaymentInfraLoadBalancerDNS52A85495 -> LoadBalancerDNS
+            # Strip common prefixes and hash suffixes for test-friendly keys
+            clean_key=$(echo "$key" | sed -E 's/^[A-Za-z]+Infra//; s/^[A-Z][a-z]+Stack//; s/[A-F0-9]{8,}$//')
+            if [ "$clean_key" != "$key" ] && [ -n "$clean_key" ]; then
+              jq --arg key "$clean_key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+              mv temp-flat.json cfn-outputs/flat-outputs.json
+            fi
           done
         fi
         rm -f "temp-${stack}-outputs.json"
@@ -197,9 +208,18 @@ elif [ "$PLATFORM" = "cfn" ]; then
       if [ ! -f "cfn-outputs/flat-outputs.json" ]; then
         echo "{}" > cfn-outputs/flat-outputs.json
       fi
+      # Create both full keys and cleaned keys (for test compatibility)
       jq -r '.[] | "\(.OutputKey)=\(.OutputValue)"' "temp-${STACK_NAME}-outputs.json" | while IFS='=' read -r key value; do
+        # Add the full key as-is
         jq --arg key "$key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
         mv temp-flat.json cfn-outputs/flat-outputs.json
+        
+        # Also add a cleaned key (remove construct path prefix and CDK hash suffix)
+        clean_key=$(echo "$key" | sed -E 's/^[A-Za-z]+Infra//; s/^[A-Z][a-z]+Stack//; s/[A-F0-9]{8,}$//')
+        if [ "$clean_key" != "$key" ] && [ -n "$clean_key" ]; then
+          jq --arg key "$clean_key" --arg value "$value" '. + {($key): $value}' cfn-outputs/flat-outputs.json > temp-flat.json
+          mv temp-flat.json cfn-outputs/flat-outputs.json
+        fi
       done
     else
       echo "{}" > cfn-outputs/flat-outputs.json

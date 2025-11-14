@@ -1,63 +1,60 @@
-import fs from 'fs';
 import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeSubnetsCommand,
-  DescribeNatGatewaysCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBClustersCommand,
-  DescribeDBInstancesCommand,
-} from '@aws-sdk/client-rds';
-import {
-  ECSClient,
-  DescribeClustersCommand,
-  DescribeServicesCommand,
-  DescribeTaskDefinitionCommand,
-} from '@aws-sdk/client-ecs';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
-import {
-  S3Client,
-  HeadBucketCommand,
-  GetBucketEncryptionCommand,
-  GetPublicAccessBlockCommand,
-} from '@aws-sdk/client-s3';
+  ApplicationAutoScalingClient,
+  DescribeScalableTargetsCommand,
+  DescribeScalingPoliciesCommand,
+} from '@aws-sdk/client-application-auto-scaling';
 import {
   CloudFrontClient,
   GetDistributionCommand,
 } from '@aws-sdk/client-cloudfront';
-import {
-  SecretsManagerClient,
-  DescribeSecretCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  SNSClient,
-  GetTopicAttributesCommand,
-} from '@aws-sdk/client-sns';
 import {
   CloudWatchClient,
   DescribeAlarmsCommand,
   GetDashboardCommand,
 } from '@aws-sdk/client-cloudwatch';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  GetKeyRotationStatusCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeClustersCommand,
+  DescribeServicesCommand,
+  DescribeTaskDefinitionCommand,
+  ECSClient,
+} from '@aws-sdk/client-ecs';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetGroupsCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  KMSClient
 } from '@aws-sdk/client-kms';
 import {
-  ApplicationAutoScalingClient,
-  DescribeScalableTargetsCommand,
-  DescribeScalingPoliciesCommand,
-} from '@aws-sdk/client-application-auto-scaling';
+  DescribeDBClustersCommand,
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketEncryptionCommand,
+  GetPublicAccessBlockCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from '@aws-sdk/client-secrets-manager';
+import {
+  SNSClient
+} from '@aws-sdk/client-sns';
+import fs from 'fs';
 
 // Configuration - Load deployment outputs
 const outputs = JSON.parse(
@@ -66,7 +63,7 @@ const outputs = JSON.parse(
 
 // Get environment suffix from environment variable (set by CI/CD pipeline)
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-const region = process.env.AWS_REGION || 'ap-southeast-1';
+const region = process.env.AWS_REGION || 'eu-south-2';
 
 // Initialize AWS clients
 const ec2Client = new EC2Client({ region });
