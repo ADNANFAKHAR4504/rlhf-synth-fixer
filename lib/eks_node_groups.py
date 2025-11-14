@@ -34,7 +34,7 @@ class NodeGroupsConstruct(Construct):
             taint=[{
                 "key": "workload",
                 "value": "critical",
-                "effect": "NoSchedule"
+                "effect": "NO_SCHEDULE"
             }],
             tags={
                 "Name": f"eks-critical-ng-{environment_suffix}",
@@ -85,7 +85,7 @@ class NodeGroupsConstruct(Construct):
             taint=[{
                 "key": "workload",
                 "value": "batch",
-                "effect": "NoSchedule"
+                "effect": "NO_SCHEDULE"
             }],
             tags={
                 "Name": f"eks-batch-ng-{environment_suffix}",
