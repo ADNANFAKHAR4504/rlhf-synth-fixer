@@ -1,4 +1,0 @@
-config:
-  aws:region: us-west-2
-  pulumi-infra:environmentSuffix: dev
-encryptionsalt: v1:MALYm4f8kv8=:v1:P2egOcAwBn2+jgkg:L1CmtAiFEeNu1E7X8KKIqt1Q+K7cFQ==
