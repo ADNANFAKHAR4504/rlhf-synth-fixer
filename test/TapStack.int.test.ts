@@ -14,7 +14,7 @@ describe('Trading Platform DR CloudFormation Integration Tests', () => {
 
   beforeAll(() => {
     // Load the CloudFormation template
-    const templatePath = path.join(__dirname, '..', 'lib', 'trading-platform-dr-primary.json');
+    const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
     templateString = fs.readFileSync(templatePath, 'utf-8');
     template = JSON.parse(templateString);
 
