@@ -91,7 +91,7 @@ Resources:
   # ==========================================
   # S3 BUCKETS WITH ENCRYPTION AND VERSIONING
   # ==========================================
-  
+
   # S3 Bucket for CloudTrail Logs
   CloudTrailBucket:
     Type: AWS::S3::Bucket
@@ -898,42 +898,42 @@ Resources:
           import boto3
           import os
           from datetime import datetime, timedelta
-          
+
           def handler(event, context):
               iam = boto3.client('iam')
               sns = boto3.client('sns')
-              
+
               max_age = int(os.environ['MAX_KEY_AGE_DAYS'])
               topic_arn = os.environ['SNS_TOPIC_ARN']
-              
+
               users = iam.list_users()
               old_keys = []
-              
+
               for user in users['Users']:
                   username = user['UserName']
                   keys = iam.list_access_keys(UserName=username)
-                  
+
                   for key in keys['AccessKeyMetadata']:
                       key_age = datetime.now(key['CreateDate'].tzinfo) - key['CreateDate']
-                      
+
                       if key_age.days > max_age:
                           old_keys.append({
                               'Username': username,
                               'KeyId': key['AccessKeyId'],
                               'Age': key_age.days
                           })
-              
+
               if old_keys:
                   message = f"Access keys older than {max_age} days found:\n"
                   for key in old_keys:
                       message += f"\nUser: {key['Username']}, Key: {key['KeyId']}, Age: {key['Age']} days"
-                  
+
                   sns.publish(
                       TopicArn=topic_arn,
                       Subject='AWS Access Key Rotation Required',
                       Message=message
                   )
-              
+
               return {
                   'statusCode': 200,
                   'body': f'Checked {len(users["Users"])} users, found {len(old_keys)} old keys'
@@ -1220,12 +1220,19 @@ Resources:
   # AWS Shield Advanced requires manual subscription and cannot be enabled via CloudFormation.
 
 Outputs:
+  # S3 Buckets
   CloudTrailBucketName:
     Condition: ShouldCreateCloudTrail
     Description: S3 Bucket for CloudTrail logs
     Value: !Ref CloudTrailBucket
     Export:
       Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+
+  AccessLogsBucketName:
+    Description: S3 Bucket for Access logs
+    Value: !Ref AccessLogsBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-AccessLogsBucket'
 
   ConfigBucketName:
     Condition: ShouldCreateAWSConfig
@@ -1234,25 +1241,33 @@ Outputs:
     Export:
       Name: !Sub '${AWS::StackName}-ConfigBucket'
 
-  VPCId:
-    Description: VPC ID
-    Value: !Ref SecureVPC
+  ALBLogsBucketName:
+    Condition: ShouldCreateALB
+    Description: S3 Bucket for ALB logs
+    Value: !Ref ALBLogsBucket
     Export:
-      Name: !Sub '${AWS::StackName}-VPCId'
+      Name: !Sub '${AWS::StackName}-ALBLogsBucket'
 
-  GuardDutyDetectorId:
-    Condition: ShouldCreateGuardDuty
-    Description: GuardDuty Detector ID
-    Value: !Ref GuardDutyDetector
+  # Lambda Functions
+  EmptyS3BucketLambdaArn:
+    Description: ARN of Empty S3 Bucket Lambda
+    Value: !GetAtt EmptyS3BucketLambda.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
+      Name: !Sub '${AWS::StackName}-EmptyS3BucketLambda'
 
-  SecurityAlertTopicArn:
-    Description: SNS Topic ARN for security alerts
-    Value: !Ref SecurityAlertTopic
+  KeyRotationLambdaArn:
+    Description: ARN of Key Rotation Lambda
+    Value: !GetAtt KeyRotationLambda.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-SecurityAlertTopic'
+      Name: !Sub '${AWS::StackName}-KeyRotationLambda'
 
+  SecureLambdaFunctionArn:
+    Description: ARN of Secure Lambda Function
+    Value: !GetAtt SecureLambdaFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SecureLambdaFunction'
+
+  # IAM Resources
   EC2ApplicationRoleArn:
     Description: IAM Role ARN for EC2 applications
     Value: !GetAtt EC2ApplicationRole.Arn
@@ -1264,3 +1279,169 @@ Outputs:
     Value: !Ref MFAEnforcementPolicy
     Export:
       Name: !Sub '${AWS::StackName}-MFAEnforcementPolicy'
+
+  EC2IPRestrictedPolicyArn:
+    Description: IAM Policy ARN for IP-restricted EC2 access
+    Value: !Ref EC2IPRestrictedPolicy
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2IPRestrictedPolicy'
+
+  # VPC and Networking
+  VPCId:
+    Description: VPC ID
+    Value: !Ref SecureVPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  VPCCidrBlock:
+    Description: VPC CIDR Block
+    Value: !GetAtt SecureVPC.CidrBlock
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCCidrBlock'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-InternetGateway'
+
+  RestrictedSecurityGroupId:
+    Description: Restricted Security Group ID
+    Value: !Ref RestrictedSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-RestrictedSecurityGroup'
+
+  # CloudWatch
+  VPCFlowLogGroupName:
+    Description: VPC Flow Log Group Name
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCFlowLogGroup'
+
+  UnauthorizedAPICallsAlarmName:
+    Description: Unauthorized API Calls Alarm Name
+    Value: !Ref UnauthorizedAPICallsAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-UnauthorizedAPICallsAlarm'
+
+  RootAccountUsageAlarmName:
+    Description: Root Account Usage Alarm Name
+    Value: !Ref RootAccountUsageAlarm
+    Export:
+      Name: !Sub '${AWS::StackName}-RootAccountUsageAlarm'
+
+  # CloudTrail
+  CloudTrailName:
+    Condition: ShouldCreateCloudTrail
+    Description: CloudTrail Name
+    Value: !Ref CloudTrail
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail'
+
+  # AWS Config
+  ConfigRecorderName:
+    Condition: ShouldCreateAWSConfig
+    Description: Config Recorder Name
+    Value: !Ref ConfigRecorder
+    Export:
+      Name: !Sub '${AWS::StackName}-ConfigRecorder'
+
+  # GuardDuty
+  GuardDutyDetectorId:
+    Condition: ShouldCreateGuardDuty
+    Description: GuardDuty Detector ID
+    Value: !Ref GuardDutyDetector
+    Export:
+      Name: !Sub '${AWS::StackName}-GuardDutyDetectorId'
+
+  # SNS
+  SecurityAlertTopicArn:
+    Description: SNS Topic ARN for security alerts
+    Value: !Ref SecurityAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-SecurityAlertTopic'
+
+  # RDS
+  RDSInstanceId:
+    Description: RDS Instance Identifier
+    Value: !Ref SecureRDSInstance
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSInstanceId'
+
+  RDSInstanceEndpoint:
+    Description: RDS Instance Endpoint
+    Value: !GetAtt SecureRDSInstance.Endpoint.Address
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSInstanceEndpoint'
+
+  RDSSecretArn:
+    Description: RDS Password Secret ARN
+    Value: !Ref RDSPasswordSecret
+    Export:
+      Name: !Sub '${AWS::StackName}-RDSSecretArn'
+
+  # EBS
+  EncryptedEBSVolumeId:
+    Description: Encrypted EBS Volume ID
+    Value: !Ref EncryptedEBSVolume
+    Export:
+      Name: !Sub '${AWS::StackName}-EncryptedEBSVolume'
+
+  # ALB
+  ApplicationLoadBalancerArn:
+    Condition: ShouldCreateALB
+    Description: Application Load Balancer ARN
+    Value: !Ref ApplicationLoadBalancer
+    Export:
+      Name: !Sub '${AWS::StackName}-ALB'
+
+  ApplicationLoadBalancerDNS:
+    Condition: ShouldCreateALB
+    Description: Application Load Balancer DNS Name
+    Value: !GetAtt ApplicationLoadBalancer.DNSName
+    Export:
+      Name: !Sub '${AWS::StackName}-ALBDNS'
+
+  # KMS
+  LambdaKMSKeyId:
+    Description: KMS Key ID for Lambda
+    Value: !Ref LambdaKMSKey
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaKMSKey'
+
+  LambdaKMSKeyArn:
+    Description: KMS Key ARN for Lambda
+    Value: !GetAtt LambdaKMSKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaKMSKeyArn'
+
+  # EventBridge
+  KeyRotationScheduleName:
+    Description: Key Rotation Schedule Name
+    Value: !Ref KeyRotationSchedule
+    Export:
+      Name: !Sub '${AWS::StackName}-KeyRotationSchedule'
