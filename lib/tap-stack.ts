@@ -93,34 +93,49 @@ export class TapStack extends pulumi.ComponentResource {
     // Create DynamoDB Global Table
     this.dynamodbTable = this.createDynamoDBGlobalTable();
 
-    // Create ECS infrastructure
-    const primaryEcs = this.createEcsInfrastructure(
+    // Create ECS target groups and task definitions first (without services)
+    const primaryEcsInfra = this.createEcsInfrastructure(
       'primary',
       this.primaryVpc,
       primaryNetworking.publicSubnets,
       primaryNetworking.securityGroup
     );
 
-    const drEcs = this.createEcsInfrastructure(
+    const drEcsInfra = this.createEcsInfrastructure(
       'dr',
       this.drVpc,
       drNetworking.publicSubnets,
       drNetworking.securityGroup
     );
 
-    // Create ALBs
-    this.primaryAlb = this.createAlb(
+    // Create ALBs with listeners
+    const primaryAlbResult = this.createAlb(
       'primary',
       primaryNetworking.publicSubnets,
       primaryNetworking.albSecurityGroup,
-      primaryEcs.targetGroup
+      primaryEcsInfra.targetGroup
     );
+    this.primaryAlb = primaryAlbResult.alb;
 
-    this.drAlb = this.createAlb(
+    const drAlbResult = this.createAlb(
       'dr',
       drNetworking.publicSubnets,
       drNetworking.albSecurityGroup,
-      drEcs.targetGroup
+      drEcsInfra.targetGroup
+    );
+    this.drAlb = drAlbResult.alb;
+
+    // Now create ECS services with proper dependencies on ALB listeners
+    const primaryEcs = this.createEcsService(
+      'primary',
+      primaryEcsInfra,
+      primaryAlbResult.listener
+    );
+
+    const drEcs = this.createEcsService(
+      'dr',
+      drEcsInfra,
+      drAlbResult.listener
     );
 
     // Create Route 53 and health checks
@@ -482,7 +497,11 @@ export class TapStack extends pulumi.ComponentResource {
           Region: region,
         },
       },
-      { provider, parent: this }
+      {
+        provider,
+        parent: this,
+        replaceOnChanges: ['subnetIds']
+      }
     );
 
     return {
@@ -503,22 +522,39 @@ export class TapStack extends pulumi.ComponentResource {
       `artifacts-${region}-${this.props.environmentSuffix}`,
       {
         bucket: `trading-artifacts-${region}-${this.props.environmentSuffix}`,
-        versioning: {
-          enabled: true,
-        },
-        serverSideEncryptionConfiguration: {
-          rule: {
-            applyServerSideEncryptionByDefault: {
-              sseAlgorithm: 'aws:kms',
-              kmsMasterKeyId: kmsKey.id,
-            },
-          },
-        },
         tags: {
           ...this.props.tags,
           Name: `artifacts-${region}-${this.props.environmentSuffix}`,
           Region: region,
         },
+      },
+      { provider, parent: this }
+    );
+
+    // Use separate resources for versioning and encryption (non-deprecated approach)
+    new aws.s3.BucketVersioningV2(
+      `artifacts-versioning-${region}-${this.props.environmentSuffix}`,
+      {
+        bucket: bucket.id,
+        versioningConfiguration: {
+          status: 'Enabled',
+        },
+      },
+      { provider, parent: this }
+    );
+
+    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+      `artifacts-encryption-${region}-${this.props.environmentSuffix}`,
+      {
+        bucket: bucket.id,
+        rules: [
+          {
+            applyServerSideEncryptionByDefault: {
+              sseAlgorithm: 'aws:kms',
+              kmsMasterKeyId: kmsKey.id,
+            },
+          },
+        ],
       },
       { provider, parent: this }
     );
@@ -982,22 +1018,48 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
+    return {
+      region,
+      provider,
+      cluster,
+      taskDefinition,
+      targetGroup,
+      logGroup,
+      subnets,
+      securityGroup,
+    };
+  }
+
+  private createEcsService(
+    region: string,
+    ecsInfra: {
+      region: string;
+      provider: aws.Provider;
+      cluster: aws.ecs.Cluster;
+      taskDefinition: aws.ecs.TaskDefinition;
+      targetGroup: aws.lb.TargetGroup;
+      logGroup: aws.cloudwatch.LogGroup;
+      subnets: aws.ec2.Subnet[];
+      securityGroup: aws.ec2.SecurityGroup;
+    },
+    listener: aws.lb.Listener
+  ) {
     const service = new aws.ecs.Service(
       `ecs-service-${region}-${this.props.environmentSuffix}`,
       {
         name: `trading-service-${region}-${this.props.environmentSuffix}`,
-        cluster: cluster.arn,
-        taskDefinition: taskDefinition.arn,
+        cluster: ecsInfra.cluster.arn,
+        taskDefinition: ecsInfra.taskDefinition.arn,
         desiredCount: region === 'primary' ? 2 : 0,
         launchType: 'FARGATE',
         networkConfiguration: {
-          subnets: subnets.map(s => s.id),
-          securityGroups: [securityGroup.id],
+          subnets: ecsInfra.subnets.map(s => s.id),
+          securityGroups: [ecsInfra.securityGroup.id],
           assignPublicIp: true,
         },
         loadBalancers: [
           {
-            targetGroupArn: targetGroup.arn,
+            targetGroupArn: ecsInfra.targetGroup.arn,
             containerName: 'trading-app',
             containerPort: 80,
           },
@@ -1007,15 +1069,19 @@ export class TapStack extends pulumi.ComponentResource {
           Region: region,
         },
       },
-      { provider, parent: this }
+      {
+        provider: ecsInfra.provider,
+        parent: this,
+        dependsOn: [listener]
+      }
     );
 
     return {
-      cluster,
-      taskDefinition,
+      cluster: ecsInfra.cluster,
+      taskDefinition: ecsInfra.taskDefinition,
       service,
-      targetGroup,
-      logGroup,
+      targetGroup: ecsInfra.targetGroup,
+      logGroup: ecsInfra.logGroup,
     };
   }
 
@@ -1024,7 +1090,7 @@ export class TapStack extends pulumi.ComponentResource {
     subnets: aws.ec2.Subnet[],
     securityGroup: aws.ec2.SecurityGroup,
     targetGroup: aws.lb.TargetGroup
-  ): aws.lb.LoadBalancer {
+  ): { alb: aws.lb.LoadBalancer; listener: aws.lb.Listener } {
     const provider =
       region === 'primary' ? this.primaryProvider : this.drProvider;
 
@@ -1046,7 +1112,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    new aws.lb.Listener(
+    const listener = new aws.lb.Listener(
       `alb-listener-${region}-${this.props.environmentSuffix}`,
       {
         loadBalancerArn: alb.arn,
@@ -1062,7 +1128,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    return alb;
+    return { alb, listener };
   }
 
   private createHostedZone(): aws.route53.Zone {
