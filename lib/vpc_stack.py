@@ -19,13 +19,15 @@ class VpcConstruct(Construct):
         self.region = region
         self.environment_suffix = environment_suffix
 
-        # VPC
-        self.vpc = Vpc(self, f"vpc-{environment_suffix}",
+        # VPC - Use consistent naming to avoid recreations
+        vpc_name = f"vpc-{environment_suffix}"
+        self.vpc = Vpc(self, vpc_name,
             cidr_block=cidr_block,
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"eks-vpc-{environment_suffix}"
+                "Name": f"eks-vpc-{environment_suffix}",
+                "Environment": environment_suffix
             }
         )
 
