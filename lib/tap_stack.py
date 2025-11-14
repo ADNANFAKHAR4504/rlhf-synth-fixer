@@ -682,7 +682,7 @@ def handler(event, context):
             "rds-postgresql",
             identifier=f"payment-db-{environment_suffix}",
             engine="postgres",
-            engine_version="14.7",
+            engine_version="17.4",
             instance_class="db.t3.micro",
             allocated_storage=20,
             storage_encrypted=True,
@@ -772,7 +772,7 @@ def handler(event, context):
             provider=provider_us_east_1
         )
 
-        S3BucketVersioningA(
+        s3_versioning_us = S3BucketVersioningA(
             self,
             "s3-versioning-us",
             bucket=s3_bucket_us.id,
@@ -809,7 +809,7 @@ def handler(event, context):
             provider=provider_eu_west_1
         )
 
-        S3BucketVersioningA(
+        s3_versioning_eu = S3BucketVersioningA(
             self,
             "s3-versioning-eu",
             bucket=s3_bucket_eu.id,
@@ -911,6 +911,7 @@ def handler(event, context):
                     )
                 )
             ],
+            depends_on=[s3_versioning_us, s3_versioning_eu],
             provider=provider_us_east_1
         )
 
