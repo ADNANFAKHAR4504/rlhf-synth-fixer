@@ -1,6 +1,6 @@
 """DynamoDB table for payment transactions."""
-from constructs import Construct
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
+from constructs import Construct
 
 
 class DynamoDbConstruct(Construct):
@@ -11,7 +11,7 @@ class DynamoDbConstruct(Construct):
 
         self.table = DynamodbTable(
             self, "payment-transactions",
-            name=f"payment-transactions-{environment_suffix}",
+            name=f"payment-transactions-{environment_suffix}-lm",
             billing_mode="PAY_PER_REQUEST",
             hash_key="transaction_id",
             attribute=[
@@ -33,7 +33,7 @@ class DynamoDbConstruct(Construct):
                 "kms_key_arn": kms_key_id
             },
             tags={
-                "Name": f"payment-transactions-{environment_suffix}",
+                "Name": f"payment-transactions-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"

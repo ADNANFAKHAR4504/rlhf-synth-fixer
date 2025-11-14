@@ -12,10 +12,10 @@ class SqsConstruct(Construct):
         # Dead letter queues
         validator_dlq = SqsQueue(
             self, "validator-dlq",
-            name=f"payment-validator-dlq-{environment_suffix}",
+            name=f"payment-validator-dlq-{environment_suffix}-lm",
             kms_master_key_id=kms_key_id,
             tags={
-                "Name": f"payment-validator-dlq-{environment_suffix}",
+                "Name": f"payment-validator-dlq-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -24,10 +24,10 @@ class SqsConstruct(Construct):
 
         processor_dlq = SqsQueue(
             self, "processor-dlq",
-            name=f"payment-processor-dlq-{environment_suffix}",
+            name=f"payment-processor-dlq-{environment_suffix}-lm",
             kms_master_key_id=kms_key_id,
             tags={
-                "Name": f"payment-processor-dlq-{environment_suffix}",
+                "Name": f"payment-processor-dlq-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -37,12 +37,12 @@ class SqsConstruct(Construct):
         # Main queues (visibility timeout = 6 * 30 seconds = 180 seconds)
         self.validator_to_processor_queue = SqsQueue(
             self, "validator-to-processor",
-            name=f"payment-validator-to-processor-{environment_suffix}",
+            name=f"payment-validator-to-processor-{environment_suffix}-lm",
             visibility_timeout_seconds=180,
             kms_master_key_id=kms_key_id,
             redrive_policy='{"deadLetterTargetArn":"' + validator_dlq.arn + '","maxReceiveCount":3}',
             tags={
-                "Name": f"payment-validator-to-processor-{environment_suffix}",
+                "Name": f"payment-validator-to-processor-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -51,12 +51,12 @@ class SqsConstruct(Construct):
 
         self.processor_to_notifier_queue = SqsQueue(
             self, "processor-to-notifier",
-            name=f"payment-processor-to-notifier-{environment_suffix}",
+            name=f"payment-processor-to-notifier-{environment_suffix}-lm",
             visibility_timeout_seconds=180,
             kms_master_key_id=kms_key_id,
             redrive_policy='{"deadLetterTargetArn":"' + processor_dlq.arn + '","maxReceiveCount":3}',
             tags={
-                "Name": f"payment-processor-to-notifier-{environment_suffix}",
+                "Name": f"payment-processor-to-notifier-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"

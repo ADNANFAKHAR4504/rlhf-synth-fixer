@@ -27,7 +27,7 @@ class VpcConstruct(Construct):
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"payment-vpc-{environment_suffix}",
+                "Name": f"payment-vpc-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -39,7 +39,7 @@ class VpcConstruct(Construct):
             self, "igw",
             vpc_id=self.vpc.id,
             tags={
-                "Name": f"payment-igw-{environment_suffix}",
+                "Name": f"payment-igw-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )
@@ -57,7 +57,7 @@ class VpcConstruct(Construct):
                 availability_zone=az,
                 map_public_ip_on_launch=True,
                 tags={
-                    "Name": f"payment-public-{az}-{environment_suffix}",
+                    "Name": f"payment-public-{az}-{environment_suffix}-lm",
                     "Environment": environment_suffix
                 }
             )
@@ -68,7 +68,7 @@ class VpcConstruct(Construct):
             self, "public-rt",
             vpc_id=self.vpc.id,
             tags={
-                "Name": f"payment-public-rt-{environment_suffix}",
+                "Name": f"payment-public-rt-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )
@@ -94,7 +94,7 @@ class VpcConstruct(Construct):
                 cidr_block=f"10.0.{i+10}.0/24",
                 availability_zone=az,
                 tags={
-                    "Name": f"payment-private-{az}-{environment_suffix}",
+                    "Name": f"payment-private-{az}-{environment_suffix}-lm",
                     "Environment": environment_suffix
                 }
             )
@@ -103,7 +103,7 @@ class VpcConstruct(Construct):
         # Security group for NAT instance
         nat_sg = SecurityGroup(
             self, "nat-sg",
-            name=f"payment-nat-sg-{environment_suffix}",
+            name=f"payment-nat-sg-{environment_suffix}-lm",
             description="Security group for NAT instance",
             vpc_id=self.vpc.id,
             ingress=[
@@ -123,7 +123,7 @@ class VpcConstruct(Construct):
                 )
             ],
             tags={
-                "Name": f"payment-nat-sg-{environment_suffix}",
+                "Name": f"payment-nat-sg-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )
@@ -152,7 +152,7 @@ echo 1 > /proc/sys/net/ipv4/ip_forward
 iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
 """,
             tags={
-                "Name": f"payment-nat-instance-{environment_suffix}",
+                "Name": f"payment-nat-instance-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )
@@ -162,7 +162,7 @@ iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
             self, "private-rt",
             vpc_id=self.vpc.id,
             tags={
-                "Name": f"payment-private-rt-{environment_suffix}",
+                "Name": f"payment-private-rt-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )
@@ -182,7 +182,7 @@ iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
         # Security group for Lambda functions
         self.lambda_sg = SecurityGroup(
             self, "lambda-sg",
-            name=f"payment-lambda-sg-{environment_suffix}",
+            name=f"payment-lambda-sg-{environment_suffix}-lm",
             description="Security group for Lambda functions",
             vpc_id=self.vpc.id,
             egress=[
@@ -194,7 +194,7 @@ iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
                 )
             ],
             tags={
-                "Name": f"payment-lambda-sg-{environment_suffix}",
+                "Name": f"payment-lambda-sg-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )

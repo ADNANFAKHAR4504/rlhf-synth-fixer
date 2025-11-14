@@ -7,6 +7,7 @@ from cdktf_cdktf_provider_aws.api_gateway_integration import ApiGatewayIntegrati
 from cdktf_cdktf_provider_aws.api_gateway_deployment import ApiGatewayDeployment
 from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
 
 
 class ApiGatewayConstruct(Construct):
@@ -15,13 +16,16 @@ class ApiGatewayConstruct(Construct):
     def __init__(self, scope: Construct, id: str, environment_suffix: str, validator_function):
         super().__init__(scope, id)
 
+        # Get current region
+        current_region = DataAwsRegion(self, "current-region")
+
         # REST API
         api = ApiGatewayRestApi(
             self, "api",
-            name=f"payment-api-{environment_suffix}",
+            name=f"payment-api-{environment_suffix}-lm",
             description="Payment processing API",
             tags={
-                "Name": f"payment-api-{environment_suffix}",
+                "Name": f"payment-api-{environment_suffix}-lm",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -80,9 +84,9 @@ class ApiGatewayConstruct(Construct):
             rest_api_id=api.id,
             stage_name="prod",
             tags={
-                "Name": f"payment-api-prod-{environment_suffix}",
+                "Name": f"payment-api-prod-{environment_suffix}-lm",
                 "Environment": environment_suffix
             }
         )
 
-        self.api_url = f"https://{api.id}.execute-api.ap-southeast-1.amazonaws.com/{stage.stage_name}/payments"
+        self.api_url = f"https://{api.id}.execute-api.{current_region.name}.amazonaws.com/{stage.stage_name}/payments"
