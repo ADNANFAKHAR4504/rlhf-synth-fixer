@@ -764,11 +764,12 @@ export class TapStack extends pulumi.ComponentResource {
           Region: 'primary',
         },
       },
-      { provider: this.primaryProvider, parent: this }
+      { provider: this.primaryProvider, parent: this, dependsOn: [primaryCluster] }
     );
 
     // DR Cluster - CRITICAL FIX: Remove masterUsername and masterPassword
-    // Wait for primary instance to be fully created before attempting DR cluster
+    // The key is to ensure primary cluster status is 'available' before creating DR
+    // We depend on the primary instance which ensures the cluster is fully ready
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
@@ -777,6 +778,7 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         // DO NOT include masterUsername - it's inherited from primary
         // DO NOT include masterPassword - it's inherited from primary
+        // DO NOT include databaseName - it's inherited from primary
         globalClusterIdentifier: globalCluster.id,
         dbSubnetGroupName: drSubnetGroup.name,
         vpcSecurityGroupIds: [drSecurityGroup.id],
@@ -796,8 +798,9 @@ export class TapStack extends pulumi.ComponentResource {
       {
         provider: this.drProvider,
         parent: this,
-        dependsOn: [primaryCluster, primaryInstance, globalCluster],
-        ignoreChanges: ['masterUsername', 'masterPassword'],
+        // Critical: depend on primary instance to ensure cluster is fully available
+        dependsOn: [primaryInstance],
+        ignoreChanges: ['masterUsername', 'masterPassword', 'databaseName'],
         deleteBeforeReplace: true,
       }
     );
@@ -817,7 +820,7 @@ export class TapStack extends pulumi.ComponentResource {
           Region: 'dr',
         },
       },
-      { provider: this.drProvider, parent: this }
+      { provider: this.drProvider, parent: this, dependsOn: [drCluster] }
     );
 
     return globalCluster;
