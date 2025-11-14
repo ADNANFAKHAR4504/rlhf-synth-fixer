@@ -120,7 +120,7 @@ def handler(event, context):
             enable_dns_support=True,
             tags={
                 **common_tags,
-                "Name": f"payment-vpc-eu-south-1-{environment_suffix}",
+                "Name": f"payment-vpc-eu-south-1-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -137,7 +137,7 @@ def handler(event, context):
             map_public_ip_on_launch=True,
             tags={
                 **common_tags,
-                "Name": f"payment-public-1a-{environment_suffix}",
+                "Name": f"payment-public-1a-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -153,7 +153,7 @@ def handler(event, context):
             map_public_ip_on_launch=True,
             tags={
                 **common_tags,
-                "Name": f"payment-public-1b-{environment_suffix}",
+                "Name": f"payment-public-1b-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -169,7 +169,7 @@ def handler(event, context):
             availability_zone="eu-south-1a",
             tags={
                 **common_tags,
-                "Name": f"payment-private-1a-{environment_suffix}",
+                "Name": f"payment-private-1a-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -184,7 +184,7 @@ def handler(event, context):
             availability_zone="eu-south-1b",
             tags={
                 **common_tags,
-                "Name": f"payment-private-1b-{environment_suffix}",
+                "Name": f"payment-private-1b-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -198,7 +198,7 @@ def handler(event, context):
             vpc_id=vpc_eu_south.id,
             tags={
                 **common_tags,
-                "Name": f"payment-igw-eu-south-1-{environment_suffix}",
+                "Name": f"payment-igw-eu-south-1-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -212,7 +212,7 @@ def handler(event, context):
             domain="vpc",
             tags={
                 **common_tags,
-                "Name": f"payment-nat-eip-us-{environment_suffix}",
+                "Name": f"payment-nat-eip-us-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -226,7 +226,7 @@ def handler(event, context):
             subnet_id=subnet_eu_south_public_1a.id,
             tags={
                 **common_tags,
-                "Name": f"payment-nat-us-{environment_suffix}",
+                "Name": f"payment-nat-us-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -246,7 +246,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rt-public-us-{environment_suffix}",
+                "Name": f"payment-rt-public-us-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -265,7 +265,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rt-private-us-{environment_suffix}",
+                "Name": f"payment-rt-private-us-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -315,7 +315,7 @@ def handler(event, context):
             enable_dns_support=True,
             tags={
                 **common_tags,
-                "Name": f"payment-vpc-eu-west-1-{environment_suffix}",
+                "Name": f"payment-vpc-eu-west-1-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -332,7 +332,7 @@ def handler(event, context):
             map_public_ip_on_launch=True,
             tags={
                 **common_tags,
-                "Name": f"payment-public-1a-{environment_suffix}",
+                "Name": f"payment-public-1a-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -348,7 +348,7 @@ def handler(event, context):
             map_public_ip_on_launch=True,
             tags={
                 **common_tags,
-                "Name": f"payment-public-1b-{environment_suffix}",
+                "Name": f"payment-public-1b-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -364,7 +364,7 @@ def handler(event, context):
             availability_zone="eu-west-1a",
             tags={
                 **common_tags,
-                "Name": f"payment-private-1a-{environment_suffix}",
+                "Name": f"payment-private-1a-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -379,7 +379,7 @@ def handler(event, context):
             availability_zone="eu-west-1b",
             tags={
                 **common_tags,
-                "Name": f"payment-private-1b-{environment_suffix}",
+                "Name": f"payment-private-1b-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -393,7 +393,7 @@ def handler(event, context):
             vpc_id=vpc_eu.id,
             tags={
                 **common_tags,
-                "Name": f"payment-igw-eu-west-1-{environment_suffix}",
+                "Name": f"payment-igw-eu-west-1-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -407,7 +407,7 @@ def handler(event, context):
             domain="vpc",
             tags={
                 **common_tags,
-                "Name": f"payment-nat-eip-eu-{environment_suffix}",
+                "Name": f"payment-nat-eip-eu-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -421,7 +421,7 @@ def handler(event, context):
             subnet_id=subnet_eu_public_1a.id,
             tags={
                 **common_tags,
-                "Name": f"payment-nat-eu-{environment_suffix}",
+                "Name": f"payment-nat-eu-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -441,7 +441,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rt-public-eu-{environment_suffix}",
+                "Name": f"payment-rt-public-eu-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -460,7 +460,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rt-private-eu-{environment_suffix}",
+                "Name": f"payment-rt-private-eu-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -511,7 +511,7 @@ def handler(event, context):
             auto_accept=False,
             tags={
                 **common_tags,
-                "Name": f"payment-peering-{environment_suffix}",
+                "Name": f"payment-peering-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -525,7 +525,7 @@ def handler(event, context):
             auto_accept=True,
             tags={
                 **common_tags,
-                "Name": f"payment-peering-accepter-{environment_suffix}",
+                "Name": f"payment-peering-accepter-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -549,7 +549,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rt-private-eu-south-peering-{environment_suffix}",
+                "Name": f"payment-rt-private-eu-south-peering-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -573,7 +573,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rt-private-eu-peering-{environment_suffix}",
+                "Name": f"payment-rt-private-eu-peering-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -590,7 +590,7 @@ def handler(event, context):
             enable_key_rotation=True,
             tags={
                 **common_tags,
-                "Name": f"payment-rds-kms-{environment_suffix}",
+                "Name": f"payment-rds-kms-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -600,7 +600,7 @@ def handler(event, context):
         KmsAlias(
             self,
             "kms-alias-rds",
-            name=f"alias/payment-rds-{environment_suffix}-xy",
+            name=f"alias/payment-rds-{environment_suffix}-cd",
             target_key_id=kms_key_rds.key_id,
             provider=provider_eu_west_1
         )
@@ -610,7 +610,7 @@ def handler(event, context):
         sg_rds = SecurityGroup(
             self,
             "sg-rds",
-            name=f"payment-rds-sg-{environment_suffix}",
+            name=f"payment-rds-sg-{environment_suffix}-cd",
             description="Security group for RDS PostgreSQL",
             vpc_id=vpc_eu.id,
             ingress=[
@@ -631,7 +631,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-rds-sg-{environment_suffix}",
+                "Name": f"payment-rds-sg-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -641,7 +641,7 @@ def handler(event, context):
         sg_lambda = SecurityGroup(
             self,
             "sg-lambda",
-            name=f"payment-lambda-sg-{environment_suffix}",
+            name=f"payment-lambda-sg-{environment_suffix}-cd",
             description="Security group for Lambda functions",
             vpc_id=vpc_eu.id,
             egress=[
@@ -654,7 +654,7 @@ def handler(event, context):
             ],
             tags={
                 **common_tags,
-                "Name": f"payment-lambda-sg-{environment_suffix}",
+                "Name": f"payment-lambda-sg-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -666,11 +666,11 @@ def handler(event, context):
         db_subnet_group = DbSubnetGroup(
             self,
             "db-subnet-group",
-            name=f"payment-db-subnet-{environment_suffix}-xy",
+            name=f"payment-db-subnet-{environment_suffix}-cd",
             subnet_ids=[subnet_eu_private_1a.id, subnet_eu_private_1b.id],
             tags={
                 **common_tags,
-                "Name": f"payment-db-subnet-{environment_suffix}-xy",
+                "Name": f"payment-db-subnet-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -680,7 +680,7 @@ def handler(event, context):
         rds_instance = DbInstance(
             self,
             "rds-postgresql",
-            identifier=f"payment-db-{environment_suffix}-xy",
+            identifier=f"payment-db-{environment_suffix}-cd",
             engine="postgres",
             engine_version="17.4",
             instance_class="db.t3.micro",
@@ -697,7 +697,7 @@ def handler(event, context):
             skip_final_snapshot=True,
             tags={
                 **common_tags,
-                "Name": f"payment-db-{environment_suffix}-xy",
+                "Name": f"payment-db-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -709,7 +709,7 @@ def handler(event, context):
         dynamodb_transactions = DynamodbTable(
             self,
             "dynamodb-transactions",
-            name=f"payment-transactions-{environment_suffix}-xy",
+            name=f"payment-transactions-{environment_suffix}-cd",
             billing_mode="PAY_PER_REQUEST",
             hash_key="transactionId",
             range_key="timestamp",
@@ -750,7 +750,7 @@ def handler(event, context):
             ),
             tags={
                 **common_tags,
-                "Name": f"payment-transactions-{environment_suffix}-xy",
+                "Name": f"payment-transactions-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -762,10 +762,10 @@ def handler(event, context):
         s3_bucket_us = S3Bucket(
             self,
             "s3-bucket-us",
-            bucket=f"payment-data-eu-south-1-{environment_suffix}-xy",
+            bucket=f"payment-data-eu-south-1-{environment_suffix}-cd",
             tags={
                 **common_tags,
-                "Name": f"payment-data-eu-south-1-{environment_suffix}-xy",
+                "Name": f"payment-data-eu-south-1-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -799,10 +799,10 @@ def handler(event, context):
         s3_bucket_eu = S3Bucket(
             self,
             "s3-bucket-eu",
-            bucket=f"payment-data-eu-west-1-{environment_suffix}-xy",
+            bucket=f"payment-data-eu-west-1-{environment_suffix}-cd",
             tags={
                 **common_tags,
-                "Name": f"payment-data-eu-west-1-{environment_suffix}-xy",
+                "Name": f"payment-data-eu-west-1-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -837,7 +837,7 @@ def handler(event, context):
         replication_role = IamRole(
             self,
             "s3-replication-role",
-            name=f"payment-s3-replication-{environment_suffix}-xy",
+            name=f"payment-s3-replication-{environment_suffix}-cd",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -848,7 +848,7 @@ def handler(event, context):
             }),
             tags={
                 **common_tags,
-                "Name": f"payment-s3-replication-{environment_suffix}-xy",
+                "Name": f"payment-s3-replication-{environment_suffix}-cd",
                 "Region": "eu-south-1",
                 "MigrationBatch": "batch-1"
             },
@@ -920,7 +920,7 @@ def handler(event, context):
         lambda_role = IamRole(
             self,
             "lambda-role",
-            name=f"payment-lambda-role-{environment_suffix}-xy",
+            name=f"payment-lambda-role-{environment_suffix}-cd",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -931,7 +931,7 @@ def handler(event, context):
             }),
             tags={
                 **common_tags,
-                "Name": f"payment-lambda-role-{environment_suffix}-xy",
+                "Name": f"payment-lambda-role-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -987,7 +987,7 @@ def handler(event, context):
         lambda_function = LambdaFunction(
             self,
             "lambda-payment-processor",
-            function_name=f"payment-processor-{environment_suffix}",
+            function_name=f"payment-processor-{environment_suffix}-cd",
             role=lambda_role.arn,
             handler="index.handler",
             runtime="python3.11",
@@ -1008,7 +1008,7 @@ def handler(event, context):
             },
             tags={
                 **common_tags,
-                "Name": f"payment-processor-{environment_suffix}",
+                "Name": f"payment-processor-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1023,7 +1023,7 @@ def handler(event, context):
             retention_in_days=30,
             tags={
                 **common_tags,
-                "Name": f"payment-lambda-logs-{environment_suffix}",
+                "Name": f"payment-lambda-logs-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1035,11 +1035,11 @@ def handler(event, context):
         api_gateway = Apigatewayv2Api(
             self,
             "api-gateway",
-            name=f"payment-api-{environment_suffix}",
+            name=f"payment-api-{environment_suffix}-cd",
             protocol_type="HTTP",
             tags={
                 **common_tags,
-                "Name": f"payment-api-{environment_suffix}",
+                "Name": f"payment-api-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1074,7 +1074,7 @@ def handler(event, context):
             auto_deploy=True,
             tags={
                 **common_tags,
-                "Name": f"payment-api-prod-{environment_suffix}",
+                "Name": f"payment-api-prod-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1096,11 +1096,11 @@ def handler(event, context):
         CloudwatchLogGroup(
             self,
             "api-log-group",
-            name=f"/aws/apigateway/{api_gateway.name}-xy",
+            name=f"/aws/apigateway/{api_gateway.name}-cd",
             retention_in_days=30,
             tags={
                 **common_tags,
-                "Name": f"payment-api-logs-{environment_suffix}-xy",
+                "Name": f"payment-api-logs-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1112,7 +1112,7 @@ def handler(event, context):
         CloudwatchDashboard(
             self,
             "cloudwatch-dashboard",
-            dashboard_name=f"payment-dashboard-{environment_suffix}",
+            dashboard_name=f"payment-dashboard-{environment_suffix}-cd",
             dashboard_body=json.dumps({
                 "widgets": [
                     {
@@ -1165,7 +1165,7 @@ def handler(event, context):
         CloudwatchMetricAlarm(
             self,
             "lambda-error-alarm",
-            alarm_name=f"payment-lambda-errors-{environment_suffix}",
+            alarm_name=f"payment-lambda-errors-{environment_suffix}-cd",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -1179,7 +1179,7 @@ def handler(event, context):
             },
             tags={
                 **common_tags,
-                "Name": f"payment-lambda-errors-{environment_suffix}",
+                "Name": f"payment-lambda-errors-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1189,7 +1189,7 @@ def handler(event, context):
         CloudwatchMetricAlarm(
             self,
             "rds-cpu-alarm",
-            alarm_name=f"payment-rds-cpu-{environment_suffix}",
+            alarm_name=f"payment-rds-cpu-{environment_suffix}-cd",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=2,
             metric_name="CPUUtilization",
@@ -1203,7 +1203,7 @@ def handler(event, context):
             },
             tags={
                 **common_tags,
-                "Name": f"payment-rds-cpu-{environment_suffix}",
+                "Name": f"payment-rds-cpu-{environment_suffix}-cd",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
