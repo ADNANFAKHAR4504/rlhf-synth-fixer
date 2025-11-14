@@ -31,11 +31,11 @@ export class TapStack extends TerraformStack {
     super(scope, id);
 
     const environmentSuffix = props?.environmentSuffix || 'dev';
-
+    
     // Make AWS_REGION_OVERRIDE testable by using props
     const AWS_REGION_OVERRIDE = props?.regionOverride || '';
     const awsRegion = AWS_REGION_OVERRIDE || props?.awsRegion || 'us-east-1';
-
+      
     const stateBucketRegion = props?.stateBucketRegion || 'us-east-1';
     const stateBucket = props?.stateBucket || 'iac-rlhf-tf-states';
     const defaultTags = props?.defaultTags || [];
@@ -171,7 +171,6 @@ export class TapStack extends TerraformStack {
         environment: environmentSuffix,
       },
       tags: {
-        ...commonTags,
         Name: `eks-${environmentSuffix}-general-nodes`,
       },
     };
@@ -193,7 +192,7 @@ export class TapStack extends TerraformStack {
         environment: environmentSuffix,
       },
       tags: {
-        ...commonTags,
+        
         Name: `eks-${environmentSuffix}-spot-nodes`,
         config: `eks-${generalNodeGroupConfig}`,
       },
