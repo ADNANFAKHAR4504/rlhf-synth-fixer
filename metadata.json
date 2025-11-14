@@ -1,31 +1,31 @@
 {
-  "task_id": "101912456",
-  "po_id": "101912456",
-  "platform": "pulumi",
-  "language": "py",
+  "task_id": "101912442",
+  "po_id": "101912442",
+  "platform": "cfn",
+  "language": "json",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
-  "startedAt": "2025-11-14T00:55:26Z",
+  "startedAt": "2025-11-14T07:00:00Z",
   "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "aws",
     "infrastructure",
-    "environment-migration"
+    "multi-region-disaster-recovery"
   ],
   "aws_services": [
-    "VPC",
-    "EC2",
-    "RDS",
-    "DynamoDB",
-    "ELB",
-    "Lambda",
-    "IAM",
-    "KMS",
-    "Secrets Manager",
+    "AutoScaling",
     "CloudWatch",
-    "AWS Backup",
-    "SSM"
+    "DynamoDB",
+    "EC2",
+    "ELB",
+    "IAM",
+    "RDS",
+    "Route53",
+    "S3",
+    "SNS",
+    "VPC",
+    "SecretsManager"
   ],
   "training_quality": 10
 }
