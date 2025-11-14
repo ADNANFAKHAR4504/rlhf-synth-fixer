@@ -380,7 +380,7 @@ describe('TapStack - Basic Web Infrastructure Unit Tests', () => {
       const instanceOutputs = [
         'WebServerInstanceId', 'InstancePublicIp', 'InstancePrivateIp',
         'InstancePublicDnsName', 'InstancePrivateDnsName', 'InstanceAvailabilityZone',
-        'InstanceStateName', 'InstanceImageId', 'InstanceType'
+        'InstanceState', 'InstanceImageId', 'InstanceType'
       ];
 
       const outputsSection = extractYamlSection('Outputs');
