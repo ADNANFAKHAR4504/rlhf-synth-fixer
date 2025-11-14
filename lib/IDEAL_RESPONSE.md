@@ -4,7 +4,7 @@ This document consolidates every asset currently in `lib/` for the S3 security a
 
 
 ## analyse.py
-````python
+```python
 #!/usr/bin/env python3
 """
 S3 Security and Compliance Audit Script
@@ -23,9 +23,6 @@ from typing import Any, Dict, List, Optional, Set, Tuple
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
 from botocore.config import Config
-from jinja2 import Template
-import plotly.graph_objects as go
-import plotly.io as pio
 
 
 # Constants for S3 Security Audit
@@ -163,10 +160,15 @@ class S3SecurityAuditor:
                 if tags.get('excludefromaudit', '').lower() == 'true':
                     logger.debug(f"Skipping excluded bucket: {bucket_name}")
                     continue
-            except self.s3_client.exceptions.NoSuchTagSet:
-                pass  # No tags, include in audit
-            except Exception as e:
-                logger.warning(f"Error checking tags for bucket {bucket_name}: {e}")
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchTagSet':
+                    pass  # No tags, include in audit
+                elif e.response['Error']['Code'] in ['AccessDenied', 'NoSuchBucket']:
+                    logger.warning(f"Access error for {bucket_name}: {e}")
+                else:
+                    logger.error(f"Unexpected AWS error for {bucket_name}: {e}")
+            except (BotoCoreError, AttributeError) as e:
+                logger.error(f"Error checking tags for {bucket_name}: {e}")
             
             buckets_to_audit.append(bucket)
         
@@ -225,8 +227,11 @@ class S3SecurityAuditor:
                     if principal == '*' or (isinstance(principal, dict) and principal.get('AWS') == '*'):
                         has_public_policy = True
                         break
-            except self.s3_client.exceptions.NoSuchBucketPolicy:
-                pass
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'NoSuchBucketPolicy':
+                    pass  # No policy, continue with ACL check
+                else:
+                    logger.warning(f"Error checking bucket policy for {bucket_name}: {e}")
             
             if public_grants or has_public_policy:
                 access_types = []
@@ -252,17 +257,20 @@ class S3SecurityAuditor:
         """Check for missing default encryption"""
         try:
             encryption_response = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-        except self.s3_client.exceptions.ServerSideEncryptionConfigurationNotFoundError:
-            self.findings.append(Finding(
-                bucket_name=bucket_name,
-                bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                issue_type='NO_ENCRYPTION',
-                severity=HIGH,
-                compliance_frameworks=['SOC2', 'GDPR'],
-                current_config="No default encryption configured",
-                required_config="Default encryption should be enabled (SSE-S3, SSE-KMS, or SSE-C)",
-                remediation_steps="1. Enable default encryption\n2. Use SSE-KMS for sensitive data\n3. Consider customer-managed KMS keys"
-            ))
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
+                self.findings.append(Finding(
+                    bucket_name=bucket_name,
+                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
+                    issue_type='NO_ENCRYPTION',
+                    severity=HIGH,
+                    compliance_frameworks=['SOC2', 'GDPR'],
+                    current_config="No default encryption configured",
+                    required_config="Default encryption should be enabled (SSE-S3, SSE-KMS, or SSE-C)",
+                    remediation_steps="1. Enable default encryption\n2. Use SSE-KMS for sensitive data\n3. Consider customer-managed KMS keys"
+                ))
+            else:
+                logger.error(f"Error checking encryption for {bucket_name}: {e}")
         except Exception as e:
             logger.error(f"Error checking encryption for {bucket_name}: {e}")
     
@@ -334,17 +342,20 @@ class S3SecurityAuditor:
                     # Check lifecycle configuration
                     try:
                         lifecycle_response = self.s3_client.get_bucket_lifecycle_configuration(Bucket=bucket_name)
-                    except self.s3_client.exceptions.NoSuchLifecycleConfiguration:
-                        self.findings.append(Finding(
-                            bucket_name=bucket_name,
-                            bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                            issue_type='NO_LIFECYCLE',
-                            severity=LOW,
-                            compliance_frameworks=['SOC2', 'GDPR'],
-                            current_config=f"Large bucket ({size_gb:.1f}GB) has no lifecycle policies",
-                            required_config="Buckets >100GB should have lifecycle policies for cost optimization",
-                            remediation_steps="1. Implement lifecycle rules for old objects\n2. Transition to Glacier for archival\n3. Delete obsolete data"
-                        ))
+                    except ClientError as e:
+                        if e.response['Error']['Code'] == 'NoSuchLifecycleConfiguration':
+                            self.findings.append(Finding(
+                                bucket_name=bucket_name,
+                                bucket_arn=self.bucket_cache[bucket_name]['arn'],
+                                issue_type='NO_LIFECYCLE',
+                                severity=LOW,
+                                compliance_frameworks=['SOC2', 'GDPR'],
+                                current_config=f"Large bucket ({size_gb:.1f}GB) has no lifecycle policies",
+                                required_config="Buckets >100GB should have lifecycle policies for cost optimization",
+                                remediation_steps="1. Implement lifecycle rules for old objects\n2. Transition to Glacier for archival\n3. Delete obsolete data"
+                            ))
+                        else:
+                            logger.warning(f"Error checking lifecycle policies for {bucket_name}: {e}")
         except Exception as e:
             logger.warning(f"Error checking lifecycle policies for {bucket_name}: {e}")
     
@@ -356,17 +367,20 @@ class S3SecurityAuditor:
         if data_class == 'critical':
             try:
                 replication_response = self.s3_client.get_bucket_replication(Bucket=bucket_name)
-            except self.s3_client.exceptions.ReplicationConfigurationNotFoundError:
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_REPLICATION',
-                    severity=HIGH,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="Critical bucket has no cross-region replication",
-                    required_config="Critical buckets must have cross-region replication for DR",
-                    remediation_steps="1. Enable versioning (required for replication)\n2. Create destination bucket in DR region\n3. Configure cross-region replication"
-                ))
+            except ClientError as e:
+                if e.response['Error']['Code'] == 'ReplicationConfigurationNotFoundError':
+                    self.findings.append(Finding(
+                        bucket_name=bucket_name,
+                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
+                        issue_type='NO_REPLICATION',
+                        severity=HIGH,
+                        compliance_frameworks=['SOC2', 'GDPR'],
+                        current_config="Critical bucket has no cross-region replication",
+                        required_config="Critical buckets must have cross-region replication for DR",
+                        remediation_steps="1. Enable versioning (required for replication)\n2. Create destination bucket in DR region\n3. Configure cross-region replication"
+                    ))
+                else:
+                    logger.error(f"Error checking replication for {bucket_name}: {e}")
             except Exception as e:
                 logger.error(f"Error checking replication for {bucket_name}: {e}")
     
@@ -394,17 +408,20 @@ class S3SecurityAuditor:
                     required_config="Bucket policy should deny requests without SSL/TLS",
                     remediation_steps="1. Update bucket policy to include aws:SecureTransport condition\n2. Deny all requests where aws:SecureTransport is false\n3. Test with HTTP requests to verify"
                 ))
-        except self.s3_client.exceptions.NoSuchBucketPolicy:
-            self.findings.append(Finding(
-                bucket_name=bucket_name,
-                bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                issue_type='NO_SECURE_TRANSPORT',
-                severity=HIGH,
-                compliance_frameworks=['SOC2', 'GDPR'],
-                current_config="No bucket policy to enforce SSL/TLS",
-                required_config="Bucket policy should deny requests without SSL/TLS",
-                remediation_steps="1. Create bucket policy with aws:SecureTransport condition\n2. Deny all requests where aws:SecureTransport is false\n3. Test with HTTP requests to verify"
-            ))
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchBucketPolicy':
+                self.findings.append(Finding(
+                    bucket_name=bucket_name,
+                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
+                    issue_type='NO_SECURE_TRANSPORT',
+                    severity=HIGH,
+                    compliance_frameworks=['SOC2', 'GDPR'],
+                    current_config="No bucket policy to enforce SSL/TLS",
+                    required_config="Bucket policy should deny requests without SSL/TLS",
+                    remediation_steps="1. Create bucket policy with aws:SecureTransport condition\n2. Deny all requests where aws:SecureTransport is false\n3. Test with HTTP requests to verify"
+                ))
+            else:
+                logger.error(f"Error checking secure transport for {bucket_name}: {e}")
         except Exception as e:
             logger.error(f"Error checking secure transport for {bucket_name}: {e}")
     
@@ -594,17 +611,20 @@ class S3SecurityAuditor:
                             required_config="Old objects should transition to Glacier/Deep Archive",
                             remediation_steps="1. Create lifecycle rule for objects >90 days\n2. Transition to Glacier or Deep Archive\n3. Consider Intelligent-Tiering"
                         ))
-                except self.s3_client.exceptions.NoSuchLifecycleConfiguration:
-                    self.findings.append(Finding(
-                        bucket_name=bucket_name,
-                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                        issue_type='NO_COLD_STORAGE',
-                        severity=LOW,
-                        compliance_frameworks=['SOC2', 'GDPR'],
-                        current_config="Bucket has objects >90 days old with no lifecycle rules",
-                        required_config="Old objects should transition to Glacier/Deep Archive",
-                        remediation_steps="1. Create lifecycle rule for objects >90 days\n2. Transition to Glacier or Deep Archive\n3. Consider Intelligent-Tiering"
-                    ))
+                except ClientError as e:
+                    if e.response['Error']['Code'] == 'NoSuchLifecycleConfiguration':
+                        self.findings.append(Finding(
+                            bucket_name=bucket_name,
+                            bucket_arn=self.bucket_cache[bucket_name]['arn'],
+                            issue_type='NO_COLD_STORAGE',
+                            severity=LOW,
+                            compliance_frameworks=['SOC2', 'GDPR'],
+                            current_config="Bucket has objects >90 days old with no lifecycle rules",
+                            required_config="Old objects should transition to Glacier/Deep Archive",
+                            remediation_steps="1. Create lifecycle rule for objects >90 days\n2. Transition to Glacier or Deep Archive\n3. Consider Intelligent-Tiering"
+                        ))
+                    else:
+                        logger.warning(f"Error checking glacier transitions for {bucket_name}: {e}")
         except Exception as e:
             logger.warning(f"Error checking glacier transitions for {bucket_name}: {e}")
     
@@ -695,6 +715,17 @@ class S3SecurityAuditor:
     def save_html_report(self, findings: List[Finding], summary: Dict[str, Any], 
                         filename: str = 's3_audit_report.html'):
         """Generate HTML report with charts"""
+        try:
+            # Import optional dependencies for HTML report generation
+            from jinja2 import Template
+            import plotly.graph_objects as go
+            import plotly.io as pio
+        except ImportError as e:
+            logger.warning(f"HTML report generation requires additional dependencies (plotly, jinja2). "
+                          f"Install with: pip install plotly jinja2. Error: {e}")
+            logger.info("Skipping HTML report generation. JSON report will still be generated.")
+            return
+        
         # Create charts
         severity_chart = self._create_severity_chart(summary)
         compliance_chart = self._create_compliance_chart(summary)
@@ -748,8 +779,14 @@ class S3SecurityAuditor:
             summary: Compliance summary dictionary containing findings_by_severity counts
             
         Returns:
-            HTML string containing the Plotly chart for embedding in reports
+            HTML string containing the Plotly chart for embedding in reports, or empty string if plotly not available
         """
+        try:
+            import plotly.graph_objects as go
+            import plotly.io as pio
+        except ImportError:
+            return "<!-- Plotly charts require: pip install plotly -->"
+        
         severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
         counts = [summary['findings_by_severity'].get(s, 0) for s in severities]
         colors = ['#d32f2f', '#f57c00', '#fbc02d', '#388e3c']
@@ -779,8 +816,14 @@ class S3SecurityAuditor:
             summary: Compliance summary dictionary containing compliant/non-compliant bucket counts
             
         Returns:
-            HTML string containing the Plotly chart for embedding in reports
+            HTML string containing the Plotly chart for embedding in reports, or empty string if plotly not available
         """
+        try:
+            import plotly.graph_objects as go
+            import plotly.io as pio
+        except ImportError:
+            return "<!-- Plotly charts require: pip install plotly -->"
+        
         labels = ['Compliant', 'Non-Compliant']
         values = [summary['compliant_buckets'], summary['non_compliant_buckets']]
         colors = ['#4caf50', '#f44336']
@@ -812,8 +855,14 @@ class S3SecurityAuditor:
             summary: Compliance summary dictionary containing findings_by_issue_type counts
             
         Returns:
-            HTML string containing the Plotly chart for embedding in reports
+            HTML string containing the Plotly chart for embedding in reports, or empty string if plotly not available
         """
+        try:
+            import plotly.graph_objects as go
+            import plotly.io as pio
+        except ImportError:
+            return "<!-- Plotly charts require: pip install plotly -->"
+        
         issue_types = list(summary['findings_by_issue_type'].keys())
         counts = list(summary['findings_by_issue_type'].values())
         
@@ -855,11 +904,15 @@ def run_s3_security_audit():
         # Save JSON report
         auditor.save_json_report(summary)
         
-        # Save HTML report
-        auditor.save_html_report(findings, summary)
+        # Save HTML report (optional - will skip if dependencies not available)
+        try:
+            auditor.save_html_report(findings, summary)
+        except Exception as e:
+            logger.warning(f"HTML report generation failed: {e}")
+            logger.info("JSON report was generated successfully. HTML report requires: pip install plotly jinja2")
         
         logger.info(f"📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
-        logger.info(f"📄 Reports saved: s3_security_audit.json, s3_audit_report.html")
+        logger.info(f"📄 Reports saved: s3_security_audit.json (always generated)")
         
         # Exit with error code if critical findings
         if any(f.severity == CRITICAL for f in findings):
@@ -880,7 +933,7 @@ def main():
 if __name__ == "__main__":
     exit(main())
     
-````
+```
 
 
 
