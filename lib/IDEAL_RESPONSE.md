@@ -1,4 +1,4 @@
-```yml
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure and Compliant E-Commerce Cloud Environment'
 
@@ -555,7 +555,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'ecommerce-logs-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'ecommerce-logging-${AWS::AccountId}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:

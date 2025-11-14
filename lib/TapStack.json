@@ -1046,7 +1046,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "ecommerce-logs-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "ecommerce-logging-${AWS::AccountId}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
