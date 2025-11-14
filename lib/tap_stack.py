@@ -32,7 +32,7 @@ from cdktf_cdktf_provider_aws.route_table_association import \
     RouteTableAssociation
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfiguration, S3BucketReplicationConfigurationRule,
+    S3BucketReplicationConfigurationA, S3BucketReplicationConfigurationRule,
     S3BucketReplicationConfigurationRuleDestination)
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
@@ -867,7 +867,7 @@ class TapStack(TerraformStack):
             provider=provider_us_east_1
         )
 
-        S3BucketReplicationConfiguration(
+        S3BucketReplicationConfigurationA(
             self,
             "s3-replication",
             bucket=s3_bucket_us.id,
