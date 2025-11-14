@@ -9,23 +9,6 @@ Parameters:
     AllowedPattern: '[a-z0-9-]+'
     ConstraintDescription: 'Must contain only lowercase letters, numbers, and hyphens'
 
-  DBMasterUsername:
-    Type: String
-    Description: 'Master username for RDS PostgreSQL database'
-    Default: 'dbadmin'
-    NoEcho: true
-    MinLength: 1
-    MaxLength: 16
-    AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-
-  DBMasterPassword:
-    Type: String
-    Description: 'Master password for RDS PostgreSQL database'
-    NoEcho: true
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '[a-zA-Z0-9!@#$%^&*()_+=-]*'
-
 Metadata:
   AWS::CloudFormation::Interface:
     ParameterGroups:
@@ -33,11 +16,6 @@ Metadata:
           default: 'Environment Configuration'
         Parameters:
           - EnvironmentSuffix
-      - Label:
-          default: 'Database Configuration'
-        Parameters:
-          - DBMasterUsername
-          - DBMasterPassword
 
 Resources:
   # VPC and Network Infrastructure
@@ -401,6 +379,27 @@ Resources:
         - Key: DataClassification
           Value: confidential
 
+  # Database Secret
+  DBSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'payment-db-secret-${EnvironmentSuffix}'
+      Description: 'Database credentials for payment processing'
+      GenerateSecretString:
+        SecretStringTemplate: '{"username": "dbadmin"}'
+        GenerateStringKey: 'password'
+        PasswordLength: 16
+        ExcludeCharacters: '"@/\'
+      Tags:
+        - Key: Name
+          Value: !Sub 'db-secret-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: production
+        - Key: CostCenter
+          Value: payment-processing
+        - Key: DataClassification
+          Value: confidential
+
   # RDS PostgreSQL Instance
   PaymentDatabase:
     Type: AWS::RDS::DBInstance
@@ -408,14 +407,14 @@ Resources:
     Properties:
       DBInstanceIdentifier: !Sub 'payment-db-${EnvironmentSuffix}'
       Engine: postgres
-      EngineVersion: '15.8'
+      EngineVersion: '16.6'
       DBInstanceClass: db.t3.medium
       AllocatedStorage: 100
       StorageType: gp3
       StorageEncrypted: true
       KmsKeyId: !GetAtt RDSKMSKey.Arn
-      MasterUsername: !Ref DBMasterUsername
-      MasterUserPassword: !Ref DBMasterPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:payment-db-secret-${EnvironmentSuffix}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:payment-db-secret-${EnvironmentSuffix}:SecretString:password}}'
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !Ref DBSecurityGroup
