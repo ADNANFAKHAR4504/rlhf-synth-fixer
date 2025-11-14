@@ -6,11 +6,12 @@ Implements CloudWatch dashboards, Lambda-based incident response, SNS notificati
 and cross-account IAM roles for centralized monitoring.
 """
 
-from typing import Optional, List
 import json
+from typing import List, Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions, Output
+from pulumi import Output, ResourceOptions
 
 
 class TapStackArgs:
@@ -552,7 +553,7 @@ Reason: {reason}
             f'api-throttling-insights-{self.environment_suffix}',
             rule_name=f'api-throttling-insights-{self.environment_suffix}',
             rule_state='ENABLED',
-            rule_body=self.log_group.name.apply(create_rule_body),
+            rule_definition=self.log_group.name.apply(create_rule_body),
             tags={**self.tags, 'Name': f'api-throttling-insights-{self.environment_suffix}'},
             opts=ResourceOptions(parent=self)
         )

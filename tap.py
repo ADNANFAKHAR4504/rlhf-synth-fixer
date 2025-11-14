@@ -17,6 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import pulumi
 from pulumi import Config, ResourceOptions
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration
@@ -50,7 +51,7 @@ jira_api_token = os.getenv('JIRA_API_TOKEN', '')
 alert_email = os.getenv('ALERT_EMAIL', 'ops@example.com')
 
 stack = TapStack(
-    name="pulumi-infra",
+    name="tapstack",
     args=TapStackArgs(
         environment_suffix=environment_suffix,
         member_account_ids=member_accounts,
