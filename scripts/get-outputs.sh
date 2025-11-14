@@ -1,5 +1,19 @@
 #!/bin/bash
 
+# ============================================================================
+# Generic Deployment Outputs Script
+# ============================================================================
+# This script dynamically detects and retrieves outputs from any IaC deployment
+# Supports: CDK, CDKTF, CloudFormation, Pulumi, Terraform
+# 
+# It automatically detects stack names from the project configuration:
+# - CDK: Uses 'cdk list' to get stack names
+# - CloudFormation: Detects from template file names or searches deployed stacks
+# - Others: Uses platform-specific commands
+#
+# No hardcoded stack names - works across all projects!
+# ============================================================================
+
 # Exit on any error
 set -e
 
@@ -28,11 +42,26 @@ if [ "$PLATFORM" = "cdk" ]; then
   echo "✅ CDK project detected, getting CDK outputs..."
   npx cdk list --json > cdk-stacks.json
   
+  # Get stack names from CDK (removing quotes and brackets)
+  CDK_STACKS=$(jq -r '.[]' cdk-stacks.json 2>/dev/null || echo "")
+  
+  if [ -z "$CDK_STACKS" ]; then
+    echo "⚠️ No CDK stacks found in cdk list, falling back to search pattern"
+    # Fallback: search for any stack containing environment suffix
+    SEARCH_PATTERN=".*${ENVIRONMENT_SUFFIX}"
+  else
+    echo "📋 CDK stacks defined in this project:"
+    echo "$CDK_STACKS"
+    # Use first stack name as search pattern (remove any suffix/prefix variations)
+    FIRST_STACK=$(echo "$CDK_STACKS" | head -n 1)
+    SEARCH_PATTERN="$FIRST_STACK"
+  fi
+  
   # possible regions to search (comma-separated, can be overridden by env var)
   POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,eu-west-2,ap-southeast-2,ap-southeast-1,ap-northeast-1,eu-central-1,eu-central-2,eu-south-1,eu-south-2"}
   
   echo "Getting all CloudFormation stacks..."
-  echo "Searching for stacks containing: TapStack${ENVIRONMENT_SUFFIX}"
+  echo "Searching for stacks matching: $SEARCH_PATTERN"
   echo "Searching in regions: $POSSIBLE_REGIONS"
   
   # Convert comma-separated regions to array
@@ -42,8 +71,17 @@ if [ "$PLATFORM" = "cdk" ]; then
   > cf-stacks.txt  # Clear the file
   for region in "${REGIONS[@]}"; do
     echo "Searching in region: $region"
-    aws cloudformation list-stacks --region "$region" --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --output json 2>/dev/null | \
-      jq -r ".StackSummaries[] | select(.StackName | contains(\"TapStack${ENVIRONMENT_SUFFIX}\")) | .StackName" >> cf-stacks.txt || true
+    if [ -n "$CDK_STACKS" ]; then
+      # Search for exact CDK stack names
+      while IFS= read -r stack_name; do
+        aws cloudformation list-stacks --region "$region" --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --output json 2>/dev/null | \
+          jq -r ".StackSummaries[] | select(.StackName == \"$stack_name\") | .StackName" >> cf-stacks.txt || true
+      done <<< "$CDK_STACKS"
+    else
+      # Fallback to pattern matching
+      aws cloudformation list-stacks --region "$region" --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --output json 2>/dev/null | \
+        jq -r ".StackSummaries[] | select(.StackName | test(\"$SEARCH_PATTERN\")) | .StackName" >> cf-stacks.txt || true
+    fi
   done
   
   echo "Found stacks:"
@@ -91,7 +129,7 @@ if [ "$PLATFORM" = "cdk" ]; then
     done
     rm -f temp-stack.json temp-merged.json temp-flat.json
   else
-    echo "No TapStack CloudFormation stacks found in any region"
+    echo "No CloudFormation stacks found matching CDK project stacks in any region"
     echo "{}" > cfn-outputs/flat-outputs.json
   fi
   
@@ -114,8 +152,38 @@ elif [ "$PLATFORM" = "cdktf" ]; then
 
 elif [ "$PLATFORM" = "cfn" ]; then
   echo "✅ CloudFormation project detected, getting stack outputs..."
-  # Try to find the stack name (assuming TapStack<ENVIRONMENT_SUFFIX>)
-  STACK_NAME="TapStack${ENVIRONMENT_SUFFIX}"
+  
+  # Try to auto-detect stack name from CloudFormation templates
+  CFN_TEMPLATES=$(find lib -name "*.json" -o -name "*.yml" -o -name "*.yaml" 2>/dev/null | head -1)
+  if [ -n "$CFN_TEMPLATES" ]; then
+    # Extract stack name from first template file name (remove extension and path)
+    DETECTED_NAME=$(basename "$CFN_TEMPLATES" | sed 's/\.[^.]*$//')
+    STACK_NAME="${DETECTED_NAME}-${ENVIRONMENT_SUFFIX}"
+    echo "🔍 Detected stack name from template: $STACK_NAME"
+  else
+    # Fallback: search for any deployed stack
+    echo "🔍 No template found, searching for deployed stacks with suffix: $ENVIRONMENT_SUFFIX"
+    POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,eu-west-2,ap-southeast-2,ap-southeast-1,ap-northeast-1,eu-central-1,eu-central-2,eu-south-1,eu-south-2"}
+    IFS=',' read -ra REGIONS <<< "$POSSIBLE_REGIONS"
+    
+    STACK_NAME=""
+    for region in "${REGIONS[@]}"; do
+      FOUND_STACK=$(aws cloudformation list-stacks --region "$region" --stack-status-filter CREATE_COMPLETE UPDATE_COMPLETE --output json 2>/dev/null | \
+        jq -r ".StackSummaries[] | select(.StackName | endswith(\"${ENVIRONMENT_SUFFIX}\")) | .StackName" | head -1)
+      if [ -n "$FOUND_STACK" ]; then
+        STACK_NAME="$FOUND_STACK"
+        export AWS_DEFAULT_REGION="$region"
+        echo "✅ Found stack: $STACK_NAME in region: $region"
+        break
+      fi
+    done
+    
+    if [ -z "$STACK_NAME" ]; then
+      echo "⚠️ No CloudFormation stack found, using generic pattern"
+      STACK_NAME="Stack-${ENVIRONMENT_SUFFIX}"
+    fi
+  fi
+  
   echo "Getting outputs for CloudFormation stack: $STACK_NAME"
   aws cloudformation describe-stacks --stack-name "$STACK_NAME" --query 'Stacks[0].Outputs' --output json > "temp-${STACK_NAME}-outputs.json" 2>/dev/null || echo "No outputs for $STACK_NAME"
   echo "{}" > cfn-outputs/all-outputs.json
