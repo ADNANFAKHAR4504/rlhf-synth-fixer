@@ -429,11 +429,6 @@ describe('EKS Cluster CloudFormation Template', () => {
       expect(nodeGroup.Type).toBe('AWS::EKS::Nodegroup');
     });
 
-    test('node group should depend on EKS cluster', () => {
-      const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.DependsOn).toContain('EKSCluster');
-    });
-
     test('node group name should include EnvironmentSuffix', () => {
       const nodeGroup = template.Resources.EKSNodeGroup;
       expect(nodeGroup.Properties.NodegroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');

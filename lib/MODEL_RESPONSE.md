@@ -972,7 +972,7 @@ aws cloudformation create-stack \
   --template-body file://lib/TapStack.json \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev123 \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region eu-central-1
 ```
 
 ### Monitor Stack Creation
@@ -980,7 +980,7 @@ aws cloudformation create-stack \
 ```bash
 aws cloudformation describe-stacks \
   --stack-name eks-cluster-dev \
-  --region us-east-1 \
+  --region eu-central-1 \
   --query 'Stacks[0].StackStatus'
 ```
 
@@ -991,7 +991,7 @@ After stack creation completes (15-20 minutes):
 ```bash
 aws eks update-kubeconfig \
   --name eks-cluster-dev123 \
-  --region us-east-1
+  --region eu-central-1
 ```
 
 ### Verify Cluster
@@ -1006,7 +1006,7 @@ kubectl get pods -A
 ```bash
 aws cloudformation delete-stack \
   --stack-name eks-cluster-dev \
-  --region us-east-1
+  --region eu-central-1
 ```
 
 ## Testing Strategy
@@ -1039,7 +1039,7 @@ aws cloudformation delete-stack \
 
 ## Cost Considerations
 
-Approximate monthly costs (us-east-1):
+Approximate monthly costs (eu-central-1):
 - EKS Cluster: $73/month (control plane)
 - EC2 Instances: $60/month (2 x t3.medium)
 - NAT Gateway: $32/month + data transfer

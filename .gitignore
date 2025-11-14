@@ -149,7 +149,3 @@ turing-iac-review-app/aws-nuke-report-batch*tasks.csv.lock/
 
 # Synth Files
 tasks.csv
-
-# Terraform binaries
-lib/.terraform/
-**/.terraform/
