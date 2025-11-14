@@ -613,9 +613,10 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       // Check that it uses subnet references (private subnets)
       expect(nodeGroup.Properties.Subnets).toBeDefined();
       expect(Array.isArray(nodeGroup.Properties.Subnets)).toBe(true);
-      // Check that we have private subnet resources
-      expect(template.Resources.PrivateSubnet1).toBeDefined();
-      expect(template.Resources.PrivateSubnet2).toBeDefined();
+      // Check that we have private subnet resources (A, B, C naming)
+      expect(template.Resources.PrivateSubnetA).toBeDefined();
+      expect(template.Resources.PrivateSubnetB).toBeDefined();
+      expect(template.Resources.PrivateSubnetC).toBeDefined();
     });
 
     test('Requirement 9: Required outputs (endpoint, OIDC issuer, node group ARN)', () => {
