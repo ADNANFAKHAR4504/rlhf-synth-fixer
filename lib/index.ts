@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import * as path from 'path';
 
 const config = new pulumi.Config();
 const environmentSuffix = config.get('environmentSuffix') || 'dev';
@@ -173,7 +174,9 @@ const validatorLambda = new aws.lambda.Function(
     role: validatorLambdaRole.arn,
     reservedConcurrentExecutions: 10,
     code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('./lib/lambda/transaction-validator'),
+      '.': new pulumi.asset.FileArchive(
+        path.join(__dirname, 'lambda', 'transaction-validator')
+      ),
     }),
     environment: {
       variables: {
@@ -286,7 +289,9 @@ const fraudLambda = new aws.lambda.Function(
     role: fraudLambdaRole.arn,
     reservedConcurrentExecutions: 10,
     code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('./lib/lambda/fraud-detection'),
+      '.': new pulumi.asset.FileArchive(
+        path.join(__dirname, 'lambda', 'fraud-detection')
+      ),
     }),
     environment: {
       variables: {
@@ -414,7 +419,9 @@ const notificationLambda = new aws.lambda.Function(
     role: notificationLambdaRole.arn,
     reservedConcurrentExecutions: 10,
     code: new pulumi.asset.AssetArchive({
-      '.': new pulumi.asset.FileArchive('./lib/lambda/notification'),
+      '.': new pulumi.asset.FileArchive(
+        path.join(__dirname, 'lambda', 'notification')
+      ),
     }),
     environment: {
       variables: {
