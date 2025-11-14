@@ -355,3 +355,27 @@ class TestEksNodeGroups:
         node_groups = output_json.get("resource", {}).get("aws_eks_node_group", {})
         for ng_config in node_groups.values():
             assert ng_config.get("subnet_ids") == test_subnets
+    
+    def test_eks_node_groups_creates_launch_templates(self):
+        """EksNodeGroups no longer creates launch templates - using disk_size directly."""
+        app = App()
+        stack = TerraformStack(app, "TestStack")
+        ng = EksNodeGroups(
+            stack, "test_ng",
+            environment_suffix="test",
+            cluster_name="test-cluster",
+            node_role_arn="arn:aws:iam::123456789012:role/node-role",
+            subnet_ids=["subnet-1", "subnet-2"]
+        )
+
+        synth = Testing.synth(stack)
+        output_json = json.loads(synth)
+
+        # Verify launch templates are NOT created (we use disk_size directly now)
+        resources = output_json.get("resource", {})
+        assert "aws_launch_template" not in resources
+        
+        # Verify node groups have disk_size instead
+        node_groups = resources.get("aws_eks_node_group", {})
+        for ng_config in node_groups.values():
+            assert ng_config.get("disk_size") == 20

@@ -122,6 +122,27 @@ class TapStack(TerraformStack):
             description="Non-critical workloads node group name"
         )
 
+        # Additional outputs for integration tests
+        TerraformOutput(self, "kms_key_arn",
+            value=kms.kms_key_arn,
+            description="KMS key ARN for EKS secrets encryption"
+        )
+
+        TerraformOutput(self, "cluster_role_arn",
+            value=iam.cluster_role_arn,
+            description="EKS cluster IAM role ARN"
+        )
+
+        TerraformOutput(self, "node_role_arn",
+            value=iam.node_role_arn,
+            description="EKS node IAM role ARN"
+        )
+
+        TerraformOutput(self, "cluster_security_group_id",
+            value=security_groups.cluster_security_group_id,
+            description="EKS cluster security group ID"
+        )
+
         TerraformOutput(self, "kubeconfig_command",
             value=f"aws eks update-kubeconfig --region us-east-1 --name {eks_cluster.cluster_name}",
             description="Command to update kubeconfig"
