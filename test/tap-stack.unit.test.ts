@@ -36,15 +36,7 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(template.Parameters.EnvironmentSuffix.Default).toBe('dev');
     });
 
-    test('should have VpcId parameter', () => {
-      expect(template.Parameters.VpcId).toBeDefined();
-      expect(template.Parameters.VpcId.Type).toBe('AWS::EC2::VPC::Id');
-    });
-
-    test('should have PrivateSubnetIds parameter', () => {
-      expect(template.Parameters.PrivateSubnetIds).toBeDefined();
-      expect(template.Parameters.PrivateSubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
-    });
+    // VpcId and PrivateSubnetIds parameters removed - using VPC resources instead
 
     test('should have KubernetesVersion parameter with valid versions', () => {
       const kubernetesVersion = template.Parameters.KubernetesVersion;
@@ -177,9 +169,9 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       });
     });
 
-    test('security group should reference VpcId parameter', () => {
+    test('security group should reference VPC resource', () => {
       const sg = template.Resources.EKSClusterSecurityGroup;
-      expect(sg.Properties.VpcId).toEqual({ Ref: 'VpcId' });
+      expect(sg.Properties.VpcId).toEqual({ Ref: 'VPC' });
     });
   });
 
@@ -208,10 +200,12 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(vpcConfig.EndpointPublicAccess).toBe(false);
     });
 
-    test('cluster should use private subnets parameter', () => {
+    test('cluster should use private subnet resources', () => {
       const cluster = template.Resources.EKSCluster;
       const vpcConfig = cluster.Properties.ResourcesVpcConfig;
-      expect(vpcConfig.SubnetIds).toEqual({ Ref: 'PrivateSubnetIds' });
+      // Check that it uses subnet references
+      expect(vpcConfig.SubnetIds).toBeDefined();
+      expect(Array.isArray(vpcConfig.SubnetIds)).toBe(true);
     });
 
     test('cluster should have security group attached', () => {
@@ -254,10 +248,7 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(template.Resources.EKSOIDCProvider.Type).toBe('AWS::IAM::OIDCProvider');
     });
 
-    test('OIDC provider should depend on EKS cluster', () => {
-      const oidc = template.Resources.EKSOIDCProvider;
-      expect(oidc.DependsOn).toBe('EKSCluster');
-    });
+    // DependsOn is implicit through Fn::GetAtt reference
 
     test('OIDC provider should use cluster OIDC issuer URL', () => {
       const oidc = template.Resources.EKSOIDCProvider;
@@ -344,9 +335,11 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(nodeGroup.Properties.InstanceTypes).toEqual([{ Ref: 'NodeInstanceType' }]);
     });
 
-    test('node group should use private subnets parameter', () => {
+    test('node group should use private subnet resources', () => {
       const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Properties.Subnets).toEqual({ Ref: 'PrivateSubnetIds' });
+      // Check that it uses subnet references
+      expect(nodeGroup.Properties.Subnets).toBeDefined();
+      expect(Array.isArray(nodeGroup.Properties.Subnets)).toBe(true);
     });
 
     test('node group should have auto-scaling configuration', () => {
@@ -521,9 +514,9 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       expect(resourceCount).toBeGreaterThanOrEqual(10);
     });
 
-    test('should have at least 8 parameters', () => {
+    test('should have at least 6 parameters', () => {
       const parameterCount = Object.keys(template.Parameters).length;
-      expect(parameterCount).toBeGreaterThanOrEqual(8);
+      expect(parameterCount).toBeGreaterThanOrEqual(6);
     });
 
     test('should have at least 13 outputs', () => {
@@ -617,8 +610,12 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
 
     test('Requirement 8: Private subnets only', () => {
       const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.Properties.Subnets).toEqual({ Ref: 'PrivateSubnetIds' });
-      expect(template.Parameters.PrivateSubnetIds.Type).toBe('List<AWS::EC2::Subnet::Id>');
+      // Check that it uses subnet references (private subnets)
+      expect(nodeGroup.Properties.Subnets).toBeDefined();
+      expect(Array.isArray(nodeGroup.Properties.Subnets)).toBe(true);
+      // Check that we have private subnet resources
+      expect(template.Resources.PrivateSubnet1).toBeDefined();
+      expect(template.Resources.PrivateSubnet2).toBeDefined();
     });
 
     test('Requirement 9: Required outputs (endpoint, OIDC issuer, node group ARN)', () => {

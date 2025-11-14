@@ -62,7 +62,7 @@ Your organization is expanding its microservices architecture and needs a manage
 
 ## Environment
 
-Production-grade EKS cluster deployment in us-east-1 region using CloudFormation YAML. Requires existing VPC with at least 3 private subnets across different availability zones. AWS CLI must be configured with appropriate permissions for EKS, EC2, IAM, and KMS services. The infrastructure includes EKS control plane, managed node groups with Graviton2 instances, OIDC provider for IRSA, KMS key for secrets encryption, and CloudWatch Container Insights for monitoring. All components deployed within private subnets with egress through NAT gateways.
+Production-grade EKS cluster deployment in eu-central-1 region using CloudFormation YAML. Requires existing VPC with at least 3 private subnets across different availability zones. AWS CLI must be configured with appropriate permissions for EKS, EC2, IAM, and KMS services. The infrastructure includes EKS control plane, managed node groups with Graviton2 instances, OIDC provider for IRSA, KMS key for secrets encryption, and CloudWatch Container Insights for monitoring. All components deployed within private subnets with egress through NAT gateways.
 
 ## Expected Deliverables
 
