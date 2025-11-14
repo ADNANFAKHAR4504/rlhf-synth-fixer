@@ -600,7 +600,7 @@ def handler(event, context):
         KmsAlias(
             self,
             "kms-alias-rds",
-            name=f"alias/payment-rds-{environment_suffix}",
+            name=f"alias/payment-rds-{environment_suffix}-ab",
             target_key_id=kms_key_rds.key_id,
             provider=provider_eu_west_1
         )
@@ -666,11 +666,11 @@ def handler(event, context):
         db_subnet_group = DbSubnetGroup(
             self,
             "db-subnet-group",
-            name=f"payment-db-subnet-{environment_suffix}",
+            name=f"payment-db-subnet-{environment_suffix}-ab",
             subnet_ids=[subnet_eu_private_1a.id, subnet_eu_private_1b.id],
             tags={
                 **common_tags,
-                "Name": f"payment-db-subnet-{environment_suffix}",
+                "Name": f"payment-db-subnet-{environment_suffix}-ab",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -709,7 +709,7 @@ def handler(event, context):
         dynamodb_transactions = DynamodbTable(
             self,
             "dynamodb-transactions",
-            name=f"payment-transactions-{environment_suffix}",
+            name=f"payment-transactions-{environment_suffix}-ab",
             billing_mode="PAY_PER_REQUEST",
             hash_key="transactionId",
             range_key="timestamp",
@@ -750,7 +750,7 @@ def handler(event, context):
             ),
             tags={
                 **common_tags,
-                "Name": f"payment-transactions-{environment_suffix}",
+                "Name": f"payment-transactions-{environment_suffix}-ab",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -762,10 +762,10 @@ def handler(event, context):
         s3_bucket_us = S3Bucket(
             self,
             "s3-bucket-us",
-            bucket=f"payment-data-us-east-1-{environment_suffix}",
+            bucket=f"payment-data-us-east-1-{environment_suffix}-ab",
             tags={
                 **common_tags,
-                "Name": f"payment-data-us-east-1-{environment_suffix}",
+                "Name": f"payment-data-us-east-1-{environment_suffix}-ab",
                 "Region": "us-east-1",
                 "MigrationBatch": "batch-1"
             },
@@ -799,10 +799,10 @@ def handler(event, context):
         s3_bucket_eu = S3Bucket(
             self,
             "s3-bucket-eu",
-            bucket=f"payment-data-eu-west-1-{environment_suffix}",
+            bucket=f"payment-data-eu-west-1-{environment_suffix}-ab",
             tags={
                 **common_tags,
-                "Name": f"payment-data-eu-west-1-{environment_suffix}",
+                "Name": f"payment-data-eu-west-1-{environment_suffix}-ab",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -837,7 +837,7 @@ def handler(event, context):
         replication_role = IamRole(
             self,
             "s3-replication-role",
-            name=f"payment-s3-replication-{environment_suffix}",
+            name=f"payment-s3-replication-{environment_suffix}-ab",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -848,7 +848,7 @@ def handler(event, context):
             }),
             tags={
                 **common_tags,
-                "Name": f"payment-s3-replication-{environment_suffix}",
+                "Name": f"payment-s3-replication-{environment_suffix}-ab",
                 "Region": "us-east-1",
                 "MigrationBatch": "batch-1"
             },
@@ -920,7 +920,7 @@ def handler(event, context):
         lambda_role = IamRole(
             self,
             "lambda-role",
-            name=f"payment-lambda-role-{environment_suffix}",
+            name=f"payment-lambda-role-{environment_suffix}-ab",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -931,7 +931,7 @@ def handler(event, context):
             }),
             tags={
                 **common_tags,
-                "Name": f"payment-lambda-role-{environment_suffix}",
+                "Name": f"payment-lambda-role-{environment_suffix}-ab",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1096,11 +1096,11 @@ def handler(event, context):
         CloudwatchLogGroup(
             self,
             "api-log-group",
-            name=f"/aws/apigateway/{api_gateway.name}",
+            name=f"/aws/apigateway/{api_gateway.name}-ab",
             retention_in_days=30,
             tags={
                 **common_tags,
-                "Name": f"payment-api-logs-{environment_suffix}",
+                "Name": f"payment-api-logs-{environment_suffix}-ab",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
