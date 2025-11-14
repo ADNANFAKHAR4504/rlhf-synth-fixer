@@ -768,7 +768,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // DR Cluster - CRITICAL FIX: Remove masterUsername and masterPassword
-    // Also add explicit dependency on secretVersion to ensure proper ordering
+    // Wait for primary instance to be fully created before attempting DR cluster
     const drCluster = new aws.rds.Cluster(
       `aurora-dr-${this.props.environmentSuffix}`,
       {
@@ -796,8 +796,9 @@ export class TapStack extends pulumi.ComponentResource {
       {
         provider: this.drProvider,
         parent: this,
-        dependsOn: [primaryCluster, primaryInstance, globalCluster, secretVersion],
+        dependsOn: [primaryCluster, primaryInstance, globalCluster],
         ignoreChanges: ['masterUsername', 'masterPassword'],
+        deleteBeforeReplace: true,
       }
     );
 
