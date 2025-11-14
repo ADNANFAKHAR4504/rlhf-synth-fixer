@@ -245,7 +245,8 @@ class TapStack(pulumi.ComponentResource):
             parameters=[
                 aws.rds.ParameterGroupParameterArgs(
                     name="max_connections",
-                    value="200"
+                    value="200",
+                    apply_method="immediate"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="shared_buffers",
@@ -254,19 +255,23 @@ class TapStack(pulumi.ComponentResource):
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="max_wal_senders",
-                    value="10"
+                    value="10",
+                    apply_method="immediate"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="wal_keep_size",
-                    value="1024"
+                    value="1024",
+                    apply_method="immediate"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="log_statement",
-                    value="all"
+                    value="all",
+                    apply_method="immediate"
                 ),
                 aws.rds.ParameterGroupParameterArgs(
                     name="log_min_duration_statement",
-                    value="1000"
+                    value="1000",
+                    apply_method="immediate"
                 )
             ],
             tags={
