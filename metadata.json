@@ -2,12 +2,13 @@
   "platform": "cdk",
   "language": "ts",
   "complexity": "expert",
-  "team": "synth",
+  "team": "synth-2",
   "turn_type": "single",
   "startedAt": "2025-11-13T09:10:40.390400",
-  "subject": "Failure Recovery and High Availability",
   "subtask": "Failure Recovery Automation",
-  "subject_labels": "Aurora PostgreSQL Serverless v2, DynamoDB Global Tables, ECS Fargate with ALB, CloudWatch with SNS alerts, KMS encryption",
+  "subject_labels": [
+    "Failure Recovery and High Availability"
+  ],
   "po_id": "1s1zk2",
   "aws_services": [
     "aurora",
