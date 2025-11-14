@@ -236,8 +236,8 @@ if __name__ == "__main__":
     # Export key infrastructure outputs
     pulumi.export("vpc_id", stack.vpc.vpc_id)
     pulumi.export("vpc_cidr", vpc_cidr)
-    pulumi.export("public_subnet_ids", stack.vpc.public_subnet_ids)
-    pulumi.export("private_subnet_ids", stack.vpc.private_subnet_ids)
+    pulumi.export("public_subnet_ids", pulumi.Output.all(*stack.vpc.public_subnet_ids))
+    pulumi.export("private_subnet_ids", pulumi.Output.all(*stack.vpc.private_subnet_ids))
     pulumi.export("alb_dns_name", stack.alb.alb_dns_name)
     pulumi.export("alb_arn", stack.alb.alb_arn)
     pulumi.export("target_group_arn", stack.alb.target_group_arn)
@@ -249,4 +249,4 @@ if __name__ == "__main__":
     pulumi.export("s3_bucket_name", stack.s3_bucket.bucket_name)
     pulumi.export("s3_bucket_arn", stack.s3_bucket.bucket_arn)
     pulumi.export("environment", environment)
-    pulumi.export("environment_suffix", environment_suffix)
+    pulumi.export("stack", pulumi.get_stack())

@@ -28,6 +28,14 @@ class TestDeployedInfrastructure(unittest.TestCase):
 
         with open(outputs_file, 'r') as f:
             cls.outputs = json.load(f)
+        
+        # Parse JSON-encoded list values back to Python lists
+        for key in ['public_subnet_ids', 'private_subnet_ids']:
+            if key in cls.outputs and isinstance(cls.outputs[key], str):
+                try:
+                    cls.outputs[key] = json.loads(cls.outputs[key])
+                except (json.JSONDecodeError, TypeError):
+                    pass  # Keep as-is if not valid JSON
 
         # Initialize AWS clients
         cls.region = os.getenv('AWS_REGION', 'us-east-1')
