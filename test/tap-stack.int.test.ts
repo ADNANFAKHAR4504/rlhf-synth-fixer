@@ -58,12 +58,6 @@ if (!region) {
   throw new Error('AWS_REGION environment variable is required');
 }
 
-// Load AWS account id from environment variable
-const accid = process.env.AWS_ACCOUNT_ID;
-if (!accid) {
-  throw new Error('AWS_ACCOUNT_ID environment variable is required');
-}
-
 // Get environment suffix from environment variable 
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX;
 if (!environmentSuffix) {
@@ -345,10 +339,13 @@ describe('Auto-Scaling Workflow - End-to-End Flow', () => {
 // 4. BACKUP AND DISASTER RECOVERY WORKFLOW
 describe('Backup and DR Workflow - End-to-End Flow', () => {
   test('Backup Trigger -> Snapshot Creation -> Backup Vault Storage', async () => {
-    // A. Get Aurora cluster identifier
+    // A. Get Aurora cluster ARN from RDS describe command
     const clusterId = DatabaseEndpoint.split('.')[0];
-    expect(accid).toBeDefined();
-    const clusterArn = `arn:aws:rds:${region}:${accid}:cluster:${clusterId}`;
+    const clusterCommand = new DescribeDBClustersCommand({
+      DBClusterIdentifier: clusterId,
+    });
+    const clusterResponse = await rdsClient.send(clusterCommand);
+    const clusterArn = clusterResponse.DBClusters![0].DBClusterArn!;
 
     // B. Trigger backup job
     try {
