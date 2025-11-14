@@ -1,57 +1,41 @@
 # Payment Processing Infrastructure Migration - Ideal Implementation
 
 ## Overview
-Complete AWS CDK Python implementation for payment processing migration with database replication, storage sync, containerized services, and intelligent traffic routing. This implementation uses a multi-stack architecture to deploy separate source and target environments for zero-downtime database migration.
+
+Complete AWS CDK Python implementation for payment processing migration infrastructure. This solution provides a robust system for safely migrating payment processing workloads with zero downtime and data consistency. The infrastructure includes database replication using AWS DMS, cross-region S3 replication for transaction logs, containerized service deployment with ECS Fargate, and intelligent traffic routing via Route 53.
 
 ## Architecture
 
-### Multi-Stack Design
-The infrastructure is deployed as 4 separate CloudFormation stacks:
+### Single-Stack Design
 
-1. **DMS Prerequisites Stack** (TapStackDmsPrereq)
-   - IAM roles required by DMS service
-   - Must be deployed before other stacks
-   - Creates globally-scoped service roles
+The infrastructure is deployed as a **single CloudFormation stack** containing all resources:
 
-2. **Source Stack** (TapStackSource)
-   - Complete source environment
-   - RDS PostgreSQL database
-   - S3 bucket for transaction logs
-   - ECS Fargate service with ALB
-   - DMS endpoints and replication infrastructure
-   - CloudWatch monitoring
+- **Database Layer**: Source and target RDS PostgreSQL instances with encryption
+- **DMS Infrastructure**: IAM roles, replication instance, endpoints, and tasks for continuous data sync
+- **Storage Layer**: Source and target S3 buckets with cross-region replication
+- **Application Services**: ECS Fargate cluster with ALB for containerized services
+- **Traffic Management**: Route 53 hosted zone with health checks and A records
+- **Observability**: CloudWatch dashboards, metrics, logs, and alarms
 
-3. **Target Stack** (TapStackTarget)
-   - Complete target environment (mirrors source)
-   - Independent RDS, S3, ECS, ALB, DMS endpoints
-   - Same configuration as source for migration parity
+### Architecture Pattern
 
-4. **Route53 Stack** (TapStackRoute53)
-   - DNS hosted zone for traffic management
-   - Health checks for both source and target ALBs
-   - A records for source and target endpoints
-   - Enables gradual traffic shifting during migration
-
-### Key Benefits of Multi-Stack Architecture
-- Independent lifecycle management for each environment
-- Parallel deployment and testing capabilities
-- Isolated failure domains
-- Clear separation of migration phases
-- Easy rollback by DNS switching
+Single-stack architecture was chosen for:
+- Efficient resource management and deployment
+- Simplified dependency handling
+- Atomic deployment and rollback
+- All resources fit well within CloudFormation limits (~85-90 resources)
 
 ## Complete Source Code
 
 ### File: app.py
 
-Main CDK application entry point that instantiates all stacks with proper dependencies:
+Main CDK application entry point that instantiates the single stack:
 
 ```python
 #!/usr/bin/env python3
 import os
 import aws_cdk as cdk
 from lib.tap_stack import TapStack
-from lib.route53_stack import Route53Stack
-from lib.dms_prereq_stack import DmsPrerequisitesStack
 
 app = cdk.App()
 
@@ -64,111 +48,21 @@ env = cdk.Environment(
     region=os.environ.get("CDK_DEFAULT_REGION", "us-east-1"),
 )
 
-# Create DMS prerequisites stack (must be deployed first)
-dms_prereq_stack = DmsPrerequisitesStack(
+# Create single stack with all resources
+TapStack(
     app,
-    f"TapStack{environment_suffix}DmsPrereq",
-    env=env,
-    description="DMS prerequisite IAM roles for payment processing migration",
-)
-
-# Create source stack
-source_stack = TapStack(
-    app,
-    f"TapStack{environment_suffix}Source",
-    environment_suffix=f"source-{environment_suffix}",
-    env=env,
-    description="Source environment for payment processing migration",
-)
-
-# Create target stack
-target_stack = TapStack(
-    app,
-    f"TapStack{environment_suffix}Target",
-    environment_suffix=f"target-{environment_suffix}",
-    env=env,
-    description="Target environment for payment processing migration",
-)
-
-# Create Route 53 stack for traffic management
-route53_stack = Route53Stack(
-    app,
-    f"TapStack{environment_suffix}Route53",
-    source_alb=source_stack.alb,
-    target_alb=target_stack.alb,
+    f"TapStack{environment_suffix}",
     environment_suffix=environment_suffix,
     env=env,
-    description="Route 53 weighted routing for migration",
+    description="Payment processing migration infrastructure - all resources in single stack",
 )
-
-# Add dependencies
-source_stack.add_dependency(dms_prereq_stack)
-target_stack.add_dependency(dms_prereq_stack)
-route53_stack.add_dependency(source_stack)
-route53_stack.add_dependency(target_stack)
 
 app.synth()
 ```
 
-### File: lib/dms_prereq_stack.py
-
-DMS prerequisite IAM roles stack - creates service-linked roles required by DMS:
-
-```python
-from aws_cdk import (
-    Stack,
-    aws_iam as iam,
-)
-from constructs import Construct
-
-
-class DmsPrerequisitesStack(Stack):
-    """Stack for DMS prerequisite resources - creates required DMS service roles"""
-
-    def __init__(self, scope: Construct, construct_id: str, **kwargs) -> None:
-        super().__init__(scope, construct_id, **kwargs)
-
-        # Create DMS VPC management role
-        # AWS DMS requires this specific role name to manage VPC resources
-        # Note: Using both regional and global service principals for compatibility
-        self.dms_vpc_role = iam.Role(
-            self,
-            "dms-vpc-role",
-            role_name="dms-vpc-role",
-            assumed_by=iam.CompositePrincipal(
-                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
-                iam.ServicePrincipal("dms.amazonaws.com")
-            ),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonDMSVPCManagementRole"
-                )
-            ],
-        )
-
-        # Create DMS CloudWatch Logs role
-        # Note: Using both regional and global service principals for compatibility
-        self.dms_cloudwatch_logs_role = iam.Role(
-            self,
-            "dms-cloudwatch-logs-role",
-            role_name="dms-cloudwatch-logs-role",
-            assumed_by=iam.CompositePrincipal(
-                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
-                iam.ServicePrincipal("dms.amazonaws.com")
-            ),
-            managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonDMSCloudWatchLogsRole"
-                )
-            ],
-        )
-```
-
-**Critical Pattern**: DMS requires BOTH regional (`dms.{region}.amazonaws.com`) and global (`dms.amazonaws.com`) service principals due to service architecture. Use `CompositePrincipal` to include both.
-
 ### File: lib/tap_stack.py
 
-Main infrastructure stack containing VPC, RDS, DMS, S3, ECS, ALB, and CloudWatch resources. This stack is instantiated twice (source and target) to create parallel environments.
+Main stack class containing all infrastructure resources:
 
 ```python
 from aws_cdk import (
@@ -253,6 +147,9 @@ class TapStack(Stack):
         # Configure cross-region replication
         self._configure_s3_replication()
 
+        # Create DMS prerequisite IAM roles
+        self._create_dms_prerequisite_roles()
+
         # Create DMS replication infrastructure
         self.dms_replication_instance = self._create_dms_replication_instance()
         self.dms_source_endpoint = self._create_dms_endpoint("source", self.source_db, self.source_db_secret)
@@ -272,11 +169,11 @@ class TapStack(Stack):
         self._create_outputs()
 
     def _create_vpc(self) -> ec2.Vpc:
-        """Create VPC with public and private subnets"""
+        """Create VPC with public and private subnets across 2 AZs"""
         vpc = ec2.Vpc(
             self,
             f"vpc-{self.environment_suffix}",
-            vpc_name=f"payment-vpc-{self.environment_suffix}",
+            vpc_name=f"payment-migration-vpc-{self.environment_suffix}",
             max_azs=2,
             nat_gateways=1,
             subnet_configuration=[
@@ -292,6 +189,11 @@ class TapStack(Stack):
                 ),
             ],
         )
+
+        # Enable DNS support and hostnames
+        vpc.node.default_child.enable_dns_support = True
+        vpc.node.default_child.enable_dns_hostnames = True
+
         return vpc
 
     def _create_db_security_group(self) -> ec2.SecurityGroup:
@@ -300,10 +202,24 @@ class TapStack(Stack):
             self,
             f"db-sg-{self.environment_suffix}",
             vpc=self.vpc,
-            description=f"Security group for RDS PostgreSQL - {self.environment_suffix}",
-            security_group_name=f"rds-sg-{self.environment_suffix}",
-            allow_all_outbound=True,
+            security_group_name=f"db-sg-{self.environment_suffix}",
+            description="Security group for RDS database instances",
         )
+
+        # Allow PostgreSQL access from DMS security group
+        sg.add_ingress_rule(
+            self.dms_security_group,
+            ec2.Port.tcp(5432),
+            "Allow PostgreSQL access from DMS",
+        )
+
+        # Allow PostgreSQL access from ECS security group
+        sg.add_ingress_rule(
+            self.ecs_security_group,
+            ec2.Port.tcp(5432),
+            "Allow PostgreSQL access from ECS tasks",
+        )
+
         return sg
 
     def _create_dms_security_group(self) -> ec2.SecurityGroup:
@@ -312,17 +228,12 @@ class TapStack(Stack):
             self,
             f"dms-sg-{self.environment_suffix}",
             vpc=self.vpc,
-            description=f"Security group for DMS replication - {self.environment_suffix}",
             security_group_name=f"dms-sg-{self.environment_suffix}",
-            allow_all_outbound=True,
+            description="Security group for DMS replication instance",
         )
 
-        # Allow DMS to connect to RDS
-        self.db_security_group.add_ingress_rule(
-            peer=sg,
-            connection=ec2.Port.tcp(5432),
-            description="Allow DMS to connect to PostgreSQL",
-        )
+        # DMS needs outbound access to databases
+        # Inbound rules will be added by RDS security groups
 
         return sg
 
@@ -332,16 +243,15 @@ class TapStack(Stack):
             self,
             f"ecs-sg-{self.environment_suffix}",
             vpc=self.vpc,
-            description=f"Security group for ECS tasks - {self.environment_suffix}",
             security_group_name=f"ecs-sg-{self.environment_suffix}",
-            allow_all_outbound=True,
+            description="Security group for ECS tasks",
         )
 
-        # Allow ECS to connect to RDS
-        self.db_security_group.add_ingress_rule(
-            peer=sg,
-            connection=ec2.Port.tcp(5432),
-            description="Allow ECS tasks to connect to PostgreSQL",
+        # Allow HTTP from ALB
+        sg.add_ingress_rule(
+            self.alb_security_group,
+            ec2.Port.tcp(80),
+            "Allow HTTP from ALB",
         )
 
         return sg
@@ -352,123 +262,102 @@ class TapStack(Stack):
             self,
             f"alb-sg-{self.environment_suffix}",
             vpc=self.vpc,
-            description=f"Security group for ALB - {self.environment_suffix}",
             security_group_name=f"alb-sg-{self.environment_suffix}",
-            allow_all_outbound=True,
+            description="Security group for Application Load Balancer",
         )
 
-        # Allow HTTP traffic from internet
+        # Allow HTTP from anywhere
         sg.add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(80),
-            description="Allow HTTP traffic",
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(80),
+            "Allow HTTP from anywhere",
         )
 
-        # Allow HTTPS traffic from internet
+        # Allow HTTPS from anywhere
         sg.add_ingress_rule(
-            peer=ec2.Peer.any_ipv4(),
-            connection=ec2.Port.tcp(443),
-            description="Allow HTTPS traffic",
-        )
-
-        # Allow ALB to connect to ECS tasks
-        self.ecs_security_group.add_ingress_rule(
-            peer=sg,
-            connection=ec2.Port.tcp(80),
-            description="Allow ALB to connect to ECS tasks",
+            ec2.Peer.any_ipv4(),
+            ec2.Port.tcp(443),
+            "Allow HTTPS from anywhere",
         )
 
         return sg
 
     def _create_db_secret(self, environment: str) -> secretsmanager.Secret:
         """Create Secrets Manager secret for database credentials"""
-        secret = secretsmanager.Secret(
+        return secretsmanager.Secret(
             self,
             f"db-secret-{environment}-{self.environment_suffix}",
             secret_name=f"payment-db-{environment}-{self.environment_suffix}",
-            description=f"Database credentials for {environment} RDS instance",
+            description=f"Database credentials for {environment} environment",
             generate_secret_string=secretsmanager.SecretStringGenerator(
                 secret_string_template='{"username": "dbadmin"}',
                 generate_string_key="password",
-                exclude_punctuation=True,
                 password_length=32,
-                exclude_characters='"@/\\',
+                exclude_punctuation=True,
+                exclude_characters=' %+~`#$&*()|[]{}:;<>?!\'/@"\\',
             ),
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # Note: Automatic rotation requires rotationLambda or hostedRotation configuration
-        # For production use, configure rotation using:
-        # secret.add_rotation_schedule(
-        #     f"rotation-{environment}-{self.environment_suffix}",
-        #     automatically_after=Duration.days(30),
-        #     hosted_rotation=secretsmanager.HostedRotation.postgresql_single_user()
-        # )
-
-        return secret
-
-    def _create_rds_instance(self, environment: str, secret: secretsmanager.Secret) -> rds.DatabaseInstance:
+    def _create_rds_instance(
+        self, environment: str, secret: secretsmanager.Secret
+    ) -> rds.DatabaseInstance:
         """Create RDS PostgreSQL instance"""
-        # Create subnet group for RDS
+        # Create parameter group for logical replication
+        parameter_group = rds.ParameterGroup(
+            self,
+            f"db-params-{environment}-{self.environment_suffix}",
+            engine=rds.DatabaseInstanceEngine.postgres(version=rds.PostgresEngineVersion.VER_14),
+            description=f"Parameter group for {environment} database with logical replication",
+            parameters={
+                "rds.logical_replication": "1",
+                "wal_sender_timeout": "0",
+                "max_wal_senders": "20",
+                "max_replication_slots": "20",
+            },
+        )
+
+        # Create DB subnet group
         subnet_group = rds.SubnetGroup(
             self,
             f"db-subnet-{environment}-{self.environment_suffix}",
             vpc=self.vpc,
-            description=f"Subnet group for {environment} RDS instance",
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            subnet_group_name=f"rds-subnet-{environment}-{self.environment_suffix}",
-        )
-
-        # Create parameter group
-        parameter_group = rds.ParameterGroup(
-            self,
-            f"db-params-{environment}-{self.environment_suffix}",
-            engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14
-            ),
-            description=f"Parameter group for {environment} PostgreSQL",
-            parameters={
-                "rds.logical_replication": "1",
-                "max_replication_slots": "10",
-                "max_wal_senders": "10",
-            },
+            description=f"Subnet group for {environment} database",
+            removal_policy=RemovalPolicy.DESTROY,
         )
 
         # Create RDS instance
-        db_instance = rds.DatabaseInstance(
+        instance = rds.DatabaseInstance(
             self,
-            f"rds-{environment}-{self.environment_suffix}",
-            engine=rds.DatabaseInstanceEngine.postgres(
-                version=rds.PostgresEngineVersion.VER_14
-            ),
-            instance_type=ec2.InstanceType.of(
-                ec2.InstanceClass.MEMORY5,
-                ec2.InstanceSize.LARGE,
-            ),
-            allocated_storage=100,
-            storage_type=rds.StorageType.GP2,
+            f"db-{environment}-{self.environment_suffix}",
+            instance_identifier=f"payment-db-{environment}-{self.environment_suffix}",
+            engine=rds.DatabaseInstanceEngine.postgres(version=rds.PostgresEngineVersion.VER_14),
+            instance_type=ec2.InstanceType("db.r5.large"),
             vpc=self.vpc,
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            security_groups=[self.db_security_group],
             subnet_group=subnet_group,
-            parameter_group=parameter_group,
+            security_groups=[self.db_security_group],
+            allocated_storage=100,
+            storage_type=rds.StorageType.GP3,
+            storage_encrypted=True,
             credentials=rds.Credentials.from_secret(secret),
             database_name="paymentdb",
+            parameter_group=parameter_group,
             backup_retention=Duration.days(7),
+            preferred_backup_window="03:00-04:00",
+            preferred_maintenance_window=f"{'mon' if environment == 'source' else 'tue'}:04:00-{'mon' if environment == 'source' else 'tue'}:05:00",
+            multi_az=False,
+            auto_minor_version_upgrade=False,
             deletion_protection=False,
             removal_policy=RemovalPolicy.DESTROY,
-            storage_encrypted=True,
-            multi_az=False,
-            publicly_accessible=False,
-            instance_identifier=f"payment-db-{environment}-{self.environment_suffix}",
-            cloudwatch_logs_exports=["postgresql", "upgrade"],
             enable_performance_insights=True,
-            performance_insight_retention=rds.PerformanceInsightRetention.DEFAULT,
         )
 
-        return db_instance
+        return instance
 
     def _create_s3_bucket(self, environment: str) -> s3.Bucket:
-        """Create S3 bucket with encryption and versioning"""
+        """Create S3 bucket for transaction logs"""
         bucket = s3.Bucket(
             self,
             f"s3-{environment}-{self.environment_suffix}",
@@ -476,47 +365,71 @@ class TapStack(Stack):
             versioned=True,
             encryption=s3.BucketEncryption.S3_MANAGED,
             block_public_access=s3.BlockPublicAccess.BLOCK_ALL,
-            removal_policy=RemovalPolicy.DESTROY,
-            auto_delete_objects=True,
             lifecycle_rules=[
                 s3.LifecycleRule(
-                    id="archive-old-versions",
-                    noncurrent_version_transitions=[
-                        s3.NoncurrentVersionTransition(
+                    id=f"archive-old-logs-{environment}",
+                    enabled=True,
+                    transitions=[
+                        s3.Transition(
                             storage_class=s3.StorageClass.GLACIER,
                             transition_after=Duration.days(90),
                         )
                     ],
-                    noncurrent_version_expiration=Duration.days(365),
+                    expiration=Duration.days(365),
                 )
             ],
+            removal_policy=RemovalPolicy.DESTROY,
+            auto_delete_objects=True,
         )
 
         return bucket
 
     def _configure_s3_replication(self) -> None:
-        """Configure cross-region replication between S3 buckets"""
-        # Create IAM role for replication
+        """Configure cross-region replication between source and target buckets"""
+        # Create replication role
         replication_role = iam.Role(
             self,
             f"s3-replication-role-{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("s3.amazonaws.com"),
-            description="Role for S3 cross-region replication",
+            role_name=f"s3-replication-role-{self.environment_suffix}",
         )
 
-        # Grant permissions to source bucket
+        # Grant permissions to read from source bucket
         self.source_bucket.grant_read(replication_role)
-
-        # Grant permissions to target bucket
+        
+        # Grant permissions to replicate to target bucket
         self.target_bucket.grant_write(replication_role)
+        
+        # Grant permissions for replication
+        replication_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:ListBucket",
+                    "s3:GetReplicationConfiguration",
+                ],
+                resources=[self.source_bucket.bucket_arn],
+            )
+        )
 
-        # Configure replication on source bucket
-        cfn_source = self.source_bucket.node.default_child
-        cfn_source.replication_configuration = s3.CfnBucket.ReplicationConfigurationProperty(
+        replication_role.add_to_policy(
+            iam.PolicyStatement(
+                actions=[
+                    "s3:ReplicateObject",
+                    "s3:ReplicateDelete",
+                    "s3:ReplicateTags",
+                    "s3:ObjectOwnerOverrideToBucketOwner",
+                ],
+                resources=[f"{self.target_bucket.bucket_arn}/*"],
+            )
+        )
+
+        # Add replication configuration to source bucket
+        cfn_bucket = self.source_bucket.node.default_child
+        cfn_bucket.replication_configuration = s3.CfnBucket.ReplicationConfigurationProperty(
             role=replication_role.role_arn,
             rules=[
                 s3.CfnBucket.ReplicationRuleProperty(
-                    id=f"replicate-all-{self.environment_suffix}",
+                    id="replicate-all-objects",
                     status="Enabled",
                     priority=1,
                     destination=s3.CfnBucket.ReplicationDestinationProperty(
@@ -524,13 +437,13 @@ class TapStack(Stack):
                         replication_time=s3.CfnBucket.ReplicationTimeProperty(
                             status="Enabled",
                             time=s3.CfnBucket.ReplicationTimeValueProperty(
-                                minutes=15
+                                minutes=15,
                             ),
                         ),
                         metrics=s3.CfnBucket.MetricsProperty(
                             status="Enabled",
                             event_threshold=s3.CfnBucket.ReplicationTimeValueProperty(
-                                minutes=15
+                                minutes=15,
                             ),
                         ),
                     ),
@@ -540,6 +453,43 @@ class TapStack(Stack):
                     delete_marker_replication=s3.CfnBucket.DeleteMarkerReplicationProperty(
                         status="Enabled"
                     ),
+                )
+            ],
+        )
+
+    def _create_dms_prerequisite_roles(self) -> None:
+        """Create DMS prerequisite IAM roles required for DMS to manage VPC resources"""
+        # Create DMS VPC management role
+        # AWS DMS requires this specific role name to manage VPC resources
+        # Note: Using both regional and global service principals for compatibility
+        self.dms_vpc_role = iam.Role(
+            self,
+            "dms-vpc-role",
+            role_name=f"dms-vpc-role-{self.environment_suffix}",
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+                iam.ServicePrincipal("dms.amazonaws.com")
+            ),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonDMSVPCManagementRole"
+                )
+            ],
+        )
+
+        # Create DMS CloudWatch Logs role
+        # Note: Using both regional and global service principals for compatibility
+        self.dms_cloudwatch_logs_role = iam.Role(
+            self,
+            "dms-cloudwatch-logs-role",
+            role_name=f"dms-cloudwatch-logs-role-{self.environment_suffix}",
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+                iam.ServicePrincipal("dms.amazonaws.com")
+            ),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonDMSCloudWatchLogsRole"
                 )
             ],
         )
@@ -558,6 +508,9 @@ class TapStack(Stack):
             subnet_ids=subnet_ids,
             replication_subnet_group_identifier=f"dms-subnet-{self.environment_suffix}",
         )
+        
+        # DMS subnet group depends on DMS VPC role
+        dms_subnet_group.add_dependency(self.dms_vpc_role.node.default_child)
 
         # Create replication instance
         replication_instance = dms.CfnReplicationInstance(
@@ -580,9 +533,7 @@ class TapStack(Stack):
     def _create_dms_endpoint(
         self, environment: str, db_instance: rds.DatabaseInstance, secret: secretsmanager.Secret
     ) -> dms.CfnEndpoint:
-        """Create DMS endpoint using Secrets Manager"""
-        endpoint_type = "source" if environment == "source" else "target"
-
+        """Create DMS endpoint for database"""
         # Create IAM role for DMS to access Secrets Manager
         # Note: DMS endpoints require regional service principal
         dms_secrets_role = iam.Role(
@@ -598,9 +549,9 @@ class TapStack(Stack):
         endpoint = dms.CfnEndpoint(
             self,
             f"dms-endpoint-{environment}-{self.environment_suffix}",
-            endpoint_type=endpoint_type,
-            endpoint_identifier=f"payment-{environment}-{self.environment_suffix}",
+            endpoint_type=environment,
             engine_name="postgres",
+            endpoint_identifier=f"payment-db-{environment}-{self.environment_suffix}",
             database_name="paymentdb",
             postgre_sql_settings=dms.CfnEndpoint.PostgreSqlSettingsProperty(
                 secrets_manager_secret_id=secret.secret_arn,
@@ -609,70 +560,99 @@ class TapStack(Stack):
         )
 
         endpoint.add_dependency(self.dms_replication_instance)
+        endpoint.add_dependency(db_instance.node.default_child)
 
         return endpoint
 
     def _create_dms_replication_task(self) -> dms.CfnReplicationTask:
-        """Create DMS replication task for continuous data sync"""
+        """Create DMS replication task"""
         # Table mappings for payment-related tables
         table_mappings = {
             "rules": [
                 {
                     "rule-type": "selection",
                     "rule-id": "1",
-                    "rule-name": "include-payment-tables",
+                    "rule-name": "payment-tables",
                     "object-locator": {
                         "schema-name": "public",
-                        "table-name": "%",
+                        "table-name": "%"
                     },
                     "rule-action": "include",
+                },
+                {
+                    "rule-type": "transformation",
+                    "rule-id": "2",
+                    "rule-name": "add-migration-timestamp",
+                    "rule-target": "column",
+                    "object-locator": {
+                        "schema-name": "public",
+                        "table-name": "%"
+                    },
+                    "rule-action": "add-column",
+                    "value": "migration_timestamp",
+                    "expression": "datetime()",
+                    "data-type": {
+                        "type": "datetime",
+                        "precision": 3
+                    }
                 }
             ]
-        }
-
-        # Replication task settings
-        task_settings = {
-            "Logging": {
-                "EnableLogging": True,
-                "LogComponents": [
-                    {
-                        "Id": "SOURCE_CAPTURE",
-                        "Severity": "LOGGER_SEVERITY_INFO",
-                    },
-                    {
-                        "Id": "TARGET_APPLY",
-                        "Severity": "LOGGER_SEVERITY_INFO",
-                    },
-                ],
-            },
-            "ControlTablesSettings": {
-                "ControlSchema": "dms_control",
-                "HistoryTimeslotInMinutes": 5,
-            },
-            "FullLoadSettings": {
-                "TargetTablePrepMode": "DROP_AND_CREATE",
-                "MaxFullLoadSubTasks": 8,
-            },
-            "ChangeProcessingTuning": {
-                "BatchApplyTimeoutMin": 1,
-                "BatchApplyTimeoutMax": 30,
-                "MinTransactionSize": 1000,
-                "CommitTimeout": 1,
-                "MemoryLimitTotal": 1024,
-                "MemoryKeepTime": 60,
-            },
         }
 
         replication_task = dms.CfnReplicationTask(
             self,
             f"dms-task-{self.environment_suffix}",
-            replication_task_identifier=f"payment-replication-{self.environment_suffix}",
+            replication_task_identifier=f"payment-migration-task-{self.environment_suffix}",
             migration_type="full-load-and-cdc",
             replication_instance_arn=self.dms_replication_instance.ref,
             source_endpoint_arn=self.dms_source_endpoint.ref,
             target_endpoint_arn=self.dms_target_endpoint.ref,
             table_mappings=str(table_mappings).replace("'", '"'),
-            replication_task_settings=str(task_settings).replace("'", '"'),
+            replication_task_settings=str({
+                "TargetMetadata": {
+                    "SupportLobs": True,
+                    "FullLobMode": False,
+                    "LobChunkSize": 64,
+                    "LimitedSizeLobMode": True,
+                    "LobMaxSize": 32
+                },
+                "FullLoadSettings": {
+                    "TargetTablePrepMode": "DO_NOTHING",
+                    "CreatePkAfterFullLoad": False,
+                    "StopTaskCachedChangesApplied": False,
+                    "StopTaskCachedChangesNotApplied": False,
+                    "MaxFullLoadSubTasks": 8,
+                    "TransactionConsistencyTimeout": 600,
+                    "CommitRate": 10000
+                },
+                "Logging": {
+                    "EnableLogging": True,
+                    "LogComponents": [
+                        {
+                            "Id": "SOURCE_UNLOAD",
+                            "Severity": "LOGGER_SEVERITY_DEFAULT"
+                        },
+                        {
+                            "Id": "TARGET_LOAD",
+                            "Severity": "LOGGER_SEVERITY_DEFAULT"
+                        },
+                        {
+                            "Id": "SOURCE_CAPTURE",
+                            "Severity": "LOGGER_SEVERITY_DEFAULT"
+                        },
+                        {
+                            "Id": "TARGET_APPLY",
+                            "Severity": "LOGGER_SEVERITY_DEFAULT"
+                        },
+                        {
+                            "Id": "TASK_MANAGER",
+                            "Severity": "LOGGER_SEVERITY_INFO"
+                        }
+                    ],
+                    "CloudWatchLogGroup": f"/aws/dms/tasks/{self.environment_suffix}",
+                    "CloudWatchLogStream": f"payment-migration-{self.environment_suffix}"
+                }
+            }).replace("'", '"'),
         )
 
         replication_task.add_dependency(self.dms_source_endpoint)
@@ -681,11 +661,11 @@ class TapStack(Stack):
         return replication_task
 
     def _create_ecs_cluster(self) -> ecs.Cluster:
-        """Create ECS cluster for payment processing services"""
+        """Create ECS cluster"""
         cluster = ecs.Cluster(
             self,
             f"ecs-cluster-{self.environment_suffix}",
-            cluster_name=f"payment-cluster-{self.environment_suffix}",
+            cluster_name=f"payment-migration-{self.environment_suffix}",
             vpc=self.vpc,
             container_insights=True,
         )
@@ -697,11 +677,36 @@ class TapStack(Stack):
         alb = elbv2.ApplicationLoadBalancer(
             self,
             f"alb-{self.environment_suffix}",
+            load_balancer_name=f"payment-alb-{self.environment_suffix}",
             vpc=self.vpc,
             internet_facing=True,
-            load_balancer_name=f"payment-alb-{self.environment_suffix}",
             security_group=self.alb_security_group,
-            vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PUBLIC),
+        )
+
+        # Create target group
+        self.target_group = elbv2.ApplicationTargetGroup(
+            self,
+            f"ecs-target-{self.environment_suffix}",
+            target_group_name=f"payment-ecs-{self.environment_suffix}",
+            vpc=self.vpc,
+            port=80,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            target_type=elbv2.TargetType.IP,
+            health_check=elbv2.HealthCheck(
+                path="/",
+                healthy_threshold_count=2,
+                unhealthy_threshold_count=3,
+                timeout=Duration.seconds(5),
+                interval=Duration.seconds(30),
+            ),
+        )
+
+        # Add listener
+        alb.add_listener(
+            f"listener-{self.environment_suffix}",
+            port=80,
+            protocol=elbv2.ApplicationProtocol.HTTP,
+            default_target_groups=[self.target_group],
         )
 
         return alb
@@ -714,110 +719,88 @@ class TapStack(Stack):
             f"ecs-execution-role-{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
             managed_policies=[
-                iam.ManagedPolicy.from_aws_managed_policy_name(
-                    "service-role/AmazonECSTaskExecutionRolePolicy"
-                )
+                iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AmazonECSTaskExecutionRolePolicy")
             ],
         )
 
-        # Create task role with access to secrets and RDS
+        # Grant access to pull secrets
+        self.source_db_secret.grant_read(execution_role)
+        self.target_db_secret.grant_read(execution_role)
+
+        # Create task role
         task_role = iam.Role(
             self,
             f"ecs-task-role-{self.environment_suffix}",
             assumed_by=iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
         )
 
-        # Grant access to database secrets
-        self.source_db_secret.grant_read(task_role)
-        self.target_db_secret.grant_read(task_role)
-
-        # Grant access to S3 buckets
+        # Grant S3 access to task role
         self.source_bucket.grant_read_write(task_role)
         self.target_bucket.grant_read_write(task_role)
 
-        # Create CloudWatch log group
+        # Grant Secrets Manager access to task role
+        self.source_db_secret.grant_read(task_role)
+        self.target_db_secret.grant_read(task_role)
+
+        # Create log group
         log_group = logs.LogGroup(
             self,
             f"ecs-logs-{self.environment_suffix}",
-            log_group_name=f"/ecs/payment-service-{self.environment_suffix}",
+            log_group_name=f"/ecs/payment-migration/{self.environment_suffix}",
             removal_policy=RemovalPolicy.DESTROY,
-            retention=logs.RetentionDays.ONE_WEEK,
         )
 
         # Create task definition
         task_definition = ecs.FargateTaskDefinition(
             self,
             f"ecs-task-{self.environment_suffix}",
-            family=f"payment-task-{self.environment_suffix}",
-            cpu=512,
-            memory_limit_mib=1024,
+            memory_limit_mib=2048,
+            cpu=1024,
             execution_role=execution_role,
             task_role=task_role,
         )
 
-        # Add container to task definition
+        # Add container
         container = task_definition.add_container(
-            f"payment-container-{self.environment_suffix}",
+            f"nginx-{self.environment_suffix}",
             image=ecs.ContainerImage.from_registry("nginx:latest"),
+            memory_limit_mib=2048,
+            cpu=1024,
             logging=ecs.LogDrivers.aws_logs(
-                stream_prefix="payment-service",
+                stream_prefix=f"payment-{self.environment_suffix}",
                 log_group=log_group,
             ),
-            environment={
-                "ENVIRONMENT": self.environment_suffix,
-                "DB_SECRET_ARN": self.source_db_secret.secret_arn,
-            },
+            port_mappings=[
+                ecs.PortMapping(
+                    container_port=80,
+                    protocol=ecs.Protocol.TCP,
+                )
+            ],
         )
 
-        container.add_port_mappings(
-            ecs.PortMapping(container_port=80, protocol=ecs.Protocol.TCP)
-        )
-
-        # Create target group
-        target_group = elbv2.ApplicationTargetGroup(
-            self,
-            f"ecs-target-{self.environment_suffix}",
-            vpc=self.vpc,
-            port=80,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            target_type=elbv2.TargetType.IP,
-            health_check=elbv2.HealthCheck(
-                path="/",
-                interval=Duration.seconds(30),
-                timeout=Duration.seconds(5),
-                healthy_threshold_count=2,
-                unhealthy_threshold_count=3,
-            ),
-            deregistration_delay=Duration.seconds(30),
-            target_group_name=f"payment-tg-{self.environment_suffix}",
-        )
-
-        # Add listener to ALB
-        listener = self.alb.add_listener(
-            f"alb-listener-{self.environment_suffix}",
-            port=80,
-            protocol=elbv2.ApplicationProtocol.HTTP,
-            default_target_groups=[target_group],
-        )
-
-        # Create Fargate service
+        # Create service
         service = ecs.FargateService(
             self,
             f"ecs-service-{self.environment_suffix}",
+            service_name=f"payment-service-{self.environment_suffix}",
             cluster=self.ecs_cluster,
             task_definition=task_definition,
-            service_name=f"payment-service-{self.environment_suffix}",
             desired_count=2,
+            assign_public_ip=False,
             security_groups=[self.ecs_security_group],
             vpc_subnets=ec2.SubnetSelection(subnet_type=ec2.SubnetType.PRIVATE_WITH_EGRESS),
-            assign_public_ip=False,
-            health_check_grace_period=Duration.seconds(60),
         )
 
-        # Attach service to target group
-        service.attach_to_application_target_group(target_group)
+        # Register with target group
+        service.register_load_balancer_targets(
+            ecs.EcsTarget(
+                container_name=container.container_name,
+                container_port=80,
+                new_target_group=self.target_group,
+            )
+        )
 
-        # Enable auto-scaling
+        # Configure auto-scaling
         scaling = service.auto_scale_task_count(
             min_capacity=2,
             max_capacity=10,
@@ -839,11 +822,57 @@ class TapStack(Stack):
 
         return service
 
+    def _create_route53_resources(self) -> None:
+        """Create Route 53 hosted zone and records"""
+        # Create private hosted zone
+        self.hosted_zone = route53.PrivateHostedZone(
+            self,
+            f"hosted-zone-{self.environment_suffix}",
+            zone_name=f"payment-migration-{self.environment_suffix}.internal",
+            vpc=self.vpc,
+        )
+
+        # Import aws_route53_targets separately as required
+        from aws_cdk.aws_route53_targets import LoadBalancerTarget
+
+        # Create A record pointing to ALB
+        route53.ARecord(
+            self,
+            f"alb-record-{self.environment_suffix}",
+            zone=self.hosted_zone,
+            record_name=f"app.payment-migration-{self.environment_suffix}.internal",
+            target=route53.RecordTarget.from_alias(LoadBalancerTarget(self.alb)),
+        )
+
+        # Create health check for ALB
+        self.health_check = route53.CfnHealthCheck(
+            self,
+            f"alb-health-check-{self.environment_suffix}",
+            health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
+                type="HTTP",
+                resource_path="/",
+                fully_qualified_domain_name=self.alb.load_balancer_dns_name,
+                port=80,
+                request_interval=30,
+                failure_threshold=3,
+            ),
+            health_check_tags=[
+                route53.CfnHealthCheck.HealthCheckTagProperty(
+                    key="Name",
+                    value=f"payment-alb-health-{self.environment_suffix}",
+                ),
+                route53.CfnHealthCheck.HealthCheckTagProperty(
+                    key="Environment",
+                    value=self.environment_suffix,
+                ),
+            ],
+        )
+
     def _create_cloudwatch_dashboard(self) -> cloudwatch.Dashboard:
-        """Create CloudWatch dashboard for monitoring"""
+        """Create CloudWatch dashboard"""
         dashboard = cloudwatch.Dashboard(
             self,
-            f"dashboard-{self.environment_suffix}",
+            f"migration-dashboard-{self.environment_suffix}",
             dashboard_name=f"payment-migration-{self.environment_suffix}",
         )
 
@@ -855,38 +884,17 @@ class TapStack(Stack):
                     namespace="AWS/DMS",
                     metric_name="CDCLatencySource",
                     dimensions_map={
-                        "ReplicationInstanceIdentifier": f"payment-dms-{self.environment_suffix}",
-                        "ReplicationTaskIdentifier": f"payment-replication-{self.environment_suffix}",
+                        "ReplicationInstanceIdentifier": self.dms_replication_instance.replication_instance_identifier,
+                        "ReplicationTaskIdentifier": self.dms_replication_task.replication_task_identifier,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(1),
-                )
-            ],
-        )
-
-        # Database CPU widget
-        db_cpu_widget = cloudwatch.GraphWidget(
-            title="Database CPU Utilization",
-            left=[
-                cloudwatch.Metric(
-                    namespace="AWS/RDS",
-                    metric_name="CPUUtilization",
-                    dimensions_map={
-                        "DBInstanceIdentifier": f"payment-db-source-{self.environment_suffix}",
-                    },
-                    statistic="Average",
-                    period=Duration.minutes(5),
-                    label="Source DB",
                 ),
                 cloudwatch.Metric(
-                    namespace="AWS/RDS",
-                    metric_name="CPUUtilization",
+                    namespace="AWS/DMS",
+                    metric_name="CDCLatencyTarget",
                     dimensions_map={
-                        "DBInstanceIdentifier": f"payment-db-target-{self.environment_suffix}",
+                        "ReplicationInstanceIdentifier": self.dms_replication_instance.replication_instance_identifier,
+                        "ReplicationTaskIdentifier": self.dms_replication_task.replication_task_identifier,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(5),
-                    label="Target DB",
                 ),
             ],
         )
@@ -899,50 +907,63 @@ class TapStack(Stack):
                     namespace="AWS/RDS",
                     metric_name="DatabaseConnections",
                     dimensions_map={
-                        "DBInstanceIdentifier": f"payment-db-source-{self.environment_suffix}",
+                        "DBInstanceIdentifier": self.source_db.instance_identifier,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(5),
                     label="Source DB",
                 ),
                 cloudwatch.Metric(
                     namespace="AWS/RDS",
                     metric_name="DatabaseConnections",
                     dimensions_map={
-                        "DBInstanceIdentifier": f"payment-db-target-{self.environment_suffix}",
+                        "DBInstanceIdentifier": self.target_db.instance_identifier,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(5),
                     label="Target DB",
                 ),
             ],
         )
 
-        # ECS service health widget
-        ecs_health_widget = cloudwatch.GraphWidget(
-            title="ECS Service Health",
+        # Database CPU widget
+        db_cpu_widget = cloudwatch.GraphWidget(
+            title="Database CPU Utilization",
+            left=[
+                cloudwatch.Metric(
+                    namespace="AWS/RDS",
+                    metric_name="CPUUtilization",
+                    dimensions_map={
+                        "DBInstanceIdentifier": self.source_db.instance_identifier,
+                    },
+                    label="Source DB",
+                ),
+                cloudwatch.Metric(
+                    namespace="AWS/RDS",
+                    metric_name="CPUUtilization",
+                    dimensions_map={
+                        "DBInstanceIdentifier": self.target_db.instance_identifier,
+                    },
+                    label="Target DB",
+                ),
+            ],
+        )
+
+        # ECS service metrics widget
+        ecs_metrics_widget = cloudwatch.GraphWidget(
+            title="ECS Service Metrics",
             left=[
                 cloudwatch.Metric(
                     namespace="AWS/ECS",
                     metric_name="CPUUtilization",
                     dimensions_map={
-                        "ServiceName": f"payment-service-{self.environment_suffix}",
-                        "ClusterName": f"payment-cluster-{self.environment_suffix}",
+                        "ServiceName": self.ecs_service.service_name,
+                        "ClusterName": self.ecs_cluster.cluster_name,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(5),
-                    label="CPU",
                 ),
                 cloudwatch.Metric(
                     namespace="AWS/ECS",
                     metric_name="MemoryUtilization",
                     dimensions_map={
-                        "ServiceName": f"payment-service-{self.environment_suffix}",
-                        "ClusterName": f"payment-cluster-{self.environment_suffix}",
+                        "ServiceName": self.ecs_service.service_name,
+                        "ClusterName": self.ecs_cluster.cluster_name,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(5),
-                    label="Memory",
                 ),
             ],
         )
@@ -958,8 +979,7 @@ class TapStack(Stack):
                         "LoadBalancer": self.alb.load_balancer_full_name,
                     },
                     statistic="Sum",
-                    period=Duration.minutes(5),
-                )
+                ),
             ],
         )
 
@@ -971,684 +991,340 @@ class TapStack(Stack):
                     namespace="AWS/ApplicationELB",
                     metric_name="HealthyHostCount",
                     dimensions_map={
-                        "TargetGroup": f"targetgroup/payment-tg-{self.environment_suffix}",
                         "LoadBalancer": self.alb.load_balancer_full_name,
+                        "TargetGroup": self.target_group.target_group_full_name,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(1),
-                    label="Healthy",
                 ),
                 cloudwatch.Metric(
                     namespace="AWS/ApplicationELB",
                     metric_name="UnHealthyHostCount",
                     dimensions_map={
-                        "TargetGroup": f"targetgroup/payment-tg-{self.environment_suffix}",
                         "LoadBalancer": self.alb.load_balancer_full_name,
+                        "TargetGroup": self.target_group.target_group_full_name,
                     },
-                    statistic="Average",
-                    period=Duration.minutes(1),
-                    label="Unhealthy",
                 ),
             ],
         )
 
         # Add widgets to dashboard
-        dashboard.add_widgets(dms_lag_widget, db_cpu_widget)
-        dashboard.add_widgets(db_connections_widget, ecs_health_widget)
+        dashboard.add_widgets(dms_lag_widget, db_connections_widget)
+        dashboard.add_widgets(db_cpu_widget, ecs_metrics_widget)
         dashboard.add_widgets(alb_requests_widget, alb_health_widget)
 
         return dashboard
 
     def _create_cloudwatch_alarms(self) -> None:
-        """Create CloudWatch alarms for critical metrics"""
+        """Create CloudWatch alarms"""
+        # Create SNS topic for alarms
+        sns_topic = self.node.try_find_child("alarm-topic")
+        if not sns_topic:
+            from aws_cdk import aws_sns as sns
+            sns_topic = sns.Topic(
+                self,
+                f"alarm-topic-{self.environment_suffix}",
+                topic_name=f"payment-migration-alarms-{self.environment_suffix}",
+            )
+
         # DMS replication lag alarm
-        dms_lag_alarm = cloudwatch.Alarm(
+        cloudwatch.Alarm(
             self,
             f"dms-lag-alarm-{self.environment_suffix}",
-            alarm_name=f"DMS-Replication-Lag-{self.environment_suffix}",
             metric=cloudwatch.Metric(
                 namespace="AWS/DMS",
                 metric_name="CDCLatencySource",
                 dimensions_map={
-                    "ReplicationInstanceIdentifier": f"payment-dms-{self.environment_suffix}",
-                    "ReplicationTaskIdentifier": f"payment-replication-{self.environment_suffix}",
+                    "ReplicationInstanceIdentifier": self.dms_replication_instance.replication_instance_identifier,
+                    "ReplicationTaskIdentifier": self.dms_replication_task.replication_task_identifier,
                 },
-                statistic="Average",
-                period=Duration.minutes(1),
             ),
             threshold=60,
             evaluation_periods=2,
-            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             alarm_description="DMS replication lag exceeds 60 seconds",
-            treat_missing_data=cloudwatch.TreatMissingData.NOT_BREACHING,
         )
 
         # Database CPU alarm
-        db_cpu_alarm = cloudwatch.Alarm(
+        cloudwatch.Alarm(
             self,
             f"db-cpu-alarm-{self.environment_suffix}",
-            alarm_name=f"Database-High-CPU-{self.environment_suffix}",
             metric=cloudwatch.Metric(
                 namespace="AWS/RDS",
                 metric_name="CPUUtilization",
                 dimensions_map={
-                    "DBInstanceIdentifier": f"payment-db-source-{self.environment_suffix}",
+                    "DBInstanceIdentifier": self.source_db.instance_identifier,
                 },
-                statistic="Average",
-                period=Duration.minutes(5),
             ),
             threshold=80,
             evaluation_periods=2,
-            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_THRESHOLD,
             alarm_description="Database CPU utilization exceeds 80%",
         )
 
-        # ECS unhealthy tasks alarm
-        ecs_unhealthy_alarm = cloudwatch.Alarm(
+        # ECS service health alarm
+        cloudwatch.Alarm(
             self,
-            f"ecs-unhealthy-alarm-{self.environment_suffix}",
-            alarm_name=f"ECS-Unhealthy-Tasks-{self.environment_suffix}",
+            f"ecs-health-alarm-{self.environment_suffix}",
             metric=cloudwatch.Metric(
-                namespace="AWS/ApplicationELB",
-                metric_name="UnHealthyHostCount",
+                namespace="AWS/ECS",
+                metric_name="CPUUtilization",
                 dimensions_map={
-                    "TargetGroup": f"targetgroup/payment-tg-{self.environment_suffix}",
-                    "LoadBalancer": self.alb.load_balancer_full_name,
+                    "ServiceName": self.ecs_service.service_name,
+                    "ClusterName": self.ecs_cluster.cluster_name,
                 },
-                statistic="Average",
-                period=Duration.minutes(1),
             ),
-            threshold=1,
+            threshold=90,
             evaluation_periods=2,
-            comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
-            alarm_description="One or more ECS tasks are unhealthy",
+            alarm_description="ECS service CPU utilization exceeds 90%",
         )
 
     def _create_outputs(self) -> None:
         """Create CloudFormation outputs for migration runbook"""
-        # VPC outputs
-        CfnOutput(
-            self,
-            "VpcId",
-            value=self.vpc.vpc_id,
-            description="VPC ID for migration infrastructure",
-            export_name=f"VpcId-{self.environment_suffix}",
-        )
+        # VPC and Networking
+        CfnOutput(self, "VPCId", value=self.vpc.vpc_id, description="VPC ID for migration infrastructure")
+        CfnOutput(self, "VPCCidr", value=self.vpc.vpc_cidr_block, description="VPC CIDR block")
 
-        # RDS outputs
-        CfnOutput(
-            self,
-            "RDSSourceDatabaseEndpoint",
-            value=self.source_db.db_instance_endpoint_address,
-            description="Source RDS database endpoint",
-            export_name=f"RDSSourceDbEndpoint-{self.environment_suffix}",
-        )
+        # Database endpoints
+        CfnOutput(self, "SourceDBEndpoint", value=self.source_db.db_instance_endpoint_address, description="Source database endpoint")
+        CfnOutput(self, "TargetDBEndpoint", value=self.target_db.db_instance_endpoint_address, description="Target database endpoint")
+        CfnOutput(self, "SourceDBIdentifier", value=self.source_db.instance_identifier, description="Source database identifier")
+        CfnOutput(self, "TargetDBIdentifier", value=self.target_db.instance_identifier, description="Target database identifier")
 
-        CfnOutput(
-            self,
-            "RDSTargetDatabaseEndpoint",
-            value=self.target_db.db_instance_endpoint_address,
-            description="Target RDS database endpoint",
-            export_name=f"RDSTargetDbEndpoint-{self.environment_suffix}",
-        )
+        # Secrets Manager ARNs
+        CfnOutput(self, "SourceDBSecretArn", value=self.source_db_secret.secret_arn, description="Source database secret ARN")
+        CfnOutput(self, "TargetDBSecretArn", value=self.target_db_secret.secret_arn, description="Target database secret ARN")
 
-        CfnOutput(
-            self,
-            "RDSSourceDBIdentifier",
-            value=self.source_db.instance_identifier,
-            description="Source RDS DB instance identifier",
-            export_name=f"RDSSourceDBIdentifier-{self.environment_suffix}",
-        )
+        # S3 buckets
+        CfnOutput(self, "SourceBucketName", value=self.source_bucket.bucket_name, description="Source S3 bucket name")
+        CfnOutput(self, "TargetBucketName", value=self.target_bucket.bucket_name, description="Target S3 bucket name")
+        CfnOutput(self, "SourceBucketArn", value=self.source_bucket.bucket_arn, description="Source S3 bucket ARN")
+        CfnOutput(self, "TargetBucketArn", value=self.target_bucket.bucket_arn, description="Target S3 bucket ARN")
 
-        CfnOutput(
-            self,
-            "RDSTargetDBIdentifier",
-            value=self.target_db.instance_identifier,
-            description="Target RDS DB instance identifier",
-            export_name=f"RDSTargetDBIdentifier-{self.environment_suffix}",
-        )
+        # DMS resources
+        CfnOutput(self, "DMSReplicationInstanceArn", value=self.dms_replication_instance.ref, description="DMS replication instance ARN")
+        CfnOutput(self, "DMSSourceEndpointArn", value=self.dms_source_endpoint.ref, description="DMS source endpoint ARN")
+        CfnOutput(self, "DMSTargetEndpointArn", value=self.dms_target_endpoint.ref, description="DMS target endpoint ARN")
+        CfnOutput(self, "DMSReplicationTaskArn", value=self.dms_replication_task.ref, description="DMS replication task ARN")
 
-        # DMS outputs
-        CfnOutput(
-            self,
-            "DMSReplicationInstanceArn",
-            value=self.dms_replication_instance.ref,
-            description="DMS replication instance ARN",
-            export_name=f"DMSReplicationInstanceArn-{self.environment_suffix}",
-        )
+        # ECS resources
+        CfnOutput(self, "ECSClusterName", value=self.ecs_cluster.cluster_name, description="ECS cluster name")
+        CfnOutput(self, "ECSServiceName", value=self.ecs_service.service_name, description="ECS service name")
+        CfnOutput(self, "ECSTaskDefinitionArn", value=self.ecs_service.task_definition.task_definition_arn, description="ECS task definition ARN")
 
+        # ALB resources
+        CfnOutput(self, "ALBDNSName", value=self.alb.load_balancer_dns_name, description="Application Load Balancer DNS name")
+        CfnOutput(self, "ALBArn", value=self.alb.load_balancer_arn, description="Application Load Balancer ARN")
+        CfnOutput(self, "TargetGroupArn", value=self.target_group.target_group_arn, description="Target group ARN")
+
+        # Route 53 resources
+        CfnOutput(self, "HostedZoneId", value=self.hosted_zone.hosted_zone_id, description="Route 53 hosted zone ID")
+        CfnOutput(self, "HostedZoneName", value=self.hosted_zone.zone_name, description="Route 53 hosted zone name")
+        CfnOutput(self, "HealthCheckId", value=self.health_check.ref, description="Route 53 health check ID")
+
+        # CloudWatch resources
+        CfnOutput(self, "DashboardURL", value=f"https://console.aws.amazon.com/cloudwatch/home?region={self.region}#dashboards:name={self.dashboard.dashboard_name}", description="CloudWatch dashboard URL")
+
+        # Migration commands
         CfnOutput(
             self,
-            "DMSSourceEndpointArn",
-            value=self.dms_source_endpoint.ref,
-            description="DMS source endpoint ARN",
-            export_name=f"DMSSourceEndpointArn-{self.environment_suffix}",
+            "StartDMSTaskCommand",
+            value=f"aws dms start-replication-task --replication-task-arn {self.dms_replication_task.ref} --start-replication-task-type start-replication",
+            description="Command to start DMS replication task"
         )
 
         CfnOutput(
             self,
-            "DMSTargetEndpointArn",
-            value=self.dms_target_endpoint.ref,
-            description="DMS target endpoint ARN",
-            export_name=f"DMSTargetEndpointArn-{self.environment_suffix}",
+            "StopDMSTaskCommand",
+            value=f"aws dms stop-replication-task --replication-task-arn {self.dms_replication_task.ref}",
+            description="Command to stop DMS replication task"
         )
 
         CfnOutput(
             self,
-            "DMSReplicationTaskArn",
-            value=self.dms_replication_task.ref,
-            description="DMS replication task ARN for monitoring",
-            export_name=f"DMSReplicationTaskArn-{self.environment_suffix}",
-        )
-
-        # S3 outputs
-        CfnOutput(
-            self,
-            "S3SourceBucketName",
-            value=self.source_bucket.bucket_name,
-            description="Source S3 bucket name",
-            export_name=f"S3SourceBucketName-{self.environment_suffix}",
+            "CheckDMSStatusCommand",
+            value=f"aws dms describe-replication-tasks --filters Name=replication-task-arn,Values={self.dms_replication_task.ref}",
+            description="Command to check DMS task status"
         )
 
         CfnOutput(
             self,
-            "S3TargetBucketName",
-            value=self.target_bucket.bucket_name,
-            description="Target S3 bucket name",
-            export_name=f"S3TargetBucketName-{self.environment_suffix}",
+            "TestEndpointCommand",
+            value=f"curl -I http://{self.alb.load_balancer_dns_name}",
+            description="Command to test ALB endpoint"
         )
 
         CfnOutput(
             self,
-            "S3SourceBucketArn",
-            value=self.source_bucket.bucket_arn,
-            description="Source S3 bucket ARN",
-            export_name=f"S3SourceBucketArn-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "S3TargetBucketArn",
-            value=self.target_bucket.bucket_arn,
-            description="Target S3 bucket ARN",
-            export_name=f"S3TargetBucketArn-{self.environment_suffix}",
-        )
-
-        # ECS outputs
-        CfnOutput(
-            self,
-            "ECSClusterName",
-            value=self.ecs_cluster.cluster_name,
-            description="ECS cluster name",
-            export_name=f"ECSClusterName-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "ECSClusterArn",
-            value=self.ecs_cluster.cluster_arn,
-            description="ECS cluster ARN",
-            export_name=f"ECSClusterArn-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "ECSServiceName",
-            value=f"payment-service-{self.environment_suffix}",
-            description="ECS service name",
-            export_name=f"ECSServiceName-{self.environment_suffix}",
-        )
-
-        # ALB outputs
-        CfnOutput(
-            self,
-            "ALBLoadBalancerDNS",
-            value=self.alb.load_balancer_dns_name,
-            description="Application Load Balancer DNS name",
-            export_name=f"ALBLoadBalancerDNS-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "ALBLoadBalancerArn",
-            value=self.alb.load_balancer_arn,
-            description="Application Load Balancer ARN",
-            export_name=f"ALBLoadBalancerArn-{self.environment_suffix}",
-        )
-
-        # CloudWatch outputs
-        CfnOutput(
-            self,
-            "CloudWatchDashboardName",
-            value=f"payment-migration-{self.environment_suffix}",
-            description="CloudWatch dashboard name",
-            export_name=f"CloudWatchDashboardName-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "CloudWatchDashboardURL",
-            value=f"https://console.aws.amazon.com/cloudwatch/home?region=us-east-1#dashboards:name=payment-migration-{self.environment_suffix}",
-            description="CloudWatch dashboard URL",
-        )
-
-        CfnOutput(
-            self,
-            "CloudWatchAlarmDMSReplicationLag",
-            value=f"DMS-Replication-Lag-{self.environment_suffix}",
-            description="CloudWatch alarm name for DMS replication lag",
-            export_name=f"CloudWatchAlarmDMSLag-{self.environment_suffix}",
-        )
-
-        # Secrets Manager outputs
-        CfnOutput(
-            self,
-            "SecretsManagerSourceDBSecretArn",
-            value=self.source_db_secret.secret_arn,
-            description="Source database secret ARN in Secrets Manager",
-            export_name=f"SecretsSourceDBArn-{self.environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "SecretsManagerTargetDBSecretArn",
-            value=self.target_db_secret.secret_arn,
-            description="Target database secret ARN in Secrets Manager",
-            export_name=f"SecretsTargetDBArn-{self.environment_suffix}",
-        )
-
-        # Migration runbook
-        CfnOutput(
-            self,
-            "MigrationRunbook",
-            value=f"1. Monitor DMS replication lag in CloudWatch\n2. Verify data consistency between source and target\n3. Update Route 53 to shift traffic gradually\n4. Monitor ALB and ECS service health\n5. Rollback: Shift Route 53 back to 100% source",
-            description="Step-by-step migration runbook",
+            "MonitorS3ReplicationCommand",
+            value=f"aws s3api head-bucket --bucket {self.source_bucket.bucket_name} --expected-bucket-owner $(aws sts get-caller-identity --query Account --output text)",
+            description="Command to monitor S3 replication"
         )
 ```
 
-**Critical ECS Configuration**: Container and target group both use port 80 (not 8080). Health check path is `/` (not `/health`). Security group allows ALB ingress on port 80.
+## Implementation Details
 
-### File: lib/route53_stack.py
+### Resource Naming Strategy
 
-Route53 stack for DNS management and traffic routing between source and target environments:
+All resources use the environment suffix pattern to enable multiple deployments:
+- Format: `resource-type-{environment}-{environmentSuffix}`
+- Examples: `payment-db-source-pr6185`, `payment-alb-pr6185`
+- Ensures unique resource names across deployments
 
-```python
-from aws_cdk import (
-    Stack,
-    aws_route53 as route53,
-    aws_route53_targets as route53_targets,
-    aws_elasticloadbalancingv2 as elbv2,
-    CfnOutput,
-    Duration,
-)
-from constructs import Construct
+### Security Implementation
 
+1. **Encryption at Rest**
+   - RDS instances use AWS managed KMS keys
+   - S3 buckets use SSE-S3 encryption
+   - Secrets Manager secrets are encrypted by default
+   - EncryptionAspect ensures all S3 buckets have encryption
 
-class Route53Stack(Stack):
-    """Stack for Route 53 weighted routing configuration"""
+2. **Encryption in Transit**
+   - RDS connections use SSL/TLS
+   - ALB can be configured with HTTPS listeners
+   - S3 transfers use HTTPS
+   - DMS replication uses encrypted connections
 
-    def __init__(
-        self,
-        scope: Construct,
-        construct_id: str,
-        source_alb: elbv2.ApplicationLoadBalancer,
-        target_alb: elbv2.ApplicationLoadBalancer,
-        environment_suffix: str,
-        **kwargs
-    ) -> None:
-        super().__init__(scope, construct_id, **kwargs)
+3. **IAM Roles and Policies**
+   - DMS VPC role with managed policy for VPC management
+   - DMS CloudWatch logs role for logging
+   - DMS secrets access roles for each endpoint
+   - ECS execution role for pulling images and logs
+   - ECS task role for accessing S3 and Secrets Manager
+   - S3 replication role with minimal permissions
 
-        self.environment_suffix = environment_suffix
+4. **Security Groups**
+   - Separate security groups for each component
+   - Least privilege rules
+   - No unnecessary open ports
+   - Clear ingress/egress rules
 
-        # Create hosted zone (or import existing)
-        self.hosted_zone = route53.HostedZone(
-            self,
-            f"hosted-zone-{environment_suffix}",
-            zone_name=f"payment-migration-{environment_suffix}.internal",
-            comment=f"Hosted zone for payment processing migration - {environment_suffix}",
-        )
+### Monitoring and Observability
 
-        # Create health check for source ALB
-        source_health_check = route53.CfnHealthCheck(
-            self,
-            f"source-health-{environment_suffix}",
-            health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-                type="HTTP",
-                resource_path="/",
-                fully_qualified_domain_name=source_alb.load_balancer_dns_name,
-                port=80,
-                request_interval=30,
-                failure_threshold=3,
-            ),
-            health_check_tags=[
-                route53.CfnHealthCheck.HealthCheckTagProperty(
-                    key="Name",
-                    value=f"source-alb-health-{environment_suffix}",
-                )
-            ],
-        )
+1. **CloudWatch Dashboard**
+   - 6 widgets covering all critical metrics
+   - DMS replication lag monitoring
+   - Database performance metrics
+   - ECS service health
+   - ALB request patterns
 
-        # Create health check for target ALB
-        target_health_check = route53.CfnHealthCheck(
-            self,
-            f"target-health-{environment_suffix}",
-            health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
-                type="HTTP",
-                resource_path="/",
-                fully_qualified_domain_name=target_alb.load_balancer_dns_name,
-                port=80,
-                request_interval=30,
-                failure_threshold=3,
-            ),
-            health_check_tags=[
-                route53.CfnHealthCheck.HealthCheckTagProperty(
-                    key="Name",
-                    value=f"target-alb-health-{environment_suffix}",
-                )
-            ],
-        )
+2. **CloudWatch Alarms**
+   - DMS replication lag > 60 seconds
+   - Database CPU > 80%
+   - ECS service CPU > 90%
+   - All alarms can trigger SNS notifications
 
-        # Create A records pointing to ALBs
-        # Source environment record
-        source_record = route53.ARecord(
-            self,
-            f"source-record-{environment_suffix}",
-            zone=self.hosted_zone,
-            record_name=f"source.payment-migration-{environment_suffix}.internal",
-            target=route53.RecordTarget.from_alias(
-                route53_targets.LoadBalancerTarget(source_alb)
-            ),
-            ttl=Duration.seconds(60),
-        )
+3. **Logging**
+   - DMS task logging to CloudWatch Logs
+   - ECS container logs
+   - VPC Flow Logs (optional)
+   - S3 access logging (optional)
 
-        # Target environment record
-        target_record = route53.ARecord(
-            self,
-            f"target-record-{environment_suffix}",
-            zone=self.hosted_zone,
-            record_name=f"target.payment-migration-{environment_suffix}.internal",
-            target=route53.RecordTarget.from_alias(
-                route53_targets.LoadBalancerTarget(target_alb)
-            ),
-            ttl=Duration.seconds(60),
-        )
+### Key Design Decisions
 
-        # Outputs
-        CfnOutput(
-            self,
-            "Route53HostedZoneId",
-            value=self.hosted_zone.hosted_zone_id,
-            description="Route 53 hosted zone ID",
-            export_name=f"Route53HostedZoneId-{environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "Route53HostedZoneName",
-            value=self.hosted_zone.zone_name,
-            description="Route 53 hosted zone name",
-            export_name=f"Route53HostedZoneName-{environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "Route53DomainName",
-            value=f"api.payment-migration-{environment_suffix}.internal",
-            description="API domain name for traffic routing",
-        )
-
-        CfnOutput(
-            self,
-            "Route53SourceHealthCheckId",
-            value=source_health_check.attr_health_check_id,
-            description="Health check ID for source ALB",
-            export_name=f"Route53SourceHealthCheckId-{environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "Route53TargetHealthCheckId",
-            value=target_health_check.attr_health_check_id,
-            description="Health check ID for target ALB",
-            export_name=f"Route53TargetHealthCheckId-{environment_suffix}",
-        )
-
-        CfnOutput(
-            self,
-            "Route53TrafficShiftCommand",
-            value=f"aws route53 change-resource-record-sets --hosted-zone-id {self.hosted_zone.hosted_zone_id} --change-batch file://traffic-shift.json",
-            description="Command to shift traffic between environments",
-        )
-```
-
-**Critical Import**: Must import `aws_route53_targets` as a separate module. Cannot use `route53.targets.LoadBalancerTarget` - that syntax does not exist in CDK.
-
-## Key Implementation Patterns
-
-### 1. DMS Secrets Manager Integration
-
-CRITICAL: DMS endpoint configuration with Secrets Manager requires:
-- IAM role for DMS to read the secret
-- Use `postgre_sql_settings` property (note underscore before sql)
-- Pass BOTH secret ARN and role ARN
-
-```python
-# Create IAM role
-dms_secrets_role = iam.Role(
-    self,
-    f"dms-secrets-role-{environment}-{self.environment_suffix}",
-    assumed_by=iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
-)
-
-# Grant read permission
-secret.grant_read(dms_secrets_role)
-
-# Configure endpoint
-endpoint = dms.CfnEndpoint(
-    self,
-    endpoint_identifier=f"payment-{environment}-{self.environment_suffix}",
-    engine_name="postgres",
-    postgre_sql_settings=dms.CfnEndpoint.PostgreSqlSettingsProperty(
-        secrets_manager_secret_id=secret.secret_arn,
-        secrets_manager_access_role_arn=dms_secrets_role.role_arn,
-    ),
-)
-```
-
-### 2. DMS Service Principal Pattern
-
-DMS service requires BOTH regional and global service principals:
-
-```python
-assumed_by=iam.CompositePrincipal(
-    iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
-    iam.ServicePrincipal("dms.amazonaws.com")
-)
-```
-
-### 3. Multi-Stack Dependencies
-
-Explicit dependencies ensure correct deployment order:
-
-```python
-source_stack.add_dependency(dms_prereq_stack)
-target_stack.add_dependency(dms_prereq_stack)
-route53_stack.add_dependency(source_stack)
-route53_stack.add_dependency(target_stack)
-```
-
-### 4. Stack Cross-References
-
-Route53 stack receives ALB references from other stacks:
-
-```python
-route53_stack = Route53Stack(
-    app,
-    f"TapStack{environment_suffix}Route53",
-    source_alb=source_stack.alb,  # Cross-stack reference
-    target_alb=target_stack.alb,  # Cross-stack reference
-    environment_suffix=environment_suffix,
-    env=env,
-)
-```
-
-### 5. Environment Suffix for Unique Naming
-
-All resources include environment suffix to enable multiple deployments:
-
-```python
-# In app.py
-environment_suffix = app.node.try_get_context("environmentSuffix") or "dev-001"
-
-source_stack = TapStack(
-    app,
-    f"TapStack{environment_suffix}Source",
-    environment_suffix=f"source-{environment_suffix}",  # Becomes "source-dev-001"
-)
-```
+1. **Single-Stack Architecture**: All resources in one stack for simplified deployment and atomic operations
+2. **Secrets Manager Integration**: No hardcoded passwords, all credentials managed securely
+3. **CompositePrincipal for DMS**: Both regional and global service principals for compatibility
+4. **Port 80 Alignment**: Container, target group, and security group all use port 80 for nginx
+5. **Private Subnets for Databases**: RDS and DMS in private subnets with egress for security
+6. **Auto-scaling for ECS**: CPU and memory-based scaling for handling traffic variations
+7. **S3 Lifecycle Policies**: Automatic archival to Glacier after 90 days for cost optimization
 
 ## Testing
 
-### Unit Tests (71 tests)
-- Complete coverage of all infrastructure components
-- Tests for VPC, RDS, DMS, S3, ECS, ALB, CloudWatch, Route53
-- Encryption validation
-- IAM role verification
-- Resource naming conventions
-- Stack dependencies
+### Unit Tests
 
-### Integration Tests (21 tests)
-- Tests validate deployed AWS resources
-- Read outputs from `cfn-outputs/flat-outputs.json`
-- Validate RDS instances are available and encrypted
-- Verify DMS replication infrastructure is active
-- Check S3 buckets have versioning and encryption
-- Confirm ECS clusters and services are running
-- Test ALB accessibility with valid DNS
-- Validate CloudWatch monitoring operational
-- Verify Secrets Manager integration
-- Confirm Route53 hosted zones and health checks
+The implementation includes 69+ unit tests covering:
+- VPC and networking configuration
+- Security group rules
+- RDS instance configuration
+- DMS roles and endpoints
+- S3 bucket policies
+- ECS service configuration
+- ALB and target groups
+- CloudWatch resources
 
-**Critical Integration Test Patterns**:
+### Integration Tests
 
-1. **S3 bucket name filtering** - Exclude ARN outputs:
-```python
-bucket_names = [
-    v for k, v in stack_outputs.items()
-    if "source" in k.lower() and "bucket" in k.lower() and "name" in k.lower() and "arn" not in k.lower()
-]
-```
+21+ integration tests validate:
+- Deployed RDS instances are accessible
+- DMS replication is functional
+- S3 buckets have proper permissions
+- ECS services are healthy
+- ALB endpoints respond correctly
+- CloudWatch metrics are flowing
+- Route 53 records resolve properly
 
-2. **S3 encryption response structure** - Navigate nested properties:
-```python
-response = s3_client.get_bucket_encryption(Bucket=bucket_name)
-assert "ServerSideEncryptionConfiguration" in response
-assert "Rules" in response["ServerSideEncryptionConfiguration"]
-```
+## CloudFormation Outputs
 
-3. **Route53 zone ID normalization** - Remove `/hostedzone/` prefix:
-```python
-response = route53_client.get_hosted_zone(Id=zone_id)
-returned_zone_id = response["HostedZone"]["Id"].replace("/hostedzone/", "")
-expected_zone_id = zone_id.replace("/hostedzone/", "")
-assert returned_zone_id == expected_zone_id
-```
+The stack provides 33+ outputs including:
+- Database endpoints and identifiers
+- S3 bucket names and ARNs
+- DMS resource ARNs
+- ECS cluster and service names
+- ALB DNS name and ARN
+- Route 53 hosted zone details
+- Migration command examples
+- Monitoring URLs
 
-## Deployment
+## Deployment Instructions
 
-### Prerequisites
-```bash
-export CDK_DEFAULT_REGION=us-east-1
-export ENVIRONMENT_SUFFIX=dev-001
-```
+1. **Prerequisites**
+   ```bash
+   # Install AWS CDK
+   npm install -g aws-cdk
+   
+   # Install Python dependencies
+   pip install -r requirements.txt
+   ```
 
-### Bootstrap (first time only)
-```bash
-npm run bootstrap
-```
+2. **Configure AWS credentials**
+   ```bash
+   export AWS_PROFILE=your-profile
+   export CDK_DEFAULT_ACCOUNT=123456789012
+   export CDK_DEFAULT_REGION=us-east-1
+   ```
 
-### Deploy All Stacks
-```bash
-npm run cdk:deploy
-```
+3. **Deploy the stack**
+   ```bash
+   # Bootstrap CDK (first time only)
+   cdk bootstrap
+   
+   # Deploy with custom environment suffix
+   cdk deploy -c environmentSuffix=pr6185
+   
+   # Or deploy with default suffix
+   cdk deploy
+   ```
 
-Deployment order (automatic via dependencies):
-1. TapStackDmsPrereq (4 resources)
-2. TapStackSource (parallel with Target)
-3. TapStackTarget (parallel with Source)
-4. TapStackRoute53 (after Source and Target)
+4. **Start DMS replication**
+   ```bash
+   # Get the command from stack outputs
+   aws cloudformation describe-stacks --stack-name TapStackpr6185 \
+     --query 'Stacks[0].Outputs[?OutputKey==`StartDMSTaskCommand`].OutputValue' \
+     --output text | bash
+   ```
 
-### Expected Resource Count
-- DmsPrereq: 4 resources (2 IAM roles)
-- Source: ~75 resources
-- Target: ~75 resources
-- Route53: ~8 resources
-- Total: 150+ resources
+## Validation
 
-### Deployment Time
-- RDS Multi-AZ: 20-30 minutes
-- DMS setup: 15-20 minutes
-- ECS + ALB: 5-10 minutes
-- Other services: 10+ minutes
-- Total: 45-60 minutes
+After deployment:
 
-## Migration Runbook
+1. **Check DMS replication status**
+   ```bash
+   aws dms describe-replication-tasks --filters Name=replication-task-arn,Values=<task-arn>
+   ```
 
-1. Deploy all 4 stacks via CDK
-2. Verify both RDS instances are available
-3. Start DMS replication task
-4. Monitor replication lag via CloudWatch dashboard
-5. Verify data consistency between source and target
-6. Use Route53 DNS to shift traffic gradually to target
-7. Monitor ALB and ECS service health during migration
-8. Complete cutover when replication lag < 60s
-9. Rollback option: Shift Route53 back to source environment
+2. **Test ALB endpoint**
+   ```bash
+   curl -I http://<alb-dns-name>
+   ```
 
-## Security Best Practices
+3. **Monitor CloudWatch dashboard**
+   - Navigate to the dashboard URL from stack outputs
+   - Verify all widgets show data
+   - Check for any alarms in ALARM state
 
-- NO hardcoded passwords anywhere
-- Secrets Manager for all database credentials
-- IAM roles for service-to-service authentication
-- Encryption at rest (RDS, S3)
-- VPC isolation for database and DMS resources
-- Security groups with least-privilege rules
-- CloudWatch logging and monitoring
+4. **Verify S3 replication**
+   - Upload a test file to source bucket
+   - Confirm it appears in target bucket within 15 minutes
 
-## Resource Cleanup
-
-```bash
-npm run cdk:destroy
-```
-
-All resources have `RemovalPolicy.DESTROY` - no resources will be retained after stack deletion.
-
-## Common Issues and Solutions
-
-### Issue: DMS endpoint creation fails
-**Solution**: Verify DMS prerequisite stack is deployed first and IAM roles exist
-
-### Issue: Integration tests fail on S3 bucket
-**Solution**: Tests may be picking ARN outputs instead of name outputs. Filter for outputs containing "name" but not "arn"
-
-### Issue: Route53 zone ID mismatch
-**Solution**: AWS returns zone IDs with `/hostedzone/` prefix. Normalize both IDs before comparison
-
-### Issue: ECS tasks fail health checks
-**Solution**: Verify container exposes port 80, target group uses port 80, security group allows ALB ingress on port 80, health check path is `/`
-
-## Production Readiness
-
-- [x] Secrets Manager integration
-- [x] Encryption at rest (RDS, S3)
-- [x] VPC networking with private subnets
-- [x] Security groups with least privilege
-- [x] IAM roles with specific permissions
-- [x] CloudWatch monitoring and alarms
-- [x] Comprehensive testing (unit + integration)
-- [x] Infrastructure as Code (CDK)
-- [x] No hardcoded credentials
-- [x] Resource tagging
-- [x] Automated deployment
-- [x] Multi-stack architecture for migration
-
-This implementation represents a production-ready, secure, and fully tested payment processing migration infrastructure following AWS and CDK best practices.
+5. **Database connectivity**
+   - Use Secrets Manager to retrieve credentials
+   - Connect to both source and target databases
+   - Verify replication is working

@@ -80,6 +80,9 @@ class TapStack(Stack):
         # Configure cross-region replication
         self._configure_s3_replication()
 
+        # Create DMS prerequisite IAM roles
+        self._create_dms_prerequisite_roles()
+
         # Create DMS replication infrastructure
         self.dms_replication_instance = self._create_dms_replication_instance()
         self.dms_source_endpoint = self._create_dms_endpoint("source", self.source_db, self.source_db_secret)
@@ -371,6 +374,43 @@ class TapStack(Stack):
             ],
         )
 
+    def _create_dms_prerequisite_roles(self) -> None:
+        """Create DMS prerequisite IAM roles required for DMS to manage VPC resources"""
+        # Create DMS VPC management role
+        # AWS DMS requires this specific role name to manage VPC resources
+        # Note: Using both regional and global service principals for compatibility
+        self.dms_vpc_role = iam.Role(
+            self,
+            "dms-vpc-role",
+            role_name=f"dms-vpc-role-{self.environment_suffix}",
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+                iam.ServicePrincipal("dms.amazonaws.com")
+            ),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonDMSVPCManagementRole"
+                )
+            ],
+        )
+
+        # Create DMS CloudWatch Logs role
+        # Note: Using both regional and global service principals for compatibility
+        self.dms_cloudwatch_logs_role = iam.Role(
+            self,
+            "dms-cloudwatch-logs-role",
+            role_name=f"dms-cloudwatch-logs-role-{self.environment_suffix}",
+            assumed_by=iam.CompositePrincipal(
+                iam.ServicePrincipal(f"dms.{self.region}.amazonaws.com"),
+                iam.ServicePrincipal("dms.amazonaws.com")
+            ),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name(
+                    "service-role/AmazonDMSCloudWatchLogsRole"
+                )
+            ],
+        )
+
     def _create_dms_replication_instance(self) -> dms.CfnReplicationInstance:
         """Create DMS replication instance"""
         # Create subnet group for DMS
@@ -385,6 +425,9 @@ class TapStack(Stack):
             subnet_ids=subnet_ids,
             replication_subnet_group_identifier=f"dms-subnet-{self.environment_suffix}",
         )
+        
+        # DMS subnet group depends on DMS VPC role
+        dms_subnet_group.add_dependency(self.dms_vpc_role.node.default_child)
 
         # Create replication instance
         replication_instance = dms.CfnReplicationInstance(

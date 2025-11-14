@@ -218,7 +218,39 @@ class TestDMSConfiguration:
         # Should have IAM roles for DMS to access secrets
         roles = template.find_resources("AWS::IAM::Role")
         dms_roles = [r for r in roles.values() if "dms" in str(r).lower()]
-        assert len(dms_roles) >= 2  # At least 2 roles for source and target
+        assert len(dms_roles) >= 4  # VPC role, CloudWatch logs role, and 2 for secrets access
+    
+    def test_dms_vpc_role_created(self, tap_stack):
+        """Test DMS VPC management role is created"""
+        template = assertions.Template.from_stack(tap_stack)
+        # Check for DMS VPC role existence
+        roles = template.find_resources("AWS::IAM::Role")
+        vpc_role_found = False
+        for role_name, role_props in roles.items():
+            if "dmsvpcrole" in role_name.lower():
+                vpc_role_found = True
+                # Verify it has the correct role name
+                assert "RoleName" in role_props["Properties"]
+                assert "dms-vpc-role-" in role_props["Properties"]["RoleName"]
+                break
+        assert vpc_role_found, "DMS VPC role not found"
+        assert hasattr(tap_stack, "dms_vpc_role")
+    
+    def test_dms_cloudwatch_logs_role_created(self, tap_stack):
+        """Test DMS CloudWatch logs role is created"""
+        template = assertions.Template.from_stack(tap_stack)
+        # Check for DMS CloudWatch logs role existence
+        roles = template.find_resources("AWS::IAM::Role")
+        logs_role_found = False
+        for role_name, role_props in roles.items():
+            if "dmscloudwatchlogsrole" in role_name.lower():
+                logs_role_found = True
+                # Verify it has the correct role name
+                assert "RoleName" in role_props["Properties"]
+                assert "dms-cloudwatch-logs-role-" in role_props["Properties"]["RoleName"]
+                break
+        assert logs_role_found, "DMS CloudWatch logs role not found"
+        assert hasattr(tap_stack, "dms_cloudwatch_logs_role")
 
 
 class TestS3Configuration:
