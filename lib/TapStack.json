@@ -335,7 +335,6 @@
         },
         "EKSOIDCProvider": {
             "Type": "AWS::IAM::OIDCProvider",
-            "DependsOn": "EKSCluster",
             "Properties": {
                 "Url": {
                     "Fn::GetAtt": [

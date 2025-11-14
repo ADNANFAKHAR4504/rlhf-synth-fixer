@@ -9,11 +9,6 @@ Metadata:
         Parameters:
           - EnvironmentSuffix
       - Label:
-          default: 'Network Configuration'
-        Parameters:
-          - VpcId
-          - PrivateSubnetIds
-      - Label:
           default: 'EKS Configuration'
         Parameters:
           - KubernetesVersion
@@ -24,10 +19,6 @@ Metadata:
     ParameterLabels:
       EnvironmentSuffix:
         default: 'Environment Suffix'
-      VpcId:
-        default: 'VPC ID'
-      PrivateSubnetIds:
-        default: 'Private Subnet IDs'
       KubernetesVersion:
         default: 'Kubernetes Version'
       NodeInstanceType:
@@ -40,14 +31,6 @@ Parameters:
     Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
     AllowedPattern: '^[a-zA-Z0-9]+$'
     ConstraintDescription: 'Must contain only alphanumeric characters'
-
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: 'VPC ID where EKS cluster will be deployed'
-
-  PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: 'At least 3 private subnet IDs across different availability zones'
 
   KubernetesVersion:
     Type: String
@@ -98,6 +81,192 @@ Parameters:
     Description: 'Desired number of worker nodes'
 
 Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.0.0/20
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.16.0/20
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.32.0/20
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.128.0/20
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.144.0/20
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.160.0/20
+      AvailabilityZone: !Select [2, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatEip:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-nat-eip-${EnvironmentSuffix}'
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-nat-${EnvironmentSuffix}'
+
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-rt-${EnvironmentSuffix}'
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-rt-${EnvironmentSuffix}'
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetAssociationA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetAssociationB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetAssociationC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref PrivateRouteTable
+
   # KMS Key for EKS Secrets Encryption
   EKSEncryptionKey:
     Type: AWS::KMS::Key
@@ -160,7 +329,7 @@ Resources:
     Properties:
       GroupName: !Sub 'eks-cluster-sg-${EnvironmentSuffix}'
       GroupDescription: 'Security group for EKS cluster control plane'
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupEgress:
         - IpProtocol: '-1'
           CidrIp: 0.0.0.0/0
@@ -179,7 +348,10 @@ Resources:
       Version: !Ref KubernetesVersion
       RoleArn: !GetAtt EKSClusterRole.Arn
       ResourcesVpcConfig:
-        SubnetIds: !Ref PrivateSubnetIds
+        SubnetIds:
+          - !Ref PrivateSubnetA
+          - !Ref PrivateSubnetB
+          - !Ref PrivateSubnetC
         SecurityGroupIds:
           - !Ref EKSClusterSecurityGroup
         EndpointPrivateAccess: true
@@ -206,7 +378,6 @@ Resources:
   # OIDC Provider for IRSA
   EKSOIDCProvider:
     Type: AWS::IAM::OIDCProvider
-    DependsOn: EKSCluster
     Properties:
       Url: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
       ClientIdList:
@@ -250,7 +421,10 @@ Resources:
       NodegroupName: !Sub 'eks-nodegroup-${EnvironmentSuffix}'
       ClusterName: !Ref EKSCluster
       NodeRole: !GetAtt EKSNodeRole.Arn
-      Subnets: !Ref PrivateSubnetIds
+      Subnets:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+        - !Ref PrivateSubnetC
       AmiType: 'AL2_ARM_64'
       InstanceTypes:
         - !Ref NodeInstanceType
