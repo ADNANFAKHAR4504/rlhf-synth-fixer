@@ -1,6 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """
 Production EKS Cluster Deployment - CDKTF Entry Point
+
+This is the main entry point for the CDKTF application that creates
+a production-ready Amazon EKS cluster infrastructure.
 
 Platform: CDKTF
 Language: Python
@@ -10,8 +13,8 @@ Region: us-east-1
 import sys
 import os
 
-# Add lib directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'lib'))
+# Add current directory to path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
 from cdktf import App
 from tap_stack import TapStack

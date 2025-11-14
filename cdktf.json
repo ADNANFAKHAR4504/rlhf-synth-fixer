@@ -1,7 +1,7 @@
 {
   "language": "python",
-  "app": "python3 main.py",
-  "projectId": "eks-cluster-project",
+  "app": "pipenv run python main.py",
+  "projectId": "3f0m4a-eks-cluster-deployment",
   "sendCrashReports": "false",
   "terraformProviders": [
     "aws@~> 5.0"

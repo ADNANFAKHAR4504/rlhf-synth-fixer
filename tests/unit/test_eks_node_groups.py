@@ -311,7 +311,7 @@ class TestEksNodeGroups:
             block_devices = lt_config.get("block_device_mappings", [])
             for device in block_devices:
                 ebs = device.get("ebs", {})
-                assert ebs.get("encrypted") is True
+                assert ebs.get("encrypted") == "true"
 
     def test_eks_node_groups_launch_template_monitoring(self):
         """EksNodeGroups launch templates enable detailed monitoring."""

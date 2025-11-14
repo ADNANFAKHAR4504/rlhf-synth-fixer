@@ -174,7 +174,7 @@ class TestEksCluster:
 
         clusters = output_json.get("resource", {}).get("aws_eks_cluster", {})
         for cluster_config in clusters.values():
-            encryption_config = cluster_config.get("encryption_config", [{}])[0]
+            encryption_config = cluster_config.get("encryption_config", {})
             assert encryption_config.get("resources") == ["secrets"]
             assert encryption_config.get("provider", {}).get("key_arn") == kms_arn
 

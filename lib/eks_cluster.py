@@ -43,12 +43,12 @@ class EksCluster(Construct):
                 "endpoint_private_access": True,
                 "endpoint_public_access": False
             },
-            encryption_config=[{
+            encryption_config={
                 "provider": {
                     "key_arn": encryption_key_arn
                 },
                 "resources": ["secrets"]
-            }],
+            },
             enabled_cluster_log_types=["api", "authenticator"],
             tags={
                 "Name": f"eks-cluster-{environment_suffix}",
@@ -68,7 +68,7 @@ class EksCluster(Construct):
 
     @property
     def cluster_oidc_issuer_url(self) -> str:
-        return self.cluster.identity[0].oidc[0].issuer
+        return self.cluster.identity.get(0).oidc.get(0).issuer
 
     @property
     def cluster_id(self) -> str:

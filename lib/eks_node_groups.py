@@ -36,8 +36,8 @@ class EksNodeGroups(Construct):
                 "ebs": {
                     "volume_size": 20,
                     "volume_type": "gp3",
-                    "encrypted": True,
-                    "delete_on_termination": True
+                    "encrypted": "true",
+                    "delete_on_termination": "true"
                 }
             }],
             monitoring={
@@ -71,8 +71,8 @@ class EksNodeGroups(Construct):
                 "ebs": {
                     "volume_size": 20,
                     "volume_type": "gp3",
-                    "encrypted": True,
-                    "delete_on_termination": True
+                    "encrypted": "true",
+                    "delete_on_termination": "true"
                 }
             }],
             monitoring={
