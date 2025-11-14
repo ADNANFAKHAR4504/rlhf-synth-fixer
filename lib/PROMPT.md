@@ -2,7 +2,7 @@
 
 Hey team,
 
-We need to build a production-grade payment processing web application infrastructure for a fintech startup launching their real-time payment service. The business needs this deployed in Singapore (ap-southeast-1) to serve their Asia-Pacific customers. I've been asked to create this infrastructure using **AWS CDK with TypeScript**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements and ensure zero-downtime deployments.
+We need to build a production-grade payment processing web application infrastructure for a fintech startup launching their real-time payment service. The business needs this deployed in Singapore (eu-south-2) to serve their Asia-Pacific customers. I've been asked to create this infrastructure using **AWS CDK with TypeScript**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements and ensure zero-downtime deployments.
 
 The application architecture consists of three main components: a React frontend served through CloudFront for fast global access, a Node.js API backend running on containerized infrastructure, and a PostgreSQL database for storing transaction records. The business has strict requirements around security, availability, and compliance given the sensitive nature of payment data.
 
@@ -10,7 +10,7 @@ We're targeting deployment across three availability zones for high availability
 
 ## What we need to build
 
-Create a complete payment processing infrastructure using **AWS CDK with TypeScript** deployed to the ap-southeast-1 region. This infrastructure must support a React frontend, Node.js API backend, and PostgreSQL database with full observability and security controls.
+Create a complete payment processing infrastructure using **AWS CDK with TypeScript** deployed to the eu-south-2 region. This infrastructure must support a React frontend, Node.js API backend, and PostgreSQL database with full observability and security controls.
 
 ### Core Requirements
 
@@ -49,13 +49,8 @@ Create a complete payment processing infrastructure using **AWS CDK with TypeScr
    - CloudFront configured as the only access point to frontend assets
    - Proper caching policies for static assets
 
-6. **Web Application Firewall**
-   - AWS WAF configured on CloudFront distribution
-   - Rules to block common attack patterns including SQL injection and XSS
-   - Rate limiting to prevent DDoS attacks
-   - Logging of blocked requests for security analysis
 
-7. **Monitoring and Observability**
+6. **Monitoring and Observability**
    - CloudWatch dashboard showing key metrics:
      - API response times and latency percentiles
      - Application error rates
@@ -64,17 +59,17 @@ Create a complete payment processing infrastructure using **AWS CDK with TypeScr
    - All application logs centralized in CloudWatch Logs
    - 90-day log retention policy
 
-8. **Alerting**
+7. **Alerting**
    - SNS topic for operational alerts
    - CloudWatch alarm triggered when error rate exceeds 1%
    - Notifications sent to SNS topic for on-call team
 
-9. **Blue-Green Deployment**
+8. **Blue-Green Deployment**
    - ECS service configured to support blue-green deployment pattern
    - Deployment configuration allowing safe rollback
    - Health checks ensuring new tasks are healthy before traffic shift
 
-10. **Encryption**
+9. **Encryption**
     - All data encrypted at rest using AWS KMS customer-managed keys
     - Database encryption enabled
     - S3 bucket encryption enabled
@@ -88,14 +83,13 @@ Create a complete payment processing infrastructure using **AWS CDK with TypeScr
 - Use **ECS Fargate** for serverless container orchestration
 - Use **Application Load Balancer** for distributing traffic to containers
 - Use **S3** and **CloudFront** for frontend asset delivery
-- Use **AWS WAF** for application security
 - Use **Secrets Manager** for credential management with rotation
 - Use **CloudWatch** for logs, metrics, and dashboards
 - Use **SNS** for alerting and notifications
 - Use **KMS** for encryption key management
 - Resource names must include **environmentSuffix** for uniqueness across deployments
 - Follow naming convention: `{resource-type}-${environmentSuffix}`
-- Deploy to **ap-southeast-1** region
+- Deploy to **eu-south-2** region
 - Container runtime should use Node.js 18 or later
 
 ### Security Constraints
@@ -123,7 +117,7 @@ Create a complete payment processing infrastructure using **AWS CDK with TypeScr
 ## Success Criteria
 
 - **Functionality**: Complete three-tier architecture with VPC, compute, database, and CDN
-- **Security**: Encryption at rest, WAF protection, secrets management, and least privilege IAM
+- **Security**: Encryption at rest, secrets management, and least privilege IAM
 - **High Availability**: Multi-AZ deployment for database and load balancer
 - **Auto Scaling**: Dynamic scaling based on CPU metrics at 70% threshold
 - **Monitoring**: CloudWatch dashboard with API latency, errors, and database metrics
@@ -141,7 +135,6 @@ Create a complete payment processing infrastructure using **AWS CDK with TypeScr
 - ECS Fargate service with Application Load Balancer
 - Auto-scaling configuration for ECS based on CPU utilization
 - S3 bucket and CloudFront distribution for React frontend
-- AWS WAF rules on CloudFront for security
 - Secrets Manager secret with 30-day rotation for database credentials
 - CloudWatch dashboard with API, database, and error metrics
 - SNS topic and alarm for error rate threshold
