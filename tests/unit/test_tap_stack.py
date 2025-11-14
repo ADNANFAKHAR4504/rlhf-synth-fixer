@@ -44,6 +44,10 @@ class TestStackStructure:
 
         # Verify required outputs exist
         outputs = output_json.get("output", {})
+        assert "vpc_id" in outputs
+        assert "vpc_cidr" in outputs
+        assert "private_subnet_ids" in outputs
+        assert "public_subnet_ids" in outputs
         assert "cluster_endpoint" in outputs
         assert "cluster_name" in outputs
         assert "oidc_provider_arn" in outputs
@@ -218,22 +222,26 @@ class TestStackStructure:
         assert "--region us-east-1" in kubeconfig
         assert "--name" in kubeconfig
 
-    def test_tap_stack_configures_data_sources_for_discovery(self):
-        """TapStack uses data sources to discover VPC and subnets."""
+    def test_tap_stack_creates_networking_resources(self):
+        """TapStack creates VPC and networking resources."""
         app = App()
-        stack = TapStack(app, "TestTapStackData", environment_suffix="test")
+        stack = TapStack(app, "TestTapStackNetworking", environment_suffix="test")
 
         synth = Testing.synth(stack)
         output_json = json.loads(synth)
 
-        data = output_json.get("data", {})
         resources = output_json.get("resource", {})
 
-        # Verify VPC and subnet data sources exist for discovery
-        assert "aws_vpc" in data
-        assert "aws_subnets" in data
+        # Verify VPC and networking resources are created
+        assert "aws_vpc" in resources
+        assert "aws_subnet" in resources
+        assert "aws_internet_gateway" in resources
+        assert "aws_nat_gateway" in resources
+        assert "aws_eip" in resources
+        assert "aws_route_table" in resources
+        assert "aws_route" in resources
 
-        # Verify resources are created
+        # Verify EKS resources are created
         assert "aws_eks_cluster" in resources
         assert "aws_security_group" in resources
 
