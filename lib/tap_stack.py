@@ -1,15 +1,15 @@
 """Main CDKTF stack for serverless payment processing system."""
-from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput
+from cdktf import TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
+from constructs import Construct
 
-from .kms_construct import KmsConstruct
-from .vpc_construct import VpcConstruct
-from .lambda_construct import LambdaConstruct
-from .dynamodb_construct import DynamoDbConstruct
-from .sqs_construct import SqsConstruct
 from .api_gateway_construct import ApiGatewayConstruct
+from .dynamodb_construct import DynamoDbConstruct
+from .kms_construct import KmsConstruct
+from .lambda_construct import LambdaConstruct
 from .monitoring_construct import MonitoringConstruct
+from .sqs_construct import SqsConstruct
+from .vpc_construct import VpcConstruct
 
 
 class TapStack(TerraformStack):
@@ -20,7 +20,7 @@ class TapStack(TerraformStack):
 
         # Extract configuration from kwargs
         environment_suffix = kwargs.get('environment_suffix', 'dev')
-        aws_region = kwargs.get('aws_region', 'ap-southeast-1')
+        aws_region = kwargs.get('aws_region', 'us-east-1')
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
@@ -73,6 +73,7 @@ class TapStack(TerraformStack):
             self, "lambda",
             environment_suffix=environment_suffix,
             kms_key_id=kms.lambda_key.arn,
+            logs_kms_key_id=kms.logs_key.arn,
             vpc_config={
                 "subnet_ids": vpc.private_subnet_ids,
                 "security_group_ids": [vpc.lambda_sg_id]

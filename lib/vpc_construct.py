@@ -1,14 +1,17 @@
 """VPC configuration with private subnets and NAT instances."""
-from constructs import Construct
-from cdktf_cdktf_provider_aws.vpc import Vpc
-from cdktf_cdktf_provider_aws.subnet import Subnet
-from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
-from cdktf_cdktf_provider_aws.route_table import RouteTable
-from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociation
-from cdktf_cdktf_provider_aws.security_group import SecurityGroup, SecurityGroupIngress, SecurityGroupEgress
-from cdktf_cdktf_provider_aws.instance import Instance
-from cdktf_cdktf_provider_aws.route import Route
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi
+from cdktf_cdktf_provider_aws.instance import Instance
+from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
+from cdktf_cdktf_provider_aws.route import Route
+from cdktf_cdktf_provider_aws.route_table import RouteTable
+from cdktf_cdktf_provider_aws.route_table_association import \
+    RouteTableAssociation
+from cdktf_cdktf_provider_aws.security_group import (SecurityGroup,
+                                                     SecurityGroupEgress,
+                                                     SecurityGroupIngress)
+from cdktf_cdktf_provider_aws.subnet import Subnet
+from cdktf_cdktf_provider_aws.vpc import Vpc
+from constructs import Construct
 
 
 class VpcConstruct(Construct):
@@ -42,7 +45,7 @@ class VpcConstruct(Construct):
         )
 
         # Availability zones
-        azs = ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
+        azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
         # Public subnets for NAT instances
         public_subnets = []

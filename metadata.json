@@ -7,7 +7,9 @@
   "startedAt": "2025-11-14T21:46:00+05:30",
   "completedAt": "2025-11-14T22:45:00+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "po_id": "3s6w0x",
   "aws_services": [
     "VPC",
@@ -21,7 +23,7 @@
     "CloudWatch",
     "IAM"
   ],
-  "region": "ap-southeast-1",
+  "region": "us-east-1",
   "training_quality": 8,
   "errors_fixed": 5,
   "synth_status": "passed",

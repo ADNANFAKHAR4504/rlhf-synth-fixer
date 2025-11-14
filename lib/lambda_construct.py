@@ -1,22 +1,27 @@
 """Lambda functions with layers and proper configuration."""
-from constructs import Construct
+import json
+
+from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.lambda_event_source_mapping import \
+    LambdaEventSourceMapping
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_layer_version import LambdaLayerVersion
-from cdktf_cdktf_provider_aws.lambda_event_source_mapping import LambdaEventSourceMapping
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
-from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
-import json
+from constructs import Construct
 
 
 class LambdaConstruct(Construct):
     """Lambda functions with layers and monitoring."""
 
     def __init__(self, scope: Construct, id: str, environment_suffix: str,
-                 kms_key_id: str, vpc_config: dict, sqs_queues,
+                 kms_key_id: str, logs_kms_key_id: str, vpc_config: dict, sqs_queues,
                  dynamodb_table, dynamodb_stream_arn: str):
         super().__init__(scope, id)
+        
+        self.logs_kms_key_id = logs_kms_key_id
 
         # Create shared layer
         self.shared_layer = self._create_shared_layer(environment_suffix)
@@ -204,7 +209,7 @@ class LambdaConstruct(Construct):
             self, f"{function_name}-logs",
             name=f"/aws/lambda/payment-{function_name}-{environment_suffix}",
             retention_in_days=7,
-            kms_key_id=kms_key_id,
+            kms_key_id=self.logs_kms_key_id,
             tags={
                 "Name": f"payment-{function_name}-logs-{environment_suffix}",
                 "Environment": environment_suffix
