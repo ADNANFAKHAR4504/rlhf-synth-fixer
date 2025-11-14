@@ -532,7 +532,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Use separate resources for versioning and encryption (non-deprecated approach)
-    new aws.s3.BucketVersioningV2(
+    new aws.s3.BucketVersioning(
       `artifacts-versioning-${region}-${this.props.environmentSuffix}`,
       {
         bucket: bucket.id,
@@ -543,7 +543,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider, parent: this }
     );
 
-    new aws.s3.BucketServerSideEncryptionConfigurationV2(
+    new aws.s3.BucketServerSideEncryptionConfiguration(
       `artifacts-encryption-${region}-${this.props.environmentSuffix}`,
       {
         bucket: bucket.id,
@@ -739,7 +739,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Primary Instance
-    new aws.rds.ClusterInstance(
+    const primaryInstance = new aws.rds.ClusterInstance(
       `aurora-primary-instance-${this.props.environmentSuffix}`,
       {
         identifier: `trading-aurora-primary-instance-${this.props.environmentSuffix}`,
@@ -784,7 +784,8 @@ export class TapStack extends pulumi.ComponentResource {
       {
         provider: this.drProvider,
         parent: this,
-        dependsOn: [primaryCluster, globalCluster],
+        dependsOn: [primaryCluster, primaryInstance, globalCluster],
+        ignoreChanges: ['masterUsername', 'masterPassword'],
       }
     );
 
@@ -1146,7 +1147,7 @@ export class TapStack extends pulumi.ComponentResource {
 
   private createHealthCheck(alb: aws.lb.LoadBalancer): aws.route53.HealthCheck {
     const healthCheck = new aws.route53.HealthCheck(
-      `hc-${alb.name}`,
+      `hc-primary-${this.props.environmentSuffix}`,
       {
         fqdn: alb.dnsName,
         port: 80,
