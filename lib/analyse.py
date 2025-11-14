@@ -978,9 +978,12 @@ class S3SecurityAuditor:
         """
 
     def _write_html_file(self, filename: str, content: str):
-        with open(filename, 'w') as f:
-            f.write(content)
-        logger.info(f"HTML report saved to {filename}")
+        try:
+            with open(filename, 'w') as f:
+                f.write(content)
+            logger.info(f"HTML report saved to {filename}")
+        except (OSError, IOError) as exc:
+            logger.error(f"Failed to write HTML report to {filename}: {exc}")
     
     def _create_severity_chart(self, summary: Dict[str, Any]) -> str:
         """Create a bar chart showing the distribution of security findings by severity level.
@@ -1155,8 +1158,11 @@ def run_resource_audit() -> int:
 def main():
     """CLI entrypoint for the analysis script."""
     mode = sys.argv[1].lower() if len(sys.argv) > 1 else 'resources'
+    if mode == 'resources':
+        return run_resource_audit()
     if mode == 's3':
         return run_s3_security_audit()
+    logger.warning(f"Unknown mode '{mode}', defaulting to resource audit")
     return run_resource_audit()
 
 

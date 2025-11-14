@@ -19,10 +19,12 @@ from moto import mock_aws
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
 from analyse import (
+    AWSResourceAuditor,
     HIGH_OBJECT_COUNT,
     LARGE_BUCKET_SIZE_GB,
     Finding,
     main,
+    run_resource_audit,
     run_s3_security_audit,
     S3SecurityAuditor,
 )
@@ -43,6 +45,17 @@ def auditor_with_mocks():
         mock_s3.list_buckets.return_value = {'Buckets': []}
         auditor = S3SecurityAuditor()
         yield auditor, mock_s3, mock_cloudwatch
+
+
+@pytest.fixture
+def resource_auditor_with_mocks():
+    """Provide AWSResourceAuditor with mocked boto3 clients."""
+    with patch('analyse.boto3.client') as mock_client:
+        mock_ec2 = MagicMock()
+        mock_logs = MagicMock()
+        mock_client.side_effect = [mock_ec2, mock_logs]
+        auditor = AWSResourceAuditor(region_name='us-east-1')
+        yield auditor, mock_ec2, mock_logs
 
 
 @contextmanager
@@ -1185,6 +1198,110 @@ def test_run_s3_security_audit_handles_fatal_error():
         assert run_s3_security_audit() == 2
 
 
-def test_main_propagates_run_result():
-    with patch('analyse.run_s3_security_audit', return_value=42):
-        assert main() == 42
+def test_main_defaults_to_resource_audit():
+    with patch('sys.argv', ['analyse.py']):
+        with patch('analyse.run_resource_audit', return_value=42):
+            assert main() == 42
+
+
+def test_main_s3_argument_invokes_s3_audit():
+    with patch('sys.argv', ['analyse.py', 's3']):
+        with patch('analyse.run_s3_security_audit', return_value=24):
+            assert main() == 24
+
+
+# =========================================================================
+# AWS resource auditor coverage
+# =========================================================================
+
+
+def test_aws_resource_auditor_collects_data(resource_auditor_with_mocks):
+    auditor, mock_ec2, mock_logs = resource_auditor_with_mocks
+
+    vol_paginator = MagicMock()
+    vol_paginator.paginate.return_value = [{
+        'Volumes': [{
+            'VolumeId': 'vol-001',
+            'State': 'available',
+            'Size': 5,
+            'VolumeType': 'gp3',
+            'CreateTime': datetime.now(timezone.utc),
+            'AvailabilityZone': 'us-east-1a',
+            'Encrypted': False,
+            'Tags': [{'Key': 'Name', 'Value': 'test-volume'}]
+        }]
+    }]
+
+    sg_paginator = MagicMock()
+    sg_paginator.paginate.return_value = [{
+        'SecurityGroups': [{
+            'GroupId': 'sg-123',
+            'GroupName': 'public',
+            'Description': 'test',
+            'VpcId': 'vpc-1',
+            'IpPermissions': [{
+                'IpProtocol': 'tcp',
+                'FromPort': 22,
+                'ToPort': 22,
+                'IpRanges': [{'CidrIp': '0.0.0.0/0'}],
+                'Ipv6Ranges': []
+            }]
+        }]
+    }]
+
+    def ec2_paginator(name):
+        if name == 'describe_volumes':
+            return vol_paginator
+        if name == 'describe_security_groups':
+            return sg_paginator
+        raise ValueError(name)
+
+    mock_ec2.get_paginator.side_effect = ec2_paginator
+
+    log_group_paginator = MagicMock()
+    log_group_paginator.paginate.return_value = [{
+        'logGroups': [{'logGroupName': '/test-group'}]
+    }]
+    log_stream_paginator = MagicMock()
+    log_stream_paginator.paginate.return_value = [{
+        'logStreams': [{'storedBytes': 100}, {'storedBytes': 300}]
+    }]
+
+    def logs_paginator(name):
+        if name == 'describe_log_groups':
+            return log_group_paginator
+        if name == 'describe_log_streams':
+            return log_stream_paginator
+        raise ValueError(name)
+
+    mock_logs.get_paginator.side_effect = logs_paginator
+
+    unused = auditor.find_unused_ebs_volumes()
+    assert len(unused) == 1
+    assert unused[0]['VolumeId'] == 'vol-001'
+
+    public_sgs = auditor.find_public_security_groups()
+    assert len(public_sgs) == 1
+    assert public_sgs[0]['PublicIngressRules'][0]['Source'] == '0.0.0.0/0'
+
+    metrics = auditor.calculate_log_stream_metrics()
+    assert metrics['TotalLogStreams'] == 2
+    assert metrics['LogGroupMetrics'][0]['AverageStreamSize'] == 200
+
+    combined = auditor.audit_resources()
+    assert combined['UnusedEBSVolumes']['Count'] == 1
+    assert combined['PublicSecurityGroups']['Count'] == 1
+    assert combined['CloudWatchLogMetrics']['TotalLogStreams'] == 2
+
+
+def test_run_resource_audit_writes_file(tmp_path):
+    fake_results = {'ok': True}
+    fake_auditor = MagicMock()
+    fake_auditor.audit_resources.return_value = fake_results
+    out_path = tmp_path / 'aws.json'
+
+    with patch('analyse.AWSResourceAuditor', return_value=fake_auditor):
+        with patch('analyse.AWS_AUDIT_RESULTS_FILE', out_path):
+            assert run_resource_audit() == 0
+            with open(out_path, 'r') as fh:
+                assert json.load(fh) == fake_results
