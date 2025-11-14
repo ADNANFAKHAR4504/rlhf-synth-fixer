@@ -87,7 +87,7 @@ class KmsConstruct(Construct):
                     "Sid": "Allow CloudWatch Logs",
                     "Effect": "Allow",
                     "Principal": {
-                        "Service": f"logs.{current_region.name}.amazonaws.com"
+                        "Service": f"logs.{current_region.id}.amazonaws.com"
                     },
                     "Action": [
                         "kms:Encrypt",
@@ -100,7 +100,7 @@ class KmsConstruct(Construct):
                     "Resource": "*",
                     "Condition": {
                         "ArnLike": {
-                            "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region.name}:{caller_identity.account_id}:log-group:*"
+                            "kms:EncryptionContext:aws:logs:arn": f"arn:aws:logs:{current_region.id}:{caller_identity.account_id}:log-group:*"
                         }
                     }
                 }

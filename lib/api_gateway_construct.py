@@ -1,13 +1,15 @@
 """API Gateway REST API."""
-from constructs import Construct
-from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
-from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
+from cdktf_cdktf_provider_aws.api_gateway_deployment import \
+    ApiGatewayDeployment
+from cdktf_cdktf_provider_aws.api_gateway_integration import \
+    ApiGatewayIntegration
 from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
-from cdktf_cdktf_provider_aws.api_gateway_integration import ApiGatewayIntegration
-from cdktf_cdktf_provider_aws.api_gateway_deployment import ApiGatewayDeployment
+from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
+from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
 from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
-from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
 from cdktf_cdktf_provider_aws.data_aws_region import DataAwsRegion
+from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
+from constructs import Construct
 
 
 class ApiGatewayConstruct(Construct):
@@ -89,4 +91,4 @@ class ApiGatewayConstruct(Construct):
             }
         )
 
-        self.api_url = f"https://{api.id}.execute-api.{current_region.name}.amazonaws.com/{stage.stage_name}/payments"
+        self.api_url = f"https://{api.id}.execute-api.{current_region.id}.amazonaws.com/{stage.stage_name}/payments"

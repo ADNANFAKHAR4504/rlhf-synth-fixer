@@ -90,7 +90,7 @@ class LambdaConstruct(Construct):
             layer_name=f"payment-shared-layer-{environment_suffix}-lm",
             compatible_runtimes=["python3.11"],
             description="Shared utilities for payment processing",
-            filename="lib/lambda/shared_layer.zip"
+            filename="../../../lib/lambda/shared_layer.zip"
         )
         return layer
 
@@ -220,7 +220,7 @@ class LambdaConstruct(Construct):
         function = LambdaFunction(
             self, f"{function_name}-function",
             function_name=f"payment-{function_name}-{environment_suffix}-lm",
-            filename=f"lib/lambda/{function_name}.zip",
+            filename=f"../../../lib/lambda/{function_name}.zip",
             handler="handler.lambda_handler",
             runtime="python3.11",
             architectures=["arm64"],
