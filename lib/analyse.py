@@ -1,1170 +1,646 @@
 #!/usr/bin/env python3
 """
-S3 Security and Compliance Audit Script
-Identifies security and compliance issues in S3 buckets for SOC2 and GDPR.
+RDS Performance Analysis Tool
+Analyzes RDS databases for performance, cost optimization, and compliance issues.
 """
 
 import json
 import logging
 import os
 import sys
-from collections import defaultdict
-from dataclasses import dataclass, asdict
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
-
+from typing import Dict, List, Tuple, Any, Optional
+import pandas as pd
+import matplotlib.pyplot as plt
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError, NoCredentialsError
-from botocore.config import Config
-
-
-# Constants for S3 Security Audit
-REGION = 'us-east-1'
-AUDIT_AGE_DAYS = 60
-LARGE_BUCKET_SIZE_GB = 100
-HIGH_OBJECT_COUNT = 1_000_000
-MAX_OBJECTS_TO_CHECK = 200  # Maximum objects to check when scanning bucket contents
-
-LIB_DIR = Path(__file__).resolve().parent
-PROJECT_ROOT = LIB_DIR.parent
-AWS_AUDIT_RESULTS_FILE = PROJECT_ROOT / 'aws_audit_results.json'
-S3_JSON_REPORT = PROJECT_ROOT / 's3_security_audit.json'
-S3_HTML_REPORT = PROJECT_ROOT / 's3_audit_report.html'
-TEMPLATE_PATH = LIB_DIR / 's3_audit_report_template.html'
-
-
-def should_ignore_bucket_age() -> bool:
-    """Return True when running against a mock endpoint to include newly created buckets."""
-    return bool(os.environ.get('AUDIT_IGNORE_BUCKET_AGE') or os.environ.get('AWS_ENDPOINT_URL'))
-
-# Severity levels
-CRITICAL = 'CRITICAL'
-HIGH = 'HIGH'
-MEDIUM = 'MEDIUM'
-LOW = 'LOW'
+from botocore.exceptions import ClientError
+import numpy as np
+from tabulate import tabulate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+# RDS instance pricing (simplified - in production, use AWS Pricing API)
+INSTANCE_PRICING = {
+    'db.t2.micro': 0.017,
+    'db.t2.small': 0.034,
+    'db.t2.medium': 0.068,
+    'db.t2.large': 0.136,
+    'db.t3.micro': 0.017,
+    'db.t3.small': 0.034,
+    'db.t3.medium': 0.068,
+    'db.t3.large': 0.136,
+    'db.m5.large': 0.171,
+    'db.m5.xlarge': 0.342,
+    'db.m5.2xlarge': 0.684,
+    'db.r5.large': 0.25,
+    'db.r5.xlarge': 0.50,
+    'db.r5.2xlarge': 1.00,
+}
 
-@dataclass
-class Finding:
-    """Represents a security finding for a bucket"""
-    bucket_name: str
-    bucket_arn: str
-    issue_type: str
-    severity: str
-    compliance_frameworks: List[str]
-    current_config: str
-    required_config: str
-    remediation_steps: str
+# Engine version mapping (simplified)
+LATEST_ENGINE_VERSIONS = {
+    'aurora-mysql': '8.0.mysql_aurora.3.04.0',
+    'aurora-postgresql': '15.4',
+    'mysql': '8.0.35',
+    'postgres': '15.5',
+    'mariadb': '10.11.6'
+}
 
-
-class AWSResourceAuditor:
-    """Audits AWS resources (EBS, Security Groups, CloudWatch Logs) for optimization and security."""
-
-    def __init__(self, region_name: Optional[str] = None, endpoint_url: Optional[str] = None):
-        self.region_name = region_name or os.environ.get('AWS_DEFAULT_REGION', REGION)
-        self.endpoint_url = endpoint_url or os.environ.get('AWS_ENDPOINT_URL')
-
-        client_kwargs: Dict[str, Any] = {'region_name': self.region_name}
-        if self.endpoint_url:
-            client_kwargs['endpoint_url'] = self.endpoint_url
-
-        self.ec2_client = boto3.client('ec2', **client_kwargs)
-        self.logs_client = boto3.client('logs', **client_kwargs)
-
-    def find_unused_ebs_volumes(self) -> List[Dict[str, Any]]:
-        """Find unattached (available) EBS volumes."""
-        unused_volumes: List[Dict[str, Any]] = []
-        try:
-            paginator = self.ec2_client.get_paginator('describe_volumes')
-            for page in paginator.paginate():
-                for volume in page.get('Volumes', []):
-                    if volume.get('State') == 'available':
-                        unused_volumes.append({
-                            'VolumeId': volume['VolumeId'],
-                            'Size': volume['Size'],
-                            'VolumeType': volume.get('VolumeType', 'standard'),
-                            'CreateTime': volume['CreateTime'].strftime('%Y-%m-%d %H:%M:%S'),
-                            'AvailabilityZone': volume.get('AvailabilityZone'),
-                            'Encrypted': volume.get('Encrypted', False),
-                            'Tags': self._extract_tags(volume.get('Tags', [])),
-                        })
-        except Exception as exc:
-            logger.error(f"Error retrieving EBS volumes: {exc}")
-        return unused_volumes
-
-    def find_public_security_groups(self) -> List[Dict[str, Any]]:
-        """Find security groups that allow unrestricted ingress."""
-        public_sgs: List[Dict[str, Any]] = []
-        try:
-            paginator = self.ec2_client.get_paginator('describe_security_groups')
-            for page in paginator.paginate():
-                for sg in page.get('SecurityGroups', []):
-                    public_rules: List[Dict[str, Any]] = []
-                    for rule in sg.get('IpPermissions', []):
-                        # IPv4 ranges
-                        for ip_range in rule.get('IpRanges', []):
-                            if ip_range.get('CidrIp') == '0.0.0.0/0':
-                                public_rules.append({
-                                    'Protocol': rule.get('IpProtocol', 'All'),
-                                    'FromPort': rule.get('FromPort', 'All'),
-                                    'ToPort': rule.get('ToPort', 'All'),
-                                    'Source': '0.0.0.0/0',
-                                })
-                        # IPv6 ranges
-                        for ipv6_range in rule.get('Ipv6Ranges', []):
-                            if ipv6_range.get('CidrIpv6') == '::/0':
-                                public_rules.append({
-                                    'Protocol': rule.get('IpProtocol', 'All'),
-                                    'FromPort': rule.get('FromPort', 'All'),
-                                    'ToPort': rule.get('ToPort', 'All'),
-                                    'Source': '::/0',
-                                })
-                    if public_rules:
-                        public_sgs.append({
-                            'GroupId': sg['GroupId'],
-                            'GroupName': sg.get('GroupName', ''),
-                            'Description': sg.get('Description', ''),
-                            'VpcId': sg.get('VpcId'),
-                            'PublicIngressRules': public_rules,
-                            'Tags': self._extract_tags(sg.get('Tags', [])),
-                        })
-        except Exception as exc:
-            logger.error(f"Error retrieving security groups: {exc}")
-        return public_sgs
-
-    def calculate_log_stream_metrics(self) -> Dict[str, Any]:
-        """Aggregate CloudWatch log stream sizes."""
-        total_size = 0
-        total_streams = 0
-        log_group_metrics: List[Dict[str, Any]] = []
-        try:
-            group_paginator = self.logs_client.get_paginator('describe_log_groups')
-            for group_page in group_paginator.paginate():
-                for group in group_page.get('logGroups', []):
-                    group_size = 0
-                    group_streams = 0
-                    stream_paginator = self.logs_client.get_paginator('describe_log_streams')
-                    try:
-                        for stream_page in stream_paginator.paginate(logGroupName=group['logGroupName']):
-                            for stream in stream_page.get('logStreams', []):
-                                stream_size = stream.get('storedBytes', 0)
-                                group_size += stream_size
-                                group_streams += 1
-                                total_size += stream_size
-                                total_streams += 1
-                    except Exception as stream_exc:
-                        logger.error(f"Error retrieving log streams for {group['logGroupName']}: {stream_exc}")
-                        continue
-
-                    if group_streams:
-                        log_group_metrics.append({
-                            'LogGroupName': group['logGroupName'],
-                            'StreamCount': group_streams,
-                            'TotalSize': group_size,
-                            'AverageStreamSize': group_size / group_streams if group_streams else 0,
-                        })
-        except Exception as exc:
-            logger.error(f"Error retrieving log groups: {exc}")
-
-        average_stream_size = total_size / total_streams if total_streams else 0
-        return {
-            'TotalLogStreams': total_streams,
-            'TotalSize': total_size,
-            'AverageStreamSize': average_stream_size,
-            'LogGroupMetrics': log_group_metrics,
-        }
-
-    def audit_resources(self) -> Dict[str, Any]:
-        """Run all resource checks and return structured data."""
-        unused_volumes = self.find_unused_ebs_volumes()
-        public_sgs = self.find_public_security_groups()
-        log_metrics = self.calculate_log_stream_metrics()
-
-        return {
-            'AuditTimestamp': datetime.now(timezone.utc).isoformat(),
-            'Region': self.region_name,
-            'UnusedEBSVolumes': {
-                'Count': len(unused_volumes),
-                'TotalSize': sum(vol['Size'] for vol in unused_volumes),
-                'Volumes': unused_volumes,
-            },
-            'PublicSecurityGroups': {
-                'Count': len(public_sgs),
-                'SecurityGroups': public_sgs,
-            },
-            'CloudWatchLogMetrics': log_metrics,
-        }
-
-    @staticmethod
-    def _extract_tags(tags: List[Dict[str, str]]) -> Dict[str, str]:
-        return {tag.get('Key', ''): tag.get('Value', '') for tag in tags if tag.get('Key')}
-
-
-class S3SecurityAuditor:
-    """Main auditor class for S3 security analysis"""
-    
-    def __init__(self, region: str = REGION):
+class RDSAnalyzer:
+    def __init__(self, region='us-east-1'):
         self.region = region
-        
-        # Configure timeouts for AWS API calls
-        config = Config(
-            connect_timeout=5,
-            read_timeout=30,
-            retries={'max_attempts': 3}
-        )
-        
-        client_kwargs: Dict[str, Any] = {'region_name': region, 'config': config}
-        endpoint_override = os.environ.get('AWS_ENDPOINT_URL')
-        if endpoint_override:
-            client_kwargs['endpoint_url'] = endpoint_override
+        # Check if using mock endpoint
+        endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
 
-        try:
-            self.s3_client = boto3.client('s3', **client_kwargs)
-            self.cloudwatch_client = boto3.client('cloudwatch', **client_kwargs)
-            # Validate credentials with a simple call
-            self.s3_client.list_buckets()
-        except NoCredentialsError:
-            logger.error("AWS credentials not found. Please configure credentials.")
-            raise
-        except ClientError as e:
-            logger.error(f"Failed to initialize AWS clients: {e}")
-            raise
-        
-        self.findings: List[Finding] = []
-        self.bucket_cache: Dict[str, Dict] = {}
-        
-    def run_audit(self) -> Tuple[List[Finding], Dict[str, Any]]:
-        """Run the complete security audit"""
-        logger.info(f"Starting S3 security audit in region {self.region}")
-        
-        # Get all buckets to audit
-        buckets_to_audit = self._get_buckets_to_audit()
-        logger.info(f"Found {len(buckets_to_audit)} buckets to audit")
-        
-        # Run all security checks
-        for bucket in buckets_to_audit:
-            bucket_name = bucket['Name']
-            logger.info(f"Auditing bucket: {bucket_name}")
-            
-            # Cache bucket details for efficiency
-            self._cache_bucket_details(bucket_name)
-            
-            # Run all checks
-            self._check_public_access(bucket_name)
-            self._check_encryption(bucket_name)
-            self._check_versioning(bucket_name)
-            self._check_logging(bucket_name)
-            self._check_lifecycle_policies(bucket_name)
-            self._check_replication(bucket_name)
-            self._check_secure_transport(bucket_name)
-            self._check_object_lock(bucket_name)
-            self._check_mfa_delete(bucket_name)
-            self._check_access_logging_destination(bucket_name)
-            self._check_kms_encryption_for_vpc(bucket_name)
-            self._check_glacier_transitions(bucket_name)
-        
-        # Generate compliance summary
-        compliance_summary = self._generate_compliance_summary(buckets_to_audit)
-        
-        return self.findings, compliance_summary
-    
-    def _get_buckets_to_audit(self) -> List[Dict]:
-        """Get list of buckets that meet audit criteria.
-        
-        Filters buckets based on age, naming patterns, and exclusion tags.
-        Only includes buckets older than AUDIT_AGE_DAYS that don't have
-        ExcludeFromAudit=true tag and aren't temp/test buckets.
-        
-        Returns:
-            List of bucket dictionaries from AWS API, or empty list on error
-        """
-        try:
-            response = self.s3_client.list_buckets()
-            all_buckets = response['Buckets']
-        except Exception as e:
-            logger.error(f"Failed to list buckets: {e}")
-            return []
-        
-        buckets_to_audit = []
-        if should_ignore_bucket_age():
-            cutoff_date = datetime.min.replace(tzinfo=timezone.utc)
+        if endpoint_url:
+            self.rds = boto3.client('rds', region_name=region, endpoint_url=endpoint_url)
+            self.cloudwatch = boto3.client('cloudwatch', region_name=region, endpoint_url=endpoint_url)
         else:
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=AUDIT_AGE_DAYS)
+            self.rds = boto3.client('rds', region_name=region)
+            self.cloudwatch = boto3.client('cloudwatch', region_name=region)
+
+        self.instances_data = []
+        self.analysis_results = {}
         
-        for bucket in all_buckets:
-            bucket_name = bucket['Name']
-            
-            # Skip buckets created less than 60 days ago
-            if bucket['CreationDate'] > cutoff_date:
-                logger.debug(f"Skipping new bucket: {bucket_name}")
-                continue
-            
-            # Skip temp and test buckets
-            if bucket_name.startswith('temp-') or bucket_name.startswith('test-'):
-                logger.debug(f"Skipping temp/test bucket: {bucket_name}")
-                continue
-            
-            # Check for ExcludeFromAudit tag
-            try:
-                tagging_response = self.s3_client.get_bucket_tagging(Bucket=bucket_name)
-                tags = {tag['Key'].lower(): tag['Value'].lower() for tag in tagging_response.get('TagSet', [])}
-                
-                if tags.get('excludefromaudit', '').lower() == 'true':
-                    logger.debug(f"Skipping excluded bucket: {bucket_name}")
+    def get_rds_instances(self) -> List[Dict]:
+        """Fetch all RDS instances with filters applied."""
+        instances = []
+        paginator = self.rds.get_paginator('describe_db_instances')
+        
+        for page in paginator.paginate():
+            for db in page['DBInstances']:
+                # Skip test instances
+                if db['DBInstanceIdentifier'].startswith('test-'):
                     continue
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'NoSuchTagSet':
-                    pass  # No tags, include in audit
-                elif e.response['Error']['Code'] in ['AccessDenied', 'NoSuchBucket']:
-                    logger.warning(f"Access error for {bucket_name}: {e}")
-                else:
-                    logger.error(f"Unexpected AWS error for {bucket_name}: {e}")
-            except (BotoCoreError, AttributeError) as e:
-                logger.error(f"Error checking tags for {bucket_name}: {e}")
-            
-            buckets_to_audit.append(bucket)
-        
-        return buckets_to_audit
-    
-    def _cache_bucket_details(self, bucket_name: str):
-        """Cache bucket details to avoid repeated API calls"""
-        if bucket_name in self.bucket_cache:
-            return
-        
-        cache = {'name': bucket_name}
-        cache['arn'] = f"arn:aws:s3:::{bucket_name}"
-        
-        # Get tags
-        try:
-            tagging_response = self.s3_client.get_bucket_tagging(Bucket=bucket_name)
-            cache['tags'] = {tag['Key']: tag['Value'] for tag in tagging_response.get('TagSet', [])}
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchTagSet':
-                cache['tags'] = {}
-            else:
-                logger.warning(f"Error getting tags for bucket {bucket_name}: {e}")
-                cache['tags'] = {}
-        
-        # Get bucket location
-        try:
-            location_response = self.s3_client.get_bucket_location(Bucket=bucket_name)
-            cache['region'] = location_response.get('LocationConstraint', 'us-east-1')
-        except ClientError as e:
-            logger.warning(f"Error getting location for bucket {bucket_name}: {e}")
-            cache['region'] = 'us-east-1'
-        
-        self.bucket_cache[bucket_name] = cache
-    
-    def _check_public_access(self, bucket_name: str):
-        """Check for public read/write access via ACL or policies"""
-        try:
-            # Check bucket ACL
-            acl_response = self.s3_client.get_bucket_acl(Bucket=bucket_name)
-            public_grants = []
-            
-            for grant in acl_response.get('Grants', []):
-                grantee = grant.get('Grantee', {})
-                if grantee.get('Type') == 'Group' and \
-                   grantee.get('URI', '').endswith('AllUsers'):
-                    public_grants.append(grant['Permission'])
-            
-            # Check bucket policy
-            has_public_policy = False
-            try:
-                policy_response = self.s3_client.get_bucket_policy(Bucket=bucket_name)
-                policy = json.loads(policy_response['Policy'])
                 
-                for statement in policy.get('Statement', []):
-                    effect = statement.get('Effect', '')
-                    principal = statement.get('Principal', '')
-                    # Only flag Allow statements with Principal "*" as public access
-                    if effect == 'Allow' and (principal == '*' or (isinstance(principal, dict) and principal.get('AWS') == '*')):
-                        has_public_policy = True
-                        break
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'NoSuchBucketPolicy':
-                    pass  # No policy, continue with ACL check
-                else:
-                    logger.warning(f"Error checking bucket policy for {bucket_name}: {e}")
-            
-            if public_grants or has_public_policy:
-                access_types = []
-                if public_grants:
-                    access_types.append(f"ACL grants: {', '.join(public_grants)}")
-                if has_public_policy:
-                    access_types.append("Policy allows Principal: '*'")
-                
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='PUBLIC_ACCESS',
-                    severity=CRITICAL,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config=f"Bucket has public access: {'; '.join(access_types)}",
-                    required_config="Bucket should not have public read or write access",
-                    remediation_steps="1. Remove public ACL grants\n2. Update bucket policy to remove Principal: '*'\n3. Enable Block Public Access settings"
-                ))
-        except Exception as e:
-            logger.error(f"Error checking public access for {bucket_name}: {e}")
-    
-    def _check_encryption(self, bucket_name: str):
-        """Check for missing default encryption"""
-        try:
-            encryption_response = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'ServerSideEncryptionConfigurationNotFoundError':
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_ENCRYPTION',
-                    severity=HIGH,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="No default encryption configured",
-                    required_config="Default encryption should be enabled (SSE-S3, SSE-KMS, or SSE-C)",
-                    remediation_steps="1. Enable default encryption\n2. Use SSE-KMS for sensitive data\n3. Consider customer-managed KMS keys"
-                ))
-            else:
-                logger.error(f"Error checking encryption for {bucket_name}: {e}")
-        except Exception as e:
-            logger.error(f"Error checking encryption for {bucket_name}: {e}")
-    
-    def _check_versioning(self, bucket_name: str):
-        """Check versioning for critical/confidential buckets"""
-        tags = self.bucket_cache[bucket_name].get('tags', {})
-        data_class = tags.get('DataClassification', '').lower()
-        
-        if data_class in ['critical', 'confidential']:
-            try:
-                versioning_response = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
-                status = versioning_response.get('Status', 'Disabled')
-                
-                if status != 'Enabled':
-                    self.findings.append(Finding(
-                        bucket_name=bucket_name,
-                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                        issue_type='NO_VERSIONING',
-                        severity=HIGH,
-                        compliance_frameworks=['SOC2', 'GDPR'],
-                        current_config=f"Versioning is {status} for {data_class.capitalize()} data",
-                        required_config="Versioning must be enabled for Critical/Confidential data",
-                        remediation_steps="1. Enable bucket versioning\n2. Configure lifecycle rules for version management\n3. Consider MFA Delete for additional protection"
-                    ))
-            except Exception as e:
-                logger.error(f"Error checking versioning for {bucket_name}: {e}")
-    
-    def _check_logging(self, bucket_name: str):
-        """Check for missing server access logging"""
-        try:
-            logging_response = self.s3_client.get_bucket_logging(Bucket=bucket_name)
-            
-            if 'LoggingEnabled' not in logging_response:
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_LOGGING',
-                    severity=MEDIUM,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="Server access logging is disabled",
-                    required_config="Server access logging should be enabled",
-                    remediation_steps="1. Create a dedicated logging bucket\n2. Enable server access logging\n3. Configure log retention policies"
-                ))
-        except Exception as e:
-            logger.error(f"Error checking logging for {bucket_name}: {e}")
-    
-    def _check_lifecycle_policies(self, bucket_name: str):
-        """Check for lifecycle policies on large buckets"""
-        try:
-            # Get bucket size from CloudWatch
-            metrics = self.cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/S3',
-                MetricName='BucketSizeBytes',
-                Dimensions=[
-                    {'Name': 'BucketName', 'Value': bucket_name},
-                    {'Name': 'StorageType', 'Value': 'StandardStorage'}
-                ],
-                StartTime=datetime.now(timezone.utc) - timedelta(days=2),
-                EndTime=datetime.now(timezone.utc),
-                Period=86400,
-                Statistics=['Average']
-            )
-            
-            if metrics['Datapoints']:
-                size_bytes = metrics['Datapoints'][0]['Average']
-                size_gb = size_bytes / (1024 ** 3)
-                
-                if size_gb > LARGE_BUCKET_SIZE_GB:
-                    # Check lifecycle configuration
-                    try:
-                        lifecycle_response = self.s3_client.get_bucket_lifecycle_configuration(Bucket=bucket_name)
-                    except ClientError as e:
-                        if e.response['Error']['Code'] == 'NoSuchLifecycleConfiguration':
-                            self.findings.append(Finding(
-                                bucket_name=bucket_name,
-                                bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                                issue_type='NO_LIFECYCLE',
-                                severity=LOW,
-                                compliance_frameworks=['SOC2', 'GDPR'],
-                                current_config=f"Large bucket ({size_gb:.1f}GB) has no lifecycle policies",
-                                required_config="Buckets >100GB should have lifecycle policies for cost optimization",
-                                remediation_steps="1. Implement lifecycle rules for old objects\n2. Transition to Glacier for archival\n3. Delete obsolete data"
-                            ))
-                        else:
-                            logger.warning(f"Error checking lifecycle policies for {bucket_name}: {e}")
-        except Exception as e:
-            logger.warning(f"Error checking lifecycle policies for {bucket_name}: {e}")
-    
-    def _check_replication(self, bucket_name: str):
-        """Check replication for critical buckets"""
-        tags = self.bucket_cache[bucket_name].get('tags', {})
-        data_class = tags.get('DataClassification', '').lower()
-        
-        if data_class == 'critical':
-            try:
-                replication_response = self.s3_client.get_bucket_replication(Bucket=bucket_name)
-            except ClientError as e:
-                if e.response['Error']['Code'] == 'ReplicationConfigurationNotFoundError':
-                    self.findings.append(Finding(
-                        bucket_name=bucket_name,
-                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                        issue_type='NO_REPLICATION',
-                        severity=HIGH,
-                        compliance_frameworks=['SOC2', 'GDPR'],
-                        current_config="Critical bucket has no cross-region replication",
-                        required_config="Critical buckets must have cross-region replication for DR",
-                        remediation_steps="1. Enable versioning (required for replication)\n2. Create destination bucket in DR region\n3. Configure cross-region replication"
-                    ))
-                else:
-                    logger.error(f"Error checking replication for {bucket_name}: {e}")
-            except Exception as e:
-                logger.error(f"Error checking replication for {bucket_name}: {e}")
-    
-    def _check_secure_transport(self, bucket_name: str):
-        """Check if bucket policy enforces SSL/TLS"""
-        try:
-            policy_response = self.s3_client.get_bucket_policy(Bucket=bucket_name)
-            policy = json.loads(policy_response['Policy'])
-            
-            has_secure_transport = False
-            for statement in policy.get('Statement', []):
-                conditions = statement.get('Condition', {})
-                if 'Bool' in conditions and 'aws:SecureTransport' in conditions['Bool']:
-                    has_secure_transport = True
-                    break
-            
-            if not has_secure_transport:
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_SECURE_TRANSPORT',
-                    severity=HIGH,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="Bucket policy does not enforce SSL/TLS",
-                    required_config="Bucket policy should deny requests without SSL/TLS",
-                    remediation_steps="1. Update bucket policy to include aws:SecureTransport condition\n2. Deny all requests where aws:SecureTransport is false\n3. Test with HTTP requests to verify"
-                ))
-        except ClientError as e:
-            if e.response['Error']['Code'] == 'NoSuchBucketPolicy':
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_SECURE_TRANSPORT',
-                    severity=HIGH,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="No bucket policy to enforce SSL/TLS",
-                    required_config="Bucket policy should deny requests without SSL/TLS",
-                    remediation_steps="1. Create bucket policy with aws:SecureTransport condition\n2. Deny all requests where aws:SecureTransport is false\n3. Test with HTTP requests to verify"
-                ))
-            else:
-                logger.error(f"Error checking secure transport for {bucket_name}: {e}")
-        except Exception as e:
-            logger.error(f"Error checking secure transport for {bucket_name}: {e}")
-    
-    def _check_object_lock(self, bucket_name: str):
-        """Check object lock for compliance-required buckets"""
-        tags = self.bucket_cache[bucket_name].get('tags', {})
-        requires_compliance = tags.get('RequireCompliance', '').lower() == 'true'
-        
-        if requires_compliance:
-            try:
-                object_lock_response = self.s3_client.get_object_lock_configuration(Bucket=bucket_name)
-                if object_lock_response.get('ObjectLockConfiguration', {}).get('ObjectLockEnabled') != 'Enabled':
-                    raise Exception("Object lock not enabled")
-            except ClientError as e:
-                # Object lock not configured or other AWS error
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_OBJECT_LOCK',
-                    severity=CRITICAL,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="Compliance-required bucket has Object Lock disabled",
-                    required_config="Object Lock must be enabled for compliance-required buckets",
-                    remediation_steps="1. Object Lock must be enabled at bucket creation\n2. Create new bucket with Object Lock\n3. Migrate data to new bucket"
-                ))
-            except Exception as e:
-                # Generic exception for object lock not enabled
-                self.findings.append(Finding(
-                    bucket_name=bucket_name,
-                    bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                    issue_type='NO_OBJECT_LOCK',
-                    severity=CRITICAL,
-                    compliance_frameworks=['SOC2', 'GDPR'],
-                    current_config="Compliance-required bucket has Object Lock disabled",
-                    required_config="Object Lock must be enabled for compliance-required buckets",
-                    remediation_steps="1. Object Lock must be enabled at bucket creation\n2. Create new bucket with Object Lock\n3. Migrate data to new bucket"
-                ))
-    
-    def _check_mfa_delete(self, bucket_name: str):
-        """Check MFA delete for versioned financial buckets"""
-        tags = self.bucket_cache[bucket_name].get('tags', {})
-        
-        # Simple heuristic for financial records
-        is_financial = any(keyword in bucket_name.lower() or keyword in str(tags).lower() 
-                          for keyword in ['financial', 'finance', 'payment', 'billing', 'invoice'])
-        
-        if is_financial:
-            try:
-                versioning_response = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
-                if versioning_response.get('Status') == 'Enabled' and \
-                   versioning_response.get('MFADelete', 'Disabled') != 'Enabled':
-                    self.findings.append(Finding(
-                        bucket_name=bucket_name,
-                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                        issue_type='NO_MFA_DELETE',
-                        severity=HIGH,
-                        compliance_frameworks=['SOC2', 'GDPR'],
-                        current_config="Financial bucket lacks MFA Delete protection",
-                        required_config="MFA Delete should be enabled for financial records",
-                        remediation_steps="1. Enable MFA Delete on the bucket\n2. Configure MFA device for root account\n3. Update IAM policies to require MFA"
-                    ))
-            except Exception as e:
-                logger.error(f"Error checking MFA delete for {bucket_name}: {e}")
-    
-    def _check_access_logging_destination(self, bucket_name: str):
-        """Check if high-traffic buckets log to themselves"""
-        try:
-            # Get object count metric
-            metrics = self.cloudwatch_client.get_metric_statistics(
-                Namespace='AWS/S3',
-                MetricName='NumberOfObjects',
-                Dimensions=[
-                    {'Name': 'BucketName', 'Value': bucket_name},
-                    {'Name': 'StorageType', 'Value': 'AllStorageTypes'}
-                ],
-                StartTime=datetime.now(timezone.utc) - timedelta(days=2),
-                EndTime=datetime.now(timezone.utc),
-                Period=86400,
-                Statistics=['Average']
-            )
-            
-            if metrics['Datapoints'] and metrics['Datapoints'][0]['Average'] > HIGH_OBJECT_COUNT:
-                # Check logging configuration
-                logging_response = self.s3_client.get_bucket_logging(Bucket=bucket_name)
-                logging_config = logging_response.get('LoggingEnabled', {})
-                target_bucket = logging_config.get('TargetBucket', '')
-                
-                if target_bucket == bucket_name:
-                    self.findings.append(Finding(
-                        bucket_name=bucket_name,
-                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                        issue_type='SELF_LOGGING',
-                        severity=MEDIUM,
-                        compliance_frameworks=['SOC2', 'GDPR'],
-                        current_config="High-traffic bucket logs to itself",
-                        required_config="Logs should be sent to a separate logging bucket",
-                        remediation_steps="1. Create dedicated logging bucket\n2. Update logging configuration\n3. Set appropriate retention on log bucket"
-                    ))
-        except Exception as e:
-            logger.warning(f"Error checking access logging destination for {bucket_name}: {e}")
-    
-    def _check_kms_encryption_for_vpc(self, bucket_name: str):
-        """Check if VPC/sensitive buckets use KMS encryption"""
-        tags = self.bucket_cache[bucket_name].get('tags', {})
-        
-        # Check if bucket is VPC-related or has sensitive data
-        is_vpc_related = any(keyword in bucket_name.lower() or keyword in str(tags).lower() 
-                           for keyword in ['vpc', 'private', 'internal', 'sensitive'])
-        
-        if is_vpc_related:
-            try:
-                encryption_response = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-                rules = encryption_response.get('ServerSideEncryptionConfiguration', {}).get('Rules', [])
-                
-                uses_s3_only = False
-                for rule in rules:
-                    sse_config = rule.get('ApplyServerSideEncryptionByDefault', {})
-                    if sse_config.get('SSEAlgorithm') == 'AES256':
-                        uses_s3_only = True
-                        break
-                
-                if uses_s3_only:
-                    self.findings.append(Finding(
-                        bucket_name=bucket_name,
-                        bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                        issue_type='WEAK_ENCRYPTION',
-                        severity=MEDIUM,
-                        compliance_frameworks=['SOC2', 'GDPR'],
-                        current_config="VPC/sensitive bucket uses SSE-S3 instead of SSE-KMS",
-                        required_config="Should use customer-managed KMS keys for sensitive data",
-                        remediation_steps="1. Create customer-managed KMS key\n2. Update bucket encryption to use SSE-KMS\n3. Re-encrypt existing objects"
-                    ))
-            except Exception as e:
-                logger.warning(f"Error checking KMS encryption for bucket {bucket_name}: {e}")
-    
-    def _check_glacier_transitions(self, bucket_name: str):
-        """Check if old objects are transitioning to cold storage"""
-        import time
-        
-        try:
-            # Check if bucket has old objects with timeout and limited pagination
-            paginator = self.s3_client.get_paginator('list_objects_v2')
-            page_iterator = paginator.paginate(
-                Bucket=bucket_name, 
-                MaxKeys=50,  # Reduced from 100 for better performance
-                PaginationConfig={'MaxItems': MAX_OBJECTS_TO_CHECK}  # Limit total objects checked
-            )
-            
-            cutoff_date = datetime.now(timezone.utc) - timedelta(days=90)
-            has_old_objects = False
-            start_time = time.time()
-            timeout = 30  # 30 second timeout
-            
-            for page in page_iterator:
-                if time.time() - start_time > timeout:
-                    logger.warning(f"Timeout checking glacier transitions for {bucket_name}")
-                    break
-                    
-                for obj in page.get('Contents', []):
-                    if obj['LastModified'] < cutoff_date:
-                        has_old_objects = True
-                        break
-                if has_old_objects:
-                    break
-            
-            if has_old_objects:
-                # Check lifecycle configuration
+                # Get tags
                 try:
-                    lifecycle_response = self.s3_client.get_bucket_lifecycle_configuration(Bucket=bucket_name)
-                    has_glacier_transition = False
-                    
-                    for rule in lifecycle_response.get('Rules', []):
-                        transitions = rule.get('Transitions', [])
-                        for transition in transitions:
-                            if transition.get('StorageClass') in ['GLACIER', 'DEEP_ARCHIVE']:
-                                has_glacier_transition = True
-                                break
-                    
-                    if not has_glacier_transition:
-                        self.findings.append(Finding(
-                            bucket_name=bucket_name,
-                            bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                            issue_type='NO_COLD_STORAGE',
-                            severity=LOW,
-                            compliance_frameworks=['SOC2', 'GDPR'],
-                            current_config="Bucket has objects >90 days old not transitioning to cold storage",
-                            required_config="Old objects should transition to Glacier/Deep Archive",
-                            remediation_steps="1. Create lifecycle rule for objects >90 days\n2. Transition to Glacier or Deep Archive\n3. Consider Intelligent-Tiering"
-                        ))
-                except ClientError as e:
-                    if e.response['Error']['Code'] == 'NoSuchLifecycleConfiguration':
-                        self.findings.append(Finding(
-                            bucket_name=bucket_name,
-                            bucket_arn=self.bucket_cache[bucket_name]['arn'],
-                            issue_type='NO_COLD_STORAGE',
-                            severity=LOW,
-                            compliance_frameworks=['SOC2', 'GDPR'],
-                            current_config="Bucket has objects >90 days old with no lifecycle rules",
-                            required_config="Old objects should transition to Glacier/Deep Archive",
-                            remediation_steps="1. Create lifecycle rule for objects >90 days\n2. Transition to Glacier or Deep Archive\n3. Consider Intelligent-Tiering"
-                        ))
-                    else:
-                        logger.warning(f"Error checking glacier transitions for {bucket_name}: {e}")
-        except Exception as e:
-            logger.warning(f"Error checking glacier transitions for {bucket_name}: {e}")
+                    tags_response = self.rds.list_tags_for_resource(
+                        ResourceName=db['DBInstanceArn']
+                    )
+                    tags = {tag['Key']: tag['Value'] for tag in tags_response['TagList']}
+                except ClientError:
+                    tags = {}
+                
+                # Skip if ExcludeFromAnalysis tag is true
+                if tags.get('ExcludeFromAnalysis', '').lower() == 'true':
+                    continue
+
+                # Skip instances younger than 30 days (unless in test/mock mode)
+                endpoint_url = os.environ.get('AWS_ENDPOINT_URL')
+                if not endpoint_url:  # Only apply age filter in production
+                    creation_date = db.get('InstanceCreateTime', datetime.now(timezone.utc))
+                    if (datetime.now(timezone.utc) - creation_date).days < 30:
+                        continue
+                
+                db['Tags'] = tags
+                instances.append(db)
+                
+        return instances
     
-    def _generate_compliance_summary(self, audited_buckets: List[Dict]) -> Dict[str, Any]:
-        """Generate compliance summary statistics"""
-        total_buckets = len(audited_buckets)
+    def get_cloudwatch_metrics(self, db_identifier: str, metric_name: str, 
+                              stat: str = 'Average', days: int = 30) -> float:
+        """Get CloudWatch metrics for an RDS instance."""
+        try:
+            response = self.cloudwatch.get_metric_statistics(
+                Namespace='AWS/RDS',
+                MetricName=metric_name,
+                Dimensions=[{'Name': 'DBInstanceIdentifier', 'Value': db_identifier}],
+                StartTime=datetime.now(timezone.utc) - timedelta(days=days),
+                EndTime=datetime.now(timezone.utc),
+                Period=3600,  # 1 hour
+                Statistics=[stat]
+            )
+            
+            if response['Datapoints']:
+                values = [point[stat] for point in response['Datapoints']]
+                return np.mean(values) if stat == 'Average' else max(values)
+            return 0.0
+        except ClientError as e:
+            logger.warning(f"Error fetching metric {metric_name} for {db_identifier}: {e}")
+            return 0.0
+    
+    def get_storage_growth_rate(self, db_identifier: str) -> float:
+        """Calculate monthly storage growth rate."""
+        try:
+            # Get storage metrics for 60 days to calculate growth
+            response = self.cloudwatch.get_metric_statistics(
+                Namespace='AWS/RDS',
+                MetricName='FreeStorageSpace',
+                Dimensions=[{'Name': 'DBInstanceIdentifier', 'Value': db_identifier}],
+                StartTime=datetime.now(timezone.utc) - timedelta(days=60),
+                EndTime=datetime.now(timezone.utc),
+                Period=86400,  # Daily
+                Statistics=['Average']
+            )
+            
+            if len(response['Datapoints']) < 30:
+                return 0.0
+            
+            # Sort by timestamp and calculate growth
+            datapoints = sorted(response['Datapoints'], key=lambda x: x['Timestamp'])
+            if len(datapoints) >= 2:
+                start_free = datapoints[0]['Average']
+                end_free = datapoints[-1]['Average']
+                
+                # If free space decreased, storage grew
+                if start_free > end_free:
+                    growth = ((start_free - end_free) / start_free) * 100
+                    # Convert to monthly rate
+                    days_diff = (datapoints[-1]['Timestamp'] - datapoints[0]['Timestamp']).days
+                    monthly_growth = (growth / days_diff) * 30
+                    return monthly_growth
+            
+            return 0.0
+        except ClientError:
+            return 0.0
+    
+    def analyze_instance(self, instance: Dict) -> Dict:
+        """Analyze a single RDS instance for all criteria."""
+        db_id = instance['DBInstanceIdentifier']
+        issues = []
         
-        # Get unique bucket names with CRITICAL or HIGH severity findings
-        # Medium and low severity findings don't make a bucket non-compliant
-        critical_findings = [f for f in self.findings if f.severity in [CRITICAL, HIGH]]
-        non_compliant_buckets = set(finding.bucket_name for finding in critical_findings)
-        compliant_buckets = set(bucket['Name'] for bucket in audited_buckets) - non_compliant_buckets
+        # 1. Underutilized databases
+        avg_cpu = self.get_cloudwatch_metrics(db_id, 'CPUUtilization', 'Average', 30)
+        max_connections = instance.get('DBParameterGroups', [{}])[0].get('DBParameterGroupName', '')
         
-        # Count by severity
-        severity_counts = defaultdict(int)
-        for finding in self.findings:
-            severity_counts[finding.severity] += 1
+        # Get DatabaseConnections metric
+        avg_connections = self.get_cloudwatch_metrics(db_id, 'DatabaseConnections', 'Average', 30)
+        max_connections_limit = 1000  # Default, should be fetched from parameter group
         
-        # Count by issue type
-        issue_counts = defaultdict(int)
-        for finding in self.findings:
-            issue_counts[finding.issue_type] += 1
+        if avg_cpu < 20 and avg_connections < max_connections_limit * 0.1:
+            issues.append({
+                'type': 'underutilized',
+                'severity': 'medium',
+                'metric_value': f"CPU: {avg_cpu:.1f}%, Connections: {avg_connections:.0f}",
+                'threshold': 'CPU < 20% and connections < 10% of max',
+                'recommendation': 'Consider downsizing instance class or consolidating workloads'
+            })
         
-        # Framework-specific compliance (simplified - bucket is compliant if no findings)
-        soc2_compliant = len(compliant_buckets)
-        gdpr_compliant = len(compliant_buckets)
+        # 2. High storage growth
+        storage_growth = self.get_storage_growth_rate(db_id)
+        if storage_growth > 20:
+            issues.append({
+                'type': 'high_storage_growth',
+                'severity': 'high',
+                'metric_value': f"{storage_growth:.1f}% per month",
+                'threshold': '> 20% per month',
+                'recommendation': 'Implement data archival strategy or increase storage allocation'
+            })
+        
+        # 3. Burstable credit depletion
+        if instance['DBInstanceClass'].startswith(('db.t2', 'db.t3')):
+            burst_balance = self.get_cloudwatch_metrics(db_id, 'BurstBalance', 'Average', 7)
+            if burst_balance < 20:
+                issues.append({
+                    'type': 'burst_credit_depletion',
+                    'severity': 'high',
+                    'metric_value': f"{burst_balance:.1f}%",
+                    'threshold': '< 20%',
+                    'recommendation': 'Upgrade to non-burstable instance class (e.g., m5, r5)'
+                })
+        
+        # 4. Missing Multi-AZ for production
+        if instance['Tags'].get('Environment') == 'production' and not instance.get('MultiAZ', False):
+            issues.append({
+                'type': 'missing_multi_az',
+                'severity': 'high',
+                'metric_value': 'Disabled',
+                'threshold': 'Production without Multi-AZ',
+                'recommendation': 'Enable Multi-AZ for high availability'
+            })
+        
+        # 5. No automated backups
+        if instance.get('BackupRetentionPeriod', 0) == 0:
+            issues.append({
+                'type': 'no_automated_backups',
+                'severity': 'critical',
+                'metric_value': '0 days',
+                'threshold': 'Backup retention = 0',
+                'recommendation': 'Enable automated backups with 7+ day retention'
+            })
+        
+        # 6. Outdated engine versions
+        engine = instance.get('Engine', '')
+        current_version = instance.get('EngineVersion', '')
+        latest_version = LATEST_ENGINE_VERSIONS.get(engine, '')
+        
+        if latest_version and self._is_version_outdated(current_version, latest_version):
+            issues.append({
+                'type': 'outdated_engine',
+                'severity': 'medium',
+                'metric_value': current_version,
+                'threshold': '2+ minor versions behind',
+                'recommendation': f'Update to latest version: {latest_version}'
+            })
+        
+        # 7. No enhanced monitoring for large DBs
+        allocated_storage = instance.get('AllocatedStorage', 0)
+        if allocated_storage > 1024 and not instance.get('EnabledCloudwatchLogsExports'):
+            issues.append({
+                'type': 'no_enhanced_monitoring',
+                'severity': 'medium',
+                'metric_value': f'{allocated_storage} GB without monitoring',
+                'threshold': '> 1TB without enhanced monitoring',
+                'recommendation': 'Enable Enhanced Monitoring for detailed metrics'
+            })
+        
+        # 8. Read replica lag (for Aurora)
+        if 'aurora' in engine:
+            replica_lag = self.get_cloudwatch_metrics(db_id, 'AuroraReplicaLag', 'Average', 7)
+            if replica_lag > 1000:
+                issues.append({
+                    'type': 'high_replica_lag',
+                    'severity': 'high',
+                    'metric_value': f'{replica_lag:.0f} ms',
+                    'threshold': '> 1000ms',
+                    'recommendation': 'Investigate and optimize replication performance'
+                })
+        
+        # 9. No Performance Insights for production
+        if (instance['Tags'].get('Environment') == 'production' and 
+            not instance.get('PerformanceInsightsEnabled', False)):
+            issues.append({
+                'type': 'no_performance_insights',
+                'severity': 'medium',
+                'metric_value': 'Disabled',
+                'threshold': 'Production without Performance Insights',
+                'recommendation': 'Enable Performance Insights for query analysis'
+            })
+        
+        # 10. Inefficient storage type
+        storage_type = instance.get('StorageType', '')
+        if storage_type == 'standard':  # Magnetic
+            issues.append({
+                'type': 'inefficient_storage',
+                'severity': 'high',
+                'metric_value': 'Magnetic',
+                'threshold': 'Using magnetic storage',
+                'recommendation': 'Migrate to gp3 or io2 for better performance'
+            })
+        
+        # 11. Default parameter groups
+        param_groups = instance.get('DBParameterGroups', [])
+        if param_groups and 'default' in param_groups[0].get('DBParameterGroupName', ''):
+            issues.append({
+                'type': 'default_parameter_group',
+                'severity': 'low',
+                'metric_value': param_groups[0].get('DBParameterGroupName', ''),
+                'threshold': 'Using default parameter group',
+                'recommendation': 'Create custom parameter group for optimization'
+            })
+        
+        # 12. No encryption for sensitive data
+        if (instance['Tags'].get('DataClassification') == 'Sensitive' and 
+            not instance.get('StorageEncrypted', False)):
+            issues.append({
+                'type': 'no_encryption',
+                'severity': 'critical',
+                'metric_value': 'Not encrypted',
+                'threshold': 'Sensitive data without encryption',
+                'recommendation': 'Enable encryption at rest immediately'
+            })
+        
+        # 13. No IAM database auth
+        if (engine in ['mysql', 'postgres'] and 
+            not instance.get('IAMDatabaseAuthenticationEnabled', False)):
+            issues.append({
+                'type': 'no_iam_auth',
+                'severity': 'medium',
+                'metric_value': 'Disabled',
+                'threshold': 'PostgreSQL/MySQL without IAM auth',
+                'recommendation': 'Enable IAM database authentication'
+            })
+        
+        # 14. Idle connections
+        peak_connections = self.get_cloudwatch_metrics(db_id, 'DatabaseConnections', 'Maximum', 30)
+        if max_connections_limit > 1000 and peak_connections < 100:
+            issues.append({
+                'type': 'idle_connections',
+                'severity': 'medium',
+                'metric_value': f'Max connections: {max_connections_limit}, Peak: {peak_connections:.0f}',
+                'threshold': 'max_connections > 1000 but peak < 100',
+                'recommendation': 'Reduce max_connections parameter to optimize memory'
+            })
+        
+        # Calculate performance score
+        score = self._calculate_performance_score(issues)
+        
+        # Calculate cost optimization
+        cost_optimization = self._calculate_cost_optimization(instance, issues, avg_cpu, avg_connections)
         
         return {
-            'total_buckets_audited': total_buckets,
-            'compliant_buckets': len(compliant_buckets),
-            'non_compliant_buckets': len(non_compliant_buckets),
-            'compliant_bucket_names': list(compliant_buckets),
-            'non_compliant_bucket_names': list(non_compliant_buckets),
-            'findings_by_severity': dict(severity_counts),
-            'findings_by_issue_type': dict(issue_counts),
-            'framework_compliance': {
-                'SOC2': {
-                    'compliant': soc2_compliant,
-                    'non_compliant': total_buckets - soc2_compliant
-                },
-                'GDPR': {
-                    'compliant': gdpr_compliant,
-                    'non_compliant': total_buckets - gdpr_compliant
-                }
-            },
-            'audit_timestamp': datetime.now(timezone.utc).isoformat(),
-            'region': self.region
+            'db_identifier': db_id,
+            'engine': engine,
+            'instance_class': instance['DBInstanceClass'],
+            'performance_score': score,
+            'issues': issues,
+            'cost_optimization': cost_optimization,
+            'metrics': {
+                'avg_cpu': avg_cpu,
+                'avg_connections': avg_connections,
+                'storage_growth': storage_growth
+            }
         }
     
-    def print_findings(self):
-        """Print findings to console grouped by severity"""
-        if not self.findings:
-            logger.info("✅ No security issues found!")
-            return
-        
-        # Group findings by severity
-        findings_by_severity = defaultdict(list)
-        for finding in self.findings:
-            findings_by_severity[finding.severity].append(finding)
-        
-        # Print in order of severity
-        for severity in [CRITICAL, HIGH, MEDIUM, LOW]:
-            if severity in findings_by_severity:
-                logger.info(f"\n{'='*80}")
-                logger.info(f"{severity} SEVERITY FINDINGS ({len(findings_by_severity[severity])} issues)")
-                logger.info('='*80)
-                
-                for finding in findings_by_severity[severity]:
-                    logger.info(f"\nBucket: {finding.bucket_name}")
-                    logger.info(f"Issue: {finding.issue_type}")
-                    logger.info(f"Current: {finding.current_config}")
-                    logger.info(f"Required: {finding.required_config}")
-                    logger.info(f"Remediation:\n{finding.remediation_steps}")
-                    logger.info('-'*40)
+    def _is_version_outdated(self, current: str, latest: str) -> bool:
+        """Check if version is 2+ minor versions behind."""
+        try:
+            current_parts = [int(x) for x in current.split('.')[:2]]
+            latest_parts = [int(x) for x in latest.split('.')[:2]]
+            
+            if current_parts[0] < latest_parts[0]:
+                return True
+            elif current_parts[0] == latest_parts[0]:
+                return latest_parts[1] - current_parts[1] >= 2
+            return False
+        except:
+            return False
     
-    def save_json_report(self, summary: Dict[str, Any], filename: str = str(S3_JSON_REPORT)):
-        """Save detailed findings to JSON file"""
-        findings_data = [asdict(finding) for finding in self.findings]
+    def _calculate_performance_score(self, issues: List[Dict]) -> int:
+        """Calculate performance score based on issues found."""
+        if not issues:
+            return 100
         
+        severity_weights = {
+            'critical': 25,
+            'high': 15,
+            'medium': 10,
+            'low': 5
+        }
+        
+        total_penalty = sum(severity_weights.get(issue['severity'], 0) for issue in issues)
+        score = max(0, 100 - total_penalty)
+        
+        return score
+    
+    def _calculate_cost_optimization(self, instance: Dict, issues: List[Dict], 
+                                   avg_cpu: float, avg_connections: float) -> Dict:
+        """Calculate potential cost savings."""
+        current_class = instance['DBInstanceClass']
+        current_cost = INSTANCE_PRICING.get(current_class, 0) * 730  # Monthly hours
+        
+        recommended_class = current_class
+        
+        # Rightsizing logic
+        if any(issue['type'] == 'underutilized' for issue in issues):
+            # Suggest smaller instance
+            if current_class == 'db.m5.2xlarge':
+                recommended_class = 'db.m5.xlarge'
+            elif current_class == 'db.m5.xlarge':
+                recommended_class = 'db.m5.large'
+            elif current_class == 'db.t3.large':
+                recommended_class = 'db.t3.medium'
+            elif current_class == 'db.t3.medium':
+                recommended_class = 'db.t3.small'
+        
+        elif any(issue['type'] == 'burst_credit_depletion' for issue in issues):
+            # Suggest non-burstable instance
+            if current_class == 'db.t3.small':
+                recommended_class = 'db.m5.large'
+            elif current_class == 'db.t3.medium':
+                recommended_class = 'db.m5.large'
+            elif current_class == 'db.t3.large':
+                recommended_class = 'db.m5.xlarge'
+        
+        optimized_cost = INSTANCE_PRICING.get(recommended_class, current_cost/730) * 730
+        savings = max(0, current_cost - optimized_cost)
+        
+        return {
+            'current_cost': current_cost,
+            'optimized_cost': optimized_cost,
+            'potential_savings': savings,
+            'recommended_class': recommended_class
+        }
+    
+    def analyze_all_instances(self):
+        """Analyze all RDS instances."""
+        instances = self.get_rds_instances()
+        logger.info(f"Found {len(instances)} RDS instances to analyze")
+        
+        results = []
+        for instance in instances:
+            logger.info(f"Analyzing {instance['DBInstanceIdentifier']}...")
+            result = self.analyze_instance(instance)
+            results.append(result)
+            self.analysis_results[instance['DBInstanceIdentifier']] = result
+        
+        return results
+    
+    def generate_console_output(self, results: List[Dict]):
+        """Generate formatted console output with tables."""
+        print("\n" + "="*120)
+        print("RDS PERFORMANCE ANALYSIS REPORT")
+        print("="*120 + "\n")
+
+        # 1. INSTANCE OVERVIEW TABLE
+        overview_data = []
+        for result in results:
+            overview_data.append([
+                result['db_identifier'],
+                result['engine'],
+                result['instance_class'],
+                f"{result['performance_score']}/100",
+                f"{result['metrics']['avg_cpu']:.1f}%",
+                f"{result['metrics']['avg_connections']:.0f}",
+                len(result['issues']),
+                f"${result['cost_optimization']['potential_savings']:.2f}"
+            ])
+
+        print("INSTANCE OVERVIEW")
+        print(tabulate(
+            overview_data,
+            headers=['DB Identifier', 'Engine', 'Instance Class', 'Score', 'Avg CPU', 'Avg Conn', 'Issues', 'Savings/Mo'],
+            tablefmt='grid',
+            stralign='left',
+            numalign='right'
+        ))
+
+        # 2. ISSUES BY SEVERITY TABLE
+        print("\n\nISSUES BY SEVERITY")
+        critical_issues = []
+        high_issues = []
+        medium_issues = []
+        low_issues = []
+
+        for result in results:
+            db_id = result['db_identifier']
+            for issue in result['issues']:
+                issue_row = [db_id, issue['type'], issue['metric_value'], issue['recommendation']]
+                if issue['severity'] == 'critical':
+                    critical_issues.append(issue_row)
+                elif issue['severity'] == 'high':
+                    high_issues.append(issue_row)
+                elif issue['severity'] == 'medium':
+                    medium_issues.append(issue_row)
+                else:
+                    low_issues.append(issue_row)
+
+        if critical_issues:
+            print("\n🔴 CRITICAL (Immediate Action Required)")
+            print(tabulate(
+                critical_issues,
+                headers=['DB Identifier', 'Issue Type', 'Current Value', 'Recommendation'],
+                tablefmt='grid',
+                stralign='left'
+            ))
+
+        if high_issues:
+            print("\n🟠 HIGH PRIORITY")
+            print(tabulate(
+                high_issues,
+                headers=['DB Identifier', 'Issue Type', 'Current Value', 'Recommendation'],
+                tablefmt='grid',
+                stralign='left'
+            ))
+
+        if medium_issues:
+            print("\n🟡 MEDIUM PRIORITY")
+            print(tabulate(
+                medium_issues[:10],  # Limit to top 10
+                headers=['DB Identifier', 'Issue Type', 'Current Value', 'Recommendation'],
+                tablefmt='grid',
+                stralign='left'
+            ))
+
+        # 3. COST OPTIMIZATION TABLE
+        print("\n\nCOST OPTIMIZATION RECOMMENDATIONS")
+        cost_data = []
+        for result in results:
+            if result['cost_optimization']['potential_savings'] > 0:
+                cost_data.append([
+                    result['db_identifier'],
+                    result['instance_class'],
+                    result['cost_optimization']['recommended_class'],
+                    f"${result['cost_optimization']['current_cost']:.2f}",
+                    f"${result['cost_optimization']['optimized_cost']:.2f}",
+                    f"${result['cost_optimization']['potential_savings']:.2f}"
+                ])
+
+        if cost_data:
+            print(tabulate(
+                cost_data,
+                headers=['DB Identifier', 'Current Class', 'Recommended Class', 'Current Cost', 'Optimized Cost', 'Savings/Mo'],
+                tablefmt='grid',
+                stralign='left',
+                numalign='right'
+            ))
+
+        # 4. SUMMARY TABLE
+        total_savings = sum(r['cost_optimization']['potential_savings'] for r in results)
+        avg_score = np.mean([r['performance_score'] for r in results])
+        total_issues = sum(len(r['issues']) for r in results)
+
+        print("\n\nSUMMARY")
+        summary_data = [
+            ['Total Instances Analyzed', len(results)],
+            ['Total Issues Found', total_issues],
+            ['Critical Issues', len(critical_issues)],
+            ['High Priority Issues', len(high_issues)],
+            ['Medium Priority Issues', len(medium_issues)],
+            ['Average Performance Score', f"{avg_score:.1f}/100"],
+            ['Total Potential Monthly Savings', f"${total_savings:.2f}"]
+        ]
+        print(tabulate(summary_data, tablefmt='grid', stralign='left'))
+
+        print("\n" + "="*120)
+    
+    def save_json_report(self, results: List[Dict], filename: str = 'rds_performance_report.json'):
+        """Save detailed JSON report."""
+        total_instances = len(results)
+        avg_score = np.mean([r['performance_score'] for r in results]) if results else 0
+        total_savings = sum(r['cost_optimization']['potential_savings'] for r in results)
+
         report = {
-            'findings': findings_data,
-            'compliance_summary': summary
+            'timestamp': datetime.now().isoformat(),
+            'summary': {
+                'total_instances': total_instances,
+                'avg_performance_score': round(avg_score, 2),
+                'total_potential_savings': round(total_savings, 2)
+            },
+            'instances': results
         }
-        
+
         with open(filename, 'w') as f:
             json.dump(report, f, indent=2, default=str)
-        
+
         logger.info(f"JSON report saved to {filename}")
-    
-    def save_html_report(self, findings: List[Finding], summary: Dict[str, Any], 
-                        filename: str = str(S3_HTML_REPORT)):
-        """Generate HTML report with charts"""
-        filename = str(filename)
-        try:
-            # Import optional dependencies for HTML report generation
-            from jinja2 import Template
-            import plotly.graph_objects as go
-            import plotly.io as pio
-        except ImportError as e:
-            logger.warning(f"HTML report generation requires additional dependencies (plotly, jinja2). "
-                          f"Install with: pip install plotly jinja2. Error: {e}")
-            basic_html = self._render_basic_html(findings, summary)
-            self._write_html_file(filename, basic_html)
-            return
-        
-        # Create charts
-        severity_chart = self._create_severity_chart(summary)
-        compliance_chart = self._create_compliance_chart(summary)
-        issue_type_chart = self._create_issue_type_chart(summary)
-        
-        template_path = TEMPLATE_PATH
-        if not template_path.exists():
-            logger.error(f"HTML template file not found: {template_path}")
-            basic_html = self._render_basic_html(findings, summary)
-            self._write_html_file(filename, basic_html)
-            return
-        
-        try:
-            with open(template_path, 'r') as f:
-                template_content = f.read()
-        except FileNotFoundError:
-            logger.error(f"HTML template file not found: {template_path}")
-            basic_html = self._render_basic_html(findings, summary)
-            self._write_html_file(filename, basic_html)
-            return
-        
-        template = Template(template_content)
-        html_content = template.render(
-            findings=findings,
-            summary=summary,
-            severity_chart=severity_chart,
-            compliance_chart=compliance_chart,
-            issue_type_chart=issue_type_chart,
-            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            region=self.region
-        )
-        
-        self._write_html_file(filename, html_content)
-    
-    def _render_basic_html(self, findings: List[Finding], summary: Dict[str, Any]) -> str:
-        """Render a minimal HTML report when optional dependencies are unavailable."""
-        severity_rows = ''.join(
-            f"<li>{sev}: {count}</li>"
-            for sev, count in summary.get('findings_by_severity', {}).items()
-        ) or "<li>No findings</li>"
-        
-        finding_rows = ''.join(
-            f"<tr><td>{finding.bucket_name}</td>"
-            f"<td>{finding.issue_type}</td>"
-            f"<td>{finding.severity}</td>"
-            f"<td>{finding.current_config}</td>"
-            f"<td>{finding.required_config}</td></tr>"
-            for finding in findings
-        ) or "<tr><td colspan='5'>No findings recorded</td></tr>"
-        
-        return f"""
-        <!DOCTYPE html>
-        <html>
-            <head>
-                <meta charset="utf-8" />
-                <title>S3 Security Audit Report</title>
-                <style>
-                    body {{ font-family: Arial, sans-serif; margin: 20px; }}
-                    table {{ border-collapse: collapse; width: 100%; }}
-                    th, td {{ border: 1px solid #ddd; padding: 8px; }}
-                    th {{ background-color: #1976d2; color: #fff; }}
-                </style>
-            </head>
-            <body>
-                <h1>S3 Security Audit Report</h1>
-                <p><strong>Region:</strong> {self.region}</p>
-                <p><strong>Audit Timestamp:</strong> {summary.get('audit_timestamp', '')}</p>
-                <h2>Findings by Severity</h2>
-                <ul>{severity_rows}</ul>
-                <h2>Detailed Findings</h2>
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Bucket</th>
-                            <th>Issue</th>
-                            <th>Severity</th>
-                            <th>Current Config</th>
-                            <th>Required Config</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {finding_rows}
-                    </tbody>
-                </table>
-            </body>
-        </html>
-        """
 
-    def _write_html_file(self, filename: str, content: str):
-        try:
-            with open(filename, 'w') as f:
-                f.write(content)
-            logger.info(f"HTML report saved to {filename}")
-        except (OSError, IOError) as exc:
-            logger.error(f"Failed to write HTML report to {filename}: {exc}")
+        # Also save to aws_audit_results.json for test compatibility
+        audit_filename = 'aws_audit_results.json'
+        with open(audit_filename, 'w') as f:
+            json.dump(report, f, indent=2, default=str)
+        logger.info(f"Audit results saved to {audit_filename}")
     
-    def _create_severity_chart(self, summary: Dict[str, Any]) -> str:
-        """Create a bar chart showing the distribution of security findings by severity level.
+    def save_rightsizing_csv(self, results: List[Dict], filename: str = 'rds_rightsizing.csv'):
+        """Save rightsizing recommendations as CSV."""
+        rightsizing_data = []
         
-        Args:
-            summary: Compliance summary dictionary containing findings_by_severity counts
+        for result in results:
+            # Get additional metrics
+            db_id = result['db_identifier']
+            cpu_p95 = self.get_cloudwatch_metrics(db_id, 'CPUUtilization', 'Maximum', 30)
+            connections_p95 = self.get_cloudwatch_metrics(db_id, 'DatabaseConnections', 'Maximum', 30)
+            iops_p95 = self.get_cloudwatch_metrics(db_id, 'ReadIOPS', 'Maximum', 30) + \
+                      self.get_cloudwatch_metrics(db_id, 'WriteIOPS', 'Maximum', 30)
             
-        Returns:
-            HTML string containing the Plotly chart for embedding in reports, or empty string if plotly not available
-        """
-        try:
-            import plotly.graph_objects as go
-            import plotly.io as pio
-        except ImportError:
-            return "<!-- Plotly charts require: pip install plotly -->"
+            rightsizing_data.append({
+                'DBIdentifier': db_id,
+                'Engine': result['engine'],
+                'CurrentClass': result['instance_class'],
+                'RecommendedClass': result['cost_optimization']['recommended_class'],
+                'CPU_P95': round(cpu_p95, 2),
+                'Connections_P95': round(connections_p95, 0),
+                'IOPS_P95': round(iops_p95, 0),
+                'MonthlySavings': round(result['cost_optimization']['potential_savings'], 2)
+            })
         
-        severities = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW']
-        counts = [summary['findings_by_severity'].get(s, 0) for s in severities]
-        colors = ['#d32f2f', '#f57c00', '#fbc02d', '#388e3c']
-        
-        fig = go.Figure(data=[go.Bar(
-            x=severities,
-            y=counts,
-            marker_color=colors,
-            text=counts,
-            textposition='auto'
-        )])
-        
-        fig.update_layout(
-            title='Findings by Severity',
-            xaxis_title='Severity Level',
-            yaxis_title='Number of Findings',
-            showlegend=False,
-            height=400
-        )
-        
-        return pio.to_html(fig, include_plotlyjs='cdn', div_id='severity-chart')
+        df = pd.DataFrame(rightsizing_data)
+        df.to_csv(filename, index=False)
+        logger.info(f"Rightsizing CSV saved to {filename}")
     
-    def _create_compliance_chart(self, summary: Dict[str, Any]) -> str:
-        """Create a donut chart showing overall compliance status across all audited buckets.
+    def save_performance_distribution(self, results: List[Dict], filename: str = 'performance_distribution.png'):
+        """Save performance score distribution chart."""
+        scores = [r['performance_score'] for r in results]
         
-        Args:
-            summary: Compliance summary dictionary containing compliant/non-compliant bucket counts
-            
-        Returns:
-            HTML string containing the Plotly chart for embedding in reports, or empty string if plotly not available
-        """
-        try:
-            import plotly.graph_objects as go
-            import plotly.io as pio
-        except ImportError:
-            return "<!-- Plotly charts require: pip install plotly -->"
+        plt.figure(figsize=(10, 6))
+        plt.hist(scores, bins=20, edgecolor='black', alpha=0.7)
+        plt.xlabel('Performance Score')
+        plt.ylabel('Number of Instances')
+        plt.title('RDS Performance Score Distribution')
+        plt.axvline(np.mean(scores), color='red', linestyle='dashed', linewidth=2, 
+                   label=f'Average: {np.mean(scores):.1f}')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig(filename, dpi=300, bbox_inches='tight')
+        plt.close()
         
-        labels = ['Compliant', 'Non-Compliant']
-        values = [summary['compliant_buckets'], summary['non_compliant_buckets']]
-        colors = ['#4caf50', '#f44336']
-        
-        fig = go.Figure(data=[go.Pie(
-            labels=labels,
-            values=values,
-            hole=0.4,
-            marker=dict(colors=colors),
-            textinfo='label+percent'
-        )])
-        
-        fig.update_layout(
-            title='Overall Compliance Status',
-            height=400,
-            annotations=[{
-                'text': f"{summary['total_buckets_audited']}<br>Buckets",
-                'showarrow': False,
-                'font': {'size': 20}
-            }]
-        )
-        
-        return pio.to_html(fig, include_plotlyjs='cdn', div_id='compliance-chart')
-    
-    def _create_issue_type_chart(self, summary: Dict[str, Any]) -> str:
-        """Create a horizontal bar chart showing the distribution of findings by issue type.
-        
-        Args:
-            summary: Compliance summary dictionary containing findings_by_issue_type counts
-            
-        Returns:
-            HTML string containing the Plotly chart for embedding in reports, or empty string if plotly not available
-        """
-        try:
-            import plotly.graph_objects as go
-            import plotly.io as pio
-        except ImportError:
-            return "<!-- Plotly charts require: pip install plotly -->"
-        
-        issue_types = list(summary['findings_by_issue_type'].keys())
-        counts = list(summary['findings_by_issue_type'].values())
-        
-        fig = go.Figure(data=[go.Bar(
-            x=counts,
-            y=issue_types,
-            orientation='h',
-            marker_color='#1976d2',
-            text=counts,
-            textposition='auto'
-        )])
-        
-        fig.update_layout(
-            title='Findings by Issue Type',
-            xaxis_title='Number of Findings',
-            yaxis_title='Issue Type',
-            height=max(400, len(issue_types) * 40),
-            margin=dict(l=150)
-        )
-        
-        return pio.to_html(fig, include_plotlyjs='cdn', div_id='issue-type-chart')
-
-
-def run_s3_security_audit():
-    """Run S3 security audit"""
-    # Configure logging
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-    
-    try:
-        auditor = S3SecurityAuditor()
-        findings, summary = auditor.run_audit()
-        
-        # Cache summary for report generation
-        auditor._last_summary = summary
-        
-        # Print findings to console
-        auditor.print_findings()
-        
-        # Save JSON report
-        auditor.save_json_report(summary)
-        
-        # Save HTML report (optional - will skip if dependencies not available)
-        try:
-            auditor.save_html_report(findings, summary)
-        except Exception as e:
-            logger.warning(f"HTML report generation failed: {e}")
-            logger.info("JSON report was generated successfully. HTML report requires: pip install plotly jinja2")
-        
-        logger.info(f"📊 Audit complete! Found {len(findings)} issues across {summary['total_buckets_audited']} buckets.")
-        logger.info(f"📄 Reports saved: s3_security_audit.json (always generated)")
-        
-        # Exit with error code if critical findings
-        if any(f.severity == CRITICAL for f in findings):
-            return 1
-        
-    except Exception as e:
-        logger.error(f"Fatal error during audit: {e}")
-        return 2
-    
-    return 0
-
-
-def run_resource_audit() -> int:
-    """Run the general AWS resource audit and persist results."""
-    try:
-        auditor = AWSResourceAuditor()
-        results = auditor.audit_resources()
-        with open(AWS_AUDIT_RESULTS_FILE, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        logger.info(f"AWS resource audit report saved to {AWS_AUDIT_RESULTS_FILE}")
-        return 0
-    except NoCredentialsError:
-        logger.error("AWS credentials not found. Please configure credentials.")
-        return 2
-    except Exception as exc:
-        logger.error(f"Fatal error during AWS resource audit: {exc}")
-        return 2
-
+        logger.info(f"Performance distribution chart saved to {filename}")
 
 def main():
-    """CLI entrypoint for the analysis script."""
-    mode = sys.argv[1].lower() if len(sys.argv) > 1 else 'resources'
-    if mode == 'resources':
-        return run_resource_audit()
-    if mode == 's3':
-        return run_s3_security_audit()
-    logger.warning(f"Unknown mode '{mode}', defaulting to resource audit")
-    return run_resource_audit()
+    """Main execution function."""
+    try:
+        analyzer = RDSAnalyzer()
+        results = analyzer.analyze_all_instances()
+        
+        if not results:
+            logger.warning("No RDS instances found matching criteria")
+            return
 
+        # Generate outputs - save files first, then display console output
+        analyzer.save_json_report(results)
+        analyzer.save_rightsizing_csv(results)
+        analyzer.save_performance_distribution(results)
+        logger.info("Analysis complete!")
 
-if __name__ == "__main__":
-    exit(main())
+        # Display console output last (after all file I/O logs)
+        analyzer.generate_console_output(results)
+        
+    except Exception as e:
+        logger.error(f"Error during analysis: {e}")
+        sys.exit(1)
+
+if __name__ == '__main__':
+    main()
