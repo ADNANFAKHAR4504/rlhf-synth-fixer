@@ -7,6 +7,7 @@ from aws_cdk import (
     aws_ecs as ecs,
     aws_elasticloadbalancingv2 as elbv2,
     aws_route53 as route53,
+    aws_route53_targets as route53_targets,
     aws_cloudwatch as cloudwatch,
     aws_secretsmanager as secretsmanager,
     aws_iam as iam,
@@ -93,6 +94,11 @@ class TapStack(Stack):
         self.ecs_cluster = self._create_ecs_cluster()
         self.alb = self._create_application_load_balancer()
         self.ecs_service = self._create_ecs_service()
+
+        # Create Route 53 for traffic management
+        self.hosted_zone = self._create_route53_hosted_zone()
+        self.health_check = self._create_route53_health_check()
+        self.dns_record = self._create_route53_record()
 
         # Create CloudWatch monitoring
         self.dashboard = self._create_cloudwatch_dashboard()
@@ -645,7 +651,7 @@ class TapStack(Stack):
         )
 
         # Create target group
-        target_group = elbv2.ApplicationTargetGroup(
+        self.target_group = elbv2.ApplicationTargetGroup(
             self,
             f"ecs-target-{self.environment_suffix}",
             vpc=self.vpc,
@@ -668,7 +674,7 @@ class TapStack(Stack):
             f"alb-listener-{self.environment_suffix}",
             port=80,
             protocol=elbv2.ApplicationProtocol.HTTP,
-            default_target_groups=[target_group],
+            default_target_groups=[self.target_group],
         )
 
         # Create Fargate service
@@ -686,7 +692,7 @@ class TapStack(Stack):
         )
 
         # Attach service to target group
-        service.attach_to_application_target_group(target_group)
+        service.attach_to_application_target_group(self.target_group)
 
         # Enable auto-scaling
         scaling = service.auto_scale_task_count(
@@ -842,7 +848,7 @@ class TapStack(Stack):
                     namespace="AWS/ApplicationELB",
                     metric_name="HealthyHostCount",
                     dimensions_map={
-                        "TargetGroup": f"targetgroup/payment-tg-{self.environment_suffix}",
+                        "TargetGroup": self.target_group.target_group_full_name,
                         "LoadBalancer": self.alb.load_balancer_full_name,
                     },
                     statistic="Average",
@@ -853,7 +859,7 @@ class TapStack(Stack):
                     namespace="AWS/ApplicationELB",
                     metric_name="UnHealthyHostCount",
                     dimensions_map={
-                        "TargetGroup": f"targetgroup/payment-tg-{self.environment_suffix}",
+                        "TargetGroup": self.target_group.target_group_full_name,
                         "LoadBalancer": self.alb.load_balancer_full_name,
                     },
                     statistic="Average",
@@ -933,6 +939,54 @@ class TapStack(Stack):
             evaluation_periods=2,
             comparison_operator=cloudwatch.ComparisonOperator.GREATER_THAN_OR_EQUAL_TO_THRESHOLD,
             alarm_description="One or more ECS tasks are unhealthy",
+        )
+
+    def _create_route53_hosted_zone(self) -> route53.HostedZone:
+        """Create Route 53 hosted zone for traffic management"""
+        return route53.HostedZone(
+            self,
+            f"hosted-zone-{self.environment_suffix}",
+            zone_name=f"payment-migration-{self.environment_suffix}.internal",
+            comment=f"Hosted zone for payment processing migration - {self.environment_suffix}",
+        )
+
+    def _create_route53_health_check(self) -> route53.CfnHealthCheck:
+        """Create health check for ALB"""
+        return route53.CfnHealthCheck(
+            self,
+            f"alb-health-{self.environment_suffix}",
+            health_check_config=route53.CfnHealthCheck.HealthCheckConfigProperty(
+                type="HTTP",
+                resource_path="/",
+                fully_qualified_domain_name=self.alb.load_balancer_dns_name,
+                port=80,
+                request_interval=30,
+                failure_threshold=3,
+            ),
+            health_check_tags=[
+                route53.CfnHealthCheck.HealthCheckTagProperty(
+                    key="Name",
+                    value=f"ALB-Health-Check-{self.environment_suffix}"
+                ),
+                route53.CfnHealthCheck.HealthCheckTagProperty(
+                    key="Environment",
+                    value=f"migration-{self.environment_suffix}"
+                ),
+            ],
+        )
+
+    def _create_route53_record(self) -> route53.ARecord:
+        """Create A record pointing to ALB"""
+        return route53.ARecord(
+            self,
+            f"api-record-{self.environment_suffix}",
+            zone=self.hosted_zone,
+            record_name=f"api",
+            target=route53.RecordTarget.from_alias(
+                route53_targets.LoadBalancerTarget(self.alb)
+            ),
+            ttl=Duration.seconds(60),
+            comment=f"API endpoint for payment processing - {self.environment_suffix}",
         )
 
     def _create_outputs(self) -> None:
@@ -1085,6 +1139,39 @@ class TapStack(Stack):
             value=self.alb.load_balancer_arn,
             description="Application Load Balancer ARN",
             export_name=f"ALBLoadBalancerArn-{self.environment_suffix}",
+        )
+
+        # Route53 outputs
+        CfnOutput(
+            self,
+            "Route53HostedZoneId",
+            value=self.hosted_zone.hosted_zone_id,
+            description="Route 53 hosted zone ID",
+            export_name=f"Route53HostedZoneId-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "Route53HostedZoneName",
+            value=self.hosted_zone.zone_name,
+            description="Route 53 hosted zone name",
+            export_name=f"Route53HostedZoneName-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "Route53HealthCheckId",
+            value=self.health_check.ref,
+            description="Route 53 health check ID for ALB",
+            export_name=f"Route53HealthCheckId-{self.environment_suffix}",
+        )
+
+        CfnOutput(
+            self,
+            "Route53DnsRecordName",
+            value=f"api.{self.hosted_zone.zone_name}",
+            description="Route 53 DNS record for API endpoint",
+            export_name=f"Route53DnsRecordName-{self.environment_suffix}",
         )
 
         # CloudWatch outputs

@@ -350,6 +350,65 @@ class TestLoadBalancerConfiguration:
         )
 
 
+class TestRoute53Configuration:
+    """Test Route53 configuration"""
+
+    def test_hosted_zone_created(self, tap_stack):
+        """Test Route53 hosted zone is created"""
+        template = assertions.Template.from_stack(tap_stack)
+        template.resource_count_is("AWS::Route53::HostedZone", 1)
+        assert hasattr(tap_stack, "hosted_zone")
+
+    def test_hosted_zone_internal_domain(self, tap_stack):
+        """Test hosted zone uses .internal domain"""
+        template = assertions.Template.from_stack(tap_stack)
+        template.has_resource_properties(
+            "AWS::Route53::HostedZone",
+            assertions.Match.object_like({
+                "Name": assertions.Match.string_like_regexp(".*\\.internal\\.$")
+            })
+        )
+
+    def test_health_check_created(self, tap_stack):
+        """Test Route53 health check is created"""
+        template = assertions.Template.from_stack(tap_stack)
+        template.resource_count_is("AWS::Route53::HealthCheck", 1)
+        assert hasattr(tap_stack, "health_check")
+
+    def test_health_check_configuration(self, tap_stack):
+        """Test health check targets ALB on HTTP port 80"""
+        template = assertions.Template.from_stack(tap_stack)
+        template.has_resource_properties(
+            "AWS::Route53::HealthCheck",
+            assertions.Match.object_like({
+                "HealthCheckConfig": assertions.Match.object_like({
+                    "Type": "HTTP",
+                    "Port": 80,
+                    "ResourcePath": "/"
+                })
+            })
+        )
+
+    def test_a_record_created(self, tap_stack):
+        """Test A record is created pointing to ALB"""
+        template = assertions.Template.from_stack(tap_stack)
+        template.resource_count_is("AWS::Route53::RecordSet", 1)
+        assert hasattr(tap_stack, "dns_record")
+
+    def test_a_record_points_to_alb(self, tap_stack):
+        """Test A record uses ALB as alias target"""
+        template = assertions.Template.from_stack(tap_stack)
+        # Should have A record with alias target
+        records = template.find_resources("AWS::Route53::RecordSet")
+        a_record_found = False
+        for record in records.values():
+            if record.get("Properties", {}).get("Type") == "A":
+                assert "AliasTarget" in record["Properties"]
+                a_record_found = True
+                break
+        assert a_record_found, "No A record with alias target found"
+
+
 class TestCloudWatchConfiguration:
     """Test CloudWatch monitoring configuration"""
 

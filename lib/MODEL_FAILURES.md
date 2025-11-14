@@ -187,3 +187,49 @@ self.dms_vpc_role = iam.Role(
 1. **Some AWS services require exact IAM role names**: DMS, unlike most services, requires specific role names
 2. **Service documentation is critical**: AWS DMS documentation specifies these exact role names
 3. **Don't apply environment suffixes to service-required roles**: These are account-level roles, not stack-specific
+
+---
+
+## Issue 4: Multiple Stack Files Violate Single-Stack Architecture
+
+### What Went Wrong
+
+The PR review identified architecture violations:
+- `lib/route53_stack.py` and `lib/dms_prereq_stack.py` existed despite single-stack requirement
+- Tests existed for these unused stacks
+- The prompt explicitly required all resources in a single TapStack
+
+### Root Cause
+
+- Legacy multi-stack implementation not fully cleaned up
+- Route53 resources were never implemented in the main stack
+- Unused stack files created confusion about the architecture
+
+### Correct Implementation
+
+1. **Deleted unused stack files**:
+   - `lib/route53_stack.py`
+   - `lib/dms_prereq_stack.py`
+   - `tests/unit/test_route53_stack_unit.py`
+   - `tests/unit/test_dms_prereq_stack_unit.py`
+
+2. **Added Route53 implementation to TapStack**:
+```python
+# Create Route 53 for traffic management
+self.hosted_zone = self._create_route53_hosted_zone()
+self.health_check = self._create_route53_health_check()
+self.dns_record = self._create_route53_record()
+```
+
+3. **Fixed CloudWatch dashboard target group dimension**:
+```python
+# Changed from hardcoded string to actual target group property
+"TargetGroup": self.target_group.target_group_full_name,
+```
+
+### Key Learnings
+
+1. **Always clean up unused files**: When refactoring architecture, remove all obsolete files
+2. **Verify all requirements are implemented**: Route53 was a core requirement but missing
+3. **Use actual resource properties**: Don't hardcode dimensions that can change
+4. **Single-stack is clearer**: All resources in one place makes dependencies explicit
