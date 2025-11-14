@@ -1,6 +1,6 @@
 {
     "AWSTemplateFormatVersion": "2010-09-09",
-    "Description": "TapStack.yml — Production-grade, from-scratch ECS Fargate microservices stack (payment, fraud, reporting) with VPC (3 AZ), ALB + path routing, Cloud Map, autoscaling, CloudWatch logging, least-privilege security groups, and ECS Exec enabled. All names include EnvironmentSuffix; YAML only; no anchors; deployable in one attempt.\n",
+    "Description": "TapStack.yml — Production-grade, from-scratch ECS Fargate microservices stack (payment, fraud, reporting) with VPC (3 AZ), ALB + path routing, Cloud Map, autoscaling, CloudWatch logging, least-privilege security groups, and ECS Exec enabled.\n",
     "Metadata": {
         "TemplateName": "TapStack-ECS-Fargate",
         "Version": "1.3",
@@ -2230,7 +2230,7 @@
                 "LaunchType": "FARGATE",
                 "DesiredCount": {
                     "Fn::If": [
-                        "HasReportingImage",
+                        "HasPaymentImage",
                         {
                             "Ref": "DesiredCount"
                         },
@@ -2246,6 +2246,7 @@
                     "MaximumPercent": 200,
                     "MinimumHealthyPercent": 50
                 },
+                "HealthCheckGracePeriodSeconds": 60,
                 "NetworkConfiguration": {
                     "AwsvpcConfiguration": {
                         "AssignPublicIp": "DISABLED",
@@ -2329,7 +2330,7 @@
                 "LaunchType": "FARGATE",
                 "DesiredCount": {
                     "Fn::If": [
-                        "HasPaymentImage",
+                        "HasFraudImage",
                         {
                             "Ref": "DesiredCount"
                         },
@@ -2345,6 +2346,7 @@
                     "MaximumPercent": 200,
                     "MinimumHealthyPercent": 50
                 },
+                "HealthCheckGracePeriodSeconds": 60,
                 "NetworkConfiguration": {
                     "AwsvpcConfiguration": {
                         "AssignPublicIp": "DISABLED",
@@ -2428,7 +2430,7 @@
                 "LaunchType": "FARGATE",
                 "DesiredCount": {
                     "Fn::If": [
-                        "HasFraudImage",
+                        "HasReportingImage",
                         {
                             "Ref": "DesiredCount"
                         },
@@ -2444,6 +2446,7 @@
                     "MaximumPercent": 200,
                     "MinimumHealthyPercent": 50
                 },
+                "HealthCheckGracePeriodSeconds": 60,
                 "NetworkConfiguration": {
                     "AwsvpcConfiguration": {
                         "AssignPublicIp": "DISABLED",

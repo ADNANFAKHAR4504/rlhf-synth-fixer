@@ -3,8 +3,7 @@ Description: >
   TapStack.yml — Production-grade, from-scratch ECS Fargate microservices stack
   (payment, fraud, reporting) with VPC (3 AZ), ALB + path routing, Cloud Map,
   autoscaling, CloudWatch logging, least-privilege security groups, and ECS Exec enabled.
-  All names include EnvironmentSuffix; YAML only; no anchors; deployable in one attempt.
-
+  
 Metadata:
   TemplateName: TapStack-ECS-Fargate
   Version: "1.3"
@@ -958,14 +957,13 @@ Resources:
       ServiceName: !Sub "payment-${EnvironmentSuffix}"
       Cluster: !Ref EcsCluster
       LaunchType: FARGATE
-      DesiredCount: !If [HasReportingImage, !Ref DesiredCount, 0]
+      DesiredCount: !If [HasPaymentImage, !Ref DesiredCount, 0]
       EnableExecuteCommand: true
       DeploymentConfiguration:
-        DeploymentCircuitBreaker:
-          Enable: true
-          Rollback: true
+        DeploymentCircuitBreaker: { Enable: true, Rollback: true }
         MaximumPercent: 200
         MinimumHealthyPercent: 50
+      HealthCheckGracePeriodSeconds: 60
 
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -991,14 +989,13 @@ Resources:
       ServiceName: !Sub "fraud-${EnvironmentSuffix}"
       Cluster: !Ref EcsCluster
       LaunchType: FARGATE
-      DesiredCount: !If [HasPaymentImage, !Ref DesiredCount, 0]
+      DesiredCount: !If [HasFraudImage, !Ref DesiredCount, 0]
       EnableExecuteCommand: true
       DeploymentConfiguration:
-        DeploymentCircuitBreaker:
-          Enable: true
-          Rollback: true
+        DeploymentCircuitBreaker: { Enable: true, Rollback: true }
         MaximumPercent: 200
         MinimumHealthyPercent: 50
+      HealthCheckGracePeriodSeconds: 60
 
       NetworkConfiguration:
         AwsvpcConfiguration:
@@ -1024,14 +1021,13 @@ Resources:
       ServiceName: !Sub "reporting-${EnvironmentSuffix}"
       Cluster: !Ref EcsCluster
       LaunchType: FARGATE
-      DesiredCount: !If [HasFraudImage, !Ref DesiredCount, 0]
+      DesiredCount: !If [HasReportingImage, !Ref DesiredCount, 0]
       EnableExecuteCommand: true
       DeploymentConfiguration:
-        DeploymentCircuitBreaker:
-          Enable: true
-          Rollback: true
+        DeploymentCircuitBreaker: { Enable: true, Rollback: true }
         MaximumPercent: 200
         MinimumHealthyPercent: 50
+      HealthCheckGracePeriodSeconds: 60
 
       NetworkConfiguration:
         AwsvpcConfiguration:
