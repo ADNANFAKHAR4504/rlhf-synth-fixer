@@ -5,7 +5,7 @@
 
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import * as crypto from 'crypto';
+import * as random from '@pulumi/random';
 
 interface TapStackProps {
   environmentSuffix: string;
@@ -672,21 +672,31 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: this.primaryProvider, parent: this }
     );
 
-    // Generate secure random password
-    const securePassword = crypto.randomBytes(32).toString('base64').slice(0, 32).replace(/[^a-zA-Z0-9]/g, 'A') + '1!';
+    // Generate secure random password using Pulumi Random provider
+    // This ensures the password is generated once and remains stable across updates
+    const dbPassword = new random.RandomPassword(
+      `aurora-password-${this.props.environmentSuffix}`,
+      {
+        length: 32,
+        special: true,
+        overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+        minSpecial: 1,
+        minNumeric: 1,
+        minUpper: 1,
+        minLower: 1,
+      },
+      { parent: this }
+    );
 
     const secretVersion = new aws.secretsmanager.SecretVersion(
       `aurora-secret-version-${this.props.environmentSuffix}`,
       {
         secretId: dbSecret.id,
         secretString: pulumi.secret(
-          JSON.stringify({
-            username: 'dbadmin',
-            password: securePassword,
-          })
+          pulumi.interpolate`{"username":"dbadmin","password":"${dbPassword.result}"}`
         ),
       },
-      { provider: this.primaryProvider, parent: this }
+      { provider: this.primaryProvider, parent: this, ignoreChanges: ['secretString'] }
     );
 
     // Create Global Cluster
