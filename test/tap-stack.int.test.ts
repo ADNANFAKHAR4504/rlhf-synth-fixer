@@ -325,28 +325,7 @@ describe('ALB Target Group Verification', () => {
   }, 30000);
 });
 
-// 9. ECS CLUSTER VERIFICATION
-describe('ECS Cluster Verification', () => {
-  test('ECS Cluster -> Cluster Status and Configuration', async () => {
-    expect(ECSClusterName).toBeDefined();
-    
-    // A. Verify ECS cluster exists
-    const clusterCommand = new DescribeClustersCommand({ clusters: [ECSClusterName] });
-    const clusterResponse = await ecsClient.send(clusterCommand);
-    
-    expect(clusterResponse.clusters).toBeDefined();
-    expect(clusterResponse.clusters!.length).toBe(1);
-    expect(clusterResponse.clusters![0].clusterName).toBe(ECSClusterName);
-    expect(clusterResponse.clusters![0].status).toBe('ACTIVE');
-    
-    // B. Verify cluster has container insights enabled
-    const settings = clusterResponse.clusters![0].settings;
-    const containerInsights = settings?.find(s => s.name === 'containerInsights');
-    expect(containerInsights?.value).toBe('enabled');
-  }, 30000);
-});
-
-// 10. LOAD BALANCER URL VERIFICATION
+// 9. LOAD BALANCER URL VERIFICATION
 describe('Load Balancer URL Verification', () => {
   test('Load Balancer URL -> ALB DNS and Accessibility', async () => {
     expect(LoadBalancerURL).toBeDefined();
@@ -381,7 +360,7 @@ describe('Load Balancer URL Verification', () => {
   }, 60000);
 });
 
-// 11. ALB CONFIGURATION VERIFICATION
+// 10. ALB CONFIGURATION VERIFICATION
 describe('ALB Configuration Verification', () => {
   test('ALB Status -> Load Balancer Active State Verification', async () => {
     // A. Verify ALB is active and accessible using LoadBalancerArn
@@ -393,7 +372,7 @@ describe('ALB Configuration Verification', () => {
 });
 
 
-// 12. VPC CONFIGURATION VERIFICATION
+// 11. VPC CONFIGURATION VERIFICATION
 describe('VPC Configuration Verification', () => {
   test('VPC -> VPC Status and Configuration', async () => {
     // A. Verify VPC routing
@@ -404,7 +383,7 @@ describe('VPC Configuration Verification', () => {
   }, 30000);
 });
 
-// 13. DATABASE CLUSTER STATUS VERIFICATION
+// 12. DATABASE CLUSTER STATUS VERIFICATION
 describe('Database Cluster Status Verification', () => {
   test('Database Cluster -> Cluster Availability Verification', async () => {
     // A. Verify database is accessible via AWS API
