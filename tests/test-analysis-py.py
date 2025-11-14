@@ -17,23 +17,6 @@ import boto3
 import pytest
 
 
-@pytest.fixture(scope="session", autouse=True)
-def setup_aws_environment():
-    """
-    Automatically configure AWS environment variables for all tests.
-    Sets up AWS credentials and endpoint URL for moto server integration.
-    """
-    if not os.environ.get("AWS_ENDPOINT_URL"):
-        os.environ["AWS_ENDPOINT_URL"] = "http://localhost:5001"
-    if not os.environ.get("AWS_ACCESS_KEY_ID"):
-        os.environ["AWS_ACCESS_KEY_ID"] = "testing"
-    if not os.environ.get("AWS_SECRET_ACCESS_KEY"):
-        os.environ["AWS_SECRET_ACCESS_KEY"] = "testing"
-    if not os.environ.get("AWS_DEFAULT_REGION"):
-        os.environ["AWS_DEFAULT_REGION"] = "us-east-1"
-    yield
-
-
 def boto_client(service: str):
     """Get boto client with endpoint URL support for mocking."""
     return boto3.client(
