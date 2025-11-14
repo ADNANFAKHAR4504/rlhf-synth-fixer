@@ -393,10 +393,10 @@ describe('TapStack CloudFormation Template - EKS Cluster', () => {
       });
     });
 
-    test('log groups should reference cluster name', () => {
+    test('log groups should have unique names with environment suffix', () => {
       const logGroup = template.Resources.EKSContainerInsightsLogGroup;
       expect(logGroup.Properties.LogGroupName).toEqual({
-        'Fn::Sub': '/aws/eks/${EKSCluster}/cluster',
+        'Fn::Sub': '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance',
       });
     });
   });

@@ -858,7 +858,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/eks/${EKSCluster}/cluster"
+                    "Fn::Sub": "/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance"
                 },
                 "RetentionInDays": 7,
                 "Tags": [
@@ -881,7 +881,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/eks/${EKSCluster}/application"
+                    "Fn::Sub": "/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application"
                 },
                 "RetentionInDays": 7,
                 "Tags": [
@@ -904,7 +904,7 @@
             "Type": "AWS::Logs::LogGroup",
             "Properties": {
                 "LogGroupName": {
-                    "Fn::Sub": "/aws/eks/${EKSCluster}/dataplane"
+                    "Fn::Sub": "/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane"
                 },
                 "RetentionInDays": 7,
                 "Tags": [
