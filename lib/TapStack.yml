@@ -1531,6 +1531,13 @@ Resources:
                 Resource: !Ref DatabaseSecret
               - Effect: Allow
                 Action:
+                  - 'kms:Decrypt'
+                  - 'kms:GenerateDataKey'
+                Resource:
+                  - !GetAtt SecretsManagerKMSKey.Arn
+                  - !GetAtt CloudWatchLogsKMSKey.Arn
+              - Effect: Allow
+                Action:
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
                 Resource: !GetAtt ECSLogGroup.Arn
@@ -1850,10 +1857,10 @@ Resources:
         - ContainerName: transaction-processor
           ContainerPort: 8080
           TargetGroupArn: !Ref ALBTargetGroup
-      HealthCheckGracePeriodSeconds: 300
+      HealthCheckGracePeriodSeconds: 60
       DeploymentConfiguration:
         MaximumPercent: 200
-        MinimumHealthyPercent: 50
+        MinimumHealthyPercent: 100
         DeploymentCircuitBreaker:
           Enable: true
           Rollback: true
