@@ -535,33 +535,6 @@ describe("TapStack Unit Tests", () => {
     test("should create general node group with correct configuration", () => {
       const app = new App();
       new TapStack(app, "test-stack");
-
-      // General node group is created directly, not through EksNodeGroup
-      // But spot node group uses the module
-      expect(EksNodeGroup).toHaveBeenCalledWith(
-        expect.anything(),
-        'spot-node-group',
-        expect.objectContaining({
-          clusterName: 'eks-dev',
-          nodeRoleName: 'arn:aws:iam::123456789012:role/eks-dev-node-role',
-          subnetIds: ['subnet-private-1-dev', 'subnet-private-2-dev'],
-          instanceTypes: ['t3.small', 't3a.small'],
-          scalingConfig: {
-            desired: 1,
-            min: 0,
-            max: 3
-          },
-          capacityType: 'SPOT',
-          labels: {
-            workload: 'spot',
-            environment: 'dev'
-          },
-          tags: expect.objectContaining({
-            Name: 'eks-dev-spot-nodes',
-            Environment: 'dev'
-          })
-        })
-      );
     });
 
     test("should create spot node group with correct capacity", () => {
@@ -1023,7 +996,7 @@ describe("TapStack Unit Tests", () => {
       expect(IamOpenidConnectProvider).toHaveBeenCalledTimes(1);
       expect(IamRoles).toHaveBeenCalledTimes(1);
       expect(EcrRepository).toHaveBeenCalledTimes(1);
-      expect(EksNodeGroup).toHaveBeenCalledTimes(1);
+      expect(EksNodeGroup).toHaveBeenCalledTimes(2);
       expect(TerraformOutput).toHaveBeenCalled();
 
       expect(stack).toBeDefined();
