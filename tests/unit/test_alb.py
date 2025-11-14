@@ -21,7 +21,6 @@ class TestAlbStack:
             environment_suffix="test",
             vpc_id="vpc-12345",
             public_subnet_ids=["subnet-1", "subnet-2", "subnet-3"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/test",
         )
 
         assert stack is not None
@@ -39,7 +38,6 @@ class TestAlbStack:
             environment_suffix="test",
             vpc_id="vpc-12345",
             public_subnet_ids=["subnet-1", "subnet-2", "subnet-3"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/test",
         )
 
         assert stack.alb_sg is not None
@@ -55,7 +53,6 @@ class TestAlbStack:
             environment_suffix="test",
             vpc_id="vpc-12345",
             public_subnet_ids=["subnet-1", "subnet-2", "subnet-3"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/test",
         )
 
         assert stack.alb is not None
@@ -71,7 +68,6 @@ class TestAlbStack:
             environment_suffix="test",
             vpc_id="vpc-12345",
             public_subnet_ids=["subnet-1", "subnet-2", "subnet-3"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/test",
         )
 
         assert stack.target_group is not None
@@ -87,7 +83,6 @@ class TestAlbStack:
             environment_suffix="test",
             vpc_id="vpc-12345",
             public_subnet_ids=["subnet-1", "subnet-2", "subnet-3"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/test",
         )
 
         tg_arn = stack.target_group_arn
@@ -105,7 +100,6 @@ class TestAlbStack:
             environment_suffix="test",
             vpc_id="vpc-12345",
             public_subnet_ids=["subnet-1", "subnet-2", "subnet-3"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/test",
         )
 
         sg_id = stack.alb_security_group_id
@@ -123,7 +117,6 @@ class TestAlbStack:
             environment_suffix="prod",
             vpc_id="vpc-67890",
             public_subnet_ids=["subnet-4", "subnet-5", "subnet-6"],
-            certificate_arn="arn:aws:acm:us-east-1:123456789012:certificate/prod",
         )
 
         assert stack is not None

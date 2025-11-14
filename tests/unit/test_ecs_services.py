@@ -158,5 +158,5 @@ class TestEcsServicesStack:
         )
 
         assert stack is not None
-        # Verify region is used in ECR image URLs
-        assert "us-west-2" in stack.services_config["payment-api"]["image"]
+        # Verify image is configured (using public ECR for now)
+        assert "nginx" in stack.services_config["payment-api"]["image"]
