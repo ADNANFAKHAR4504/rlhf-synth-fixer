@@ -5,7 +5,12 @@ module.exports = {
   preset: 'ts-jest',
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': ['ts-jest', {
+      tsconfig: {
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
+    }],
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
@@ -35,11 +40,10 @@ module.exports = {
   verbose: true,
   globals: {
     'ts-jest': {
-      isolatedModules: true,
       tsconfig: {
-        allowJs: true,
-        esModuleInterop: true
-      }
-    }
-  }
+        esModuleInterop: true,
+        allowSyntheticDefaultImports: true,
+      },
+    },
+  },
 };

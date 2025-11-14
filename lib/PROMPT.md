@@ -1,47 +1,100 @@
-# Task: Blue-Green Migration Strategy for Payment Processing System
+# Amazon EKS Cluster Infrastructure - CloudFormation JSON
 
-## Platform & Language
-**MANDATORY:** This task MUST be implemented using **Pulumi with Python**.
+## Overview
+Create infrastructure using **CloudFormation with JSON** to deploy an Amazon EKS (Elastic Kubernetes Service) cluster for production workloads.
 
-## Background
-A financial services company needs to migrate their legacy on-premises payment processing system to AWS. The current system handles credit card transactions and requires strict compliance with PCI DSS standards. The migration must be performed with zero downtime using a blue-green deployment strategy.
-
-## Problem Statement
-Create a CloudFormation template to implement a blue-green migration strategy for a payment processing system.
+**CRITICAL CONSTRAINT**: This task MUST use CloudFormation with JSON format. The platform and language are non-negotiable requirements from metadata.json.
 
 ## Requirements
 
-The configuration must implement the following:
+### Core Infrastructure
+1. **Amazon EKS Cluster**
+   - Production-grade EKS cluster configuration
+   - Kubernetes version 1.28 or later
+   - Cluster endpoint access configuration (public/private)
+   - Cluster logging enabled (API, audit, authenticator, controller manager, scheduler)
+   - Cluster encryption configuration for secrets using KMS
 
-1. Define two identical environments (blue and green) with RDS Aurora clusters in private subnets
-2. Create an Application Load Balancer with weighted target groups for traffic shifting
-3. Configure DynamoDB tables with point-in-time recovery for session data
-4. Implement CloudFormation custom resources for pre-migration data validation
-5. Set up CloudWatch alarms for database connection counts and response times
-6. Create Lambda functions to handle environment switching logic
-7. Configure AWS Backup plans with 7-day retention for both environments
-8. Implement stack outputs that display current active environment and migration status
+2. **VPC Networking**
+   - VPC with public and private subnets across multiple AZs (minimum 2 AZs)
+   - Internet Gateway for public subnets
+   - NAT Gateway(s) for private subnet internet access
+   - Route tables properly configured
+   - VPC endpoint for S3 (cost optimization)
 
-## Environment Details
-Blue-green migration infrastructure deployed in us-east-1 across 3 availability zones. Uses RDS Aurora MySQL 8.0 for transaction data and DynamoDB for session management. Requires VPC with private subnets, NAT gateways for outbound traffic, and VPC endpoints for S3 and DynamoDB. AWS account must have KMS key creation permissions and Secrets Manager access. CloudFormation stack will manage approximately 25 resources including load balancers, auto-scaling groups, and security configurations.
+3. **EKS Node Groups**
+   - Managed node group(s) for worker nodes
+   - Auto-scaling configuration (min, max, desired capacity)
+   - Instance types appropriate for production workloads
+   - Nodes in private subnets for security
+   - Node IAM role with required permissions
 
-## Constraints
+4. **Security**
+   - IAM roles for EKS cluster and node groups
+   - Security groups for cluster and nodes
+   - Least privilege IAM policies
+   - KMS encryption for EKS secrets
+   - Private subnet placement for nodes
 
-1. All data must be encrypted at rest using AWS KMS customer-managed keys
-2. Database credentials must be stored in AWS Secrets Manager with automatic rotation enabled
-3. The template must support rollback to the previous environment within 5 minutes
-4. Network traffic between components must use VPC endpoints to avoid internet exposure
-5. All resources must be tagged with Environment, CostCenter, and MigrationPhase tags
-6. The template must use CloudFormation drift detection compatible resources only
-7. Parameter validation must enforce naming conventions matching ^(dev|staging|prod)-payment-[a-z0-9]{8}$
+5. **Resource Naming**
+   - All resource names MUST include `${EnvironmentSuffix}` parameter
+   - Pattern: `resource-type-${EnvironmentSuffix}`
+   - This is critical for parallel deployment testing
 
-## Expected Output
-A CloudFormation YAML template that enables controlled migration between blue and green environments with automated rollback capabilities and comprehensive monitoring.
+### AWS Services Required
+- Amazon EKS (Elastic Kubernetes Service)
+- Amazon VPC (Virtual Private Cloud)
+- Amazon EC2 (for node groups)
+- AWS IAM (Identity and Access Management)
+- AWS KMS (Key Management Service)
+- Amazon CloudWatch (for logging)
 
-## Region
-us-east-1 (default)
+### Constraints
+- **Platform**: CloudFormation (MANDATORY)
+- **Language**: JSON (MANDATORY)
+- **Region**: Use `${AWS::Region}` intrinsic function
+- **Destroyability**: All resources must be destroyable (no DeletionPolicy: Retain)
+- **Environment Suffix**: ALL resources must include `${EnvironmentSuffix}` parameter
 
-## Subject Labels
-- aws
-- infrastructure
-- environment-migration
+### Production Best Practices
+1. **High Availability**
+   - Multi-AZ deployment for cluster and nodes
+   - Auto-scaling for node groups
+   
+2. **Security**
+   - Nodes in private subnets only
+   - Security groups with minimal required access
+   - IAM roles following least privilege principle
+   - KMS encryption for cluster secrets
+   
+3. **Observability**
+   - EKS cluster logging enabled (all log types)
+   - CloudWatch log group for cluster logs
+   - Resource tags for cost tracking
+   
+4. **Cost Optimization**
+   - Use VPC endpoint for S3 (avoid NAT Gateway charges for S3 traffic)
+   - Consider single NAT Gateway for dev/test (not production)
+   - Appropriate instance types and auto-scaling policies
+
+## Output Requirements
+The CloudFormation template must output:
+- EKS Cluster Name
+- EKS Cluster Endpoint
+- EKS Cluster Security Group ID
+- Node Group Name(s)
+- VPC ID
+- Subnet IDs
+
+## Template Structure
+Create a single CloudFormation JSON template at `lib/template.json` that includes:
+1. Parameters section (including EnvironmentSuffix)
+2. Resources section with all required AWS resources
+3. Outputs section with cluster and networking information
+
+## Important Notes
+- This task description mentions "Terraform" but the CSV platform constraint specifies "CloudFormation with JSON"
+- The CSV platform is MANDATORY and takes precedence
+- We MUST implement this using CloudFormation JSON format
+- All resource names must be parameterized with EnvironmentSuffix
+- Follow CloudFormation JSON syntax (not YAML)
