@@ -320,7 +320,7 @@ def handler(event, context):
 """),
                 handler="handler"
             ),
-            runtime=synthetics.Runtime.SYNTHETICS_PYTHON_PUPPETEER_3_5,
+            runtime=synthetics.Runtime.SYNTHETICS_PYTHON_SELENIUM_6_0,
         )
 
     def _create_contributor_insights(self, environment_suffix: str) -> None:
