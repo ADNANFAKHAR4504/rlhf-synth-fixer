@@ -1367,12 +1367,6 @@ output "db_master_username" {
   sensitive   = true
 }
 
-output "db_master_password" {
-  value       = random_password.db_master.result
-  description = "Generated master password for Aurora database"
-  sensitive   = true
-}
-
 output "secrets_manager_secret_id" {
   value       = aws_secretsmanager_secret.aurora_credentials.id
   description = "ID of the Secrets Manager secret containing database credentials"

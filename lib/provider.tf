@@ -38,10 +38,3 @@ variable "db_master_username" {
   description = "Master username for Aurora database"
   default     = "admin"
 }
-
-variable "db_master_password" {
-  type        = string
-  description = "Master password for Aurora database"
-  # REMOVED: default = "ChangeMe123!" - now generated via random_password
-  sensitive = true
-}
