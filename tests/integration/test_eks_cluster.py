@@ -128,7 +128,7 @@ def test_kms_encryption_enabled(stack_outputs, eks_client, kms_client):
 
 
 def test_node_groups_exist(stack_outputs, eks_client):
-    """Test that all 4 node groups exist."""
+    """Test that all 3 node groups exist."""
     cluster_name = None
     for key, value in stack_outputs.items():
         if "ClusterName" in key:
@@ -138,7 +138,7 @@ def test_node_groups_exist(stack_outputs, eks_client):
     response = eks_client.list_nodegroups(clusterName=cluster_name)
     nodegroups = response["nodegroups"]
 
-    assert len(nodegroups) == 4, f"Expected 4 node groups, found {len(nodegroups)}"
+    assert len(nodegroups) == 3, f"Expected 3 node groups, found {len(nodegroups)}"
 
 
 def test_general_node_groups(stack_outputs, eks_client):
@@ -194,31 +194,32 @@ def test_memory_node_group(stack_outputs, eks_client):
     assert ng["amiType"] == "BOTTLEROCKET_x86_64"
 
 
-def test_gpu_node_group(stack_outputs, eks_client):
-    """Test GPU node group configuration."""
-    cluster_name = None
-    for key, value in stack_outputs.items():
-        if "ClusterName" in key:
-            cluster_name = value
-            break
-
-    response = eks_client.list_nodegroups(clusterName=cluster_name)
-    nodegroups = response["nodegroups"]
-
-    gpu_groups = [ng for ng in nodegroups if "gpu" in ng.lower()]
-    assert len(gpu_groups) == 1, "Expected 1 GPU node group"
-
-    ng_response = eks_client.describe_nodegroup(
-        clusterName=cluster_name, nodegroupName=gpu_groups[0]
-    )
-    ng = ng_response["nodegroup"]
-
-    assert ng["instanceTypes"] == ["g4dn.xlarge"]
-    assert ng["scalingConfig"]["minSize"] == 1
-    assert ng["scalingConfig"]["maxSize"] == 3
-    assert ng["scalingConfig"]["desiredSize"] == 1
-    assert "BOTTLEROCKET" in ng["amiType"]
-    assert "NVIDIA" in ng["amiType"] or "GPU" in ng["amiType"]
+# GPU node group is commented out in tap_stack.py (lines 546-574)
+# def test_gpu_node_group(stack_outputs, eks_client):
+#     """Test GPU node group configuration."""
+#     cluster_name = None
+#     for key, value in stack_outputs.items():
+#         if "ClusterName" in key:
+#             cluster_name = value
+#             break
+#
+#     response = eks_client.list_nodegroups(clusterName=cluster_name)
+#     nodegroups = response["nodegroups"]
+#
+#     gpu_groups = [ng for ng in nodegroups if "gpu" in ng.lower()]
+#     assert len(gpu_groups) == 1, "Expected 1 GPU node group"
+#
+#     ng_response = eks_client.describe_nodegroup(
+#         clusterName=cluster_name, nodegroupName=gpu_groups[0]
+#     )
+#     ng = ng_response["nodegroup"]
+#
+#     assert ng["instanceTypes"] == ["g4dn.xlarge"]
+#     assert ng["scalingConfig"]["minSize"] == 1
+#     assert ng["scalingConfig"]["maxSize"] == 3
+#     assert ng["scalingConfig"]["desiredSize"] == 1
+#     assert "BOTTLEROCKET" in ng["amiType"]
+#     assert "NVIDIA" in ng["amiType"] or "GPU" in ng["amiType"]
 
 
 def test_autoscaler_tags(stack_outputs, eks_client):
