@@ -944,7 +944,6 @@ describe('TapStack - Web Application Infrastructure Unit Tests', () => {
       expect(templateYaml).not.toMatch(/\b\d{12}\b/);
       expect(templateYaml).not.toMatch(/us-east-1|us-west-2|eu-west-1/);
 
-      // Uses dynamic resolution
       expect(templateYaml).toContain('{{resolve:ssm:');
       expect(templateYaml).toContain('{{resolve:secretsmanager:');
     });
