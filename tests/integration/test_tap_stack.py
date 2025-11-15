@@ -101,7 +101,8 @@ class TestTapStackOutputs(unittest.TestCase):
             sg_id.startswith("sg-"),
             f"Security group ID '{sg_id}' doesn't follow AWS format"
         )
-        self.assertEqual(len(sg_id), 21, f"Security group ID '{sg_id}' has invalid length")
+        # Security group IDs can be 20 or 21 characters (sg- prefix + 17 or 18 hex chars)
+        self.assertIn(len(sg_id), [20, 21], f"Security group ID '{sg_id}' has invalid length")
 
     @mark.it("Has GitHub OIDC provider ARN output")
     def test_github_oidc_provider_arn_output(self):
@@ -241,9 +242,10 @@ class TestTapStackOutputs(unittest.TestCase):
     def test_lambda_function_arns_valid(self):
         """Test that Lambda function ARNs follow correct format."""
         # ARRANGE & ACT
+        # Lambda ARNs may not have "lambda" in key name (e.g., Kubectl, ClusterResource)
         lambda_arns = [
             value for key, value in flat_outputs.items()
-            if "lambda" in key.lower() and "arn:aws:lambda:" in str(value)
+            if "arn:aws:lambda:" in str(value)
         ]
 
         # ASSERT

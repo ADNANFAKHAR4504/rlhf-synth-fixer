@@ -32,7 +32,6 @@
   "region": "ap-southeast-1",
   "training_quality": 10,
   "author": "mayanksethi-turing",
-  "reviewer": "raghav-turing",
   "coverage": {
     "lines": 100,
     "branches": 100
