@@ -59,3 +59,19 @@ variable "certificate_arn" {
   type        = string
   default     = ""
 }
+
+variable "health_check_bucket" {
+  description = "S3 bucket containing health_check.py script"
+  type        = string
+}
+
+variable "health_check_script_key" {
+  description = "S3 key for health_check.py script"
+  type        = string
+  default     = "scripts/health_check.py"
+}
+
+variable "transaction_logs_bucket" {
+  description = "S3 bucket for transaction logs"
+  type        = string
+}

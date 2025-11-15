@@ -5,7 +5,7 @@ output "db_endpoint" {
 
 output "db_connection_string" {
   description = "Database connection string"
-  value       = "postgresql://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.endpoint}/${var.db_name}"
+  value       = "postgresql://${var.db_username}:${urlencode(random_password.db_password.result)}@${aws_db_instance.main.endpoint}/${var.db_name}"
   sensitive   = true
 }
 

@@ -1,62 +1,8 @@
 # Local variables
 locals {
-  current_env = terraform.workspace == "default" ? "dev" : terraform.workspace
-}
-
-# Data sources for shared resources
-# ECR Repository - create in each environment with workspace-specific naming
-resource "aws_ecr_repository" "payment_api" {
-  name                 = "payment-api-${local.current_env}"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-
-  tags = {
-    Name        = "payment-api-${local.current_env}"
-    Environment = local.current_env
-  }
-}
-
-# Lifecycle policy for ECR
-resource "aws_ecr_lifecycle_policy" "payment_api" {
-  repository = aws_ecr_repository.payment_api.name
-
-  policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Keep last 10 images"
-        selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["v"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 10
-        }
-        action = {
-          type = "expire"
-        }
-      },
-      {
-        rulePriority = 2
-        description  = "Remove untagged images after 7 days"
-        selection = {
-          tagStatus   = "untagged"
-          countType   = "sinceImagePushed"
-          countUnit   = "days"
-          countNumber = 7
-        }
-        action = {
-          type = "expire"
-        }
-      }
-    ]
-  })
+  current_env             = terraform.workspace == "default" ? "dev" : terraform.workspace
+  health_check_bucket     = var.health_check_bucket != "" ? var.health_check_bucket : "payment-health-check-scripts"
+  health_check_script_key = "scripts/health_check.py"
 }
 
 data "aws_caller_identity" "current" {}
@@ -94,18 +40,21 @@ module "rds" {
 module "ecs" {
   source = "./modules/ecs"
 
-  environment        = local.current_env
-  vpc_id             = module.core.vpc_id
-  private_subnet_ids = module.core.private_subnet_ids
-  public_subnet_ids  = module.core.public_subnet_ids
-  task_count         = var.ecs_task_count
-  task_cpu           = var.ecs_task_cpu
-  task_memory        = var.ecs_task_memory
-  container_image    = "${aws_ecr_repository.payment_api.repository_url}:latest"
-  container_port     = 8080
-  health_check_path  = "/health"
-  database_url       = module.rds.db_connection_string
-  certificate_arn    = var.certificate_arn
+  environment             = local.current_env
+  vpc_id                  = module.core.vpc_id
+  private_subnet_ids      = module.core.private_subnet_ids
+  public_subnet_ids       = module.core.public_subnet_ids
+  task_count              = var.ecs_task_count
+  task_cpu                = var.ecs_task_cpu
+  task_memory             = var.ecs_task_memory
+  container_image         = "python:3.11-slim"
+  container_port          = 8080
+  health_check_path       = "/health"
+  database_url            = module.rds.db_connection_string
+  certificate_arn         = var.certificate_arn
+  health_check_bucket     = local.health_check_bucket
+  health_check_script_key = local.health_check_script_key
+  transaction_logs_bucket = aws_s3_bucket.transaction_logs.id
 }
 
 # S3 Bucket for Transaction Logs

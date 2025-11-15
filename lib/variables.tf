@@ -123,3 +123,9 @@ variable "s3_expiration_days" {
   type        = number
   default     = 365
 }
+
+variable "health_check_bucket" {
+  description = "S3 bucket containing the health_check.py script"
+  type        = string
+  default     = "payment-health-check-scripts"
+}

@@ -96,63 +96,9 @@ provider "aws" {
 ```hcl
 # Local variables
 locals {
-  current_env = terraform.workspace == "default" ? "dev" : terraform.workspace
-}
-
-# Data sources for shared resources
-# ECR Repository - create in each environment with workspace-specific naming
-resource "aws_ecr_repository" "payment_api" {
-  name                 = "payment-api-${local.current_env}"
-  image_tag_mutability = "MUTABLE"
-
-  image_scanning_configuration {
-    scan_on_push = true
-  }
-
-  encryption_configuration {
-    encryption_type = "AES256"
-  }
-
-  tags = {
-    Name        = "payment-api-${local.current_env}"
-    Environment = local.current_env
-  }
-}
-
-# Lifecycle policy for ECR
-resource "aws_ecr_lifecycle_policy" "payment_api" {
-  repository = aws_ecr_repository.payment_api.name
-
-  policy = jsonencode({
-    rules = [
-      {
-        rulePriority = 1
-        description  = "Keep last 10 images"
-        selection = {
-          tagStatus     = "tagged"
-          tagPrefixList = ["v"]
-          countType     = "imageCountMoreThan"
-          countNumber   = 10
-        }
-        action = {
-          type = "expire"
-        }
-      },
-      {
-        rulePriority = 2
-        description  = "Remove untagged images after 7 days"
-        selection = {
-          tagStatus   = "untagged"
-          countType   = "sinceImagePushed"
-          countUnit   = "days"
-          countNumber = 7
-        }
-        action = {
-          type = "expire"
-        }
-      }
-    ]
-  })
+  current_env             = terraform.workspace == "default" ? "dev" : terraform.workspace
+  health_check_bucket     = var.health_check_bucket != "" ? var.health_check_bucket : "payment-health-check-scripts"
+  health_check_script_key = "scripts/health_check.py"
 }
 
 data "aws_caller_identity" "current" {}
@@ -190,18 +136,21 @@ module "rds" {
 module "ecs" {
   source = "./modules/ecs"
 
-  environment        = local.current_env
-  vpc_id             = module.core.vpc_id
-  private_subnet_ids = module.core.private_subnet_ids
-  public_subnet_ids  = module.core.public_subnet_ids
-  task_count         = var.ecs_task_count
-  task_cpu           = var.ecs_task_cpu
-  task_memory        = var.ecs_task_memory
-  container_image    = "${aws_ecr_repository.payment_api.repository_url}:latest"
-  container_port     = 8080
-  health_check_path  = "/health"
-  database_url       = module.rds.db_connection_string
-  certificate_arn    = var.certificate_arn
+  environment             = local.current_env
+  vpc_id                  = module.core.vpc_id
+  private_subnet_ids      = module.core.private_subnet_ids
+  public_subnet_ids       = module.core.public_subnet_ids
+  task_count              = var.ecs_task_count
+  task_cpu                = var.ecs_task_cpu
+  task_memory             = var.ecs_task_memory
+  container_image         = "python:3.11-slim"
+  container_port          = 8080
+  health_check_path       = "/health"
+  database_url            = module.rds.db_connection_string
+  certificate_arn         = var.certificate_arn
+  health_check_bucket     = local.health_check_bucket
+  health_check_script_key = local.health_check_script_key
+  transaction_logs_bucket = aws_s3_bucket.transaction_logs.id
 }
 
 # S3 Bucket for Transaction Logs
@@ -397,6 +346,12 @@ variable "s3_expiration_days" {
   description = "Days before expiring objects"
   type        = number
   default     = 365
+}
+
+variable "health_check_bucket" {
+  description = "S3 bucket containing the health_check.py script"
+  type        = string
+  default     = "payment-health-check-scripts"
 }
 ```
 
@@ -890,7 +845,7 @@ output "db_endpoint" {
 
 output "db_connection_string" {
   description = "Database connection string"
-  value       = "postgresql://${var.db_username}:${random_password.db_password.result}@${aws_db_instance.main.endpoint}/${var.db_name}"
+  value       = "postgresql://${var.db_username}:${urlencode(random_password.db_password.result)}@${aws_db_instance.main.endpoint}/${var.db_name}"
   sensitive   = true
 }
 
@@ -1039,12 +994,8 @@ resource "aws_lb_listener" "http" {
   protocol          = "HTTP"
 
   default_action {
-    type = "redirect"
-    redirect {
-      port        = "443"
-      protocol    = "HTTPS"
-      status_code = "HTTP_301"
-    }
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.main.arn
   }
 }
 
@@ -1104,6 +1055,26 @@ resource "aws_iam_role_policy_attachment" "ecs_task_execution" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# Allow Task Execution Role to read SSM parameters (for secrets)
+resource "aws_iam_role_policy" "ecs_task_execution_ssm" {
+  name = "payment-ecs-task-execution-ssm-${var.environment}"
+  role = aws_iam_role.ecs_task_execution.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ssm:GetParameter",
+          "ssm:GetParameters"
+        ]
+        Resource = "arn:aws:ssm:*:*:parameter/payment/${var.environment}/*"
+      }
+    ]
+  })
+}
+
 # ECS Task Role
 resource "aws_iam_role" "ecs_task" {
   name = "payment-ecs-task-${var.environment}"
@@ -1137,8 +1108,17 @@ resource "aws_iam_role_policy" "ecs_task" {
           "s3:ListBucket"
         ]
         Resource = [
-          "arn:aws:s3:::payment-logs-${var.environment}-*",
-          "arn:aws:s3:::payment-logs-${var.environment}-*/*"
+          "arn:aws:s3:::${var.transaction_logs_bucket}",
+          "arn:aws:s3:::${var.transaction_logs_bucket}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::${var.health_check_bucket}/${var.health_check_script_key}"
         ]
       },
       {
@@ -1181,6 +1161,26 @@ resource "aws_ecs_task_definition" "main" {
         }
       ]
 
+      # Use entryPoint and command to download and run the health check script
+      entryPoint = ["sh", "-c"]
+      command = [
+        <<-EOT
+        set -e
+        echo "Installing system dependencies..."
+        apt-get update -qq && apt-get install -y -qq curl unzip
+        echo "Installing AWS CLI..."
+        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+        unzip -q awscliv2.zip
+        ./aws/install
+        echo "Installing Python dependencies..."
+        pip install --no-cache-dir flask boto3 psycopg2-binary
+        echo "Downloading health check script from S3..."
+        aws s3 cp s3://${var.health_check_bucket}/${var.health_check_script_key} /app/health_check.py
+        echo "Starting application..."
+        python /app/health_check.py
+        EOT
+      ]
+
       environment = [
         {
           name  = "ENVIRONMENT"
@@ -1189,6 +1189,14 @@ resource "aws_ecs_task_definition" "main" {
         {
           name  = "PORT"
           value = tostring(var.container_port)
+        },
+        {
+          name  = "S3_BUCKET"
+          value = var.transaction_logs_bucket
+        },
+        {
+          name  = "AWS_REGION"
+          value = data.aws_region.current.name
         }
       ]
 
@@ -1209,11 +1217,11 @@ resource "aws_ecs_task_definition" "main" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || timeout 1 bash -c 'cat < /dev/null > /dev/tcp/localhost/${var.container_port}' || exit 1"]
+        command     = ["CMD-SHELL", "curl -f http://localhost:${var.container_port}${var.health_check_path} || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 60
+        startPeriod = 90
       }
     }
   ])
@@ -1340,6 +1348,22 @@ variable "certificate_arn" {
   description = "ACM certificate ARN"
   type        = string
   default     = ""
+}
+
+variable "health_check_bucket" {
+  description = "S3 bucket containing health_check.py script"
+  type        = string
+}
+
+variable "health_check_script_key" {
+  description = "S3 key for health_check.py script"
+  type        = string
+  default     = "scripts/health_check.py"
+}
+
+variable "transaction_logs_bucket" {
+  description = "S3 bucket for transaction logs"
+  type        = string
 }
 ```
 

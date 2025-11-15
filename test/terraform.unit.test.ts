@@ -37,6 +37,7 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
   // -------------------------
   describe('Variables Definition (variables.tf)', () => {
     const requiredVariables = [
+      'environment',
       'aws_region',
       'vpc_cidr',
       'availability_zones',
@@ -56,7 +57,8 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
       'certificate_arn',
       's3_transition_days',
       's3_glacier_days',
-      's3_expiration_days'
+      's3_expiration_days',
+      'health_check_bucket'
     ];
 
     requiredVariables.forEach(varName => {
@@ -68,13 +70,13 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
     test('Variables have type definitions', () => {
       const typeMatches = variablesContent.match(/type\s*=\s*(string|number|bool|list\(string\))/g);
       expect(typeMatches).not.toBeNull();
-      expect(typeMatches!.length).toBeGreaterThan(15);
+      expect(typeMatches!.length).toBeGreaterThanOrEqual(20);
     });
 
     test('Variables have descriptions', () => {
       const descMatches = variablesContent.match(/description\s*=\s*"/g);
       expect(descMatches).not.toBeNull();
-      expect(descMatches!.length).toBeGreaterThan(15);
+      expect(descMatches!.length).toBeGreaterThanOrEqual(20);
     });
   });
 
@@ -94,30 +96,12 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
       expect(tapstackContent).toMatch(/current_env\s*=\s*terraform\.workspace\s*==\s*"default"\s*\?\s*"dev"\s*:\s*terraform\.workspace/);
     });
 
-    describe('ECR Resources', () => {
-      test('ECR repository is defined', () => {
-        expect(tapstackContent).toMatch(/resource\s+"aws_ecr_repository"\s+"payment_api"\s*{/);
-      });
+    test('Local variable health_check_bucket is defined', () => {
+      expect(tapstackContent).toMatch(/health_check_bucket\s*=/);
+    });
 
-      test('ECR repository has workspace-specific naming', () => {
-        expect(tapstackContent).toMatch(/name\s*=\s*"payment-api-\$\{local\.current_env\}"/);
-      });
-
-      test('ECR image scanning is enabled', () => {
-        expect(tapstackContent).toMatch(/scan_on_push\s*=\s*true/);
-      });
-
-      test('ECR lifecycle policy is defined', () => {
-        expect(tapstackContent).toMatch(/resource\s+"aws_ecr_lifecycle_policy"\s+"payment_api"\s*{/);
-      });
-
-      test('ECR lifecycle policy keeps last 10 tagged images', () => {
-        expect(tapstackContent).toMatch(/countNumber\s*=\s*10/);
-      });
-
-      test('ECR lifecycle policy removes untagged images after 7 days', () => {
-        expect(tapstackContent).toMatch(/countNumber\s*=\s*7/);
-      });
+    test('Local variable health_check_script_key is defined', () => {
+      expect(tapstackContent).toMatch(/health_check_script_key\s*=/);
     });
 
     describe('Data Sources', () => {
@@ -209,12 +193,20 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
         expect(tapstackContent).toMatch(/ecs_security_group_id\s*=\s*module\.ecs\.ecs_security_group_id/);
       });
 
-      test('ECS module receives container image from ECR', () => {
-        expect(tapstackContent).toMatch(/container_image\s*=\s*"\$\{aws_ecr_repository\.payment_api\.repository_url\}:latest"/);
+      test('ECS module uses Docker Hub python image', () => {
+        expect(tapstackContent).toMatch(/container_image\s*=\s*"python:3\.11-slim"/);
       });
 
       test('ECS module receives database URL from RDS', () => {
         expect(tapstackContent).toMatch(/database_url\s*=\s*module\.rds\.db_connection_string/);
+      });
+
+      test('ECS module receives health check bucket configuration', () => {
+        expect(tapstackContent).toMatch(/health_check_bucket\s*=\s*local\.health_check_bucket/);
+      });
+
+      test('ECS module receives transaction logs bucket', () => {
+        expect(tapstackContent).toMatch(/transaction_logs_bucket\s*=\s*aws_s3_bucket\.transaction_logs\.id/);
       });
     });
 
@@ -222,13 +214,13 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
       test('Resources have Environment tags with local.current_env', () => {
         const envTagMatches = tapstackContent.match(/Environment\s*=\s*local\.current_env/g);
         expect(envTagMatches).not.toBeNull();
-        expect(envTagMatches!.length).toBeGreaterThan(1);
+        expect(envTagMatches!.length).toBeGreaterThanOrEqual(1);
       });
 
       test('Resources have Name tags', () => {
         const nameTagMatches = tapstackContent.match(/Name\s*=\s*"/g);
         expect(nameTagMatches).not.toBeNull();
-        expect(nameTagMatches!.length).toBeGreaterThan(1);
+        expect(nameTagMatches!.length).toBeGreaterThanOrEqual(1);
       });
     });
   });
@@ -347,10 +339,6 @@ describe('Payment Processing Infrastructure - Terraform Unit Tests', () => {
 
     test('Encryption is enabled for S3', () => {
       expect(tapstackContent).toMatch(/sse_algorithm/);
-    });
-
-    test('Encryption is enabled for ECR', () => {
-      expect(tapstackContent).toMatch(/encryption_configuration/);
     });
 
     test('RDS backup retention is configurable', () => {
