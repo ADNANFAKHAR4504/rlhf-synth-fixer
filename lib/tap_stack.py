@@ -301,12 +301,14 @@ class TapStack(TerraformStack):
         )
 
         # Create Secrets Manager secret for database password
+        # Set recovery_window_in_days=0 to allow immediate recreation if needed
         db_secret = SecretsmanagerSecret(
             self,
             "aurora_master_secret",
             name=f"aurora-postgres-{environment_suffix}-master-password",
             description="Master password for Aurora PostgreSQL cluster",
-            recovery_window_in_days=7,
+            recovery_window_in_days=0,
+            force_overwrite_replica_secret=True,
             tags={
                 "Name": f"aurora-postgres-{environment_suffix}-master-password"
             }
