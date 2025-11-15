@@ -230,6 +230,7 @@ class DRRegion(pulumi.ComponentResource):
         )
 
         self.aurora_cluster_endpoint = self.aurora_cluster.endpoint
+        self.aurora_cluster_arn = self.aurora_cluster.arn
 
     def _create_lambda_functions(self, args: DRRegionArgs):
         """Create Lambda functions for payment processing."""
