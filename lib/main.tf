@@ -663,7 +663,7 @@ resource "random_password" "db_master" {
   upper   = true
   lower   = true
   number  = true
-  
+
   # Generate a secure random password
   override_special = "!@#$%^&*()-_=+[]{}:|,.<>/?"
 }
@@ -673,7 +673,7 @@ resource "aws_secretsmanager_secret" "aurora_credentials" {
   name                    = "aurora-credentials-${var.environment}"
   description             = "Database credentials for Aurora cluster ${var.environment}"
   recovery_window_in_days = 7
-  kms_key_id             = aws_kms_key.aurora_encryption.arn
+  kms_key_id              = aws_kms_key.aurora_encryption.arn
 }
 
 resource "aws_secretsmanager_secret_version" "aurora_credentials" {
