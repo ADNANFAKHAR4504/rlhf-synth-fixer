@@ -343,26 +343,47 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Webhook validator function using Docker image from ECR
-    const validatorFunction = new cdk.aws_lambda.DockerImageFunction(
+    // Webhook validator function using inline code
+    const validatorFunction = new cdk.aws_lambda.Function(
       this,
       `WebhookValidator${environmentSuffix}`,
       {
         functionName: `webhook-validator-${environmentSuffix}`,
-        code: cdk.aws_lambda.DockerImageCode.fromEcr(
-          cdk.aws_ecr.Repository.fromRepositoryName(
-            this,
-            'WebhookLambdaRepo',
-            'webhook-lambda-pr6140'
-          ),
-          {
-            tag: 'latest',
-            cmd: ['app.handler'],
-          }
-        ),
+        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        architecture: cdk.aws_lambda.Architecture.ARM_64,
+        handler: 'index.handler',
+        code: cdk.aws_lambda.Code.fromInline(`
+const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
+const sqs = new SQSClient({});
+
+exports.handler = async (event) => {
+  console.log('Webhook received:', JSON.stringify(event));
+  
+  const body = JSON.parse(event.body || '{}');
+  const provider = body.provider || 'stripe';
+  
+  const queueUrls = {
+    stripe: process.env.STRIPE_QUEUE_URL,
+    paypal: process.env.PAYPAL_QUEUE_URL,
+    square: process.env.SQUARE_QUEUE_URL
+  };
+  
+  const queueUrl = queueUrls[provider];
+  if (!queueUrl) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid provider' }) };
+  }
+  
+  await sqs.send(new SendMessageCommand({
+    QueueUrl: queueUrl,
+    MessageBody: JSON.stringify(body),
+    MessageGroupId: provider
+  }));
+  
+  return { statusCode: 200, body: JSON.stringify({ status: 'queued' }) };
+};
+        `),
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
         role: validatorRole,
         logGroup: validatorLogGroup,
         environment: {
@@ -374,26 +395,53 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Webhook processor function using Docker image from ECR
-    const processorFunction = new cdk.aws_lambda.DockerImageFunction(
+    // Webhook processor function using inline code
+    const processorFunction = new cdk.aws_lambda.Function(
       this,
       `WebhookProcessor${environmentSuffix}`,
       {
         functionName: `webhook-processor-${environmentSuffix}`,
-        code: cdk.aws_lambda.DockerImageCode.fromEcr(
-          cdk.aws_ecr.Repository.fromRepositoryName(
-            this,
-            'WebhookLambdaRepoProcessor',
-            'webhook-lambda-pr6140'
-          ),
-          {
-            tag: 'latest',
-            cmd: ['processor.handler'],
-          }
-        ),
+        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        architecture: cdk.aws_lambda.Architecture.ARM_64,
+        handler: 'index.handler',
+        code: cdk.aws_lambda.Code.fromInline(`
+const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
+const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
+const dynamodb = new DynamoDBClient({});
+const eventbridge = new EventBridgeClient({});
+
+exports.handler = async (event) => {
+  console.log('Processing webhook:', JSON.stringify(event));
+  
+  for (const record of event.Records) {
+    const body = JSON.parse(record.body);
+    
+    await dynamodb.send(new PutItemCommand({
+      TableName: process.env.TABLE_NAME,
+      Item: {
+        webhookId: { S: body.webhookId || Date.now().toString() },
+        timestamp: { N: Date.now().toString() },
+        provider: { S: body.provider || 'unknown' },
+        data: { S: JSON.stringify(body) },
+        status: { S: 'processed' }
+      }
+    }));
+    
+    await eventbridge.send(new PutEventsCommand({
+      Entries: [{
+        Source: 'webhook.processor',
+        DetailType: 'Webhook Processed',
+        Detail: JSON.stringify(body),
+        EventBusName: process.env.EVENT_BUS_NAME
+      }]
+    }));
+  }
+  
+  return { statusCode: 200, body: 'Processed' };
+};
+        `),
         timeout: cdk.Duration.minutes(5),
         memorySize: 1024,
-        architecture: cdk.aws_lambda.Architecture.ARM_64,
         role: processorRole,
         logGroup: processorLogGroup,
         environment: {
