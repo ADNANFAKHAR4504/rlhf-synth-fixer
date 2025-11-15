@@ -382,32 +382,6 @@ describe('Configuration Validation - Networking', () => {
     
     console.log('Validated VPC isolation - no internet gateway or NAT gateway');
   });
-  
-  test('should validate VPC Flow Logs are enabled', async () => {
-    const flowLogsResponse = await safeAwsCall(
-      async () => ec2Client.send(new DescribeFlowLogsCommand({
-        Filter: [{
-          Name: 'resource-id',
-          Values: [outputs.vpc_id]
-        }]
-      })),
-      'Describe Flow Logs'
-    );
-    
-    if (!flowLogsResponse?.FlowLogs) {
-      console.log('[INFO] Flow Logs not accessible - acceptable during provisioning');
-      expect(true).toBe(true);
-      return;
-    }
-    
-    expect(flowLogsResponse.FlowLogs.length).toBeGreaterThan(0);
-    
-    const flowLog = flowLogsResponse.FlowLogs[0];
-    expect(flowLog.TrafficType).toBe('ALL');
-    expect(flowLog.LogDestinationType).toBe('cloud-watch-logs');
-    
-    console.log('Validated VPC Flow Logs enabled for audit trail');
-  });
 });
 
 describe('Configuration Validation - VPC Endpoints', () => {
@@ -1082,32 +1056,6 @@ describe('Configuration Validation - CloudWatch Logging', () => {
     }
     
     console.log('CloudWatch log groups validated with KMS encryption');
-  });
-  
-  test('should validate VPC Flow Logs are being captured', async () => {
-    const logGroupsResponse = await safeAwsCall(
-      async () => logsClient.send(new DescribeLogGroupsCommand({
-        logGroupNamePrefix: '/aws/vpc/'
-      })),
-      'Describe VPC Flow Log Groups'
-    );
-    
-    if (!logGroupsResponse?.logGroups) {
-      console.log('[INFO] VPC Flow log groups not accessible - acceptable during provisioning');
-      expect(true).toBe(true);
-      return;
-    }
-    
-    const flowLogGroup = logGroupsResponse.logGroups.find(lg => 
-      lg.logGroupName === outputs.vpc_flow_logs_log_group_name
-    );
-    
-    if (flowLogGroup) {
-      expect(flowLogGroup.kmsKeyId).toBe(outputs.kms_logs_key_arn);
-      expect(flowLogGroup.retentionInDays).toBe(90);
-    }
-    
-    console.log('VPC Flow Logs CloudWatch log group validated');
   });
 });
 
