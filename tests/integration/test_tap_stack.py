@@ -14,7 +14,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
             app,
             "IntegrationTestStack",
             environment_suffix="test",
-            aws_region="us-west-2",
+            aws_region="eu-south-2",
         )
 
         # Verify basic structure

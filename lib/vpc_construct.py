@@ -45,7 +45,7 @@ class VpcConstruct(Construct):
         )
 
         # Availability zones
-        azs = ["us-west-2a", "us-west-2b", "us-west-2c"]
+        azs = ["eu-south-2a", "eu-south-2b", "eu-south-2c"]
 
         # Public subnets for NAT instances
         public_subnets = []

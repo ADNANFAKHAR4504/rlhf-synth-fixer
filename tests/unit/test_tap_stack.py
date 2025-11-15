@@ -24,8 +24,8 @@ class TestStackStructure:
             "TestTapStackWithProps",
             environment_suffix="prod",
             state_bucket="custom-state-bucket",
-            state_bucket_region="us-west-2",
-            aws_region="us-west-2",
+            state_bucket_region="eu-south-2",
+            aws_region="eu-south-2",
         )
 
         # Verify that TapStack instantiates without errors via props
