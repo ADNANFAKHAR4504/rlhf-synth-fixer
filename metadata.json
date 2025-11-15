@@ -8,7 +8,7 @@
   "startedAt": "2025-11-09T14:30:00.3NZ",
   "subtask": "Cloud Environment Setup",
   "subject_labels": [
-    "Infrastructure Analysis/Monitoring"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "CloudWatch",
@@ -19,6 +19,5 @@
     "Contributor Insights",
     "CloudWatch Logs",
     "IAM"
-  ],
-  "training_quality": 10
+  ]
 }
