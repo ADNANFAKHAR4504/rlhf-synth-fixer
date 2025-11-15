@@ -5,6 +5,7 @@ import os
 import json
 import subprocess
 import builtins
+import logging
 from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 from types import ModuleType
@@ -23,10 +24,15 @@ from analyse import (
     HIGH_OBJECT_COUNT,
     LARGE_BUCKET_SIZE_GB,
     Finding,
+    MotoDemoDataSeeder,
+    S3SecurityAuditor,
     main,
+    print_resource_report,
     run_resource_audit,
     run_s3_security_audit,
-    S3SecurityAuditor,
+    seed_demo_data_if_needed,
+    _resource_results_empty,
+    _is_truthy,
 )
 
 
@@ -1305,3 +1311,144 @@ def test_run_resource_audit_writes_file(tmp_path):
             assert run_resource_audit() == 0
             with open(out_path, 'r') as fh:
                 assert json.load(fh) == fake_results
+
+
+class TestMotoSeederAndHelpers:
+    def test_truthy_helper(self):
+        assert _is_truthy('true')
+        assert _is_truthy('  YES ')
+        assert not _is_truthy('')
+        assert not _is_truthy(None)
+
+    def test_moto_seeder_from_environment_flag_handling(self, monkeypatch):
+        monkeypatch.delenv('AWS_ENDPOINT_URL', raising=False)
+        assert MotoDemoDataSeeder.from_environment() is None
+
+        monkeypatch.setenv('AWS_ENDPOINT_URL', 'http://localhost:5001')
+        seeder = MotoDemoDataSeeder.from_environment()
+        assert isinstance(seeder, MotoDemoDataSeeder)
+
+        monkeypatch.setenv('ANALYSE_SKIP_DEMO_DATA', 'true')
+        assert MotoDemoDataSeeder.from_environment() is None
+
+        monkeypatch.setenv('ANALYSE_SKIP_DEMO_DATA', '0')
+        monkeypatch.setenv('ANALYSE_FORCE_DEMO_DATA', '1')
+        seeder = MotoDemoDataSeeder.from_environment()
+        assert isinstance(seeder, MotoDemoDataSeeder)
+
+    def test_moto_seeder_seed_all_provisions_resources(self, monkeypatch):
+        seeder = MotoDemoDataSeeder('us-west-2', 'http://endpoint')
+        ec2 = MagicMock()
+        ec2.describe_volumes.side_effect = Exception("boom")
+        ec2.describe_security_groups.return_value = {
+            'SecurityGroups': [{'GroupName': 'analyse-public', 'GroupId': 'sg-existing'}]
+        }
+        ec2.create_security_group.side_effect = lambda **kw: {'GroupId': f"sg-{kw['GroupName']}"}
+        ec2.authorize_security_group_ingress.side_effect = make_client_error(
+            'InvalidPermission.Duplicate', 'AuthorizeSecurityGroupIngress'
+        )
+
+        class AlreadyExists(Exception):
+            pass
+
+        logs = MagicMock()
+        logs.exceptions = type('Exceptions', (), {'ResourceAlreadyExistsException': AlreadyExists})
+        logs.create_log_group.side_effect = AlreadyExists("exists")
+        logs.create_log_stream.side_effect = [AlreadyExists("exists"), AlreadyExists("exists")]
+        logs.put_log_events.return_value = {}
+
+        s3 = MagicMock()
+        s3.list_buckets.side_effect = Exception("oops")
+
+        clients = {'ec2': ec2, 'logs': logs, 's3': s3}
+        monkeypatch.setattr(seeder, '_client', lambda service: clients[service])
+
+        seeder.seed_all()
+        first_volume_calls = ec2.create_volume.call_count
+
+        assert seeder._seeded is True
+        assert first_volume_calls == 3  # all demo sizes created
+        assert ec2.create_security_group.call_count == 1  # only missing private group created
+        assert logs.put_log_events.call_count == 2
+        assert s3.create_bucket.call_count == 3
+        assert s3.create_bucket.call_args.kwargs['CreateBucketConfiguration']['LocationConstraint'] == 'us-west-2'
+
+        seeder.seed_all()  # idempotent path should not call clients again
+        assert ec2.create_volume.call_count == first_volume_calls
+        assert s3.create_bucket.call_count == 3
+
+    def test_seed_demo_data_if_needed_handles_absence(self):
+        with patch('analyse.MotoDemoDataSeeder.from_environment', return_value=None):
+            assert seed_demo_data_if_needed() is False
+
+        fake_seeder = MagicMock()
+        with patch('analyse.MotoDemoDataSeeder.from_environment', return_value=fake_seeder):
+            assert seed_demo_data_if_needed() is True
+            fake_seeder.seed_all.assert_called_once()
+
+    def test_print_resource_report_outputs_tables(self, caplog):
+        caplog.set_level(logging.INFO)
+        results = {
+            'UnusedEBSVolumes': {
+                'Count': 1,
+                'TotalSize': 1,
+                'Volumes': [{
+                    'VolumeId': 'vol-123',
+                    'Size': 1,
+                    'VolumeType': 'gp2',
+                    'AvailabilityZone': 'us-east-1a',
+                    'Encrypted': False,
+                }],
+            },
+            'PublicSecurityGroups': {
+                'Count': 0,
+                'SecurityGroups': []
+            },
+            'CloudWatchLogMetrics': {
+                'TotalLogStreams': 1,
+                'LogGroupMetrics': [{
+                    'LogGroupName': '/demo',
+                    'StreamCount': 1,
+                    'TotalSize': 128,
+                    'AverageStreamSize': 128,
+                }]
+            }
+        }
+
+        print_resource_report(results)
+
+        assert "Unused EBS Volumes" in caplog.text
+        assert "Public Security Groups" in caplog.text
+        assert "none detected" in caplog.text
+        assert "Summary" in caplog.text
+
+    def test_resource_results_empty_detection(self):
+        empty = {
+            'UnusedEBSVolumes': {'Volumes': []},
+            'PublicSecurityGroups': {'SecurityGroups': []},
+            'CloudWatchLogMetrics': {'LogGroupMetrics': []},
+        }
+        assert _resource_results_empty(empty) is True
+
+        not_empty = {
+            'UnusedEBSVolumes': {'Volumes': [{'VolumeId': 'vol'}]},
+            'PublicSecurityGroups': {'SecurityGroups': []},
+            'CloudWatchLogMetrics': {'LogGroupMetrics': []},
+        }
+        assert _resource_results_empty(not_empty) is False
+
+    def test_estimate_stream_size_fallback(self, resource_auditor_with_mocks):
+        auditor, _, mock_logs = resource_auditor_with_mocks
+        mock_logs.get_log_events.return_value = {'events': [{'message': 'abc'}, {'message': 'de'}]}
+        assert auditor._estimate_stream_size('/demo', 's1') == 5
+
+        mock_logs.get_log_events.side_effect = Exception("boom")
+        assert auditor._estimate_stream_size('/demo', 's1') == 0
+
+    def test_moto_seeder_client_factory_uses_boto3(self):
+        with patch('analyse.boto3.client') as mock_client:
+            fake_client = MagicMock()
+            mock_client.return_value = fake_client
+            seeder = MotoDemoDataSeeder('us-east-1', None)
+            assert seeder._client('logs') is fake_client
+            mock_client.assert_called_once_with('logs', region_name='us-east-1')
