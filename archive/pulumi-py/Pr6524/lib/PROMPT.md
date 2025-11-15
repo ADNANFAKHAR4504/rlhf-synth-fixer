@@ -1,6 +1,6 @@
 Hey team,
 
-We need to set up AWS Config for infrastructure compliance monitoring across our AWS environment. The business has been asking for better visibility into our infrastructure configuration and wants to ensure we're meeting compliance standards. This is part of our broader security and governance initiative to maintain proper oversight of our cloud resources.
+We need to set up AWS Config for infrastructure compliance monitoring across our AWS environment. The business has been asking for better visibility into our infrastructure configuration and wants to ensure we're meeting compliance standards. This is part of our broader security and governance initiative to maintain proper oversight of our cloud resources
 
 The compliance team needs a way to continuously monitor our infrastructure against established policies and get alerts when resources drift from our standards. Right now we don't have good visibility into configuration changes or compliance posture, and that's creating risk for the organization. We need to implement AWS Config to track resource configurations, evaluate compliance rules, and notify the team when issues are detected.
 
