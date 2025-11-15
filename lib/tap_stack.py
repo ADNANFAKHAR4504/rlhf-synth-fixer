@@ -302,6 +302,7 @@ class TapStack(TerraformStack):
 
         # Create Secrets Manager secret for database password
         # Set recovery_window_in_days=0 to allow immediate recreation if needed
+        # Using add_override to add lifecycle rule to handle deletion conflicts
         db_secret = SecretsmanagerSecret(
             self,
             "aurora_master_secret",
@@ -311,6 +312,14 @@ class TapStack(TerraformStack):
             force_overwrite_replica_secret=True,
             tags={
                 "Name": f"aurora-postgres-{environment_suffix}-master-password"
+            }
+        )
+
+        # Add lifecycle rule to create new resource before destroying old one
+        self.add_override(
+            "resource.aws_secretsmanager_secret.aurora_master_secret.lifecycle",
+            {
+                "create_before_destroy": True
             }
         )
         
