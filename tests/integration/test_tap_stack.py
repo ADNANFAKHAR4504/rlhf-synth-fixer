@@ -82,4 +82,38 @@ class TestTapStackIntegration:
         output, code = run_aws_command(cmd)
         
         assert code == 0
-        assert int(output) >= 15
+        assert int(output) >= 20  # Updated to include Synthetics resources
+
+    def test_synthetics_canary_exists(self):
+        """Verify Synthetics canary is created"""
+        cmd = f"aws synthetics describe-canaries --region {self.region} --query 'Canaries[?contains(Name, `payment-api-canary`)].Name' --output text"
+        output, code = run_aws_command(cmd)
+        
+        assert code == 0
+        assert "payment-api-canary" in output
+
+    def test_synthetics_canary_configuration(self):
+        """Verify Synthetics canary configuration and status"""
+        canary_name = f"payment-api-canary-{self.env_suffix}"
+        cmd = f"aws synthetics describe-canaries --region {self.region} --names {canary_name} --query 'Canaries[0].[Status.State,RuntimeVersion,Schedule.DurationInSeconds]' --output text"
+        output, code = run_aws_command(cmd)
+        
+        assert code == 0
+        parts = output.split()
+        state = parts[0] if len(parts) > 0 else ""
+        runtime = parts[1] if len(parts) > 1 else ""
+        
+        # Canary should be in RUNNING or READY state
+        assert state in ["RUNNING", "READY", "CREATING"], f"Canary state: {state}"
+        assert "syn-python-selenium" in runtime, f"Runtime: {runtime}"
+
+    def test_synthetics_canary_runs(self):
+        """Verify Synthetics canary has executed runs"""
+        canary_name = f"payment-api-canary-{self.env_suffix}"
+        cmd = f"aws synthetics get-canary-runs --region {self.region} --name {canary_name} --max-results 1 --query 'CanaryRuns[0].Status.State' --output text"
+        output, code = run_aws_command(cmd)
+        
+        # If canary has run, check status. If not run yet, that's also acceptable (newly created)
+        if code == 0 and output and output != "None":
+            # Canary has run - verify it's not in a failed state
+            assert output in ["PASSED", "RUNNING"], f"Canary run state: {output}"

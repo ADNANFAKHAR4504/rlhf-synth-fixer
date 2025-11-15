@@ -87,7 +87,7 @@ class TapStack(cdk.Stack):
         self._create_cloudwatch_dashboards(environment_suffix)
         self._create_xray_configuration()
         self._create_eventbridge_rules(environment_suffix)
-        # self._create_synthetics_canaries(environment_suffix)  # Commented out due to runtime issues
+        self._create_synthetics_canaries(environment_suffix)
         self._create_contributor_insights(environment_suffix)
 
     def _create_log_groups(self, environment_suffix: str) -> None:
@@ -204,7 +204,11 @@ class TapStack(cdk.Stack):
         lambda_errors_alarm.add_alarm_action(cw_actions.SnsAction(self.warning_topic))
 
     def _create_cloudwatch_dashboards(self, environment_suffix: str) -> None:
-        """Create CloudWatch dashboards for monitoring"""
+        """Create CloudWatch dashboards for monitoring
+        
+        Note: CloudWatch metrics retention is automatically set to 15 months for standard metrics.
+        Custom metrics published via PutMetricData also follow this retention policy.
+        """
         dashboard = cloudwatch.Dashboard(
             self, f"PaymentDashboard{environment_suffix}",
             dashboard_name=f"payment-monitoring-{environment_suffix}",
@@ -294,31 +298,35 @@ class TapStack(cdk.Stack):
         alarm_rule.add_target(events_targets.SnsTopic(self.info_topic))
 
     def _create_synthetics_canaries(self, environment_suffix: str) -> None:
-        """Create Synthetics canaries for endpoint monitoring"""
+        """Create Synthetics canaries for endpoint monitoring
+        
+        Note: Using example.com as a placeholder. Replace with your actual API endpoint.
+        Example: https://api.yourcompany.com/health or your API Gateway URL
+        """
         # API availability canary
         synthetics.Canary(
             self, f"ApiAvailabilityCanary{environment_suffix}",
-            canary_name=f"payment-api-availability-{environment_suffix}",
+            canary_name=f"payment-api-canary-{environment_suffix}",
             schedule=synthetics.Schedule.rate(Duration.minutes(5)),
             test=synthetics.Test.custom(
                 code=synthetics.Code.from_inline("""
-import http.client
-import json
+from aws_synthetics.selenium import synthetics_webdriver as webdriver
+from aws_synthetics.common import synthetics_logger as logger
 
 def handler(event, context):
-    # Simple API availability check
-    try:
-        conn = http.client.HTTPSConnection("api.example.com")
-        conn.request("GET", "/health")
-        response = conn.getresponse()
-        if response.status == 200:
-            return {"status": "success"}
-        else:
-            return {"status": "failed", "status_code": response.status}
-    except Exception as e:
-        return {"status": "error", "message": str(e)}
+    logger.info("Canary check starting")
+    
+    # Example: Check public endpoint availability
+    # Replace https://example.com with your actual API endpoint
+    browser = webdriver.Chrome()
+    browser.get("https://example.com")
+    
+    logger.info(f"Page title: {browser.title}")
+    browser.quit()
+    
+    return {"statusCode": 200, "body": "Success"}
 """),
-                handler="handler"
+                handler="index.handler"
             ),
             runtime=synthetics.Runtime.SYNTHETICS_PYTHON_SELENIUM_6_0,
         )

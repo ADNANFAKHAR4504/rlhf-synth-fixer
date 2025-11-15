@@ -174,6 +174,19 @@ class TestTapStack(unittest.TestCase):
             })
         })
 
+    @mark.it("creates Synthetics canary for endpoint monitoring")
+    def test_creates_synthetics_canary(self):
+        env_suffix = "test"
+        stack = TapStack(self.app, "TapStackTest",
+                         TapStackProps(environment_suffix=env_suffix))
+        template = Template.from_stack(stack)
+        
+        template.resource_count_is("AWS::Synthetics::Canary", 1)
+        template.has_resource_properties("AWS::Synthetics::Canary", {
+            "Name": f"payment-api-canary-{env_suffix}",
+            "RuntimeVersion": "syn-python-selenium-6.0"
+        })
+
     @mark.it("creates Contributor Insights rule")
     def test_creates_contributor_insights(self):
         env_suffix = "test"
@@ -225,6 +238,9 @@ class TestTapStack(unittest.TestCase):
         template.resource_count_is("AWS::Events::Rule", 1)
         template.resource_count_is("AWS::XRay::SamplingRule", 1)
         template.resource_count_is("AWS::CloudWatch::InsightRule", 1)
+        template.resource_count_is("AWS::Synthetics::Canary", 1)
+        template.resource_count_is("AWS::S3::Bucket", 1)  # Synthetics artifacts bucket
+        template.resource_count_is("AWS::IAM::Role", 1)  # Synthetics canary role
 
 
 if __name__ == "__main__":
