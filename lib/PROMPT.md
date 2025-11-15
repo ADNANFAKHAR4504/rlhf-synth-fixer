@@ -2,7 +2,7 @@
 
 Hey team,
 
-We need to build a production-grade payment processing web application infrastructure for a fintech startup launching their real-time payment service. The business needs this deployed in Milan (eu-south-1) to serve their European customers. I've been asked to create this infrastructure using **AWS CDK with TypeScript**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements and ensure zero-downtime deployments.
+We need to build a production-grade payment processing web application infrastructure for a fintech startup launching their real-time payment service. The business needs this deployed in Milan (eu-south-2) to serve their European customers. I've been asked to create this infrastructure using **AWS CDK with TypeScript**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements and ensure zero-downtime deployments.
 
 The application architecture consists of three main components: a React frontend served through CloudFront for fast global access, a Node.js API backend running on containerized infrastructure, and a PostgreSQL database for storing transaction records. The business has strict requirements around security, availability, and compliance given the sensitive nature of payment data.
 
@@ -10,7 +10,7 @@ We're targeting deployment across three availability zones for high availability
 
 ## What we need to build
 
-Create a complete payment processing infrastructure using **AWS CDK with TypeScript** deployed to the eu-south-1 region. This infrastructure must support a React frontend, Node.js API backend, and PostgreSQL database with full observability and security controls.
+Create a complete payment processing infrastructure using **AWS CDK with TypeScript** deployed to the eu-south-2 region. This infrastructure must support a React frontend, Node.js API backend, and PostgreSQL database with full observability and security controls.
 
 ### Core Requirements
 

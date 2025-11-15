@@ -31,8 +31,8 @@
     "API Gateway HTTP endpoints",
     "VPC peering with route table configuration"
   ],
-  "description": "Multi-region payment processing infrastructure migration from eu-south-1 to eu-west-1 using CDKTF with Python. Create complete VPC infrastructure in both regions with cross-region VPC peering, encrypted RDS PostgreSQL, DynamoDB with PITR, Lambda functions with reserved concurrency, API Gateway HTTP API, S3 with cross-region replication, and CloudWatch monitoring. All resources must use environment_suffix for naming.",
-  "region": "eu-south-1",
+  "description": "Multi-region payment processing infrastructure migration from eu-south-2 to eu-west-1 using CDKTF with Python. Create complete VPC infrastructure in both regions with cross-region VPC peering, encrypted RDS PostgreSQL, DynamoDB with PITR, Lambda functions with reserved concurrency, API Gateway HTTP API, S3 with cross-region replication, and CloudWatch monitoring. All resources must use environment_suffix for naming.",
+  "region": "eu-south-2",
   "target_region": "eu-west-1",
   "author": "aj-turing",
   "training_quality": 10

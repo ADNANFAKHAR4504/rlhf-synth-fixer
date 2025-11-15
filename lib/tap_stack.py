@@ -98,9 +98,9 @@ def handler(event, context):
         # Provider configurations
         provider_us_east_1 = AwsProvider(
             self,
-            "aws-eu-south-1",
-            region="eu-south-1",
-            alias="eu_south_1"
+            "aws-eu-south-2",
+            region="eu-south-2",
+            alias="eu_south_2"
         )
 
         provider_eu_west_1 = AwsProvider(
@@ -114,31 +114,31 @@ def handler(event, context):
 
         vpc_eu_south = Vpc(
             self,
-            "vpc-eu-south-1",
+            "vpc-eu-south-2",
             cidr_block="10.0.0.0/16",
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
                 **common_tags,
-                "Name": f"payment-vpc-eu-south-1-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Name": f"payment-vpc-eu-south-2-{environment_suffix}-cd",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
         )
 
-        # Public subnets in eu-south-1
+        # Public subnets in eu-south-2
         subnet_eu_south_public_1a = Subnet(
             self,
             "subnet-eu-south-public-1a",
             vpc_id=vpc_eu_south.id,
             cidr_block="10.0.1.0/24",
-            availability_zone="eu-south-1a",
+            availability_zone="eu-south-2a",
             map_public_ip_on_launch=True,
             tags={
                 **common_tags,
                 "Name": f"payment-public-1a-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -149,28 +149,28 @@ def handler(event, context):
             "subnet-eu-south-public-1b",
             vpc_id=vpc_eu_south.id,
             cidr_block="10.0.2.0/24",
-            availability_zone="eu-south-1b",
+            availability_zone="eu-south-2b",
             map_public_ip_on_launch=True,
             tags={
                 **common_tags,
                 "Name": f"payment-public-1b-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
         )
 
-        # Private subnets in eu-south-1
+        # Private subnets in eu-south-2
         subnet_eu_south_private_1a = Subnet(
             self,
             "subnet-eu-south-private-1a",
             vpc_id=vpc_eu_south.id,
             cidr_block="10.0.11.0/24",
-            availability_zone="eu-south-1a",
+            availability_zone="eu-south-2a",
             tags={
                 **common_tags,
                 "Name": f"payment-private-1a-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -181,31 +181,31 @@ def handler(event, context):
             "subnet-eu-south-private-1b",
             vpc_id=vpc_eu_south.id,
             cidr_block="10.0.12.0/24",
-            availability_zone="eu-south-1b",
+            availability_zone="eu-south-2b",
             tags={
                 **common_tags,
                 "Name": f"payment-private-1b-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
         )
 
-        # Internet Gateway for eu-south-1
+        # Internet Gateway for eu-south-2
         igw_eu_south = InternetGateway(
             self,
-            "igw-eu-south-1",
+            "igw-eu-south-2",
             vpc_id=vpc_eu_south.id,
             tags={
                 **common_tags,
-                "Name": f"payment-igw-eu-south-1-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Name": f"payment-igw-eu-south-2-{environment_suffix}-cd",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
         )
 
-        # NAT Gateway for eu-south-1
+        # NAT Gateway for eu-south-2
         eip_eu_south_nat = Eip(
             self,
             "eip-eu-south-nat",
@@ -213,7 +213,7 @@ def handler(event, context):
             tags={
                 **common_tags,
                 "Name": f"payment-nat-eip-us-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -221,19 +221,19 @@ def handler(event, context):
 
         nat_eu_south = NatGateway(
             self,
-            "nat-eu-south-1",
+            "nat-eu-south-2",
             allocation_id=eip_eu_south_nat.id,
             subnet_id=subnet_eu_south_public_1a.id,
             tags={
                 **common_tags,
                 "Name": f"payment-nat-us-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
         )
 
-        # Route tables for eu-south-1
+        # Route tables for eu-south-2
         rt_eu_south_public = RouteTable(
             self,
             "rt-eu-south-public",
@@ -247,7 +247,7 @@ def handler(event, context):
             tags={
                 **common_tags,
                 "Name": f"payment-rt-public-us-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -266,13 +266,13 @@ def handler(event, context):
             tags={
                 **common_tags,
                 "Name": f"payment-rt-private-us-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
         )
 
-        # Route table associations for eu-south-1
+        # Route table associations for eu-south-2
         RouteTableAssociation(
             self,
             "rta-eu-south-public-1a",
@@ -512,7 +512,7 @@ def handler(event, context):
             tags={
                 **common_tags,
                 "Name": f"payment-peering-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -532,7 +532,7 @@ def handler(event, context):
             provider=provider_eu_west_1
         )
 
-        # Add peering routes to eu-south-1 private route table
+        # Add peering routes to eu-south-2 private route table
         rt_eu_south_private_peering = RouteTable(
             self,
             "rt-eu-south-private-with-peering",
@@ -550,7 +550,7 @@ def handler(event, context):
             tags={
                 **common_tags,
                 "Name": f"payment-rt-private-eu-south-peering-{environment_suffix}-cd",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -762,11 +762,11 @@ def handler(event, context):
         s3_bucket_us = S3Bucket(
             self,
             "s3-bucket-us",
-            bucket=f"payment-data-eu-south-1-{environment_suffix}-ef",
+            bucket=f"payment-data-eu-south-2-{environment_suffix}-ef",
             tags={
                 **common_tags,
-                "Name": f"payment-data-eu-south-1-{environment_suffix}-ef",
-                "Region": "eu-south-1",
+                "Name": f"payment-data-eu-south-2-{environment_suffix}-ef",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -849,7 +849,7 @@ def handler(event, context):
             tags={
                 **common_tags,
                 "Name": f"payment-s3-replication-{environment_suffix}-ef",
-                "Region": "eu-south-1",
+                "Region": "eu-south-2",
                 "MigrationBatch": "batch-1"
             },
             provider=provider_us_east_1
@@ -987,7 +987,7 @@ def handler(event, context):
         lambda_function = LambdaFunction(
             self,
             "lambda-payment-processor",
-            function_name=f"payment-processor-{environment_suffix}-cd",
+            function_name=f"payment-processor-{environment_suffix}-lm",
             role=lambda_role.arn,
             handler="index.handler",
             runtime="python3.11",
@@ -1008,7 +1008,7 @@ def handler(event, context):
             },
             tags={
                 **common_tags,
-                "Name": f"payment-processor-{environment_suffix}-cd",
+                "Name": f"payment-processor-{environment_suffix}-lm",
                 "Region": "eu-west-1",
                 "MigrationBatch": "batch-1"
             },
@@ -1216,7 +1216,7 @@ def handler(event, context):
             self,
             "vpc_eu_south_id",
             value=vpc_eu_south.id,
-            description="VPC ID in eu-south-1"
+            description="VPC ID in eu-south-2"
         )
 
         TerraformOutput(
@@ -1258,7 +1258,7 @@ def handler(event, context):
             self,
             "s3_bucket_eu_south",
             value=s3_bucket_us.bucket,
-            description="S3 bucket name in eu-south-1"
+            description="S3 bucket name in eu-south-2"
         )
 
         TerraformOutput(

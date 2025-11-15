@@ -1,5 +1,6 @@
 """Integration tests for TapStack."""
 import json
+
 from cdktf import App, Testing
 
 from lib.tap_stack import TapStack
@@ -15,7 +16,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
             app,
             "IntegrationTestStack",
             environment_suffix="test",
-            aws_region="eu-south-1",
+            aws_region="eu-south-2",
         )
 
         # Verify basic structure
@@ -32,7 +33,7 @@ class TestTurnAroundPromptAPIIntegrationTests:
             app,
             "OutputTestStack",
             environment_suffix="test",
-            aws_region="eu-south-1",
+            aws_region="eu-south-2",
         )
         
         # Synthesize the stack
