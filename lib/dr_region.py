@@ -288,6 +288,7 @@ def handler(event, context):
             opts=ResourceOptions(parent=self, provider=self.provider)
         )
 
+        self.lambda_arn = self.payment_lambda.arn
         self.lambda_invoke_arn = self.payment_lambda.invoke_arn
 
     def _create_api_gateway(self, args: DRRegionArgs):
