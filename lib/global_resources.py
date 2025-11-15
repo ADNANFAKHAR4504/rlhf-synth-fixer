@@ -151,7 +151,7 @@ class GlobalResources(pulumi.ComponentResource):
                 region_name=args.dr_region
             )],
             tags={**args.tags, 'Name': f'sessions-primary-{args.environment_suffix}'},
-            opts=ResourceOptions(parent=self, provider=self.primary_provider)
+            opts=ResourceOptions(parent=self, provider=self.primary_provider, protect=False)
         )
 
         self.dynamodb_table_name = self.dynamodb_table_primary.name

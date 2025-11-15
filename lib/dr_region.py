@@ -378,26 +378,26 @@ def handler(event, context):
             f'dr-secondary-bucket-{args.environment_suffix}',
             bucket=f'dr-secondary-bucket-{args.environment_suffix}',
             tags={**args.tags, 'Name': f'dr-secondary-bucket-{args.environment_suffix}'},
-            opts=ResourceOptions(parent=self, provider=self.provider)
+            opts=ResourceOptions(parent=self, provider=self.provider, protect=False)
         )
 
-        # Enable versioning
-        self.bucket_versioning = aws.s3.BucketVersioningV2(
+        # Enable versioning - Using non-deprecated resource
+        self.bucket_versioning = aws.s3.BucketVersioning(
             f'bucket-versioning-dr-{args.environment_suffix}',
             bucket=self.bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status='Enabled'
             ),
             opts=ResourceOptions(parent=self, provider=self.provider)
         )
 
-        # Enable encryption
+        # Enable encryption - Using non-deprecated resource
         # pylint: disable=line-too-long
-        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        self.bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f'bucket-encryption-dr-{args.environment_suffix}',
             bucket=self.bucket.id,
-            rules=[aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+            rules=[aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                     sse_algorithm='AES256'
                 )
             )],
@@ -412,7 +412,7 @@ def handler(event, context):
             f'dr-alerts-dr-{args.environment_suffix}',
             name=f'dr-alerts-dr-{args.environment_suffix}',
             tags={**args.tags, 'Name': f'dr-alerts-dr-{args.environment_suffix}'},
-            opts=ResourceOptions(parent=self, provider=self.provider)
+            opts=ResourceOptions(parent=self, provider=self.provider, protect=False)
         )
 
         self.sns_topic_arn = self.sns_topic.arn
