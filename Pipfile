@@ -20,6 +20,7 @@ cfn-lint = "*"
 cfn-flip = "*"
 tabulate = "*"
 cdktf-cdktf-provider-aws = "*"
+aws-cdk-lambda-layer-kubectl-v29 = "*"
 
 [dev-packages]
 boto3 = "*"
