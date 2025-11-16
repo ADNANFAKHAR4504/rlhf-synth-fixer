@@ -83,9 +83,9 @@ class TestStackStructure:
         outputs = config.get("output", {})
 
         # Check for expected outputs
-        assert "vpc_eu_south_id" in outputs
+        assert "vpc_eu_central_id" in outputs
         assert "vpc_eu_id" in outputs
-        assert "s3_bucket_eu_south" in outputs
+        assert "s3_bucket_eu_central" in outputs
         assert "s3_bucket_eu" in outputs
         assert "rds_endpoint" in outputs
         assert "dynamodb_table" in outputs

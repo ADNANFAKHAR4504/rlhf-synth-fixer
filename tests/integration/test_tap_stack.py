@@ -156,18 +156,18 @@ class TestTapStackIntegration:
     def test_outputs_file_exists_and_valid(self, outputs):
         """Verify outputs file exists and contains expected keys."""
         assert outputs is not None
-        assert 'vpc_eu_south_id' in outputs
+        assert 'vpc_eu_central_id' in outputs
         assert 'vpc_eu_id' in outputs
-        assert 's3_bucket_eu_south' in outputs
+        assert 's3_bucket_eu_central' in outputs
         assert 's3_bucket_eu' in outputs
         assert 'rds_endpoint' in outputs
         assert 'dynamodb_table' in outputs
         assert 'lambda_function_arn' in outputs
         assert 'api_gateway_endpoint' in outputs
 
-    def test_vpc_eu_south_exists_and_available(self, outputs, ec2_client_south):
+    def test_vpc_eu_central_exists_and_available(self, outputs, ec2_client_south):
         """Test VPC in eu-central-2 exists and is in available state."""
-        vpc_id = outputs.get('vpc_eu_south_id')
+        vpc_id = outputs.get('vpc_eu_central_id')
         assert vpc_id is not None
 
         try:
@@ -195,9 +195,9 @@ class TestTapStackIntegration:
         except ClientError:
             pytest.skip("Unable to describe VPC in eu-west-1")
 
-    def test_vpc_eu_south_has_public_subnets(self, outputs, ec2_client_south):
+    def test_vpc_eu_central_has_public_subnets(self, outputs, ec2_client_south):
         """Test VPC in eu-central-2 has public subnets configured."""
-        vpc_id = outputs.get('vpc_eu_south_id')
+        vpc_id = outputs.get('vpc_eu_central_id')
 
         try:
             response = ec2_client_south.describe_subnets(
@@ -210,9 +210,9 @@ class TestTapStackIntegration:
         except ClientError:
             pytest.skip("Unable to describe subnets in eu-central-2")
 
-    def test_vpc_eu_south_has_private_subnets(self, outputs, ec2_client_south):
+    def test_vpc_eu_central_has_private_subnets(self, outputs, ec2_client_south):
         """Test VPC in eu-central-2 has private subnets configured."""
-        vpc_id = outputs.get('vpc_eu_south_id')
+        vpc_id = outputs.get('vpc_eu_central_id')
 
         try:
             response = ec2_client_south.describe_subnets(
@@ -257,13 +257,13 @@ class TestTapStackIntegration:
 
     def test_vpc_peering_connection_active(self, outputs, ec2_client_south):
         """Test VPC peering connection is active."""
-        vpc_eu_south_id = outputs.get('vpc_eu_south_id')
+        vpc_eu_central_id = outputs.get('vpc_eu_central_id')
         vpc_eu_id = outputs.get('vpc_eu_id')
 
         try:
             response = ec2_client_south.describe_vpc_peering_connections(
                 Filters=[
-                    {'Name': 'requester-vpc-info.vpc-id', 'Values': [vpc_eu_south_id]},
+                    {'Name': 'requester-vpc-info.vpc-id', 'Values': [vpc_eu_central_id]},
                     {'Name': 'accepter-vpc-info.vpc-id', 'Values': [vpc_eu_id]}
                 ]
             )
@@ -376,9 +376,9 @@ class TestTapStackIntegration:
         except ClientError:
             pytest.skip("Unable to verify point-in-time recovery")
 
-    def test_s3_bucket_eu_south_exists(self, outputs, s3_client_south):
+    def test_s3_bucket_eu_central_exists(self, outputs, s3_client_south):
         """Test S3 bucket in eu-central-2 exists."""
-        bucket_name = outputs.get('s3_bucket_eu_south')
+        bucket_name = outputs.get('s3_bucket_eu_central')
         assert bucket_name is not None
 
         try:
@@ -400,7 +400,7 @@ class TestTapStackIntegration:
 
     def test_s3_bucket_has_versioning_enabled(self, outputs, s3_client_south):
         """Test S3 bucket has versioning enabled."""
-        bucket_name = outputs.get('s3_bucket_eu_south')
+        bucket_name = outputs.get('s3_bucket_eu_central')
 
         try:
             response = s3_client_south.get_bucket_versioning(Bucket=bucket_name)
@@ -410,7 +410,7 @@ class TestTapStackIntegration:
 
     def test_s3_bucket_has_encryption_enabled(self, outputs, s3_client_south):
         """Test S3 bucket has encryption enabled."""
-        bucket_name = outputs.get('s3_bucket_eu_south')
+        bucket_name = outputs.get('s3_bucket_eu_central')
 
         try:
             response = s3_client_south.get_bucket_encryption(Bucket=bucket_name)
@@ -422,7 +422,7 @@ class TestTapStackIntegration:
 
     def test_s3_cross_region_replication_configured(self, outputs, s3_client_south):
         """Test S3 cross-region replication is configured."""
-        bucket_name = outputs.get('s3_bucket_eu_south')
+        bucket_name = outputs.get('s3_bucket_eu_central')
 
         try:
             response = s3_client_south.get_bucket_replication(Bucket=bucket_name)
@@ -556,9 +556,9 @@ class TestTapStackIntegration:
     def test_complete_infrastructure_deployed(self, outputs):
         """Test all critical infrastructure components are present."""
         required_outputs = [
-            'vpc_eu_south_id',
+            'vpc_eu_central_id',
             'vpc_eu_id',
-            's3_bucket_eu_south',
+            's3_bucket_eu_central',
             's3_bucket_eu',
             'rds_endpoint',
             'dynamodb_table',
