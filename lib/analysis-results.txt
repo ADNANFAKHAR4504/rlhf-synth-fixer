@@ -1,0 +1,106 @@
+Starting AWS resource audit...
+Finding unused EBS volumes...
+Finding public security groups...
+Calculating CloudWatch log stream metrics...
+
+================================================================================
+RESOURCE AUDIT SUMMARY
+================================================================================
+
++------------------------+---------+---------+
+| Metric                 |   Count |   Value |
++========================+=========+=========+
+| Unused EBS Volumes     |       3 |       6 |
++------------------------+---------+---------+
+| Public Security Groups |       1 |       1 |
++------------------------+---------+---------+
+| CloudWatch Log Streams |       0 |       0 |
++------------------------+---------+---------+
+
+================================================================================
+
+{
+  "AuditTimestamp": "2025-11-16 11:09:43",
+  "Region": "us-east-1",
+  "UnusedEBSVolumes": {
+    "Count": 3,
+    "TotalSize": 6,
+    "Volumes": [
+      {
+        "VolumeId": "vol-44e08b9ae123c8260",
+        "Size": 1,
+        "VolumeType": "gp2",
+        "CreateTime": "2025-11-16 10:09:35",
+        "AvailabilityZone": "us-east-1a",
+        "Encrypted": false,
+        "Tags": {}
+      },
+      {
+        "VolumeId": "vol-bfce2589d12f343b0",
+        "Size": 2,
+        "VolumeType": "gp2",
+        "CreateTime": "2025-11-16 10:09:35",
+        "AvailabilityZone": "us-east-1a",
+        "Encrypted": false,
+        "Tags": {}
+      },
+      {
+        "VolumeId": "vol-b9e7e7ed8bf9398da",
+        "Size": 3,
+        "VolumeType": "gp2",
+        "CreateTime": "2025-11-16 10:09:35",
+        "AvailabilityZone": "us-east-1a",
+        "Encrypted": false,
+        "Tags": {}
+      }
+    ]
+  },
+  "PublicSecurityGroups": {
+    "Count": 1,
+    "SecurityGroups": [
+      {
+        "GroupId": "sg-9bdad2e43e91bfea2",
+        "GroupName": "public",
+        "Description": "has public",
+        "VpcId": "vpc-461d47496af9722b7",
+        "PublicIngressRules": [
+          {
+            "Protocol": "tcp",
+            "FromPort": 22,
+            "ToPort": 22,
+            "Source": "0.0.0.0/0"
+          }
+        ],
+        "Tags": {}
+      }
+    ]
+  },
+  "CloudWatchLogMetrics": {
+    "TotalLogStreams": 0,
+    "TotalSize": 0,
+    "AverageStreamSize": 0,
+    "LogGroupMetrics": []
+  }
+}
+Resource audit saved to aws_audit_results.json
+Starting AWS resource audit...
+Finding unused EBS volumes...
+Finding public security groups...
+Calculating CloudWatch log stream metrics...
+
+================================================================================
+RESOURCE AUDIT SUMMARY
+================================================================================
+
++------------------------+---------+---------+
+| Metric                 |   Count |   Value |
++========================+=========+=========+
+| Unused EBS Volumes     |       3 |       6 |
++------------------------+---------+---------+
+| Public Security Groups |       1 |       1 |
++------------------------+---------+---------+
+| CloudWatch Log Streams |       0 |       0 |
++------------------------+---------+---------+
+
+================================================================================
+
