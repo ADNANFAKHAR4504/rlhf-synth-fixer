@@ -1,0 +1,5 @@
+config:
+  aws:region: us-east-1
+  payment-infra:environment: prod
+  payment-infra:dbPassword:
+    secure: AAABAOzKXtW9zGxIVCEpHW2fwIGDProdPassword123!

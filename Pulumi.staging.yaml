@@ -1,0 +1,5 @@
+config:
+  aws:region: us-east-1
+  payment-infra:environment: staging
+  payment-infra:dbPassword:
+    secure: AAABAOzKXtW9zGxIVCEpHW2fwIGDStagingPassword123!

@@ -1,0 +1,6 @@
+config:
+  aws:region: us-east-1
+  payment-infra:environment: dev
+  payment-infra:dbPassword:
+    secure: v1:q4/prZdvC+fS6h4/:vZtsAmDA1mlxbB19n4287aGNbesfCNkDmMzM77Z5p13fzEw=
+encryptionsalt: v1:99YEWZsNdps=:v1:KxVD5eJir5yhjQtj:yuRYfUlMNjCB3iuiiK1f7HB89nzFSA==
