@@ -30,9 +30,8 @@ class TestStackStructure:
 
         # Verify that TapStack instantiates without errors via props
         assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        assert hasattr(stack, 'environment_suffix')
+        assert stack.environment_suffix == 'prod'
 
     def test_tap_stack_uses_default_values_when_no_props_provided(self):
         """TapStack uses default values when no props provided."""
@@ -41,9 +40,49 @@ class TestStackStructure:
 
         # Verify that TapStack instantiates without errors when no props provided
         assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        assert hasattr(stack, 'environment_suffix')
+        assert stack.environment_suffix == 'dev'  # default value
+
+    def test_tap_stack_synth_generates_terraform_config(self):
+        """TapStack synthesizes to valid Terraform configuration."""
+        app = App()
+        stack = TapStack(
+            app,
+            "TestSynthStack",
+            environment_suffix="test",
+            aws_region="us-east-1"
+        )
+        
+        # Synthesize the stack to JSON
+        synth = Testing.synth(stack)
+        
+        # Verify synth produces JSON output
+        assert synth is not None
+        assert "resource" in synth
+        
+    def test_tap_stack_has_required_outputs(self):
+        """TapStack defines required Terraform outputs."""
+        app = App()
+        stack = TapStack(
+            app,
+            "TestOutputStack",
+            environment_suffix="test",
+            aws_region="us-east-1"
+        )
+        
+        # Synthesize to check outputs
+        synth = Testing.synth(stack)
+        
+        # Verify outputs exist
+        assert "output" in synth
+        outputs = synth.get("output", {})
+        
+        # Check for expected outputs
+        assert "api_gateway_url" in outputs
+        assert "dynamodb_table_name" in outputs
+        assert "validator_queue_url" in outputs
+        assert "processor_queue_url" in outputs
+        assert "vpc_id" in outputs
 
 
 # add more test suites and cases as needed
