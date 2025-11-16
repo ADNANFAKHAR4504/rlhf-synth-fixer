@@ -142,7 +142,6 @@ resource "aws_sns_topic_policy" "payment_notifications" {
 }
 
 # CloudWatch Log Groups
-# CloudWatch Log Groups (WITHOUT KMS - using default encryption)
 resource "aws_cloudwatch_log_group" "validation_lambda" {
   name              = "/aws/lambda/lambda-payment-validation-${var.environment}"
   retention_in_days = 1
