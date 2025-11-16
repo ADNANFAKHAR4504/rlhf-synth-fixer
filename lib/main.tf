@@ -575,9 +575,9 @@ resource "aws_sfn_state_machine" "payment_workflow" {
   type     = "STANDARD"
 
   definition = jsonencode({
-    Comment = "Payment Processing Workflow"
-    StartAt = "ValidatePayment"
-    TimeoutSeconds = 600 # 10 minutes - prevents runaway executions
+    Comment        = "Payment Processing Workflow"
+    StartAt        = "ValidatePayment"
+    TimeoutSeconds = 600
     States = {
       ValidatePayment = {
         Type     = "Task"

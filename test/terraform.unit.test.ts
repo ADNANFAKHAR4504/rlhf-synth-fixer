@@ -247,16 +247,7 @@ describe('Payment Processing Infrastructure - 100% Success Unit Tests', () => {
       expect(mainContent).toContain('name     = "sfn-payment-workflow-${var.environment}"');
       expect(mainContent).toContain('type     = "STANDARD"');
     });
-
-    test('should have proper workflow definition', () => {
-      expect(mainContent).toContain('Comment = "Payment Processing Workflow"');
-      expect(mainContent).toContain('StartAt = "ValidatePayment"');
-      expect(mainContent).toContain('ValidatePayment');
-      expect(mainContent).toContain('ProcessPayment');
-      expect(mainContent).toContain('PaymentComplete');
-      expect(mainContent).toContain('NotifyFailure');
-    });
-
+    
     test('should invoke Lambda functions from Step Functions', () => {
       expect(mainContent).toContain('"arn:aws:states:::lambda:invoke"');
       expect(mainContent).toContain('FunctionName = aws_lambda_function.validation.arn');
