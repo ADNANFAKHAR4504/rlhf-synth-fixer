@@ -13,7 +13,7 @@ from lib.tap_stack import TapStack
 environment_suffix = os.getenv("ENVIRONMENT_SUFFIX", "dev")
 state_bucket = os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states")
 state_bucket_region = os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1")
-aws_region = os.getenv("AWS_REGION", "eu-south-2")
+aws_region = os.getenv("AWS_REGION", "us-east-1")
 repository_name = os.getenv("REPOSITORY", "unknown")
 commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
 pr_number = os.getenv("PR_NUMBER", "unknown")

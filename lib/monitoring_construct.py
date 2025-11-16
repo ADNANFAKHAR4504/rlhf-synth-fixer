@@ -17,7 +17,7 @@ class MonitoringConstruct(Construct):
         for name, function in lambda_functions.items():
             CloudwatchLogMetricFilter(
                 self, f"{name}-error-filter",
-                name=f"payment-{name}-errors-{environment_suffix}-no",
+                name=f"payment-{name}-errors-{environment_suffix}-es2",
                 log_group_name=f"/aws/lambda/{function.function_name}",
                 pattern="[ERROR]",
                 metric_transformation={
@@ -30,7 +30,7 @@ class MonitoringConstruct(Construct):
             # Alarm for function errors
             CloudwatchMetricAlarm(
                 self, f"{name}-error-alarm",
-                alarm_name=f"payment-{name}-errors-{environment_suffix}-no",
+                alarm_name=f"payment-{name}-errors-{environment_suffix}-es2",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=1,
                 metric_name="Errors",
@@ -43,7 +43,7 @@ class MonitoringConstruct(Construct):
                 },
                 alarm_description=f"Alert when {name} function has errors",
                 tags={
-                    "Name": f"payment-{name}-error-alarm-{environment_suffix}-no",
+                    "Name": f"payment-{name}-error-alarm-{environment_suffix}-es2",
                     "Environment": environment_suffix
                 }
             )
@@ -52,7 +52,7 @@ class MonitoringConstruct(Construct):
         for name, queue in sqs_queues.items():
             CloudwatchMetricAlarm(
                 self, f"{name}-queue-alarm",
-                alarm_name=f"payment-{name}-queue-depth-{environment_suffix}-no",
+                alarm_name=f"payment-{name}-queue-depth-{environment_suffix}-es2",
                 comparison_operator="GreaterThanThreshold",
                 evaluation_periods=2,
                 metric_name="ApproximateNumberOfMessagesVisible",
@@ -65,7 +65,7 @@ class MonitoringConstruct(Construct):
                 },
                 alarm_description=f"Alert when {name} queue depth is high",
                 tags={
-                    "Name": f"payment-{name}-queue-alarm-{environment_suffix}-no",
+                    "Name": f"payment-{name}-queue-alarm-{environment_suffix}-es2",
                     "Environment": environment_suffix
                 }
             )
