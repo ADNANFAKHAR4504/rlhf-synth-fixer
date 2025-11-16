@@ -163,18 +163,28 @@ PROBLEM=$(unescape_json_string "$PROBLEM")
 CONSTRAINTS=$(unescape_json_string "$CONSTRAINTS")
 ENVIRONMENT=$(unescape_json_string "$ENVIRONMENT")
 
-# Extract region from constraints if present
+# Extract region from environment or constraints if present
 extract_region() {
-    local constraints="$1"
-    local region=$(echo "$constraints" | grep -oE '(us|eu|ap|ca|sa|me|af)-[a-z]+-[0-9]+' | head -1)
-    if [ -n "$region" ]; then
-        echo "$region"
+    local environment="$1"
+    local constraints="$2"
+    
+    # First, try to find region in environment field (where regions are actually mentioned)
+    local region=$(echo "$environment" | grep -oE '(us-east-[12]|us-west-[12]|eu-[a-z]+-[0-9]+|ap-[a-z]+-[0-9]+|ca-central-[0-9]+|sa-east-[0-9]+|af-south-[0-9]+|me-south-[0-9]+)' | head -1)
+    
+    # If not found, check constraints
+    if [ -z "$region" ]; then
+        region=$(echo "$constraints" | grep -oE '(us-east-[12]|us-west-[12]|eu-[a-z]+-[0-9]+|ap-[a-z]+-[0-9]+|ca-central-[0-9]+|sa-east-[0-9]+|af-south-[0-9]+|me-south-[0-9]+)' | head -1)
+    fi
+    
+    # Default to us-east-1 if no region found
+    if [ -z "$region" ]; then
+        echo "us-east-1"
     else
-        echo "ap-southeast-1"
+        echo "$region"
     fi
 }
 
-REGION=$(extract_region "$CONSTRAINTS")
+REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
 
 # Create metadata.json
 METADATA_FILE="$OUTPUT_DIR/metadata.json"
