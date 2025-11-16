@@ -420,7 +420,7 @@ If `metadata.json` not present:
 - Prefer TypeScript for tests (unless project is Python-based)
 - **CRITICAL**: Set `complexity` = EXACT value from CSV `difficulty` column (NOT "difficulty")
   - Valid: "medium", "hard", "expert" (must match CSV exactly)
-- Set `team` = "synth" (REQUIRED)
+- Set `team` = value from `.claude/settings.local.json` if present, otherwise default to "synth" (REQUIRED)
 - Set `turn_type` = "single" (REQUIRED)
 - Set `startedAt` = current timestamp: `date -Iseconds` (REQUIRED)
 - **Extract from .claude/tasks.csv** (REQUIRED):

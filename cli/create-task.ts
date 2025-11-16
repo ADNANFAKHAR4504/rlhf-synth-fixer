@@ -281,6 +281,8 @@ async function main(): Promise<void> {
         { name: '5', value: '5' },
         { name: '6', value: '6' },
         { name: 'synth', value: 'synth' },
+        { name: 'synth-1', value: 'synth-1' },
+        { name: 'synth-2', value: 'synth-2' },
         { name: 'stf', value: 'stf' },
       ],
     });
@@ -341,18 +343,18 @@ async function main(): Promise<void> {
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? {
-            aws_services: resourcesText
-              .split(',')
-              .map(s => s.trim())
-              .filter(s => s.length > 0),
-          }
+          aws_services: resourcesText
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0),
+        }
         : {}),
       ...(deployEnv
         ? {
-            task_config: {
-              deploy_env: deployEnv,
-            },
-          }
+          task_config: {
+            deploy_env: deployEnv,
+          },
+        }
         : {}),
     };
 

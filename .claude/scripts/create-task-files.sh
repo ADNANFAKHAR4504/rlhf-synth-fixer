@@ -186,6 +186,17 @@ extract_region() {
 
 REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
 
+# Read team value from settings.local.json
+# If team is mentioned in settings, use that value (e.g., synth-2, synth-1)
+# Otherwise, default to "synth"
+SETTINGS_FILE=".claude/settings.local.json"
+if [ -f "$SETTINGS_FILE" ]; then
+    TEAM=$(json_val "$(cat "$SETTINGS_FILE")" "team")
+    [ -z "$TEAM" ] && TEAM="synth"
+else
+    TEAM="synth"
+fi
+
 # Create metadata.json
 METADATA_FILE="$OUTPUT_DIR/metadata.json"
 cat > "$METADATA_FILE" <<EOF
@@ -194,7 +205,7 @@ cat > "$METADATA_FILE" <<EOF
   "language": "$LANGUAGE",
   "complexity": "$COMPLEXITY",
   "turn_type": "single",
-  "team": "synth",
+  "team": "$TEAM",
   "startedAt": "$STARTED_AT",
   "subtask": "$SUBTASK",
   "subject_labels": $SUBJECT_LABELS,
