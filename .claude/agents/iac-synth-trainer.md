@@ -1393,7 +1393,172 @@ fi
 **VALIDATION RESULT**: <PASSED/FAILED>
 **ISSUES FOUND**: <list or NONE>
 **FIXES APPLIED**: <list or NONE>
-**NEXT ACTION**: Proceed to deployment fixes
+**NEXT ACTION**: Proceed to code analysis
+**BLOCKED**: NO
+```
+
+---
+
+#### 2.5.1: Code Analysis Before Deployment (NEW)
+
+**Purpose**: Analyze generated code for deployment blockers BEFORE attempting deployment
+
+**Analysis Steps**:
+
+```bash
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "PHASE 2.5.1: CODE ANALYSIS BEFORE DEPLOYMENT"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Update progress
+bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Code analysis before deployment"
+
+CODE_ANALYSIS_ISSUES=()
+CODE_ANALYSIS_FIXES_NEEDED=false
+
+# 1. Scan for Missing environmentSuffix
+echo "📋 1. Scanning for missing environmentSuffix in resource names..."
+case "$PLATFORM-$LANGUAGE" in
+  "cdk-ts"|"cdktf-ts"|"pulumi-ts")
+    # Check for bucketName, functionName, etc. without environmentSuffix
+    NO_SUFFIX=$(grep -rnE "(bucketName|functionName|tableName|roleName|queueName|topicName|streamName|clusterName|dbInstanceIdentifier).*['\"][^'\"]*['\"]" lib/ --include="*.ts" --include="*.js" 2>/dev/null | grep -v "environmentSuffix" | head -10 || true)
+    if [ -n "$NO_SUFFIX" ]; then
+      echo "⚠️  Found resources without environmentSuffix:"
+      echo "$NO_SUFFIX"
+      CODE_ANALYSIS_ISSUES+=("Missing environmentSuffix in resource names")
+      CODE_ANALYSIS_FIXES_NEEDED=true
+    fi
+    ;;
+  "cdk-py"|"cdktf-py"|"pulumi-py")
+    NO_SUFFIX=$(grep -rnE "(bucket_name|function_name|table_name|role_name|queue_name|topic_name|stream_name|cluster_name|db_instance_identifier).*['\"][^'\"]*['\"]" lib/ --include="*.py" 2>/dev/null | grep -v "environment_suffix" | head -10 || true)
+    if [ -n "$NO_SUFFIX" ]; then
+      echo "⚠️  Found resources without environment_suffix:"
+      echo "$NO_SUFFIX"
+      CODE_ANALYSIS_ISSUES+=("Missing environment_suffix in resource names")
+      CODE_ANALYSIS_FIXES_NEEDED=true
+    fi
+    ;;
+esac
+
+# 2. Scan for Retain Policies
+echo ""
+echo "📋 2. Scanning for Retain policies and DeletionProtection..."
+RETAIN_POLICIES=$(grep -rnE "(RemovalPolicy\.RETAIN|DeletionPolicy.*Retain|deletion_protection.*true|skip_final_snapshot.*false)" lib/ --include="*.ts" --include="*.py" --include="*.js" --include="*.yaml" --include="*.json" --include="*.hcl" --include="*.tf" 2>/dev/null || true)
+if [ -n "$RETAIN_POLICIES" ]; then
+  echo "⚠️  Found Retain policies or DeletionProtection:"
+  echo "$RETAIN_POLICIES" | head -10
+  CODE_ANALYSIS_ISSUES+=("Retain policies or DeletionProtection found")
+  CODE_ANALYSIS_FIXES_NEEDED=true
+fi
+
+# 3. Scan for Deprecated Versions
+echo ""
+echo "📋 3. Scanning for deprecated AWS service versions..."
+DEPRECATED_SYNTHETICS=$(grep -rnE "SYNTHETICS_NODEJS_PUPPETEER_[0-5]\." lib/ --include="*.ts" --include="*.py" --include="*.js" 2>/dev/null || true)
+if [ -n "$DEPRECATED_SYNTHETICS" ]; then
+  echo "⚠️  Found deprecated CloudWatch Synthetics runtime:"
+  echo "$DEPRECATED_SYNTHETICS"
+  CODE_ANALYSIS_ISSUES+=("Deprecated Synthetics runtime version")
+  CODE_ANALYSIS_FIXES_NEEDED=true
+fi
+
+DEPRECATED_SDK=$(grep -rnE "require\(['\"]aws-sdk['\"]\)" lib/ --include="*.js" --include="*.ts" 2>/dev/null || true)
+if [ -n "$DEPRECATED_SDK" ]; then
+  echo "⚠️  Found AWS SDK v2 usage (not available in Node.js 18+):"
+  echo "$DEPRECATED_SDK"
+  CODE_ANALYSIS_ISSUES+=("AWS SDK v2 usage in Node.js 18+")
+  CODE_ANALYSIS_FIXES_NEEDED=true
+fi
+
+# 4. Scan for GuardDuty Detectors
+echo ""
+echo "📋 4. Scanning for GuardDuty detector creation..."
+GUARDDUTY_DETECTORS=$(grep -rnE "(GuardDuty.*Detector|aws_guardduty_detector)" lib/ --include="*.ts" --include="*.py" --include="*.tf" 2>/dev/null || true)
+if [ -n "$GUARDDUTY_DETECTORS" ]; then
+  echo "⚠️  Found GuardDuty detector creation (account-level resource):"
+  echo "$GUARDDUTY_DETECTORS"
+  CODE_ANALYSIS_ISSUES+=("GuardDuty detector creation (only one per account)")
+  CODE_ANALYSIS_FIXES_NEEDED=true
+fi
+
+# 5. Scan for AWS Config IAM Issues
+echo ""
+echo "📋 5. Scanning for AWS Config IAM policy issues..."
+CONFIG_IAM=$(grep -rnE "(ConfigRole|AWS_ConfigRole)" lib/ --include="*.ts" --include="*.py" 2>/dev/null | grep -v "service-role/AWS_ConfigRole" || true)
+if [ -n "$CONFIG_IAM" ]; then
+  echo "⚠️  Found potentially incorrect AWS Config IAM policy:"
+  echo "$CONFIG_IAM"
+  CODE_ANALYSIS_ISSUES+=("Incorrect AWS Config IAM policy name")
+  CODE_ANALYSIS_FIXES_NEEDED=true
+fi
+
+# Summary
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Code Analysis Summary"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ "$CODE_ANALYSIS_FIXES_NEEDED" = true ]; then
+  echo "❌ Code analysis found issues that will cause deployment failures:"
+  printf '  - %s\n' "${CODE_ANALYSIS_ISSUES[@]}"
+  echo ""
+  echo "🔧 Fixing issues before deployment attempt..."
+  
+  # Apply fixes
+  # 1. Fix Retain policies
+  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "Retain policies"; then
+    echo "  → Fixing Retain policies..."
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/removalPolicy.*=.*RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' {} \;
+    find lib/ -type f -exec sed -i.bak 's/deletionProtection.*true/deletionProtection: false/g' {} \;
+    find lib/ -type f -exec sed -i.bak 's/deletion_protection.*True/deletion_protection=False/g' {} \;
+  fi
+  
+  # 2. Fix deprecated Synthetics runtime
+  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "Deprecated Synthetics"; then
+    echo "  → Fixing deprecated Synthetics runtime..."
+    find lib/ -type f -exec sed -i.bak 's/SYNTHETICS_NODEJS_PUPPETEER_[0-5]\./SYNTHETICS_NODEJS_PUPPETEER_7_0/g' {} \;
+  fi
+  
+  # 3. Fix AWS Config IAM policy
+  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "AWS Config IAM"; then
+    echo "  → Fixing AWS Config IAM policy..."
+    find lib/ -type f -exec sed -i.bak 's/service-role\/ConfigRole/service-role\/AWS_ConfigRole/g' {} \;
+    find lib/ -type f -exec sed -i.bak 's/AWS_ConfigRole[^"]/service-role\/AWS_ConfigRole/g' {} \;
+  fi
+  
+  # Note: environmentSuffix and GuardDuty fixes require manual code changes (too complex for sed)
+  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "environmentSuffix\|GuardDuty"; then
+    echo "  → Manual fixes needed for environmentSuffix/GuardDuty (documenting in root cause analysis)"
+  fi
+  
+  echo "✅ Code fixes applied (where possible)"
+  echo "⚠️  Note: Some fixes may require manual code changes"
+else
+  echo "✅ Code analysis PASSED - no deployment blockers found"
+fi
+
+echo ""
+```
+
+**Action Based on Findings**:
+- If issues found → Fix BEFORE deployment attempt
+- Document fixes in root cause analysis (Phase 2.0)
+- Re-run analysis after fixes
+- Only proceed to deployment if analysis passes or fixes applied
+
+**Benefits**:
+- Catches issues before AWS deployment (saves time and cost)
+- Reduces iterations from 3-5 to 1-2
+- Prevents known failure patterns
+
+**Report Status**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.5.1 - CODE ANALYSIS - PR #<number>
+**ANALYSIS RESULT**: <PASSED/ISSUES_FOUND>
+**ISSUES FOUND**: <list or NONE>
+**FIXES APPLIED**: <list or NONE>
+**NEXT ACTION**: Proceed to deployment / Apply fixes
 **BLOCKED**: NO
 ```
 
@@ -1403,7 +1568,7 @@ fi
 
 **CRITICAL**: Deploy failures are complex and require careful analysis.
 
-**Note**: Pre-deployment validation (Phase 2.5) should have already fixed common issues. This section handles deployment-specific failures.
+**Note**: Pre-deployment validation (Phase 2.5) and code analysis (Phase 2.5.1) should have already fixed common issues. This section handles deployment-specific failures that weren't caught earlier.
 
 ```bash
 if echo "$FAILED_STAGES" | grep -qi "deploy"; then
