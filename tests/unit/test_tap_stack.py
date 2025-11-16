@@ -26,7 +26,7 @@ class TestStackStructure:
             environment_suffix="prod",
             state_bucket="custom-state-bucket",
             state_bucket_region="eu-west-1",
-            aws_region="eu-south-2",
+            aws_region="eu-central-2",
         )
 
         # Verify that TapStack instantiates without errors via props
@@ -48,7 +48,7 @@ class TestStackStructure:
         """TapStack synthesizes to valid Terraform configuration."""
         app = App()
         stack = TapStack(
-            app, "TestSynthStack", environment_suffix="test", aws_region="eu-south-2"
+            app, "TestSynthStack", environment_suffix="test", aws_region="eu-central-2"
         )
 
         # Synthesize the stack to JSON string
@@ -69,7 +69,7 @@ class TestStackStructure:
             app,
             "TestOutputStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         # Synthesize to check outputs
@@ -97,13 +97,13 @@ class TestVPCResources:
     """Test suite for VPC resources."""
 
     def test_vpc_resources_created_in_both_regions(self):
-        """VPCs are created in both eu-south-2 and eu-west-1."""
+        """VPCs are created in both eu-central-2 and eu-west-1."""
         app = App()
         stack = TapStack(
             app,
             "TestVPCStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -113,11 +113,11 @@ class TestVPCResources:
         vpcs = resources.get("aws_vpc", {})
 
         # Verify both VPCs exist
-        assert "vpc-eu-south-2" in vpcs
+        assert "vpc-eu-central-2" in vpcs
         assert "vpc-eu-west-1" in vpcs
 
         # Verify CIDR blocks
-        assert vpcs["vpc-eu-south-2"]["cidr_block"] == "10.0.0.0/16"
+        assert vpcs["vpc-eu-central-2"]["cidr_block"] == "10.0.0.0/16"
         assert vpcs["vpc-eu-west-1"]["cidr_block"] == "10.1.0.0/16"
 
     def test_subnets_created_in_multiple_azs(self):
@@ -127,7 +127,7 @@ class TestVPCResources:
             app,
             "TestSubnetStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -153,7 +153,7 @@ class TestVPCResources:
             app,
             "TestPeeringStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -176,7 +176,7 @@ class TestDatabaseResources:
             app,
             "TestRDSStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -204,7 +204,7 @@ class TestDatabaseResources:
             app,
             "TestDynamoDBStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -237,7 +237,7 @@ class TestDatabaseResources:
             app,
             "TestDBSubnetStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -260,7 +260,7 @@ class TestLambdaAndAPIResources:
             app,
             "TestLambdaStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -289,7 +289,7 @@ class TestLambdaAndAPIResources:
             app,
             "TestAPIStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -313,7 +313,7 @@ class TestLambdaAndAPIResources:
             app,
             "TestLambdaIAMStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -339,7 +339,7 @@ class TestStorageResources:
             app,
             "TestS3Stack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -359,7 +359,7 @@ class TestStorageResources:
             app,
             "TestS3VersioningStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -382,7 +382,7 @@ class TestStorageResources:
             app,
             "TestS3EncryptionStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -401,7 +401,7 @@ class TestStorageResources:
             app,
             "TestS3ReplicationStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -428,7 +428,7 @@ class TestMonitoringResources:
             app,
             "TestDashboardStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -446,7 +446,7 @@ class TestMonitoringResources:
             app,
             "TestAlarmsStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -470,7 +470,7 @@ class TestMonitoringResources:
             app,
             "TestLogGroupsStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -497,7 +497,7 @@ class TestSecurityResources:
             app,
             "TestSecurityStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -516,7 +516,7 @@ class TestSecurityResources:
             app,
             "TestKMSStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -539,7 +539,7 @@ class TestSecurityResources:
             app,
             "TestKMSAliasStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -561,7 +561,7 @@ class TestResourceTagging:
             app,
             "TestTaggingStack",
             environment_suffix="test",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)
@@ -585,7 +585,7 @@ class TestResourceTagging:
             app,
             "TestNamingStack",
             environment_suffix="prod",
-            aws_region="eu-south-2"
+            aws_region="eu-central-2"
         )
 
         synth = Testing.synth(stack)

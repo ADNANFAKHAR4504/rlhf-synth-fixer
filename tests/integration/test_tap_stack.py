@@ -35,8 +35,8 @@ class TestTapStackIntegration:
 
     @pytest.fixture(scope="class")
     def region_eu_south(self):
-        """Get eu-south-2 region."""
-        return os.getenv("AWS_REGION_SOUTH", "eu-south-2")
+        """Get eu-central-2 region."""
+        return os.getenv("AWS_REGION_SOUTH", "eu-central-2")
 
     @pytest.fixture(scope="class")
     def region_eu_west(self):
@@ -45,13 +45,13 @@ class TestTapStackIntegration:
 
     @pytest.fixture(scope="class")
     def ec2_client_south(self, region_eu_south):
-        """Create EC2 client for eu-south-2."""
+        """Create EC2 client for eu-central-2."""
         if not BOTO3_AVAILABLE:
             pytest.skip("boto3 not installed")
         try:
             return boto3.client('ec2', region_name=region_eu_south)
         except Exception:
-            pytest.skip("Unable to create EC2 client for eu-south-2")
+            pytest.skip("Unable to create EC2 client for eu-central-2")
 
     @pytest.fixture(scope="class")
     def ec2_client_west(self, region_eu_west):
@@ -85,13 +85,13 @@ class TestTapStackIntegration:
 
     @pytest.fixture(scope="class")
     def s3_client_south(self, region_eu_south):
-        """Create S3 client for eu-south-2."""
+        """Create S3 client for eu-central-2."""
         if not BOTO3_AVAILABLE:
             pytest.skip("boto3 not installed")
         try:
             return boto3.client('s3', region_name=region_eu_south)
         except Exception:
-            pytest.skip("Unable to create S3 client for eu-south-2")
+            pytest.skip("Unable to create S3 client for eu-central-2")
 
     @pytest.fixture(scope="class")
     def s3_client_west(self, region_eu_west):
@@ -166,7 +166,7 @@ class TestTapStackIntegration:
         assert 'api_gateway_endpoint' in outputs
 
     def test_vpc_eu_south_exists_and_available(self, outputs, ec2_client_south):
-        """Test VPC in eu-south-2 exists and is in available state."""
+        """Test VPC in eu-central-2 exists and is in available state."""
         vpc_id = outputs.get('vpc_eu_south_id')
         assert vpc_id is not None
 
@@ -178,7 +178,7 @@ class TestTapStackIntegration:
             assert vpc['VpcId'] == vpc_id
             assert vpc['CidrBlock'] == '10.0.0.0/16'
         except ClientError:
-            pytest.skip("Unable to describe VPC in eu-south-2")
+            pytest.skip("Unable to describe VPC in eu-central-2")
 
     def test_vpc_eu_west_exists_and_available(self, outputs, ec2_client_west):
         """Test VPC in eu-west-1 exists and is in available state."""
@@ -196,7 +196,7 @@ class TestTapStackIntegration:
             pytest.skip("Unable to describe VPC in eu-west-1")
 
     def test_vpc_eu_south_has_public_subnets(self, outputs, ec2_client_south):
-        """Test VPC in eu-south-2 has public subnets configured."""
+        """Test VPC in eu-central-2 has public subnets configured."""
         vpc_id = outputs.get('vpc_eu_south_id')
 
         try:
@@ -208,10 +208,10 @@ class TestTapStackIntegration:
             )
             assert len(response['Subnets']) >= 2
         except ClientError:
-            pytest.skip("Unable to describe subnets in eu-south-2")
+            pytest.skip("Unable to describe subnets in eu-central-2")
 
     def test_vpc_eu_south_has_private_subnets(self, outputs, ec2_client_south):
-        """Test VPC in eu-south-2 has private subnets configured."""
+        """Test VPC in eu-central-2 has private subnets configured."""
         vpc_id = outputs.get('vpc_eu_south_id')
 
         try:
@@ -223,7 +223,7 @@ class TestTapStackIntegration:
             )
             assert len(response['Subnets']) >= 2
         except ClientError:
-            pytest.skip("Unable to describe private subnets in eu-south-2")
+            pytest.skip("Unable to describe private subnets in eu-central-2")
 
     def test_vpc_eu_west_has_public_subnets(self, outputs, ec2_client_west):
         """Test VPC in eu-west-1 has public subnets configured."""
@@ -377,7 +377,7 @@ class TestTapStackIntegration:
             pytest.skip("Unable to verify point-in-time recovery")
 
     def test_s3_bucket_eu_south_exists(self, outputs, s3_client_south):
-        """Test S3 bucket in eu-south-2 exists."""
+        """Test S3 bucket in eu-central-2 exists."""
         bucket_name = outputs.get('s3_bucket_eu_south')
         assert bucket_name is not None
 
@@ -385,7 +385,7 @@ class TestTapStackIntegration:
             response = s3_client_south.head_bucket(Bucket=bucket_name)
             assert response['ResponseMetadata']['HTTPStatusCode'] == 200
         except ClientError:
-            pytest.skip("Unable to access S3 bucket in eu-south-2")
+            pytest.skip("Unable to access S3 bucket in eu-central-2")
 
     def test_s3_bucket_eu_west_exists(self, outputs, s3_client_west):
         """Test S3 bucket in eu-west-1 exists."""

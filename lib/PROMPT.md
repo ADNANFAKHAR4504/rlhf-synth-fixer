@@ -2,24 +2,24 @@
 
 Hey team,
 
-We need to build a production-grade multi-region payment processing infrastructure for a fintech startup migrating their real-time payment service from Milan (eu-south-2) to Ireland (eu-west-1). I've been asked to create this infrastructure using **CDKTF with Python**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements with proper encryption, logging, and access controls.
+We need to build a production-grade multi-region payment processing infrastructure for a fintech startup migrating their real-time payment service from Zurich (eu-central-2) to Ireland (eu-west-1). I've been asked to create this infrastructure using **CDKTF with Python**. This is a critical system that handles financial transactions, so we need to meet PCI-DSS compliance requirements with proper encryption, logging, and access controls.
 
 The application architecture consists of a serverless backend using AWS Lambda for payment processing, API Gateway for HTTP endpoints, RDS PostgreSQL for transaction records, and DynamoDB for high-throughput transaction data. The business has strict requirements around security, availability, multi-region redundancy, and compliance given the sensitive nature of payment data.
 
-We're deploying across two regions (eu-south-2 and eu-west-1) with VPC peering for cross-region connectivity and S3 cross-region replication for data redundancy. The infrastructure must be fully monitored with CloudWatch dashboards and alarms so the operations team can track system health and respond quickly to issues.
+We're deploying across two regions (eu-central-2 and eu-west-1) with VPC peering for cross-region connectivity and S3 cross-region replication for data redundancy. The infrastructure must be fully monitored with CloudWatch dashboards and alarms so the operations team can track system health and respond quickly to issues.
 
 ## What we need to build
 
-Create a complete multi-region payment processing infrastructure using **CDKTF with Python** deployed across eu-south-2 (source) and eu-west-1 (target) regions. This infrastructure must support serverless payment processing, API endpoints, multi-region data storage, and comprehensive monitoring.
+Create a complete multi-region payment processing infrastructure using **CDKTF with Python** deployed across eu-central-2 (source) and eu-west-1 (target) regions. This infrastructure must support serverless payment processing, API endpoints, multi-region data storage, and comprehensive monitoring.
 
 ### Core Requirements
 
 1. **Multi-Region Network Infrastructure**
-   - VPC in eu-south-2 (10.0.0.0/16) with public and private subnets across 2 availability zones
+   - VPC in eu-central-2 (10.0.0.0/16) with public and private subnets across 2 availability zones
    - VPC in eu-west-1 (10.1.0.0/16) with public and private subnets across 2 availability zones
    - Public subnets for NAT Gateways and internet connectivity
    - Private subnets for Lambda functions and RDS database
-   - VPC peering connection between eu-south-2 and eu-west-1 for cross-region communication
+   - VPC peering connection between eu-central-2 and eu-west-1 for cross-region communication
    - Proper routing tables and security groups for each tier
    - Internet Gateways for public subnet access
    - NAT Gateways for private subnet outbound connectivity
@@ -56,11 +56,11 @@ Create a complete multi-region payment processing infrastructure using **CDKTF w
    - CloudWatch logging enabled with 30-day retention
 
 6. **Storage and Replication**
-   - S3 bucket in eu-south-2 for payment data
+   - S3 bucket in eu-central-2 for payment data
    - S3 bucket in eu-west-1 for replicated data
    - Server-side encryption (AES256) enabled on all buckets
    - Versioning enabled for data integrity
-   - Cross-region replication from eu-south-2 to eu-west-1
+   - Cross-region replication from eu-central-2 to eu-west-1
    - IAM role for S3 replication with least privilege
 
 7. **Monitoring and Observability**
@@ -94,7 +94,7 @@ Create a complete multi-region payment processing infrastructure using **CDKTF w
 - Use **KMS** for encryption key management with automatic rotation
 - Resource names must include **environment_suffix** for uniqueness across deployments
 - Follow naming convention: `payment-{resource-type}-{environment_suffix}-{suffix}`
-- Primary region: **eu-south-2** (Milan)
+- Primary region: **eu-central-2** (Milan)
 - Target region: **eu-west-1** (Ireland)
 - Lambda runtime: Python 3.11
 - Reserved concurrency: 10 for Lambda functions
@@ -129,8 +129,8 @@ Create a complete multi-region payment processing infrastructure using **CDKTF w
 - **Functionality**: Complete multi-region architecture with VPCs, Lambda, API Gateway, RDS, DynamoDB, and S3
 - **Security**: Encryption at rest using KMS and AES256, least privilege IAM policies
 - **High Availability**: Multi-AZ RDS deployment, VPC peering for cross-region connectivity
-- **Multi-Region**: VPCs in both eu-south-2 and eu-west-1 with proper networking
-- **Data Replication**: S3 cross-region replication from eu-south-2 to eu-west-1
+- **Multi-Region**: VPCs in both eu-central-2 and eu-west-1 with proper networking
+- **Data Replication**: S3 cross-region replication from eu-central-2 to eu-west-1
 - **Monitoring**: CloudWatch dashboard with Lambda, RDS, and DynamoDB metrics
 - **Alerting**: CloudWatch alarms for Lambda errors and RDS CPU utilization
 - **Serverless**: Lambda-based payment processing with reserved concurrency
@@ -142,7 +142,7 @@ Create a complete multi-region payment processing infrastructure using **CDKTF w
 
 - Complete CDKTF Python implementation in lib/ directory
 - Multi-region VPC architecture with public and private subnets across 2 availability zones in each region
-- VPC peering connection between eu-south-2 and eu-west-1
+- VPC peering connection between eu-central-2 and eu-west-1
 - RDS PostgreSQL 17.4 with Multi-AZ, encryption, and automated backups
 - DynamoDB table with point-in-time recovery and global secondary indexes
 - Lambda function with VPC configuration and reserved concurrency
