@@ -20,6 +20,8 @@ cfn-lint = "*"
 cfn-flip = "*"
 tabulate = "*"
 cdktf-cdktf-provider-aws = "*"
+pulumi-kubernetes = "*"
+pulumi-tls = "*"
 aws-cdk-lambda-layer-kubectl-v29 = "*"
 
 [dev-packages]
