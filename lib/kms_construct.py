@@ -25,7 +25,7 @@ class KmsConstruct(Construct):
             description=f"KMS key for Lambda encryption - {environment_suffix}",
             enable_key_rotation=True,
             tags={
-                "Name": f"payment-lambda-key-{environment_suffix}-es2",
+                "Name": f"payment-lambda-key-{environment_suffix}-ef",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -33,7 +33,7 @@ class KmsConstruct(Construct):
         )
 
         KmsAlias(self, "lambda-key-alias",
-                name=f"alias/payment-lambda-{environment_suffix}-es2",
+                name=f"alias/payment-lambda-{environment_suffix}-ef",
                 target_key_id=self.lambda_key.key_id)
 
         # SQS encryption key
@@ -42,7 +42,7 @@ class KmsConstruct(Construct):
             description=f"KMS key for SQS encryption - {environment_suffix}",
             enable_key_rotation=True,
             tags={
-                "Name": f"payment-sqs-key-{environment_suffix}-es2",
+                "Name": f"payment-sqs-key-{environment_suffix}-ef",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -50,7 +50,7 @@ class KmsConstruct(Construct):
         )
 
         KmsAlias(self, "sqs-key-alias",
-                name=f"alias/payment-sqs-{environment_suffix}-es2",
+                name=f"alias/payment-sqs-{environment_suffix}-ef",
                 target_key_id=self.sqs_key.key_id)
 
         # DynamoDB encryption key
@@ -59,7 +59,7 @@ class KmsConstruct(Construct):
             description=f"KMS key for DynamoDB encryption - {environment_suffix}",
             enable_key_rotation=True,
             tags={
-                "Name": f"payment-dynamodb-key-{environment_suffix}-es2",
+                "Name": f"payment-dynamodb-key-{environment_suffix}-ef",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -67,7 +67,7 @@ class KmsConstruct(Construct):
         )
 
         KmsAlias(self, "dynamodb-key-alias",
-                name=f"alias/payment-dynamodb-{environment_suffix}-es2",
+                name=f"alias/payment-dynamodb-{environment_suffix}-ef",
                 target_key_id=self.dynamodb_key.key_id)
 
         # CloudWatch Logs encryption key with proper policy
@@ -113,7 +113,7 @@ class KmsConstruct(Construct):
             enable_key_rotation=True,
             policy=json.dumps(logs_key_policy),
             tags={
-                "Name": f"payment-logs-key-{environment_suffix}-es2",
+                "Name": f"payment-logs-key-{environment_suffix}-ef",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"
@@ -121,5 +121,5 @@ class KmsConstruct(Construct):
         )
 
         KmsAlias(self, "logs-key-alias",
-                name=f"alias/payment-logs-{environment_suffix}-es2",
+                name=f"alias/payment-logs-{environment_suffix}-ef",
                 target_key_id=self.logs_key.key_id)

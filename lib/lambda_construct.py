@@ -87,7 +87,7 @@ class LambdaConstruct(Construct):
         """Create Lambda layer with shared code."""
         layer = LambdaLayerVersion(
             self, "shared-layer",
-            layer_name=f"payment-shared-layer-{environment_suffix}-es2",
+            layer_name=f"payment-shared-layer-{environment_suffix}-ef",
             compatible_runtimes=["python3.11"],
             description="Shared utilities for payment processing",
             filename="../../../lib/lambda/shared_layer.zip"
@@ -102,7 +102,7 @@ class LambdaConstruct(Construct):
         """Create IAM role for Lambda function."""
         role = IamRole(
             self, f"{function_name}-role",
-            name=f"payment-{function_name}-role-{environment_suffix}-es2",
+            name=f"payment-{function_name}-role-{environment_suffix}-ef",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [{
@@ -112,7 +112,7 @@ class LambdaConstruct(Construct):
                 }]
             }),
             tags={
-                "Name": f"payment-{function_name}-role-{environment_suffix}-es2",
+                "Name": f"payment-{function_name}-role-{environment_suffix}-ef",
                 "Environment": environment_suffix
             }
         )
@@ -188,7 +188,7 @@ class LambdaConstruct(Construct):
         if policy_statements:
             custom_policy = IamPolicy(
                 self, f"{function_name}-custom-policy",
-                name=f"payment-{function_name}-policy-{environment_suffix}-es2",
+                name=f"payment-{function_name}-policy-{environment_suffix}-ef",
                 policy=json.dumps({"Version": "2012-10-17", "Statement": policy_statements})
             )
 
@@ -207,11 +207,11 @@ class LambdaConstruct(Construct):
         # CloudWatch Log Group
         log_group = CloudwatchLogGroup(
             self, f"{function_name}-logs",
-            name=f"/aws/lambda/payment-{function_name}-{environment_suffix}-es2",
+            name=f"/aws/lambda/payment-{function_name}-{environment_suffix}-ef",
             retention_in_days=7,
             kms_key_id=self.logs_kms_key_id,
             tags={
-                "Name": f"payment-{function_name}-logs-{environment_suffix}-es2",
+                "Name": f"payment-{function_name}-logs-{environment_suffix}-ef",
                 "Environment": environment_suffix
             }
         )
@@ -219,7 +219,7 @@ class LambdaConstruct(Construct):
         # Lambda function - MISSING reserved_concurrent_executions (deliberate error)
         function = LambdaFunction(
             self, f"{function_name}-function",
-            function_name=f"payment-{function_name}-{environment_suffix}-es2",
+            function_name=f"payment-{function_name}-{environment_suffix}-ef",
             filename=f"../../../lib/lambda/{function_name}.zip",
             handler="handler.lambda_handler",
             runtime="python3.11",
@@ -240,7 +240,7 @@ class LambdaConstruct(Construct):
                 "mode": "Active"
             },
             tags={
-                "Name": f"payment-{function_name}-{environment_suffix}-es2",
+                "Name": f"payment-{function_name}-{environment_suffix}-ef",
                 "Environment": environment_suffix,
                 "Project": "payment-processing",
                 "CostCenter": "engineering"

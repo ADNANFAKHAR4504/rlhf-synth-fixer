@@ -1,4 +1,5 @@
 """Unit tests for TAP Stack."""
+import json
 import os
 import sys
 
@@ -53,12 +54,16 @@ class TestStackStructure:
             aws_region="us-east-1"
         )
         
-        # Synthesize the stack to JSON
+        # Synthesize the stack to JSON string
         synth = Testing.synth(stack)
         
         # Verify synth produces JSON output
         assert synth is not None
-        assert "resource" in synth
+        assert isinstance(synth, str)
+        
+        # Parse JSON and verify structure
+        config = json.loads(synth)
+        assert "resource" in config
         
     def test_tap_stack_has_required_outputs(self):
         """TapStack defines required Terraform outputs."""
@@ -73,9 +78,12 @@ class TestStackStructure:
         # Synthesize to check outputs
         synth = Testing.synth(stack)
         
+        # Parse JSON string
+        config = json.loads(synth)
+        
         # Verify outputs exist
-        assert "output" in synth
-        outputs = synth.get("output", {})
+        assert "output" in config
+        outputs = config.get("output", {})
         
         # Check for expected outputs
         assert "api_gateway_url" in outputs
