@@ -74,15 +74,25 @@ resource "aws_kms_key" "cloudwatch_encryption" {
         Action = [
           "kms:Decrypt",
           "kms:GenerateDataKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
           "kms:CreateGrant",
           "kms:DescribeKey"
         ]
         Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
-          }
+      },
+      {
+        Sid    = "Allow Lambda to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.${data.aws_region.current.name}.amazonaws.com"
         }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -116,6 +126,19 @@ resource "aws_dynamodb_table" "transactions" {
   }
 }
 
+# SQS Queue for Lambda Dead Letter Queue
+resource "aws_sqs_queue" "payment_dlq" {
+  name                       = "payment-dlq-${var.environment}"
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 60
+
+  tags = {
+    Name = "payment-dlq-${var.environment}"
+  }
+}
+
+
+
 # SNS Topic
 resource "aws_sns_topic" "payment_notifications" {
   name              = "sns-payment-notifications-${var.environment}"
@@ -145,16 +168,19 @@ resource "aws_sns_topic_policy" "payment_notifications" {
 resource "aws_cloudwatch_log_group" "validation_lambda" {
   name              = "/aws/lambda/lambda-payment-validation-${var.environment}"
   retention_in_days = 1
+  kms_key_id        = aws_kms_key.cloudwatch_encryption.arn
 }
 
 resource "aws_cloudwatch_log_group" "processing_lambda" {
   name              = "/aws/lambda/lambda-payment-processing-${var.environment}"
   retention_in_days = 1
+  kms_key_id        = aws_kms_key.cloudwatch_encryption.arn
 }
 
 resource "aws_cloudwatch_log_group" "step_functions" {
   name              = "/aws/vendedlogs/states/sfn-payment-workflow-${var.environment}"
   retention_in_days = 1
+  kms_key_id        = aws_kms_key.cloudwatch_encryption.arn
 }
 
 # CloudWatch Alarms
@@ -380,6 +406,20 @@ data "aws_iam_policy_document" "validation_lambda" {
       aws_kms_key.dynamodb_encryption.arn
     ]
   }
+
+  statement {
+    sid    = "SQSAccess"
+    effect = "Allow"
+    actions = [
+      "sqs:SendMessage",
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes"
+    ]
+    resources = [
+      aws_sqs_queue.payment_dlq.arn
+    ]
+  }
 }
 
 data "aws_iam_policy_document" "processing_lambda" {
@@ -416,6 +456,20 @@ data "aws_iam_policy_document" "processing_lambda" {
     ]
     resources = [
       aws_sns_topic.payment_notifications.arn
+    ]
+  }
+
+  statement {
+    sid    = "SQSAccess"
+    effect = "Allow"
+    actions = [
+      "sqs:SendMessage",
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes"
+    ]
+    resources = [
+      aws_sqs_queue.payment_dlq.arn
     ]
   }
 }
@@ -466,6 +520,10 @@ resource "aws_lambda_function" "validation" {
   memory_size      = 256
   timeout          = 300
 
+  dead_letter_config {
+    target_arn = aws_sqs_queue.payment_dlq.arn
+  }
+
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.transactions.name
@@ -491,6 +549,10 @@ resource "aws_lambda_function" "processing" {
   memory_size      = 256
   timeout          = 300
 
+  dead_letter_config {
+    target_arn = aws_sqs_queue.payment_dlq.arn
+  }
+
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.transactions.name
@@ -515,6 +577,7 @@ resource "aws_sfn_state_machine" "payment_workflow" {
   definition = jsonencode({
     Comment = "Payment Processing Workflow"
     StartAt = "ValidatePayment"
+    TimeoutSeconds = 600 # 10 minutes - prevents runaway executions
     States = {
       ValidatePayment = {
         Type     = "Task"

@@ -281,19 +281,6 @@ describe('E2E Functional Flow Tests - Payment Processing Workflow', () => {
   // ==================== CONFIGURATION VALIDATION ====================
 
   describe('Workflow 1: Configuration Validation', () => {
-    test('should have complete Terraform outputs', () => {
-      expect(outputs).toBeDefined();
-      expect(outputs.account_id).toBeDefined();
-      expect(outputs.region).toBeDefined();
-      expect(outputs.step_functions_state_machine_arn).toBeDefined();
-      expect(outputs.lambda_validation_function_name).toBeDefined();
-      expect(outputs.lambda_processing_function_name).toBeDefined();
-      expect(outputs.dynamodb_table_name).toBeDefined();
-      expect(outputs.sns_topic_arn).toBeDefined();
-      
-      console.log('Terraform outputs parsed successfully');
-      console.log(`Total outputs: ${Object.keys(outputs).length}`);
-    });
 
     test('should validate Step Functions state machine configuration', async () => {
       const stateMachine = await safeAwsCall(

@@ -148,15 +148,25 @@ resource "aws_kms_key" "cloudwatch_encryption" {
         Action = [
           "kms:Decrypt",
           "kms:GenerateDataKey",
+          "kms:Encrypt",
+          "kms:ReEncrypt*",
           "kms:CreateGrant",
           "kms:DescribeKey"
         ]
         Resource = "*"
-        Condition = {
-          ArnLike = {
-            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
-          }
+      },
+      {
+        Sid    = "Allow Lambda to use the key"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.${data.aws_region.current.name}.amazonaws.com"
         }
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Resource = "*"
       }
     ]
   })
@@ -190,6 +200,19 @@ resource "aws_dynamodb_table" "transactions" {
   }
 }
 
+# SQS Queue for Lambda Dead Letter Queue
+resource "aws_sqs_queue" "payment_dlq" {
+  name                       = "payment-dlq-${var.environment}"
+  message_retention_seconds  = 1209600 # 14 days
+  visibility_timeout_seconds = 60
+
+  tags = {
+    Name = "payment-dlq-${var.environment}"
+  }
+}
+
+
+
 # SNS Topic
 resource "aws_sns_topic" "payment_notifications" {
   name              = "sns-payment-notifications-${var.environment}"
@@ -219,16 +242,25 @@ resource "aws_sns_topic_policy" "payment_notifications" {
 resource "aws_cloudwatch_log_group" "validation_lambda" {
   name              = "/aws/lambda/lambda-payment-validation-${var.environment}"
   retention_in_days = 1
+  kms_key_id        = aws_kms_key.cloudwatch_encryption.arn
+
+  depends_on = [aws_kms_key.cloudwatch_encryption]
 }
 
 resource "aws_cloudwatch_log_group" "processing_lambda" {
   name              = "/aws/lambda/lambda-payment-processing-${var.environment}"
   retention_in_days = 1
+  kms_key_id        = aws_kms_key.cloudwatch_encryption.arn
+
+  depends_on = [aws_kms_key.cloudwatch_encryption]
 }
 
 resource "aws_cloudwatch_log_group" "step_functions" {
   name              = "/aws/vendedlogs/states/sfn-payment-workflow-${var.environment}"
   retention_in_days = 1
+  kms_key_id        = aws_kms_key.cloudwatch_encryption.arn
+
+  depends_on = [aws_kms_key.cloudwatch_encryption]
 }
 
 # CloudWatch Alarms
@@ -454,6 +486,20 @@ data "aws_iam_policy_document" "validation_lambda" {
       aws_kms_key.dynamodb_encryption.arn
     ]
   }
+
+  statement {
+    sid    = "SQSAccess"
+    effect = "Allow"
+    actions = [
+      "sqs:SendMessage",
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes"
+    ]
+    resources = [
+      aws_sqs_queue.payment_dlq.arn
+    ]
+  }
 }
 
 data "aws_iam_policy_document" "processing_lambda" {
@@ -490,6 +536,20 @@ data "aws_iam_policy_document" "processing_lambda" {
     ]
     resources = [
       aws_sns_topic.payment_notifications.arn
+    ]
+  }
+
+  statement {
+    sid    = "SQSAccess"
+    effect = "Allow"
+    actions = [
+      "sqs:SendMessage",
+      "sqs:ReceiveMessage",
+      "sqs:DeleteMessage",
+      "sqs:GetQueueAttributes"
+    ]
+    resources = [
+      aws_sqs_queue.payment_dlq.arn
     ]
   }
 }
@@ -540,6 +600,10 @@ resource "aws_lambda_function" "validation" {
   memory_size      = 256
   timeout          = 300
 
+  dead_letter_config {
+    target_arn = aws_sqs_queue.payment_dlq.arn
+  }
+
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.transactions.name
@@ -565,6 +629,10 @@ resource "aws_lambda_function" "processing" {
   memory_size      = 256
   timeout          = 300
 
+  dead_letter_config {
+    target_arn = aws_sqs_queue.payment_dlq.arn
+  }
+
   environment {
     variables = {
       DYNAMODB_TABLE_NAME = aws_dynamodb_table.transactions.name
@@ -587,8 +655,9 @@ resource "aws_sfn_state_machine" "payment_workflow" {
   type     = "STANDARD"
 
   definition = jsonencode({
-    Comment = "Payment Processing Workflow"
-    StartAt = "ValidatePayment"
+    Comment        = "Payment Processing Workflow"
+    StartAt        = "ValidatePayment"
+    TimeoutSeconds = 600 # 10 minutes - prevents runaway executions
     States = {
       ValidatePayment = {
         Type     = "Task"
@@ -685,218 +754,175 @@ resource "aws_sfn_state_machine" "payment_workflow" {
 
 # Outputs
 output "step_functions_state_machine_arn" {
-  description = "ARN of the Step Functions state machine for payment workflow orchestration"
-  value       = aws_sfn_state_machine.payment_workflow.arn
+  value = aws_sfn_state_machine.payment_workflow.arn
 }
 
 output "step_functions_state_machine_name" {
-  description = "Name of the Step Functions state machine"
-  value       = aws_sfn_state_machine.payment_workflow.name
+  value = aws_sfn_state_machine.payment_workflow.name
 }
 
 output "step_functions_state_machine_id" {
-  description = "ID of the Step Functions state machine"
-  value       = aws_sfn_state_machine.payment_workflow.id
+  value = aws_sfn_state_machine.payment_workflow.id
 }
 
 output "step_functions_role_arn" {
-  description = "ARN of the IAM role used by Step Functions for execution"
-  value       = aws_iam_role.step_functions_execution.arn
+  value = aws_iam_role.step_functions_execution.arn
 }
 
 output "lambda_validation_function_name" {
-  description = "Name of the payment validation Lambda function"
-  value       = aws_lambda_function.validation.function_name
+  value = aws_lambda_function.validation.function_name
 }
 
 output "lambda_validation_function_arn" {
-  description = "ARN of the payment validation Lambda function"
-  value       = aws_lambda_function.validation.arn
+  value = aws_lambda_function.validation.arn
 }
 
 output "lambda_validation_invoke_arn" {
-  description = "Invoke ARN of the payment validation Lambda function"
-  value       = aws_lambda_function.validation.invoke_arn
+  value = aws_lambda_function.validation.invoke_arn
 }
 
 output "lambda_validation_role_arn" {
-  description = "ARN of the IAM role used by validation Lambda function"
-  value       = aws_iam_role.validation_lambda.arn
+  value = aws_iam_role.validation_lambda.arn
 }
 
 output "lambda_processing_function_name" {
-  description = "Name of the payment processing Lambda function"
-  value       = aws_lambda_function.processing.function_name
+  value = aws_lambda_function.processing.function_name
 }
 
 output "lambda_processing_function_arn" {
-  description = "ARN of the payment processing Lambda function"
-  value       = aws_lambda_function.processing.arn
+  value = aws_lambda_function.processing.arn
 }
 
 output "lambda_processing_invoke_arn" {
-  description = "Invoke ARN of the payment processing Lambda function"
-  value       = aws_lambda_function.processing.invoke_arn
+  value = aws_lambda_function.processing.invoke_arn
 }
 
 output "lambda_processing_role_arn" {
-  description = "ARN of the IAM role used by processing Lambda function"
-  value       = aws_iam_role.processing_lambda.arn
+  value = aws_iam_role.processing_lambda.arn
 }
 
 output "dynamodb_table_name" {
-  description = "Name of the DynamoDB table storing transaction state"
-  value       = aws_dynamodb_table.transactions.name
+  value = aws_dynamodb_table.transactions.name
 }
 
 output "dynamodb_table_arn" {
-  description = "ARN of the DynamoDB transactions table"
-  value       = aws_dynamodb_table.transactions.arn
+  value = aws_dynamodb_table.transactions.arn
 }
 
 output "dynamodb_table_id" {
-  description = "ID of the DynamoDB transactions table"
-  value       = aws_dynamodb_table.transactions.id
+  value = aws_dynamodb_table.transactions.id
 }
 
 output "sns_topic_arn" {
-  description = "ARN of the SNS topic for payment failure notifications"
-  value       = aws_sns_topic.payment_notifications.arn
+  value = aws_sns_topic.payment_notifications.arn
 }
 
 output "sns_topic_name" {
-  description = "Name of the SNS topic for payment notifications"
-  value       = aws_sns_topic.payment_notifications.name
+  value = aws_sns_topic.payment_notifications.name
 }
 
 output "cloudwatch_log_group_validation_name" {
-  description = "Name of the CloudWatch log group for validation Lambda"
-  value       = aws_cloudwatch_log_group.validation_lambda.name
+  value = aws_cloudwatch_log_group.validation_lambda.name
 }
 
 output "cloudwatch_log_group_validation_arn" {
-  description = "ARN of the CloudWatch log group for validation Lambda"
-  value       = aws_cloudwatch_log_group.validation_lambda.arn
+  value = aws_cloudwatch_log_group.validation_lambda.arn
 }
 
 output "cloudwatch_log_group_processing_name" {
-  description = "Name of the CloudWatch log group for processing Lambda"
-  value       = aws_cloudwatch_log_group.processing_lambda.name
+  value = aws_cloudwatch_log_group.processing_lambda.name
 }
 
 output "cloudwatch_log_group_processing_arn" {
-  description = "ARN of the CloudWatch log group for processing Lambda"
-  value       = aws_cloudwatch_log_group.processing_lambda.arn
+  value = aws_cloudwatch_log_group.processing_lambda.arn
 }
 
 output "cloudwatch_log_group_stepfunctions_name" {
-  description = "Name of the CloudWatch log group for Step Functions"
-  value       = aws_cloudwatch_log_group.step_functions.name
+  value = aws_cloudwatch_log_group.step_functions.name
 }
 
 output "cloudwatch_log_group_stepfunctions_arn" {
-  description = "ARN of the CloudWatch log group for Step Functions"
-  value       = aws_cloudwatch_log_group.step_functions.arn
+  value = aws_cloudwatch_log_group.step_functions.arn
 }
 
 output "cloudwatch_alarm_sfn_failures_name" {
-  description = "Name of the CloudWatch alarm for Step Functions failures"
-  value       = aws_cloudwatch_metric_alarm.step_functions_failures.alarm_name
+  value = aws_cloudwatch_metric_alarm.step_functions_failures.alarm_name
 }
 
 output "cloudwatch_alarm_sfn_failures_arn" {
-  description = "ARN of the CloudWatch alarm for Step Functions failures"
-  value       = aws_cloudwatch_metric_alarm.step_functions_failures.arn
+  value = aws_cloudwatch_metric_alarm.step_functions_failures.arn
 }
 
 output "cloudwatch_alarm_validation_errors_name" {
-  description = "Name of the CloudWatch alarm for validation Lambda errors"
-  value       = aws_cloudwatch_metric_alarm.validation_lambda_errors.alarm_name
+  value = aws_cloudwatch_metric_alarm.validation_lambda_errors.alarm_name
 }
 
 output "cloudwatch_alarm_validation_errors_arn" {
-  description = "ARN of the CloudWatch alarm for validation Lambda errors"
-  value       = aws_cloudwatch_metric_alarm.validation_lambda_errors.arn
+  value = aws_cloudwatch_metric_alarm.validation_lambda_errors.arn
 }
 
 output "cloudwatch_alarm_validation_throttles_name" {
-  description = "Name of the CloudWatch alarm for validation Lambda throttles"
-  value       = aws_cloudwatch_metric_alarm.validation_lambda_throttles.alarm_name
+  value = aws_cloudwatch_metric_alarm.validation_lambda_throttles.alarm_name
 }
 
 output "cloudwatch_alarm_validation_throttles_arn" {
-  description = "ARN of the CloudWatch alarm for validation Lambda throttles"
-  value       = aws_cloudwatch_metric_alarm.validation_lambda_throttles.arn
+  value = aws_cloudwatch_metric_alarm.validation_lambda_throttles.arn
 }
 
 output "cloudwatch_alarm_processing_errors_name" {
-  description = "Name of the CloudWatch alarm for processing Lambda errors"
-  value       = aws_cloudwatch_metric_alarm.processing_lambda_errors.alarm_name
+  value = aws_cloudwatch_metric_alarm.processing_lambda_errors.alarm_name
 }
 
 output "cloudwatch_alarm_processing_errors_arn" {
-  description = "ARN of the CloudWatch alarm for processing Lambda errors"
-  value       = aws_cloudwatch_metric_alarm.processing_lambda_errors.arn
+  value = aws_cloudwatch_metric_alarm.processing_lambda_errors.arn
 }
 
 output "cloudwatch_alarm_processing_throttles_name" {
-  description = "Name of the CloudWatch alarm for processing Lambda throttles"
-  value       = aws_cloudwatch_metric_alarm.processing_lambda_throttles.alarm_name
+  value = aws_cloudwatch_metric_alarm.processing_lambda_throttles.alarm_name
 }
 
 output "cloudwatch_alarm_processing_throttles_arn" {
-  description = "ARN of the CloudWatch alarm for processing Lambda throttles"
-  value       = aws_cloudwatch_metric_alarm.processing_lambda_throttles.arn
+  value = aws_cloudwatch_metric_alarm.processing_lambda_throttles.arn
 }
 
 output "cloudwatch_alarm_payment_duration_name" {
-  description = "Name of the CloudWatch alarm for payment processing duration"
-  value       = aws_cloudwatch_metric_alarm.payment_duration.alarm_name
+  value = aws_cloudwatch_metric_alarm.payment_duration.alarm_name
 }
 
 output "cloudwatch_alarm_payment_duration_arn" {
-  description = "ARN of the CloudWatch alarm for payment processing duration"
-  value       = aws_cloudwatch_metric_alarm.payment_duration.arn
+  value = aws_cloudwatch_metric_alarm.payment_duration.arn
 }
 
 output "kms_key_dynamodb_id" {
-  description = "ID of the KMS key used for DynamoDB encryption"
-  value       = aws_kms_key.dynamodb_encryption.id
+  value = aws_kms_key.dynamodb_encryption.id
 }
 
 output "kms_key_dynamodb_arn" {
-  description = "ARN of the KMS key used for DynamoDB encryption"
-  value       = aws_kms_key.dynamodb_encryption.arn
+  value = aws_kms_key.dynamodb_encryption.arn
 }
 
 output "kms_key_sns_id" {
-  description = "ID of the KMS key used for SNS encryption"
-  value       = aws_kms_key.sns_encryption.id
+  value = aws_kms_key.sns_encryption.id
 }
 
 output "kms_key_sns_arn" {
-  description = "ARN of the KMS key used for SNS encryption"
-  value       = aws_kms_key.sns_encryption.arn
+  value = aws_kms_key.sns_encryption.arn
 }
 
 output "kms_key_cloudwatch_id" {
-  description = "ID of the KMS key used for CloudWatch Logs encryption"
-  value       = aws_kms_key.cloudwatch_encryption.id
+  value = aws_kms_key.cloudwatch_encryption.id
 }
 
 output "kms_key_cloudwatch_arn" {
-  description = "ARN of the KMS key used for CloudWatch Logs encryption"
-  value       = aws_kms_key.cloudwatch_encryption.arn
+  value = aws_kms_key.cloudwatch_encryption.arn
 }
 
 output "account_id" {
-  description = "AWS account ID where resources are deployed"
-  value       = data.aws_caller_identity.current.account_id
+  value = data.aws_caller_identity.current.account_id
 }
 
 output "region" {
-  description = "AWS region where resources are deployed"
-  value       = data.aws_region.current.name
+  value = data.aws_region.current.name
 }
 ```
 
