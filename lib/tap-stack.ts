@@ -92,31 +92,39 @@ export class TapStack extends cdk.Stack {
       managedPolicies: [
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEKSWorkerNodePolicy'),
         iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEKS_CNI_Policy'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonEC2ContainerRegistryReadOnly'),
-        iam.ManagedPolicy.fromAwsManagedPolicyName('AmazonSSMManagedInstanceCore'),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonEC2ContainerRegistryReadOnly'
+        ),
+        iam.ManagedPolicy.fromAwsManagedPolicyName(
+          'AmazonSSMManagedInstanceCore'
+        ),
       ],
     });
 
-    nodeGroupRole.addToPolicy(new iam.PolicyStatement({
-      effect: iam.Effect.ALLOW,
-      actions: [
-        'ec2:CreateSnapshot',
-        'ec2:AttachVolume',
-        'ec2:DetachVolume',
-        'ec2:ModifyVolume',
-        'ec2:DescribeAvailabilityZones',
-        'ec2:DescribeInstances',
-        'ec2:DescribeSnapshots',
-        'ec2:DescribeTags',
-        'ec2:DescribeVolumes',
-        'ec2:DescribeVolumesModifications',
-      ],
-      resources: ['*'],
-    }));
+    nodeGroupRole.addToPolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: [
+          'ec2:CreateSnapshot',
+          'ec2:AttachVolume',
+          'ec2:DetachVolume',
+          'ec2:ModifyVolume',
+          'ec2:DescribeAvailabilityZones',
+          'ec2:DescribeInstances',
+          'ec2:DescribeSnapshots',
+          'ec2:DescribeTags',
+          'ec2:DescribeVolumes',
+          'ec2:DescribeVolumesModifications',
+        ],
+        resources: ['*'],
+      })
+    );
 
     this.cluster.addNodegroupCapacity('CriticalNodeGroup', {
       nodegroupName: `critical-nodegroup-${environmentSuffix}`,
-      instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE)],
+      instanceTypes: [
+        ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
+      ],
       minSize: 3,
       maxSize: 5,
       desiredSize: 3,
@@ -126,18 +134,22 @@ export class TapStack extends cdk.Stack {
       diskSize: 50,
       labels: {
         'node-type': 'critical',
-        'workload': 'payment-processing',
+        workload: 'payment-processing',
       },
-      taints: [{
-        effect: eks.TaintEffect.NO_SCHEDULE,
-        key: 'critical',
-        value: 'true',
-      }],
+      taints: [
+        {
+          effect: eks.TaintEffect.NO_SCHEDULE,
+          key: 'critical',
+          value: 'true',
+        },
+      ],
     });
 
     this.cluster.addNodegroupCapacity('GeneralNodeGroup', {
       nodegroupName: `general-nodegroup-${environmentSuffix}`,
-      instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE)],
+      instanceTypes: [
+        ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
+      ],
       minSize: 2,
       maxSize: 8,
       desiredSize: 2,
@@ -147,13 +159,15 @@ export class TapStack extends cdk.Stack {
       diskSize: 50,
       labels: {
         'node-type': 'general',
-        'workload': 'microservices',
+        workload: 'microservices',
       },
     });
 
     this.cluster.addNodegroupCapacity('BatchNodeGroup', {
       nodegroupName: `batch-nodegroup-${environmentSuffix}`,
-      instanceTypes: [ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE)],
+      instanceTypes: [
+        ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.LARGE),
+      ],
       minSize: 1,
       maxSize: 2,
       desiredSize: 1,
@@ -163,13 +177,15 @@ export class TapStack extends cdk.Stack {
       diskSize: 50,
       labels: {
         'node-type': 'batch',
-        'workload': 'background-jobs',
+        workload: 'background-jobs',
       },
-      taints: [{
-        effect: eks.TaintEffect.NO_SCHEDULE,
-        key: 'batch',
-        value: 'true',
-      }],
+      taints: [
+        {
+          effect: eks.TaintEffect.NO_SCHEDULE,
+          key: 'batch',
+          value: 'true',
+        },
+      ],
     });
 
     // 🔹 IRSA Roles
@@ -202,13 +218,18 @@ export class TapStack extends cdk.Stack {
     });
     autoscalerSa.role.attachInlinePolicy(autoscalerPolicy);
 
-    const albControllerSa = this.cluster.addServiceAccount('AWSLoadBalancerControllerSA', {
-      name: `aws-load-balancer-controller-${environmentSuffix}`,
-      namespace: 'kube-system',
-    });
+    const albControllerSa = this.cluster.addServiceAccount(
+      'AWSLoadBalancerControllerSA',
+      {
+        name: `aws-load-balancer-controller-${environmentSuffix}`,
+        namespace: 'kube-system',
+      }
+    );
 
     albControllerSa.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('ElasticLoadBalancingFullAccess')
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'ElasticLoadBalancingFullAccess'
+      )
     );
 
     const ebsCsiSa = this.cluster.addServiceAccount('EBSCSIServiceAccount', {
@@ -217,7 +238,9 @@ export class TapStack extends cdk.Stack {
     });
 
     ebsCsiSa.role.addManagedPolicy(
-      iam.ManagedPolicy.fromAwsManagedPolicyName('service-role/AmazonEBSCSIDriverPolicy')
+      iam.ManagedPolicy.fromAwsManagedPolicyName(
+        'service-role/AmazonEBSCSIDriverPolicy'
+      )
     );
 
     // 🔹 RBAC
@@ -235,8 +258,23 @@ export class TapStack extends cdk.Stack {
         rules: [
           {
             apiGroups: ['', 'apps', 'batch', 'extensions'],
-            resources: ['pods', 'deployments', 'replicasets', 'services', 'jobs', 'cronjobs'],
-            verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete'],
+            resources: [
+              'pods',
+              'deployments',
+              'replicasets',
+              'services',
+              'jobs',
+              'cronjobs',
+            ],
+            verbs: [
+              'get',
+              'list',
+              'watch',
+              'create',
+              'update',
+              'patch',
+              'delete',
+            ],
           },
           {
             apiGroups: [''],
@@ -249,7 +287,13 @@ export class TapStack extends cdk.Stack {
         apiVersion: 'rbac.authorization.k8s.io/v1',
         kind: 'ClusterRole',
         metadata: { name: `viewer-role-${environmentSuffix}` },
-        rules: [{ apiGroups: ['*'], resources: ['*'], verbs: ['get', 'list', 'watch'] }],
+        rules: [
+          {
+            apiGroups: ['*'],
+            resources: ['*'],
+            verbs: ['get', 'list', 'watch'],
+          },
+        ],
       },
     ];
 
@@ -270,125 +314,164 @@ export class TapStack extends cdk.Stack {
 
     new eks.KubernetesManifest(this, 'GP3StorageClass', {
       cluster: this.cluster,
-      manifest: [{
-        apiVersion: 'storage.k8s.io/v1',
-        kind: 'StorageClass',
-        metadata: {
-          name: 'gp3',
-          annotations: {
-            'storageclass.kubernetes.io/is-default-class': 'true',
-          },
-        },
-        provisioner: 'ebs.csi.aws.com',
-        volumeBindingMode: 'WaitForFirstConsumer',
-        parameters: {
-          type: 'gp3',
-          encrypted: 'true',
-          'csi.storage.k8s.io/fstype': 'ext4',
-        },
-        allowVolumeExpansion: true,
-      }],
-    });
-
-    const autoscalerDeployment = new eks.KubernetesManifest(this, 'ClusterAutoscalerDeployment', {
-      cluster: this.cluster,
-      manifest: [{
-        apiVersion: 'apps/v1',
-        kind: 'Deployment',
-        metadata: {
-          name: `cluster-autoscaler-${environmentSuffix}`,
-          namespace: 'kube-system',
-          labels: { app: 'cluster-autoscaler' },
-        },
-        spec: {
-          replicas: 1,
-          selector: { matchLabels: { app: 'cluster-autoscaler' } },
-          template: {
-            metadata: { labels: { app: 'cluster-autoscaler' } },
-            spec: {
-              serviceAccountName: `cluster-autoscaler-${environmentSuffix}`,
-              containers: [{
-                image: 'k8s.gcr.io/autoscaling/cluster-autoscaler:v1.28.0',
-                name: 'cluster-autoscaler',
-                command: [
-                  './cluster-autoscaler',
-                  '--v=4',
-                  '--stderrthreshold=info',
-                  '--cloud-provider=aws',
-                  '--skip-nodes-with-local-storage=false',
-                  `--expander=least-waste`,
-                  `--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/${this.cluster.clusterName}`,
-                  '--balance-similar-node-groups',
-                  '--skip-nodes-with-system-pods=false',
-                ],
-                env: [{ name: 'AWS_REGION', value: this.region }],
-                resources: {
-                  limits: { cpu: '100m', memory: '300Mi' },
-                  requests: { cpu: '100m', memory: '300Mi' },
-                },
-              }],
+      manifest: [
+        {
+          apiVersion: 'storage.k8s.io/v1',
+          kind: 'StorageClass',
+          metadata: {
+            name: 'gp3',
+            annotations: {
+              'storageclass.kubernetes.io/is-default-class': 'true',
             },
           },
+          provisioner: 'ebs.csi.aws.com',
+          volumeBindingMode: 'WaitForFirstConsumer',
+          parameters: {
+            type: 'gp3',
+            encrypted: 'true',
+            'csi.storage.k8s.io/fstype': 'ext4',
+          },
+          allowVolumeExpansion: true,
         },
-      }],
+      ],
     });
+
+    const autoscalerDeployment = new eks.KubernetesManifest(
+      this,
+      'ClusterAutoscalerDeployment',
+      {
+        cluster: this.cluster,
+        manifest: [
+          {
+            apiVersion: 'apps/v1',
+            kind: 'Deployment',
+            metadata: {
+              name: `cluster-autoscaler-${environmentSuffix}`,
+              namespace: 'kube-system',
+              labels: { app: 'cluster-autoscaler' },
+            },
+            spec: {
+              replicas: 1,
+              selector: { matchLabels: { app: 'cluster-autoscaler' } },
+              template: {
+                metadata: { labels: { app: 'cluster-autoscaler' } },
+                spec: {
+                  serviceAccountName: `cluster-autoscaler-${environmentSuffix}`,
+                  containers: [
+                    {
+                      image:
+                        'k8s.gcr.io/autoscaling/cluster-autoscaler:v1.28.0',
+                      name: 'cluster-autoscaler',
+                      command: [
+                        './cluster-autoscaler',
+                        '--v=4',
+                        '--stderrthreshold=info',
+                        '--cloud-provider=aws',
+                        '--skip-nodes-with-local-storage=false',
+                        '--expander=least-waste',
+                        `--node-group-auto-discovery=asg:tag=k8s.io/cluster-autoscaler/${this.cluster.clusterName}`,
+                        '--balance-similar-node-groups',
+                        '--skip-nodes-with-system-pods=false',
+                      ],
+                      env: [{ name: 'AWS_REGION', value: this.region }],
+                      resources: {
+                        limits: { cpu: '100m', memory: '300Mi' },
+                        requests: { cpu: '100m', memory: '300Mi' },
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+        ],
+      }
+    );
     autoscalerDeployment.node.addDependency(autoscalerSa);
 
     // 🔹 Pod Disruption Budgets
-    ['default', 'payment-processing', 'kube-system'].forEach((namespace) => {
+    ['default', 'payment-processing', 'kube-system'].forEach(namespace => {
       new eks.KubernetesManifest(this, `PDB-${namespace}`, {
         cluster: this.cluster,
-        manifest: [{
-          apiVersion: 'policy/v1',
-          kind: 'PodDisruptionBudget',
-          metadata: { name: `${namespace}-pdb-${environmentSuffix}`, namespace },
-          spec: {
-            minAvailable: '50%',
-            selector: { matchLabels: { 'critical': 'true' } },
+        manifest: [
+          {
+            apiVersion: 'policy/v1',
+            kind: 'PodDisruptionBudget',
+            metadata: {
+              name: `${namespace}-pdb-${environmentSuffix}`,
+              namespace,
+            },
+            spec: {
+              minAvailable: '50%',
+              selector: { matchLabels: { critical: 'true' } },
+            },
           },
-        }],
+        ],
       });
     });
 
     // 🔹 Network Policies
     new eks.KubernetesManifest(this, 'PaymentNamespace', {
       cluster: this.cluster,
-      manifest: [{
-        apiVersion: 'v1',
-        kind: 'Namespace',
-        metadata: {
-          name: `payment-processing-${environmentSuffix}`,
-          labels: { name: `payment-processing-${environmentSuffix}` },
+      manifest: [
+        {
+          apiVersion: 'v1',
+          kind: 'Namespace',
+          metadata: {
+            name: `payment-processing-${environmentSuffix}`,
+            labels: { name: `payment-processing-${environmentSuffix}` },
+          },
         },
-      }],
+      ],
     });
 
     new eks.KubernetesManifest(this, 'NetworkPolicy', {
       cluster: this.cluster,
-      manifest: [{
-        apiVersion: 'networking.k8s.io/v1',
-        kind: 'NetworkPolicy',
-        metadata: {
-          name: `namespace-isolation-${environmentSuffix}`,
-          namespace: `payment-processing-${environmentSuffix}`,
-        },
-        spec: {
-          podSelector: {},
-          policyTypes: ['Ingress', 'Egress'],
-          ingress: [{
-            from: [
-              { namespaceSelector: { matchLabels: { name: `payment-processing-${environmentSuffix}` } } },
-              { namespaceSelector: { matchLabels: { name: 'ingress-nginx' } } },
-              { namespaceSelector: { matchLabels: { name: 'monitoring' } } },
+      manifest: [
+        {
+          apiVersion: 'networking.k8s.io/v1',
+          kind: 'NetworkPolicy',
+          metadata: {
+            name: `namespace-isolation-${environmentSuffix}`,
+            namespace: `payment-processing-${environmentSuffix}`,
+          },
+          spec: {
+            podSelector: {},
+            policyTypes: ['Ingress', 'Egress'],
+            ingress: [
+              {
+                from: [
+                  {
+                    namespaceSelector: {
+                      matchLabels: {
+                        name: `payment-processing-${environmentSuffix}`,
+                      },
+                    },
+                  },
+                  {
+                    namespaceSelector: {
+                      matchLabels: { name: 'ingress-nginx' },
+                    },
+                  },
+                  {
+                    namespaceSelector: { matchLabels: { name: 'monitoring' } },
+                  },
+                ],
+              },
             ],
-          }],
-          egress: [
-            { to: [{ namespaceSelector: {} }] },
-            { to: [{ podSelector: {} }] },
-            { ports: [{ protocol: 'TCP', port: 53 }, { protocol: 'UDP', port: 53 }] },
-          ],
+            egress: [
+              { to: [{ namespaceSelector: {} }] },
+              { to: [{ podSelector: {} }] },
+              {
+                ports: [
+                  { protocol: 'TCP', port: 53 },
+                  { protocol: 'UDP', port: 53 },
+                ],
+              },
+            ],
+          },
         },
-      }],
+      ],
     });
 
     // Outputs
