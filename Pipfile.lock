@@ -1,7 +1,7 @@
 {
     "_meta": {
         "hash": {
-            "sha256": "dad373b0acc939290bd2d50de79d29f2b60f5eb368e525f44bae6974dbe707ad"
+            "sha256": "c6f018b30d1130b899e335d5d328d368a78878c2b95c50de88acfce766aa34df"
         },
         "pipfile-spec": 6,
         "requires": {
@@ -48,6 +48,15 @@
             "index": "pypi",
             "markers": "python_version ~= '3.9'",
             "version": "==2.222.0a0"
+        },
+        "aws-cdk-lambda-layer-kubectl-v29": {
+            "hashes": [
+                "sha256:6a3dee8036ea04e26f5f56242c1b91a099b00babb6ab0810b2e46deff59f7355",
+                "sha256:b6496fc9bc7e3e1d56e45328e4fc878c010a1e340a1039c639aacbd7395fe2e0"
+            ],
+            "index": "pypi",
+            "markers": "python_version ~= '3.8'",
+            "version": "==2.1.1"
         },
         "aws-cdk-lib": {
             "hashes": [
