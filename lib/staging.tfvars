@@ -11,7 +11,7 @@ container_image = "123456789012.dkr.ecr.us-west-2.amazonaws.com/payment-processo
 
 # Lambda Configuration
 # PLACEHOLDER: Replace with actual Lambda package path
-lambda_source_path = "./lambda/payment-validation-staging.zip"
+lambda_source_path = "./lambda.zip"
 
 # Metadata for resource tagging
 repository    = "iac-test-automations"

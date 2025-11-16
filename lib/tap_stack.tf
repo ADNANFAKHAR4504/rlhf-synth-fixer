@@ -1228,7 +1228,7 @@ output "cloudwatch_dashboard_url" {
 # cost_center        = "FINTECH-001"
 # data_classification = "confidential"
 # container_image    = "${account_id}.dkr.ecr.us-east-1.amazonaws.com/payment-processor:latest"
-# lambda_source_path = "./payment-validation-lambda.zip"
+# lambda_source_path = "./lambda.zip"
 
 # Example commands:
 # terraform init
