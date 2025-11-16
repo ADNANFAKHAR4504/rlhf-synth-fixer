@@ -1,0 +1,11 @@
+{
+  "name": "order-processing-lambda",
+  "version": "1.0.0",
+  "description": "Order processing Lambda function for trading platform",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0",
+    "@aws-sdk/client-sqs": "^3.450.0",
+    "@aws-sdk/client-s3": "^3.450.0"
+  }
+}
