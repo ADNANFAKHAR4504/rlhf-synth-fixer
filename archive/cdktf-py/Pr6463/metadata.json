@@ -2,7 +2,7 @@
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
-  "team": "synth",
+  "team": "synth-2",
   "turn_type": "single",
   "startedAt": "2025-11-13T00:00:00Z",
   "subtask": "Application Deployment",
