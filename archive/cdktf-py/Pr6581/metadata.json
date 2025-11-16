@@ -31,5 +31,11 @@
   "deployment_blockers": [
     "S3 backend access denied (iac-rlhf-tf-states bucket permissions)",
     "Terraform registry connectivity issues (registry.terraform.io DNS resolution)"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
 }
