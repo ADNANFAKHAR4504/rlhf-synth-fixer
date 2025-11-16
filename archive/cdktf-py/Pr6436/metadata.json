@@ -5,7 +5,7 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "h1w06e",
-  "team": "cloud-infrastructure",
+  "team": "synth-2",
   "startedAt": "2025-11-13T00:00:00Z",
   "subtask": "multi-region-payment-migration",
   "aws_services": [
