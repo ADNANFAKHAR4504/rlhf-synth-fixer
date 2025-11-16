@@ -52,6 +52,11 @@ resource "aws_kms_key" "cloudwatch_logs" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
       }
     ]
   })
@@ -369,12 +374,12 @@ resource "aws_cloudwatch_log_metric_filter" "payment_api_error_rate" {
 resource "aws_cloudwatch_log_metric_filter" "payment_api_response_time" {
   name           = "payment-api-response-time-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.payment_api.name
-  pattern        = "[time, id, amount, status, response_time_ms, timestamp]"
+  pattern        = "{ $.response_time_ms = * }"
 
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "payment_api_response_time"
-    value         = "$response_time_ms"
+    value         = "$.response_time_ms"
     default_value = "0"
   }
 }
@@ -436,12 +441,12 @@ resource "aws_cloudwatch_log_metric_filter" "notification_delivery_failure_rate"
 resource "aws_cloudwatch_log_metric_filter" "notification_retry_count" {
   name           = "notification-retry-count-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.notification_service.name
-  pattern        = "[type, recipient, status, retry_count]"
+  pattern        = "{ $.retry_count = * }"
 
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "notification_retry_count_total"
-    value         = "$retry_count"
+    value         = "$.retry_count"
     default_value = "0"
   }
 }
@@ -597,12 +602,152 @@ resource "aws_cloudwatch_dashboard" "payment_platform" {
         height = 6
         properties = {
           metrics = [
-            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.payment_api.function_name]
+            ["PaymentPlatform", "payment_api_response_time", { stat = "Average", label = "Avg Response Time" }],
+            [".", "payment_api_error_rate", { stat = "Sum", label = "Error Count" }]
           ]
           view    = "timeSeries"
           stacked = false
           region  = data.aws_region.current.name
-          title   = "Lambda Duration Metrics"
+          title   = "Payment API Performance"
+          yAxis = {
+            left = {
+              label = "Milliseconds / Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["PaymentPlatform", "payment_api_transaction_volume", { stat = "Sum", label = "Total Transactions" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Transaction Volume"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["PaymentPlatform", "fraud_high_risk_transaction_count", { stat = "Sum", label = "High Risk Transactions" }],
+            [".", "fraud_rejection_rate", { stat = "Average", label = "Rejection Rate" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Fraud Detection Metrics"
+          yAxis = {
+            left = {
+              label = "Count / Percentage"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["PaymentPlatform", "notification_delivery_failure_rate", { stat = "Sum", label = "Delivery Failures" }],
+            [".", "notification_retry_count_total", { stat = "Sum", label = "Total Retries" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Notification Service Metrics"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 12
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.payment_api.function_name, { stat = "Average" }],
+            ["...", aws_lambda_function.fraud_detection.function_name, { stat = "Average" }],
+            ["...", aws_lambda_function.notification_service.function_name, { stat = "Average" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Lambda Duration by Function"
+          yAxis = {
+            left = {
+              label = "Milliseconds"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 8
+        y      = 12
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Errors", "FunctionName", aws_lambda_function.payment_api.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.fraud_detection.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.notification_service.function_name, { stat = "Sum" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Lambda Errors by Function"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 16
+        y      = 12
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.payment_api.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.fraud_detection.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.notification_service.function_name, { stat = "Sum" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Lambda Invocations by Function"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
         }
       }
     ]

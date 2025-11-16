@@ -101,7 +101,7 @@ data "archive_file" "notification_service" {
 # KMS Keys for Encryption
 resource "aws_kms_key" "cloudwatch_logs" {
   description             = "KMS key for CloudWatch Logs encryption"
-  enable_key_rotation    = true
+  enable_key_rotation     = true
   deletion_window_in_days = 7
 
   policy = jsonencode({
@@ -129,6 +129,11 @@ resource "aws_kms_key" "cloudwatch_logs" {
           "kms:DescribeKey"
         ]
         Resource = "*"
+        Condition = {
+          ArnLike = {
+            "kms:EncryptionContext:aws:logs:arn" = "arn:aws:logs:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:log-group:*"
+          }
+        }
       }
     ]
   })
@@ -141,7 +146,7 @@ resource "aws_kms_alias" "cloudwatch_logs" {
 
 resource "aws_kms_key" "sns" {
   description             = "KMS key for SNS topic encryption"
-  enable_key_rotation    = true
+  enable_key_rotation     = true
   deletion_window_in_days = 7
 
   policy = jsonencode({
@@ -325,12 +330,12 @@ resource "aws_iam_role_policy_attachment" "notification_service_basic" {
 # Lambda Functions
 resource "aws_lambda_function" "payment_api" {
   function_name    = "lambda-payment-api-${var.environment}"
-  role            = aws_iam_role.payment_api.arn
-  handler         = "payment_api.lambda_handler"
-  runtime         = "python3.11"
-  memory_size     = 256
-  timeout         = 60
-  filename        = data.archive_file.payment_api.output_path
+  role             = aws_iam_role.payment_api.arn
+  handler          = "payment_api.lambda_handler"
+  runtime          = "python3.11"
+  memory_size      = 256
+  timeout          = 60
+  filename         = data.archive_file.payment_api.output_path
   source_code_hash = data.archive_file.payment_api.output_base64sha256
 
   depends_on = [
@@ -341,12 +346,12 @@ resource "aws_lambda_function" "payment_api" {
 
 resource "aws_lambda_function" "fraud_detection" {
   function_name    = "lambda-fraud-detection-${var.environment}"
-  role            = aws_iam_role.fraud_detection.arn
-  handler         = "fraud_detection.lambda_handler"
-  runtime         = "python3.11"
-  memory_size     = 256
-  timeout         = 60
-  filename        = data.archive_file.fraud_detection.output_path
+  role             = aws_iam_role.fraud_detection.arn
+  handler          = "fraud_detection.lambda_handler"
+  runtime          = "python3.11"
+  memory_size      = 256
+  timeout          = 60
+  filename         = data.archive_file.fraud_detection.output_path
   source_code_hash = data.archive_file.fraud_detection.output_base64sha256
 
   depends_on = [
@@ -357,12 +362,12 @@ resource "aws_lambda_function" "fraud_detection" {
 
 resource "aws_lambda_function" "notification_service" {
   function_name    = "lambda-notification-service-${var.environment}"
-  role            = aws_iam_role.notification_service.arn
-  handler         = "notification_service.lambda_handler"
-  runtime         = "python3.11"
-  memory_size     = 256
-  timeout         = 60
-  filename        = data.archive_file.notification_service.output_path
+  role             = aws_iam_role.notification_service.arn
+  handler          = "notification_service.lambda_handler"
+  runtime          = "python3.11"
+  memory_size      = 256
+  timeout          = 60
+  filename         = data.archive_file.notification_service.output_path
   source_code_hash = data.archive_file.notification_service.output_base64sha256
 
   depends_on = [
@@ -434,7 +439,7 @@ resource "aws_cloudwatch_log_metric_filter" "payment_api_error_rate" {
   name           = "payment-api-error-rate-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.payment_api.name
   pattern        = "{ $.status_code >= 400 }"
-  
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "payment_api_error_rate"
@@ -446,12 +451,12 @@ resource "aws_cloudwatch_log_metric_filter" "payment_api_error_rate" {
 resource "aws_cloudwatch_log_metric_filter" "payment_api_response_time" {
   name           = "payment-api-response-time-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.payment_api.name
-  pattern        = "[time, id, amount, status, response_time_ms, timestamp]"
-  
+  pattern        = "{ $.response_time_ms = * }"
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "payment_api_response_time"
-    value         = "$response_time_ms"
+    value         = "$.response_time_ms"
     default_value = "0"
   }
 }
@@ -460,7 +465,7 @@ resource "aws_cloudwatch_log_metric_filter" "payment_api_transaction_volume" {
   name           = "payment-api-transaction-volume-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.payment_api.name
   pattern        = "{ $.transaction_id = * }"
-  
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "payment_api_transaction_volume"
@@ -474,7 +479,7 @@ resource "aws_cloudwatch_log_metric_filter" "fraud_high_risk_count" {
   name           = "fraud-high-risk-count-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.fraud_detection.name
   pattern        = "{ $.risk_score > 80 }"
-  
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "fraud_high_risk_transaction_count"
@@ -487,7 +492,7 @@ resource "aws_cloudwatch_log_metric_filter" "fraud_rejection_rate" {
   name           = "fraud-rejection-rate-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.fraud_detection.name
   pattern        = "{ $.decision = \"reject\" }"
-  
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "fraud_rejection_rate"
@@ -501,7 +506,7 @@ resource "aws_cloudwatch_log_metric_filter" "notification_delivery_failure_rate"
   name           = "notification-delivery-failure-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.notification_service.name
   pattern        = "{ $.delivery_status = \"failed\" }"
-  
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "notification_delivery_failure_rate"
@@ -513,12 +518,12 @@ resource "aws_cloudwatch_log_metric_filter" "notification_delivery_failure_rate"
 resource "aws_cloudwatch_log_metric_filter" "notification_retry_count" {
   name           = "notification-retry-count-${var.environment}"
   log_group_name = aws_cloudwatch_log_group.notification_service.name
-  pattern        = "[type, recipient, status, retry_count]"
-  
+  pattern        = "{ $.retry_count = * }"
+
   metric_transformation {
     namespace     = "PaymentPlatform"
     name          = "notification_retry_count_total"
-    value         = "$retry_count"
+    value         = "$.retry_count"
     default_value = "0"
   }
 }
@@ -589,13 +594,13 @@ resource "aws_cloudwatch_metric_alarm" "payment_api_latency" {
   alarm_name          = "alarm-api-latency-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "2"
-  metric_name        = "payment_api_response_time"
-  namespace          = "PaymentPlatform"
-  period             = "60"
-  statistic          = "Average"
-  threshold          = "500"
-  alarm_description  = "Payment API response time exceeds 500ms"
-  treat_missing_data = "notBreaching"
+  metric_name         = "payment_api_response_time"
+  namespace           = "PaymentPlatform"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "500"
+  alarm_description   = "Payment API response time exceeds 500ms"
+  treat_missing_data  = "notBreaching"
 
   alarm_actions = [aws_sns_topic.critical_alerts.arn]
 }
@@ -604,13 +609,13 @@ resource "aws_cloudwatch_metric_alarm" "payment_api_error_rate" {
   alarm_name          = "alarm-api-error-rate-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "5"
-  metric_name        = "payment_api_error_rate"
-  namespace          = "PaymentPlatform"
-  period             = "60"
-  statistic          = "Sum"
-  threshold          = "1"
-  alarm_description  = "Payment API error rate above 1%"
-  treat_missing_data = "notBreaching"
+  metric_name         = "payment_api_error_rate"
+  namespace           = "PaymentPlatform"
+  period              = "60"
+  statistic           = "Sum"
+  threshold           = "1"
+  alarm_description   = "Payment API error rate above 1%"
+  treat_missing_data  = "notBreaching"
 
   alarm_actions = [aws_sns_topic.critical_alerts.arn]
 }
@@ -619,13 +624,13 @@ resource "aws_cloudwatch_metric_alarm" "payment_transaction_failure" {
   alarm_name          = "alarm-transaction-failure-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "3"
-  metric_name        = "payment_api_error_rate"
-  namespace          = "PaymentPlatform"
-  period             = "60"
-  statistic          = "Average"
-  threshold          = "0.5"
-  alarm_description  = "Transaction failure rate exceeds 0.5%"
-  treat_missing_data = "notBreaching"
+  metric_name         = "payment_api_error_rate"
+  namespace           = "PaymentPlatform"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "0.5"
+  alarm_description   = "Transaction failure rate exceeds 0.5%"
+  treat_missing_data  = "notBreaching"
 
   alarm_actions = [aws_sns_topic.warning_alerts.arn]
 }
@@ -634,13 +639,13 @@ resource "aws_cloudwatch_metric_alarm" "fraud_high_risk_spike" {
   alarm_name          = "alarm-high-risk-spike-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name        = "fraud_high_risk_transaction_count"
-  namespace          = "PaymentPlatform"
-  period             = "300"
-  statistic          = "Sum"
-  threshold          = "10"
-  alarm_description  = "High-risk transaction spike detected"
-  treat_missing_data = "notBreaching"
+  metric_name         = "fraud_high_risk_transaction_count"
+  namespace           = "PaymentPlatform"
+  period              = "300"
+  statistic           = "Sum"
+  threshold           = "10"
+  alarm_description   = "High-risk transaction spike detected"
+  treat_missing_data  = "notBreaching"
 
   alarm_actions = [aws_sns_topic.warning_alerts.arn]
 }
@@ -649,13 +654,13 @@ resource "aws_cloudwatch_metric_alarm" "fraud_rejection_rate" {
   alarm_name          = "alarm-rejection-rate-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = "1"
-  metric_name        = "fraud_rejection_rate"
-  namespace          = "PaymentPlatform"
-  period             = "300"
-  statistic          = "Average"
-  threshold          = "15"
-  alarm_description  = "Fraud rejection rate exceeds 15%"
-  treat_missing_data = "notBreaching"
+  metric_name         = "fraud_rejection_rate"
+  namespace           = "PaymentPlatform"
+  period              = "300"
+  statistic           = "Average"
+  threshold           = "15"
+  alarm_description   = "Fraud rejection rate exceeds 15%"
+  treat_missing_data  = "notBreaching"
 
   alarm_actions = [aws_sns_topic.warning_alerts.arn]
 }
@@ -667,19 +672,159 @@ resource "aws_cloudwatch_dashboard" "payment_platform" {
   dashboard_body = jsonencode({
     widgets = [
       {
-        type = "metric"
-        x = 0
-        y = 0
-        width = 12
+        type   = "metric"
+        x      = 0
+        y      = 0
+        width  = 12
         height = 6
         properties = {
           metrics = [
-            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.payment_api.function_name]
+            ["PaymentPlatform", "payment_api_response_time", { stat = "Average", label = "Avg Response Time" }],
+            [".", "payment_api_error_rate", { stat = "Sum", label = "Error Count" }]
           ]
-          view = "timeSeries"
+          view    = "timeSeries"
           stacked = false
-          region = data.aws_region.current.name
-          title = "Lambda Duration Metrics"
+          region  = data.aws_region.current.name
+          title   = "Payment API Performance"
+          yAxis = {
+            left = {
+              label = "Milliseconds / Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 0
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["PaymentPlatform", "payment_api_transaction_volume", { stat = "Sum", label = "Total Transactions" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Transaction Volume"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["PaymentPlatform", "fraud_high_risk_transaction_count", { stat = "Sum", label = "High Risk Transactions" }],
+            [".", "fraud_rejection_rate", { stat = "Average", label = "Rejection Rate" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Fraud Detection Metrics"
+          yAxis = {
+            left = {
+              label = "Count / Percentage"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 12
+        y      = 6
+        width  = 12
+        height = 6
+        properties = {
+          metrics = [
+            ["PaymentPlatform", "notification_delivery_failure_rate", { stat = "Sum", label = "Delivery Failures" }],
+            [".", "notification_retry_count_total", { stat = "Sum", label = "Total Retries" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Notification Service Metrics"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 0
+        y      = 12
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Duration", "FunctionName", aws_lambda_function.payment_api.function_name, { stat = "Average" }],
+            ["...", aws_lambda_function.fraud_detection.function_name, { stat = "Average" }],
+            ["...", aws_lambda_function.notification_service.function_name, { stat = "Average" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Lambda Duration by Function"
+          yAxis = {
+            left = {
+              label = "Milliseconds"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 8
+        y      = 12
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Errors", "FunctionName", aws_lambda_function.payment_api.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.fraud_detection.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.notification_service.function_name, { stat = "Sum" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Lambda Errors by Function"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
+        }
+      },
+      {
+        type   = "metric"
+        x      = 16
+        y      = 12
+        width  = 8
+        height = 6
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.payment_api.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.fraud_detection.function_name, { stat = "Sum" }],
+            ["...", aws_lambda_function.notification_service.function_name, { stat = "Sum" }]
+          ]
+          view    = "timeSeries"
+          stacked = false
+          region  = data.aws_region.current.name
+          title   = "Lambda Invocations by Function"
+          yAxis = {
+            left = {
+              label = "Count"
+            }
+          }
         }
       }
     ]
@@ -689,7 +834,7 @@ resource "aws_cloudwatch_dashboard" "payment_platform" {
 # CloudWatch Logs Insights Saved Queries
 resource "aws_cloudwatch_query_definition" "high_value_failed_transactions" {
   name = "high-value-failed-transactions"
-  
+
   log_group_names = [
     aws_cloudwatch_log_group.payment_api.name
   ]
@@ -703,7 +848,7 @@ EOF
 
 resource "aws_cloudwatch_query_definition" "fraud_detection_rejections" {
   name = "fraud-detection-rejections"
-  
+
   log_group_names = [
     aws_cloudwatch_log_group.fraud_detection.name
   ]
@@ -717,7 +862,7 @@ EOF
 
 resource "aws_cloudwatch_query_definition" "notification_delivery_failures" {
   name = "notification-delivery-failures"
-  
+
   log_group_names = [
     aws_cloudwatch_log_group.notification_service.name
   ]
@@ -731,7 +876,7 @@ EOF
 
 resource "aws_cloudwatch_query_definition" "slow_api_responses" {
   name = "slow-api-responses"
-  
+
   log_group_names = [
     aws_cloudwatch_log_group.payment_api.name
   ]
@@ -760,7 +905,7 @@ resource "aws_s3_bucket_public_access_block" "log_archive" {
 
 resource "aws_s3_bucket_versioning" "log_archive" {
   bucket = aws_s3_bucket.log_archive.id
-  
+
   versioning_configuration {
     status = "Enabled"
   }
@@ -784,10 +929,10 @@ resource "aws_s3_bucket_policy" "log_archive" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "DenyInsecureTransport"
-        Effect = "Deny"
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
         Principal = "*"
-        Action = "s3:*"
+        Action    = "s3:*"
         Resource = [
           aws_s3_bucket.log_archive.arn,
           "${aws_s3_bucket.log_archive.arn}/*"
