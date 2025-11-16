@@ -8,17 +8,32 @@ import json
 import csv
 import argparse
 import logging
+import warnings
+import importlib
+import subprocess
+import sys
 from datetime import datetime, timedelta
 from collections import defaultdict
 from typing import Dict, List, Tuple, Any, Optional
-import warnings
 
 import boto3
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 from botocore.exceptions import ClientError, BotoCoreError
+
+
+def _lazy_import(module: str, pip_name: Optional[str] = None):
+    """Import a module, installing via pip if it's missing."""
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError:
+        pkg = pip_name or module
+        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
+        return importlib.import_module(module)
+
+
+pd = _lazy_import("pandas")
+np = _lazy_import("numpy")
+plt = _lazy_import("matplotlib.pyplot", pip_name="matplotlib")
+sns = _lazy_import("seaborn")
 
 # Suppress matplotlib warnings
 warnings.filterwarnings("ignore")
