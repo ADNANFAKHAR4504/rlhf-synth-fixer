@@ -12,23 +12,47 @@ import warnings
 import importlib
 import subprocess
 import sys
+import os
+import site
 from datetime import datetime, timedelta
 from collections import defaultdict
-from typing import Dict, List, Tuple, Any, Optional
+from typing import Dict, List, Tuple, Any, Optional, TypedDict
 
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
 
 
 def _lazy_import(module: str, pip_name: Optional[str] = None):
-    """Import a module, installing via pip if it's missing."""
+    """Import a module, installing via pip if it's missing (unless disabled)."""
     try:
         return importlib.import_module(module)
     except ModuleNotFoundError:
+        if os.environ.get("ANALYZE_DISABLE_AUTO_INSTALL") == "1":
+            raise
         pkg = pip_name or module
-        subprocess.check_call([sys.executable, "-m", "pip", "install", pkg])
+        install_cmd = [sys.executable, "-m", "pip", "install", pkg]
+        if sys.prefix == sys.base_prefix:
+            install_cmd.extend(["--user", "--break-system-packages"])
+        env = os.environ.copy()
+        env.setdefault("PIP_BREAK_SYSTEM_PACKAGES", "1")
+        subprocess.check_call(install_cmd, env=env)
+        importlib.invalidate_caches()
         return importlib.import_module(module)
 
+
+def _ensure_user_site_on_path():
+    """Ensure user site-packages directory is on sys.path when needed."""
+    if sys.prefix != sys.base_prefix:
+        return
+    try:
+        user_site = site.getusersitepackages()
+    except AttributeError:
+        return
+    if user_site and user_site not in sys.path:
+        sys.path.append(user_site)
+
+
+_ensure_user_site_on_path()
 
 pd = _lazy_import("pandas")
 np = _lazy_import("numpy")
@@ -50,6 +74,11 @@ FARGATE_MEMORY_GB_HOUR_COST = 0.004445
 EC2_M5_LARGE_HOUR_COST = 0.096
 EC2_M5_LARGE_SPOT_HOUR_COST = 0.038
 HOURS_PER_MONTH = 730
+
+
+class ResourceTag(TypedDict, total=False):
+    Key: str
+    Value: str
 
 
 class ContainerResourceAnalyzer:
@@ -94,7 +123,7 @@ class ContainerResourceAnalyzer:
 
         logger.info("Analysis complete!")
 
-    def _should_exclude_cluster(self, tags: List[Dict[str, str]]) -> bool:
+    def _should_exclude_cluster(self, tags: List[ResourceTag]) -> bool:
         """Check if cluster should be excluded based on tags"""
         for tag in tags:
             if (
@@ -104,7 +133,7 @@ class ContainerResourceAnalyzer:
                 return True
         return False
 
-    def _analyze_ecs_clusters(self):  # pragma: no cover
+    def _analyze_ecs_clusters(self):
         """Analyze all ECS clusters and services"""
         try:
             clusters = self.ecs_client.list_clusters().get("clusterArns", [])
@@ -129,12 +158,12 @@ class ContainerResourceAnalyzer:
                 # Check cluster overprovisioning (Rule 11)
                 self._check_cluster_overprovisioning(cluster_name, cluster_details)
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.error(f"Error analyzing ECS clusters: {e}")
 
     def _analyze_ecs_services(
         self, cluster_name: str, cluster_details: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Analyze services within an ECS cluster"""
         try:
             paginator = self.ecs_client.get_paginator("list_services")
@@ -177,12 +206,12 @@ class ContainerResourceAnalyzer:
                     self._check_missing_logging(cluster_name, service)
                     self._check_service_discovery(cluster_name, service)
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.error(f"Error analyzing ECS services: {e}")
 
     def _check_ecs_over_provisioning(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for over-provisioned ECS tasks (Rule 1)"""
         service_name = service["serviceName"]
         task_definition = service["taskDefinition"]
@@ -261,12 +290,12 @@ class ContainerResourceAnalyzer:
                 self.utilization_data["ecs_cpu"].append(avg_cpu_percent)
                 self.utilization_data["ecs_memory"].append(avg_memory_percent)
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error checking over-provisioning for {service_name}: {e}")
 
     def _check_missing_auto_scaling(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for missing auto-scaling configuration (Rule 3)"""
         service_name = service["serviceName"]
         resource_id = f"service/{cluster_name}/{service_name}"
@@ -310,12 +339,12 @@ class ContainerResourceAnalyzer:
                         )
                         self.summary["services_requiring_attention"] += 1
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error checking auto-scaling for {service_name}: {e}")
 
-    def _check_inefficient_task_placement(  # pragma: no cover
+    def _check_inefficient_task_placement(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for inefficient Fargate task placement (Rule 4)"""
         if service.get("launchType") != "FARGATE":
             return
@@ -355,12 +384,12 @@ class ContainerResourceAnalyzer:
                 self.summary["services_requiring_attention"] += 1
                 self.summary["total_monthly_savings"] += monthly_savings
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error checking task placement for {service_name}: {e}")
 
     def _check_singleton_ha_risks(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for singleton services without HA (Rule 6)"""
         service_name = service["serviceName"]
         desired_count = service.get("desiredCount", 0)
@@ -390,7 +419,7 @@ class ContainerResourceAnalyzer:
 
     def _check_old_container_images(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for old container images (Rule 7)"""
         service_name = service["serviceName"]
         task_definition = service["taskDefinition"]
@@ -425,12 +454,12 @@ class ContainerResourceAnalyzer:
                 )
                 self.summary["services_requiring_attention"] += 1
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error checking container images for {service_name}: {e}")
 
     def _check_health_checks(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for missing health checks (Rule 8)"""
         service_name = service["serviceName"]
         load_balancers = service.get("loadBalancers", [])
@@ -447,7 +476,7 @@ class ContainerResourceAnalyzer:
             )
             self.summary["services_requiring_attention"] += 1
 
-    def _check_excessive_task_revisions(  # pragma: no cover
+    def _check_excessive_task_revisions(
         self, cluster_name: str, service: Dict[str, Any]
     ):
         """Check for excessive task definition revisions (Rule 9)"""
@@ -471,7 +500,7 @@ class ContainerResourceAnalyzer:
 
     def _check_missing_logging(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for missing logging configuration (Rule 12)"""
         service_name = service["serviceName"]
         task_definition = service["taskDefinition"]
@@ -503,12 +532,12 @@ class ContainerResourceAnalyzer:
                 )
                 self.summary["services_requiring_attention"] += 1
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error checking logging for {service_name}: {e}")
 
     def _check_service_discovery(
         self, cluster_name: str, service: Dict[str, Any]
-    ):  # pragma: no cover
+    ):
         """Check for missing service discovery (Rule 13)"""
         service_name = service["serviceName"]
         service_registries = service.get("serviceRegistries", [])
@@ -529,7 +558,7 @@ class ContainerResourceAnalyzer:
                 )
                 self.summary["services_requiring_attention"] += 1
 
-    def _check_cluster_overprovisioning(  # pragma: no cover
+    def _check_cluster_overprovisioning(
         self, cluster_name: str, cluster_details: Dict[str, Any]
     ):
         """Check for cluster overprovisioning (Rule 11)"""
@@ -565,7 +594,7 @@ class ContainerResourceAnalyzer:
                 )
                 self.summary["services_requiring_attention"] += 1
 
-    def _analyze_eks_clusters(self):  # pragma: no cover
+    def _analyze_eks_clusters(self):
         """Analyze all EKS clusters and nodes"""
         try:
             clusters = self.eks_client.list_clusters().get("clusters", [])
@@ -588,10 +617,10 @@ class ContainerResourceAnalyzer:
                 # Analyze individual nodes
                 self._analyze_eks_nodes(cluster_name)
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.error(f"Error analyzing EKS clusters: {e}")
 
-    def _analyze_eks_node_groups(self, cluster_name: str):  # pragma: no cover
+    def _analyze_eks_node_groups(self, cluster_name: str):
         """Analyze EKS node groups for optimization opportunities"""
         try:
             node_groups = self.eks_client.list_nodegroups(clusterName=cluster_name).get(
@@ -645,10 +674,10 @@ class ContainerResourceAnalyzer:
                         self.summary["total_monthly_savings"] += spot_savings
                         self.summary["services_requiring_attention"] += 1
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error analyzing node groups for {cluster_name}: {e}")
 
-    def _analyze_eks_nodes(self, cluster_name: str):  # pragma: no cover
+    def _analyze_eks_nodes(self, cluster_name: str):
         """Analyze individual EKS nodes for utilization"""
         try:
             # Find EC2 instances belonging to the EKS cluster
@@ -685,12 +714,12 @@ class ContainerResourceAnalyzer:
                     # Get pod information (mock for resource limits check)
                     self._check_eks_pod_resource_limits(cluster_name, instance_id)
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error analyzing EKS nodes for {cluster_name}: {e}")
 
-    def _check_eks_node_utilization(  # pragma: no cover
+    def _check_eks_node_utilization(
         self, cluster_name: str, instance_id: str, instance_type: str
-    ):  # pragma: no cover
+    ):
         """Check EKS node utilization (Rule 2)"""
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(days=14)
@@ -733,18 +762,23 @@ class ContainerResourceAnalyzer:
                 )
                 self.summary["services_requiring_attention"] += 1
 
-    def _check_eks_pod_resource_limits(
-        self, cluster_name: str, instance_id: str
-    ):  # pragma: no cover
+    def _check_eks_pod_resource_limits(self, cluster_name: str, instance_id: str):
         """Check for pods without resource limits (Rule 5)"""
-        # In a real implementation, this would query the Kubernetes API
-        # For this implementation, we'll simulate the check
-        # This would normally use kubectl or the Kubernetes Python client
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(hours=6)
 
-        # Simulated check - in practice, would query pods on the node
-        pods_without_limits = 2  # Simulated finding
+        violations = self._get_cloudwatch_metrics(
+            namespace="EKS/PodInsights",
+            dimension_name="NodeName",
+            dimension_value=instance_id,
+            metric_name="PodsWithoutLimits",
+            start_time=start_time,
+            end_time=end_time,
+        )
 
-        if pods_without_limits > 0:
+        pods_without_limits = int(max(violations)) if violations else 0
+
+        if pods_without_limits:
             self.eks_findings.append(
                 {
                     "cluster_name": cluster_name,
@@ -755,8 +789,13 @@ class ContainerResourceAnalyzer:
                 }
             )
             self.summary["services_requiring_attention"] += 1
+        elif not violations:
+            logger.debug(
+                "No pod limit data available for %s; ensure Container Insights metrics exist",
+                instance_id,
+            )
 
-    def _get_container_insights_metrics(  # pragma: no cover
+    def _get_container_insights_metrics(
         self,
         cluster_name: str,
         service_name: str,
@@ -781,11 +820,11 @@ class ContainerResourceAnalyzer:
 
             return [dp["Average"] for dp in response["Datapoints"]]
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error getting Container Insights metrics: {e}")
             return []
 
-    def _get_cloudwatch_metrics(  # pragma: no cover
+    def _get_cloudwatch_metrics(
         self,
         namespace: str,
         dimension_name: str,
@@ -808,7 +847,7 @@ class ContainerResourceAnalyzer:
 
             return [dp["Average"] for dp in response["Datapoints"]]
 
-        except ClientError as e:
+        except (ClientError, BotoCoreError) as e:
             logger.warning(f"Error getting CloudWatch metrics: {e}")
             return []
 
@@ -920,6 +959,17 @@ class ContainerResourceAnalyzer:
     def _save_csv_output(self):
         """Save rightsizing plan to CSV"""
         plans = []
+        columns = [
+            "Type",
+            "Cluster",
+            "Service",
+            "NodeGroup",
+            "Action",
+            "Current_Config",
+            "Recommended_Config",
+            "Monthly_Savings",
+            "Implementation_Steps",
+        ]
 
         # Generate rightsizing plans from ECS findings
         for finding in self.ecs_findings:
@@ -963,12 +1013,15 @@ class ContainerResourceAnalyzer:
                 }
                 plans.append(plan)
 
-        if plans:
-            df = pd.DataFrame(plans)
-            df.to_csv("rightsizing_plan.csv", index=False)
-            logger.info("Saved rightsizing plan to rightsizing_plan.csv")
+        df = pd.DataFrame(plans) if plans else pd.DataFrame(columns=columns)
+        for column in columns:
+            if column not in df.columns:
+                df[column] = ""
+        df = df[columns]
+        df.to_csv("rightsizing_plan.csv", index=False)
+        logger.info("Saved rightsizing plan to rightsizing_plan.csv")
 
-    def _create_utilization_chart(self):  # pragma: no cover
+    def _create_utilization_chart(self):
         """Create utilization distribution chart"""
         has_data = any(self.utilization_data.values())
         plt.style.use("seaborn-v0_8-darkgrid")

@@ -8,13 +8,19 @@ import csv
 import json
 import os
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, patch
+from unittest.mock import ANY, MagicMock, patch
 
 import boto3
 import pytest
 from moto import mock_aws
+from botocore.exceptions import ClientError
 
-from lib.analyse import ContainerResourceAnalyzer
+import lib.analyse as analyse_module
+from lib.analyse import (
+    ContainerResourceAnalyzer,
+    _ensure_user_site_on_path,
+    _lazy_import,
+)
 
 
 class FakeEKSClient:
@@ -374,6 +380,58 @@ def _create_cloudwatch_test_data(cloudwatch_client):
 class TestContainerResourceAnalyzer:
     """Test cases for Container Resource Analyzer"""
 
+    def test_lazy_import_installs_missing_dependency(self, monkeypatch):
+        """Ensure _lazy_import installs packages when absent"""
+        call_tracker = {"import": 0, "pip": 0}
+
+        def fake_import(module):
+            call_tracker["import"] += 1
+            if call_tracker["import"] == 1:
+                raise ModuleNotFoundError
+            return "loaded-module"
+
+        def fake_pip_install(cmd, env=None):
+            call_tracker["pip"] += 1
+            assert "missing-package" in cmd
+            assert env and env.get("PIP_BREAK_SYSTEM_PACKAGES") == "1"
+
+        monkeypatch.setattr("lib.analyse.importlib.import_module", fake_import)
+        monkeypatch.setattr("lib.analyse.subprocess.check_call", fake_pip_install)
+
+        result = _lazy_import("missing-package", pip_name="missing-package")
+        assert result == "loaded-module"
+        assert call_tracker["pip"] == 1
+
+    def test_lazy_import_respects_disable_flag(self, monkeypatch):
+        """Ensure auto-install can be disabled via environment variable."""
+        monkeypatch.setenv("ANALYZE_DISABLE_AUTO_INSTALL", "1")
+
+        def fake_import(module):
+            raise ModuleNotFoundError
+
+        def no_pip(*_, **__):
+            raise AssertionError("pip called while auto-install disabled")
+
+        monkeypatch.setattr("lib.analyse.importlib.import_module", fake_import)
+        monkeypatch.setattr("lib.analyse.subprocess.check_call", no_pip)
+
+        with pytest.raises(ModuleNotFoundError):
+            _lazy_import("missing-package", pip_name="missing-package")
+
+    def test_user_site_path_is_appended_when_running_outside_venv(
+        self, monkeypatch
+    ):
+        """Ensure helper adds user site directory to sys.path."""
+        fake_site = "/tmp/fake-site"
+        monkeypatch.setattr("lib.analyse.sys.prefix", "/opt/python")
+        monkeypatch.setattr("lib.analyse.sys.base_prefix", "/opt/python")
+        monkeypatch.setattr("lib.analyse.sys.path", [])
+        monkeypatch.setattr("lib.analyse.site.getusersitepackages", lambda: fake_site)
+
+        _ensure_user_site_on_path()
+
+        assert fake_site in analyse_module.sys.path
+
     def test_initialization(self):
         """Test analyzer initialization"""
         analyzer = ContainerResourceAnalyzer()
@@ -396,6 +454,41 @@ class TestContainerResourceAnalyzer:
 
         tags = [{"Key": "OtherTag", "Value": "value"}]
         assert analyzer._should_exclude_cluster(tags) is False
+
+    def test_analyze_ecs_clusters_honors_exclusions(self):
+        """Ensure excluded ECS clusters are skipped"""
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.ecs_client = MagicMock()
+        analyzer.ecs_client.list_clusters.return_value = {
+            "clusterArns": [
+                "arn:aws:ecs:us-east-1:123:cluster/production-cluster",
+                "arn:aws:ecs:us-east-1:123:cluster/excluded-cluster",
+            ]
+        }
+        analyzer.ecs_client.describe_clusters.side_effect = [
+            {"clusters": [{"clusterName": "production-cluster", "tags": []}]},
+            {
+                "clusters": [
+                    {
+                        "clusterName": "excluded-cluster",
+                        "tags": [{"Key": "ExcludeFromAnalysis", "Value": "true"}],
+                    }
+                ]
+            },
+        ]
+
+        with patch.object(
+            analyzer, "_analyze_ecs_services"
+        ) as mock_services, patch.object(
+            analyzer, "_check_cluster_overprovisioning"
+        ) as mock_over:
+            analyzer._analyze_ecs_clusters()
+
+        mock_services.assert_called_once()
+        mock_over.assert_called_once()
+        called_cluster, details = mock_services.call_args[0]
+        assert called_cluster == "production-cluster"
+        assert details["clusterName"] == "production-cluster"
 
     @patch("lib.analyse.ContainerResourceAnalyzer._get_container_insights_metrics")
     def test_ecs_over_provisioning_detection(self, mock_metrics, aws_setup):
@@ -466,6 +559,63 @@ class TestContainerResourceAnalyzer:
             assert len(spot_findings) == 1
             assert spot_findings[0]["spot_savings_potential"] > 0
 
+    def test_analyze_eks_clusters_routes_active_clusters(self):
+        """Ensure only non-excluded EKS clusters are analyzed"""
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.eks_client = MagicMock()
+        analyzer.eks_client.list_clusters.return_value = {
+            "clusters": ["production-eks", "excluded-eks"]
+        }
+        analyzer.eks_client.describe_cluster.side_effect = [
+            {"cluster": {"name": "production-eks", "tags": {"Env": "prod"}}},
+            {
+                "cluster": {
+                    "name": "excluded-eks",
+                    "tags": {"ExcludeFromAnalysis": "true"},
+                }
+            },
+        ]
+
+        with patch.object(
+            analyzer, "_analyze_eks_node_groups"
+        ) as mock_group, patch.object(
+            analyzer, "_analyze_eks_nodes"
+        ) as mock_nodes:
+            analyzer._analyze_eks_clusters()
+
+        mock_group.assert_called_once_with("production-eks")
+        mock_nodes.assert_called_once_with("production-eks")
+
+    def test_analyze_eks_nodes_counts_instances(self):
+        """Ensure node-level analysis increments counters and runs checks"""
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.ec2_client = MagicMock()
+        analyzer.ec2_client.describe_instances.return_value = {
+            "Reservations": [
+                {
+                    "Instances": [
+                        {
+                            "InstanceId": "i-1234567890",
+                            "InstanceType": "m5.large",
+                            "LaunchTime": datetime.now(timezone.utc)
+                            - timedelta(days=30),
+                        }
+                    ]
+                }
+            ]
+        }
+
+        with patch.object(
+            analyzer, "_check_eks_node_utilization"
+        ) as mock_util, patch.object(
+            analyzer, "_check_eks_pod_resource_limits"
+        ) as mock_pods:
+            analyzer._analyze_eks_nodes("production-eks")
+
+        assert analyzer.summary["total_eks_nodes"] == 1
+        mock_util.assert_called_once_with("production-eks", "i-1234567890", "m5.large")
+        mock_pods.assert_called_once_with("production-eks", "i-1234567890")
+
     @patch("lib.analyse.ContainerResourceAnalyzer._get_cloudwatch_metrics")
     def test_eks_underutilized_nodes(self, mock_metrics, aws_setup):
         """Test detection of underutilized EKS nodes"""
@@ -487,6 +637,35 @@ class TestContainerResourceAnalyzer:
         assert len(underutilized) == 1
         assert underutilized[0]["current_utilization"]["cpu"] == 25.0
         assert underutilized[0]["current_utilization"]["memory"] == 35.0
+
+    @patch("lib.analyse.ContainerResourceAnalyzer._get_cloudwatch_metrics")
+    def test_eks_pod_resource_limits_detection(self, mock_metrics):
+        """Test detection of pods missing resource limits"""
+        analyzer = ContainerResourceAnalyzer()
+        mock_metrics.return_value = [0, 1, 3]
+
+        analyzer._check_eks_pod_resource_limits("production-eks", "i-1234567890")
+
+        findings = [
+            f
+            for f in analyzer.eks_findings
+            if f["finding_type"] == "missing_resource_limits"
+        ]
+        assert len(findings) == 1
+        assert findings[0]["pods_without_limits"] == 3
+
+    @patch("lib.analyse.logger")
+    @patch("lib.analyse.ContainerResourceAnalyzer._get_cloudwatch_metrics")
+    def test_eks_pod_resource_limits_logs_when_no_data(
+        self, mock_metrics, mock_logger
+    ):
+        """Ensure missing metrics emit a debug log instead of raising"""
+        analyzer = ContainerResourceAnalyzer()
+        mock_metrics.return_value = []
+
+        analyzer._check_eks_pod_resource_limits("production-eks", "i-0000")
+
+        mock_logger.debug.assert_called_once()
 
     def test_missing_auto_scaling_detection(self, aws_setup):
         """Test detection of missing auto-scaling configuration"""
@@ -749,13 +928,149 @@ class TestContainerResourceAnalyzer:
                             "createdAt": datetime.now() - timedelta(days=30),
                             "taskDefinition": "over-provisioned-app:1",
                         },
+                        {
+                            "serviceName": "recent-service",
+                            "createdAt": datetime.now() - timedelta(days=5),
+                            "taskDefinition": "over-provisioned-app:1",
+                        },
                     ]
                 }
 
                 analyzer._analyze_ecs_services("production-cluster", {})
 
-                # Only non-dev service should be counted
+                # Only non-dev, older service should be counted
                 assert analyzer.summary["total_ecs_services"] == 1
+
+    def test_timezone_aware_service_age_filter(self, aws_setup):
+        """Services older than 14 days with tz-aware timestamps should be analyzed"""
+        analyzer = ContainerResourceAnalyzer()
+
+        tz_old = timezone(timedelta(hours=5))
+        tz_new = timezone(timedelta(hours=-7))
+        old_service_time = datetime.now(tz_old) - timedelta(days=20)
+        new_service_time = datetime.now(tz_new) - timedelta(days=5)
+
+        with patch.object(analyzer.ecs_client, "get_paginator") as mock_pag:
+            mock_pag.return_value.paginate.return_value = [
+                {"serviceArns": ["arn:prod/old", "arn:prod/new"]}
+            ]
+
+            with patch.object(
+                analyzer.ecs_client, "describe_services"
+            ) as mock_describe:
+                mock_describe.return_value = {
+                    "services": [
+                        {
+                            "serviceName": "old-service",
+                            "createdAt": old_service_time,
+                            "taskDefinition": "td:1",
+                        },
+                        {
+                            "serviceName": "new-service",
+                            "createdAt": new_service_time,
+                            "taskDefinition": "td:2",
+                        },
+                    ]
+                }
+
+                with patch.multiple(
+                    analyzer,
+                    _check_ecs_over_provisioning=lambda *a, **k: None,
+                    _check_missing_auto_scaling=lambda *a, **k: None,
+                    _check_inefficient_task_placement=lambda *a, **k: None,
+                    _check_singleton_ha_risks=lambda *a, **k: None,
+                    _check_old_container_images=lambda *a, **k: None,
+                    _check_health_checks=lambda *a, **k: None,
+                    _check_excessive_task_revisions=lambda *a, **k: None,
+                    _check_missing_logging=lambda *a, **k: None,
+                    _check_service_discovery=lambda *a, **k: None,
+                ):
+                    analyzer._analyze_ecs_services("production-cluster", {})
+
+        assert analyzer.summary["total_ecs_services"] == 1
+
+    def test_get_cloudwatch_metrics_helper(self):
+        """Ensure CloudWatch metrics helper returns datapoints"""
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.cloudwatch_client = MagicMock()
+        analyzer.cloudwatch_client.get_metric_statistics.return_value = {
+            "Datapoints": [{"Average": 10.0}, {"Average": 20.0}]
+        }
+
+        end = datetime.utcnow()
+        start = end - timedelta(hours=1)
+        values = analyzer._get_cloudwatch_metrics(
+            "AWS/EC2", "InstanceId", "i-123", "CPUUtilization", start, end
+        )
+
+        assert values == [10.0, 20.0]
+        analyzer.cloudwatch_client.get_metric_statistics.assert_called_once()
+
+    def test_get_container_insights_metrics_helper(self):
+        """Ensure Container Insights metrics helper returns averages"""
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.cloudwatch_client = MagicMock()
+        analyzer.cloudwatch_client.get_metric_statistics.return_value = {
+            "Datapoints": [{"Average": 30.0}]
+        }
+
+        end = datetime.utcnow()
+        start = end - timedelta(hours=1)
+        values = analyzer._get_container_insights_metrics(
+            "production-cluster", "api-service", "CPUUtilization", start, end
+        )
+
+        assert values == [30.0]
+        analyzer.cloudwatch_client.get_metric_statistics.assert_called_once()
+
+    def test_cloudwatch_metrics_error_returns_empty(self):
+        """Ensure CloudWatch helper swallows boto errors"""
+        analyzer = ContainerResourceAnalyzer()
+
+        error = ClientError(
+            error_response={"Error": {"Code": "Throttling", "Message": "slow"}},
+            operation_name="GetMetricStatistics",
+        )
+
+        with patch.object(
+            analyzer.cloudwatch_client,
+            "get_metric_statistics",
+            side_effect=error,
+        ):
+            values = analyzer._get_cloudwatch_metrics(
+                "AWS/EC2",
+                "InstanceId",
+                "i-0000",
+                "CPUUtilization",
+                datetime.utcnow() - timedelta(hours=1),
+                datetime.utcnow(),
+            )
+
+        assert values == []
+
+    def test_container_insights_metrics_error_returns_empty(self):
+        """Ensure Container Insights helper swallows boto errors"""
+        analyzer = ContainerResourceAnalyzer()
+
+        error = ClientError(
+            error_response={"Error": {"Code": "AccessDenied", "Message": "nope"}},
+            operation_name="GetMetricStatistics",
+        )
+
+        with patch.object(
+            analyzer.cloudwatch_client,
+            "get_metric_statistics",
+            side_effect=error,
+        ):
+            values = analyzer._get_container_insights_metrics(
+                "production",
+                "svc",
+                "CPUUtilization",
+                datetime.utcnow() - timedelta(hours=1),
+                datetime.utcnow(),
+            )
+
+        assert values == []
 
     def test_output_generation(self, aws_setup, tmp_path, monkeypatch):
         """Test that all output files are generated correctly"""
@@ -823,6 +1138,23 @@ class TestContainerResourceAnalyzer:
 
         # Verify chart output
         assert os.path.exists("resource_utilization_trends.png")
+
+    def test_empty_rightsizing_plan_still_writes_csv(self, tmp_path, monkeypatch):
+        """Ensure CSV output is created even when no plans exist"""
+        monkeypatch.chdir(tmp_path)
+
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.ecs_findings = []
+        analyzer.eks_findings = []
+
+        analyzer._save_csv_output()
+
+        csv_path = tmp_path / "rightsizing_plan.csv"
+        assert csv_path.exists()
+        with open(csv_path, "r", encoding="utf-8") as handle:
+            header = handle.readline().strip()
+            assert "Type" in header
+            assert "Monthly_Savings" in header
 
     def test_cost_calculations(self):
         """Test cost calculation accuracy"""

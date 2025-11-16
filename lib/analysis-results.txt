@@ -1,106 +1,32 @@
-Starting AWS resource audit...
-Finding unused EBS volumes...
-Finding public security groups...
-Calculating CloudWatch log stream metrics...
+2025-11-16 21:56:59,955 - botocore.credentials - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-16 21:57:00,062 - botocore.configprovider - INFO - Found endpoint for ecs via: environment_global.
+2025-11-16 21:57:00,077 - botocore.configprovider - INFO - Found endpoint for eks via: environment_global.
+2025-11-16 21:57:00,244 - botocore.configprovider - INFO - Found endpoint for ec2 via: environment_global.
+2025-11-16 21:57:00,262 - botocore.configprovider - INFO - Found endpoint for cloudwatch via: environment_global.
+2025-11-16 21:57:00,286 - botocore.configprovider - INFO - Found endpoint for autoscaling via: environment_global.
+2025-11-16 21:57:00,307 - botocore.configprovider - INFO - Found endpoint for application-autoscaling via: environment_global.
+2025-11-16 21:57:00,316 - __main__ - INFO - Starting container resource analysis...
+2025-11-16 21:57:00,514 - __main__ - INFO - Saved findings to container_optimization.json
+2025-11-16 21:57:00,518 - __main__ - INFO - Saved rightsizing plan to rightsizing_plan.csv
+2025-11-16 21:57:00,589 - __main__ - WARNING - No utilization data to visualize
+2025-11-16 21:57:01,107 - __main__ - INFO - Analysis complete!
 
 ================================================================================
-RESOURCE AUDIT SUMMARY
+CONTAINER RESOURCE OPTIMIZATION ANALYSIS RESULTS
 ================================================================================
 
-+------------------------+---------+---------+
-| Metric                 |   Count |   Value |
-+========================+=========+=========+
-| Unused EBS Volumes     |       3 |       6 |
-+------------------------+---------+---------+
-| Public Security Groups |       1 |       1 |
-+------------------------+---------+---------+
-| CloudWatch Log Streams |       0 |       0 |
-+------------------------+---------+---------+
+Total ECS Services Analyzed: 1
+Total EKS Nodes Analyzed: 0
+Services Requiring Attention: 2
+Total Potential Monthly Savings: $0.00
 
-================================================================================
+----------------------------------------
+TOP ECS OPTIMIZATION RECOMMENDATIONS
+----------------------------------------
 
-{
-  "AuditTimestamp": "2025-11-16 11:09:43",
-  "Region": "us-east-1",
-  "UnusedEBSVolumes": {
-    "Count": 3,
-    "TotalSize": 6,
-    "Volumes": [
-      {
-        "VolumeId": "vol-44e08b9ae123c8260",
-        "Size": 1,
-        "VolumeType": "gp2",
-        "CreateTime": "2025-11-16 10:09:35",
-        "AvailabilityZone": "us-east-1a",
-        "Encrypted": false,
-        "Tags": {}
-      },
-      {
-        "VolumeId": "vol-bfce2589d12f343b0",
-        "Size": 2,
-        "VolumeType": "gp2",
-        "CreateTime": "2025-11-16 10:09:35",
-        "AvailabilityZone": "us-east-1a",
-        "Encrypted": false,
-        "Tags": {}
-      },
-      {
-        "VolumeId": "vol-b9e7e7ed8bf9398da",
-        "Size": 3,
-        "VolumeType": "gp2",
-        "CreateTime": "2025-11-16 10:09:35",
-        "AvailabilityZone": "us-east-1a",
-        "Encrypted": false,
-        "Tags": {}
-      }
-    ]
-  },
-  "PublicSecurityGroups": {
-    "Count": 1,
-    "SecurityGroups": [
-      {
-        "GroupId": "sg-9bdad2e43e91bfea2",
-        "GroupName": "public",
-        "Description": "has public",
-        "VpcId": "vpc-461d47496af9722b7",
-        "PublicIngressRules": [
-          {
-            "Protocol": "tcp",
-            "FromPort": 22,
-            "ToPort": 22,
-            "Source": "0.0.0.0/0"
-          }
-        ],
-        "Tags": {}
-      }
-    ]
-  },
-  "CloudWatchLogMetrics": {
-    "TotalLogStreams": 0,
-    "TotalSize": 0,
-    "AverageStreamSize": 0,
-    "LogGroupMetrics": []
-  }
-}
-Resource audit saved to aws_audit_results.json
-Starting AWS resource audit...
-Finding unused EBS volumes...
-Finding public security groups...
-Calculating CloudWatch log stream metrics...
-
-================================================================================
-RESOURCE AUDIT SUMMARY
-================================================================================
-
-+------------------------+---------+---------+
-| Metric                 |   Count |   Value |
-+========================+=========+=========+
-| Unused EBS Volumes     |       3 |       6 |
-+------------------------+---------+---------+
-| Public Security Groups |       1 |       1 |
-+------------------------+---------+---------+
-| CloudWatch Log Streams |       0 |       0 |
-+------------------------+---------+---------+
+----------------------------------------
+TOP EKS OPTIMIZATION RECOMMENDATIONS
+----------------------------------------
 
 ================================================================================
 

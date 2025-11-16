@@ -1,42 +1,10 @@
 # MODEL_FAILURES
 
-This document identifies where the original `MODEL_RESPONSE.md` deliverable diverged from the working implementation now in `lib/analyse.py`, causing the original submission to be non-ideal.
-
----
-
-### 1. **Missing Container Analysis Logic**
-The IDEAL prompt required a Python CLI that inspects ECS/EKS workloads, computes CPU/memory utilization, and emits optimization artifacts. The original `MODEL_RESPONSE.md` included that logic inside `analyze_container_resources.py`, but the repo’s `lib/analyse.py` (before this refactor) still contained the older IAM/resource audit. This mismatch meant:
-- None of the container-specific checks (14 audit rules) ran.
-- Required outputs (`container_optimization.json`, `rightsizing_plan.csv`, `resource_utilization_trends.png`) were never produced.
-- Integration tests defined in `tests/test-analysis-py.py` could not pass because the CLI signature and outputs didn’t exist.
-
-**Impact:** Critical functionality gap; prompt requirements were not satisfied at all.
-
----
-
-### 2. **Tests Out of Sync With Implementation**
-`MODEL_RESPONSE.md` supplied extensive moto-based tests for the container analyzer, but the repository still carried the legacy IAM tests. Consequently:
-- `./scripts/analysis.sh` (which runs `tests/test-analysis-py.py`) failed because it tried to import/validate the new behavior, but `lib/analyse.py` exported something else.
-- Coverage enforcement (`pytest --cov-fail-under=90`) was impossible because the new test suite never ran to completion.
-
-**Impact:** Continuous integration unable to pass; no automated proof the container analyzer worked.
-
----
-
-### 3. **IAM-Specific CLI Still Wired Into Scripts**
-`scripts/analysis.sh` and `./scripts/unit-tests.sh` were still tuned for the old auditor (no pandas/seaborn deps, no provision for the heavier integration tests). Even if the container analyzer had been present, the scripts would:
-- Run under the wrong environment (no pipenv, missing pandas/seaborn/matplotlib).
-- Fail when generating plots or CSV/JSON outputs due to missing packages/CLI wiring.
-
-**Impact:** `scripts/analysis.sh` could not satisfy the new prompt even after plugging in the code.
-
----
-
-### 4. **Lack of Coverage Pragmas For Non-Mockable Paths**
-The model code was written assuming full AWS API mocking. In practice, EKS APIs are not implemented in Moto, so unit tests would hit unimplemented calls (e.g., `create_cluster`, `create_nodegroup`). Without adjustments (`pragma: no cover`, fake clients), the suite could never reach 90 % coverage.
-
-**Impact:** CI coverage gate blocked merges because large sections of `lib/analyse.py` were untestable under moto.
-
----
-
-These failures collectively prevented the original MODEL_RESPONSE from being usable in this repository. The current refactor corrects them by replacing `lib/analyse.py`, updating the tests, and scripting the proper dependencies. 
+1. **Repo Entry Point Mismatch** – MODEL_RESPONSE delivers a standalone `analyze_container_resources.py`, but the project requires the analyzer to live in `lib/analyse.py` so `scripts/analysis.sh` and other tooling can import it.
+2. **No AWS Endpoint Overrides** – The reference script never honors `AWS_ENDPOINT_URL`/related env vars, so it can’t talk to the Moto/server endpoint the repo’s analysis workflow depends on.
+3. **Tests Not Wired to Project Structure** – MODEL_RESPONSE’s pytest module is `test_analyze_container_resources.py` with bespoke helpers instead of the mandated `tests/test-analysis-py.py` + `tests/unit/test__unit__analysis.py` layout that `scripts/analysis.sh` expects.
+4. **Integration Workflow Not Covered** – The reference tests only cover unit-level behaviors and never exercise the analyzer via the CLI/console path, so artifact generation (JSON/CSV/PNG + console table) isn’t validated the way this repository requires.
+5. **EKS Pod Limit Check Simulated** – MODEL_RESPONSE hard-codes `pods_without_limits = 2` instead of inspecting metrics or pod data, leaving the “missing resource limits” requirement effectively unimplemented.
+6. **Rightsizing CSV Not Guaranteed** – The reference script writes `rightsizing_plan.csv` only when findings exist, so CI jobs fail when a clean environment produces no file; our implementation always emits the schema.
+7. **Moto Support for EKS Missing** – The reference tests call real `boto3.client("eks")` APIs that Moto doesn’t implement, so the suite can’t even set up node groups; we replaced this with a FakeEKSClient to mirror expected data.
+8. **No Dependency Bootstrapping** – The model code imports pandas/matplotlib/seaborn unconditionally and assumes they are pre-installed, which breaks `scripts/analysis.sh` environments that don’t vendor those wheels. Our `_lazy_import` logic installs them on demand.
