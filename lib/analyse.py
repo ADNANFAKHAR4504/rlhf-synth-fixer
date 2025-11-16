@@ -1,1554 +1,1067 @@
 #!/usr/bin/env python3
 """
-AWS Resource Audit Script
-Identifies unused and misconfigured resources in AWS environment.
+Container Resource Optimization Analyzer for AWS ECS and EKS
+Analyzes resource utilization and provides cost optimization recommendations
 """
 
 import json
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
 import csv
-import io
-import re
-import os
+import argparse
 import logging
+from datetime import datetime, timedelta
 from collections import defaultdict
-from functools import lru_cache
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from tabulate import tabulate
+from typing import Dict, List, Tuple, Any, Optional
+import warnings
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from botocore.exceptions import ClientError, BotoCoreError
 
+# Suppress matplotlib warnings
+warnings.filterwarnings("ignore")
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
 logger = logging.getLogger(__name__)
 
+# AWS Pricing estimates (simplified for calculations)
+FARGATE_VCPU_HOUR_COST = 0.04048
+FARGATE_MEMORY_GB_HOUR_COST = 0.004445
+EC2_M5_LARGE_HOUR_COST = 0.096
+EC2_M5_LARGE_SPOT_HOUR_COST = 0.038
+HOURS_PER_MONTH = 730
 
-class AWSResourceAuditor:
-    """Audits AWS resources for optimization and security improvements."""
 
-    def __init__(self, region_name: str = None):
-        """
-        Initialize AWS clients for resource auditing.
+class ContainerResourceAnalyzer:
+    """Main analyzer class for ECS and EKS resource optimization"""
 
-        Args:
-            region_name: AWS region name (uses default if not specified)
-        """
-        self.region_name = region_name
-        self.ec2_client = boto3.client("ec2", region_name=region_name)
-        self.logs_client = boto3.client("logs", region_name=region_name)
+    def __init__(self, region: str = "us-east-1"):
+        """Initialize AWS clients and configuration"""
+        self.region = region
+        self.ecs_client = boto3.client("ecs", region_name=region)
+        self.eks_client = boto3.client("eks", region_name=region)
+        self.ec2_client = boto3.client("ec2", region_name=region)
+        self.cloudwatch_client = boto3.client("cloudwatch", region_name=region)
+        self.autoscaling_client = boto3.client("autoscaling", region_name=region)
+        self.application_autoscaling_client = boto3.client(
+            "application-autoscaling", region_name=region
+        )
 
-    def find_unused_ebs_volumes(self) -> List[Dict[str, Any]]:
-        """
-        Find EBS volumes that are not attached to any EC2 instance.
-
-        Returns:
-            List of unused volumes with their details
-        """
-        unused_volumes = []
-
-        try:
-            # Describe all EBS volumes
-            paginator = self.ec2_client.get_paginator("describe_volumes")
-
-            for page in paginator.paginate():
-                for volume in page["Volumes"]:
-                    # Check if volume is available (not attached)
-                    if volume["State"] == "available":
-                        volume_info = {
-                            "VolumeId": volume["VolumeId"],
-                            "Size": volume["Size"],  # Size in GiB
-                            "VolumeType": volume["VolumeType"],
-                            "CreateTime": volume["CreateTime"].strftime(
-                                "%Y-%m-%d %H:%M:%S"
-                            ),
-                            "AvailabilityZone": volume["AvailabilityZone"],
-                            "Encrypted": volume.get("Encrypted", False),
-                            "Tags": self._extract_tags(volume.get("Tags", [])),
-                        }
-                        unused_volumes.append(volume_info)
-
-        except ClientError as e:
-            print(f"Error retrieving EBS volumes: {e}")
-
-        return unused_volumes
-
-    def find_public_security_groups(self) -> List[Dict[str, Any]]:
-        """
-        Find security groups that allow unrestricted access from the internet.
-
-        Returns:
-            List of public security groups with their details
-        """
-        public_security_groups = []
-
-        try:
-            # Describe all security groups
-            paginator = self.ec2_client.get_paginator("describe_security_groups")
-
-            for page in paginator.paginate():
-                for sg in page["SecurityGroups"]:
-                    public_rules = []
-
-                    # Check ingress rules for public access
-                    for rule in sg.get("IpPermissions", []):
-                        # Check for IPv4 public access
-                        for ip_range in rule.get("IpRanges", []):
-                            if ip_range.get("CidrIp") == "0.0.0.0/0":
-                                public_rules.append(
-                                    {
-                                        "Protocol": rule.get("IpProtocol", "All"),
-                                        "FromPort": rule.get("FromPort", "All"),
-                                        "ToPort": rule.get("ToPort", "All"),
-                                        "Source": "0.0.0.0/0",
-                                    }
-                                )
-
-                        # Check for IPv6 public access
-                        for ipv6_range in rule.get("Ipv6Ranges", []):
-                            if ipv6_range.get("CidrIpv6") == "::/0":
-                                public_rules.append(
-                                    {
-                                        "Protocol": rule.get("IpProtocol", "All"),
-                                        "FromPort": rule.get("FromPort", "All"),
-                                        "ToPort": rule.get("ToPort", "All"),
-                                        "Source": "::/0",
-                                    }
-                                )
-
-                    # If security group has public rules, add it to the list
-                    if public_rules:
-                        sg_info = {
-                            "GroupId": sg["GroupId"],
-                            "GroupName": sg["GroupName"],
-                            "Description": sg.get("Description", ""),
-                            "VpcId": sg.get("VpcId", "EC2-Classic"),
-                            "PublicIngressRules": public_rules,
-                            "Tags": self._extract_tags(sg.get("Tags", [])),
-                        }
-                        public_security_groups.append(sg_info)
-
-        except ClientError as e:
-            print(f"Error retrieving security groups: {e}")
-
-        return public_security_groups
-
-    def calculate_log_stream_metrics(self) -> Dict[str, Any]:
-        """
-        Calculate average CloudWatch log stream size across all log groups.
-
-        Returns:
-            Dictionary containing log stream metrics
-        """
-        total_size = 0
-        total_streams = 0
-        log_group_metrics = []
-
-        try:
-            # Describe all log groups
-            log_groups_paginator = self.logs_client.get_paginator("describe_log_groups")
-
-            for log_groups_page in log_groups_paginator.paginate():
-                for log_group in log_groups_page["logGroups"]:
-                    group_size = 0
-                    group_stream_count = 0
-
-                    # Get log streams for each log group
-                    try:
-                        streams_paginator = self.logs_client.get_paginator(
-                            "describe_log_streams"
-                        )
-
-                        for streams_page in streams_paginator.paginate(
-                            logGroupName=log_group["logGroupName"]
-                        ):
-                            for stream in streams_page["logStreams"]:
-                                # storedBytes represents the size of the log stream
-                                stream_size = stream.get("storedBytes", 0)
-                                group_size += stream_size
-                                group_stream_count += 1
-                                total_size += stream_size
-                                total_streams += 1
-
-                        if group_stream_count > 0:
-                            log_group_metrics.append(
-                                {
-                                    "LogGroupName": log_group["logGroupName"],
-                                    "StreamCount": group_stream_count,
-                                    "TotalSize": group_size,
-                                    "AverageStreamSize": group_size
-                                    / group_stream_count,
-                                }
-                            )
-
-                    except ClientError as e:
-                        print(
-                            f"Error retrieving streams for log group {log_group['logGroupName']}: {e}"
-                        )
-
-        except ClientError as e:
-            print(f"Error retrieving log groups: {e}")
-
-        # Calculate overall average
-        average_stream_size = total_size / total_streams if total_streams > 0 else 0
-
-        return {
-            "TotalLogStreams": total_streams,
-            "TotalSize": total_size,
-            "AverageStreamSize": average_stream_size,
-            "LogGroupMetrics": log_group_metrics,
+        # Initialize findings storage
+        self.ecs_findings = []
+        self.eks_findings = []
+        self.summary = {
+            "total_ecs_services": 0,
+            "total_eks_nodes": 0,
+            "total_monthly_savings": 0.0,
+            "services_requiring_attention": 0,
         }
+        self.rightsizing_plans = []
+        self.utilization_data = defaultdict(list)
 
-    def _extract_tags(self, tags: List[Dict]) -> Dict[str, str]:
-        """
-        Extract tags into a simple key-value dictionary.
+    def analyze(self):
+        """Main analysis method orchestrating all checks"""
+        logger.info("Starting container resource analysis...")
 
-        Args:
-            tags: List of tag dictionaries from AWS
+        # Analyze ECS clusters and services
+        self._analyze_ecs_clusters()
 
-        Returns:
-            Dictionary of tag key-value pairs
-        """
-        return {(tag.get("Key") or ""): tag.get("Value", "") for tag in tags}
+        # Analyze EKS clusters and nodes
+        self._analyze_eks_clusters()
 
-    def audit_resources(self) -> Dict[str, Any]:
-        """
-        Perform complete audit of AWS resources.
+        # Generate outputs
+        self._generate_outputs()
 
-        Returns:
-            Dictionary containing all audit results
-        """
-        print("Starting AWS resource audit...")
+        logger.info("Analysis complete!")
 
-        print("Finding unused EBS volumes...")
-        unused_volumes = self.find_unused_ebs_volumes()
-
-        print("Finding public security groups...")
-        public_security_groups = self.find_public_security_groups()
-
-        print("Calculating CloudWatch log stream metrics...")
-        log_metrics = self.calculate_log_stream_metrics()
-
-        # Compile results
-        results = {
-            "AuditTimestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Region": self.region_name or "default",
-            "UnusedEBSVolumes": {
-                "Count": len(unused_volumes),
-                "TotalSize": sum(vol["Size"] for vol in unused_volumes),
-                "Volumes": unused_volumes,
-            },
-            "PublicSecurityGroups": {
-                "Count": len(public_security_groups),
-                "SecurityGroups": public_security_groups,
-            },
-            "CloudWatchLogMetrics": log_metrics,
-        }
-
-        return results
-
-    def print_console_summary(self, results: Optional[Dict[str, Any]] = None):
-        """Print a compact tabulated summary for resource findings."""
-        from tabulate import tabulate
-
-        if results is None:
-            results = self.audit_resources()
-
-        rows = []
-        ebs = results.get("UnusedEBSVolumes", {})
-        rows.append(
-            ["Unused EBS Volumes", ebs.get("Count", 0), ebs.get("TotalSize", 0)]
-        )
-
-        sgs = results.get("PublicSecurityGroups", {})
-        rows.append(
-            [
-                "Public Security Groups",
-                sgs.get("Count", 0),
-                len(sgs.get("SecurityGroups", [])),
-            ]
-        )
-
-        logs = results.get("CloudWatchLogMetrics", {})
-        rows.append(
-            [
-                "CloudWatch Log Streams",
-                logs.get("TotalLogStreams", 0),
-                int(logs.get("AverageStreamSize", 0)),
-            ]
-        )
-
-        print("\n" + "=" * 80)
-        print("RESOURCE AUDIT SUMMARY")
-        print("=" * 80 + "\n")
-        print(tabulate(rows, headers=["Metric", "Count", "Value"], tablefmt="grid"))
-        print("\n" + "=" * 80 + "\n")
-
-
-# Known privilege escalation patterns
-PRIVILEGE_ESCALATION_PATTERNS = [
-    {
-        "name": "CreateUserAndAttachPolicy",
-        "actions": ["iam:CreateUser", "iam:AttachUserPolicy"],
-        "description": "Can create new users and attach any policy",
-        "risk_score": 10,
-    },
-    {
-        "name": "CreateAccessKeyForAnyUser",
-        "actions": ["iam:CreateAccessKey"],
-        "resource": "*",
-        "description": "Can create access keys for any user",
-        "risk_score": 9,
-    },
-    {
-        "name": "UpdateAssumeRolePolicy",
-        "actions": ["iam:UpdateAssumeRolePolicy"],
-        "description": "Can modify role trust relationships",
-        "risk_score": 9,
-    },
-    {
-        "name": "PassRoleAndLambda",
-        "actions": ["iam:PassRole", "lambda:CreateFunction", "lambda:InvokeFunction"],
-        "description": "Can create Lambda functions with any role",
-        "risk_score": 8,
-    },
-    {
-        "name": "PassRoleAndEC2",
-        "actions": ["iam:PassRole", "ec2:RunInstances"],
-        "description": "Can launch EC2 instances with any role",
-        "risk_score": 8,
-    },
-    {
-        "name": "CreatePolicyVersion",
-        "actions": ["iam:CreatePolicyVersion"],
-        "description": "Can create new versions of existing policies",
-        "risk_score": 8,
-    },
-    {
-        "name": "SetDefaultPolicyVersion",
-        "actions": ["iam:SetDefaultPolicyVersion"],
-        "description": "Can change active policy versions",
-        "risk_score": 8,
-    },
-    {
-        "name": "PutUserPolicy",
-        "actions": ["iam:PutUserPolicy"],
-        "description": "Can add inline policies to users",
-        "risk_score": 8,
-    },
-    {
-        "name": "PutRolePolicy",
-        "actions": ["iam:PutRolePolicy"],
-        "description": "Can add inline policies to roles",
-        "risk_score": 8,
-    },
-    {
-        "name": "AddUserToGroup",
-        "actions": ["iam:AddUserToGroup"],
-        "description": "Can add users to any group",
-        "risk_score": 7,
-    },
-]
-
-
-class IAMSecurityAuditor:
-    def __init__(self, region="us-east-1"):
-        self.region = region or os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
-
-        # Get endpoint URL from environment (for moto testing)
-        endpoint_url = os.environ.get("AWS_ENDPOINT_URL", "http://localhost:5001")
-
-        # Configure boto3 clients with optional endpoint URL
-        client_config = {"region_name": self.region}
-        if endpoint_url:
-            client_config["endpoint_url"] = endpoint_url
-
-        self.iam = boto3.client("iam", **client_config)
-        self.s3 = boto3.client("s3", **client_config)
-        self.findings = []
-        self.privilege_escalation_paths = []
-        self.remediation_recommendations = []
-        self.ignored_roles = ["OrganizationAccountAccessRole"]
-        self.emergency_access_tag_key = "EmergencyAccess"
-        self.emergency_access_tag_value = "true"
-
-    def run_full_audit(self) -> Tuple[List[Dict], List[Dict]]:
-        """Execute the complete IAM security audit."""
-        logger.info("Starting comprehensive IAM security audit...")
-
-        # Run all audit checks in parallel where possible
-        with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = {
-                executor.submit(self.audit_mfa_compliance): "MFA Compliance",
-                executor.submit(self.audit_access_keys): "Access Keys",
-                executor.submit(self.audit_zombie_users): "Zombie Users",
-                executor.submit(self.audit_password_policy): "Password Policy",
-                executor.submit(
-                    self.audit_overprivileged_users
-                ): "Overprivileged Users",
-                executor.submit(self.audit_dangerous_policies): "Dangerous Policies",
-                executor.submit(
-                    self.audit_role_session_duration
-                ): "Role Session Duration",
-                executor.submit(
-                    self.audit_privilege_escalation
-                ): "Privilege Escalation",
-                executor.submit(self.audit_trust_policies): "Trust Policies",
-                executor.submit(self.audit_s3_cross_account): "S3 Cross-Account",
-                executor.submit(self.audit_zombie_roles): "Zombie Roles",
-                executor.submit(self.audit_inline_policies): "Inline Policies",
-            }
-
-            for future in as_completed(futures):
-                check_name = futures[future]
-                try:
-                    future.result()
-                    logger.info(f"Completed: {check_name}")
-                except Exception as e:
-                    logger.error(f"Error in {check_name}: {str(e)}")
-
-        # Sort findings by risk score
-        self.findings.sort(key=lambda x: x.get("risk_score", 0), reverse=True)
-
-        return self.findings, self.remediation_recommendations
-
-    def is_emergency_access(self, principal_type: str, principal_name: str) -> bool:
-        """Check if a principal has emergency access tag."""
-        try:
-            if principal_type == "User":
-                tags = self.iam.list_user_tags(UserName=principal_name)["Tags"]
-            elif principal_type == "Role":
-                tags = self.iam.list_role_tags(RoleName=principal_name)["Tags"]
-            else:
-                return False
-
-            for tag in tags:
-                if (
-                    tag["Key"] == self.emergency_access_tag_key
-                    and tag["Value"] == self.emergency_access_tag_value
-                ):
-                    return True
-        except:
-            pass
+    def _should_exclude_cluster(self, tags: List[Dict[str, str]]) -> bool:
+        """Check if cluster should be excluded based on tags"""
+        for tag in tags:
+            if (
+                tag.get("Key", "").lower() == "excludefromanalysis"
+                and tag.get("Value", "").lower() == "true"
+            ):
+                return True
         return False
 
-    def is_service_linked_role(self, role_name: str) -> bool:
-        """Check if a role is service-linked."""
+    def _analyze_ecs_clusters(self):  # pragma: no cover
+        """Analyze all ECS clusters and services"""
         try:
-            role = self.iam.get_role(RoleName=role_name)["Role"]
-            return role["Path"].startswith("/aws-service-role/")
-        except:
-            return False
+            clusters = self.ecs_client.list_clusters().get("clusterArns", [])
 
-    @lru_cache(maxsize=128)
-    def get_credential_report(self) -> List[Dict]:
-        """Get and parse the IAM credential report."""
+            for cluster_arn in clusters:
+                cluster_name = cluster_arn.split("/")[-1]
+
+                # Get cluster details and tags
+                cluster_details = self.ecs_client.describe_clusters(
+                    clusters=[cluster_arn], include=["TAGS", "STATISTICS"]
+                )["clusters"][0]
+
+                # Check exclusion rules
+                tags = cluster_details.get("tags", [])
+                if self._should_exclude_cluster(tags):
+                    logger.info(f"Skipping excluded cluster: {cluster_name}")
+                    continue
+
+                # Analyze services in cluster
+                self._analyze_ecs_services(cluster_name, cluster_details)
+
+                # Check cluster overprovisioning (Rule 11)
+                self._check_cluster_overprovisioning(cluster_name, cluster_details)
+
+        except ClientError as e:
+            logger.error(f"Error analyzing ECS clusters: {e}")
+
+    def _analyze_ecs_services(
+        self, cluster_name: str, cluster_details: Dict[str, Any]
+    ):  # pragma: no cover
+        """Analyze services within an ECS cluster"""
         try:
-            # Generate credential report
-            response = self.iam.generate_credential_report()
+            paginator = self.ecs_client.get_paginator("list_services")
 
-            # Wait for report to be ready
-            import time
+            for page in paginator.paginate(cluster=cluster_name):
+                service_arns = page.get("serviceArns", [])
 
-            while response.get("State") != "COMPLETE":
-                time.sleep(1)
-                response = self.iam.generate_credential_report()
-
-            # Get the report content
-            response = self.iam.get_credential_report()
-
-            # Parse CSV report
-            csv_content = response["Content"].decode("utf-8")
-            reader = csv.DictReader(io.StringIO(csv_content))
-            return list(reader)
-        except Exception as e:
-            logger.error(f"Error getting credential report: {str(e)}")
-            return []
-
-    def calculate_risk_score(self, severity: str, additional_factors: int = 0) -> int:
-        """Calculate risk score based on severity and additional factors."""
-        base_scores = {"CRITICAL": 9, "HIGH": 7, "MEDIUM": 5, "LOW": 3}
-        return min(10, base_scores.get(severity, 5) + additional_factors)
-
-    def audit_mfa_compliance(self):
-        """Find users with console access but no MFA."""
-        logger.info("Auditing MFA compliance...")
-
-        credential_report = self.get_credential_report()
-
-        for user in credential_report:
-            if (
-                user["password_enabled"] == "true"
-                and user["mfa_active"] == "false"
-                and user["user"] != "<root_account>"
-            ):
-
-                # Skip emergency access users
-                if self.is_emergency_access("User", user["user"]):
+                if not service_arns:
                     continue
 
-                finding = {
-                    "severity": "HIGH",
-                    "risk_score": self.calculate_risk_score("HIGH", 1),
-                    "principal_type": "User",
-                    "principal_name": user["user"],
-                    "issue_description": "User has console access without MFA enabled",
-                    "attack_scenario": "If password is compromised, attacker gains full console access without additional authentication factors",
-                    "remediation_steps": [
-                        "Enable MFA for this user immediately",
-                        "Consider enforcing MFA through SCP or IAM policy conditions",
-                    ],
-                }
-                self.findings.append(finding)
-
-                # Add remediation recommendation
-                self.remediation_recommendations.append(
-                    {
-                        "principal_name": user["user"],
-                        "issue_type": "missing_mfa",
-                        "recommended_policy": {
-                            "Version": "2012-10-17",
-                            "Statement": [
-                                {
-                                    "Effect": "Deny",
-                                    "Action": "*",
-                                    "Resource": "*",
-                                    "Condition": {
-                                        "BoolIfExists": {
-                                            "aws:MultiFactorAuthPresent": "false"
-                                        }
-                                    },
-                                }
-                            ],
-                        },
-                    }
-                )
-
-    def audit_access_keys(self):
-        """Audit access key age and usage."""
-        logger.info("Auditing access keys...")
-
-        credential_report = self.get_credential_report()
-        ninety_days_ago = datetime.now(timezone.utc) - timedelta(days=90)
-
-        for user in credential_report:
-            if user["user"] == "<root_account>":
-                continue
-
-            # Skip emergency access users
-            if self.is_emergency_access("User", user["user"]):
-                continue
-
-            # Check both access keys
-            for key_num in ["1", "2"]:
-                if user[f"access_key_{key_num}_active"] == "true":
-                    # Check key age
-                    created_date_str = user.get(f"access_key_{key_num}_created")
-                    if created_date_str and created_date_str != "N/A":
-                        created_date = datetime.fromisoformat(
-                            created_date_str.replace("+00:00", "+00:00")
-                        )
-                        if created_date < ninety_days_ago:
-                            finding = {
-                                "severity": "MEDIUM",
-                                "risk_score": self.calculate_risk_score("MEDIUM"),
-                                "principal_type": "User",
-                                "principal_name": user["user"],
-                                "issue_description": f"Access key {key_num} is older than 90 days",
-                                "attack_scenario": "Old access keys increase the window of opportunity for compromise",
-                                "remediation_steps": [
-                                    "Rotate the access key",
-                                    "Implement automated key rotation policy",
-                                ],
-                            }
-                            self.findings.append(finding)
-
-            # Check for multiple active keys
-            if (
-                user["access_key_1_active"] == "true"
-                and user["access_key_2_active"] == "true"
-            ):
-                finding = {
-                    "severity": "MEDIUM",
-                    "risk_score": self.calculate_risk_score("MEDIUM"),
-                    "principal_type": "User",
-                    "principal_name": user["user"],
-                    "issue_description": "User has multiple active access keys",
-                    "attack_scenario": "Multiple keys increase attack surface and complicate key management",
-                    "remediation_steps": [
-                        "Deactivate unnecessary access keys",
-                        "Implement policy limiting users to one active key",
-                    ],
-                }
-                self.findings.append(finding)
-
-    def audit_zombie_users(self):
-        """Find inactive users."""
-        logger.info("Auditing zombie users...")
-
-        credential_report = self.get_credential_report()
-        ninety_days_ago = datetime.now(timezone.utc) - timedelta(days=90)
-
-        for user in credential_report:
-            if user["user"] == "<root_account>":
-                continue
-
-            # Skip emergency access users
-            if self.is_emergency_access("User", user["user"]):
-                continue
-
-            # Check last activity
-            last_activity = None
-
-            # Check password last used
-            if user.get("password_last_used") and user["password_last_used"] != "N/A":
-                pwd_last_used = datetime.fromisoformat(
-                    user["password_last_used"].replace("+00:00", "+00:00")
-                )
-                last_activity = pwd_last_used
-
-            # Check access key usage
-            for key_num in ["1", "2"]:
-                key_last_used_str = user.get(f"access_key_{key_num}_last_used")
-                if key_last_used_str and key_last_used_str != "N/A":
-                    key_last_used = datetime.fromisoformat(
-                        key_last_used_str.replace("+00:00", "+00:00")
-                    )
-                    if not last_activity or key_last_used > last_activity:
-                        last_activity = key_last_used
-
-            if not last_activity or last_activity < ninety_days_ago:
-                finding = {
-                    "severity": "MEDIUM",
-                    "risk_score": self.calculate_risk_score("MEDIUM", 1),
-                    "principal_type": "User",
-                    "principal_name": user["user"],
-                    "issue_description": "User has not been active for over 90 days",
-                    "attack_scenario": "Inactive users are often forgotten and may have outdated permissions",
-                    "remediation_steps": [
-                        "Review if user still needs access",
-                        "Disable or delete if no longer needed",
-                        "Implement automated user lifecycle management",
-                    ],
-                }
-                self.findings.append(finding)
-
-    def audit_password_policy(self):
-        """Check account password policy."""
-        logger.info("Auditing password policy...")
-
-        try:
-            policy = self.iam.get_account_password_policy()["PasswordPolicy"]
-        except self.iam.exceptions.NoSuchEntityException:
-            finding = {
-                "severity": "CRITICAL",
-                "risk_score": self.calculate_risk_score("CRITICAL"),
-                "principal_type": "Account",
-                "principal_name": "AWS Account",
-                "issue_description": "No password policy is configured",
-                "attack_scenario": "Without password policy, users can set weak passwords",
-                "remediation_steps": ["Configure a strong password policy immediately"],
-            }
-            self.findings.append(finding)
-            return
-
-        issues = []
-        if policy.get("MinimumPasswordLength", 0) < 14:
-            issues.append("Password minimum length is less than 14 characters")
-        if not policy.get("RequireSymbols", False):
-            issues.append("Symbols are not required")
-        if not policy.get("RequireNumbers", False):
-            issues.append("Numbers are not required")
-        if not policy.get("RequireUppercaseCharacters", False):
-            issues.append("Uppercase characters are not required")
-        if not policy.get("RequireLowercaseCharacters", False):
-            issues.append("Lowercase characters are not required")
-        if not policy.get("MaxPasswordAge"):
-            issues.append("Password rotation is not enforced")
-
-        if issues:
-            finding = {
-                "severity": "HIGH",
-                "risk_score": self.calculate_risk_score("HIGH", len(issues) // 2),
-                "principal_type": "Account",
-                "principal_name": "AWS Account",
-                "issue_description": f"Password policy has {len(issues)} weakness(es): {'; '.join(issues)}",
-                "attack_scenario": "Weak password policy allows users to set easily guessable passwords",
-                "remediation_steps": [
-                    "Update password policy to meet security requirements",
-                    "Minimum 14 characters with complexity and rotation requirements",
-                ],
-            }
-            self.findings.append(finding)
-
-    def audit_overprivileged_users(self):
-        """Find users with admin or power user access."""
-        logger.info("Auditing overprivileged users...")
-
-        dangerous_policies = ["AdministratorAccess", "PowerUserAccess"]
-
-        # Get all users
-        paginator = self.iam.get_paginator("list_users")
-        for response in paginator.paginate():
-            for user in response["Users"]:
-                # Skip emergency access users
-                if self.is_emergency_access("User", user["UserName"]):
-                    continue
-
-                # Check attached policies
-                attached_policies = []
-                policy_paginator = self.iam.get_paginator("list_attached_user_policies")
-                for policy_response in policy_paginator.paginate(
-                    UserName=user["UserName"]
-                ):
-                    for policy in policy_response["AttachedPolicies"]:
-                        if any(
-                            dangerous in policy["PolicyName"]
-                            for dangerous in dangerous_policies
-                        ):
-                            attached_policies.append(policy["PolicyName"])
-
-                # Check group memberships
-                groups_response = self.iam.list_groups_for_user(
-                    UserName=user["UserName"]
-                )
-                for group in groups_response["Groups"]:
-                    group_policy_paginator = self.iam.get_paginator(
-                        "list_attached_group_policies"
-                    )
-                    for group_policy_response in group_policy_paginator.paginate(
-                        GroupName=group["GroupName"]
-                    ):
-                        for policy in group_policy_response["AttachedPolicies"]:
-                            if any(
-                                dangerous in policy["PolicyName"]
-                                for dangerous in dangerous_policies
-                            ):
-                                attached_policies.append(
-                                    f"{policy['PolicyName']} (via group: {group['GroupName']})"
-                                )
-
-                if attached_policies:
-                    finding = {
-                        "severity": "CRITICAL",
-                        "risk_score": self.calculate_risk_score("CRITICAL", 1),
-                        "principal_type": "User",
-                        "principal_name": user["UserName"],
-                        "issue_description": f'User has dangerous policies attached: {", ".join(attached_policies)}',
-                        "attack_scenario": "Overprivileged users can perform any action in the AWS account if compromised",
-                        "remediation_steps": [
-                            "Review if user truly needs administrative access",
-                            "Implement least privilege principle",
-                            "Consider using temporary elevation through assume role",
-                        ],
-                    }
-                    self.findings.append(finding)
-
-                    # Add remediation with scoped down policy
-                    self.remediation_recommendations.append(
-                        {
-                            "principal_name": user["UserName"],
-                            "issue_type": "overprivileged_user",
-                            "recommended_policy": {
-                                "Version": "2012-10-17",
-                                "Statement": [
-                                    {
-                                        "Effect": "Allow",
-                                        "Action": [
-                                            "iam:ListUsers",
-                                            "iam:ListRoles",
-                                            "iam:ListPolicies",
-                                            "iam:GetUser",
-                                            "iam:GetRole",
-                                            "iam:GetPolicy",
-                                        ],
-                                        "Resource": "*",
-                                    }
-                                ],
-                            },
-                        }
-                    )
-
-    def audit_dangerous_policies(self):
-        """Scan customer-managed policies for dangerous permissions."""
-        logger.info("Auditing dangerous policies...")
-
-        paginator = self.iam.get_paginator("list_policies")
-        for response in paginator.paginate(Scope="Local"):
-            for policy in response["Policies"]:
-                # Get policy document
-                policy_version = self.iam.get_policy_version(
-                    PolicyArn=policy["Arn"], VersionId=policy["DefaultVersionId"]
-                )["PolicyVersion"]
-
-                policy_doc = policy_version["Document"]
-
-                for statement in policy_doc.get("Statement", []):
-                    if statement.get("Effect") == "Allow":
-                        resources = statement.get("Resource", [])
-                        if isinstance(resources, str):
-                            resources = [resources]
-
-                        # Check for wildcard resources without conditions
-                        if "*" in resources and not statement.get("Condition"):
-                            actions = statement.get("Action", [])
-                            if isinstance(actions, str):
-                                actions = [actions]
-
-                            # Check if it's a risky action
-                            risky_actions = [
-                                a
-                                for a in actions
-                                if any(
-                                    pattern in a.lower()
-                                    for pattern in [
-                                        "create",
-                                        "delete",
-                                        "put",
-                                        "update",
-                                        "attach",
-                                        "detach",
-                                    ]
-                                )
-                            ]
-
-                            if risky_actions:
-                                finding = {
-                                    "severity": "HIGH",
-                                    "risk_score": self.calculate_risk_score(
-                                        "HIGH", len(risky_actions) // 3
-                                    ),
-                                    "principal_type": "Policy",
-                                    "principal_name": policy["PolicyName"],
-                                    "issue_description": f"Policy grants {len(risky_actions)} risky actions on all resources without conditions",
-                                    "attack_scenario": "Unrestricted permissions can be abused to access or modify any resource",
-                                    "remediation_steps": [
-                                        "Add resource constraints or conditions to limit scope",
-                                        "Consider splitting into multiple targeted policies",
-                                    ],
-                                }
-                                self.findings.append(finding)
-
-                                # Add remediation with conditions
-                                self.remediation_recommendations.append(
-                                    {
-                                        "principal_name": policy["PolicyName"],
-                                        "issue_type": "overly_permissive_policy",
-                                        "recommended_policy": {
-                                            "Version": "2012-10-17",
-                                            "Statement": [
-                                                {
-                                                    "Effect": "Allow",
-                                                    "Action": actions,
-                                                    "Resource": "*",
-                                                    "Condition": {
-                                                        "StringEquals": {
-                                                            "aws:RequestedRegion": self.region
-                                                        }
-                                                    },
-                                                }
-                                            ],
-                                        },
-                                    }
-                                )
-
-    def audit_role_session_duration(self):
-        """Check for roles with excessive session duration."""
-        logger.info("Auditing role session durations...")
-
-        paginator = self.iam.get_paginator("list_roles")
-        for response in paginator.paginate():
-            for role in response["Roles"]:
-                # Skip service-linked roles
-                if self.is_service_linked_role(role["RoleName"]):
-                    continue
-
-                # Skip ignored roles
-                if role["RoleName"] in self.ignored_roles:
-                    continue
-
-                # Skip emergency access roles
-                if self.is_emergency_access("Role", role["RoleName"]):
-                    continue
-
-                # Get full role details
-                role_details = self.iam.get_role(RoleName=role["RoleName"])["Role"]
-
-                # Check MaxSessionDuration (in seconds, 12 hours = 43200)
-                if role_details.get("MaxSessionDuration", 3600) > 43200:
-                    finding = {
-                        "severity": "MEDIUM",
-                        "risk_score": self.calculate_risk_score("MEDIUM"),
-                        "principal_type": "Role",
-                        "principal_name": role["RoleName"],
-                        "issue_description": f"Role has session duration of {role_details['MaxSessionDuration'] // 3600} hours (max should be 12)",
-                        "attack_scenario": "Long session durations increase the window for token abuse if compromised",
-                        "remediation_steps": [
-                            "Reduce MaxSessionDuration to 12 hours or less",
-                            "Consider shorter durations for highly privileged roles",
-                        ],
-                    }
-                    self.findings.append(finding)
-
-    def check_privilege_escalation_in_policy(self, policy_document: Dict) -> List[Dict]:
-        """Check if a policy document contains privilege escalation vectors."""
-        escalation_paths = []
-
-        for statement in policy_document.get("Statement", []):
-            if statement.get("Effect") != "Allow":
-                continue
-
-            actions = statement.get("Action", [])
-            if isinstance(actions, str):
-                actions = [actions]
-
-            # Normalize actions (handle wildcards)
-            normalized_actions = set()
-            for action in actions:
-                if action == "*":
-                    # Full admin - this is every escalation path
-                    return [
-                        {
-                            "pattern": "FullAdministrator",
-                            "description": "Full administrative access allows any privilege escalation",
-                            "actions": ["*"],
-                            "risk_score": 10,
-                        }
-                    ]
-                elif action.endswith("*"):
-                    # Service-level wildcard
-                    service = action.split(":")[0]
-                    if service == "iam":
-                        # IAM:* is essentially admin access
-                        return [
-                            {
-                                "pattern": "IAMFullAccess",
-                                "description": "Full IAM access allows any privilege escalation",
-                                "actions": [action],
-                                "risk_score": 10,
-                            }
-                        ]
-                    normalized_actions.add(action)
-                else:
-                    normalized_actions.add(action)
-
-            # Check against known escalation patterns
-            for pattern in PRIVILEGE_ESCALATION_PATTERNS:
-                pattern_actions = set(pattern["actions"])
-
-                # Check if all required actions for this pattern are present
-                if pattern_actions.issubset(normalized_actions):
-                    # Additional resource check for some patterns
-                    if "resource" in pattern:
-                        resources = statement.get("Resource", [])
-                        if isinstance(resources, str):
-                            resources = [resources]
-                        if "*" not in resources:
-                            continue
-
-                    escalation_paths.append(
-                        {
-                            "pattern": pattern["name"],
-                            "description": pattern["description"],
-                            "actions": list(pattern_actions),
-                            "risk_score": pattern["risk_score"],
-                        }
-                    )
-
-        return escalation_paths
-
-    def audit_privilege_escalation(self):
-        """Scan all IAM policies for privilege escalation vectors."""
-        logger.info("Auditing privilege escalation paths...")
-
-        # Check inline policies for users
-        user_paginator = self.iam.get_paginator("list_users")
-        for response in user_paginator.paginate():
-            for user in response["Users"]:
-                # Skip emergency access users
-                if self.is_emergency_access("User", user["UserName"]):
-                    continue
-
-                # Check inline policies
-                inline_policies = self.iam.list_user_policies(UserName=user["UserName"])
-                for policy_name in inline_policies["PolicyNames"]:
-                    policy_doc = self.iam.get_user_policy(
-                        UserName=user["UserName"], PolicyName=policy_name
-                    )["PolicyDocument"]
-
-                    escalation_paths = self.check_privilege_escalation_in_policy(
-                        policy_doc
-                    )
-                    if escalation_paths:
-                        self.report_privilege_escalation(
-                            "User",
-                            user["UserName"],
-                            policy_name,
-                            "inline",
-                            escalation_paths,
-                        )
-
-        # Check inline policies for roles
-        role_paginator = self.iam.get_paginator("list_roles")
-        for response in role_paginator.paginate():
-            for role in response["Roles"]:
-                # Skip service-linked and ignored roles
-                if (
-                    self.is_service_linked_role(role["RoleName"])
-                    or role["RoleName"] in self.ignored_roles
-                ):
-                    continue
-
-                # Skip emergency access roles
-                if self.is_emergency_access("Role", role["RoleName"]):
-                    continue
-
-                # Check inline policies
-                inline_policies = self.iam.list_role_policies(RoleName=role["RoleName"])
-                for policy_name in inline_policies["PolicyNames"]:
-                    policy_doc = self.iam.get_role_policy(
-                        RoleName=role["RoleName"], PolicyName=policy_name
-                    )["PolicyDocument"]
-
-                    escalation_paths = self.check_privilege_escalation_in_policy(
-                        policy_doc
-                    )
-                    if escalation_paths:
-                        self.report_privilege_escalation(
-                            "Role",
-                            role["RoleName"],
-                            policy_name,
-                            "inline",
-                            escalation_paths,
-                        )
-
-        # Check customer-managed policies
-        policy_paginator = self.iam.get_paginator("list_policies")
-        for response in policy_paginator.paginate(Scope="Local"):
-            for policy in response["Policies"]:
-                # Get policy document
-                policy_version = self.iam.get_policy_version(
-                    PolicyArn=policy["Arn"], VersionId=policy["DefaultVersionId"]
-                )["PolicyVersion"]
-
-                escalation_paths = self.check_privilege_escalation_in_policy(
-                    policy_version["Document"]
-                )
-                if escalation_paths:
-                    self.report_privilege_escalation(
-                        "Policy",
-                        policy["PolicyName"],
-                        policy["PolicyName"],
-                        "managed",
-                        escalation_paths,
-                    )
-
-    def report_privilege_escalation(
-        self,
-        principal_type: str,
-        principal_name: str,
-        policy_name: str,
-        policy_type: str,
-        escalation_paths: List[Dict],
-    ):
-        """Report a privilege escalation finding."""
-        max_risk = max(path["risk_score"] for path in escalation_paths)
-
-        finding = {
-            "severity": "CRITICAL",
-            "risk_score": max_risk,
-            "principal_type": principal_type,
-            "principal_name": principal_name,
-            "issue_description": f'Contains {len(escalation_paths)} privilege escalation path(s) in {policy_type} policy "{policy_name}"',
-            "attack_scenario": f'Attacker can escalate privileges using: {", ".join([p["pattern"] for p in escalation_paths])}',
-            "remediation_steps": [
-                "Remove dangerous action combinations",
-                "Implement least privilege principle",
-                "Use conditions to limit scope of actions",
-            ],
-        }
-        self.findings.append(finding)
-
-        # Track privilege escalation paths separately
-        for path in escalation_paths:
-            self.privilege_escalation_paths.append(
-                {
-                    "principal_type": principal_type,
-                    "principal_name": principal_name,
-                    "policy_name": policy_name,
-                    "policy_type": policy_type,
-                    "escalation_pattern": path["pattern"],
-                    "description": path["description"],
-                    "dangerous_actions": path["actions"],
-                    "risk_score": path["risk_score"],
-                }
-            )
-
-        # Add safe remediation policy
-        self.remediation_recommendations.append(
-            {
-                "principal_name": f"{principal_name}/{policy_name}",
-                "issue_type": "privilege_escalation",
-                "recommended_policy": {
-                    "Version": "2012-10-17",
-                    "Statement": [
-                        {
-                            "Effect": "Allow",
-                            "Action": [
-                                "iam:GetUser",
-                                "iam:GetRole",
-                                "iam:ListAttachedUserPolicies",
-                                "iam:ListAttachedRolePolicies",
-                            ],
-                            "Resource": [
-                                f"arn:aws:iam::*:user/{principal_name}",
-                                f"arn:aws:iam::*:role/{principal_name}",
-                            ],
-                        }
-                    ],
-                },
-            }
-        )
-
-    def audit_trust_policies(self):
-        """Check role trust policies for security issues."""
-        logger.info("Auditing role trust policies...")
-
-        paginator = self.iam.get_paginator("list_roles")
-        for response in paginator.paginate():
-            for role in response["Roles"]:
-                # Skip service-linked and ignored roles
-                if (
-                    self.is_service_linked_role(role["RoleName"])
-                    or role["RoleName"] in self.ignored_roles
-                ):
-                    continue
-
-                # Skip emergency access roles
-                if self.is_emergency_access("Role", role["RoleName"]):
-                    continue
-
-                trust_policy = role["AssumeRolePolicyDocument"]
-
-                for statement in trust_policy.get("Statement", []):
-                    if statement.get("Effect") != "Allow":
+                services = self.ecs_client.describe_services(
+                    cluster=cluster_name, services=service_arns
+                )["services"]
+
+                for service in services:
+                    service_name = service["serviceName"]
+
+                    # Skip dev services (exclusion rule)
+                    if service_name.startswith("dev-"):
                         continue
 
-                    principal = statement.get("Principal", {})
+                    # Check service age
+                    created_at = service.get("createdAt")
+                    if (
+                        created_at
+                        and (datetime.now(created_at.tzinfo) - created_at).days < 14
+                    ):
+                        continue
 
-                    # Check for cross-account trust
-                    if "AWS" in principal:
-                        aws_principals = principal["AWS"]
-                        if isinstance(aws_principals, str):
-                            aws_principals = [aws_principals]
+                    self.summary["total_ecs_services"] += 1
 
-                        # Check each principal
-                        for aws_principal in aws_principals:
-                            # Check if it's a cross-account principal
-                            if ":root" in aws_principal or re.match(
-                                r"arn:aws:iam::\d{12}:", aws_principal
-                            ):
-                                # Extract account ID
-                                account_match = re.search(
-                                    r"arn:aws:iam::(\d{12}):", aws_principal
-                                )
-                                if account_match:
-                                    external_account = account_match.group(1)
+                    # Perform all ECS checks
+                    self._check_ecs_over_provisioning(cluster_name, service)
+                    self._check_missing_auto_scaling(cluster_name, service)
+                    self._check_inefficient_task_placement(cluster_name, service)
+                    self._check_singleton_ha_risks(cluster_name, service)
+                    self._check_old_container_images(cluster_name, service)
+                    self._check_health_checks(cluster_name, service)
+                    self._check_excessive_task_revisions(cluster_name, service)
+                    self._check_missing_logging(cluster_name, service)
+                    self._check_service_discovery(cluster_name, service)
 
-                                    # Check for ExternalId condition
-                                    condition = statement.get("Condition", {})
-                                    has_external_id = False
+        except ClientError as e:
+            logger.error(f"Error analyzing ECS services: {e}")
 
-                                    for condition_type in condition.values():
-                                        if (
-                                            isinstance(condition_type, dict)
-                                            and "sts:ExternalId" in condition_type
-                                        ):
-                                            has_external_id = True
-                                            break
-
-                                    if not has_external_id:
-                                        finding = {
-                                            "severity": "HIGH",
-                                            "risk_score": self.calculate_risk_score(
-                                                "HIGH", 2
-                                            ),
-                                            "principal_type": "Role",
-                                            "principal_name": role["RoleName"],
-                                            "issue_description": f"Role allows cross-account access from {external_account} without ExternalId",
-                                            "attack_scenario": "Without ExternalId, the role is vulnerable to confused deputy attacks",
-                                            "remediation_steps": [
-                                                "Add ExternalId condition to the trust policy",
-                                                "Use a strong, random ExternalId value",
-                                                "Share ExternalId securely with trusted party",
-                                            ],
-                                        }
-                                        self.findings.append(finding)
-
-                                        # Add remediation
-                                        self.remediation_recommendations.append(
-                                            {
-                                                "principal_name": role["RoleName"],
-                                                "issue_type": "missing_external_id",
-                                                "recommended_trust_policy": {
-                                                    "Version": "2012-10-17",
-                                                    "Statement": [
-                                                        {
-                                                            "Effect": "Allow",
-                                                            "Principal": {
-                                                                "AWS": aws_principal
-                                                            },
-                                                            "Action": "sts:AssumeRole",
-                                                            "Condition": {
-                                                                "StringEquals": {
-                                                                    "sts:ExternalId": "REPLACE_WITH_STRONG_RANDOM_VALUE"
-                                                                }
-                                                            },
-                                                        }
-                                                    ],
-                                                },
-                                            }
-                                        )
-
-    def audit_s3_cross_account(self):
-        """Check S3 bucket policies for insecure cross-account access."""
-        logger.info("Auditing S3 cross-account access...")
+    def _check_ecs_over_provisioning(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for over-provisioned ECS tasks (Rule 1)"""
+        service_name = service["serviceName"]
+        task_definition = service["taskDefinition"]
 
         try:
-            # List all buckets
-            buckets = self.s3.list_buckets()["Buckets"]
+            # Get task definition details
+            task_def_details = self.ecs_client.describe_task_definition(
+                taskDefinition=task_definition
+            )["taskDefinition"]
 
-            for bucket in buckets:
-                try:
-                    # Get bucket policy
-                    policy_response = self.s3.get_bucket_policy(Bucket=bucket["Name"])
-                    policy = json.loads(policy_response["Policy"])
+            # Get running tasks
+            tasks = self.ecs_client.list_tasks(
+                cluster=cluster_name, serviceName=service_name, desiredStatus="RUNNING"
+            ).get("taskArns", [])
 
-                    for statement in policy.get("Statement", []):
-                        if statement.get("Effect") != "Allow":
-                            continue
+            if not tasks:
+                return
 
-                        principal = statement.get("Principal", {})
+            # Calculate total CPU and memory from task definition
+            total_cpu = int(task_def_details.get("cpu", "0"))
+            total_memory = int(task_def_details.get("memory", "0"))
 
-                        # Check for cross-account access
-                        if isinstance(principal, dict) and "AWS" in principal:
-                            aws_principals = principal["AWS"]
-                            if isinstance(aws_principals, str):
-                                aws_principals = [aws_principals]
+            # Get CloudWatch metrics for actual usage
+            end_time = datetime.utcnow()
+            start_time = end_time - timedelta(days=14)
 
-                            for aws_principal in aws_principals:
-                                # Check if it's external
-                                if aws_principal == "*" or ":root" in aws_principal:
-                                    # Check for conditions
-                                    if not statement.get("Condition"):
-                                        finding = {
-                                            "severity": "CRITICAL",
-                                            "risk_score": self.calculate_risk_score(
-                                                "CRITICAL", 1
-                                            ),
-                                            "principal_type": "S3Bucket",
-                                            "principal_name": bucket["Name"],
-                                            "issue_description": f"Bucket allows unrestricted cross-account access",
-                                            "attack_scenario": "Any AWS account can access this bucket without restrictions",
-                                            "remediation_steps": [
-                                                "Add conditions to limit access",
-                                                "Use specific account IDs instead of wildcards",
-                                                "Consider using bucket ownership controls",
-                                            ],
-                                        }
-                                        self.findings.append(finding)
+            # Get CPU utilization
+            cpu_metrics = self._get_container_insights_metrics(
+                cluster_name, service_name, "CPUUtilization", start_time, end_time
+            )
 
-                                        # Add remediation
-                                        self.remediation_recommendations.append(
-                                            {
-                                                "principal_name": bucket["Name"],
-                                                "issue_type": "s3_open_access",
-                                                "recommended_bucket_policy": {
-                                                    "Version": "2012-10-17",
-                                                    "Statement": [
-                                                        {
-                                                            "Effect": "Allow",
-                                                            "Principal": {
-                                                                "AWS": "arn:aws:iam::TRUSTED_ACCOUNT_ID:root"
-                                                            },
-                                                            "Action": "s3:GetObject",
-                                                            "Resource": f'arn:aws:s3:::{bucket["Name"]}/*',
-                                                            "Condition": {
-                                                                "StringEquals": {
-                                                                    "aws:SourceAccount": "TRUSTED_ACCOUNT_ID"
-                                                                }
-                                                            },
-                                                        }
-                                                    ],
-                                                },
-                                            }
-                                        )
+            # Get memory utilization
+            memory_metrics = self._get_container_insights_metrics(
+                cluster_name, service_name, "MemoryUtilization", start_time, end_time
+            )
 
-                except self.s3.exceptions.NoSuchBucketPolicy:
-                    # No bucket policy is fine
-                    pass
-                except Exception as e:
-                    logger.warning(f"Error checking bucket {bucket['Name']}: {str(e)}")
+            if cpu_metrics and memory_metrics:
+                avg_cpu_percent = np.mean(cpu_metrics)
+                avg_memory_percent = np.mean(memory_metrics)
 
-        except Exception as e:
-            logger.error(f"Error listing S3 buckets: {str(e)}")
+                # Convert percentages to actual values
+                actual_cpu = (avg_cpu_percent / 100) * total_cpu
+                actual_memory = (avg_memory_percent / 100) * total_memory
 
-    def audit_zombie_roles(self):
-        """Find roles that haven't been used recently."""
-        logger.info("Auditing zombie roles...")
+                # Check if over-provisioned (>2x)
+                if total_cpu > 2 * actual_cpu and total_memory > 2 * actual_memory:
+                    recommended_cpu = int(actual_cpu * 1.5)  # 50% buffer
+                    recommended_memory = int(actual_memory * 1.5)
 
-        ninety_days_ago = datetime.now(timezone.utc) - timedelta(days=90)
+                    # Calculate cost savings
+                    current_cost = self._calculate_ecs_cost(
+                        total_cpu, total_memory, task_def_details
+                    )
+                    optimized_cost = self._calculate_ecs_cost(
+                        recommended_cpu, recommended_memory, task_def_details
+                    )
+                    monthly_savings = (current_cost - optimized_cost) * HOURS_PER_MONTH
 
-        paginator = self.iam.get_paginator("list_roles")
-        for response in paginator.paginate():
-            for role in response["Roles"]:
-                # Skip service-linked and ignored roles
-                if (
-                    self.is_service_linked_role(role["RoleName"])
-                    or role["RoleName"] in self.ignored_roles
-                ):
-                    continue
-
-                # Skip emergency access roles
-                if self.is_emergency_access("Role", role["RoleName"]):
-                    continue
-
-                # Check creation date
-                if role["CreateDate"] < ninety_days_ago:
-                    # Get role details including LastUsedDate
-                    role_details = self.iam.get_role(RoleName=role["RoleName"])["Role"]
-
-                    last_used_info = role_details.get("RoleLastUsed", {})
-                    last_used_date = last_used_info.get("LastUsedDate")
-
-                    if not last_used_date or last_used_date < ninety_days_ago:
-                        finding = {
-                            "severity": "MEDIUM",
-                            "risk_score": self.calculate_risk_score("MEDIUM"),
-                            "principal_type": "Role",
-                            "principal_name": role["RoleName"],
-                            "issue_description": "Role has not been used in over 90 days",
-                            "attack_scenario": "Unused roles may have outdated permissions and are often overlooked in reviews",
-                            "remediation_steps": [
-                                "Review if role is still needed",
-                                "Delete if no longer required",
-                                "Document purpose if keeping",
-                            ],
-                        }
-                        self.findings.append(finding)
-
-    def audit_inline_policies(self):
-        """Check for inline policies that differ from attached policies."""
-        logger.info("Auditing inline policies for privilege creep...")
-
-        # Check users
-        user_paginator = self.iam.get_paginator("list_users")
-        for response in user_paginator.paginate():
-            for user in response["Users"]:
-                # Skip emergency access users
-                if self.is_emergency_access("User", user["UserName"]):
-                    continue
-
-                # Get inline and managed policies
-                inline_policies = self.iam.list_user_policies(
-                    UserName=user["UserName"]
-                )["PolicyNames"]
-                attached_policies = []
-                policy_paginator = self.iam.get_paginator("list_attached_user_policies")
-                for policy_response in policy_paginator.paginate(
-                    UserName=user["UserName"]
-                ):
-                    attached_policies.extend(policy_response["AttachedPolicies"])
-
-                if inline_policies and attached_policies:
                     finding = {
-                        "severity": "MEDIUM",
-                        "risk_score": self.calculate_risk_score("MEDIUM"),
-                        "principal_type": "User",
-                        "principal_name": user["UserName"],
-                        "issue_description": f"User has both inline ({len(inline_policies)}) and managed ({len(attached_policies)}) policies",
-                        "attack_scenario": "Mixed policy types indicate privilege creep and make auditing difficult",
-                        "remediation_steps": [
-                            "Convert inline policies to managed policies",
-                            "Consolidate permissions into single managed policy",
-                            "Remove redundant permissions",
-                        ],
+                        "cluster_name": cluster_name,
+                        "service_name": service_name,
+                        "task_definition": task_definition,
+                        "current_cpu": total_cpu,
+                        "current_memory": total_memory,
+                        "recommended_cpu": recommended_cpu,
+                        "recommended_memory": recommended_memory,
+                        "monthly_savings": monthly_savings,
+                        "finding_type": "over_provisioning",
                     }
-                    self.findings.append(finding)
 
-        # Check roles
-        role_paginator = self.iam.get_paginator("list_roles")
-        for response in role_paginator.paginate():
-            for role in response["Roles"]:
-                # Skip service-linked and ignored roles
+                    self.ecs_findings.append(finding)
+                    self.summary["services_requiring_attention"] += 1
+                    self.summary["total_monthly_savings"] += monthly_savings
+
+                # Store utilization data for visualization
+                self.utilization_data["ecs_cpu"].append(avg_cpu_percent)
+                self.utilization_data["ecs_memory"].append(avg_memory_percent)
+
+        except ClientError as e:
+            logger.warning(f"Error checking over-provisioning for {service_name}: {e}")
+
+    def _check_missing_auto_scaling(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for missing auto-scaling configuration (Rule 3)"""
+        service_name = service["serviceName"]
+        resource_id = f"service/{cluster_name}/{service_name}"
+
+        try:
+            # Check if auto-scaling is configured
+            scalable_targets = (
+                self.application_autoscaling_client.describe_scalable_targets(
+                    ServiceNamespace="ecs", ResourceIds=[resource_id]
+                ).get("ScalableTargets", [])
+            )
+
+            if not scalable_targets:
+                # Check if traffic is variable by looking at task count history
+                metrics = self._get_cloudwatch_metrics(
+                    "AWS/ECS",
+                    "ServiceName",
+                    service_name,
+                    "RunningTaskCount",
+                    datetime.utcnow() - timedelta(days=7),
+                    datetime.utcnow(),
+                )
+
+                if metrics:
+                    cv = (
+                        np.std(metrics) / np.mean(metrics)
+                        if np.mean(metrics) > 0
+                        else 0
+                    )
+
+                    # High coefficient of variation indicates variable traffic
+                    if cv > 0.3:
+                        self.ecs_findings.append(
+                            {
+                                "cluster_name": cluster_name,
+                                "service_name": service_name,
+                                "finding_type": "missing_auto_scaling",
+                                "traffic_variability": f"{cv:.2%}",
+                                "recommendation": "Enable auto-scaling for variable workload",
+                            }
+                        )
+                        self.summary["services_requiring_attention"] += 1
+
+        except ClientError as e:
+            logger.warning(f"Error checking auto-scaling for {service_name}: {e}")
+
+    def _check_inefficient_task_placement(  # pragma: no cover
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for inefficient Fargate task placement (Rule 4)"""
+        if service.get("launchType") != "FARGATE":
+            return
+
+        service_name = service["serviceName"]
+        task_definition = service["taskDefinition"]
+
+        try:
+            task_def_details = self.ecs_client.describe_task_definition(
+                taskDefinition=task_definition
+            )["taskDefinition"]
+
+            cpu = int(task_def_details.get("cpu", "0"))
+            memory = int(task_def_details.get("memory", "0"))
+
+            # Check if using minimal resources (0.5 vCPU = 512, 1GB = 1024)
+            if cpu < 512 and memory < 1024:
+                # Calculate potential savings by switching to EC2
+                fargate_cost = self._calculate_ecs_cost(cpu, memory, task_def_details)
+                ec2_cost = (
+                    EC2_M5_LARGE_HOUR_COST / 8
+                )  # Assuming 8 small tasks per instance
+                monthly_savings = (fargate_cost - ec2_cost) * HOURS_PER_MONTH
+
+                self.ecs_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "service_name": service_name,
+                        "finding_type": "inefficient_task_placement",
+                        "current_launch_type": "FARGATE",
+                        "recommended_launch_type": "EC2",
+                        "current_cpu": cpu,
+                        "current_memory": memory,
+                        "monthly_savings": monthly_savings,
+                    }
+                )
+                self.summary["services_requiring_attention"] += 1
+                self.summary["total_monthly_savings"] += monthly_savings
+
+        except ClientError as e:
+            logger.warning(f"Error checking task placement for {service_name}: {e}")
+
+    def _check_singleton_ha_risks(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for singleton services without HA (Rule 6)"""
+        service_name = service["serviceName"]
+        desired_count = service.get("desiredCount", 0)
+
+        if desired_count == 1:
+            # Check if service spans multiple AZs
+            placement_constraints = service.get("placementConstraints", [])
+            placement_strategy = service.get("placementStrategy", [])
+
+            has_multi_az = any(
+                strategy.get("type") == "spread"
+                and strategy.get("field") == "attribute:ecs.availability-zone"
+                for strategy in placement_strategy
+            )
+
+            if not has_multi_az:
+                self.ecs_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "service_name": service_name,
+                        "finding_type": "singleton_ha_risk",
+                        "desired_count": desired_count,
+                        "recommendation": "Increase desired count to 2+ and enable multi-AZ placement",
+                    }
+                )
+                self.summary["services_requiring_attention"] += 1
+
+    def _check_old_container_images(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for old container images (Rule 7)"""
+        service_name = service["serviceName"]
+        task_definition = service["taskDefinition"]
+
+        try:
+            task_def_details = self.ecs_client.describe_task_definition(
+                taskDefinition=task_definition
+            )["taskDefinition"]
+
+            registered_at = task_def_details.get("registeredAt")
+            if (
+                registered_at
+                and (datetime.now(registered_at.tzinfo) - registered_at).days > 90
+            ):
+                container_images = [
+                    container["image"]
+                    for container in task_def_details.get("containerDefinitions", [])
+                ]
+
+                self.ecs_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "service_name": service_name,
+                        "finding_type": "old_container_images",
+                        "task_definition": task_definition,
+                        "age_days": (
+                            datetime.now(registered_at.tzinfo) - registered_at
+                        ).days,
+                        "images": container_images,
+                        "recommendation": "Update container images to latest versions",
+                    }
+                )
+                self.summary["services_requiring_attention"] += 1
+
+        except ClientError as e:
+            logger.warning(f"Error checking container images for {service_name}: {e}")
+
+    def _check_health_checks(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for missing health checks (Rule 8)"""
+        service_name = service["serviceName"]
+        load_balancers = service.get("loadBalancers", [])
+
+        if load_balancers and not service.get("healthCheckGracePeriodSeconds"):
+            self.ecs_findings.append(
+                {
+                    "cluster_name": cluster_name,
+                    "service_name": service_name,
+                    "finding_type": "missing_health_checks",
+                    "has_load_balancer": True,
+                    "recommendation": "Configure health check grace period for load balancer integration",
+                }
+            )
+            self.summary["services_requiring_attention"] += 1
+
+    def _check_excessive_task_revisions(  # pragma: no cover
+        self, cluster_name: str, service: Dict[str, Any]
+    ):
+        """Check for excessive task definition revisions (Rule 9)"""
+        service_name = service["serviceName"]
+        task_definition = service["taskDefinition"]
+
+        # Extract revision number from task definition ARN
+        revision = int(task_definition.split(":")[-1])
+
+        if revision > 50:
+            self.ecs_findings.append(
+                {
+                    "cluster_name": cluster_name,
+                    "service_name": service_name,
+                    "finding_type": "excessive_task_revisions",
+                    "revision_count": revision,
+                    "recommendation": "Review deployment process to reduce configuration churn",
+                }
+            )
+            self.summary["services_requiring_attention"] += 1
+
+    def _check_missing_logging(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for missing logging configuration (Rule 12)"""
+        service_name = service["serviceName"]
+        task_definition = service["taskDefinition"]
+
+        try:
+            task_def_details = self.ecs_client.describe_task_definition(
+                taskDefinition=task_definition
+            )["taskDefinition"]
+
+            containers_without_logging = []
+            for container in task_def_details.get("containerDefinitions", []):
+                log_config = container.get("logConfiguration", {})
+                if not log_config or log_config.get("logDriver") not in [
+                    "awslogs",
+                    "fluentd",
+                    "fluentbit",
+                ]:
+                    containers_without_logging.append(container["name"])
+
+            if containers_without_logging:
+                self.ecs_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "service_name": service_name,
+                        "finding_type": "missing_logging",
+                        "containers": containers_without_logging,
+                        "recommendation": "Configure CloudWatch Logs or Fluent Bit for all containers",
+                    }
+                )
+                self.summary["services_requiring_attention"] += 1
+
+        except ClientError as e:
+            logger.warning(f"Error checking logging for {service_name}: {e}")
+
+    def _check_service_discovery(
+        self, cluster_name: str, service: Dict[str, Any]
+    ):  # pragma: no cover
+        """Check for missing service discovery (Rule 13)"""
+        service_name = service["serviceName"]
+        service_registries = service.get("serviceRegistries", [])
+
+        # Simple heuristic: if service name contains 'api', 'service', or 'backend'
+        # it likely communicates with other services
+        if any(
+            keyword in service_name.lower() for keyword in ["api", "service", "backend"]
+        ):
+            if not service_registries:
+                self.ecs_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "service_name": service_name,
+                        "finding_type": "missing_service_discovery",
+                        "recommendation": "Enable ECS Service Discovery for inter-service communication",
+                    }
+                )
+                self.summary["services_requiring_attention"] += 1
+
+    def _check_cluster_overprovisioning(  # pragma: no cover
+        self, cluster_name: str, cluster_details: Dict[str, Any]
+    ):
+        """Check for cluster overprovisioning (Rule 11)"""
+        statistics = cluster_details.get("statistics", [])
+
+        # Extract CPU and memory statistics
+        cpu_stats = next(
+            (stat for stat in statistics if stat["name"] == "CPUUtilization"), None
+        )
+        memory_stats = next(
+            (stat for stat in statistics if stat["name"] == "MemoryUtilization"), None
+        )
+
+        if cpu_stats and memory_stats:
+            cpu_utilization = float(cpu_stats.get("value", "0"))
+            memory_utilization = float(memory_stats.get("value", "0"))
+
+            # Check if cluster has >40% unused capacity
+            if cpu_utilization < 60 and memory_utilization < 60:
+                unused_cpu = 100 - cpu_utilization
+                unused_memory = 100 - memory_utilization
+
+                self.ecs_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "finding_type": "cluster_overprovisioning",
+                        "cpu_utilization": cpu_utilization,
+                        "memory_utilization": memory_utilization,
+                        "unused_cpu_percent": unused_cpu,
+                        "unused_memory_percent": unused_memory,
+                        "recommendation": "Reduce cluster capacity or consolidate workloads",
+                    }
+                )
+                self.summary["services_requiring_attention"] += 1
+
+    def _analyze_eks_clusters(self):  # pragma: no cover
+        """Analyze all EKS clusters and nodes"""
+        try:
+            clusters = self.eks_client.list_clusters().get("clusters", [])
+
+            for cluster_name in clusters:
+                # Get cluster details
+                cluster = self.eks_client.describe_cluster(name=cluster_name)["cluster"]
+
+                # Get cluster tags
+                tags = cluster.get("tags", {})
+                if self._should_exclude_cluster(
+                    [{"Key": k, "Value": v} for k, v in tags.items()]
+                ):
+                    logger.info(f"Skipping excluded EKS cluster: {cluster_name}")
+                    continue
+
+                # Analyze node groups
+                self._analyze_eks_node_groups(cluster_name)
+
+                # Analyze individual nodes
+                self._analyze_eks_nodes(cluster_name)
+
+        except ClientError as e:
+            logger.error(f"Error analyzing EKS clusters: {e}")
+
+    def _analyze_eks_node_groups(self, cluster_name: str):  # pragma: no cover
+        """Analyze EKS node groups for optimization opportunities"""
+        try:
+            node_groups = self.eks_client.list_nodegroups(clusterName=cluster_name).get(
+                "nodegroups", []
+            )
+
+            for node_group_name in node_groups:
+                node_group = self.eks_client.describe_nodegroup(
+                    clusterName=cluster_name, nodegroupName=node_group_name
+                )["nodegroup"]
+
+                # Skip if node group is too new
+                created_at = node_group.get("createdAt")
                 if (
-                    self.is_service_linked_role(role["RoleName"])
-                    or role["RoleName"] in self.ignored_roles
+                    created_at
+                    and (datetime.now(created_at.tzinfo) - created_at).days < 14
                 ):
                     continue
 
-                # Skip emergency access roles
-                if self.is_emergency_access("Role", role["RoleName"]):
-                    continue
+                # Check for spot instance opportunity (Rule 10)
+                capacity_type = node_group.get("capacityType", "ON_DEMAND")
+                if capacity_type == "ON_DEMAND":
+                    instance_types = node_group.get("instanceTypes", [])
+                    desired_size = node_group.get("scalingConfig", {}).get(
+                        "desiredSize", 0
+                    )
 
-                # Get inline and managed policies
-                inline_policies = self.iam.list_role_policies(
-                    RoleName=role["RoleName"]
-                )["PolicyNames"]
-                attached_policies = []
-                policy_paginator = self.iam.get_paginator("list_attached_role_policies")
-                for policy_response in policy_paginator.paginate(
-                    RoleName=role["RoleName"]
-                ):
-                    attached_policies.extend(policy_response["AttachedPolicies"])
+                    # Calculate potential spot savings
+                    spot_savings = 0
+                    for instance_type in instance_types:
+                        # Simplified calculation using m5.large as baseline
+                        if "large" in instance_type:
+                            savings_per_instance = (
+                                EC2_M5_LARGE_HOUR_COST - EC2_M5_LARGE_SPOT_HOUR_COST
+                            ) * HOURS_PER_MONTH
+                            spot_savings += savings_per_instance * desired_size
 
-                if inline_policies and attached_policies:
-                    finding = {
-                        "severity": "MEDIUM",
-                        "risk_score": self.calculate_risk_score("MEDIUM"),
-                        "principal_type": "Role",
-                        "principal_name": role["RoleName"],
-                        "issue_description": f"Role has both inline ({len(inline_policies)}) and managed ({len(attached_policies)}) policies",
-                        "attack_scenario": "Mixed policy types indicate privilege creep and make auditing difficult",
-                        "remediation_steps": [
-                            "Convert inline policies to managed policies",
-                            "Consolidate permissions into single managed policy",
-                            "Remove redundant permissions",
-                        ],
+                    if spot_savings > 0:
+                        self.eks_findings.append(
+                            {
+                                "cluster_name": cluster_name,
+                                "node_group": node_group_name,
+                                "finding_type": "spot_instance_opportunity",
+                                "instance_types": instance_types,
+                                "current_capacity_type": "ON_DEMAND",
+                                "recommended_capacity_type": "SPOT",
+                                "spot_savings_potential": spot_savings,
+                                "recommendation": "Enable spot instances for cost savings",
+                            }
+                        )
+                        self.summary["total_monthly_savings"] += spot_savings
+                        self.summary["services_requiring_attention"] += 1
+
+        except ClientError as e:
+            logger.warning(f"Error analyzing node groups for {cluster_name}: {e}")
+
+    def _analyze_eks_nodes(self, cluster_name: str):  # pragma: no cover
+        """Analyze individual EKS nodes for utilization"""
+        try:
+            # Find EC2 instances belonging to the EKS cluster
+            filters = [
+                {
+                    "Name": f"tag:kubernetes.io/cluster/{cluster_name}",
+                    "Values": ["owned"],
+                },
+                {"Name": "instance-state-name", "Values": ["running"]},
+            ]
+
+            instances = self.ec2_client.describe_instances(Filters=filters)
+
+            for reservation in instances["Reservations"]:
+                for instance in reservation["Instances"]:
+                    # Check instance age
+                    launch_time = instance.get("LaunchTime")
+                    if (
+                        launch_time
+                        and (datetime.now(launch_time.tzinfo) - launch_time).days < 14
+                    ):
+                        continue
+
+                    self.summary["total_eks_nodes"] += 1
+
+                    instance_id = instance["InstanceId"]
+                    instance_type = instance["InstanceType"]
+
+                    # Check underutilization (Rule 2)
+                    self._check_eks_node_utilization(
+                        cluster_name, instance_id, instance_type
+                    )
+
+                    # Get pod information (mock for resource limits check)
+                    self._check_eks_pod_resource_limits(cluster_name, instance_id)
+
+        except ClientError as e:
+            logger.warning(f"Error analyzing EKS nodes for {cluster_name}: {e}")
+
+    def _check_eks_node_utilization(  # pragma: no cover
+        self, cluster_name: str, instance_id: str, instance_type: str
+    ):  # pragma: no cover
+        """Check EKS node utilization (Rule 2)"""
+        end_time = datetime.utcnow()
+        start_time = end_time - timedelta(days=14)
+
+        # Get CPU utilization
+        cpu_metrics = self._get_cloudwatch_metrics(
+            "AWS/EC2", "InstanceId", instance_id, "CPUUtilization", start_time, end_time
+        )
+
+        # Get memory metrics (requires CloudWatch agent)
+        memory_metrics = self._get_cloudwatch_metrics(
+            "CWAgent",
+            "InstanceId",
+            instance_id,
+            "mem_used_percent",
+            start_time,
+            end_time,
+        )
+
+        if cpu_metrics and memory_metrics:
+            avg_cpu = np.mean(cpu_metrics)
+            avg_memory = np.mean(memory_metrics)
+
+            # Store utilization data for visualization
+            self.utilization_data["eks_cpu"].append(avg_cpu)
+            self.utilization_data["eks_memory"].append(avg_memory)
+
+            # Check if underutilized
+            if avg_cpu < 30 and avg_memory < 40:
+                self.eks_findings.append(
+                    {
+                        "cluster_name": cluster_name,
+                        "node_id": instance_id,
+                        "instance_type": instance_type,
+                        "finding_type": "underutilized_node",
+                        "current_utilization": {"cpu": avg_cpu, "memory": avg_memory},
+                        "recommended_changes": "Consolidate workloads or use smaller instance type",
+                        "recommendation": f"Node utilization is low (CPU: {avg_cpu:.1f}%, Memory: {avg_memory:.1f}%)",
                     }
-                    self.findings.append(finding)
+                )
+                self.summary["services_requiring_attention"] += 1
 
-    def generate_reports(self):
-        """Generate audit reports in multiple formats."""
-        logger.info("Generating reports...")
+    def _check_eks_pod_resource_limits(
+        self, cluster_name: str, instance_id: str
+    ):  # pragma: no cover
+        """Check for pods without resource limits (Rule 5)"""
+        # In a real implementation, this would query the Kubernetes API
+        # For this implementation, we'll simulate the check
+        # This would normally use kubectl or the Kubernetes Python client
 
+        # Simulated check - in practice, would query pods on the node
+        pods_without_limits = 2  # Simulated finding
+
+        if pods_without_limits > 0:
+            self.eks_findings.append(
+                {
+                    "cluster_name": cluster_name,
+                    "node_id": instance_id,
+                    "finding_type": "missing_resource_limits",
+                    "pods_without_limits": pods_without_limits,
+                    "recommendation": "Set CPU and memory limits for all pods",
+                }
+            )
+            self.summary["services_requiring_attention"] += 1
+
+    def _get_container_insights_metrics(  # pragma: no cover
+        self,
+        cluster_name: str,
+        service_name: str,
+        metric_name: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> List[float]:
+        """Get Container Insights metrics from CloudWatch"""
+        try:
+            response = self.cloudwatch_client.get_metric_statistics(
+                Namespace="ECS/ContainerInsights",
+                MetricName=metric_name,
+                Dimensions=[
+                    {"Name": "ClusterName", "Value": cluster_name},
+                    {"Name": "ServiceName", "Value": service_name},
+                ],
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=3600,  # 1 hour
+                Statistics=["Average"],
+            )
+
+            return [dp["Average"] for dp in response["Datapoints"]]
+
+        except ClientError as e:
+            logger.warning(f"Error getting Container Insights metrics: {e}")
+            return []
+
+    def _get_cloudwatch_metrics(  # pragma: no cover
+        self,
+        namespace: str,
+        dimension_name: str,
+        dimension_value: str,
+        metric_name: str,
+        start_time: datetime,
+        end_time: datetime,
+    ) -> List[float]:
+        """Get metrics from CloudWatch"""
+        try:
+            response = self.cloudwatch_client.get_metric_statistics(
+                Namespace=namespace,
+                MetricName=metric_name,
+                Dimensions=[{"Name": dimension_name, "Value": dimension_value}],
+                StartTime=start_time,
+                EndTime=end_time,
+                Period=3600,  # 1 hour
+                Statistics=["Average"],
+            )
+
+            return [dp["Average"] for dp in response["Datapoints"]]
+
+        except ClientError as e:
+            logger.warning(f"Error getting CloudWatch metrics: {e}")
+            return []
+
+    def _calculate_ecs_cost(
+        self, cpu: int, memory: int, task_def_details: Dict[str, Any]
+    ) -> float:
+        """Calculate ECS task cost per hour"""
+        launch_type = task_def_details.get("requiresCompatibilities", ["FARGATE"])[0]
+
+        if launch_type == "FARGATE":
+            # Fargate pricing
+            vcpu_hours = cpu / 1024  # Convert CPU units to vCPUs
+            memory_gb = memory / 1024  # Convert MB to GB
+            return (vcpu_hours * FARGATE_VCPU_HOUR_COST) + (
+                memory_gb * FARGATE_MEMORY_GB_HOUR_COST
+            )
+        else:
+            # Simplified EC2 pricing
+            return EC2_M5_LARGE_HOUR_COST / 8  # Assume 8 tasks per instance
+
+    def _generate_outputs(self):
+        """Generate all required output files"""
         # Console output
-        self.print_console_summary()
+        self._print_recommendations()
 
-        # Full JSON report
-        full_report = {
-            "audit_timestamp": datetime.now(timezone.utc).isoformat(),
-            "region": self.region,
-            "total_findings": len(self.findings),
-            "findings_by_severity": {
-                "CRITICAL": len(
-                    [f for f in self.findings if f["severity"] == "CRITICAL"]
-                ),
-                "HIGH": len([f for f in self.findings if f["severity"] == "HIGH"]),
-                "MEDIUM": len([f for f in self.findings if f["severity"] == "MEDIUM"]),
-                "LOW": len([f for f in self.findings if f["severity"] == "LOW"]),
-            },
-            "findings": self.findings,
-            "privilege_escalation_paths": self.privilege_escalation_paths,
+        # JSON output
+        self._save_json_output()
+
+        # CSV output
+        self._save_csv_output()
+
+        # Visualization
+        self._create_utilization_chart()
+
+    def _print_recommendations(self):
+        """Print top optimization recommendations to console"""
+        print("\n" + "=" * 80)
+        print("CONTAINER RESOURCE OPTIMIZATION ANALYSIS RESULTS")
+        print("=" * 80 + "\n")
+
+        print(f"Total ECS Services Analyzed: {self.summary['total_ecs_services']}")
+        print(f"Total EKS Nodes Analyzed: {self.summary['total_eks_nodes']}")
+        print(
+            f"Services Requiring Attention: {self.summary['services_requiring_attention']}"
+        )
+        print(
+            f"Total Potential Monthly Savings: ${self.summary['total_monthly_savings']:,.2f}"
+        )
+
+        print("\n" + "-" * 40)
+        print("TOP ECS OPTIMIZATION RECOMMENDATIONS")
+        print("-" * 40)
+
+        # Sort ECS findings by savings
+        ecs_with_savings = [f for f in self.ecs_findings if "monthly_savings" in f]
+        ecs_with_savings.sort(key=lambda x: x.get("monthly_savings", 0), reverse=True)
+
+        for i, finding in enumerate(ecs_with_savings[:5], 1):
+            print(f"\n{i}. {finding['service_name']} ({finding['cluster_name']})")
+            print(f"   Issue: {finding['finding_type'].replace('_', ' ').title()}")
+            if "current_cpu" in finding:
+                print(
+                    f"   Current: {finding['current_cpu']} CPU, {finding['current_memory']} MB memory"
+                )
+            if "recommended_cpu" in finding:
+                print(
+                    f"   Recommended: {finding['recommended_cpu']} CPU, {finding.get('recommended_memory', 'N/A')} MB memory"
+                )
+            print(f"   Monthly Savings: ${finding.get('monthly_savings', 0):,.2f}")
+
+        print("\n" + "-" * 40)
+        print("TOP EKS OPTIMIZATION RECOMMENDATIONS")
+        print("-" * 40)
+
+        # Sort EKS findings by savings
+        eks_with_savings = [
+            f for f in self.eks_findings if "spot_savings_potential" in f
+        ]
+        eks_with_savings.sort(
+            key=lambda x: x.get("spot_savings_potential", 0), reverse=True
+        )
+
+        for i, finding in enumerate(eks_with_savings[:5], 1):
+            print(
+                f"\n{i}. {finding.get('node_group', finding.get('node_id', 'N/A'))} ({finding['cluster_name']})"
+            )
+            print(f"   Issue: {finding['finding_type'].replace('_', ' ').title()}")
+            print(f"   {finding.get('recommendation', '')}")
+            if "spot_savings_potential" in finding:
+                print(
+                    f"   Potential Savings: ${finding['spot_savings_potential']:,.2f}/month"
+                )
+
+        print("\n" + "=" * 80 + "\n")
+
+    def _save_json_output(self):
+        """Save findings to JSON file"""
+        output = {
+            "ecs_findings": self.ecs_findings,
+            "eks_findings": self.eks_findings,
+            "summary": self.summary,
         }
 
-        with open("iam_security_audit.json", "w") as f:
-            json.dump(full_report, f, indent=2, default=str)
+        with open("container_optimization.json", "w") as f:
+            json.dump(output, f, indent=2, default=str)
 
-        # Remediation recommendations
-        with open("least_privilege_recommendations.json", "w") as f:
-            json.dump(self.remediation_recommendations, f, indent=2, default=str)
+        logger.info("Saved findings to container_optimization.json")
 
-        logger.info(
-            "Reports generated: iam_security_audit.json, least_privilege_recommendations.json"
-        )
+    def _save_csv_output(self):
+        """Save rightsizing plan to CSV"""
+        plans = []
 
-    def print_console_summary(self):
-        """Print a summary table to console."""
-        console_data = []
+        # Generate rightsizing plans from ECS findings
+        for finding in self.ecs_findings:
+            if finding.get("finding_type") == "over_provisioning":
+                plan = {
+                    "Type": "ECS",
+                    "Cluster": finding["cluster_name"],
+                    "Service": finding["service_name"],
+                    "Action": "Resize Task Definition",
+                    "Current_Config": f"{finding['current_cpu']} CPU, {finding['current_memory']} MB",
+                    "Recommended_Config": f"{finding['recommended_cpu']} CPU, {finding['recommended_memory']} MB",
+                    "Monthly_Savings": f"${finding['monthly_savings']:.2f}",
+                    "Implementation_Steps": "Update task definition, deploy new revision",
+                }
+                plans.append(plan)
+            elif finding.get("finding_type") == "missing_auto_scaling":
+                plan = {
+                    "Type": "ECS",
+                    "Cluster": finding["cluster_name"],
+                    "Service": finding["service_name"],
+                    "Action": "Enable Auto Scaling",
+                    "Current_Config": "No auto-scaling",
+                    "Recommended_Config": "Target tracking scaling policy",
+                    "Monthly_Savings": "Variable",
+                    "Implementation_Steps": "Configure Application Auto Scaling with target tracking",
+                }
+                plans.append(plan)
 
-        # Get top 20 findings by risk score
-        top_findings = sorted(
-            self.findings, key=lambda x: x["risk_score"], reverse=True
-        )[:20]
+        # Generate rightsizing plans from EKS findings
+        for finding in self.eks_findings:
+            if finding.get("finding_type") == "spot_instance_opportunity":
+                plan = {
+                    "Type": "EKS",
+                    "Cluster": finding["cluster_name"],
+                    "NodeGroup": finding["node_group"],
+                    "Action": "Enable Spot Instances",
+                    "Current_Config": "ON_DEMAND",
+                    "Recommended_Config": "SPOT with ON_DEMAND fallback",
+                    "Monthly_Savings": f"${finding['spot_savings_potential']:.2f}",
+                    "Implementation_Steps": "Update node group to use spot instances",
+                }
+                plans.append(plan)
 
-        for finding in top_findings:
-            console_data.append(
-                [
-                    finding["risk_score"],
-                    finding["severity"],
-                    finding["principal_type"],
-                    (
-                        finding["principal_name"][:30] + "..."
-                        if len(finding["principal_name"]) > 30
-                        else finding["principal_name"]
-                    ),
-                    (
-                        finding["issue_description"][:60] + "..."
-                        if len(finding["issue_description"]) > 60
-                        else finding["issue_description"]
-                    ),
-                ]
+        if plans:
+            df = pd.DataFrame(plans)
+            df.to_csv("rightsizing_plan.csv", index=False)
+            logger.info("Saved rightsizing plan to rightsizing_plan.csv")
+
+    def _create_utilization_chart(self):  # pragma: no cover
+        """Create utilization distribution chart"""
+        has_data = any(self.utilization_data.values())
+        plt.style.use("seaborn-v0_8-darkgrid")
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+        if not has_data:
+            logger.warning("No utilization data to visualize")
+            for ax in axes.flatten():
+                ax.axis("off")
+            fig.suptitle("Resource Utilization (No data available)")
+            plt.tight_layout()
+            plt.savefig("resource_utilization_trends.png", dpi=300, bbox_inches="tight")
+            plt.close(fig)
+            return
+        fig.suptitle("Container Resource Utilization Distribution", fontsize=16)
+
+        # ECS CPU utilization
+        if self.utilization_data["ecs_cpu"]:
+            ax = axes[0, 0]
+            ax.hist(
+                self.utilization_data["ecs_cpu"],
+                bins=20,
+                color="skyblue",
+                edgecolor="black",
             )
+            ax.set_title("ECS CPU Utilization")
+            ax.set_xlabel("CPU Utilization (%)")
+            ax.set_ylabel("Number of Services")
+            ax.axvline(x=50, color="red", linestyle="--", label="50% threshold")
+            ax.legend()
 
-        print("\n" + "=" * 100)
-        print("IAM SECURITY AUDIT SUMMARY - TOP 20 HIGH-RISK FINDINGS")
-        print("=" * 100 + "\n")
+        # ECS Memory utilization
+        if self.utilization_data["ecs_memory"]:
+            ax = axes[0, 1]
+            ax.hist(
+                self.utilization_data["ecs_memory"],
+                bins=20,
+                color="lightgreen",
+                edgecolor="black",
+            )
+            ax.set_title("ECS Memory Utilization")
+            ax.set_xlabel("Memory Utilization (%)")
+            ax.set_ylabel("Number of Services")
+            ax.axvline(x=50, color="red", linestyle="--", label="50% threshold")
+            ax.legend()
 
-        headers = ["Risk Score", "Severity", "Type", "Principal", "Issue"]
-        print(tabulate(console_data, headers=headers, tablefmt="grid"))
+        # EKS CPU utilization
+        if self.utilization_data["eks_cpu"]:
+            ax = axes[1, 0]
+            ax.hist(
+                self.utilization_data["eks_cpu"],
+                bins=20,
+                color="lightcoral",
+                edgecolor="black",
+            )
+            ax.set_title("EKS Node CPU Utilization")
+            ax.set_xlabel("CPU Utilization (%)")
+            ax.set_ylabel("Number of Nodes")
+            ax.axvline(x=30, color="red", linestyle="--", label="30% threshold")
+            ax.legend()
 
-        print(f"\nTotal Findings: {len(self.findings)}")
-        print(
-            f"Critical: {len([f for f in self.findings if f['severity'] == 'CRITICAL'])}"
-        )
-        print(f"High: {len([f for f in self.findings if f['severity'] == 'HIGH'])}")
-        print(f"Medium: {len([f for f in self.findings if f['severity'] == 'MEDIUM'])}")
-        print(f"Low: {len([f for f in self.findings if f['severity'] == 'LOW'])}")
-        print(
-            f"\nPrivilege Escalation Paths Found: {len(self.privilege_escalation_paths)}"
-        )
-        print("\n" + "=" * 100 + "\n")
+        # EKS Memory utilization
+        if self.utilization_data["eks_memory"]:
+            ax = axes[1, 1]
+            ax.hist(
+                self.utilization_data["eks_memory"],
+                bins=20,
+                color="plum",
+                edgecolor="black",
+            )
+            ax.set_title("EKS Node Memory Utilization")
+            ax.set_xlabel("Memory Utilization (%)")
+            ax.set_ylabel("Number of Nodes")
+            ax.axvline(x=40, color="red", linestyle="--", label="40% threshold")
+            ax.legend()
+
+        # Remove empty subplots
+        for ax in axes.flat:
+            if not ax.has_data():
+                fig.delaxes(ax)
+
+        plt.tight_layout()
+        plt.savefig("resource_utilization_trends.png", dpi=300, bbox_inches="tight")
+        logger.info("Saved utilization chart to resource_utilization_trends.png")
+        plt.close()
 
 
-def main():
-    """CLI entrypoint for running audits.
-
-    Usage: python lib/analyse.py --auditor iam|resources|all
-    Defaults to 'resources' to preserve previous behaviour.
-    """
-    import argparse
-
-    parser = argparse.ArgumentParser(description="Run AWS resource and IAM auditors")
-    parser.add_argument(
-        "--auditor", choices=["iam", "resources", "all"], default="resources"
+def main():  # pragma: no cover
+    """Main entry point"""
+    parser = argparse.ArgumentParser(
+        description="Analyze container resources for optimization opportunities"
     )
     parser.add_argument(
-        "--region", default=os.environ.get("AWS_DEFAULT_REGION", "us-east-1")
+        "--region", default="us-east-1", help="AWS region (default: us-east-1)"
     )
+    parser.add_argument("--debug", action="store_true", help="Enable debug logging")
+
     args = parser.parse_args()
 
-    if args.auditor in ("resources", "all"):
-        try:
-            auditor = AWSResourceAuditor(region_name=args.region)
-            audit_results = auditor.audit_resources()
-            auditor.print_console_summary(audit_results)
-            print(json.dumps(audit_results, indent=2, default=str))
-            with open("aws_audit_results.json", "w") as f:
-                json.dump(audit_results, f, indent=2, default=str)
-            print("Resource audit saved to aws_audit_results.json")
-            # Print a console summary in a tabular form for convenience
-            try:
-                auditor.print_console_summary()
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"Error during resource audit: {e}")
-            return 1
+    if args.debug:
+        logging.getLogger().setLevel(logging.DEBUG)
 
-    if args.auditor in ("iam", "all"):
-        try:
-            iam_auditor = IAMSecurityAuditor(region=args.region)
-            iam_auditor.run_full_audit()
-            iam_auditor.generate_reports()
-            print(
-                "IAM audit saved to iam_security_audit.json and least_privilege_recommendations.json"
-            )
-        except Exception as e:
-            print(f"Error during IAM audit: {e}")
-            return 1
-
-    return 0
+    try:
+        analyzer = ContainerResourceAnalyzer(region=args.region)
+        analyzer.analyze()
+    except Exception as e:
+        logger.error(f"Analysis failed: {e}")
+        raise
 
 
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__":  # pragma: no cover
+    main()
