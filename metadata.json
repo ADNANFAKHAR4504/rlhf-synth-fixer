@@ -3,10 +3,10 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-11-17T02:29:44+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": ["Web Application Deployment"],
   "po_id": "1u8k2i",
   "aws_services": [
     "VPC",
