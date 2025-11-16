@@ -1,0 +1,9 @@
+{
+  "name": "transaction-validator",
+  "version": "1.0.0",
+  "description": "Lambda function to validate and store transactions",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.450.0"
+  }
+}
