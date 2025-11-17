@@ -1,31 +1,27 @@
 {
-  "task_id": "101912456",
-  "po_id": "101912456",
   "platform": "pulumi",
   "language": "py",
   "complexity": "hard",
-  "team": "synth",
   "turn_type": "single",
-  "startedAt": "2025-11-14T00:55:26Z",
-  "subtask": "Failure Recovery and High Availability",
+  "po_id": "101912397",
+  "team": "synth",
+  "startedAt": "2025-11-17T12:10:46+00:00",
+  "subtask": "CI/CD Pipeline Integration",
   "subject_labels": [
     "aws",
     "infrastructure",
-    "environment-migration"
+    "ci/cd-pipeline-integration"
   ],
   "aws_services": [
-    "VPC",
-    "EC2",
-    "RDS",
-    "DynamoDB",
-    "ELB",
-    "Lambda",
+    "CodePipeline",
+    "CodeBuild",
+    "S3",
     "IAM",
-    "KMS",
-    "Secrets Manager",
+    "SSM",
     "CloudWatch",
-    "AWS Backup",
-    "SSM"
+    "SNS",
+    "KMS",
+    "CodeStarNotifications"
   ],
   "training_quality": 10
 }
