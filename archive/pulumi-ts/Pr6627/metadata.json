@@ -7,12 +7,7 @@
   "startedAt": "2025-11-17T05:30:10+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "infrastructure",
-    "aws",
-    "networking",
-    "compute",
-    "database",
-    "serverless"
+    "Cloud Environment Setup"
   ],
   "po_id": "y7v9v6",
   "aws_services": [
