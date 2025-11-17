@@ -3,20 +3,21 @@ import * as pulumi from '@pulumi/pulumi';
 // Set up Pulumi test environment
 pulumi.runtime.setMocks({
   newResource: (args: pulumi.runtime.MockResourceArgs): { id: string, state: any } => {
-    return {
+    const state = {
+      ...args.inputs,
+      arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
       id: `${args.name}_id`,
-      state: {
-        ...args.inputs,
-        arn: `arn:aws:${args.type}:us-east-1:123456789012:${args.name}`,
-        id: `${args.name}_id`,
-        name: args.inputs.name || args.name,
-        dnsName: args.type === 'aws:lb/loadBalancer:LoadBalancer' ? `${args.name}.elb.amazonaws.com` : undefined,
-        clusterIdentifier: args.inputs.clusterIdentifier || `${args.name}-cluster`,
-        clusterEndpoint: `${args.name}.cluster.us-east-1.rds.amazonaws.com`,
-        readerEndpoint: `${args.name}.cluster-ro.us-east-1.rds.amazonaws.com`,
-        vpcId: args.inputs.vpcId || 'vpc-12345',
-        dashboardName: args.inputs.dashboardName || `${args.name}-dashboard`,
-      },
+      name: args.inputs.name || args.name,
+      dnsName: args.type === 'aws:lb/loadBalancer:LoadBalancer' ? `${args.name}.elb.amazonaws.com` : undefined,
+      clusterIdentifier: args.inputs.clusterIdentifier || `${args.name}-cluster`,
+      clusterEndpoint: `${args.name}.cluster.us-east-1.rds.amazonaws.com`,
+      readerEndpoint: `${args.name}.cluster-ro.us-east-1.rds.amazonaws.com`,
+      vpcId: args.inputs.vpcId || 'vpc-12345',
+      dashboardName: args.inputs.dashboardName || `${args.name}-dashboard`,
+    };
+    return {
+      id: state.id,
+      state: state,
     };
   },
   call: (args: pulumi.runtime.MockCallArgs) => {
