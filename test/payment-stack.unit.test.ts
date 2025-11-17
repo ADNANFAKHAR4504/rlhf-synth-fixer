@@ -1,13 +1,13 @@
 import * as pulumi from '@pulumi/pulumi';
-import { PaymentStack } from '../lib/payment-stack';
-import { getEnvironmentConfig } from '../lib/config';
-import { VpcComponent } from '../lib/components/vpc';
+import { ApiGatewayComponent } from '../lib/components/api-gateway';
 import { DatabaseComponent } from '../lib/components/database';
 import { DynamoDbComponent } from '../lib/components/dynamodb';
-import { S3Component } from '../lib/components/s3';
 import { LambdaComponent } from '../lib/components/lambda';
-import { ApiGatewayComponent } from '../lib/components/api-gateway';
 import { MonitoringComponent } from '../lib/components/monitoring';
+import { S3Component } from '../lib/components/s3';
+import { VpcComponent } from '../lib/components/vpc';
+import { getEnvironmentConfig } from '../lib/config';
+import { PaymentStack } from '../lib/payment-stack';
 
 // Set up Pulumi mocks before any imports
 pulumi.runtime.setMocks({
@@ -30,14 +30,20 @@ pulumi.runtime.setMocks({
   },
 });
 
-// Set required config
-pulumi.runtime.setConfig('payment-infra:environment', 'dev');
-pulumi.runtime.setConfig('payment-infra:dbPassword', 'test-password-123');
+// Set required config - default to dev, can be overridden in tests
+pulumi.runtime.setConfig('TapStack:environment', 'dev');
+pulumi.runtime.setConfig('TapStack:dbPassword', 'test-password-123');
 pulumi.runtime.setConfig('aws:region', 'us-east-1');
 
 describe('PaymentStack Unit Tests', () => {
+  beforeEach(() => {
+    // Reset to dev config before each test
+    pulumi.runtime.setConfig('TapStack:environment', 'dev');
+  });
+
   describe('Environment Configuration', () => {
     it('should return correct dev configuration', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
       const config = getEnvironmentConfig();
 
       expect(config.environment).toBe('dev');
@@ -48,6 +54,30 @@ describe('PaymentStack Unit Tests', () => {
       expect(config.dbInstanceClass).toBe('db.t3.micro');
       expect(config.enableWaf).toBe(false);
       expect(config.customDomain).toBe('api-dev.payments.internal');
+    });
+
+    it('should return correct prod configuration', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'prod');
+      const config = getEnvironmentConfig();
+
+      expect(config.environment).toBe('prod');
+      expect(config.lambdaConcurrency).toBe(200);
+      expect(config.logRetentionDays).toBe(90);
+      expect(config.rdsAlarmThreshold).toBe(70);
+      expect(config.s3LifecycleDays).toBe(90);
+      expect(config.dbInstanceClass).toBe('db.t3.medium');
+      expect(config.enableWaf).toBe(true);
+      expect(config.customDomain).toBe('api-prod.payments.internal');
+    });
+
+    it('should return correct staging configuration', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'staging');
+      const config = getEnvironmentConfig();
+
+      expect(config.environment).toBe('staging');
+      expect(config.lambdaConcurrency).toBe(50);
+      expect(config.logRetentionDays).toBe(30);
+      expect(config.enableWaf).toBe(false);
     });
   });
 
@@ -124,6 +154,7 @@ describe('PaymentStack Unit Tests', () => {
     });
 
     it('should create database with encryption', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
       const db = new DatabaseComponent('test-db', {
         environmentSuffix: 'test',
         envConfig: getEnvironmentConfig(),
@@ -138,6 +169,25 @@ describe('PaymentStack Unit Tests', () => {
       });
 
       expect(db.kmsKey).toBeDefined();
+      expect(db.dbEndpoint).toBeDefined();
+    });
+
+    it('should create database with prod-specific configuration', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'prod');
+      const db = new DatabaseComponent('test-db-prod', {
+        environmentSuffix: 'prod',
+        envConfig: getEnvironmentConfig(),
+        tags: {
+          Environment: 'prod',
+          EnvironmentSuffix: 'prod',
+          ManagedBy: 'Pulumi',
+          Project: 'Test',
+        },
+        vpcId: vpc.vpcId,
+        privateSubnetIds: vpc.privateSubnetIds,
+      });
+
+      expect(db.dbInstance).toBeDefined();
       expect(db.dbEndpoint).toBeDefined();
     });
   });
@@ -268,6 +318,7 @@ describe('PaymentStack Unit Tests', () => {
     });
 
     it('should create Lambda with correct memory and concurrency', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
       const lambda = new LambdaComponent('test-lambda', {
         environmentSuffix: 'test',
         envConfig: getEnvironmentConfig(),
@@ -286,6 +337,28 @@ describe('PaymentStack Unit Tests', () => {
 
       expect(lambda.functionArn).toBeDefined();
       expect(lambda.functionName).toBeDefined();
+    });
+
+    it('should create Lambda with prod-specific configuration', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'prod');
+      const lambda = new LambdaComponent('test-lambda-prod', {
+        environmentSuffix: 'prod',
+        envConfig: getEnvironmentConfig(),
+        tags: {
+          Environment: 'prod',
+          EnvironmentSuffix: 'prod',
+          ManagedBy: 'Pulumi',
+          Project: 'Test',
+        },
+        vpcId: vpc.vpcId,
+        privateSubnetIds: vpc.privateSubnetIds,
+        dbEndpoint: pulumi.output('prod.rds.amazonaws.com:5432'),
+        dynamoTableName: dynamo.tableName,
+        dynamoTableArn: dynamo.tableArn,
+      });
+
+      expect(lambda.function).toBeDefined();
+      expect(lambda.functionArn).toBeDefined();
     });
   });
 
@@ -311,6 +384,7 @@ describe('PaymentStack Unit Tests', () => {
     });
 
     it('should not create WAF for dev environment', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
       const api = new ApiGatewayComponent('test-api', {
         environmentSuffix: 'test',
         envConfig: getEnvironmentConfig(),
@@ -326,6 +400,26 @@ describe('PaymentStack Unit Tests', () => {
 
       expect(api.wafWebAcl).toBeUndefined();
       expect(api.wafAssociation).toBeUndefined();
+    });
+
+    it('should create WAF for prod environment', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'prod');
+      const api = new ApiGatewayComponent('test-api-prod', {
+        environmentSuffix: 'prod',
+        envConfig: getEnvironmentConfig(),
+        tags: {
+          Environment: 'prod',
+          EnvironmentSuffix: 'prod',
+          ManagedBy: 'Pulumi',
+          Project: 'Test',
+        },
+        lambdaFunctionArn: pulumi.output('arn:aws:lambda:us-east-1:123456789012:function:test-prod'),
+        lambdaFunctionName: pulumi.output('test-function-prod'),
+      });
+
+      expect(api.api).toBeDefined();
+      expect(api.wafWebAcl).toBeDefined();
+      expect(api.wafAssociation).toBeDefined();
     });
   });
 
@@ -405,6 +499,7 @@ describe('PaymentStack Unit Tests', () => {
     });
 
     it('should apply custom tags', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
       const customTags = {
         CustomTag: 'CustomValue',
         Team: 'TestTeam',
@@ -416,6 +511,39 @@ describe('PaymentStack Unit Tests', () => {
       });
 
       expect(stack).toBeDefined();
+    });
+
+    it('should create PaymentStack for prod environment', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'prod');
+      const stack = new PaymentStack('test-stack-prod', {
+        environmentSuffix: 'prod',
+        tags: {
+          Environment: 'prod',
+        },
+      });
+
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+      expect(stack.dbEndpoint).toBeDefined();
+      expect(stack.lambdaArn).toBeDefined();
+      expect(stack.apiEndpoint).toBeDefined();
+    });
+
+    it('should use default environment suffix when not provided', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
+      const stack = new PaymentStack('test-stack-default', {});
+
+      expect(stack).toBeDefined();
+      expect(stack.vpcId).toBeDefined();
+    });
+
+    it('should fallback to process.env when environmentSuffix not in args', () => {
+      pulumi.runtime.setConfig('TapStack:environment', 'dev');
+      process.env.ENVIRONMENT_SUFFIX = 'envvar';
+      const stack = new PaymentStack('test-stack-env', {});
+
+      expect(stack).toBeDefined();
+      delete process.env.ENVIRONMENT_SUFFIX;
     });
   });
 });
