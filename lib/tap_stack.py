@@ -641,6 +641,65 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.logs_bucket)
         )
 
+        # ALB access logs bucket policy (allow ELB service account to write logs)
+        # ELB service account IDs by region: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
+        elb_service_accounts = {
+            "us-east-1": "127311923021",
+            "us-east-2": "033677994240", 
+            "us-west-1": "027434742980",
+            "us-west-2": "797873946194",
+            "eu-west-1": "156460612806",
+            "ap-southeast-1": "114774131450",
+            "ap-southeast-2": "783225319266"
+        }
+        
+        elb_service_account = elb_service_accounts.get(self.region, "127311923021")  # Default to us-east-1
+        
+        alb_logs_policy = pulumi.Output.all(
+            bucket_arn=self.logs_bucket.arn,
+            account_id=aws.get_caller_identity().account_id
+        ).apply(lambda args: json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::{elb_service_account}:root"
+                    },
+                    "Action": "s3:PutObject",
+                    "Resource": f"{args['bucket_arn']}/alb-access-logs/AWSLogs/{args['account_id']}/*"
+                },
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "Service": "delivery.logs.amazonaws.com"
+                    },
+                    "Action": "s3:PutObject",
+                    "Resource": f"{args['bucket_arn']}/alb-access-logs/AWSLogs/{args['account_id']}/*",
+                    "Condition": {
+                        "StringEquals": {
+                            "s3:x-amz-acl": "bucket-owner-full-control"
+                        }
+                    }
+                },
+                {
+                    "Effect": "Allow",
+                    "Principal": {
+                        "AWS": f"arn:aws:iam::{elb_service_account}:root"
+                    },
+                    "Action": "s3:GetBucketAcl",
+                    "Resource": args['bucket_arn']
+                }
+            ]
+        }))
+
+        aws.s3.BucketPolicy(
+            f"logs-bucket-alb-policy-{self.environment_suffix}",
+            bucket=self.logs_bucket.id,
+            policy=alb_logs_policy,
+            opts=ResourceOptions(parent=self.logs_bucket)
+        )
+
     def _create_alb(self):
         """Create Application Load Balancer with HTTPS listeners."""
         
