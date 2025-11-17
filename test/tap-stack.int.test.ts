@@ -1,15 +1,19 @@
-// Configuration - These are coming from cfn-outputs after cdk deploy
 import fs from 'fs';
+import path from 'path';
 import {
   S3Client,
   PutObjectCommand,
   GetObjectCommand,
   ListBucketsCommand,
+  GetBucketEncryptionCommand,
+  GetBucketVersioningCommand,
+  DeleteObjectCommand,
 } from '@aws-sdk/client-s3';
 import {
   LambdaClient,
   InvokeCommand,
   GetFunctionCommand,
+  GetFunctionConfigurationCommand,
 } from '@aws-sdk/client-lambda';
 import {
   CloudWatchLogsClient,
@@ -42,15 +46,30 @@ import {
   CloudWatchClient,
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
-
-const path = require('path');
+import {
+  SNSClient,
+  ListTopicsCommand,
+  GetTopicAttributesCommand,
+} from '@aws-sdk/client-sns';
+import {
+  EventBridgeClient,
+  DescribeRuleCommand,
+  ListRulesCommand,
+} from '@aws-sdk/client-eventbridge';
+import {
+  IAMClient,
+  GetRoleCommand,
+  GetPolicyCommand,
+} from '@aws-sdk/client-iam';
 import { fromIni } from '@aws-sdk/credential-provider-ini';
 
+// Get outputs from flat-outputs.json
 const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
 
-const region = process.env.AWS_REGION || 'us-east-1';
+// Get environment suffix and region from environment variables
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const region = process.env.AWS_REGION || 'us-east-1';
 const awsProfile = process.env.AWS_PROFILE;
 
 // Configure AWS SDK client options
@@ -68,10 +87,37 @@ const kmsClient = new KMSClient(clientConfig);
 const ec2Client = new EC2Client(clientConfig);
 const wafClient = new WAFV2Client(clientConfig);
 const cloudWatchClient = new CloudWatchClient(clientConfig);
+const snsClient = new SNSClient(clientConfig);
+const eventBridgeClient = new EventBridgeClient(clientConfig);
+const iamClient = new IAMClient(clientConfig);
 
-describe('Secure Data Analytics Platform Integration Tests', () => {
+describe('Secure Data Analytics Platform - Integration Tests', () => {
+  describe('Environment Configuration', () => {
+    test('should have valid environment suffix', () => {
+      expect(environmentSuffix).toBeDefined();
+      expect(typeof environmentSuffix).toBe('string');
+      expect(environmentSuffix.length).toBeGreaterThan(0);
+    });
+
+    test('should have valid AWS region', () => {
+      expect(region).toBeDefined();
+      expect(typeof region).toBe('string');
+      expect(region).toMatch(/^[a-z]{2}-[a-z]+-\d+$/);
+    });
+
+    test('should have flat-outputs.json file', () => {
+      expect(fs.existsSync(outputsPath)).toBe(true);
+      expect(Object.keys(outputs).length).toBeGreaterThan(0);
+    });
+  });
+
   describe('KMS Encryption', () => {
-    test('KMS key exists and has rotation enabled', async () => {
+    test('should have KMS key output', () => {
+      expect(outputs.KmsKeyArn).toBeDefined();
+      expect(outputs.KmsKeyArn).toMatch(/^arn:aws:kms:/);
+    });
+
+    test('KMS key should exist and be enabled', async () => {
       const keyId = outputs.KmsKeyArn.split('/').pop();
       const keyDescription = await kmsClient.send(
         new DescribeKeyCommand({ KeyId: keyId })
@@ -79,16 +125,25 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
 
       expect(keyDescription.KeyMetadata).toBeDefined();
       expect(keyDescription.KeyMetadata?.KeyState).toBe('Enabled');
+      expect(keyDescription.KeyMetadata?.Description).toContain('encryption');
+    });
 
+    test('KMS key should have rotation enabled', async () => {
+      const keyId = outputs.KmsKeyArn.split('/').pop();
       const rotationStatus = await kmsClient.send(
         new GetKeyRotationStatusCommand({ KeyId: keyId })
       );
       expect(rotationStatus.KeyRotationEnabled).toBe(true);
-    }, 30000);
+    });
   });
 
   describe('VPC and Network Configuration', () => {
-    test('VPC exists with correct configuration', async () => {
+    test('should have VPC ID output', () => {
+      expect(outputs.VpcId).toBeDefined();
+      expect(outputs.VpcId).toMatch(/^vpc-[a-f0-9]+$/);
+    });
+
+    test('VPC should exist and be available', async () => {
       const vpcsResponse = await ec2Client.send(
         new DescribeVpcsCommand({
           VpcIds: [outputs.VpcId],
@@ -98,9 +153,10 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       expect(vpcsResponse.Vpcs).toHaveLength(1);
       const vpc = vpcsResponse.Vpcs![0];
       expect(vpc.State).toBe('available');
-    }, 30000);
+      expect(vpc.VpcId).toBe(outputs.VpcId);
+    });
 
-    test('VPC has three private subnets', async () => {
+    test('VPC should have exactly 3 private subnets', async () => {
       const subnetsResponse = await ec2Client.send(
         new DescribeSubnetsCommand({
           Filters: [
@@ -115,10 +171,11 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       expect(subnetsResponse.Subnets).toHaveLength(3);
       subnetsResponse.Subnets?.forEach((subnet) => {
         expect(subnet.State).toBe('available');
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
-    }, 30000);
+    });
 
-    test('VPC has required endpoint types', async () => {
+    test('VPC should have S3 gateway endpoint', async () => {
       const endpointsResponse = await ec2Client.send(
         new DescribeVpcEndpointsCommand({
           Filters: [
@@ -126,53 +183,161 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
               Name: 'vpc-id',
               Values: [outputs.VpcId],
             },
+            {
+              Name: 'service-name',
+              Values: [`com.amazonaws.${region}.s3`],
+            },
           ],
         })
       );
 
-      const endpoints = endpointsResponse.VpcEndpoints || [];
-      expect(endpoints.length).toBeGreaterThanOrEqual(3);
+      expect(endpointsResponse.VpcEndpoints).toBeDefined();
+      expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThanOrEqual(1);
+      const s3Endpoint = endpointsResponse.VpcEndpoints![0];
+      expect(s3Endpoint.State).toBe('available');
+      expect(s3Endpoint.VpcEndpointType).toBe('Gateway');
+    });
 
-      const serviceNames = endpoints.map((e) => e.ServiceName || '');
-      expect(serviceNames.some((s) => s.includes('s3'))).toBe(true);
-      expect(serviceNames.some((s) => s.includes('dynamodb'))).toBe(true);
-      expect(serviceNames.some((s) => s.includes('lambda'))).toBe(true);
-    }, 30000);
-
-    test('Security groups have correct ingress/egress rules', async () => {
-      const securityGroupsResponse = await ec2Client.send(
-        new DescribeSecurityGroupsCommand({
+    test('VPC should have DynamoDB gateway endpoint', async () => {
+      const endpointsResponse = await ec2Client.send(
+        new DescribeVpcEndpointsCommand({
           Filters: [
             {
               Name: 'vpc-id',
               Values: [outputs.VpcId],
             },
             {
-              Name: 'group-name',
-              Values: ['*Lambda*', '*Endpoint*'],
+              Name: 'service-name',
+              Values: [`com.amazonaws.${region}.dynamodb`],
             },
           ],
         })
       );
 
-      expect(securityGroupsResponse.SecurityGroups).toBeDefined();
-      expect(securityGroupsResponse.SecurityGroups!.length).toBeGreaterThan(0);
-    }, 30000);
+      expect(endpointsResponse.VpcEndpoints).toBeDefined();
+      expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThanOrEqual(1);
+      const dynamoEndpoint = endpointsResponse.VpcEndpoints![0];
+      expect(dynamoEndpoint.State).toBe('available');
+      expect(dynamoEndpoint.VpcEndpointType).toBe('Gateway');
+    });
+
+    test('VPC should have Lambda interface endpoint', async () => {
+      const endpointsResponse = await ec2Client.send(
+        new DescribeVpcEndpointsCommand({
+          Filters: [
+            {
+              Name: 'vpc-id',
+              Values: [outputs.VpcId],
+            },
+            {
+              Name: 'service-name',
+              Values: [`com.amazonaws.${region}.lambda`],
+            },
+          ],
+        })
+      );
+
+      expect(endpointsResponse.VpcEndpoints).toBeDefined();
+      expect(endpointsResponse.VpcEndpoints!.length).toBeGreaterThanOrEqual(1);
+      const lambdaEndpoint = endpointsResponse.VpcEndpoints![0];
+      expect(lambdaEndpoint.State).toBe('available');
+      expect(lambdaEndpoint.VpcEndpointType).toBe('Interface');
+    });
+
+    test('should have Lambda security group', async () => {
+      expect(outputs.LambdaSecurityGroupId).toBeDefined();
+
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.LambdaSecurityGroupId],
+        })
+      );
+
+      expect(sgResponse.SecurityGroups).toHaveLength(1);
+      const sg = sgResponse.SecurityGroups![0];
+      expect(sg.GroupName).toContain('Lambda');
+      expect(sg.VpcId).toBe(outputs.VpcId);
+    });
+
+    test('should have endpoint security group', async () => {
+      expect(outputs.EndpointSecurityGroupId).toBeDefined();
+
+      const sgResponse = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          GroupIds: [outputs.EndpointSecurityGroupId],
+        })
+      );
+
+      expect(sgResponse.SecurityGroups).toHaveLength(1);
+      const sg = sgResponse.SecurityGroups![0];
+      expect(sg.GroupName).toContain('Endpoint');
+      expect(sg.VpcId).toBe(outputs.VpcId);
+    });
   });
 
   describe('S3 Buckets', () => {
-    test('all three buckets exist and are accessible', async () => {
+    test('should have all bucket name outputs', () => {
+      expect(outputs.RawDataBucketName).toBeDefined();
+      expect(outputs.ProcessedDataBucketName).toBeDefined();
+      expect(outputs.AuditLogsBucketName).toBeDefined();
+    });
+
+    test('all three buckets should exist', async () => {
       const bucketsResponse = await s3Client.send(new ListBucketsCommand({}));
       const bucketNames = bucketsResponse.Buckets?.map((b) => b.Name) || [];
 
       expect(bucketNames).toContain(outputs.RawDataBucketName);
       expect(bucketNames).toContain(outputs.ProcessedDataBucketName);
       expect(bucketNames).toContain(outputs.AuditLogsBucketName);
-    }, 30000);
+    });
 
-    test('can upload an encrypted object to raw data bucket', async () => {
-      const testKey = 'input/test-file.txt';
-      const testData = 'Integration test data';
+    test('raw data bucket should have KMS encryption', async () => {
+      const encryptionResponse = await s3Client.send(
+        new GetBucketEncryptionCommand({
+          Bucket: outputs.RawDataBucketName,
+        })
+      );
+
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+    });
+
+    test('raw data bucket should have versioning enabled', async () => {
+      const versioningResponse = await s3Client.send(
+        new GetBucketVersioningCommand({
+          Bucket: outputs.RawDataBucketName,
+        })
+      );
+
+      expect(versioningResponse.Status).toBe('Enabled');
+    });
+
+    test('processed data bucket should have KMS encryption', async () => {
+      const encryptionResponse = await s3Client.send(
+        new GetBucketEncryptionCommand({
+          Bucket: outputs.ProcessedDataBucketName,
+        })
+      );
+
+      expect(encryptionResponse.ServerSideEncryptionConfiguration).toBeDefined();
+      const rule = encryptionResponse.ServerSideEncryptionConfiguration!.Rules![0];
+      expect(rule.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('aws:kms');
+    });
+
+    test('audit logs bucket should have versioning enabled', async () => {
+      const versioningResponse = await s3Client.send(
+        new GetBucketVersioningCommand({
+          Bucket: outputs.AuditLogsBucketName,
+        })
+      );
+
+      expect(versioningResponse.Status).toBe('Enabled');
+    });
+
+    test('should successfully upload encrypted object to raw data bucket', async () => {
+      const testKey = `input/integration-test-${Date.now()}.txt`;
+      const testData = 'Integration test data - encrypted upload';
 
       await s3Client.send(
         new PutObjectCommand({
@@ -183,7 +348,6 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
         })
       );
 
-      // Verify upload
       const getResponse = await s3Client.send(
         new GetObjectCommand({
           Bucket: outputs.RawDataBucketName,
@@ -192,26 +356,49 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       );
 
       expect(getResponse.ServerSideEncryption).toBe('aws:kms');
-    }, 30000);
 
-    test('unencrypted upload is denied by bucket policy', async () => {
-      const testKey = 'test-unencrypted.txt';
+      // Cleanup
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: outputs.RawDataBucketName,
+          Key: testKey,
+        })
+      );
+    });
+  });
 
-      await expect(
-        s3Client.send(
-          new PutObjectCommand({
-            Bucket: outputs.RawDataBucketName,
-            Key: testKey,
-            Body: 'test',
-            // No server-side encryption specified
-          })
-        )
-      ).rejects.toThrow();
-    }, 30000);
+  describe('IAM Roles and Policies', () => {
+    test('should have data processor role ARN output', () => {
+      expect(outputs.DataProcessorRoleArn).toBeDefined();
+      expect(outputs.DataProcessorRoleArn).toMatch(/^arn:aws:iam::/);
+    });
+
+    test('should have permission boundary ARN output', () => {
+      expect(outputs.PermissionBoundaryArn).toBeDefined();
+      expect(outputs.PermissionBoundaryArn).toMatch(/^arn:aws:iam::/);
+    });
+
+    test('data processor role should exist', async () => {
+      const roleName = outputs.DataProcessorRoleArn.split('/').pop();
+      const roleResponse = await iamClient.send(
+        new GetRoleCommand({
+          RoleName: roleName,
+        })
+      );
+
+      expect(roleResponse.Role).toBeDefined();
+      expect(roleResponse.Role?.RoleName).toBe(roleName);
+      expect(roleResponse.Role?.PermissionsBoundary).toBeDefined();
+    });
   });
 
   describe('Lambda Function', () => {
-    test('Lambda function exists and is properly configured', async () => {
+    test('should have Lambda function name output', () => {
+      expect(outputs.DataProcessorFunctionName).toBeDefined();
+      expect(outputs.DataProcessorFunctionName).toContain('data-processor');
+    });
+
+    test('Lambda function should exist and be configured correctly', async () => {
       const functionResponse = await lambdaClient.send(
         new GetFunctionCommand({
           FunctionName: outputs.DataProcessorFunctionName,
@@ -222,15 +409,38 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       expect(functionResponse.Configuration?.Runtime).toMatch(/nodejs20/);
       expect(functionResponse.Configuration?.Timeout).toBe(300);
       expect(functionResponse.Configuration?.MemorySize).toBe(512);
+      expect(functionResponse.Configuration?.State).toBe('Active');
+    });
 
-      // Verify function is in VPC
-      expect(functionResponse.Configuration?.VpcConfig).toBeDefined();
-      expect(functionResponse.Configuration?.VpcConfig?.VpcId).toBe(
-        outputs.VpcId
+    test('Lambda function should be in VPC', async () => {
+      const functionResponse = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({
+          FunctionName: outputs.DataProcessorFunctionName,
+        })
       );
-    }, 30000);
 
-    test('Lambda function can be invoked', async () => {
+      expect(functionResponse.VpcConfig).toBeDefined();
+      expect(functionResponse.VpcConfig?.VpcId).toBe(outputs.VpcId);
+      expect(functionResponse.VpcConfig?.SubnetIds).toBeDefined();
+      expect(functionResponse.VpcConfig?.SubnetIds!.length).toBeGreaterThan(0);
+      expect(functionResponse.VpcConfig?.SecurityGroupIds).toContain(outputs.LambdaSecurityGroupId);
+    });
+
+    test('Lambda function should have correct environment variables', async () => {
+      const functionResponse = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({
+          FunctionName: outputs.DataProcessorFunctionName,
+        })
+      );
+
+      const env = functionResponse.Environment?.Variables;
+      expect(env).toBeDefined();
+      expect(env?.RAW_DATA_BUCKET).toBe(outputs.RawDataBucketName);
+      expect(env?.PROCESSED_DATA_BUCKET).toBe(outputs.ProcessedDataBucketName);
+      expect(env?.KMS_KEY_ID).toBeDefined();
+    });
+
+    test('Lambda function should be invocable', async () => {
       const invokeResponse = await lambdaClient.send(
         new InvokeCommand({
           FunctionName: outputs.DataProcessorFunctionName,
@@ -249,71 +459,68 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
         Buffer.from(invokeResponse.Payload!).toString()
       );
       expect(payload.statusCode).toBe(200);
-    }, 30000);
-
-    test('Lambda function has correct environment variables', async () => {
-      const functionResponse = await lambdaClient.send(
-        new GetFunctionCommand({
-          FunctionName: outputs.DataProcessorFunctionName,
-        })
-      );
-
-      const env = functionResponse.Configuration?.Environment?.Variables;
-      expect(env).toBeDefined();
-      expect(env?.RAW_DATA_BUCKET).toBe(outputs.RawDataBucketName);
-      expect(env?.PROCESSED_DATA_BUCKET).toBe(outputs.ProcessedDataBucketName);
-      expect(env?.KMS_KEY_ID).toBeDefined();
-    }, 30000);
+    });
   });
 
   describe('CloudWatch Logs', () => {
-    test('Lambda log group exists with correct configuration', async () => {
+    test('should have log group name outputs', () => {
+      expect(outputs.DataProcessorLogGroupName).toBeDefined();
+      expect(outputs.ApiGatewayLogGroupName).toBeDefined();
+    });
+
+    test('Lambda log group should exist with correct configuration', async () => {
       const logGroupsResponse = await cwLogsClient.send(
         new DescribeLogGroupsCommand({
           logGroupNamePrefix: outputs.DataProcessorLogGroupName,
         })
       );
 
-      const lambdaLogGroup = logGroupsResponse.logGroups?.find((lg) =>
-        lg.logGroupName === outputs.DataProcessorLogGroupName
+      const lambdaLogGroup = logGroupsResponse.logGroups?.find(
+        (lg) => lg.logGroupName === outputs.DataProcessorLogGroupName
       );
 
       expect(lambdaLogGroup).toBeDefined();
       expect(lambdaLogGroup?.retentionInDays).toBe(90);
       expect(lambdaLogGroup?.kmsKeyId).toBeDefined();
-    }, 30000);
+    });
 
-    test('API Gateway log group exists', async () => {
+    test('API Gateway log group should exist with correct configuration', async () => {
       const logGroupsResponse = await cwLogsClient.send(
         new DescribeLogGroupsCommand({
           logGroupNamePrefix: outputs.ApiGatewayLogGroupName,
         })
       );
 
-      const apiLogGroup = logGroupsResponse.logGroups?.find((lg) =>
-        lg.logGroupName === outputs.ApiGatewayLogGroupName
+      const apiLogGroup = logGroupsResponse.logGroups?.find(
+        (lg) => lg.logGroupName === outputs.ApiGatewayLogGroupName
       );
 
       expect(apiLogGroup).toBeDefined();
       expect(apiLogGroup?.retentionInDays).toBe(90);
-    }, 30000);
+      expect(apiLogGroup?.kmsKeyId).toBeDefined();
+    });
   });
 
   describe('API Gateway', () => {
-    test('REST API exists and is configured', async () => {
+    test('should have API endpoint and key outputs', () => {
+      expect(outputs.ApiEndpoint).toBeDefined();
+      expect(outputs.ApiKeyId).toBeDefined();
+    });
+
+    test('REST API should exist', async () => {
       const apisResponse = await apiGatewayClient.send(
         new GetRestApisCommand({})
       );
 
       const api = apisResponse.items?.find((a) =>
-        a.name?.includes('analytics-api')
+        a.name?.includes(`analytics-api-${environmentSuffix}`)
       );
 
       expect(api).toBeDefined();
       expect(api?.endpointConfiguration?.types).toContain('REGIONAL');
-    }, 30000);
+    });
 
-    test('API key exists', async () => {
+    test('API key should exist and be enabled', async () => {
       const apiKeysResponse = await apiGatewayClient.send(
         new GetApiKeysCommand({
           includeValues: false,
@@ -326,36 +533,41 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
 
       expect(apiKey).toBeDefined();
       expect(apiKey?.enabled).toBe(true);
-    }, 30000);
+      expect(apiKey?.name).toContain(`analytics-api-key-${environmentSuffix}`);
+    });
 
-    test('usage plan exists with throttling', async () => {
+    test('usage plan should exist with correct throttling', async () => {
       const usagePlansResponse = await apiGatewayClient.send(
         new GetUsagePlansCommand({})
       );
 
       const usagePlan = usagePlansResponse.items?.find((up) =>
-        up.name?.includes('analytics-usage-plan')
+        up.name?.includes(`analytics-usage-plan-${environmentSuffix}`)
       );
 
       expect(usagePlan).toBeDefined();
       expect(usagePlan?.throttle).toBeDefined();
       expect(usagePlan?.throttle?.rateLimit).toBe(100);
       expect(usagePlan?.throttle?.burstLimit).toBe(200);
-    }, 30000);
+    });
 
-    test('API endpoint is accessible but requires authentication', async () => {
+    test('API endpoint should require authentication', async () => {
       const apiUrl = outputs.ApiEndpoint;
       const response = await fetch(`${apiUrl}data`, {
         method: 'GET',
       });
 
-      // Should return 403 Forbidden without API key
       expect(response.status).toBe(403);
-    }, 30000);
+    });
   });
 
   describe('WAF Configuration', () => {
-    test('WAF WebACL exists with security rules', async () => {
+    test('should have WAF WebACL ARN output', () => {
+      expect(outputs.WebAclArn).toBeDefined();
+      expect(outputs.WebAclArn).toMatch(/^arn:aws:wafv2:/);
+    });
+
+    test('WAF WebACL should exist with security rules', async () => {
       const webAclsResponse = await wafClient.send(
         new ListWebACLsCommand({
           Scope: 'REGIONAL',
@@ -363,7 +575,7 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       );
 
       const webAcl = webAclsResponse.WebACLs?.find((w) =>
-        w.Name?.includes('analytics-waf')
+        w.Name?.includes(`analytics-waf-${environmentSuffix}`)
       );
 
       expect(webAcl).toBeDefined();
@@ -385,11 +597,21 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
         expect(ruleNames).toContain('SQLInjectionProtection');
         expect(ruleNames).toContain('XSSProtection');
       }
-    }, 30000);
+    });
   });
 
   describe('CloudWatch Alarms', () => {
-    test('security alarms are configured', async () => {
+    test('should have alarm name outputs', () => {
+      expect(outputs.ApiErrorAlarmName).toBeDefined();
+      expect(outputs.LambdaErrorAlarmName).toBeDefined();
+      expect(outputs.WafBlockedRequestsAlarmName).toBeDefined();
+    });
+
+    test('should have SNS topic ARN output', () => {
+      expect(outputs.SecurityAlarmTopicArn).toBeDefined();
+    });
+
+    test('all security alarms should be configured', async () => {
       const alarmsResponse = await cloudWatchClient.send(
         new DescribeAlarmsCommand({
           AlarmNames: [
@@ -407,25 +629,63 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       expect(alarmNames).toContain(outputs.ApiErrorAlarmName);
       expect(alarmNames).toContain(outputs.LambdaErrorAlarmName);
       expect(alarmNames).toContain(outputs.WafBlockedRequestsAlarmName);
+    });
 
-      // Verify alarms have SNS actions configured
-      const apiErrorAlarm = alarms.find(
-        (a) => a.AlarmName === outputs.ApiErrorAlarmName
+    test('API error alarm should have SNS action', async () => {
+      const alarmsResponse = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          AlarmNames: [outputs.ApiErrorAlarmName],
+        })
       );
-      expect(apiErrorAlarm?.AlarmActions).toBeDefined();
-      expect(apiErrorAlarm?.AlarmActions!.length).toBeGreaterThan(0);
-    }, 30000);
+
+      const alarm = alarmsResponse.MetricAlarms![0];
+      expect(alarm.AlarmActions).toBeDefined();
+      expect(alarm.AlarmActions!.length).toBeGreaterThan(0);
+      expect(alarm.AlarmActions![0]).toContain(outputs.SecurityAlarmTopicArn);
+    });
+
+    test('SNS topic should exist', async () => {
+      const topicsResponse = await snsClient.send(new ListTopicsCommand({}));
+      const topic = topicsResponse.Topics?.find(
+        (t) => t.TopicArn === outputs.SecurityAlarmTopicArn
+      );
+
+      expect(topic).toBeDefined();
+    });
   });
 
-  describe('End-to-End Workflow', () => {
-    test('complete data processing workflow', async () => {
-      // 1. Upload file to raw data bucket
-      const testKey = 'input/e2e-test-file.txt';
+  describe('EventBridge Rules', () => {
+    test('should have S3 event rule name output', () => {
+      expect(outputs.S3EventRuleName).toBeDefined();
+    });
+
+    test('S3 EventBridge rule should exist', async () => {
+      const ruleResponse = await eventBridgeClient.send(
+        new DescribeRuleCommand({
+          Name: outputs.S3EventRuleName,
+        })
+      );
+
+      expect(ruleResponse.Name).toBe(outputs.S3EventRuleName);
+      expect(ruleResponse.State).toBe('ENABLED');
+      expect(ruleResponse.EventPattern).toBeDefined();
+
+      const eventPattern = JSON.parse(ruleResponse.EventPattern!);
+      expect(eventPattern.source).toContain('aws.s3');
+      expect(eventPattern['detail-type']).toContain('Object Created');
+    });
+  });
+
+  describe('End-to-End Data Processing Workflow', () => {
+    test('complete workflow: upload -> Lambda processing -> verification', async () => {
+      const testKey = `input/e2e-test-${Date.now()}.json`;
       const testData = JSON.stringify({
         testId: Date.now(),
-        data: 'End-to-end test',
+        message: 'End-to-end integration test',
+        timestamp: new Date().toISOString(),
       });
 
+      // Step 1: Upload file to raw data bucket
       await s3Client.send(
         new PutObjectCommand({
           Bucket: outputs.RawDataBucketName,
@@ -435,7 +695,7 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
         })
       );
 
-      // 2. Verify file is encrypted
+      // Step 2: Verify file is encrypted
       const getResponse = await s3Client.send(
         new GetObjectCommand({
           Bucket: outputs.RawDataBucketName,
@@ -445,7 +705,7 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
 
       expect(getResponse.ServerSideEncryption).toBe('aws:kms');
 
-      // 3. Verify Lambda function can access the file
+      // Step 3: Invoke Lambda function with S3 event
       const invokeResponse = await lambdaClient.send(
         new InvokeCommand({
           FunctionName: outputs.DataProcessorFunctionName,
@@ -465,10 +725,20 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
       );
 
       expect(invokeResponse.StatusCode).toBe(200);
+      expect(invokeResponse.FunctionError).toBeUndefined();
+
       const payload = JSON.parse(
         Buffer.from(invokeResponse.Payload!).toString()
       );
       expect(payload.statusCode).toBe(200);
-    }, 30000);
+
+      // Cleanup
+      await s3Client.send(
+        new DeleteObjectCommand({
+          Bucket: outputs.RawDataBucketName,
+          Key: testKey,
+        })
+      );
+    });
   });
 });

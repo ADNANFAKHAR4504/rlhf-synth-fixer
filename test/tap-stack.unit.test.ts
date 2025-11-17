@@ -124,7 +124,7 @@ describe('TapStack Unit Tests', () => {
 
     test('creates raw data bucket with logging', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`^raw-data-${environmentSuffix}-\\d+$`),
+        BucketName: `raw-data-${environmentSuffix}`,
         LoggingConfiguration: Match.objectLike({
           LogFilePrefix: 'raw-data-logs/',
         }),
@@ -133,7 +133,7 @@ describe('TapStack Unit Tests', () => {
 
     test('creates processed data bucket with logging', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: Match.stringLikeRegexp(`^processed-data-${environmentSuffix}-\\d+$`),
+        BucketName: `processed-data-${environmentSuffix}`,
         LoggingConfiguration: Match.objectLike({
           LogFilePrefix: 'processed-data-logs/',
         }),
