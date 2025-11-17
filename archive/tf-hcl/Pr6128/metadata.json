@@ -1,0 +1,36 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912343",
+  "team": "2",
+  "startedAt": "2025-11-07T14:52:18.130Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "Application Auto Scaling",
+    "CloudWatch",
+    "EC2",
+    "ECR",
+    "ECS",
+    "ELB",
+    "IAM",
+    "RDS",
+    "S3",
+    "SSM",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "task_config": {
+    "deploy_env": "dev.tfvars"
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}
