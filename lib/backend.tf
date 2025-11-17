@@ -8,7 +8,7 @@ terraform {
     }
   }
 
-  # Using local backend for QA testing
+  # Using local backend for testing
   backend "local" {
     path = "terraform.tfstate"
   }

@@ -6,6 +6,8 @@
   "team": "synth",
   "startedAt": "2025-11-17T04:13:25+00:00",
   "subtask": "IaC Program Optimization",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
   "subject_labels": [
     "EC2",
     "RDS",
