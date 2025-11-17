@@ -1,0 +1,9 @@
+name: pulumi-cicd-pipeline
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: CI/CD Pipeline Infrastructure for Automated Pulumi Deployments
+main: tap.py
+config:
+  aws:region: us-east-1

@@ -1,27 +1,31 @@
 {
+  "task_id": "101912456",
+  "po_id": "101912456",
   "platform": "pulumi",
   "language": "py",
   "complexity": "hard",
-  "turn_type": "single",
-  "po_id": "101912397",
   "team": "synth",
-  "startedAt": "2025-11-17T12:10:46+00:00",
-  "subtask": "CI/CD Pipeline Integration",
+  "turn_type": "single",
+  "startedAt": "2025-11-14T00:55:26Z",
+  "subtask": "Failure Recovery and High Availability",
   "subject_labels": [
     "aws",
     "infrastructure",
-    "ci/cd-pipeline-integration"
+    "environment-migration"
   ],
   "aws_services": [
-    "CodePipeline",
-    "CodeBuild",
-    "S3",
+    "VPC",
+    "EC2",
+    "RDS",
+    "DynamoDB",
+    "ELB",
+    "Lambda",
     "IAM",
-    "SSM",
-    "CloudWatch",
-    "SNS",
     "KMS",
-    "CodeStarNotifications"
+    "Secrets Manager",
+    "CloudWatch",
+    "AWS Backup",
+    "SSM"
   ],
   "training_quality": 10,
   "author": "iamarpit-turing",
