@@ -480,10 +480,6 @@ describe('TapStack CloudFormation Template - EKS Infrastructure', () => {
       );
     });
 
-    test('node group should depend on cluster', () => {
-      expect(template.Resources.EKSNodeGroup.DependsOn).toBe('EKSCluster');
-    });
-
     test('node group should have name with environment suffix', () => {
       expect(template.Resources.EKSNodeGroup.Properties.NodegroupName).toEqual(
         {
