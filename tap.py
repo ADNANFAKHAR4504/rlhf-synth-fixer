@@ -45,9 +45,12 @@ default_tags = {
     "CreatedAt": created_at,
 }
 
+# Get AWS region from environment, default to us-east-1
+aws_region = os.getenv('AWS_REGION', 'us-east-1')
+
 # Configure AWS provider with default tags
 provider = aws.Provider('aws',
-    region=os.getenv('AWS_REGION', 'us-east-1'),
+    region=aws_region,
     default_tags=aws.ProviderDefaultTagsArgs(
         tags=default_tags
     )
@@ -55,6 +58,9 @@ provider = aws.Provider('aws',
 
 stack = TapStack(
     name="pulumi-infra",
-    args=TapStackArgs(environment_suffix=environment_suffix),
+    args=TapStackArgs(
+        environment_suffix=environment_suffix,
+        region=aws_region
+    ),
     opts=ResourceOptions(provider=provider)
 )
