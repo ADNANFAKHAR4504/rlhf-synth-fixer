@@ -1210,7 +1210,7 @@ Resources:
               - '**/_temporary/**'
               - '**/.sparkStaging/**'
       SchemaChangePolicy:
-        UpdateBehavior: UPDATE_IN_DATABASE
+        UpdateBehavior: LOG
         DeleteBehavior: LOG
       RecrawlPolicy:
         RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
@@ -1240,7 +1240,7 @@ Resources:
       LakeFormationConfiguration:
         UseLakeFormationCredentials: false
       SchemaChangePolicy:
-        UpdateBehavior: UPDATE_IN_DATABASE
+        UpdateBehavior: LOG
         DeleteBehavior: LOG
       RecrawlPolicy:
         RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
