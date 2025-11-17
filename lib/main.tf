@@ -531,7 +531,7 @@ resource "aws_lambda_permission" "allow_config" {
   action        = "lambda:InvokeFunction"
   function_name = aws_lambda_function.compliance_checker.function_name
   principal     = "config.amazonaws.com"
-  source_arn    = "arn:aws:config:${data.aws_region.current.id}:${data.aws_caller_identity.current.account_id}:*"
+  source_arn    = "arn:aws:config:${data.aws_region.current.name}:${data.aws_caller_identity.current.account_id}:*"
 }
 
 # Lambda permission for EventBridge to invoke the function
