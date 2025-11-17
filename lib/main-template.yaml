@@ -22,11 +22,6 @@ Parameters:
     Description: Primary AWS Region
     Default: ap-southeast-1
 
-  DRRegion:
-    Type: String
-    Description: DR AWS Region
-    Default: ap-southeast-2
-
   DBSecretArn:
     Type: String
     Description: ARN of existing Secrets Manager secret for database credentials
@@ -49,7 +44,6 @@ Resources:
 
   DatabaseStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: NetworkStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/database-stack.yaml'
       Parameters:
@@ -71,9 +65,6 @@ Resources:
 
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - NetworkStack
-      - DatabaseStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/compute-stack.yaml'
       Parameters:
@@ -109,9 +100,6 @@ Resources:
 
   MonitoringStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - DatabaseStack
-      - ComputeStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/monitoring-stack.yaml'
       Parameters:

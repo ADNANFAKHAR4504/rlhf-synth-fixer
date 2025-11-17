@@ -1,0 +1,239 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Multi-Region Disaster Recovery Payment Processing System - Main Stack'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+    MinLength: 3
+    MaxLength: 10
+    AllowedPattern: '^[a-z0-9-]+$'
+    Default: 'test'
+
+  DeploymentRegion:
+    Type: String
+    Description: Primary or DR region
+    AllowedValues:
+      - primary
+      - dr
+    Default: primary
+
+  PrimaryRegion:
+    Type: String
+    Description: Primary AWS Region
+    Default: ap-southeast-1
+
+  DRRegion:
+    Type: String
+    Description: DR AWS Region
+    Default: ap-southeast-2
+
+  DBSecretArn:
+    Type: String
+    Description: ARN of existing Secrets Manager secret for database credentials
+    Default: ''
+
+  UseS3Templates:
+    Type: String
+    Description: Whether to use S3 URLs for nested templates
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  S3BucketName:
+    Type: String
+    Description: S3 bucket name for templates (required if UseS3Templates is true)
+    Default: ''
+
+Conditions:
+  UseS3: !Equals [!Ref UseS3Templates, 'true']
+  UseLocalFiles: !Not [!Equals [!Ref UseS3Templates, 'true']]
+  HasDBSecret: !Not [!Equals [!Ref DBSecretArn, '']]
+
+Resources:
+  NetworkStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !If
+        - UseS3
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/network-stack.yaml'
+        - './network-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  DatabaseStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: NetworkStack
+    Properties:
+      TemplateURL: !If
+        - UseS3
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/database-stack.yaml'
+        - './database-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        VPCId: !GetAtt NetworkStack.Outputs.VPCId
+        PrivateSubnet1: !GetAtt NetworkStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt NetworkStack.Outputs.PrivateSubnet2
+        PrivateSubnet3: !GetAtt NetworkStack.Outputs.PrivateSubnet3
+        DBSecretArn: !If
+          - HasDBSecret
+          - !Ref DBSecretArn
+          - !Sub 'arn:aws:secretsmanager:${AWS::Region}:${AWS::AccountId}:secret:payment-db-credentials-${EnvironmentSuffix}'
+        DeploymentRegion: !Ref DeploymentRegion
+        SourceRegion: !Ref PrimaryRegion
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  QueueStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !If
+        - UseS3
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/queue-stack.yaml'
+        - './queue-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  ComputeStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - NetworkStack
+      - DatabaseStack
+      - QueueStack
+    Properties:
+      TemplateURL: !If
+        - UseS3
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/compute-stack.yaml'
+        - './compute-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        VPCId: !GetAtt NetworkStack.Outputs.VPCId
+        PublicSubnet1: !GetAtt NetworkStack.Outputs.PublicSubnet1
+        PublicSubnet2: !GetAtt NetworkStack.Outputs.PublicSubnet2
+        PrivateSubnet1: !GetAtt NetworkStack.Outputs.PrivateSubnet1
+        PrivateSubnet2: !GetAtt NetworkStack.Outputs.PrivateSubnet2
+        DBEndpoint: !GetAtt DatabaseStack.Outputs.DBClusterEndpoint
+        TransactionQueueUrl: !GetAtt QueueStack.Outputs.TransactionQueueUrl
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  MonitoringStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn:
+      - DatabaseStack
+      - ComputeStack
+    Properties:
+      TemplateURL: !If
+        - UseS3
+        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/monitoring-stack.yaml'
+        - './monitoring-stack.yaml'
+      Parameters:
+        EnvironmentSuffix: !Ref EnvironmentSuffix
+        DBClusterIdentifier: !GetAtt DatabaseStack.Outputs.DBClusterIdentifier
+        ALBFullName: !GetAtt ComputeStack.Outputs.ALBFullName
+        APIGatewayId: !GetAtt ComputeStack.Outputs.APIGatewayId
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !GetAtt NetworkStack.Outputs.VPCId
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  DBClusterEndpoint:
+    Description: RDS Cluster Endpoint
+    Value: !GetAtt DatabaseStack.Outputs.DBClusterEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-DBClusterEndpoint'
+
+  APIEndpoint:
+    Description: API Gateway Endpoint
+    Value: !GetAtt ComputeStack.Outputs.APIEndpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-APIEndpoint'
+
+  LoadBalancerDNS:
+    Description: Application Load Balancer DNS
+    Value: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
+    Export:
+      Name: !Sub '${AWS::StackName}-LoadBalancerDNS'
+
+  SessionTableName:
+    Description: DynamoDB Global Table Name
+    Value: !GetAtt DatabaseStack.Outputs.SessionTableName
+    Export:
+      Name: !Sub '${AWS::StackName}-SessionTableName'
+
+  TransactionQueueUrl:
+    Description: SQS Transaction Queue URL
+    Value: !GetAtt QueueStack.Outputs.TransactionQueueUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-TransactionQueueUrl'
+
+  TransactionDLQUrl:
+    Description: SQS Transaction Dead Letter Queue URL
+    Value: !GetAtt QueueStack.Outputs.TransactionDLQUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-TransactionDLQUrl'
+
+  KMSKeyId:
+    Description: KMS Key ID for encryption
+    Value: !GetAtt DatabaseStack.Outputs.KMSKeyId
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  CloudTrailBucket:
+    Description: S3 Bucket for CloudTrail logs
+    Value: !GetAtt MonitoringStack.Outputs.CloudTrailBucket
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrailBucket'
+
+  StackName:
+    Description: Stack Name
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+
+  Region:
+    Description: Deployment Region
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
+
+  DeploymentType:
+    Description: Deployment Type (primary or dr)
+    Value: !Ref DeploymentRegion
+    Export:
+      Name: !Sub '${AWS::StackName}-DeploymentType'

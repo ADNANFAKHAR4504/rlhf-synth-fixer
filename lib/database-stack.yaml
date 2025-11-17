@@ -217,9 +217,8 @@ Resources:
       SSESpecification:
         SSEEnabled: true
         SSEType: KMS
-        KMSMasterKeyId: !Ref KMSKey
       Replicas:
-        - Region: ap-southeast-1
+        - Region: !Ref SourceRegion
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
           Tags:
