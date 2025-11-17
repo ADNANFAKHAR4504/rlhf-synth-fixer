@@ -1,0 +1,7 @@
+name: TapStack
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Pulumi infrastructure for EC2 cost optimization with scheduled start/stop
+main: bin/tap.ts

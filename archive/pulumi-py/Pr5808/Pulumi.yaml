@@ -1,0 +1,8 @@
+name: TapStack
+runtime: python
+description: Production-ready VPC infrastructure for payment processing with PCI-DSS compliance
+main: lib/tap.py
+config:
+  environmentSuffix:
+    description: Environment suffix for resource naming and isolation
+    default: dev

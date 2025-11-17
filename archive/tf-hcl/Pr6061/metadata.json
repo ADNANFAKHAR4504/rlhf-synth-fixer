@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "6053",
+  "team": "5",
+  "startedAt": "2025-11-07T11:00:45.078Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "comprehensive CloudWatch monitoring and alerting for production e-commerce infrastructure with centralized logging and custom business metrics",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "Application Load Balancer (ALB)",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "Lambda",
+    "EventBridge"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

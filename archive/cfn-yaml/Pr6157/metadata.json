@@ -1,0 +1,53 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912201",
+  "team": "3",
+  "startedAt": "2025-11-10T06:59:55.216Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3Bucket",
+    "IngestionLambda",
+    "TransactionsTable",
+    "FraudDetectionLambda",
+    "DeadLetterQueue",
+    "ApiGateway",
+    "ApiLambda",
+    "SnsTopic",
+    "ComplianceSubscription",
+    "IngestionLambdaRole",
+    "FraudLambdaRole",
+    "ApiLambdaRole",
+    "IngestionLambdaLogGroup",
+    "FraudLambdaLogGroup",
+    "ApiLambdaLogGroup",
+    "IngestionLambdaAlarm",
+    "FraudLambdaAlarm",
+    "ApiLambdaAlarm",
+    "IngestionLambdaPermissionS3",
+    "FraudLambdaEventSourceMapping",
+    "ApiGatewayUsagePlan",
+    "ApiGatewayApiKey",
+    "ApiGatewayStage",
+    "CloudWatchAlarmMetricMath",
+    "XRayTracingConfig",
+    "LifecyclePolicy90Days",
+    "TransactionsTableStream",
+    "DynamoDBStreamMapping",
+    "S3NotificationConfiguration",
+    "OutputsSection"
+  ],
+  "training_quality": 9,
+  "background": "Deploy a brand-new, self-contained serverless transaction processing stack in us-east-1 using a single TapStack.yml. Provision an S3 bucket with versioning and a 90-day lifecycle policy that triggers a Python 3.11 ingestion Lambda on uploads/ *.csv. Persist validated transactions into a DynamoDB table (partition key transactionId, sort key timestamp) with on-demand billing, streams (NEW_IMAGE), and point-in-time recovery. Wire a fraud detection Lambda to the DynamoDB stream to publish alerts (amount > 10000) to an SNS topic with an email subscription for compliance. Provide a REST API in API Gateway with GET/POST endpoints and a usage plan (API key, 1000 requests/day). Include an SQS DLQ (max receive count 3) for Lambdas, least-privilege IAM roles, X-Ray tracing for all Lambdas and API Gateway, CloudWatch metric-math alarms for >1% error rate over 5 minutes, explicit 30-day log retention, and outputs for S3 bucket name, API base URL, and DynamoDB table ARN. All resource names include EnvironmentSuffix for safe multi-environment deployments.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "iqbala-turing",
+  "dockerS3Location": ""
+}

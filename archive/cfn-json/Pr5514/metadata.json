@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-31T07:05:29+00:00",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "multi-environment",
+    "cloudformation",
+    "stacksets",
+    "vpc",
+    "financial-services",
+    "infrastructure-consistency"
+  ],
+  "po_id": "101000780",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "AutoScaling",
+    "RDS",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

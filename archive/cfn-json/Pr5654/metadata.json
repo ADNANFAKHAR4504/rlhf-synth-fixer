@@ -1,0 +1,35 @@
+{
+  "task_id": "101000809",
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "turn_type": "multi",
+  "po_id": "synth-101000809",
+  "team": "synth",
+  "startedAt": "2025-11-03T12:55:59Z",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "ALB",
+    "AutoScaling",
+    "CloudWatch",
+    "ECR",
+    "ECS",
+    "Fargate",
+    "IAM",
+    "RDS",
+    "Route53",
+    "SecretsManager",
+    "SecurityGroups",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

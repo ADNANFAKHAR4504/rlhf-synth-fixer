@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "turn_type": "single",
+  "po_id": "101000914",
+  "startedAt": "2025-11-12T00:00:00Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "ECS",
+    "Fargate",
+    "RDS",
+    "Aurora",
+    "ALB",
+    "VPC"
+  ],
+  "aws_services": [
+    "VPC",
+    "ECS",
+    "Fargate",
+    "ALB",
+    "RDS Aurora PostgreSQL",
+    "ECR",
+    "Security Groups",
+    "IAM",
+    "CloudWatch",
+    "Auto Scaling",
+    "Route53",
+    "Secrets Manager",
+    "ACM"
+  ],
+  "region": "eu-west-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912244",
+  "team": "3",
+  "startedAt": "2025-11-11T06:52:54.298Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 10,
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "CloudWatch Dashboard",
+    "SNS",
+    "SSM Parameter Store",
+    "EventBridge",
+    "IAM",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}

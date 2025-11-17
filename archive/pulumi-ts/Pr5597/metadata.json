@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000169",
+  "team": "1",
+  "startedAt": "2025-11-01T20:06:16.605Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "Route53",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "Application Load Balancer (ALB)",
+    "Auto Scaling",
+    "NAT Gateway",
+    "Security Groups",
+    "KMS",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "raghav-turing",
+  "dockerS3Location": ""
+}

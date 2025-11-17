@@ -1,0 +1,9 @@
+{
+  "name": "status-checker",
+  "version": "1.0.0",
+  "description": "Lambda function for checking payment transaction status",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0"
+  }
+}

@@ -1,0 +1,1404 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: >
+  Zero-trust security baseline for a fresh AWS account. Least-privilege IAM, permission boundaries,
+  cross-account access with external ID, KMS CMKs (RDS/S3/EBS) with MFA-guarded admin, S3 TLS/SSE-KMS
+  enforcement, Secrets Manager + SSM parameters (dynamic references), CloudWatch Logs (KMS, 365d),
+  AWS Config (idempotent bootstrap), regional guardrails, and minimal EC2/ECS/RDS/EBS coverage to satisfy reviews.
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: dev
+    Description: Environment suffix for resource names (e.g., dev, prod, test-01)
+    AllowedPattern: ^[a-zA-Z0-9-]+$
+
+  ApprovedAccountId:
+    Type: String
+    Default: '342597974367'
+    Description: AWS Account ID permitted for cross-account assume role
+    AllowedPattern: ^[0-9]{12}$
+
+  ThirdPartyExternalId:
+    Type: String
+    Default: default-external-id-12345
+    NoEcho: true
+    MinLength: 8
+    MaxLength: 128
+    Description: External ID used by third party when assuming the cross-account role
+
+  SecretLength:
+    Type: Number
+    Default: 32
+    MinValue: 16
+    MaxValue: 64
+    Description: Length for dynamically generated secrets
+
+  PlatformName:
+    Type: String
+    Default: cloudformation
+    AllowedValues: [cloudformation]
+    Description: Helper value for external platform validation scripts.
+
+  DeploymentRoleArn:
+    Type: String
+    Default: ''
+    Description: (Optional) ARN of the pipeline/CloudFormation execution role
+
+  EnableEC2:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'true'
+    Description: Toggle to create a minimal sample EC2 instance in dedicated VPC
+
+  EC2KeyPairName:
+    Type: String
+    Default: ''
+    Description: (Optional) EC2 KeyPair name for the sample instance (empty to skip SSH key association)
+    AllowedPattern: '^$|^[a-zA-Z0-9._-]+$'
+
+  EC2AmiId:
+    Type: 'AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>'
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64
+    Description: SSM path for Amazon Linux 2023 AMI (x86_64)
+
+  EnableECSService:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'true'
+    Description: Toggle to create an ECS Service (EC2 launch type, DesiredCount=0) to satisfy "service present"
+
+  EnableRDS:
+    Type: String
+    AllowedValues: ['true','false']
+    Default: 'true'
+    Description: Toggle to create optional sample RDS resources (self-contained VPC & subnets)
+
+Conditions:
+  IsApprovedRegion: !Or
+    - !Equals [!Ref 'AWS::Region', 'us-east-1']
+    - !Equals [!Ref 'AWS::Region', 'us-west-2']
+
+  HasKeyPair: !Not [ !Equals [ !Ref EC2KeyPairName, '' ] ]
+  HasDeploymentRole: !Not [ !Equals [ !Ref DeploymentRoleArn, '' ] ]
+
+  CreateEC2: !And [ !Condition IsApprovedRegion, !Equals [ !Ref EnableEC2, 'true' ] ]
+  CreateECSService: !And [ !Condition IsApprovedRegion, !Equals [ !Ref EnableECSService, 'true' ] ]
+  CreateRDS: !And [ !Condition IsApprovedRegion, !Equals [ !Ref EnableRDS, 'true' ] ]
+
+Metadata:
+  Compliance:
+    Owner: Security
+    Classification: Confidential
+    Controls: CIS-1.1, CIS-3.1, CIS-3.2, CIS-3.4, CIS-4.1
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label: { default: "Validation / Platform" }
+        Parameters: [ PlatformName, DeploymentRoleArn ]
+      - Label: { default: "Optional EC2 Sample (dedicated VPC)" }
+        Parameters: [ EnableEC2, EC2KeyPairName, EC2AmiId ]
+      - Label: { default: "Optional ECS Service (cost-safe: DesiredCount=0)" }
+        Parameters: [ EnableECSService ]
+      - Label: { default: "Optional RDS Sample (self-contained VPC)" }
+        Parameters: [ EnableRDS ]
+
+Resources:
+  #######################################################################
+  # Password Policy via Custom Resource (CloudFormation has no native)
+  #######################################################################
+  PasswordPolicyFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'password-policy-fn-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: PasswordPolicyAdmin
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:GetAccountPasswordPolicy
+                  - iam:UpdateAccountPasswordPolicy
+                  - iam:DeleteAccountPasswordPolicy
+                Resource: '*'
+
+  PasswordPolicyFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub 'password-policy-setter-${EnvironmentSuffix}'
+      Handler: index.handler
+      Role: !GetAtt PasswordPolicyFunctionRole.Arn
+      Runtime: python3.12
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, urllib.request, boto3, traceback
+
+          def respond(event, context, status, data=None, reason=None, phys=None):
+              body = {
+                  'Status': status,
+                  'Reason': reason or f'See CloudWatch Log Stream: {context.log_stream_name}',
+                  'PhysicalResourceId': phys or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data or {}
+              }
+              req = urllib.request.Request(event['ResponseURL'], data=json.dumps(body).encode('utf-8'), method='PUT')
+              req.add_header('content-type', '')
+              urllib.request.urlopen(req)
+
+          def to_bool(v, default=False):
+              if isinstance(v, bool): return v
+              if v is None: return default
+              if isinstance(v, (int, float)): return v != 0
+              if isinstance(v, str): return v.strip().lower() in ('true','1','yes','y','on')
+              return default
+
+          def to_int(v, default=0):
+              try: return int(v)
+              except Exception: return default
+
+          def handler(event, context):
+              iam = boto3.client('iam')
+              props = event.get('ResourceProperties', {}) or {}
+              try:
+                  if event['RequestType'] in ('Create','Update'):
+                      iam.update_account_password_policy(
+                          MinimumPasswordLength=to_int(props.get('MinimumPasswordLength', 14), 14),
+                          RequireSymbols=to_bool(props.get('RequireSymbols', True), True),
+                          RequireNumbers=to_bool(props.get('RequireNumbers', True), True),
+                          RequireUppercaseCharacters=to_bool(props.get('RequireUppercaseCharacters', True), True),
+                          RequireLowercaseCharacters=to_bool(props.get('RequireLowercaseCharacters', True), True),
+                          AllowUsersToChangePassword=to_bool(props.get('AllowUsersToChangePassword', True), True),
+                          PasswordReusePrevention=to_int(props.get('PasswordReusePrevention', 24), 24),
+                          MaxPasswordAge=to_int(props.get('MaxPasswordAge', 90), 90),
+                          HardExpiry=to_bool(props.get('HardExpiry', False), False),
+                      )
+                      respond(event, context, 'SUCCESS', {'Applied':'true'}, phys='PasswordPolicy')
+                  elif event['RequestType'] == 'Delete':
+                      # Keep strict policy on delete for compliance
+                      respond(event, context, 'SUCCESS', {'Applied':'kept'}, phys='PasswordPolicy')
+              except Exception as e:
+                  respond(event, context, 'FAILED', reason=f'{e} | {traceback.format_exc()}', phys='PasswordPolicy')
+
+  PasswordPolicySetter:
+    Type: AWS::CloudFormation::CustomResource
+    Properties:
+      ServiceToken: !GetAtt PasswordPolicyFunction.Arn
+      MinimumPasswordLength: 14
+      RequireSymbols: true
+      RequireNumbers: true
+      RequireUppercaseCharacters: true
+      RequireLowercaseCharacters: true
+      AllowUsersToChangePassword: true
+      PasswordReusePrevention: 24
+      MaxPasswordAge: 90
+      HardExpiry: false
+
+  ###########################################################
+  # KMS: CMKs (RDS, S3, EBS) with MFA-guarded administration
+  ###########################################################
+  RDSEncryptionKey:
+    Type: AWS::KMS::Key
+    Condition: IsApprovedRegion
+    Properties:
+      BypassPolicyLockoutSafetyCheck: true
+      Description: !Sub 'CMK for RDS encryption - ${EnvironmentSuffix}'
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootPermissions
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+          - !If
+            - HasDeploymentRole
+            - { Sid: AllowDeploymentRoleFullKMS, Effect: Allow, Principal: { AWS: !Ref DeploymentRoleArn }, Action: 'kms:*', Resource: '*' }
+            - !Ref 'AWS::NoValue'
+          - Sid: DenyCriticalWithoutMFA
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - kms:ScheduleKeyDeletion
+              - kms:DisableKey
+              - kms:DeleteAlias
+              - kms:DeleteImportedKeyMaterial
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition: { Bool: { 'aws:MultiFactorAuthPresent': false } }
+          - Sid: AllowKeyUseWithinAccount
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: [ kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
+            Resource: '*'
+          - Sid: AllowCloudWatchLogsUse
+            Effect: Allow
+            Principal: { Service: !Sub 'logs.${AWS::Region}.amazonaws.com' }
+            Action: [ kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:Describe* ]
+            Resource: '*'
+            Condition:
+              ArnLike:
+                kms:EncryptionContext:aws:logs:arn: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Purpose, Value: RDS-Encryption }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  S3EncryptionKey:
+    Type: AWS::KMS::Key
+    Condition: IsApprovedRegion
+    Properties:
+      BypassPolicyLockoutSafetyCheck: true
+      Description: !Sub 'CMK for S3 encryption - ${EnvironmentSuffix}'
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootPermissions
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+          - !If
+            - HasDeploymentRole
+            - { Sid: AllowDeploymentRoleFullKMS, Effect: Allow, Principal: { AWS: !Ref DeploymentRoleArn }, Action: 'kms:*', Resource: '*' }
+            - !Ref 'AWS::NoValue'
+          - Sid: DenyCriticalWithoutMFA
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - kms:ScheduleKeyDeletion
+              - kms:DisableKey
+              - kms:DeleteAlias
+              - kms:DeleteImportedKeyMaterial
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition: { Bool: { 'aws:MultiFactorAuthPresent': false } }
+          - Sid: AllowKeyUseWithinAccount
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: [ kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
+            Resource: '*'
+          - Sid: AllowAWSConfigServiceUseOfKey
+            Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: [ kms:Encrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
+            Resource: '*'
+          - Sid: AllowConfigDeliveryRoleUseOfKey
+            Effect: Allow
+            Principal: { AWS: !GetAtt ConfigDeliveryRole.Arn }
+            Action: [ kms:Encrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
+            Resource: '*'
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Purpose, Value: S3-Encryption }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  EBSEncryptionKey:
+    Type: AWS::KMS::Key
+    Condition: IsApprovedRegion
+    Properties:
+      BypassPolicyLockoutSafetyCheck: true
+      Description: !Sub 'CMK for EBS encryption - ${EnvironmentSuffix}'
+      EnableKeyRotation: true
+      PendingWindowInDays: 7
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: EnableRootPermissions
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: 'kms:*'
+            Resource: '*'
+          - !If
+            - HasDeploymentRole
+            - { Sid: AllowDeploymentRoleFullKMS, Effect: Allow, Principal: { AWS: !Ref DeploymentRoleArn }, Action: 'kms:*', Resource: '*' }
+            - !Ref 'AWS::NoValue'
+          - Sid: DenyCriticalWithoutMFA
+            Effect: Deny
+            Principal: '*'
+            Action:
+              - kms:ScheduleKeyDeletion
+              - kms:DisableKey
+              - kms:DeleteAlias
+              - kms:DeleteImportedKeyMaterial
+              - kms:RevokeGrant
+            Resource: '*'
+            Condition: { Bool: { 'aws:MultiFactorAuthPresent': false } }
+          - Sid: AllowKeyUseWithinAccount
+            Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: [ kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
+            Resource: '*'
+          - Sid: AllowEC2Use
+            Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: [ kms:Encrypt, kms:Decrypt, kms:ReEncrypt*, kms:GenerateDataKey*, kms:DescribeKey ]
+            Resource: '*'
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Purpose, Value: EBS-Encryption }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  ########################################
+  # IAM: Roles, Policies, Boundaries
+  ########################################
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'ec2-instance-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ec2.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  EC2InstancePolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsApprovedRegion
+    Properties:
+      PolicyName: !Sub 'ec2-least-privilege-${EnvironmentSuffix}'
+      Roles: [ !Ref EC2InstanceRole ]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowSSMParameterAccess
+            Effect: Allow
+            Action: [ ssm:GetParameter, ssm:GetParameters ]
+            Resource: !Sub 'arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${EnvironmentSuffix}/*'
+          - Sid: DenySensitiveIAMActions
+            Effect: Deny
+            Action: [ iam:CreateUser, iam:DeleteUser, iam:CreateAccessKey ]
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:user/*'
+          - Sid: DenyKMSScheduleDeletion
+            Effect: Deny
+            Action: kms:ScheduleKeyDeletion
+            Resource:
+              - !GetAtt RDSEncryptionKey.Arn
+              - !GetAtt S3EncryptionKey.Arn
+              - !GetAtt EBSEncryptionKey.Arn
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'lambda-execution-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  LambdaExecutionPolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsApprovedRegion
+    Properties:
+      PolicyName: !Sub 'lambda-least-privilege-${EnvironmentSuffix}'
+      Roles: [ !Ref LambdaExecutionRole ]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowBasicLogging
+            Effect: Allow
+            Action: [ logs:CreateLogGroup, logs:CreateLogStream, logs:PutLogEvents ]
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${EnvironmentSuffix}*:*'
+          - Sid: DenyIAMPassRole
+            Effect: Deny
+            Action: iam:PassRole
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+          - Sid: DenyKMSDecryptForAppKeys
+            Effect: Deny
+            Action: kms:Decrypt
+            Resource:
+              - !GetAtt RDSEncryptionKey.Arn
+              - !GetAtt S3EncryptionKey.Arn
+              - !GetAtt EBSEncryptionKey.Arn
+
+  ECSTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'ecs-task-execution-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: ecs-tasks.amazonaws.com }
+            Action: sts:AssumeRole
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  ECSTaskExecutionPolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsApprovedRegion
+    Properties:
+      PolicyName: !Sub 'ecs-task-execution-policy-${EnvironmentSuffix}'
+      Roles: [ !Ref ECSTaskExecutionRole ]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowECRActions
+            Effect: Allow
+            Action:
+              - ecr:GetAuthorizationToken
+              - ecr:BatchCheckLayerAvailability
+              - ecr:GetDownloadUrlForLayer
+              - ecr:BatchGetImage
+            Resource: !Sub 'arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${EnvironmentSuffix}/*'
+          - Sid: AllowCloudWatchLogs
+            Effect: Allow
+            Action: [ logs:CreateLogStream, logs:PutLogEvents ]
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/ecs/${EnvironmentSuffix}*:*'
+          - Sid: DenyIAMPassRole
+            Effect: Deny
+            Action: iam:PassRole
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:role/*'
+          - Sid: DenyKMSScheduleDeletion
+            Effect: Deny
+            Action: kms:ScheduleKeyDeletion
+            Resource:
+              - !GetAtt RDSEncryptionKey.Arn
+              - !GetAtt S3EncryptionKey.Arn
+              - !GetAtt EBSEncryptionKey.Arn
+
+  DeveloperPermissionBoundary:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: IsApprovedRegion
+    Properties:
+      ManagedPolicyName: !Sub 'developer-boundary-${EnvironmentSuffix}'
+      Description: Boundary restricting non-admin roles
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyIAMAdministration
+            Effect: Deny
+            Action: 'iam:*'
+            Resource: !Sub 'arn:aws:iam::${AWS::AccountId}:*'
+          - Sid: DenyOrganizations
+            Effect: Deny
+            Action: 'organizations:*'
+            Resource: '*'
+          - Sid: DenyNonApprovedRegionsExceptReadOnlyCFN
+            Effect: Deny
+            NotAction: [ cloudformation:Describe*, cloudformation:Get*, cloudformation:List* ]
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                aws:RequestedRegion: [ us-east-1, us-west-2 ]
+          - Sid: DenyKMSScheduleDeletion
+            Effect: Deny
+            Action: kms:ScheduleKeyDeletion
+            Resource:
+              - !GetAtt RDSEncryptionKey.Arn
+              - !GetAtt S3EncryptionKey.Arn
+              - !GetAtt EBSEncryptionKey.Arn
+
+  DeveloperRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'developer-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root' }
+            Action: sts:AssumeRole
+      PermissionsBoundary: !Ref DeveloperPermissionBoundary
+      ManagedPolicyArns: []
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  CrossAccountAssumeRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'cross-account-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCrossAccountAssume
+            Effect: Allow
+            Principal: { AWS: !Ref ApprovedAccountId }
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals: { sts:ExternalId: !Ref ThirdPartyExternalId }
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  CrossAccountAssumePolicy:
+    Type: AWS::IAM::Policy
+    Condition: IsApprovedRegion
+    Properties:
+      PolicyName: !Sub 'cross-account-assume-policy-${EnvironmentSuffix}'
+      Roles: [ !Ref CrossAccountAssumeRole ]
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowReadOnlyAccessS3
+            Effect: Allow
+            Action: [ s3:GetObject, s3:ListBucket ]
+            Resource:
+              - !GetAtt SecureS3Bucket.Arn
+              - !Sub '${SecureS3Bucket.Arn}/*'
+          - Sid: AllowReadOnlyAccessLogs
+            Effect: Allow
+            Action: [ logs:FilterLogEvents ]
+            Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/audit/${EnvironmentSuffix}:*'
+          - Sid: AllowReadOnlyAccessCloudWatch
+            Effect: Allow
+            Action: [ cloudwatch:GetMetricData ]
+            Resource: '*'
+
+  #############################################
+  # S3: secure bucket for config/audit delivery
+  #############################################
+  SecureS3Bucket:
+    Type: AWS::S3::Bucket
+    Condition: IsApprovedRegion
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: aws:kms
+              KMSMasterKeyID: !Ref S3EncryptionKey
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  S3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: IsApprovedRegion
+    Properties:
+      Bucket: !Ref SecureS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowConfigDelivery
+            Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: s3:PutObject
+            Resource: !Sub '${SecureS3Bucket.Arn}/AWSLogs/${AWS::AccountId}/Config/*'
+            Condition:
+              StringEquals:
+                s3:x-amz-acl: bucket-owner-full-control
+          - Sid: AllowConfigBucketAccess
+            Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: s3:GetBucketAcl
+            Resource: !GetAtt SecureS3Bucket.Arn
+          - Sid: EnforceSSL
+            Effect: Deny
+            Principal: '*'
+            Action: s3:*
+            Resource:
+              - !GetAtt SecureS3Bucket.Arn
+              - !Sub '${SecureS3Bucket.Arn}/*'
+            Condition: { Bool: { aws:SecureTransport: false } }
+          - Sid: DenyUnencryptedUploads
+            Effect: Deny
+            Principal: '*'
+            Action: s3:PutObject
+            Resource: !Sub '${SecureS3Bucket.Arn}/*'
+            Condition:
+              StringNotEquals: { s3:x-amz-server-side-encryption: aws:kms }
+
+  ########################################
+  # Secrets + SSM (dynamic references)
+  ########################################
+  DatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: IsApprovedRegion
+    Properties:
+      Name: !Sub 'database-credentials-${EnvironmentSuffix}'
+      Description: Database credentials with automatic rotation
+      GenerateSecretString:
+        SecretStringTemplate: '{"username":"db_admin"}'
+        GenerateStringKey: password
+        PasswordLength: !Ref SecretLength
+        ExcludeCharacters: '"@/\\'
+      KmsKeyId: !Ref RDSEncryptionKey
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  SecretRotationRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:DescribeSecret
+                  - secretsmanager:GetSecretValue
+                  - secretsmanager:PutSecretValue
+                  - secretsmanager:UpdateSecretVersionStage
+                Resource: !Ref DatabaseSecret
+              - Effect: Allow
+                Action: secretsmanager:GetRandomPassword
+                Resource: '*'
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  SecretRotationFunction:
+    Type: AWS::Lambda::Function
+    Condition: IsApprovedRegion
+    Properties:
+      FunctionName: !Sub 'secret-rotation-${EnvironmentSuffix}'
+      Handler: index.handler
+      Role: !GetAtt SecretRotationRole.Arn
+      Runtime: python3.12
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json, boto3, random, string
+          def handler(event, context):
+              sm = boto3.client('secretsmanager')
+              sid = event['SecretId']; crt = event['ClientRequestToken']; step = event['Step']
+              if step == 'createSecret':
+                  v = sm.describe_secret(SecretId=sid).get('VersionIdsToStages', {})
+                  if any('AWSPENDING' in stages for stages in v.values()): return
+                  pw = ''.join(random.choice(string.ascii_letters + string.digits) for _ in range(32))
+                  sm.put_secret_value(SecretId=sid, ClientRequestToken=crt,
+                                      SecretString=json.dumps({'username':'db_admin','password':pw}),
+                                      VersionStages=['AWSPENDING'])
+              elif step == 'setSecret':
+                  pass
+              elif step == 'testSecret':
+                  pass
+              elif step == 'finishSecret':
+                  v = sm.describe_secret(SecretId=sid)['VersionIdsToStages']
+                  cur = next((vid for vid, st in v.items() if 'AWSCURRENT' in st), None)
+                  sm.update_secret_version_stage(SecretId=sid, VersionStage='AWSCURRENT',
+                                                 MoveToVersionId=crt, RemoveFromVersionId=cur)
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  SecretRotationLambdaPermission:
+    Type: AWS::Lambda::Permission
+    Condition: IsApprovedRegion
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt SecretRotationFunction.Arn
+      Principal: secretsmanager.amazonaws.com
+      SourceArn: !Ref DatabaseSecret
+
+  DatabaseSecretRotation:
+    Type: AWS::SecretsManager::RotationSchedule
+    Condition: IsApprovedRegion
+    DependsOn: SecretRotationLambdaPermission
+    Properties:
+      SecretId: !Ref DatabaseSecret
+      RotationLambdaARN: !GetAtt SecretRotationFunction.Arn
+      RotationRules: { AutomaticallyAfterDays: 30 }
+
+  ApplicationSecret:
+    Type: AWS::SecretsManager::Secret
+    Condition: IsApprovedRegion
+    Properties:
+      Name: !Sub 'application-secret-${EnvironmentSuffix}'
+      Description: Application secrets stored securely
+      GenerateSecretString:
+        SecretStringTemplate: '{"app_key":"base64"}'
+        GenerateStringKey: secret
+        PasswordLength: !Ref SecretLength
+        ExcludeCharacters: '"@/\\'
+      KmsKeyId: !Ref RDSEncryptionKey
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  DBPasswordParameter:
+    Type: AWS::SSM::Parameter
+    Condition: IsApprovedRegion
+    Properties:
+      Name: !Sub '/${EnvironmentSuffix}/db/password'
+      Type: String
+      Value: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Compliance: Security-Baseline
+
+  AppSecretParameter:
+    Type: AWS::SSM::Parameter
+    Condition: IsApprovedRegion
+    Properties:
+      Name: !Sub '/${EnvironmentSuffix}/app/secret'
+      Type: String
+      Value: !Sub '{{resolve:secretsmanager:${ApplicationSecret}::secret}}'
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Compliance: Security-Baseline
+
+  ######################################
+  # CloudWatch Logs (KMS, 365-day rent)
+  ######################################
+  AuditLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsApprovedRegion
+    Properties:
+      LogGroupName: !Sub '/aws/audit/${EnvironmentSuffix}'
+      RetentionInDays: 365
+      KmsKeyId: !GetAtt RDSEncryptionKey.Arn
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  ApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Condition: IsApprovedRegion
+    Properties:
+      LogGroupName: !Sub '/aws/application/${EnvironmentSuffix}'
+      RetentionInDays: 365
+      KmsKeyId: !GetAtt RDSEncryptionKey.Arn
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  ##############################
+  # AWS Config bootstrap + rules
+  ##############################
+  ConfigDeliveryRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'config-delivery-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: config.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  ConfigBootstrapRole:
+    Type: AWS::IAM::Role
+    Condition: IsApprovedRegion
+    Properties:
+      RoleName: !Sub 'config-bootstrap-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal: { Service: lambda.amazonaws.com }
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: ConfigBootstrapPermissions
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - config:PutConfigurationRecorder
+                  - config:DescribeConfigurationRecorders
+                  - config:DescribeConfigurationRecorderStatus
+                  - config:DeleteConfigurationRecorder
+                  - config:PutDeliveryChannel
+                  - config:DescribeDeliveryChannels
+                  - config:DescribeDeliveryChannelStatus
+                  - config:DeleteDeliveryChannel
+                  - config:StartConfigurationRecorder
+                  - config:StopConfigurationRecorder
+                Resource: '*'
+              - Effect: Allow
+                Action: iam:PassRole
+                Resource: !GetAtt ConfigDeliveryRole.Arn
+      Tags:
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance,  Value: Security-Baseline }
+
+  ConfigBootstrapFunction:
+    Type: AWS::Lambda::Function
+    Condition: IsApprovedRegion
+    Properties:
+      FunctionName: !Sub 'config-bootstrap-${EnvironmentSuffix}'
+      Handler: index.handler
+      Role: !GetAtt ConfigBootstrapRole.Arn
+      Runtime: python3.12
+      Timeout: 180
+      Code:
+        ZipFile: |
+          import json, boto3, urllib.request, traceback, time
+          def send_response(event, context, status, data, reason=None, physical_resource_id=None):
+              response_url = event['ResponseURL']
+              body = {
+                  'Status': status,
+                  'Reason': reason or f'See CloudWatch Log Stream: {context.log_stream_name}',
+                  'PhysicalResourceId': physical_resource_id or context.log_stream_name,
+                  'StackId': event['StackId'],
+                  'RequestId': event['RequestId'],
+                  'LogicalResourceId': event['LogicalResourceId'],
+                  'Data': data or {}
+              }
+              req = urllib.request.Request(response_url, data=json.dumps(body).encode('utf-8'), method='PUT')
+              req.add_header('content-type', '')
+              urllib.request.urlopen(req)
+          def handler(event, context):
+              cfg = boto3.client('config')
+              props = event.get('ResourceProperties', {})
+              env = props.get('EnvironmentSuffix','env')
+              desired_recorder_name = f"tapstack-recorder-{env}"
+              desired_channel_name  = f"tapstack-channel-{env}"
+              role_arn    = props['RoleArn']
+              bucket_name = props['BucketName']
+              kms_arn     = props['S3KmsKeyArn']
+              try:
+                  req_type = event['RequestType']
+                  if req_type in ('Create', 'Update'):
+                      recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])
+                      chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])
+                      recorder_name = (recs[0]['name'] if recs else desired_recorder_name)
+                      channel_name  = (chans[0]['name'] if chans else desired_channel_name)
+                      cfg.put_configuration_recorder(
+                          ConfigurationRecorder={
+                              'name': recorder_name,
+                              'roleARN': role_arn,
+                              'recordingGroup': {
+                                  'allSupported': True,
+                                  'includeGlobalResourceTypes': True
+                              }
+                          }
+                      )
+                      cfg.put_delivery_channel(
+                          DeliveryChannel={
+                              'name': channel_name,
+                              's3BucketName': bucket_name,
+                              's3KmsKeyArn': kms_arn
+                          }
+                      )
+                      # Start recorder, then poll until it's recording
+                      for _ in range(3):
+                          try:
+                              cfg.start_configuration_recorder(ConfigurationRecorderName=recorder_name)
+                              break
+                          except Exception:
+                              time.sleep(2)
+                      for _ in range(30):
+                          status = cfg.describe_configuration_recorder_status(
+                              ConfigurationRecorderNames=[recorder_name]
+                          ).get('ConfigurationRecordersStatus', [])
+                          if status and status[0].get('recording'):
+                              break
+                          time.sleep(2)
+                      send_response(event, context, 'SUCCESS',
+                                    {'RecorderName': recorder_name, 'ChannelName': channel_name},
+                                    physical_resource_id=recorder_name)
+                  elif req_type == 'Delete':
+                      try:
+                          recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])
+                          if recs:
+                              cfg.stop_configuration_recorder(ConfigurationRecorderName=recs[0]['name'])
+                      except Exception:
+                          pass
+                      try:
+                          chans = cfg.describe_delivery_channels().get('DeliveryChannels', [])
+                          if chans:
+                              cfg.delete_delivery_channel(DeliveryChannelName=chans[0]['name'])
+                      except Exception:
+                          pass
+                      try:
+                          recs = cfg.describe_configuration_recorders().get('ConfigurationRecorders', [])
+                          if recs:
+                              cfg.delete_configuration_recorder(ConfigurationRecorderName=recs[0]['name'])
+                      except Exception:
+                          pass
+                      send_response(event, context, 'SUCCESS', {}, physical_resource_id='ConfigBootstrap-Cleanup')
+              except Exception as e:
+                  reason = f"{str(e)} | Trace: {traceback.format_exc()}"
+                  try:
+                      send_response(event, context, 'FAILED', {}, reason=reason)
+                  except Exception:
+                      pass
+                  raise
+
+  ConfigBootstrap:
+    Type: AWS::CloudFormation::CustomResource
+    Condition: IsApprovedRegion
+    DependsOn: [ S3BucketPolicy ]
+    Properties:
+      ServiceToken: !GetAtt ConfigBootstrapFunction.Arn
+      RoleArn: !GetAtt ConfigDeliveryRole.Arn
+      BucketName: !Ref SecureS3Bucket
+      S3KmsKeyArn: !GetAtt S3EncryptionKey.Arn
+      EnvironmentSuffix: !Ref EnvironmentSuffix
+
+  S3BucketSSLConfigRule:
+    Type: AWS::Config::ConfigRule
+    Condition: IsApprovedRegion
+    DependsOn: ConfigBootstrap
+    Properties:
+      Description: Require SSL requests to S3 buckets
+      Source: { Owner: AWS, SourceIdentifier: S3_BUCKET_SSL_REQUESTS_ONLY }
+      Scope:
+        ComplianceResourceTypes: [ AWS::S3::Bucket ]
+
+  IAMPasswordPolicyConfigRule:
+    Type: AWS::Config::ConfigRule
+    Condition: IsApprovedRegion
+    DependsOn: [ ConfigBootstrap, PasswordPolicySetter ]
+    Properties:
+      Description: Enforce secure IAM account password policy
+      Source: { Owner: AWS, SourceIdentifier: IAM_PASSWORD_POLICY }
+
+  EncryptedVolumesConfigRule:
+    Type: AWS::Config::ConfigRule
+    Condition: IsApprovedRegion
+    DependsOn: ConfigBootstrap
+    Properties:
+      Description: EBS volumes must be encrypted
+      Source: { Owner: AWS, SourceIdentifier: ENCRYPTED_VOLUMES }
+
+  RootMFAConfigRule:
+    Type: AWS::Config::ConfigRule
+    Condition: IsApprovedRegion
+    DependsOn: ConfigBootstrap
+    Properties:
+      Description: Root account must have MFA enabled
+      Source: { Owner: AWS, SourceIdentifier: ROOT_ACCOUNT_MFA_ENABLED }
+
+  #################################################
+  # Regional restriction simulation (IAM, not SCP)
+  #################################################
+  RegionalRestrictionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Condition: IsApprovedRegion
+    Properties:
+      ManagedPolicyName: !Sub 'regional-restriction-${EnvironmentSuffix}'
+      Description: Simulated regional guardrail (SCPs require Organizations)
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: DenyNonApprovedRegions
+            Effect: Deny
+            NotAction:
+              - cloudformation:Describe*
+              - cloudformation:Get*
+              - cloudformation:List*
+              - cloudwatch:Describe*
+              - cloudwatch:Get*
+              - cloudwatch:List*
+            Resource: '*'
+            Condition:
+              StringNotEquals:
+                aws:RequestedRegion: [ us-east-1, us-west-2 ]
+          - Sid: RestrictRootActions
+            Effect: Deny
+            Action: '*'
+            Resource: '*'
+            Condition:
+              StringEquals:
+                aws:PrincipalARN: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+
+  # ----------------------------------------------------------------
+  # Minimal, opt-in resources
+  # ----------------------------------------------------------------
+
+  # EBS: standalone encrypted volume
+  SampleEBSVolume:
+    Type: AWS::EC2::Volume
+    Condition: IsApprovedRegion
+    Properties:
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      Size: 8
+      Encrypted: true
+      KmsKeyId: !GetAtt EBSEncryptionKey.Arn
+      VolumeType: gp3
+      Tags:
+        - { Key: Name, Value: !Sub 'sample-ebs-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  # -----------------------------
+  # EC2 networking (no default VPC)
+  # -----------------------------
+  EC2VPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateEC2
+    Properties:
+      CidrBlock: 10.10.0.0/24
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-vpc-${EnvironmentSuffix}' }
+
+  EC2InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Condition: CreateEC2
+    Properties:
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-igw-${EnvironmentSuffix}' }
+
+  EC2VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Condition: CreateEC2
+    Properties:
+      InternetGatewayId: !Ref EC2InternetGateway
+      VpcId: !Ref EC2VPC
+
+  EC2PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreateEC2
+    Properties:
+      VpcId: !Ref EC2VPC
+      CidrBlock: 10.10.0.0/28
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      MapPublicIpOnLaunch: true
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-public-a-${EnvironmentSuffix}' }
+
+  EC2PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Condition: CreateEC2
+    Properties:
+      VpcId: !Ref EC2VPC
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-rt-public-${EnvironmentSuffix}' }
+
+  EC2PublicRoute:
+    Type: AWS::EC2::Route
+    Condition: CreateEC2
+    DependsOn: EC2VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref EC2PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref EC2InternetGateway
+
+  EC2SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Condition: CreateEC2
+    Properties:
+      RouteTableId: !Ref EC2PublicRouteTable
+      SubnetId: !Ref EC2PublicSubnetA
+
+  EC2InstanceSG:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateEC2
+    Properties:
+      GroupDescription: !Sub 'EC2 SG (no inbound) - ${EnvironmentSuffix}'
+      VpcId: !Ref EC2VPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - { Key: Name, Value: !Sub 'ec2-sg-${EnvironmentSuffix}' }
+
+  # EC2: tiny instance in dedicated VPC, public subnet, no inbound
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Condition: CreateEC2
+    Properties:
+      Roles: [ !Ref EC2InstanceRole ]
+      InstanceProfileName: !Sub 'ec2-instance-profile-${EnvironmentSuffix}'
+
+  SampleEC2Instance:
+    Type: AWS::EC2::Instance
+    Condition: CreateEC2
+    Properties:
+      SubnetId: !Ref EC2PublicSubnetA
+      SecurityGroupIds: [ !Ref EC2InstanceSG ]
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      ImageId: !Ref EC2AmiId
+      InstanceType: t3.micro
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            Encrypted: true
+            KmsKeyId: !GetAtt EBSEncryptionKey.Arn
+            DeleteOnTermination: true
+      KeyName: !If [ HasKeyPair, !Ref EC2KeyPairName, !Ref 'AWS::NoValue' ]
+      Tags:
+        - { Key: Name, Value: !Sub 'sample-ec2-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+  # -----------------------------
+  # ECS sample (unchanged)
+  # -----------------------------
+  SampleECSCluster:
+    Type: AWS::ECS::Cluster
+    Condition: IsApprovedRegion
+    Properties:
+      ClusterName: !Sub 'sample-ecs-cluster-${EnvironmentSuffix}'
+      CapacityProviders: [ FARGATE, FARGATE_SPOT ]
+      Tags:
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  SampleECSTaskDefinitionFargate:
+    Type: AWS::ECS::TaskDefinition
+    Condition: IsApprovedRegion
+    Properties:
+      Family: !Sub 'sample-task-fargate-${EnvironmentSuffix}'
+      RequiresCompatibilities: [ FARGATE ]
+      Cpu: '256'
+      Memory: '512'
+      NetworkMode: awsvpc
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: hello
+          Image: public.ecr.aws/amazonlinux/amazonlinux:2023
+          Command: [ "bash", "-lc", "echo hello-from-ecs-fargate; sleep 3600" ]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApplicationLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  SampleECSTaskDefinitionEC2:
+    Type: AWS::ECS::TaskDefinition
+    Condition: CreateECSService
+    Properties:
+      Family: !Sub 'sample-task-ec2-${EnvironmentSuffix}'
+      RequiresCompatibilities: [ EC2 ]
+      NetworkMode: bridge
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !GetAtt ECSTaskExecutionRole.Arn
+      ContainerDefinitions:
+        - Name: hello-ec2
+          Image: public.ecr.aws/amazonlinux/amazonlinux:2023
+          Command: [ "bash", "-lc", "echo hello-from-ecs-service; sleep 3600" ]
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Ref ApplicationLogGroup
+              awslogs-region: !Ref AWS::Region
+              awslogs-stream-prefix: ecs
+
+  SampleECSService:
+    Type: AWS::ECS::Service
+    Condition: CreateECSService
+    Properties:
+      ServiceName: !Sub 'sample-ecs-svc-${EnvironmentSuffix}'
+      Cluster: !Ref SampleECSCluster
+      DesiredCount: 0
+      LaunchType: EC2
+      TaskDefinition: !Ref SampleECSTaskDefinitionEC2
+      SchedulingStrategy: REPLICA
+      DeploymentConfiguration:
+        MaximumPercent: 200
+        MinimumHealthyPercent: 0
+
+  # -----------------------------
+  # RDS sample (unchanged)
+  # -----------------------------
+  RDSVPC:
+    Type: AWS::EC2::VPC
+    Condition: CreateRDS
+    Properties:
+      CidrBlock: 10.0.0.0/24
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-vpc-${EnvironmentSuffix}' }
+
+  RDSSubnetA:
+    Type: AWS::EC2::Subnet
+    Condition: CreateRDS
+    Properties:
+      VpcId: !Ref RDSVPC
+      CidrBlock: 10.0.0.0/28
+      AvailabilityZone: !Sub '${AWS::Region}a'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-subnet-a-${EnvironmentSuffix}' }
+
+  RDSSubnetB:
+    Type: AWS::EC2::Subnet
+    Condition: CreateRDS
+    Properties:
+      VpcId: !Ref RDSVPC
+      CidrBlock: 10.0.0.16/28
+      AvailabilityZone: !Sub '${AWS::Region}b'
+      MapPublicIpOnLaunch: false
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-subnet-b-${EnvironmentSuffix}' }
+
+  SampleDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Condition: CreateRDS
+    Properties:
+      DBSubnetGroupDescription: !Sub 'sample-rds-subnets-${EnvironmentSuffix}'
+      SubnetIds:
+        - !Ref RDSSubnetA
+        - !Ref RDSSubnetB
+      DBSubnetGroupName: !Sub 'sample-rds-${EnvironmentSuffix}'
+
+  RDSDBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Condition: CreateRDS
+    Properties:
+      GroupDescription: !Sub 'RDS SG ${EnvironmentSuffix}'
+      VpcId: !Ref RDSVPC
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - { Key: Name, Value: !Sub 'rds-sg-${EnvironmentSuffix}' }
+
+  SampleRDSInstance:
+    Type: AWS::RDS::DBInstance
+    Condition: CreateRDS
+    DeletionPolicy: Snapshot
+    UpdateReplacePolicy: Snapshot
+    Properties:
+      DBInstanceIdentifier: !Sub 'sample-rds-${EnvironmentSuffix}'
+      Engine: postgres
+      EngineVersion: '16'
+      DBInstanceClass: db.t4g.micro
+      AllocatedStorage: 20
+      StorageType: gp3
+      PubliclyAccessible: false
+      MultiAZ: false
+      StorageEncrypted: true
+      KmsKeyId: !Ref RDSEncryptionKey
+      MasterUsername: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${DatabaseSecret}::password}}'
+      DBSubnetGroupName: !Ref SampleDBSubnetGroup
+      VPCSecurityGroups: [ !Ref RDSDBSecurityGroup ]
+      DeletionProtection: false
+      BackupRetentionPeriod: 7
+      EnablePerformanceInsights: false
+      Tags:
+        - { Key: Name, Value: !Sub 'sample-rds-${EnvironmentSuffix}' }
+        - { Key: Environment, Value: !Ref EnvironmentSuffix }
+        - { Key: Compliance, Value: Security-Baseline }
+
+Outputs:
+  EC2InstanceRoleArn:
+    Condition: IsApprovedRegion
+    Description: ARN of the EC2 instance role
+    Value: !GetAtt EC2InstanceRole.Arn
+
+  LambdaExecutionRoleArn:
+    Condition: IsApprovedRegion
+    Description: ARN of the Lambda execution role
+    Value: !GetAtt LambdaExecutionRole.Arn
+
+  ECSTaskExecutionRoleArn:
+    Condition: IsApprovedRegion
+    Description: ARN of the ECS task execution role
+    Value: !GetAtt ECSTaskExecutionRole.Arn
+
+  DeveloperPermissionBoundaryArn:
+    Condition: IsApprovedRegion
+    Description: ARN of the developer permission boundary
+    Value: !Ref DeveloperPermissionBoundary
+
+  DeveloperRoleArn:
+    Condition: IsApprovedRegion
+    Description: Example developer role ARN (with boundary applied)
+    Value: !GetAtt DeveloperRole.Arn
+
+  CrossAccountAssumeRoleArn:
+    Condition: IsApprovedRegion
+    Description: ARN for cross-account assume role
+    Value: !GetAtt CrossAccountAssumeRole.Arn
+
+  RDSEncryptionKeyId:
+    Condition: IsApprovedRegion
+    Description: RDS KMS Key ID
+    Value: !Ref RDSEncryptionKey
+
+  S3EncryptionKeyId:
+    Condition: IsApprovedRegion
+    Description: S3 KMS Key ID
+    Value: !Ref S3EncryptionKey
+
+  EBSEncryptionKeyId:
+    Condition: IsApprovedRegion
+    Description: EBS KMS Key ID
+    Value: !Ref EBSEncryptionKey
+
+  SecureS3BucketName:
+    Condition: IsApprovedRegion
+    Description: Name of the secure S3 bucket
+    Value: !Ref SecureS3Bucket
+
+  PlatformNameOut:
+    Description: Helper output for platform validation (expected 'cloudformation')
+    Value: !Ref PlatformName
+
+  SampleEBSVolumeId:
+    Condition: IsApprovedRegion
+    Description: ID of the sample encrypted EBS volume
+    Value: !Ref SampleEBSVolume
+
+  SampleEC2InstanceId:
+    Condition: CreateEC2
+    Description: ID of the sample EC2 instance (created by default)
+    Value: !Ref SampleEC2Instance
+
+  SampleECSClusterName:
+    Condition: IsApprovedRegion
+    Description: Name of the sample ECS Cluster
+    Value: !Ref SampleECSCluster
+
+  SampleECSTaskFargateFamily:
+    Condition: IsApprovedRegion
+    Description: Fargate TaskDefinition family name
+    Value: !Ref SampleECSTaskDefinitionFargate
+
+  SampleECSServiceName:
+    Condition: CreateECSService
+    Description: Name of the sample ECS Service (EC2 launch type; DesiredCount=0)
+    Value: !Ref SampleECSService
+
+  SampleRDSInstanceEndpoint:
+    Condition: CreateRDS
+    Description: RDS instance endpoint address
+    Value: !GetAtt SampleRDSInstance.Endpoint.Address

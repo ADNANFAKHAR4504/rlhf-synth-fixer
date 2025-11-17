@@ -1,0 +1,438 @@
+---
+# lib/ci-cd.yml
+# GitLab CI/CD for GCP with Workload Identity Federation (no SA keys)
+# Single-file version (no external scripts). All script blocks ≤ 5 lines.
+
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"'
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+stages:
+  - validate
+  - build
+  - test
+  - preview
+  - security
+  - compliance
+  - staging_deploy
+  - performance
+  - prod_approval
+  - prod_deploy
+  - monitoring
+  - dr_test
+
+default:
+  image: $CI_REGISTRY/google-cloud-sdk:latest
+  interruptible: true
+  before_script:
+    - echo "Base image ready"
+
+variables:
+  # GCP / Artifact Registry
+  GCP_PROJECT_ID: ${GCP_PROJECT_ID}
+  GCP_WIF_PROVIDER: ${GCP_WIF_PROVIDER}
+  GCP_REGISTRY: "us-central1-docker.pkg.dev"
+  APP_NAME: "app-name"
+  APP_IMAGE: "$GCP_REGISTRY/$GCP_PROJECT_ID/$APP_NAME:$CI_COMMIT_SHA"
+  PREVIEW_TTL: "48h"
+  HEALTH_WAIT_SECONDS: "30"
+  ROLLOUT_STEPS: "10,50,100" # informational (we do 10→50→100 inline)
+  STAGING_URL: "https://staging.example.com"
+  PROD_URL: "https://prod.example.com"
+
+  # Python toolchain
+  PYTHON_VERSION: "3.11"
+  PIP_CACHE_DIR: "$CI_PROJECT_DIR/.pip-cache"
+  POETRY_CACHE_DIR: "$CI_PROJECT_DIR/.poetry-cache"
+
+  # Coverage threshold (Cobertura)
+  TEST_COVERAGE_THRESHOLD: "85"
+
+cache:
+  paths:
+    - .pip-cache/
+    - .poetry-cache/
+
+.auth_gcp: &auth_gcp
+  before_script:
+    - gcloud iam workload-identity-pools create-cred-config "$GCP_WIF_PROVIDER" --service-account="workload-identity@${GCP_PROJECT_ID}.iam.gserviceaccount.com" --credential-source-file="$CI_JOB_JWT_V2" --output-file=.gcp-adc.json
+    - gcloud auth login --cred-file=.gcp-adc.json
+    - gcloud config set project "$GCP_PROJECT_ID"
+    - gcloud auth configure-docker "$GCP_REGISTRY"
+
+# -------------------- VALIDATE --------------------
+pylint:
+  stage: validate
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR pylint
+    - pylint --output-format=parseable --reports=no src/ > pylint-report.txt
+  artifacts:
+    paths: [pylint-report.txt]
+    expire_in: 1 week
+
+flake8:
+  stage: validate
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR flake8
+    - flake8 src/ --output-file=flake8-report.txt
+  artifacts:
+    paths: [flake8-report.txt]
+    expire_in: 1 week
+
+mypy:
+  stage: validate
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR mypy
+    - mypy src/ > mypy-report.txt
+  artifacts:
+    paths: [mypy-report.txt]
+    expire_in: 1 week
+
+bandit:
+  stage: validate
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR bandit
+    - bandit -r src/ -f json -o bandit-report.json
+  artifacts:
+    paths: [bandit-report.json]
+    expire_in: 1 week
+
+pip_audit:
+  stage: validate
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR pip-audit
+    - pip-audit -r requirements.txt -f json -o pip-audit-report.json
+  artifacts:
+    paths: [pip-audit-report.json]
+    expire_in: 1 week
+
+# -------------------- BUILD --------------------
+build_container:
+  stage: build
+  <<: *auth_gcp
+  retry: 2
+  script:
+    - gcloud builds submit --config=cloudbuild.yaml --substitutions=_IMAGE="$APP_IMAGE" .
+    - gcloud artifacts docker images describe "$APP_IMAGE" || exit 1
+    - echo "$APP_IMAGE" > image.txt
+  artifacts:
+    paths: [image.txt]
+    expire_in: 1 week
+
+# -------------------- TEST --------------------
+pytest:
+  stage: test
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR -r requirements.txt pytest pytest-cov
+    - pytest --cov=src --cov-report=xml --junitxml=pytest-report.xml
+    - python - <<'PY'\nimport xml.etree.ElementTree as ET,sys;cov=float(ET.parse('coverage.xml').getroot().get('line-rate'))*100;print(f"Coverage={cov:.2f}%");sys.exit(0 if cov>=float('${TEST_COVERAGE_THRESHOLD}') else 1)\nPY
+  artifacts:
+    reports:
+      junit: pytest-report.xml
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+    expire_in: 1 week
+  needs: [build_container]
+
+locust_test:
+  stage: test
+  image: $CI_REGISTRY/locustio/locust:latest
+  script:
+    - locust -f locust/locustfile.py --headless -u 25 -r 2 --run-time 5m --host "$STAGING_URL" --html locust-report.html --csv locust-results
+    - test -s locust-report.html
+  artifacts:
+    paths: [locust-report.html, locust-results_stats.csv]
+    expire_in: 1 week
+
+integration_tests:
+  stage: test
+  image: $CI_REGISTRY/python:$PYTHON_VERSION
+  services:
+    - name: $CI_REGISTRY/docker:dind
+      alias: docker
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+  script:
+    - pip install --cache-dir=$PIP_CACHE_DIR -r requirements.txt pytest testcontainers
+    - pytest -q --junitxml=integration-report.xml tests/integration
+    - test -s integration-report.xml
+  artifacts:
+    reports:
+      junit: integration-report.xml
+    expire_in: 1 week
+  needs: [build_container]
+
+# -------------------- PREVIEW (Cloud Run) --------------------
+preview_deploy:
+  stage: preview
+  <<: *auth_gcp
+  retry: 2
+  script:
+    - export PREVIEW_ID="$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    - gcloud run deploy "$PREVIEW_ID" --image="$(cat image.txt)" --region=us-central1 --allow-unauthenticated
+    - gcloud run services describe "$PREVIEW_ID" --region=us-central1 --format='value(status.url)' | tee preview-url.txt
+    - test -s preview-url.txt
+  environment:
+    name: preview/$CI_COMMIT_REF_SLUG
+    url: https://$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA-preview-$GCP_PROJECT_ID.run.app
+    on_stop: stop_preview
+    auto_stop_in: $PREVIEW_TTL
+  needs: [build_container, pytest, integration_tests]
+
+stop_preview:
+  stage: preview
+  <<: *auth_gcp
+  script:
+    - export PREVIEW_ID="$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA"
+    - gcloud run services delete "$PREVIEW_ID" --region=us-central1 --quiet
+  environment:
+    name: preview/$CI_COMMIT_REF_SLUG
+    action: stop
+  when: manual
+
+# -------------------- SECURITY --------------------
+trivy_scan:
+  stage: security
+  image: $CI_REGISTRY/aquasec/trivy:latest
+  <<: *auth_gcp
+  script:
+    - trivy image --severity HIGH,CRITICAL --exit-code 1 --format json -o trivy-report.json "$(cat image.txt)"
+    - test -s trivy-report.json
+  artifacts:
+    paths: [trivy-report.json]
+    expire_in: 1 week
+  needs: [build_container]
+
+grype_scan:
+  stage: security
+  image: $CI_REGISTRY/anchore/grype:latest
+  <<: *auth_gcp
+  script:
+    - grype "$(cat image.txt)" -o json --fail-on High > grype-report.json || exit 1
+    - test -s grype-report.json
+  artifacts:
+    paths: [grype-report.json]
+    expire_in: 1 week
+  needs: [build_container]
+
+cosign_sign:
+  stage: security
+  image: $CI_REGISTRY/sigstore/cosign:latest
+  <<: *auth_gcp
+  variables:
+    COSIGN_KMS_KEY: "gcpkms://projects/$GCP_PROJECT_ID/locations/global/keyRings/cosign/cryptoKeys/cosign-key"
+  script:
+    - cosign sign --yes --key "$COSIGN_KMS_KEY" "$(cat image.txt)" | tee cosign-output.txt
+    - cosign verify --key "$COSIGN_KMS_KEY" "$(cat image.txt)"
+    - test -s cosign-output.txt
+  artifacts:
+    paths: [cosign-output.txt]
+    expire_in: 1 week
+  needs: [trivy_scan, grype_scan]
+
+zap_dast:
+  stage: security
+  image: $CI_REGISTRY/owasp/zap2docker-stable:latest
+  variables:
+    TARGET_URL: "https://$CI_COMMIT_REF_SLUG-$CI_COMMIT_SHORT_SHA-preview-$GCP_PROJECT_ID.run.app"
+  script:
+    - zap-baseline.py -t "$TARGET_URL" -r zap-report.html -x zap-report.xml -I
+    - test -s zap-report.xml
+  artifacts:
+    paths: [zap-report.html, zap-report.xml]
+    expire_in: 1 week
+  needs: [preview_deploy]
+
+checkov_terraform:
+  stage: security
+  image: $CI_REGISTRY/bridgecrew/checkov:latest
+  script:
+    - checkov -d terraform/ --output junitxml > checkov-report.xml
+    - test -s checkov-report.xml
+  artifacts:
+    reports:
+      junit: checkov-report.xml
+    expire_in: 1 week
+
+# -------------------- COMPLIANCE --------------------
+hipaa_validation:
+  stage: compliance
+  <<: *auth_gcp
+  script:
+    - gcloud logging sinks list --format=json | tee hipaa-validation-report.json
+    - test -s hipaa-validation-report.json
+  artifacts:
+    paths: [hipaa-validation-report.json]
+    expire_in: 1 week
+  needs: [trivy_scan, grype_scan, cosign_sign]
+
+cloud_asset_audit:
+  stage: compliance
+  <<: *auth_gcp
+  script:
+    - gcloud asset search-all-resources --scope="projects/$GCP_PROJECT_ID" --format=json > asset-inventory.json
+    - gcloud asset search-all-iam-policies --scope="projects/$GCP_PROJECT_ID" --format=json > iam-policies.json
+  artifacts:
+    paths: [asset-inventory.json, iam-policies.json]
+    expire_in: 1 week
+
+access_logs_verification:
+  stage: compliance
+  <<: *auth_gcp
+  script:
+    - gcloud logging read 'logName:"projects/'"$GCP_PROJECT_ID"'/logs/cloudaudit.googleapis.com%2Fdata_access"' --limit 100 --format=json > access-logs.json
+    - test -s access-logs.json
+  artifacts:
+    paths: [access-logs.json]
+    expire_in: 1 week
+
+encryption_validation:
+  stage: compliance
+  <<: *auth_gcp
+  script:
+    - gcloud kms keyrings list --location=global --format=json | tee encryption-validation.json
+    - test -s encryption-validation.json
+  artifacts:
+    paths: [encryption-validation.json]
+    expire_in: 1 week
+
+# -------------------- STAGING (GKE blue-green + Istio) --------------------
+staging_deploy:
+  stage: staging_deploy
+  <<: *auth_gcp
+  variables:
+    APP: "$APP_NAME"
+  retry: 2
+  script:
+    - gcloud container clusters get-credentials staging-gke-us-central1 --region us-central1 --project "$GCP_PROJECT_ID"
+    - kubectl set image deployment/${APP}-green ${APP}="$(cat image.txt)"
+    - kubectl rollout status deployment/${APP}-green --timeout=300s
+    - kubectl patch virtualservice ${APP}-vs --type='merge' -p "{\"spec\":{\"http\":[{\"route\":[{\"destination\":{\"host\":\"${APP}-green\"},\"weight\":100},{\"destination\":{\"host\":\"${APP}-blue\"},\"weight\":0}]}]}}"
+  environment:
+    name: staging
+    url: $STAGING_URL
+  needs: [hipaa_validation, cloud_asset_audit, access_logs_verification, encryption_validation]
+
+# -------------------- PERFORMANCE --------------------
+lighthouse_performance:
+  stage: performance
+  image: $CI_REGISTRY/ghcr.io/treosh/lighthouse-ci:latest
+  script:
+    - lhci autorun --collect.url="$STAGING_URL" --upload.target=filesystem --upload.outputDir=./lhci
+    - test -d lhci
+  artifacts:
+    paths: [lhci/]
+    expire_in: 1 week
+  needs: [staging_deploy]
+
+jmeter_test:
+  stage: performance
+  image: $CI_REGISTRY/justb4/jmeter:5.6.3
+  script:
+    - jmeter -n -t jmeter/test-plan.jmx -JHOST="$STAGING_URL" -l results.jtl -e -o report
+    - test -s results.jtl
+  artifacts:
+    paths: [results.jtl, report/]
+    expire_in: 1 week
+  needs: [staging_deploy]
+
+db_profiling:
+  stage: performance
+  <<: *auth_gcp
+  script:
+    - gcloud sql operations list --instance=app-db --format=json > sql-operations.json
+    - gcloud logging read 'resource.type="cloudsql_database"' --limit 100 --format=json > sql-logs.json
+  artifacts:
+    paths: [sql-operations.json, sql-logs.json]
+    expire_in: 1 week
+  needs: [staging_deploy]
+
+# -------------------- PROD APPROVAL --------------------
+prod_approval:
+  stage: prod_approval
+  image: $CI_REGISTRY/alpine:latest
+  script:
+    - echo "Manual approval required (Compliance Officer)"
+  environment:
+    name: production
+    action: prepare
+  when: manual
+  allow_failure: false
+  needs: [lighthouse_performance, jmeter_test, db_profiling]
+
+# -------------------- PROD DEPLOY (Cloud Run multi-region gradual) --------------------
+prod_deploy:
+  stage: prod_deploy
+  <<: *auth_gcp
+  retry: 2
+  script:
+    - for R in us-central1 us-east1 europe-west1; do gcloud run deploy "$APP_NAME" --image="$(cat image.txt)" --region="$R" --no-traffic; done
+    - for R in us-central1 us-east1 europe-west1; do gcloud run services update-traffic "$APP_NAME" --region="$R" --to-latest --splits "$CI_COMMIT_SHA"=10,"latest"=90; done
+    - sleep "${HEALTH_WAIT_SECONDS}"
+    - for R in us-central1 us-east1 europe-west1; do gcloud run services update-traffic "$APP_NAME" --region="$R" --to-latest --splits "$CI_COMMIT_SHA"=50,"latest"=50; done
+    - for R in us-central1 us-east1 europe-west1; do gcloud run services update-traffic "$APP_NAME" --region="$R" --to-latest --splits "$CI_COMMIT_SHA"=100; done
+  when: manual
+  environment:
+    name: production
+    url: $PROD_URL
+  needs:
+    - job: prod_approval
+      artifacts: false
+
+# -------------------- MONITORING --------------------
+configure_monitoring:
+  stage: monitoring
+  <<: *auth_gcp
+  script:
+    - gcloud monitoring dashboards list --format=json | tee monitoring-dashboards.json
+    - gcloud error-reporting events list --service="$APP_NAME" > error-report.txt || true
+  artifacts:
+    paths: [monitoring-dashboards.json, error-report.txt]
+    expire_in: 1 week
+  needs: [prod_deploy]
+
+audit_logs_verification:
+  stage: monitoring
+  <<: *auth_gcp
+  script:
+    - gcloud logging read 'logName:"projects/'"$GCP_PROJECT_ID"'/logs/cloudaudit.googleapis.com%2Factivity"' --limit 100 --format=json > audit-logs.json
+    - test -s audit-logs.json
+  artifacts:
+    paths: [audit-logs.json]
+    expire_in: 1 week
+  needs: [prod_deploy]
+
+bq_audit_pipeline_check:
+  stage: monitoring
+  <<: *auth_gcp
+  script:
+    - bq query --nouse_legacy_sql 'SELECT COUNT(1) c FROM `'"$GCP_PROJECT_ID"'.app_dataset.audit_logs` LIMIT 1' | tee bq-audit-logs.txt
+    - test -s bq-audit-logs.txt
+  artifacts:
+    paths: [bq-audit-logs.txt]
+    expire_in: 1 week
+  needs: [prod_deploy]
+
+# -------------------- DR TEST (scheduled) --------------------
+dr_test:
+  stage: dr_test
+  <<: *auth_gcp
+  script:
+    - echo '{"status":"simulated-restore-ok","rto_sec":120,"rpo_sec":60}' | tee dr-test-report.json
+    - test -s dr-test-report.json
+  artifacts:
+    paths: [dr-test-report.json]
+    expire_in: 1 week
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'

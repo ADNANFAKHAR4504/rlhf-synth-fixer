@@ -1,0 +1,40 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350155",
+  "team": "3",
+  "startedAt": "2025-10-17T11:44:40.056Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "ElastiCache",
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "EventBridge",
+    "Route 53",
+    "KMS",
+    "Secrets Manager",
+    "IAM",
+    "WAF",
+    "CloudTrail",
+    "AWS Config",
+    "SNS"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "matkadturing",
+  "dockerS3Location": ""
+}

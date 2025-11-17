@@ -1,0 +1,43 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "po_id": "101000830",
+  "startedAt": "2025-11-04T23:58:21",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "vpc",
+    "networking",
+    "subnets",
+    "nat-gateway",
+    "internet-gateway",
+    "route-tables",
+    "vpc-flow-logs",
+    "s3-endpoint",
+    "high-availability"
+  ],
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "Subnets",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Elastic IP",
+    "Route Tables",
+    "VPC Flow Logs",
+    "CloudWatch Logs",
+    "S3 VPC Endpoint",
+    "Network ACL",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

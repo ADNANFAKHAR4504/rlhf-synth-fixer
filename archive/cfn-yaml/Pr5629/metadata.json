@@ -1,0 +1,39 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000256",
+  "team": "4",
+  "startedAt": "2025-11-03T08:56:51.481Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "S3 Buckets",
+    "DynamoDB Global Table",
+    "Lambda Functions",
+    "EventBridge Rules",
+    "SSM Parameter Store",
+    "IAM Roles & Policies",
+    "CloudWatch Alarms & Dashboard"
+  ],
+  "background": "A financial services company requires a multi-account AWS infrastructure to synchronize configuration and schema changes across development, staging, and production environments. The goal is to ensure configuration consistency, maintain schema parity, and enable automated propagation of infrastructure updates while enforcing strict isolation and least-privilege access. The solution leverages S3 for configuration artifacts with cross-account replication, DynamoDB Global Tables for metadata synchronization, Lambda functions for event-driven replication and validation, EventBridge for change propagation, SSM Parameter Store for configuration mirroring, IAM for cross-account roles, and CloudWatch for monitoring. The framework must be fully parameterized to deploy across multiple AWS accounts without modification.",
+  "training_quality": 9,
+  "implementation_completeness": {
+    "s3_buckets": "complete",
+    "dynamodb_global_table": "complete",
+    "lambda_functions": "complete",
+    "eventbridge_rules": "partial",
+    "ssm_parameter_store": "partial",
+    "iam_roles_policies": "complete",
+    "cloudwatch_monitoring": "complete"
+  },
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rahulpatil118",
+  "dockerS3Location": ""
+}

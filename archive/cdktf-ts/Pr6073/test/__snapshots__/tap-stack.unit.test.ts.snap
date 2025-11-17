@@ -1,0 +1,759 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`TapStack Stack Creation should create stack with default props 1`] = `
+"{
+  "data": {
+    "aws_availability_zones": {
+      "available": {
+        "state": "available"
+      }
+    },
+    "aws_caller_identity": {
+      "current": {
+      }
+    }
+  },
+  "output": {
+    "alb-arn": {
+      "description": "Application Load Balancer ARN",
+      "value": "\${aws_lb.alb.arn}"
+    },
+    "alb-dns-name": {
+      "description": "Application Load Balancer DNS name",
+      "value": "\${aws_lb.alb.dns_name}"
+    },
+    "application-url": {
+      "description": "Application URL (ALB DNS name)",
+      "value": "https://\${aws_lb.alb.dns_name}"
+    },
+    "aws-account-id": {
+      "description": "Current AWS Account ID",
+      "value": "\${data.aws_caller_identity.current.account_id}"
+    },
+    "aws-region": {
+      "description": "AWS Region",
+      "value": "us-east-1"
+    },
+    "cloudwatch-log-group": {
+      "description": "CloudWatch Log Group for ECS",
+      "value": "\${aws_cloudwatch_log_group.ecs-log-group.name}"
+    },
+    "db-secret-arn": {
+      "description": "Database secret ARN in Secrets Manager",
+      "value": "\${aws_secretsmanager_secret.db-secret.arn}"
+    },
+    "ecr-repository-url": {
+      "description": "ECR Repository URL",
+      "value": "\${aws_ecr_repository.ecr-repo.repository_url}"
+    },
+    "ecs-cluster-name": {
+      "description": "ECS Cluster name",
+      "value": "\${aws_ecs_cluster.ecs-cluster.name}"
+    },
+    "ecs-service-name": {
+      "description": "ECS Service name",
+      "value": "\${aws_ecs_service.ecs-service.name}"
+    },
+    "https-enabled": {
+      "description": "HTTPS is enabled",
+      "value": "true"
+    },
+    "private-subnet-ids": {
+      "description": "Private subnet IDs",
+      "value": [
+        "\${aws_subnet.private-subnet-0.id}",
+        "\${aws_subnet.private-subnet-1.id}",
+        "\${aws_subnet.private-subnet-2.id}"
+      ]
+    },
+    "public-subnet-ids": {
+      "description": "Public subnet IDs",
+      "value": [
+        "\${aws_subnet.public-subnet-0.id}",
+        "\${aws_subnet.public-subnet-1.id}",
+        "\${aws_subnet.public-subnet-2.id}"
+      ]
+    },
+    "rds-endpoint": {
+      "description": "RDS PostgreSQL endpoint",
+      "value": "\${aws_db_instance.rds-instance.endpoint}"
+    },
+    "vpc-id": {
+      "description": "VPC ID",
+      "value": "\${aws_vpc.vpc.id}"
+    }
+  },
+  "provider": {
+    "aws": [
+      {
+        "default_tags": [
+        ],
+        "region": "us-east-1"
+      }
+    ]
+  },
+  "resource": {
+    "aws_appautoscaling_policy": {
+      "ecs-cpu-scaling-policy": {
+        "name": "payment-cpu-scaling-dev",
+        "policy_type": "TargetTrackingScaling",
+        "resource_id": "\${aws_appautoscaling_target.ecs-autoscaling-target.resource_id}",
+        "scalable_dimension": "\${aws_appautoscaling_target.ecs-autoscaling-target.scalable_dimension}",
+        "service_namespace": "\${aws_appautoscaling_target.ecs-autoscaling-target.service_namespace}",
+        "target_tracking_scaling_policy_configuration": {
+          "predefined_metric_specification": {
+            "predefined_metric_type": "ECSServiceAverageCPUUtilization"
+          },
+          "scale_in_cooldown": 300,
+          "scale_out_cooldown": 60,
+          "target_value": 70
+        }
+      }
+    },
+    "aws_appautoscaling_target": {
+      "ecs-autoscaling-target": {
+        "max_capacity": 10,
+        "min_capacity": 3,
+        "resource_id": "service/\${aws_ecs_cluster.ecs-cluster.name}/\${aws_ecs_service.ecs-service.name}",
+        "scalable_dimension": "ecs:service:DesiredCount",
+        "service_namespace": "ecs"
+      }
+    },
+    "aws_cloudwatch_log_group": {
+      "ecs-log-group": {
+        "name": "/ecs/payment-app-dev",
+        "retention_in_days": 7,
+        "tags": {
+          "Environment": "production",
+          "Name": "ecs-logs-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_db_instance": {
+      "rds-instance": {
+        "allocated_storage": 20,
+        "backup_retention_period": 7,
+        "backup_window": "03:00-04:00",
+        "db_name": "paymentdb",
+        "db_subnet_group_name": "\${aws_db_subnet_group.db-subnet-group.name}",
+        "deletion_protection": false,
+        "enabled_cloudwatch_logs_exports": [
+          "postgresql",
+          "upgrade"
+        ],
+        "engine": "postgres",
+        "engine_version": "16.4",
+        "identifier": "payment-db-dev",
+        "instance_class": "db.t3.medium",
+        "maintenance_window": "sun:04:00-sun:05:00",
+        "multi_az": true,
+        "password": "TemporaryPassword123!",
+        "publicly_accessible": false,
+        "skip_final_snapshot": true,
+        "storage_encrypted": true,
+        "storage_type": "gp3",
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-db-dev",
+          "Project": "payment-app"
+        },
+        "username": "dbadmin",
+        "vpc_security_group_ids": [
+          "\${aws_security_group.rds-sg.id}"
+        ]
+      }
+    },
+    "aws_db_subnet_group": {
+      "db-subnet-group": {
+        "description": "Subnet group for RDS PostgreSQL",
+        "name": "db-subnet-group-dev",
+        "subnet_ids": [
+          "\${aws_subnet.private-subnet-0.id}",
+          "\${aws_subnet.private-subnet-1.id}",
+          "\${aws_subnet.private-subnet-2.id}"
+        ],
+        "tags": {
+          "Environment": "production",
+          "Name": "db-subnet-group-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_ecr_repository": {
+      "ecr-repo": {
+        "image_scanning_configuration": {
+          "scan_on_push": true
+        },
+        "image_tag_mutability": "MUTABLE",
+        "name": "payment-app-dev",
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-app-ecr-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_ecs_cluster": {
+      "ecs-cluster": {
+        "name": "payment-cluster-dev",
+        "setting": [
+          {
+            "name": "containerInsights",
+            "value": "enabled"
+          }
+        ],
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-cluster-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_ecs_service": {
+      "ecs-service": {
+        "capacity_provider_strategy": [
+          {
+            "base": 0,
+            "capacity_provider": "FARGATE_SPOT",
+            "weight": 100
+          }
+        ],
+        "cluster": "\${aws_ecs_cluster.ecs-cluster.id}",
+        "desired_count": 3,
+        "enable_execute_command": true,
+        "health_check_grace_period_seconds": 60,
+        "load_balancer": [
+          {
+            "container_name": "payment-app",
+            "container_port": 8080,
+            "target_group_arn": "\${aws_lb_target_group.target-group.arn}"
+          }
+        ],
+        "name": "payment-service-dev",
+        "network_configuration": {
+          "assign_public_ip": false,
+          "security_groups": [
+            "\${aws_security_group.ecs-sg.id}"
+          ],
+          "subnets": [
+            "\${aws_subnet.private-subnet-0.id}",
+            "\${aws_subnet.private-subnet-1.id}",
+            "\${aws_subnet.private-subnet-2.id}"
+          ]
+        },
+        "platform_version": "LATEST",
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-service-dev",
+          "Project": "payment-app"
+        },
+        "task_definition": "\${aws_ecs_task_definition.task-definition.arn}"
+      }
+    },
+    "aws_ecs_task_definition": {
+      "task-definition": {
+        "container_definitions": "[{\\"name\\":\\"payment-app\\",\\"image\\":\\"\${aws_ecr_repository.ecr-repo.repository_url}:latest\\",\\"essential\\":true,\\"portMappings\\":[{\\"containerPort\\":8080,\\"protocol\\":\\"tcp\\"}],\\"environment\\":[{\\"name\\":\\"ENVIRONMENT\\",\\"value\\":\\"production\\"},{\\"name\\":\\"LOG_LEVEL\\",\\"value\\":\\"INFO\\"}],\\"secrets\\":[{\\"name\\":\\"DB_CONNECTION\\",\\"valueFrom\\":\\"\${aws_secretsmanager_secret.db-secret.arn}\\"}],\\"logConfiguration\\":{\\"logDriver\\":\\"awslogs\\",\\"options\\":{\\"awslogs-group\\":\\"\${aws_cloudwatch_log_group.ecs-log-group.name}\\",\\"awslogs-region\\":\\"us-east-1\\",\\"awslogs-stream-prefix\\":\\"ecs\\"}},\\"healthCheck\\":{\\"command\\":[\\"CMD-SHELL\\",\\"curl -f http://localhost:8080/health || exit 1\\"],\\"interval\\":30,\\"timeout\\":5,\\"retries\\":3,\\"startPeriod\\":60}}]",
+        "cpu": "256",
+        "execution_role_arn": "\${aws_iam_role.ecs-task-execution-role.arn}",
+        "family": "payment-app-dev",
+        "memory": "512",
+        "network_mode": "awsvpc",
+        "requires_compatibilities": [
+          "FARGATE"
+        ],
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-task-dev",
+          "Project": "payment-app"
+        },
+        "task_role_arn": "\${aws_iam_role.ecs-task-role.arn}"
+      }
+    },
+    "aws_eip": {
+      "nat-eip-0": {
+        "domain": "vpc",
+        "tags": {
+          "Environment": "production",
+          "Name": "nat-eip-0-dev",
+          "Project": "payment-app"
+        }
+      },
+      "nat-eip-1": {
+        "domain": "vpc",
+        "tags": {
+          "Environment": "production",
+          "Name": "nat-eip-1-dev",
+          "Project": "payment-app"
+        }
+      },
+      "nat-eip-2": {
+        "domain": "vpc",
+        "tags": {
+          "Environment": "production",
+          "Name": "nat-eip-2-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_iam_policy": {
+      "secrets-policy": {
+        "description": "Policy for ECS tasks to access Secrets Manager",
+        "name": "ecs-secrets-policy-dev",
+        "policy": "{\\"Version\\":\\"2012-10-17\\",\\"Statement\\":[{\\"Effect\\":\\"Allow\\",\\"Action\\":[\\"secretsmanager:GetSecretValue\\",\\"secretsmanager:DescribeSecret\\"],\\"Resource\\":\\"\${aws_secretsmanager_secret.db-secret.arn}\\"},{\\"Effect\\":\\"Allow\\",\\"Action\\":[\\"kms:Decrypt\\"],\\"Resource\\":\\"*\\"}]}",
+        "tags": {
+          "Environment": "production",
+          "Name": "secrets-policy-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_iam_role": {
+      "ecs-task-execution-role": {
+        "assume_role_policy": "{\\"Version\\":\\"2012-10-17\\",\\"Statement\\":[{\\"Effect\\":\\"Allow\\",\\"Principal\\":{\\"Service\\":\\"ecs-tasks.amazonaws.com\\"},\\"Action\\":\\"sts:AssumeRole\\"}]}",
+        "name": "ecs-task-execution-role-dev",
+        "tags": {
+          "Environment": "production",
+          "Name": "ecs-task-execution-role-dev",
+          "Project": "payment-app"
+        }
+      },
+      "ecs-task-role": {
+        "assume_role_policy": "{\\"Version\\":\\"2012-10-17\\",\\"Statement\\":[{\\"Effect\\":\\"Allow\\",\\"Principal\\":{\\"Service\\":\\"ecs-tasks.amazonaws.com\\"},\\"Action\\":\\"sts:AssumeRole\\"}]}",
+        "name": "ecs-task-role-dev",
+        "tags": {
+          "Environment": "production",
+          "Name": "ecs-task-role-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_iam_role_policy_attachment": {
+      "ecs-task-execution-policy-attachment": {
+        "policy_arn": "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
+        "role": "\${aws_iam_role.ecs-task-execution-role.name}"
+      },
+      "secrets-policy-attachment": {
+        "policy_arn": "\${aws_iam_policy.secrets-policy.arn}",
+        "role": "\${aws_iam_role.ecs-task-execution-role.name}"
+      }
+    },
+    "aws_internet_gateway": {
+      "igw": {
+        "tags": {
+          "Environment": "production",
+          "Name": "igw-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      }
+    },
+    "aws_lb": {
+      "alb": {
+        "enable_deletion_protection": false,
+        "enable_http2": true,
+        "internal": false,
+        "load_balancer_type": "application",
+        "name": "payment-alb-dev",
+        "security_groups": [
+          "\${aws_security_group.alb-sg.id}"
+        ],
+        "subnets": [
+          "\${aws_subnet.public-subnet-0.id}",
+          "\${aws_subnet.public-subnet-1.id}",
+          "\${aws_subnet.public-subnet-2.id}"
+        ],
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-alb-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_lb_listener": {
+      "http-listener": {
+        "default_action": [
+          {
+            "redirect": {
+              "port": "443",
+              "protocol": "HTTPS",
+              "status_code": "HTTP_301"
+            },
+            "type": "redirect"
+          }
+        ],
+        "load_balancer_arn": "\${aws_lb.alb.arn}",
+        "port": 80,
+        "protocol": "HTTP",
+        "tags": {
+          "Environment": "production",
+          "Name": "http-listener-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_lb_target_group": {
+      "target-group": {
+        "deregistration_delay": "30",
+        "health_check": {
+          "enabled": true,
+          "healthy_threshold": 2,
+          "interval": 30,
+          "matcher": "200",
+          "path": "/health",
+          "protocol": "HTTP",
+          "timeout": 5,
+          "unhealthy_threshold": 3
+        },
+        "name": "payment-tg-dev",
+        "port": 8080,
+        "protocol": "HTTP",
+        "tags": {
+          "Environment": "production",
+          "Name": "payment-tg-dev",
+          "Project": "payment-app"
+        },
+        "target_type": "ip",
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      }
+    },
+    "aws_nat_gateway": {
+      "nat-gateway-0": {
+        "allocation_id": "\${aws_eip.nat-eip-0.id}",
+        "subnet_id": "\${aws_subnet.public-subnet-0.id}",
+        "tags": {
+          "Environment": "production",
+          "Name": "nat-gateway-0-dev",
+          "Project": "payment-app"
+        }
+      },
+      "nat-gateway-1": {
+        "allocation_id": "\${aws_eip.nat-eip-1.id}",
+        "subnet_id": "\${aws_subnet.public-subnet-1.id}",
+        "tags": {
+          "Environment": "production",
+          "Name": "nat-gateway-1-dev",
+          "Project": "payment-app"
+        }
+      },
+      "nat-gateway-2": {
+        "allocation_id": "\${aws_eip.nat-eip-2.id}",
+        "subnet_id": "\${aws_subnet.public-subnet-2.id}",
+        "tags": {
+          "Environment": "production",
+          "Name": "nat-gateway-2-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_route": {
+      "private-route-0": {
+        "destination_cidr_block": "0.0.0.0/0",
+        "nat_gateway_id": "\${aws_nat_gateway.nat-gateway-0.id}",
+        "route_table_id": "\${aws_route_table.private-route-table-0.id}"
+      },
+      "private-route-1": {
+        "destination_cidr_block": "0.0.0.0/0",
+        "nat_gateway_id": "\${aws_nat_gateway.nat-gateway-1.id}",
+        "route_table_id": "\${aws_route_table.private-route-table-1.id}"
+      },
+      "private-route-2": {
+        "destination_cidr_block": "0.0.0.0/0",
+        "nat_gateway_id": "\${aws_nat_gateway.nat-gateway-2.id}",
+        "route_table_id": "\${aws_route_table.private-route-table-2.id}"
+      },
+      "public-route": {
+        "destination_cidr_block": "0.0.0.0/0",
+        "gateway_id": "\${aws_internet_gateway.igw.id}",
+        "route_table_id": "\${aws_route_table.public-route-table.id}"
+      }
+    },
+    "aws_route_table": {
+      "private-route-table-0": {
+        "tags": {
+          "Environment": "production",
+          "Name": "private-rt-0-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "private-route-table-1": {
+        "tags": {
+          "Environment": "production",
+          "Name": "private-rt-1-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "private-route-table-2": {
+        "tags": {
+          "Environment": "production",
+          "Name": "private-rt-2-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "public-route-table": {
+        "tags": {
+          "Environment": "production",
+          "Name": "public-rt-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      }
+    },
+    "aws_route_table_association": {
+      "private-rta-0": {
+        "route_table_id": "\${aws_route_table.private-route-table-0.id}",
+        "subnet_id": "\${aws_subnet.private-subnet-0.id}"
+      },
+      "private-rta-1": {
+        "route_table_id": "\${aws_route_table.private-route-table-1.id}",
+        "subnet_id": "\${aws_subnet.private-subnet-1.id}"
+      },
+      "private-rta-2": {
+        "route_table_id": "\${aws_route_table.private-route-table-2.id}",
+        "subnet_id": "\${aws_subnet.private-subnet-2.id}"
+      },
+      "public-rta-0": {
+        "route_table_id": "\${aws_route_table.public-route-table.id}",
+        "subnet_id": "\${aws_subnet.public-subnet-0.id}"
+      },
+      "public-rta-1": {
+        "route_table_id": "\${aws_route_table.public-route-table.id}",
+        "subnet_id": "\${aws_subnet.public-subnet-1.id}"
+      },
+      "public-rta-2": {
+        "route_table_id": "\${aws_route_table.public-route-table.id}",
+        "subnet_id": "\${aws_subnet.public-subnet-2.id}"
+      }
+    },
+    "aws_secretsmanager_secret": {
+      "db-secret": {
+        "description": "Database connection string for payment application",
+        "name": "payment-db-connection-dev-v1",
+        "tags": {
+          "Environment": "production",
+          "Name": "db-secret-dev",
+          "Project": "payment-app"
+        }
+      }
+    },
+    "aws_secretsmanager_secret_version": {
+      "db-secret-version": {
+        "secret_id": "\${aws_secretsmanager_secret.db-secret.id}",
+        "secret_string": "{\\"host\\":\\"\${aws_db_instance.rds-instance.address}\\",\\"port\\":\\"\${aws_db_instance.rds-instance.port}\\",\\"dbname\\":\\"\${aws_db_instance.rds-instance.db_name}\\",\\"username\\":\\"\${aws_db_instance.rds-instance.username}\\",\\"password\\":\\"\${aws_db_instance.rds-instance.password}\\",\\"engine\\":\\"postgres\\"}"
+      }
+    },
+    "aws_security_group": {
+      "alb-sg": {
+        "description": "Security group for Application Load Balancer",
+        "name": "alb-sg-dev",
+        "tags": {
+          "Environment": "production",
+          "Name": "alb-sg-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "ecs-sg": {
+        "description": "Security group for ECS tasks",
+        "name": "ecs-sg-dev",
+        "tags": {
+          "Environment": "production",
+          "Name": "ecs-sg-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "rds-sg": {
+        "description": "Security group for RDS PostgreSQL",
+        "name": "rds-sg-dev",
+        "tags": {
+          "Environment": "production",
+          "Name": "rds-sg-dev",
+          "Project": "payment-app"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      }
+    },
+    "aws_security_group_rule": {
+      "alb-egress": {
+        "cidr_blocks": [
+          "0.0.0.0/0"
+        ],
+        "description": "Allow all outbound traffic",
+        "from_port": 0,
+        "protocol": "-1",
+        "security_group_id": "\${aws_security_group.alb-sg.id}",
+        "to_port": 0,
+        "type": "egress"
+      },
+      "alb-http-ingress": {
+        "cidr_blocks": [
+          "0.0.0.0/0"
+        ],
+        "description": "Allow HTTP from internet for redirect",
+        "from_port": 80,
+        "protocol": "tcp",
+        "security_group_id": "\${aws_security_group.alb-sg.id}",
+        "to_port": 80,
+        "type": "ingress"
+      },
+      "alb-https-ingress": {
+        "cidr_blocks": [
+          "0.0.0.0/0"
+        ],
+        "description": "Allow HTTPS from internet",
+        "from_port": 443,
+        "protocol": "tcp",
+        "security_group_id": "\${aws_security_group.alb-sg.id}",
+        "to_port": 443,
+        "type": "ingress"
+      },
+      "ecs-alb-ingress": {
+        "description": "Allow traffic from ALB to ECS on port 8080",
+        "from_port": 8080,
+        "protocol": "tcp",
+        "security_group_id": "\${aws_security_group.ecs-sg.id}",
+        "source_security_group_id": "\${aws_security_group.alb-sg.id}",
+        "to_port": 8080,
+        "type": "ingress"
+      },
+      "ecs-egress": {
+        "cidr_blocks": [
+          "0.0.0.0/0"
+        ],
+        "description": "Allow all outbound traffic",
+        "from_port": 0,
+        "protocol": "-1",
+        "security_group_id": "\${aws_security_group.ecs-sg.id}",
+        "to_port": 0,
+        "type": "egress"
+      },
+      "rds-ecs-ingress": {
+        "description": "Allow traffic from ECS to RDS on port 5432",
+        "from_port": 5432,
+        "protocol": "tcp",
+        "security_group_id": "\${aws_security_group.rds-sg.id}",
+        "source_security_group_id": "\${aws_security_group.ecs-sg.id}",
+        "to_port": 5432,
+        "type": "ingress"
+      },
+      "rds-egress": {
+        "cidr_blocks": [
+          "0.0.0.0/0"
+        ],
+        "description": "Allow all outbound traffic",
+        "from_port": 0,
+        "protocol": "-1",
+        "security_group_id": "\${aws_security_group.rds-sg.id}",
+        "to_port": 0,
+        "type": "egress"
+      }
+    },
+    "aws_subnet": {
+      "private-subnet-0": {
+        "availability_zone": "\${data.aws_availability_zones.available.names[0]}",
+        "cidr_block": "10.0.10.0/24",
+        "map_public_ip_on_launch": false,
+        "tags": {
+          "Environment": "production",
+          "Name": "private-subnet-0-dev",
+          "Project": "payment-app",
+          "Type": "private"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "private-subnet-1": {
+        "availability_zone": "\${data.aws_availability_zones.available.names[1]}",
+        "cidr_block": "10.0.11.0/24",
+        "map_public_ip_on_launch": false,
+        "tags": {
+          "Environment": "production",
+          "Name": "private-subnet-1-dev",
+          "Project": "payment-app",
+          "Type": "private"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "private-subnet-2": {
+        "availability_zone": "\${data.aws_availability_zones.available.names[2]}",
+        "cidr_block": "10.0.12.0/24",
+        "map_public_ip_on_launch": false,
+        "tags": {
+          "Environment": "production",
+          "Name": "private-subnet-2-dev",
+          "Project": "payment-app",
+          "Type": "private"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "public-subnet-0": {
+        "availability_zone": "\${data.aws_availability_zones.available.names[0]}",
+        "cidr_block": "10.0.0.0/24",
+        "map_public_ip_on_launch": true,
+        "tags": {
+          "Environment": "production",
+          "Name": "public-subnet-0-dev",
+          "Project": "payment-app",
+          "Type": "public"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "public-subnet-1": {
+        "availability_zone": "\${data.aws_availability_zones.available.names[1]}",
+        "cidr_block": "10.0.1.0/24",
+        "map_public_ip_on_launch": true,
+        "tags": {
+          "Environment": "production",
+          "Name": "public-subnet-1-dev",
+          "Project": "payment-app",
+          "Type": "public"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      },
+      "public-subnet-2": {
+        "availability_zone": "\${data.aws_availability_zones.available.names[2]}",
+        "cidr_block": "10.0.2.0/24",
+        "map_public_ip_on_launch": true,
+        "tags": {
+          "Environment": "production",
+          "Name": "public-subnet-2-dev",
+          "Project": "payment-app",
+          "Type": "public"
+        },
+        "vpc_id": "\${aws_vpc.vpc.id}"
+      }
+    },
+    "aws_vpc": {
+      "vpc": {
+        "cidr_block": "10.0.0.0/16",
+        "enable_dns_hostnames": true,
+        "enable_dns_support": true,
+        "tags": {
+          "Environment": "production",
+          "Name": "vpc-dev",
+          "Project": "payment-app"
+        }
+      }
+    }
+  },
+  "terraform": {
+    "backend": {
+      "s3": {
+        "bucket": "iac-rlhf-tf-states",
+        "encrypt": true,
+        "key": "dev/test-stack.tfstate",
+        "region": "us-east-1"
+      }
+    },
+    "required_providers": {
+      "aws": {
+        "source": "aws",
+        "version": "6.11.0"
+      }
+    }
+  }
+}"
+`;
