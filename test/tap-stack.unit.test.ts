@@ -46,14 +46,6 @@ describe('Infrastructure Compliance Validation System - CloudFormation Template'
       expect(param.Type).toBe('String');
       expect(param.AllowedPattern).toBeDefined();
     });
-
-    test('should have ConfigRecordingFrequency parameter', () => {
-      expect(template.Parameters.ConfigRecordingFrequency).toBeDefined();
-      const param = template.Parameters.ConfigRecordingFrequency;
-      expect(param.Type).toBe('String');
-      expect(param.AllowedValues).toContain('CONTINUOUS');
-      expect(param.AllowedValues).toContain('DAILY');
-    });
   });
 
   describe('KMS Key Resources', () => {

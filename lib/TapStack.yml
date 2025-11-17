@@ -15,14 +15,6 @@ Parameters:
     Default: compliance-team@example.com
     AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
 
-  ConfigRecordingFrequency:
-    Type: String
-    Description: Frequency for Config recording
-    Default: CONTINUOUS
-    AllowedValues:
-      - CONTINUOUS
-      - DAILY
-
 Resources:
   # KMS Key for encryption
   ComplianceKmsKey:
@@ -222,7 +214,7 @@ Resources:
               - Effect: Allow
                 Action:
                   - ec2:Describe*
-                  - s3:GetBucketEncryption
+                  - s3:GetEncryptionConfiguration
                   - s3:GetBucketPublicAccessBlock
                   - s3:GetBucketVersioning
                   - rds:Describe*
