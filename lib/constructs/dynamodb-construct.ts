@@ -18,7 +18,6 @@ export class DynamoDBConstruct extends Construct {
       this,
       `UserSessionsTable-${props.environmentSuffix}`,
       {
-        tableName: `user-sessions-${props.environmentSuffix}`,
         partitionKey: {
           name: 'sessionId',
           type: dynamodb.AttributeType.STRING,
@@ -33,6 +32,7 @@ export class DynamoDBConstruct extends Construct {
         encryption: dynamodb.TableEncryption.AWS_MANAGED,
         replicationRegions: props.replicaRegions,
         stream: dynamodb.StreamViewType.NEW_AND_OLD_IMAGES,
+        deletionProtection: false,
       }
     );
 
