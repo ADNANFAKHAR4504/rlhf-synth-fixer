@@ -1,8 +1,8 @@
 from cdktf import TerraformStack
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
-from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioning
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
-    S3BucketServerSideEncryptionConfiguration,
+    S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
     S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
 )
@@ -12,7 +12,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfigurationRuleTransition
 )
 from cdktf_cdktf_provider_aws.s3_bucket_replication_configuration import (
-    S3BucketReplicationConfiguration,
+    S3BucketReplicationConfigurationA,
     S3BucketReplicationConfigurationRule,
     S3BucketReplicationConfigurationRuleDestination,
     S3BucketReplicationConfigurationRuleDestinationReplicationTime,
@@ -38,14 +38,14 @@ class StorageModule(Construct):
         )
 
         # Enable versioning
-        S3BucketVersioning(self, "transaction-logs-primary-versioning",
+        S3BucketVersioningA(self, "transaction-logs-primary-versioning",
             provider=primary_provider,
             bucket=self.transaction_logs_primary.id,
             versioning_configuration={"status": "Enabled"}
         )
 
         # Encryption configuration
-        S3BucketServerSideEncryptionConfiguration(self, "transaction-logs-primary-encryption",
+        S3BucketServerSideEncryptionConfigurationA(self, "transaction-logs-primary-encryption",
             provider=primary_provider,
             bucket=self.transaction_logs_primary.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
@@ -85,14 +85,14 @@ class StorageModule(Construct):
         )
 
         # Enable versioning on secondary
-        S3BucketVersioning(self, "transaction-logs-secondary-versioning",
+        S3BucketVersioningA(self, "transaction-logs-secondary-versioning",
             provider=secondary_provider,
             bucket=self.transaction_logs_secondary.id,
             versioning_configuration={"status": "Enabled"}
         )
 
         # Encryption configuration for secondary
-        S3BucketServerSideEncryptionConfiguration(self, "transaction-logs-secondary-encryption",
+        S3BucketServerSideEncryptionConfigurationA(self, "transaction-logs-secondary-encryption",
             provider=secondary_provider,
             bucket=self.transaction_logs_secondary.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
@@ -115,14 +115,14 @@ class StorageModule(Construct):
         )
 
         # Enable versioning
-        S3BucketVersioning(self, "audit-trails-primary-versioning",
+        S3BucketVersioningA(self, "audit-trails-primary-versioning",
             provider=primary_provider,
             bucket=self.audit_trails_primary.id,
             versioning_configuration={"status": "Enabled"}
         )
 
         # Encryption configuration
-        S3BucketServerSideEncryptionConfiguration(self, "audit-trails-primary-encryption",
+        S3BucketServerSideEncryptionConfigurationA(self, "audit-trails-primary-encryption",
             provider=primary_provider,
             bucket=self.audit_trails_primary.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
@@ -136,7 +136,7 @@ class StorageModule(Construct):
 
 
         # FIXED: Cross-region replication for transaction logs
-        S3BucketReplicationConfiguration(self, "transaction-logs-replication",
+        S3BucketReplicationConfigurationA(self, "transaction-logs-replication",
             provider=primary_provider,
             bucket=self.transaction_logs_primary.id,
             role=security.s3_replication_role.arn,
@@ -164,7 +164,7 @@ class StorageModule(Construct):
         )
 
         # FIXED: Cross-region replication for audit trails
-        S3BucketReplicationConfiguration(self, "audit-trails-replication",
+        S3BucketReplicationConfigurationA(self, "audit-trails-replication",
             provider=primary_provider,
             bucket=self.audit_trails_primary.id,
             role=security.s3_replication_role.arn,
