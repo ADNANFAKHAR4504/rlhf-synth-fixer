@@ -1,17 +1,18 @@
 import * as cdk from 'aws-cdk-lib';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
-import * as rds from 'aws-cdk-lib/aws-rds';
 import * as elasticache from 'aws-cdk-lib/aws-elasticache';
-import * as sns from 'aws-cdk-lib/aws-sns';
-import * as logs from 'aws-cdk-lib/aws-logs';
-import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as iam from 'aws-cdk-lib/aws-iam';
+import * as lambda from 'aws-cdk-lib/aws-lambda';
+import * as logs from 'aws-cdk-lib/aws-logs';
+import * as rds from 'aws-cdk-lib/aws-rds';
+import * as sns from 'aws-cdk-lib/aws-sns';
 import { Construct } from 'constructs';
 
 export interface DatabaseStackProps extends cdk.StackProps {
   environmentSuffix: string;
   vpc: ec2.IVpc;
   alertTopic: sns.ITopic;
+  credentials?: rds.Credentials; // Add this line
 }
 
 export class DatabaseStack extends cdk.Stack {
@@ -77,6 +78,7 @@ export class DatabaseStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       cloudwatchLogsExports: ['postgresql'],
       cloudwatchLogsRetention: logs.RetentionDays.ONE_MONTH,
+      ...(props.credentials && { credentials: props.credentials }), // Add this line
     });
 
     // Configure deletion behavior - no final snapshot will be created on deletion
