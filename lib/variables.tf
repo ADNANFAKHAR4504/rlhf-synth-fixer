@@ -122,6 +122,12 @@ variable "manage_kubernetes_resources" {
   default     = false
 }
 
+variable "force_replace_node_groups" {
+  description = "If true, forces replacement of existing node groups. Use this when node groups exist from a previous failed deployment and need to be recreated."
+  type        = bool
+  default     = false
+}
+
 locals {
   cluster_name             = "${var.cluster_name_prefix}-${var.environment_suffix}"
   frontend_node_group_name = "${local.cluster_name}-frontend"

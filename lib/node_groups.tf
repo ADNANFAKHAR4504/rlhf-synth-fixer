@@ -40,6 +40,9 @@ resource "aws_eks_node_group" "frontend" {
 
   lifecycle {
     prevent_destroy = false
+    # If node groups exist from a previous failed deployment, import them:
+    # terraform import aws_eks_node_group.frontend <cluster-name>:<node-group-name>
+    # Or delete them manually via AWS CLI: aws eks delete-nodegroup --cluster-name <cluster> --nodegroup-name <name>
   }
 
   depends_on = [
@@ -91,6 +94,9 @@ resource "aws_eks_node_group" "backend" {
 
   lifecycle {
     prevent_destroy = false
+    # If node groups exist from a previous failed deployment, import them:
+    # terraform import aws_eks_node_group.backend <cluster-name>:<node-group-name>
+    # Or delete them manually via AWS CLI: aws eks delete-nodegroup --cluster-name <cluster> --nodegroup-name <name>
   }
 
   depends_on = [
