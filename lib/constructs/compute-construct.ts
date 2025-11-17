@@ -30,7 +30,7 @@ export class ComputeConstruct extends Construct {
       `PaymentProcessor-${props.environmentSuffix}`,
       {
         functionName: `payment-processor-${props.environmentSuffix}`,
-        runtime: lambda.Runtime.NODEJS_18_X,
+        runtime: lambda.Runtime.NODEJS_20_X,
         handler: 'index.handler',
         code: lambda.Code.fromInline(`
         const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');

@@ -45,7 +45,7 @@ export class DatabaseConstruct extends Construct {
       `PostgresDb-${props.environmentSuffix}`,
       {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_15_3,
+          version: rds.PostgresEngineVersion.VER_16_9,
         }),
         instanceType: ec2.InstanceType.of(
           ec2.InstanceClass.T3,
