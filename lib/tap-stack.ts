@@ -6,17 +6,16 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { VpcStack } from './vpc-stack';
-import { EksClusterStack } from './eks-cluster-stack';
-import { EksNodeGroupsStack } from './eks-node-groups-stack';
 import { EksAddonsStack } from './eks-addons-stack';
-import { LoadBalancerControllerStack } from './eks-load-balancer-controller-stack';
 import { ClusterAutoscalerStack } from './eks-cluster-autoscaler-stack';
-import { RbacNamespacesStack } from './eks-rbac-namespaces-stack';
-import { NetworkPoliciesStack } from './eks-network-policies-stack';
+import { EksClusterStack } from './eks-cluster-stack';
 import { CoreDnsOptimizationStack } from './eks-coredns-optimization-stack';
 import { IrsaDemoStack } from './eks-irsa-demo-stack';
+import { LoadBalancerControllerStack } from './eks-load-balancer-controller-stack';
+import { NetworkPoliciesStack } from './eks-network-policies-stack';
+import { RbacNamespacesStack } from './eks-rbac-namespaces-stack';
 import { SpotInterruptionStack } from './eks-spot-interruption-stack';
+import { VpcStack } from './vpc-stack';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -93,17 +92,8 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this, dependsOn: [vpcStack] }
     );
 
-    // 3. Create managed node groups (spot and on-demand)
-    const eksNodeGroupsStack = new EksNodeGroupsStack(
-      'eks-node-groups-stack',
-      {
-        environmentSuffix,
-        cluster: eksClusterStack.cluster,
-        privateSubnetIds: vpcStack.privateSubnetIds,
-        tags,
-      },
-      { parent: this, dependsOn: [eksClusterStack] }
-    );
+    // Note: Using default node group from EKS cluster instead of separate managed node groups
+    // to avoid IAM role issues with skipDefaultNodeGroup
 
     // 4. Install EKS add-ons (EBS CSI driver with encryption)
     void new EksAddonsStack(
@@ -115,7 +105,7 @@ export class TapStack extends pulumi.ComponentResource {
         oidcProviderUrl: eksClusterStack.oidcProviderUrl,
         tags,
       },
-      { parent: this, dependsOn: [eksNodeGroupsStack] }
+      { parent: this, dependsOn: [eksClusterStack] }
     );
 
     // 5. Install AWS Load Balancer Controller with IRSA
@@ -130,7 +120,7 @@ export class TapStack extends pulumi.ComponentResource {
         region,
         tags,
       },
-      { parent: this, dependsOn: [eksNodeGroupsStack] }
+      { parent: this, dependsOn: [eksClusterStack] }
     );
 
     // 6. Install Cluster Autoscaler with pod disruption budgets
@@ -144,7 +134,7 @@ export class TapStack extends pulumi.ComponentResource {
         region,
         tags,
       },
-      { parent: this, dependsOn: [eksNodeGroupsStack] }
+      { parent: this, dependsOn: [eksClusterStack] }
     );
 
     // 7. Create RBAC and namespaces with pod security standards
@@ -154,7 +144,7 @@ export class TapStack extends pulumi.ComponentResource {
         environmentSuffix,
         cluster: eksClusterStack.cluster,
       },
-      { parent: this, dependsOn: [eksNodeGroupsStack] }
+      { parent: this, dependsOn: [eksClusterStack] }
     );
 
     // 8. Create network policies for namespace isolation
@@ -176,7 +166,7 @@ export class TapStack extends pulumi.ComponentResource {
         environmentSuffix,
         cluster: eksClusterStack.cluster,
       },
-      { parent: this, dependsOn: [eksNodeGroupsStack] }
+      { parent: this, dependsOn: [eksClusterStack] }
     );
 
     // 10. Create IRSA demonstration
@@ -200,7 +190,7 @@ export class TapStack extends pulumi.ComponentResource {
         environmentSuffix,
         cluster: eksClusterStack.cluster,
       },
-      { parent: this, dependsOn: [eksNodeGroupsStack, rbacNamespacesStack] }
+      { parent: this, dependsOn: [eksClusterStack, rbacNamespacesStack] }
     );
 
     // Expose outputs
