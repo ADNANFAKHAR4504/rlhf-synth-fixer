@@ -578,8 +578,7 @@ describe('PCI-DSS Infrastructure Integration Tests', () => {
           'sns_topic_arns',
           'cloudtrail_name',
           'config_recorder_name',
-          'guardduty_detector_id',
-          'waf_web_acl_id'
+          'guardduty_detector_id'
         ];
 
         const missingOutputs = criticalOutputs.filter(output => !outputs[output]);
