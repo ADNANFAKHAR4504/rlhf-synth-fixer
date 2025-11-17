@@ -1,8 +1,0 @@
-encryptionsalt: v1:cqXgxlZ+Ygc=:v1:Pp1CsddJzPMBIrbB:mJsWOK8OPKh1tW9KtjCuIxMRb1//eQ==
-config:
-  pulumi-infra:ami_id: ami-06124b567f8becfbd
-  pulumi-infra:owner: test-owner
-  pulumi-infra:cost_center: test-cc
-  pulumi-infra:project: test-project
-  pulumi-infra:db_password:
-    secure: v1:jA736Pl1BK3FgBcQ:Ra3gsdqbyWM5CpZPdrgUFUXUUP2cWBdFgDF1nFf2EpLdBXM=

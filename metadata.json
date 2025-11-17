@@ -6,9 +6,24 @@
   "turn_type": "single",
   "startedAt": "2025-11-17T05:19:42+00:00",
   "subtask": "Infrastructure as Code",
-  "subject_labels": ["aws", "infrastructure", "iac-program-optimization-&-fixes"],
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "iac-program-optimization-&-fixes"
+  ],
   "po_id": "101912424",
-  "aws_services": ["VPC", "EC2", "ALB", "Auto Scaling", "RDS", "S3", "IAM", "CloudWatch"],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "IAM",
+    "CloudWatch"
+  ],
   "training_quality": 9,
-  "iteration": 1
+  "iteration": 1,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342"
 }
