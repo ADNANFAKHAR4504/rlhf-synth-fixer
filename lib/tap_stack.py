@@ -45,6 +45,9 @@ class FraudDetectionStack(TerraformStack):
         use_dynamodb_lock = kwargs.get('use_dynamodb_lock', False)
         default_tags = kwargs.get('default_tags', {})
 
+        # Add version suffix to avoid conflicts with existing resources
+        self.resource_suffix = f"v1-{self.environment_suffix}"
+
         # Configure S3 Backend for state management
         backend_config = {
             "bucket": state_bucket,
@@ -93,7 +96,7 @@ class FraudDetectionStack(TerraformStack):
         # SQS Queue Policy to allow SNS to send messages
         queue_policy = SqsQueuePolicy(
             self,
-            f"fraud-alerts-queue-policy-{self.environment_suffix}",
+            f"fraud-alerts-queue-policy-{self.resource_suffix}",
             queue_url=self.sqs_queue.url,
             policy=json.dumps({
                 "Version": "2012-10-17",
@@ -116,7 +119,7 @@ class FraudDetectionStack(TerraformStack):
         # Subscribe SQS to SNS
         SnsTopicSubscription(
             self,
-            f"fraud-alerts-subscription-{self.environment_suffix}",
+            f"fraud-alerts-subscription-{self.resource_suffix}",
             topic_arn=self.sns_topic.arn,
             protocol="sqs",
             endpoint=self.sqs_queue.arn,
@@ -161,7 +164,7 @@ class FraudDetectionStack(TerraformStack):
     def create_kms_key(self):
         kms_key = KmsKey(
             self,
-            f"fraud-detection-key-{self.environment_suffix}",
+            f"fraud-detection-key-{self.resource_suffix}",
             description=f"KMS key for fraud detection system - {self.environment_suffix}",
             deletion_window_in_days=7,
             enable_key_rotation=True,
@@ -170,8 +173,8 @@ class FraudDetectionStack(TerraformStack):
 
         KmsAlias(
             self,
-            f"fraud-detection-key-alias-{self.environment_suffix}",
-            name=f"alias/fraud-detection-{self.environment_suffix}",
+            f"fraud-detection-key-alias-{self.resource_suffix}",
+            name=f"alias/fraud-detection-{self.resource_suffix}",
             target_key_id=kms_key.key_id
         )
 
@@ -180,8 +183,8 @@ class FraudDetectionStack(TerraformStack):
     def create_dynamodb_table(self):
         table = DynamodbTable(
             self,
-            f"transactions-table-{self.environment_suffix}",
-            name=f"transactions-{self.environment_suffix}",
+            f"transactions-table-{self.resource_suffix}",
+            name=f"transactions-{self.resource_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="transaction_id",
             range_key="timestamp",
@@ -211,8 +214,8 @@ class FraudDetectionStack(TerraformStack):
     def create_sns_topic(self):
         topic = SnsTopic(
             self,
-            f"fraud-alerts-topic-{self.environment_suffix}",
-            name=f"fraud-alerts-{self.environment_suffix}",
+            f"fraud-alerts-topic-{self.resource_suffix}",
+            name=f"fraud-alerts-{self.resource_suffix}",
             kms_master_key_id=self.kms_key.key_id,
             tags=self.common_tags,
             sqs_success_feedback_role_arn=self.create_sns_feedback_role().arn,
@@ -235,16 +238,16 @@ class FraudDetectionStack(TerraformStack):
 
         role = IamRole(
             self,
-            f"sns-feedback-role-{self.environment_suffix}",
-            name=f"sns-feedback-role-{self.environment_suffix}",
+            f"sns-feedback-role-{self.resource_suffix}",
+            name=f"sns-feedback-role-{self.resource_suffix}",
             assume_role_policy=json.dumps(assume_role_policy),
             tags=self.common_tags
         )
 
         policy = IamPolicy(
             self,
-            f"sns-feedback-policy-{self.environment_suffix}",
-            name=f"sns-feedback-policy-{self.environment_suffix}",
+            f"sns-feedback-policy-{self.resource_suffix}",
+            name=f"sns-feedback-policy-{self.resource_suffix}",
             policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -263,7 +266,7 @@ class FraudDetectionStack(TerraformStack):
 
         IamRolePolicyAttachment(
             self,
-            f"sns-feedback-policy-attachment-{self.environment_suffix}",
+            f"sns-feedback-policy-attachment-{self.resource_suffix}",
             role=role.name,
             policy_arn=policy.arn
         )
@@ -273,8 +276,8 @@ class FraudDetectionStack(TerraformStack):
     def create_sqs_queue(self):
         queue = SqsQueue(
             self,
-            f"fraud-alerts-queue-{self.environment_suffix}",
-            name=f"fraud-alerts-queue-{self.environment_suffix}",
+            f"fraud-alerts-queue-{self.resource_suffix}",
+            name=f"fraud-alerts-queue-{self.resource_suffix}",
             visibility_timeout_seconds=300,
             kms_master_key_id=self.kms_key.key_id,
             tags=self.common_tags
@@ -285,8 +288,8 @@ class FraudDetectionStack(TerraformStack):
     def create_dlq(self):
         dlq = SqsQueue(
             self,
-            f"lambda-dlq-{self.environment_suffix}",
-            name=f"lambda-dlq-{self.environment_suffix}",
+            f"lambda-dlq-{self.resource_suffix}",
+            name=f"lambda-dlq-{self.resource_suffix}",
             visibility_timeout_seconds=300,
             kms_master_key_id=self.kms_key.key_id,
             tags=self.common_tags
@@ -297,7 +300,7 @@ class FraudDetectionStack(TerraformStack):
     def create_ssm_parameters(self):
         SsmParameter(
             self,
-            f"fraud-threshold-param-{self.environment_suffix}",
+            f"fraud-threshold-param-{self.resource_suffix}",
             name=f"/fraud-detection/{self.environment_suffix}/fraud_threshold",
             type="String",
             value="0.85",
@@ -307,7 +310,7 @@ class FraudDetectionStack(TerraformStack):
 
         SsmParameter(
             self,
-            f"alert-email-param-{self.environment_suffix}",
+            f"alert-email-param-{self.resource_suffix}",
             name=f"/fraud-detection/{self.environment_suffix}/alert_email",
             type="String",
             value="alerts@example.com",
@@ -329,8 +332,8 @@ class FraudDetectionStack(TerraformStack):
 
         role = IamRole(
             self,
-            f"{name}-role-{self.environment_suffix}",
-            name=f"{name}-role-{self.environment_suffix}",
+            f"{name}-role-{self.resource_suffix}",
+            name=f"{name}-role-{self.resource_suffix}",
             assume_role_policy=json.dumps(assume_role_policy),
             tags=self.common_tags
         )
@@ -338,7 +341,7 @@ class FraudDetectionStack(TerraformStack):
         # Basic Lambda execution policy
         IamRolePolicyAttachment(
             self,
-            f"{name}-basic-execution-{self.environment_suffix}",
+            f"{name}-basic-execution-{self.resource_suffix}",
             role=role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         )
@@ -346,7 +349,7 @@ class FraudDetectionStack(TerraformStack):
         # X-Ray policy
         IamRolePolicyAttachment(
             self,
-            f"{name}-xray-{self.environment_suffix}",
+            f"{name}-xray-{self.resource_suffix}",
             role=role.name,
             policy_arn="arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess"
         )
@@ -355,14 +358,14 @@ class FraudDetectionStack(TerraformStack):
         for idx, policy_doc in enumerate(service_policies):
             policy = IamPolicy(
                 self,
-                f"{name}-policy-{idx}-{self.environment_suffix}",
-                name=f"{name}-policy-{idx}-{self.environment_suffix}",
+                f"{name}-policy-{idx}-{self.resource_suffix}",
+                name=f"{name}-policy-{idx}-{self.resource_suffix}",
                 policy=json.dumps(policy_doc)
             )
 
             IamRolePolicyAttachment(
                 self,
-                f"{name}-policy-attachment-{idx}-{self.environment_suffix}",
+                f"{name}-policy-attachment-{idx}-{self.resource_suffix}",
                 role=role.name,
                 policy_arn=policy.arn
             )
@@ -420,8 +423,8 @@ class FraudDetectionStack(TerraformStack):
         # CloudWatch Log Group
         log_group = CloudwatchLogGroup(
             self,
-            f"transaction-processor-logs-{self.environment_suffix}",
-            name=f"/aws/lambda/transaction-processor-{self.environment_suffix}",
+            f"transaction-processor-logs-{self.resource_suffix}",
+            name=f"/aws/lambda/transaction-processor-{self.resource_suffix}",
             retention_in_days=30,
             tags=self.common_tags
         )
@@ -429,8 +432,8 @@ class FraudDetectionStack(TerraformStack):
         # Lambda Function
         lambda_function = LambdaFunction(
             self,
-            f"transaction-processor-{self.environment_suffix}",
-            function_name=f"transaction-processor-{self.environment_suffix}",
+            f"transaction-processor-{self.resource_suffix}",
+            function_name=f"transaction-processor-{self.resource_suffix}",
             runtime="python3.11",
             handler="transaction_processor.handler",
             role=role.arn,
@@ -512,8 +515,8 @@ class FraudDetectionStack(TerraformStack):
         # CloudWatch Log Group
         log_group = CloudwatchLogGroup(
             self,
-            f"pattern-analyzer-logs-{self.environment_suffix}",
-            name=f"/aws/lambda/pattern-analyzer-{self.environment_suffix}",
+            f"pattern-analyzer-logs-{self.resource_suffix}",
+            name=f"/aws/lambda/pattern-analyzer-{self.resource_suffix}",
             retention_in_days=30,
             tags=self.common_tags
         )
@@ -521,8 +524,8 @@ class FraudDetectionStack(TerraformStack):
         # Lambda Function
         lambda_function = LambdaFunction(
             self,
-            f"pattern-analyzer-{self.environment_suffix}",
-            function_name=f"pattern-analyzer-{self.environment_suffix}",
+            f"pattern-analyzer-{self.resource_suffix}",
+            function_name=f"pattern-analyzer-{self.resource_suffix}",
             runtime="python3.11",
             handler="pattern_analyzer.handler",
             role=role.arn,
@@ -555,8 +558,8 @@ class FraudDetectionStack(TerraformStack):
         # Alarm for transaction processor errors
         CloudwatchMetricAlarm(
             self,
-            f"transaction-processor-errors-{self.environment_suffix}",
-            alarm_name=f"transaction-processor-errors-{self.environment_suffix}",
+            f"transaction-processor-errors-{self.resource_suffix}",
+            alarm_name=f"transaction-processor-errors-{self.resource_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -575,8 +578,8 @@ class FraudDetectionStack(TerraformStack):
         # Alarm for pattern analyzer errors
         CloudwatchMetricAlarm(
             self,
-            f"pattern-analyzer-errors-{self.environment_suffix}",
-            alarm_name=f"pattern-analyzer-errors-{self.environment_suffix}",
+            f"pattern-analyzer-errors-{self.resource_suffix}",
+            alarm_name=f"pattern-analyzer-errors-{self.resource_suffix}",
             comparison_operator="GreaterThanThreshold",
             evaluation_periods=1,
             metric_name="Errors",
@@ -596,8 +599,8 @@ class FraudDetectionStack(TerraformStack):
         # EventBridge Rule
         rule = CloudwatchEventRule(
             self,
-            f"pattern-analysis-schedule-{self.environment_suffix}",
-            name=f"pattern-analysis-schedule-{self.environment_suffix}",
+            f"pattern-analysis-schedule-{self.resource_suffix}",
+            name=f"pattern-analysis-schedule-{self.resource_suffix}",
             description="Trigger pattern analysis every 5 minutes",
             schedule_expression="rate(5 minutes)",
             tags=self.common_tags
@@ -606,7 +609,7 @@ class FraudDetectionStack(TerraformStack):
         # Lambda Permission
         LambdaPermission(
             self,
-            f"pattern-analyzer-eventbridge-permission-{self.environment_suffix}",
+            f"pattern-analyzer-eventbridge-permission-{self.resource_suffix}",
             statement_id="AllowExecutionFromEventBridge",
             action="lambda:InvokeFunction",
             function_name=self.pattern_analyzer.function_name,
@@ -617,7 +620,7 @@ class FraudDetectionStack(TerraformStack):
         # EventBridge Target
         CloudwatchEventTarget(
             self,
-            f"pattern-analyzer-target-{self.environment_suffix}",
+            f"pattern-analyzer-target-{self.resource_suffix}",
             rule=rule.name,
             arn=self.pattern_analyzer.arn
         )
@@ -626,8 +629,8 @@ class FraudDetectionStack(TerraformStack):
         # REST API
         api = ApiGatewayRestApi(
             self,
-            f"fraud-detection-api-{self.environment_suffix}",
-            name=f"fraud-detection-api-{self.environment_suffix}",
+            f"fraud-detection-api-{self.resource_suffix}",
+            name=f"fraud-detection-api-{self.resource_suffix}",
             description="Fraud Detection API",
             tags=self.common_tags
         )
@@ -635,8 +638,8 @@ class FraudDetectionStack(TerraformStack):
         # Request Validator
         validator = ApiGatewayRequestValidator(
             self,
-            f"request-validator-{self.environment_suffix}",
-            name=f"request-validator-{self.environment_suffix}",
+            f"request-validator-{self.resource_suffix}",
+            name=f"request-validator-{self.resource_suffix}",
             rest_api_id=api.id,
             validate_request_body=True,
             validate_request_parameters=True
@@ -645,7 +648,7 @@ class FraudDetectionStack(TerraformStack):
         # Request Model
         model = ApiGatewayModel(
             self,
-            f"transaction-model-{self.environment_suffix}",
+            f"transaction-model-{self.resource_suffix}",
             rest_api_id=api.id,
             name="TransactionModel",
             description="Transaction request model",
@@ -667,7 +670,7 @@ class FraudDetectionStack(TerraformStack):
         # /transactions resource
         transactions_resource = ApiGatewayResource(
             self,
-            f"transactions-resource-{self.environment_suffix}",
+            f"transactions-resource-{self.resource_suffix}",
             rest_api_id=api.id,
             parent_id=api.root_resource_id,
             path_part="transactions"
@@ -676,7 +679,7 @@ class FraudDetectionStack(TerraformStack):
         # POST method
         post_method = ApiGatewayMethod(
             self,
-            f"transactions-post-method-{self.environment_suffix}",
+            f"transactions-post-method-{self.resource_suffix}",
             rest_api_id=api.id,
             resource_id=transactions_resource.id,
             http_method="POST",
@@ -691,7 +694,7 @@ class FraudDetectionStack(TerraformStack):
         # Lambda Integration
         integration = ApiGatewayIntegration(
             self,
-            f"transactions-integration-{self.environment_suffix}",
+            f"transactions-integration-{self.resource_suffix}",
             rest_api_id=api.id,
             resource_id=transactions_resource.id,
             http_method=post_method.http_method,
@@ -703,7 +706,7 @@ class FraudDetectionStack(TerraformStack):
         # Lambda Permission for API Gateway
         LambdaPermission(
             self,
-            f"api-gateway-lambda-permission-{self.environment_suffix}",
+            f"api-gateway-lambda-permission-{self.resource_suffix}",
             statement_id="AllowExecutionFromAPIGateway",
             action="lambda:InvokeFunction",
             function_name=self.transaction_processor.function_name,
@@ -714,7 +717,7 @@ class FraudDetectionStack(TerraformStack):
         # Deployment
         deployment = ApiGatewayDeployment(
             self,
-            f"api-deployment-{self.environment_suffix}",
+            f"api-deployment-{self.resource_suffix}",
             rest_api_id=api.id,
             depends_on=[post_method, integration],
             lifecycle={
@@ -725,7 +728,7 @@ class FraudDetectionStack(TerraformStack):
         # Stage
         stage = ApiGatewayStage(
             self,
-            f"api-stage-{self.environment_suffix}",
+            f"api-stage-{self.resource_suffix}",
             deployment_id=deployment.id,
             rest_api_id=api.id,
             stage_name="prod",
@@ -736,8 +739,8 @@ class FraudDetectionStack(TerraformStack):
         # API Key
         api_key = ApiGatewayApiKey(
             self,
-            f"api-key-{self.environment_suffix}",
-            name=f"fraud-detection-api-key-{self.environment_suffix}",
+            f"api-key-{self.resource_suffix}",
+            name=f"fraud-detection-api-key-{self.resource_suffix}",
             description="API key for fraud detection system",
             enabled=True,
             tags=self.common_tags
@@ -746,8 +749,8 @@ class FraudDetectionStack(TerraformStack):
         # Usage Plan
         usage_plan = ApiGatewayUsagePlan(
             self,
-            f"usage-plan-{self.environment_suffix}",
-            name=f"fraud-detection-usage-plan-{self.environment_suffix}",
+            f"usage-plan-{self.resource_suffix}",
+            name=f"fraud-detection-usage-plan-{self.resource_suffix}",
             description="Usage plan with 1000 requests per day",
             api_stages=[
                 ApiGatewayUsagePlanApiStages(
@@ -765,7 +768,7 @@ class FraudDetectionStack(TerraformStack):
         # Link API Key to Usage Plan
         ApiGatewayUsagePlanKey(
             self,
-            f"usage-plan-key-{self.environment_suffix}",
+            f"usage-plan-key-{self.resource_suffix}",
             key_id=api_key.id,
             key_type="API_KEY",
             usage_plan_id=usage_plan.id
