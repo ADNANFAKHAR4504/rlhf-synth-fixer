@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "3x5za8",
+  "team": "synth",
+  "startedAt": "2025-11-17T15:01:00+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "S3",
+    "Lambda",
+    "DynamoDB",
+    "ALB",
+    "ECS",
+    "Fargate",
+    "KMS",
+    "CloudWatch",
+    "WAF",
+    "SSM",
+    "NAT Gateway",
+    "VPC Peering"
+  ],
+  "training_quality": 9
+}
