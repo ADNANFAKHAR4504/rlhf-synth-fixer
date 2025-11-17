@@ -1,6 +1,6 @@
-import * as pulumi from '@pulumi/pulumi';
+﻿import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
-import { PaymentStack } from './lib/payment-stack';
+import { PaymentStack } from './payment-stack';
 
 // Get environment suffix from environment variable
 const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || pulumi.getStack();

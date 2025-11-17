@@ -1,5 +1,0 @@
-config:
-  aws:region: us-east-1
-  TapStack:environment: staging
-  TapStack:dbPassword:
-    secure: AAABAOzKXtW9zGxIVCEpHW2fwIGDStagingPassword123!

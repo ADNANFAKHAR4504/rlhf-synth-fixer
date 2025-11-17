@@ -1,6 +1,6 @@
 # Provisioning of Infrastructure Environments
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with ts**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using pulumi with ts**
 >
 > Platform: **pulumi**
 > Language: **ts**

@@ -1,5 +1,0 @@
-config:
-  aws:region: us-east-1
-  TapStack:environment: prod
-  TapStack:dbPassword:
-    secure: AAABAOzKXtW9zGxIVCEpHW2fwIGDProdPassword123!
