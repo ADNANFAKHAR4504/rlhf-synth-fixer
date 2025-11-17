@@ -192,8 +192,9 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have valid AWS ARN format for secret', () => {
       // Handle masked account IDs (***) in ARNs
+      // The resource part can contain colons (e.g., "secret:name")
       expect(outputs.secretArn).toMatch(
-        /^arn:aws:[a-z-]+:[a-z0-9-]*:(\d{12}|\*\*\*):[a-zA-Z0-9/_+=.@-]+$/
+        /^arn:aws:[a-z-]+:[a-z0-9-]*:(\d{12}|\*\*\*):[a-zA-Z0-9/_+=.@:-]+$/
       );
     });
 
