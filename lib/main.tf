@@ -1056,7 +1056,7 @@ resource "aws_lambda_event_source_mapping" "payment_processor" {
   event_source_arn = aws_sqs_queue.payment_processing.arn
   function_name    = aws_lambda_function.payment_processor.arn
 
-  batch_size = 10
+  batch_size              = 10
   function_response_types = ["ReportBatchItemFailures"]
 
   depends_on = [
