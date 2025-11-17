@@ -16,11 +16,12 @@ Features:
 - Parameter Store for secure token management
 """
 
-from typing import Optional, Dict
 import json
+from typing import Dict, Optional
+
 import pulumi
-from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
+from pulumi import Output, ResourceOptions
 
 
 class TapStackArgs:
@@ -400,31 +401,35 @@ class TapStack(pulumi.ComponentResource):
             'phases': {
                 'install': {
                     'runtime-versions': {
-                        'python': '3.11'
+                        'python': '3.12'
                     },
                     'commands': [
-                        'echo "Installing Pulumi..."',
+                        'echo "Installing pipenv..."',
+                        'pip install pipenv',
+                        'echo "Installing Python dependencies..."',
+                        'pipenv install --deploy',
+                        'echo "Installing Pulumi CLI..."',
                         'curl -fsSL https://get.pulumi.com | sh',
                         'export PATH=$PATH:$HOME/.pulumi/bin',
-                        'pulumi version',
-                        'echo "Installing Python dependencies..."',
-                        'pip install -r requirements.txt'
+                        'pipenv run pulumi version'
                     ]
                 },
                 'pre_build': {
                     'commands': [
+                        'cd lib',
                         'echo "Configuring Pulumi..."',
                         'export PULUMI_ACCESS_TOKEN=$PULUMI_TOKEN',
-                        'pulumi login',
-                        'pulumi stack select $PULUMI_STACK || pulumi stack init $PULUMI_STACK',
+                        'pipenv run pulumi login',
+                        'pipenv run pulumi stack select $PULUMI_STACK || pipenv run pulumi stack init $PULUMI_STACK',
                         'echo "Running Pulumi preview..."',
-                        'pulumi preview --non-interactive'
+                        'pipenv run pulumi preview --non-interactive'
                     ]
                 },
                 'build': {
                     'commands': [
+                        'cd lib',
                         'echo "Running Pulumi update..."',
-                        'pulumi up --yes --non-interactive',
+                        'pipenv run pulumi up --yes --non-interactive',
                         'echo "Pulumi deployment complete"'
                     ]
                 }
@@ -441,7 +446,7 @@ class TapStack(pulumi.ComponentResource):
             artifacts={'type': 'CODEPIPELINE'},
             environment={
                 'compute_type': 'BUILD_GENERAL1_SMALL',
-                'image': 'aws/codebuild/standard:5.0',
+                'image': 'aws/codebuild/standard:7.0',
                 'type': 'LINUX_CONTAINER',
                 'environment_variables': [
                     {
@@ -458,6 +463,11 @@ class TapStack(pulumi.ComponentResource):
                         'name': 'AWS_REGION',
                         'type': 'PLAINTEXT',
                         'value': self.region
+                    },
+                    {
+                        'name': 'PULUMI_BACKEND_URL',
+                        'type': 'PLAINTEXT',
+                        'value': self.state_bucket.bucket.apply(lambda b: f's3://{b}')
                     }
                 ]
             },
