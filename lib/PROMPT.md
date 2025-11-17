@@ -50,7 +50,6 @@ The infrastructure is deployed across multiple availability zones in the `us-eas
 - **IAM Roles and Policies**: Implement least privilege access principles
 - **Security Groups**: Network-level firewall rules with strict ingress/egress controls
 - **KMS Keys**: Encryption key management for data at rest
-- **AWS Config**: Continuous compliance monitoring
 
 ### Monitoring and Alerting
 - **CloudWatch Alarms**: Monitor critical metrics including:
