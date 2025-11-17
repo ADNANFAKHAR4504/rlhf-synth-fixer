@@ -74,8 +74,8 @@ if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" == "null" ] || [ "$SUBJECT_LA
   ERRORS+=("subject_labels")
 fi
 
-# Synthetic task specific validations (only for team="synth")
-if [ "$TEAM" == "synth" ]; then
+# Synthetic task specific validations (for team starting with "synth")
+if [[ "$TEAM" =~ ^synth ]]; then
   echo ""
   echo "🔍 Detected synthetic task, performing additional validations..."
   

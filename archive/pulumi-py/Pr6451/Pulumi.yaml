@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: python
+description: Multi-region disaster recovery solution for PostgreSQL database with automatic failover
+main: tap.py

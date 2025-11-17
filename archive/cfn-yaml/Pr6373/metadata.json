@@ -1,0 +1,28 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912314",
+  "team": "4",
+  "startedAt": "2025-11-12T12:58:12.408Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "KMS Key",
+    "SNS Topic",
+    "SQS Queue",
+    "EventBridge",
+    "CloudWatch Alarm",
+    "IAM Role",
+    "CloudFormation"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
+}

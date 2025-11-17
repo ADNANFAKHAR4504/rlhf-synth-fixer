@@ -1,0 +1,32 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T05:06:45+00:00",
+  "po_id": "101912425",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "infrastructure-analysis-/-qa"
+  ],
+  "aws_services": [
+    "AWS Config",
+    "AWS Lambda",
+    "Amazon S3",
+    "Amazon SNS",
+    "AWS KMS",
+    "Amazon CloudWatch",
+    "AWS IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

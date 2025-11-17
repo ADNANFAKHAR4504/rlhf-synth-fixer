@@ -1,3 +1,4 @@
+
 #!/bin/bash
 
 # Exit on any error
@@ -29,7 +30,7 @@ if [ "$PLATFORM" = "cdk" ]; then
   npx cdk list --json > cdk-stacks.json
   
   # possible regions to search (comma-separated, can be overridden by env var)
-  POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,eu-west-2,ap-southeast-2,ap-southeast-1,ap-northeast-1,eu-central-1,eu-central-2"}
+  POSSIBLE_REGIONS=${POSSIBLE_REGIONS:-"us-west-2,us-east-1,us-east-2,eu-west-1,eu-west-2,ap-southeast-2,ap-southeast-1,ap-northeast-1,eu-central-1,eu-central-2,eu-south-1,eu-south-2"}
   
   echo "Getting all CloudFormation stacks..."
   echo "Searching for stacks containing: TapStack${ENVIRONMENT_SUFFIX}"

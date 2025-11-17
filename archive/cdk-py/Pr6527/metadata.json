@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "7048",
+  "team": "2",
+  "startedAt": "2025-11-13T15:00:45.297Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "aws_services": [
+    "CDK",
+    "CloudWatch",
+    "RDS Aurora Serverless",
+    "ElastiCache Redis",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "IAM",
+    "Pricing API"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

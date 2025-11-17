@@ -1,0 +1,32 @@
+{
+  "task_id": "101912444",
+  "po_id": "101912444",
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-14T06:21:14+00:00",
+  "subtask": "Amazon EKS",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "eks-cluster-management"
+  ],
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "VPC"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -281,6 +281,8 @@ async function main(): Promise<void> {
         { name: '5', value: '5' },
         { name: '6', value: '6' },
         { name: 'synth', value: 'synth' },
+        { name: 'synth-1', value: 'synth-1' },
+        { name: 'synth-2', value: 'synth-2' },
         { name: 'stf', value: 'stf' },
       ],
     });
