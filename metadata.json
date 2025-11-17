@@ -1,0 +1,31 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "x08q1p",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T12:45:14+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "RDS",
+    "Aurora PostgreSQL",
+    "DynamoDB",
+    "API Gateway",
+    "S3",
+    "CloudFront",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9
+}
