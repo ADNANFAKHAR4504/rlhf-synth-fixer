@@ -318,7 +318,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "audit_logs" {
   bucket = aws_s3_bucket.audit_logs.id
 
   rule {
-    id     = "transition-flow-logs"
+    id     = "transition-flow-logs-${var.environment}"
     status = "Enabled"
 
     filter {
@@ -811,7 +811,9 @@ resource "aws_iam_policy" "dlq_processor" {
         Effect = "Allow"
         Action = [
           "dynamodb:Query",
-          "dynamodb:Scan"
+          "dynamodb:Scan",
+          "dynamodb:GetItem",
+          "dynamodb:UpdateItem"
         ]
         Resource = [
           aws_dynamodb_table.payment_status.arn,
@@ -1055,6 +1057,7 @@ resource "aws_lambda_event_source_mapping" "payment_processor" {
   function_name    = aws_lambda_function.payment_processor.arn
 
   batch_size = 10
+  function_response_types = ["ReportBatchItemFailures"]
 
   depends_on = [
     aws_lambda_function.payment_processor
@@ -1190,12 +1193,12 @@ resource "aws_cloudwatch_metric_alarm" "lambda_throttles" {
   alarm_name          = "alarm-lambda-throttles-${var.environment}"
   comparison_operator = "GreaterThanThreshold"
   evaluation_periods  = 1
-  metric_name         = "ConcurrentExecutions"
+  metric_name         = "Throttles"
   namespace           = "AWS/Lambda"
   period              = 300
-  statistic           = "Maximum"
-  threshold           = 5
-  alarm_description   = "Alarm when Lambda approaches concurrent execution limit"
+  statistic           = "Sum"
+  threshold           = 0
+  alarm_description   = "Alarm when Lambda function experiences throttling"
   alarm_actions       = [aws_sns_topic.alerts.arn]
 
   dimensions = {
@@ -1217,10 +1220,10 @@ resource "aws_cloudwatch_dashboard" "monitoring" {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/SQS", "NumberOfMessagesSent", { "stat" : "Sum", "label" : "Messages Sent" }],
-            [".", "NumberOfMessagesReceived", { "stat" : "Sum", "label" : "Messages Received" }],
-            [".", "ApproximateNumberOfMessagesVisible", { "stat" : "Average", "label" : "Queue Depth" }],
-            [".", "ApproximateAgeOfOldestMessage", { "stat" : "Maximum", "label" : "Oldest Message Age" }]
+            ["AWS/SQS", "NumberOfMessagesSent", "QueueName", aws_sqs_queue.payment_processing.name, { "stat" : "Sum", "label" : "Messages Sent" }],
+            [".", "NumberOfMessagesReceived", ".", ".", { "stat" : "Sum", "label" : "Messages Received" }],
+            [".", "ApproximateNumberOfMessagesVisible", ".", ".", { "stat" : "Average", "label" : "Queue Depth" }],
+            [".", "ApproximateAgeOfOldestMessage", ".", ".", { "stat" : "Maximum", "label" : "Oldest Message Age" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -1233,7 +1236,7 @@ resource "aws_cloudwatch_dashboard" "monitoring" {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", { "stat" : "Average", "label" : "DLQ Messages" }]
+            ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", aws_sqs_queue.payment_processing_dlq.name, { "stat" : "Average", "label" : "DLQ Messages" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -1246,11 +1249,11 @@ resource "aws_cloudwatch_dashboard" "monitoring" {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/Lambda", "Invocations", { "stat" : "Sum" }],
-            [".", "Errors", { "stat" : "Sum" }],
-            [".", "Duration", { "stat" : "Average" }],
-            [".", "ConcurrentExecutions", { "stat" : "Maximum" }],
-            [".", "Throttles", { "stat" : "Sum" }]
+            ["AWS/Lambda", "Invocations", "FunctionName", aws_lambda_function.payment_processor.function_name, { "stat" : "Sum" }],
+            [".", "Errors", ".", ".", { "stat" : "Sum" }],
+            [".", "Duration", ".", ".", { "stat" : "Average" }],
+            [".", "ConcurrentExecutions", ".", ".", { "stat" : "Maximum" }],
+            [".", "Throttles", ".", ".", { "stat" : "Sum" }]
           ]
           view    = "timeSeries"
           stacked = false
@@ -1263,8 +1266,8 @@ resource "aws_cloudwatch_dashboard" "monitoring" {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", { "stat" : "Sum" }],
-            [".", "ConsumedWriteCapacityUnits", { "stat" : "Sum" }]
+            ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", aws_dynamodb_table.payment_status.name, { "stat" : "Sum" }],
+            [".", "ConsumedWriteCapacityUnits", ".", ".", { "stat" : "Sum" }]
           ]
           view    = "timeSeries"
           stacked = false
