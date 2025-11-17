@@ -104,7 +104,6 @@ class SecurityStack(pulumi.ComponentResource):
 
         self.lambda_role = aws.iam.Role(
             f"lambda-rotation-role-{self.environment_suffix}",
-            name=f"lambda-rotation-role-{self.environment_suffix}",
             assume_role_policy=lambda_assume_role.json,
             tags={
                 "Name": f"lambda-rotation-role-{self.environment_suffix}",

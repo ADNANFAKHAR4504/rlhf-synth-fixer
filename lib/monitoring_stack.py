@@ -65,7 +65,7 @@ class MonitoringStack(pulumi.ComponentResource):
         )
 
         # Configure bucket ACL using separate resource
-        aws.s3.BucketAclV2(
+        aws.s3.BucketAcl(
             f"flow-logs-bucket-acl-{self.environment_suffix}",
             bucket=self.flow_logs_bucket.id,
             acl="private",
@@ -73,26 +73,26 @@ class MonitoringStack(pulumi.ComponentResource):
         )
 
         # Configure lifecycle rules using separate resource
-        aws.s3.BucketLifecycleConfigurationV2(
+        aws.s3.BucketLifecycleConfiguration(
             f"flow-logs-bucket-lifecycle-{self.environment_suffix}",
             bucket=self.flow_logs_bucket.id,
             rules=[
-                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                aws.s3.BucketLifecycleConfigurationRuleArgs(
                     id="expire-old-logs",
                     status="Enabled",
-                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(days=90)
+                    expiration=aws.s3.BucketLifecycleConfigurationRuleExpirationArgs(days=90)
                 )
             ],
             opts=ResourceOptions(parent=self.flow_logs_bucket)
         )
 
         # Configure server-side encryption using separate resource
-        aws.s3.BucketServerSideEncryptionConfigurationV2(
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"flow-logs-bucket-encryption-{self.environment_suffix}",
             bucket=self.flow_logs_bucket.id,
             rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     )
                 )
@@ -173,7 +173,7 @@ class MonitoringStack(pulumi.ComponentResource):
         )
 
         # Configure bucket ACL using separate resource
-        aws.s3.BucketAclV2(
+        aws.s3.BucketAcl(
             f"config-bucket-acl-{self.environment_suffix}",
             bucket=self.config_bucket.id,
             acl="private",
@@ -181,12 +181,12 @@ class MonitoringStack(pulumi.ComponentResource):
         )
 
         # Configure server-side encryption using separate resource
-        aws.s3.BucketServerSideEncryptionConfigurationV2(
+        aws.s3.BucketServerSideEncryptionConfiguration(
             f"config-bucket-encryption-{self.environment_suffix}",
             bucket=self.config_bucket.id,
             rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
                         sse_algorithm="AES256"
                     )
                 )

@@ -225,8 +225,9 @@ class TestSecurityStackResourceCreation(unittest.TestCase):
 
         # Verify Lambda role was created
         mock_role.assert_called_once()
-        call_kwargs = mock_role.call_args[1]
-        self.assertIn('lambda-rotation-role-test', call_kwargs['name'])
+        # Verify the resource name (first positional argument)
+        call_args = mock_role.call_args[0]
+        self.assertIn('lambda-rotation-role-test', call_args[0])
 
     @patch('lib.security_stack.aws.iam.RolePolicy')
     @patch('lib.security_stack.aws.iam.RolePolicyAttachment')
