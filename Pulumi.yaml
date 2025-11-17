@@ -1,4 +1,4 @@
-name: payment-infra
+name: TapStack
 runtime:
   name: nodejs
 description: Payment processing infrastructure with multi-environment support

@@ -1,4 +1,5 @@
-#!/usr/bin/env node
+
+#!/usr/bin / env node
 
 import { confirm, input, select } from '@inquirer/prompts';
 import * as fs from 'fs-extra';
@@ -343,18 +344,18 @@ async function main(): Promise<void> {
       ...(taskSubCategory ? { subject_labels: [taskSubCategory] } : {}),
       ...(resourcesText && resourcesText.trim().length > 0
         ? {
-            aws_services: resourcesText
-              .split(',')
-              .map(s => s.trim())
-              .filter(s => s.length > 0),
-          }
+          aws_services: resourcesText
+            .split(',')
+            .map(s => s.trim())
+            .filter(s => s.length > 0),
+        }
         : {}),
       ...(deployEnv
         ? {
-            task_config: {
-              deploy_env: deployEnv,
-            },
-          }
+          task_config: {
+            deploy_env: deployEnv,
+          },
+        }
         : {}),
     };
 
