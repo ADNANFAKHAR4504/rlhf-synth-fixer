@@ -1,0 +1,34 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "ag8id",
+  "team": "synth",
+  "startedAt": "2025-11-06T19:37:07+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "aws_services": [
+    "ALB",
+    "Auto Scaling",
+    "CloudWatch",
+    "DMS",
+    "IAM",
+    "RDS",
+    "Route 53",
+    "S3",
+    "Systems Manager",
+    "VPC"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

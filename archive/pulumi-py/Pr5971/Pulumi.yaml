@@ -1,0 +1,10 @@
+name: TapStack
+runtime:
+  name: python
+description: Production-ready VPC infrastructure for payment processing system
+main: tap.py
+config:
+  environmentSuffix:
+    type: string
+    description: Environment suffix for resource naming (e.g., prod, dev, staging)
+    default: prod

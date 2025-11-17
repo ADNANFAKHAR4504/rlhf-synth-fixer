@@ -1,0 +1,33 @@
+{
+  "platform": "cloudformation",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000812",
+  "team": "synth",
+  "startedAt": "2025-11-03T14:54:49.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "VPC",
+    "Networking",
+    "Security Groups",
+    "Multi-AZ",
+    "High Availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Internet Gateway",
+    "NAT Gateway",
+    "Route Tables",
+    "Security Groups",
+    "Elastic IP"
+  ],
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

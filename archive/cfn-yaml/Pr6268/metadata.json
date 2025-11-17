@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912176",
+  "team": "2",
+  "startedAt": "2025-11-10T17:48:46.173Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnets",
+    "NAT Gateway",
+    "ECS Fargate",
+    "RDS Aurora PostgreSQL",
+    "Application Load Balancer",
+    "API Gateway",
+    "Lambda",
+    "S3",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "KMS",
+    "Secrets Manager",
+    "VPC Endpoints"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

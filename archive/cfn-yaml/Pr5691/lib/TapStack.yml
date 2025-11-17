@@ -1,0 +1,844 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Secure AWS VPC Architecture with CloudTrail, EC2, and S3 Integration'
+
+Parameters:
+  SSHAllowedCIDR:
+    Type: String
+    Default: '203.0.113.0/24'
+    Description: 'CIDR block allowed for SSH access (Change to your IP range)'
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])(\/([0-9]|[1-2][0-9]|3[0-2]))$'
+    
+  KeyPairName:
+    Type: String
+    Default: ''
+    Description: 'EC2 Key Pair for SSH access (leave empty if not using SSH)'
+    
+  LatestAmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: '/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2'
+    Description: 'Latest Amazon Linux 2 AMI ID'
+
+  EnableNATGateway:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: 'Enable NAT Gateway for private subnet internet access (requires 1 EIP, set to false if you have EIP limit issues)'
+
+  BucketPrefix:
+    Type: String
+    Default: 'tapstack'
+    Description: 'Lowercase prefix for S3 bucket names (must be lowercase, alphanumeric, and hyphens only)'
+    AllowedPattern: '^[a-z0-9][a-z0-9-]*[a-z0-9]$'
+    MinLength: 3
+    MaxLength: 37
+    ConstraintDescription: 'Must be lowercase letters, numbers, and hyphens only. Must start and end with letter or number.'
+
+Mappings:
+  SubnetConfig:
+    VPC:
+      CIDR: '10.0.0.0/16'
+    PublicSubnet1:
+      CIDR: '10.0.1.0/24'
+    PublicSubnet2:
+      CIDR: '10.0.2.0/24'
+    PrivateSubnet1:
+      CIDR: '10.0.10.0/24'
+    PrivateSubnet2:
+      CIDR: '10.0.11.0/24'
+
+Conditions:
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  UseNATGateway: !Equals [!Ref EnableNATGateway, 'true']
+
+Resources:
+  # ==================== VPC Configuration ====================
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !FindInMap [SubnetConfig, VPC, CIDR]
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC'
+        - Key: Environment
+          Value: Production
+
+  # ==================== Internet Gateway ====================
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-IGW'
+        - Key: Environment
+          Value: Production
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # ==================== Public Subnets ====================
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet-AZ1'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Public
+
+  PublicSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PublicSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PublicSubnet-AZ2'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Public
+
+  # ==================== Private Subnets ====================
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet1, CIDR]
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet-AZ1'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Private
+
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !FindInMap [SubnetConfig, PrivateSubnet2, CIDR]
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-PrivateSubnet-AZ2'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Private
+
+  # ==================== NAT Gateway ====================
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    Condition: UseNATGateway
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-NAT-EIP'
+        - Key: Environment
+          Value: Production
+
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Condition: UseNATGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-NAT-Gateway'
+        - Key: Environment
+          Value: Production
+
+  # ==================== Route Tables ====================
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Public-RouteTable'
+        - Key: Environment
+          Value: Production
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet2
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Private-RouteTable'
+        - Key: Environment
+          Value: Production
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Condition: UseNATGateway
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnet1RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnet2RouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  # ==================== Security Groups ====================
+  BastionSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for bastion host - SSH access from specific IP'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: !Ref SSHAllowedCIDR
+          Description: 'SSH access from allowed CIDR'
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Bastion-SG'
+        - Key: Environment
+          Value: Production
+
+  PrivateInstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: 'Security group for private EC2 instances'
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          SourceSecurityGroupId: !Ref BastionSecurityGroup
+          Description: 'SSH access from bastion host'
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 10.0.0.0/16
+          Description: 'HTTPS from within VPC'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 10.0.0.0/16
+          Description: 'HTTP from within VPC'
+      SecurityGroupEgress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTPS to internet'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: 'HTTP to internet'
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.0.0/16
+          Description: 'SSH within VPC'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Private-Instance-SG'
+        - Key: Environment
+          Value: Production
+
+  # ==================== Lambda for S3 Bucket Cleanup ====================
+  EmptyS3BucketLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3BucketCleanupPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:ListBucketVersions'
+                  - 's3:DeleteObject'
+                  - 's3:DeleteObjectVersion'
+                Resource:
+                  - !Sub 'arn:aws:s3:::${BucketPrefix}-*'
+                  - !Sub 'arn:aws:s3:::${BucketPrefix}-*/*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Empty-S3-Lambda-Role'
+        - Key: Environment
+          Value: Production
+
+  EmptyS3BucketLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-EmptyS3Bucket'
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt EmptyS3BucketLambdaRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          import logging
+          
+          logger = logging.getLogger()
+          logger.setLevel(logging.INFO)
+          
+          def handler(event, context):
+              logger.info(f"Event: {event}")
+              bucket_name = event['ResourceProperties'].get('BucketName')
+              
+              try:
+                  if event['RequestType'] == 'Delete':
+                      logger.info(f"Emptying bucket: {bucket_name}")
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket_name)
+                      
+                      # Delete all object versions and delete markers
+                      bucket.object_versions.all().delete()
+                      
+                      logger.info(f"Successfully emptied bucket: {bucket_name}")
+                  
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  logger.error(f"Error: {str(e)}")
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Empty-S3-Lambda'
+        - Key: Environment
+          Value: Production
+
+  # ==================== S3 Buckets ====================
+  CloudTrailS3Bucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-cloudtrail-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldLogs
+            Status: Enabled
+            ExpirationInDays: 90
+            NoncurrentVersionExpirationInDays: 30
+      LoggingConfiguration:
+        DestinationBucketName: !Ref AccessLoggingBucket
+        LogFilePrefix: cloudtrail-access-logs/
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-CloudTrail-Bucket'
+        - Key: Environment
+          Value: Production
+
+  AccessLoggingBucket:
+    Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
+    Properties:
+      BucketName: !Sub '${BucketPrefix}-access-logs-${AWS::AccountId}-${AWS::Region}'
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldAccessLogs
+            Status: Enabled
+            ExpirationInDays: 30
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Access-Logs-Bucket'
+        - Key: Environment
+          Value: Production
+
+  CloudTrailS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref CloudTrailS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSCloudTrailAclCheck
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt CloudTrailS3Bucket.Arn
+          - Sid: AWSCloudTrailWrite
+            Effect: Allow
+            Principal:
+              Service: cloudtrail.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${CloudTrailS3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': bucket-owner-full-control
+
+  # ==================== Custom Resources to Empty Buckets on Deletion ====================
+  EmptyCloudTrailBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref CloudTrailS3Bucket
+
+  EmptyAccessLoggingBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref AccessLoggingBucket
+
+  # ==================== CloudTrail ====================
+  CloudTrail:
+    Type: AWS::CloudTrail::Trail
+    DependsOn:
+      - CloudTrailS3BucketPolicy
+    Properties:
+      TrailName: !Sub '${AWS::StackName}-CloudTrail'
+      S3BucketName: !Ref CloudTrailS3Bucket
+      IncludeGlobalServiceEvents: true
+      IsLogging: true
+      IsMultiRegionTrail: true
+      EnableLogFileValidation: true
+      EventSelectors:
+        - IncludeManagementEvents: true
+          ReadWriteType: All
+          DataResources:
+            - Type: AWS::S3::Object
+              Values:
+                - !Sub '${CloudTrailS3Bucket.Arn}/'
+                - !Sub '${AccessLoggingBucket.Arn}/'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-CloudTrail'
+        - Key: Environment
+          Value: Production
+
+  # ==================== IAM Role for EC2 ====================
+  EC2InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-EC2-Limited-S3-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+      Policies:
+        - PolicyName: LimitedS3Access
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: AllowS3ListBucket
+                Effect: Allow
+                Action:
+                  - 's3:ListBucket'
+                  - 's3:GetBucketLocation'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-*'
+              - Sid: AllowS3ObjectOperations
+                Effect: Allow
+                Action:
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                  - 's3:DeleteObject'
+                Resource: !Sub 'arn:aws:s3:::${BucketPrefix}-*/*'
+              - Sid: DenyAllOtherServices
+                Effect: Deny
+                NotAction:
+                  - 's3:*'
+                  - 'logs:*'
+                  - 'cloudwatch:*'
+                  - 'kms:Decrypt'
+                  - 'kms:DescribeKey'
+                  - 'kms:CreateGrant'
+                  - 'kms:GenerateDataKey'
+                  - 'ec2:Describe*'
+                  - 'ssm:GetParameter*'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2-Role'
+        - Key: Environment
+          Value: Production
+
+  EC2InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      InstanceProfileName: !Sub '${AWS::StackName}-EC2-Instance-Profile'
+      Roles:
+        - !Ref EC2InstanceRole
+
+  # ==================== EC2 Instance ====================
+  PrivateEC2Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.micro
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+      IamInstanceProfile: !Ref EC2InstanceProfile
+      SubnetId: !Ref PrivateSubnet1
+      SecurityGroupIds:
+        - !Ref PrivateInstanceSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -e
+
+          # Log output for debugging
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
+
+          # Create a marker file
+          echo "Private EC2 instance initialized at $(date)" > /home/ec2-user/instance-info.txt
+          echo "Stack: ${AWS::StackName}" >> /home/ec2-user/instance-info.txt
+          echo "Region: ${AWS::Region}" >> /home/ec2-user/instance-info.txt
+          
+          # Note: CloudWatch Agent installation requires internet access
+          # If EnableNATGateway is false, install CloudWatch Agent manually or via Systems Manager
+          
+          echo "Private instance UserData completed successfully"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Private-Instance'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Application
+
+  # ==================== Bastion Host (Optional - for SSH access) ====================
+  BastionHost:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: !Ref LatestAmiId
+      InstanceType: t3.nano
+      KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
+      SubnetId: !Ref PublicSubnet1
+      SecurityGroupIds:
+        - !Ref BastionSecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 8
+            VolumeType: gp3
+            DeleteOnTermination: true
+      UserData:
+        Fn::Base64: |
+          #!/bin/bash
+          set -e
+
+          # Log output for debugging
+          exec > >(tee /var/log/user-data.log)
+          exec 2>&1
+
+          # Harden SSH configuration
+          sed -i 's/^#*PermitRootLogin.*/PermitRootLogin no/' /etc/ssh/sshd_config
+          sed -i 's/^#*MaxAuthTries.*/MaxAuthTries 3/' /etc/ssh/sshd_config
+          sed -i 's/^#*PasswordAuthentication.*/PasswordAuthentication no/' /etc/ssh/sshd_config
+          
+          # Restart SSH service
+          systemctl restart sshd
+          
+          # Signal success
+          echo "Bastion host UserData completed successfully"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Bastion-Host'
+        - Key: Environment
+          Value: Production
+        - Key: Type
+          Value: Bastion
+
+  # ==================== VPC Flow Logs ====================
+  VPCFlowLogRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: vpc-flow-logs.amazonaws.com
+            Action: 'sts:AssumeRole'
+      Policies:
+        - PolicyName: CloudWatchLogPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                  - 'logs:DescribeLogGroups'
+                  - 'logs:DescribeLogStreams'
+                Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC-FlowLog-Role'
+        - Key: Environment
+          Value: Production
+
+  VPCFlowLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/vpc/${AWS::StackName}'
+      RetentionInDays: 30
+
+  VPCFlowLog:
+    Type: AWS::EC2::FlowLog
+    Properties:
+      DeliverLogsPermissionArn: !GetAtt VPCFlowLogRole.Arn
+      LogDestinationType: cloud-watch-logs
+      LogGroupName: !Ref VPCFlowLogGroup
+      ResourceId: !Ref VPC
+      ResourceType: VPC
+      TrafficType: ALL
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-VPC-FlowLog'
+        - Key: Environment
+          Value: Production
+
+Outputs:
+  VPCId:
+    Description: VPC ID
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-ID'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet1-ID'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PublicSubnet2-ID'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet1-ID'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnet2-ID'
+
+  BastionHostPublicIP:
+    Description: Bastion Host Public IP
+    Value: !GetAtt BastionHost.PublicIp
+
+  PrivateInstanceId:
+    Description: Private EC2 Instance ID
+    Value: !Ref PrivateEC2Instance
+
+  CloudTrailBucketName:
+    Description: CloudTrail S3 Bucket Name
+    Value: !Ref CloudTrailS3Bucket
+
+  AccessLogsBucketName:
+    Description: Access Logs S3 Bucket Name
+    Value: !Ref AccessLoggingBucket
+
+  NATGatewayEIP:
+    Description: NAT Gateway Elastic IP (only available if EnableNATGateway is true)
+    Condition: UseNATGateway
+    Value: !Ref NATGatewayEIP
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-IGW-ID'
+
+  BastionSecurityGroupId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Bastion-SG-ID'
+
+  PrivateInstanceSecurityGroupId:
+    Description: Private Instance Security Group ID
+    Value: !Ref PrivateInstanceSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-SG-ID'
+
+  EC2InstanceRoleArn:
+    Description: EC2 Instance Role ARN
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Role-ARN'
+
+  EC2InstanceProfileArn:
+    Description: EC2 Instance Profile ARN
+    Value: !GetAtt EC2InstanceProfile.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-EC2-Profile-ARN'
+
+  CloudTrailArn:
+    Description: CloudTrail ARN
+    Value: !GetAtt CloudTrail.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-ARN'
+
+  VPCFlowLogId:
+    Description: VPC Flow Log ID
+    Value: !Ref VPCFlowLog
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-FlowLog-ID'
+
+  VPCFlowLogGroupName:
+    Description: VPC Flow Log Group Name
+    Value: !Ref VPCFlowLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-VPC-FlowLog-Group'
+
+  CloudTrailBucketArn:
+    Description: CloudTrail S3 Bucket ARN
+    Value: !GetAtt CloudTrailS3Bucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-CloudTrail-Bucket-ARN'
+
+  AccessLogsBucketArn:
+    Description: Access Logs S3 Bucket ARN
+    Value: !GetAtt AccessLoggingBucket.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-AccessLogs-Bucket-ARN'
+
+  BastionHostId:
+    Description: Bastion Host Instance ID
+    Value: !Ref BastionHost
+    Export:
+      Name: !Sub '${AWS::StackName}-Bastion-ID'
+
+  PrivateInstancePrivateIP:
+    Description: Private EC2 Instance Private IP
+    Value: !GetAtt PrivateEC2Instance.PrivateIp
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-Instance-IP'
+
+  PublicRouteTableId:
+    Description: Public Route Table ID
+    Value: !Ref PublicRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-Public-RT-ID'
+
+  PrivateRouteTableId:
+    Description: Private Route Table ID
+    Value: !Ref PrivateRouteTable
+    Export:
+      Name: !Sub '${AWS::StackName}-Private-RT-ID'
+
+  NATGatewayId:
+    Description: NAT Gateway ID (only available if EnableNATGateway is true)
+    Condition: UseNATGateway
+    Value: !Ref NATGateway
+    Export:
+      Name: !Sub '${AWS::StackName}-NAT-Gateway-ID'
+
+  EmptyS3BucketLambdaArn:
+    Description: Empty S3 Bucket Lambda Function ARN
+    Value: !GetAtt EmptyS3BucketLambda.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-Empty-Lambda-ARN'
+
+  StackRegion:
+    Description: AWS Region where stack is deployed
+    Value: !Ref AWS::Region
+    Export:
+      Name: !Sub '${AWS::StackName}-Region'
+
+  StackId:
+    Description: CloudFormation Stack ID
+    Value: !Ref AWS::StackId
+    Export:
+      Name: !Sub '${AWS::StackName}-Stack-ID'

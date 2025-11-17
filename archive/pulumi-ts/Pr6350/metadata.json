@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-12T12:00:17+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "j2o50h",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "VPC Endpoints",
+    "Transit Gateway",
+    "VPC Flow Logs",
+    "NAT Gateway",
+    "Internet Gateway",
+    "Security Groups"
+  ],
+  "region": "eu-south-2",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

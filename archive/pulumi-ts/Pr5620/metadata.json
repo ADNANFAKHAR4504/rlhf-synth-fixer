@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "typescript",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-03T13:00:00-08:00",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Optimization"
+  ],
+  "po_id": "oiqaql",
+  "aws_services": [
+    "Lambda",
+    "S3",
+    "CloudWatch Logs",
+    "KMS",
+    "X-Ray",
+    "IAM"
+  ],
+  "region": "ap-northeast-2",
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

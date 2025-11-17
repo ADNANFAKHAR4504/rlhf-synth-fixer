@@ -1,0 +1,714 @@
+# Ideal Response
+```yaml
+name: Multi-Environment Infrastructure Deployment
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy (dev, staging, prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+          - deploy
+          - destroy
+      environment_suffix:
+        description: 'Unique suffix for resource naming'
+        required: false
+        default: 'v1'
+        type: string
+
+permissions:
+  id-token: write  # Required for OIDC authentication
+  contents: read
+
+env:
+  AWS_REGION: us-east-1
+  STACK_NAME_PREFIX: multi-env-infrastructure
+  PROJECT_NAME: myapp
+  CFN_TEMPLATE_PATH: lib/TapStack.json
+  SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+jobs:
+  # Build and Package Infrastructure Code
+  build:
+    name: Build & Package Infrastructure
+    runs-on: ubuntu-latest
+    outputs:
+      artifact-name: ${{ steps.package.outputs.artifact-name }}
+      template-checksum: ${{ steps.package.outputs.checksum }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js for CDK-NAG
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install CDK and CDK-NAG
+        run: |
+          npm install -g aws-cdk
+          npm install --save-dev cdk-nag
+
+      - name: Run CDK-NAG Security Scanning
+        id: cdk-nag
+        run: |
+          echo "Running CDK-NAG security compliance checks..."
+          # Run CDK synth with NAG checks
+          if npx cdk synth --strict 2>&1 | tee cdk-nag-results.txt; then
+            echo "✅ CDK-NAG security scan passed"
+            echo "scan_status=passed" >> $GITHUB_OUTPUT
+          else
+            echo "❌ CDK-NAG security scan failed"
+            echo "scan_status=failed" >> $GITHUB_OUTPUT
+            cat cdk-nag-results.txt
+            exit 1
+          fi
+        continue-on-error: false
+
+      - name: Upload CDK-NAG Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: cdk-nag-results
+          path: cdk-nag-results.txt
+          retention-days: 90
+
+      - name: Package CloudFormation Template
+        id: package
+        run: |
+          ARTIFACT_NAME="cfn-template-${{ github.sha }}"
+          mkdir -p artifacts
+          cp ${{ env.CFN_TEMPLATE_PATH }} artifacts/template.json
+          
+          # Calculate checksum for verification
+          CHECKSUM=$(sha256sum artifacts/template.json | awk '{print $1}')
+          echo "checksum=$CHECKSUM" >> $GITHUB_OUTPUT
+          echo "artifact-name=$ARTIFACT_NAME" >> $GITHUB_OUTPUT
+          
+          # Create metadata file
+          cat > artifacts/metadata.json << EOF
+          {
+            "commit": "${{ github.sha }}",
+            "branch": "${{ github.ref_name }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "checksum": "$CHECKSUM",
+            "actor": "${{ github.actor }}"
+          }
+          EOF
+
+      - name: Upload Build Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.package.outputs.artifact-name }}
+          path: artifacts/
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Notify Slack - Build Complete
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR="good"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+          fi
+          
+          curl -X POST ${{ env.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Build $STATUS\",
+                \"text\": \"Branch: ${{ github.ref_name }}\nCommit: ${{ github.sha }}\",
+                \"fields\": [{
+                  \"title\": \"CDK-NAG Scan\",
+                  \"value\": \"${{ steps.cdk-nag.outputs.scan_status }}\",
+                  \"short\": true
+                }]
+              }]
+            }" || echo "Slack notification failed"
+
+  # Validate CloudFormation Template
+  validate:
+    name: Validate CloudFormation Template
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: artifacts/
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          role-session-name: GHA-Validate-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Validate Template Checksum
+        run: |
+          EXPECTED="${{ needs.build.outputs.template-checksum }}"
+          ACTUAL=$(sha256sum artifacts/template.json | awk '{print $1}')
+          
+          if [ "$EXPECTED" != "$ACTUAL" ]; then
+            echo "❌ Template checksum mismatch!"
+            echo "Expected: $EXPECTED"
+            echo "Actual: $ACTUAL"
+            exit 1
+          fi
+          echo "✅ Template checksum verified"
+
+      - name: Validate CloudFormation Template
+        run: |
+          aws cloudformation validate-template \
+            --template-body file://artifacts/template.json \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Run cfn-lint
+        run: |
+          pip install cfn-lint
+          cfn-lint artifacts/template.json --format json > cfn-lint-results.json || true
+          cat cfn-lint-results.json
+
+      - name: Upload Validation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: validation-results
+          path: cfn-lint-results.json
+          retention-days: 30
+
+  # Deploy to Development
+  deploy-dev:
+    name: Deploy to Development
+    needs: [build, validate]
+    runs-on: ubuntu-latest
+    if: |
+      github.ref == 'refs/heads/develop' || 
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev' && github.event.inputs.action == 'deploy')
+    environment:
+      name: development
+      url: https://console.aws.amazon.com/cloudformation
+    outputs:
+      stack-name: ${{ steps.deploy.outputs.stack-name }}
+      deployment-status: ${{ steps.deploy.outputs.status }}
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: artifacts/
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          role-session-name: GHA-Deploy-Dev-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Environment Variables
+        run: |
+          echo "STACK_NAME=${{ env.STACK_NAME_PREFIX }}-dev-${{ github.event.inputs.environment_suffix || 'auto' }}" >> $GITHUB_ENV
+          echo "ENV_TYPE=dev" >> $GITHUB_ENV
+          echo "ENV_SUFFIX=${{ github.event.inputs.environment_suffix || 'auto' }}" >> $GITHUB_ENV
+
+      - name: Deploy CloudFormation Stack
+        id: deploy
+        run: |
+          echo "Deploying to Development..."
+          
+          aws cloudformation deploy \
+            --template-file artifacts/template.json \
+            --stack-name ${{ env.STACK_NAME }} \
+            --parameter-overrides \
+              SourceDatabasePassword=${{ secrets.DEV_DB_PASSWORD }} \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --tags \
+              Environment=dev \
+              Project=${{ env.PROJECT_NAME }} \
+              ManagedBy=GitHubActions \
+              Repository=${{ github.repository }} \
+              CommitSHA=${{ github.sha }} \
+              rlhf-iac-amazon=true \
+            --region ${{ env.AWS_REGION }} \
+            --no-fail-on-empty-changeset
+          
+          echo "stack-name=${{ env.STACK_NAME }}" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Get Stack Outputs
+        id: stack-outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs' \
+            --output json > dev-stack-outputs.json
+          
+          echo "📋 Stack Outputs:"
+          cat dev-stack-outputs.json
+
+      - name: Upload Stack Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: dev-stack-outputs-${{ github.sha }}
+          path: dev-stack-outputs.json
+          retention-days: 30
+
+      - name: Notify Slack - Dev Deployment
+        if: always()
+        run: |
+          STATUS="${{ steps.deploy.outputs.status }}"
+          COLOR="good"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+            STATUS="${{ job.status }}"
+          fi
+          
+          curl -X POST ${{ env.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Development Deployment $STATUS\",
+                \"text\": \"Stack: ${{ env.STACK_NAME }}\nCommit: ${{ github.sha }}\",
+                \"fields\": [{
+                  \"title\": \"Environment\",
+                  \"value\": \"Development\",
+                  \"short\": true
+                }, {
+                  \"title\": \"Region\",
+                  \"value\": \"${{ env.AWS_REGION }}\",
+                  \"short\": true
+                }]
+              }]
+            }" || echo "Slack notification failed"
+
+  # Deploy to Staging (depends on successful dev deployment)
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [build, validate, deploy-dev]
+    runs-on: ubuntu-latest
+    if: |
+      (github.ref == 'refs/heads/main' && needs.deploy-dev.outputs.deployment-status == 'success') || 
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' && github.event.inputs.action == 'deploy')
+    environment:
+      name: staging
+      url: https://console.aws.amazon.com/cloudformation
+    outputs:
+      stack-name: ${{ steps.deploy.outputs.stack-name }}
+      deployment-status: ${{ steps.deploy.outputs.status }}
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: artifacts/
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          role-session-name: GHA-Deploy-Staging-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Environment Variables
+        run: |
+          echo "STACK_NAME=${{ env.STACK_NAME_PREFIX }}-staging-${{ github.event.inputs.environment_suffix || 'auto' }}" >> $GITHUB_ENV
+          echo "ENV_TYPE=staging" >> $GITHUB_ENV
+          echo "ENV_SUFFIX=${{ github.event.inputs.environment_suffix || 'auto' }}" >> $GITHUB_ENV
+
+      - name: Deploy CloudFormation Stack
+        id: deploy
+        run: |
+          echo "Deploying to Staging..."
+          
+          aws cloudformation deploy \
+            --template-file artifacts/template.json \
+            --stack-name ${{ env.STACK_NAME }} \
+            --parameter-overrides \
+              SourceDatabasePassword=${{ secrets.STAGING_DB_PASSWORD }} \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --tags \
+              Environment=staging \
+              Project=${{ env.PROJECT_NAME }} \
+              ManagedBy=GitHubActions \
+              Repository=${{ github.repository }} \
+              CommitSHA=${{ github.sha }} \
+              rlhf-iac-amazon=true \
+            --region ${{ env.AWS_REGION }} \
+            --no-fail-on-empty-changeset
+          
+          echo "stack-name=${{ env.STACK_NAME }}" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Get Stack Outputs
+        id: stack-outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs' \
+            --output json > staging-stack-outputs.json
+          
+          echo "📋 Stack Outputs:"
+          cat staging-stack-outputs.json
+
+      - name: Upload Stack Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: staging-stack-outputs-${{ github.sha }}
+          path: staging-stack-outputs.json
+          retention-days: 90
+
+      - name: Notify Slack - Staging Deployment
+        if: always()
+        run: |
+          STATUS="${{ steps.deploy.outputs.status }}"
+          COLOR="good"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+            STATUS="${{ job.status }}"
+          fi
+          
+          curl -X POST ${{ env.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"Staging Deployment $STATUS\",
+                \"text\": \"Stack: ${{ env.STACK_NAME }}\nCommit: ${{ github.sha }}\",
+                \"fields\": [{
+                  \"title\": \"Environment\",
+                  \"value\": \"Staging\",
+                  \"short\": true
+                }, {
+                  \"title\": \"Region\",
+                  \"value\": \"${{ env.AWS_REGION }}\",
+                  \"short\": true
+                }]
+              }]
+            }" || echo "Slack notification failed"
+
+  # Deploy to Production (depends on successful staging deployment, requires manual approval)
+  deploy-prod:
+    name: Deploy to Production
+    needs: [build, validate, deploy-staging]
+    runs-on: ubuntu-latest
+    if: |
+      (needs.deploy-staging.outputs.deployment-status == 'success' && github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'prod' && github.event.inputs.action == 'deploy')
+    environment:
+      name: production
+      url: https://console.aws.amazon.com/cloudformation
+    outputs:
+      stack-name: ${{ steps.deploy.outputs.stack-name }}
+      deployment-status: ${{ steps.deploy.outputs.status }}
+    steps:
+      - name: Download Build Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.build.outputs.artifact-name }}
+          path: artifacts/
+
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PROD }}
+          role-session-name: GHA-Deploy-Prod-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Environment Variables
+        run: |
+          CHANGESET_NAME="prod-deployment-$(date +%Y%m%d-%H%M%S)"
+          echo "STACK_NAME=${{ env.STACK_NAME_PREFIX }}-prod-${{ github.event.inputs.environment_suffix || 'v1' }}" >> $GITHUB_ENV
+          echo "ENV_TYPE=prod" >> $GITHUB_ENV
+          echo "ENV_SUFFIX=${{ github.event.inputs.environment_suffix || 'v1' }}" >> $GITHUB_ENV
+          echo "CHANGESET_NAME=$CHANGESET_NAME" >> $GITHUB_ENV
+
+      - name: Create Change Set
+        run: |
+          echo "Creating change set for production..."
+          
+          aws cloudformation create-change-set \
+            --stack-name ${{ env.STACK_NAME }} \
+            --change-set-name ${{ env.CHANGESET_NAME }} \
+            --template-body file://artifacts/template.json \
+            --parameters \
+              ParameterKey=SourceDatabasePassword,ParameterValue=${{ secrets.PROD_DB_PASSWORD }} \
+            --capabilities CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND \
+            --tags \
+              Key=Environment,Value=prod \
+              Key=Project,Value=${{ env.PROJECT_NAME }} \
+              Key=ManagedBy,Value=GitHubActions \
+              Key=Repository,Value=${{ github.repository }} \
+              Key=CommitSHA,Value=${{ github.sha }} \
+              Key=rlhf-iac-amazon,Value=true \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for Change Set Creation
+        run: |
+          echo "Waiting for change set creation..."
+          aws cloudformation wait change-set-create-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --change-set-name ${{ env.CHANGESET_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Describe Change Set
+        run: |
+          echo "📝 Change Set Details:"
+          aws cloudformation describe-change-set \
+            --stack-name ${{ env.STACK_NAME }} \
+            --change-set-name ${{ env.CHANGESET_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Changes[*].[ResourceChange.Action,ResourceChange.LogicalResourceId,ResourceChange.ResourceType]' \
+            --output table
+
+      - name: Execute Change Set
+        id: deploy
+        run: |
+          echo "Executing change set for production deployment..."
+          
+          aws cloudformation execute-change-set \
+            --stack-name ${{ env.STACK_NAME }} \
+            --change-set-name ${{ env.CHANGESET_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "Waiting for stack deployment to complete..."
+          aws cloudformation wait stack-update-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} || \
+          aws cloudformation wait stack-create-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "stack-name=${{ env.STACK_NAME }}" >> $GITHUB_OUTPUT
+          echo "status=success" >> $GITHUB_OUTPUT
+
+      - name: Get Stack Outputs
+        id: stack-outputs
+        run: |
+          aws cloudformation describe-stacks \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }} \
+            --query 'Stacks[0].Outputs' \
+            --output json > prod-stack-outputs.json
+          
+          echo "📋 Stack Outputs:"
+          cat prod-stack-outputs.json
+
+      - name: Upload Stack Outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-stack-outputs-${{ github.sha }}
+          path: prod-stack-outputs.json
+          retention-days: 365
+
+      - name: Notify Slack - Production Deployment
+        if: always()
+        run: |
+          STATUS="${{ steps.deploy.outputs.status }}"
+          COLOR="good"
+          EMOJI="🚀"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+            EMOJI="❌"
+            STATUS="${{ job.status }}"
+          fi
+          
+          curl -X POST ${{ env.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"$EMOJI Production Deployment $STATUS\",
+                \"text\": \"Stack: ${{ env.STACK_NAME }}\nCommit: ${{ github.sha }}\nActor: ${{ github.actor }}\",
+                \"fields\": [{
+                  \"title\": \"Environment\",
+                  \"value\": \"Production\",
+                  \"short\": true
+                }, {
+                  \"title\": \"Region\",
+                  \"value\": \"${{ env.AWS_REGION }}\",
+                  \"short\": true
+                }, {
+                  \"title\": \"Change Set\",
+                  \"value\": \"${{ env.CHANGESET_NAME }}\",
+                  \"short\": false
+                }]
+              }]
+            }" || echo "Slack notification failed"
+
+  # Destroy Stack (Manual Trigger Only)
+  destroy:
+    name: Destroy Stack
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.action == 'destroy'
+    environment:
+      name: ${{ github.event.inputs.environment }}-destroy
+    steps:
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ 
+            github.event.inputs.environment == 'prod' && secrets.AWS_ROLE_ARN_PROD ||
+            github.event.inputs.environment == 'staging' && secrets.AWS_ROLE_ARN_STAGING ||
+            secrets.AWS_ROLE_ARN_DEV
+          }}
+          role-session-name: GHA-Destroy-${{ github.event.inputs.environment }}-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Set Environment Variables
+        run: |
+          echo "STACK_NAME=${{ env.STACK_NAME_PREFIX }}-${{ github.event.inputs.environment }}-${{ github.event.inputs.environment_suffix || 'auto' }}" >> $GITHUB_ENV
+
+      - name: Delete CloudFormation Stack
+        run: |
+          echo "⚠️ WARNING: Deleting stack ${{ env.STACK_NAME }}"
+          aws cloudformation delete-stack \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Wait for Stack Deletion
+        run: |
+          echo "Waiting for stack deletion to complete..."
+          aws cloudformation wait stack-delete-complete \
+            --stack-name ${{ env.STACK_NAME }} \
+            --region ${{ env.AWS_REGION }}
+          
+          echo "✅ Stack ${{ env.STACK_NAME }} deleted successfully"
+
+      - name: Notify Slack - Stack Destroyed
+        if: always()
+        run: |
+          STATUS="${{ job.status }}"
+          COLOR="warning"
+          if [ "$STATUS" != "success" ]; then
+            COLOR="danger"
+          fi
+          
+          curl -X POST ${{ env.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"$COLOR\",
+                \"title\": \"🗑️ Stack Destruction $STATUS\",
+                \"text\": \"Stack: ${{ env.STACK_NAME }}\nEnvironment: ${{ github.event.inputs.environment }}\nActor: ${{ github.actor }}\",
+                \"fields\": [{
+                  \"title\": \"Status\",
+                  \"value\": \"$STATUS\",
+                  \"short\": true
+                }, {
+                  \"title\": \"Region\",
+                  \"value\": \"${{ env.AWS_REGION }}\",
+                  \"short\": true
+                }]
+              }]
+            }" || echo "Slack notification failed"
+
+  # Drift Detection
+  drift-detection:
+    name: Drift Detection
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    strategy:
+      matrix:
+        environment: [dev, staging, prod]
+    steps:
+      - name: Configure AWS Credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ 
+            matrix.environment == 'prod' && secrets.AWS_ROLE_ARN_PROD ||
+            matrix.environment == 'staging' && secrets.AWS_ROLE_ARN_STAGING ||
+            secrets.AWS_ROLE_ARN_DEV
+          }}
+          role-session-name: GHA-Drift-${{ matrix.environment }}-${{ github.run_id }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Detect Stack Drift
+        run: |
+          STACK_NAME="${{ env.STACK_NAME_PREFIX }}-${{ matrix.environment }}-auto"
+          
+          if aws cloudformation describe-stacks --stack-name $STACK_NAME --region ${{ env.AWS_REGION }} 2>/dev/null; then
+            echo "🔍 Checking drift for $STACK_NAME"
+            
+            DRIFT_ID=$(aws cloudformation detect-stack-drift \
+              --stack-name $STACK_NAME \
+              --region ${{ env.AWS_REGION }} \
+              --query 'StackDriftDetectionId' \
+              --output text)
+            
+            # Wait for drift detection to complete
+            aws cloudformation wait stack-drift-detection-complete \
+              --stack-drift-detection-id $DRIFT_ID \
+              --region ${{ env.AWS_REGION }}
+            
+            # Get drift status
+            DRIFT_STATUS=$(aws cloudformation describe-stack-drift-detection-status \
+              --stack-drift-detection-id $DRIFT_ID \
+              --region ${{ env.AWS_REGION }} \
+              --query 'StackDriftStatus' \
+              --output text)
+            
+            echo "Drift status for $STACK_NAME: $DRIFT_STATUS"
+            echo "DRIFT_STATUS=$DRIFT_STATUS" >> $GITHUB_ENV
+            
+            if [ "$DRIFT_STATUS" == "DRIFTED" ]; then
+              echo "⚠️ WARNING: Stack $STACK_NAME has drifted!"
+              
+              # Get detailed drift information
+              aws cloudformation describe-stack-resource-drifts \
+                --stack-name $STACK_NAME \
+                --region ${{ env.AWS_REGION }} \
+                --stack-resource-drift-status-filters MODIFIED DELETED \
+                --query 'StackResourceDrifts[*].[LogicalResourceId,ResourceType,StackResourceDriftStatus]' \
+                --output table
+            fi
+          else
+            echo "Stack $STACK_NAME not found, skipping"
+            echo "DRIFT_STATUS=NOT_FOUND" >> $GITHUB_ENV
+          fi
+
+      - name: Notify Slack - Drift Detection
+        if: always() && env.DRIFT_STATUS == 'DRIFTED'
+        run: |
+          curl -X POST ${{ env.SLACK_WEBHOOK_URL }} \
+            -H 'Content-Type: application/json' \
+            -d "{
+              \"attachments\": [{
+                \"color\": \"warning\",
+                \"title\": \"⚠️ Drift Detected\",
+                \"text\": \"Stack: ${{ env.STACK_NAME_PREFIX }}-${{ matrix.environment }}-auto\nEnvironment: ${{ matrix.environment }}\",
+                \"fields\": [{
+                  \"title\": \"Status\",
+                  \"value\": \"DRIFTED\",
+                  \"short\": true
+                }, {
+                  \"title\": \"Region\",
+                  \"value\": \"${{ env.AWS_REGION }}\",
+                  \"short\": true
+                }]
+              }]
+            }" || echo "Slack notification failed"
+```

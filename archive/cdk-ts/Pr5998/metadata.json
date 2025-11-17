@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "ansux",
+  "team": "synth",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "startedAt": "2025-11-06T21:30:00+05:30",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "SQS",
+    "CloudWatch",
+    "Secrets Manager",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

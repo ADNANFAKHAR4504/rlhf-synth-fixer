@@ -1,0 +1,36 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000826",
+  "team": "synth",
+  "startedAt": "2025-11-04T14:38:08.934Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "database",
+    "migration",
+    "rds",
+    "dms",
+    "postgresql"
+  ],
+  "aws_services": [
+    "RDS",
+    "DMS",
+    "Secrets Manager",
+    "KMS",
+    "CloudWatch",
+    "VPC",
+    "EC2",
+    "IAM",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

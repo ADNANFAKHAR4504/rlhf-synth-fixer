@@ -1,0 +1,14 @@
+    };
+  }
+}
+```
+
+## File: lib/lambda/transaction-validator/package.json
+
+```json
+{
+  "name": "transaction-validator",
+  "version": "1.0.0",
+  "description": "Transaction validator Lambda function",
+  "main": "index.js",
+  "scripts": {
