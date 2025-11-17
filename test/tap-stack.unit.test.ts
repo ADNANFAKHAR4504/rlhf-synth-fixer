@@ -106,12 +106,19 @@ describe('Multi-Region Infrastructure Unit Tests', () => {
       });
     });
 
-    test('creates Lambda function with Node.js 18', () => {
-      template.hasResourceProperties('AWS::Lambda::Function', {
-        Runtime: 'nodejs18.x',
-        Timeout: 30,
-        MemorySize: 512,
+    test('creates Lambda function with Node.js 20', () => {
+      // Find all Lambda functions
+      const lambdaFunctions = template.findResources('AWS::Lambda::Function');
+
+      // Filter to find the payment processor function (not CDK internal functions)
+      const appLambdas = Object.entries(lambdaFunctions).filter(([key, value]: [string, any]) => {
+        return value.Properties.Runtime === 'nodejs20.x' &&
+               value.Properties.Timeout === 30 &&
+               value.Properties.MemorySize === 512;
       });
+
+      // Verify at least one application Lambda exists with correct properties
+      expect(appLambdas.length).toBeGreaterThan(0);
     });
 
     test('creates DynamoDB table for data storage', () => {
