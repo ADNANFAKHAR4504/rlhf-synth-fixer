@@ -98,18 +98,10 @@ resource "aws_db_proxy" "main" {
   vpc_security_group_ids = [aws_security_group.rds_proxy.id]
 
   # Connection pooling configuration
-  max_connections_percent      = 100
-  max_idle_connections_percent = 50
-  connection_borrow_timeout    = 120
-  session_pinning_filters      = []
-  idle_client_timeout          = 1800
+  idle_client_timeout = 1800
 
   # Enable enhanced monitoring
   require_tls = true
-
-  target {
-    db_cluster_identifier = var.rds_cluster_id
-  }
 
   tags = {
     Name        = "rds-proxy-${var.dr_role}-${var.environment_suffix}"
@@ -121,6 +113,24 @@ resource "aws_db_proxy" "main" {
   depends_on = [
     aws_iam_role_policy.rds_proxy_secrets
   ]
+}
+
+# RDS Proxy Target
+resource "aws_db_proxy_default_target_group" "main" {
+  db_proxy_name = aws_db_proxy.main.name
+
+  connection_pool_config {
+    max_connections_percent      = 100
+    max_idle_connections_percent = 50
+    connection_borrow_timeout    = 120
+    session_pinning_filters      = []
+  }
+}
+
+resource "aws_db_proxy_target" "main" {
+  db_proxy_name          = aws_db_proxy.main.name
+  target_group_name      = aws_db_proxy_default_target_group.main.name
+  db_cluster_identifier  = var.rds_cluster_id
 }
 
 # CloudWatch Log Group for RDS Proxy
