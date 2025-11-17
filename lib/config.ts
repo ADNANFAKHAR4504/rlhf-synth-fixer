@@ -6,7 +6,7 @@ import { EnvironmentConfig, EnvironmentType } from './types';
  */
 export function getEnvironmentConfig(): EnvironmentConfig {
   const config = new pulumi.Config();
-  const environment = config.require('environment') as EnvironmentType;
+  const environment = (config.get('environment') || 'dev') as EnvironmentType;
 
   const configs: Record<EnvironmentType, EnvironmentConfig> = {
     dev: {
