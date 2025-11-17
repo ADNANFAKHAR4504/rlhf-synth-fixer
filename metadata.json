@@ -23,7 +23,7 @@
     "iam",
     "cloudwatch"
   ],
-  "region": "us-east-1",
+  "region": "us-east-2",
   "author": "iamarpit-turing",
   "reviewer": "chriscrsov",
   "training_quality": 10
