@@ -328,27 +328,6 @@ describe("Terraform infrastructure integration", () => {
     });
   });
 });
-import {
-  CloudWatchLogsClient,
-  DescribeLogGroupsCommand,
-} from "@aws-sdk/client-cloudwatch-logs";
-import {
-  DescribeRepositoriesCommand,
-  ECRClient,
-} from "@aws-sdk/client-ecr";
-import {
-  DescribeServicesCommand,
-  ECSClient,
-} from "@aws-sdk/client-ecs";
-import { DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
-import {
-  DescribeDBInstancesCommand,
-  RDSClient,
-} from "@aws-sdk/client-rds";
-import { DescribeSecretCommand, SecretsManagerClient } from "@aws-sdk/client-secrets-manager";
-import fs from "fs";
-import fetch from "node-fetch";
-import path from "path";
 
 jest.setTimeout(60000);
 
@@ -447,9 +426,6 @@ const extractListOutput = (
     `Output "${key}" is missing or not a list: ${JSON.stringify(raw)}`
   );
 };
-
-const sleep = (ms: number) =>
-  new Promise((resolve) => setTimeout(resolve, ms));
 
 interface HealthCheckResult {
   protocol: string;
