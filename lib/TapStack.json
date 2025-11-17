@@ -21,6 +21,14 @@
             ],
             "Description": "Environment type - determines resource sizing and configuration"
         },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for unique resource naming (e.g., pr6631, dev, prod)",
+            "MinLength": 1,
+            "MaxLength": 20,
+            "AllowedPattern": "^[a-z0-9-]+$"
+        },
         "DBUsername": {
             "Type": "String",
             "Default": "dbadmin",
@@ -1012,7 +1020,7 @@
             "Type": "AWS::S3::Bucket",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "paymentprocessing-logs-${EnvironmentType}-${AWS::AccountId}"
+                    "Fn::Sub": "paymentprocessing-logs-${EnvironmentSuffix}-${AWS::AccountId}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [

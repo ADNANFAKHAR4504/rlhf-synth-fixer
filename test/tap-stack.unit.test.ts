@@ -49,18 +49,12 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
       expect(param.AllowedPattern).toBeDefined();
     });
 
-    test('should have DBPassword parameter with NoEcho', () => {
-      const param = template.Parameters.DBPassword;
+    test('should have EnvironmentSuffix parameter', () => {
+      const param = template.Parameters.EnvironmentSuffix;
       expect(param).toBeDefined();
       expect(param.Type).toBe('String');
-      expect(param.NoEcho).toBe(true);
-      expect(param.MinLength).toBe(8);
-    });
-
-    test('should have KeyPairName parameter', () => {
-      const param = template.Parameters.KeyPairName;
-      expect(param).toBeDefined();
-      expect(param.Type).toBe('AWS::EC2::KeyPair::KeyName');
+      expect(param.Default).toBe('dev');
+      expect(param.AllowedPattern).toBeDefined();
     });
 
     test('should have VPC CIDR parameters', () => {
@@ -288,10 +282,10 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
       expect(cluster.Properties.Engine).toBe('aurora-postgresql');
     });
 
-    test('Aurora Cluster should use parameter references', () => {
+    test('Aurora Cluster should use Secrets Manager for credentials', () => {
       const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.MasterUsername.Ref).toBe('DBUsername');
-      expect(cluster.Properties.MasterUserPassword.Ref).toBe('DBPassword');
+      expect(cluster.Properties.MasterUserSecret).toBeDefined();
+      expect(cluster.Properties.MasterUserSecret.SecretArn.Ref).toBe('DBPasswordSecret');
     });
 
     test('Aurora Cluster should have encryption enabled', () => {
@@ -320,6 +314,29 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
     test('Aurora Instance should have conditional instance class', () => {
       const instance = template.Resources.AuroraInstance1;
       expect(instance.Properties.DBInstanceClass['Fn::If']).toBeDefined();
+    });
+  });
+
+  describe('Secrets Manager and Key Pair Resources', () => {
+    test('should have DBPasswordSecret resource', () => {
+      const secret = template.Resources.DBPasswordSecret;
+      expect(secret).toBeDefined();
+      expect(secret.Type).toBe('AWS::SecretsManager::Secret');
+      expect(secret.Properties.GenerateSecretString).toBeDefined();
+    });
+
+    test('DBPasswordSecret should generate password automatically', () => {
+      const secret = template.Resources.DBPasswordSecret;
+      const generateSecret = secret.Properties.GenerateSecretString;
+      expect(generateSecret.GenerateStringKey).toBe('password');
+      expect(generateSecret.PasswordLength).toBe(16);
+    });
+
+    test('should have EC2KeyPair resource', () => {
+      const keyPair = template.Resources.EC2KeyPair;
+      expect(keyPair).toBeDefined();
+      expect(keyPair.Type).toBe('AWS::EC2::KeyPair');
+      expect(keyPair.Properties.KeyType).toBe('rsa');
     });
   });
 
@@ -401,9 +418,9 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
       expect(cluster.Properties.DBClusterIdentifier['Fn::Sub']).toContain('${EnvironmentType}');
     });
 
-    test('S3 bucket should use EnvironmentType in name', () => {
+    test('S3 bucket should use EnvironmentSuffix in name', () => {
       const bucket = template.Resources.TransactionLogsBucket;
-      expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentType}');
+      expect(bucket.Properties.BucketName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
   });
 
