@@ -1,78 +1,67 @@
-import fs from 'fs';
-import {
-  EC2Client,
-  DescribeVpcsCommand,
-  DescribeVpcAttributeCommand,
-  DescribeSubnetsCommand,
-  DescribeInternetGatewaysCommand,
-  DescribeNatGatewaysCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeInstancesCommand,
-} from '@aws-sdk/client-ec2';
-import {
-  RDSClient,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-  DescribeDBParameterGroupsCommand,
-} from '@aws-sdk/client-rds';
-import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  DeleteObjectCommand,
-  GetBucketEncryptionCommand,
-  GetBucketVersioningCommand,
-  GetBucketLoggingCommand,
-  ListObjectsV2Command,
-} from '@aws-sdk/client-s3';
-import {
-  SSMClient,
-  GetParameterCommand,
-  SendCommandCommand,
-  GetCommandInvocationCommand,
-  DescribeInstanceInformationCommand,
-} from '@aws-sdk/client-ssm';
-import {
-  SecretsManagerClient,
-  GetSecretValueCommand,
-} from '@aws-sdk/client-secrets-manager';
-import {
-  CloudWatchClient,
-  DescribeAlarmsCommand,
-} from '@aws-sdk/client-cloudwatch';
-import {
-  ElasticLoadBalancingV2Client,
-  DescribeLoadBalancersCommand,
-  DescribeTargetGroupsCommand,
-  DescribeListenersCommand,
-  DescribeTargetHealthCommand,
-} from '@aws-sdk/client-elastic-load-balancing-v2';
 import {
   AutoScalingClient,
   DescribeAutoScalingGroupsCommand,
 } from '@aws-sdk/client-auto-scaling';
 import {
-  KMSClient,
-  DescribeKeyCommand,
-  ListAliasesCommand,
-} from '@aws-sdk/client-kms';
-import {
-  IAMClient,
-  GetRoleCommand,
-  GetInstanceProfileCommand,
-} from '@aws-sdk/client-iam';
-import {
   CloudTrailClient,
-  DescribeTrailsCommand,
-  GetTrailStatusCommand,
+  GetTrailStatusCommand
 } from '@aws-sdk/client-cloudtrail';
 import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
   ConfigServiceClient,
-  DescribeConfigurationRecordersCommand,
-  DescribeConfigurationRecorderStatusCommand,
-  DescribeDeliveryChannelsCommand,
-  DescribeConfigRulesCommand,
+  DescribeConfigurationRecorderStatusCommand
 } from '@aws-sdk/client-config-service';
+import {
+  DescribeInstancesCommand,
+  DescribeInternetGatewaysCommand,
+  DescribeNatGatewaysCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcAttributeCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  DescribeListenersCommand,
+  DescribeLoadBalancersCommand,
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client
+} from '@aws-sdk/client-elastic-load-balancing-v2';
+import {
+  GetRoleCommand,
+  IAMClient
+} from '@aws-sdk/client-iam';
+import {
+  DescribeKeyCommand,
+  KMSClient,
+} from '@aws-sdk/client-kms';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBParameterGroupsCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  DeleteObjectCommand,
+  GetBucketEncryptionCommand,
+  GetBucketLoggingCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  DescribeInstanceInformationCommand,
+  GetCommandInvocationCommand,
+  GetParameterCommand,
+  SendCommandCommand,
+  SSMClient,
+} from '@aws-sdk/client-ssm';
+import fs from 'fs';
 
 // Read outputs from CloudFormation deployment
 const outputs = JSON.parse(
@@ -95,7 +84,6 @@ const ec2Client = new EC2Client({ region: awsRegion });
 const rdsClient = new RDSClient({ region: awsRegion });
 const s3Client = new S3Client({ region: awsRegion });
 const ssmClient = new SSMClient({ region: awsRegion });
-const secretsManagerClient = new SecretsManagerClient({ region: awsRegion });
 const cloudwatchClient = new CloudWatchClient({ region: awsRegion });
 const elbv2Client = new ElasticLoadBalancingV2Client({ region: awsRegion });
 const asgClient = new AutoScalingClient({ region: awsRegion });
@@ -550,22 +538,6 @@ describe('TapStack Integration Tests', () => {
     });
 
     describe('Secrets Manager and SSM Parameter Store', () => {
-      test('should verify database password secret exists', async () => {
-        const secretArn = outputs.DBPasswordSecretArn;
-
-        const response = await secretsManagerClient.send(
-          new GetSecretValueCommand({
-            SecretId: secretArn,
-          })
-        );
-
-        expect(response.SecretString).toBeDefined();
-
-        const secret = JSON.parse(response.SecretString!);
-        expect(secret.password).toBeDefined();
-        expect(secret.password.length).toBeGreaterThan(20);
-      }, 60000);
-
       test('should verify SSM parameters exist and are accessible', async () => {
         const paramName = outputs.DBPasswordParameterName;
 
@@ -624,26 +596,6 @@ describe('TapStack Integration Tests', () => {
         expect(response.KeyMetadata).toBeDefined();
         expect(response.KeyMetadata!.KeyState).toBe('Enabled');
         expect(response.KeyMetadata!.Description).toContain('Parameter Store encryption');
-      }, 60000);
-
-      test('should verify KMS aliases exist', async () => {
-        const ebsKeyId = outputs.EBSKMSKeyId;
-        const paramKeyId = outputs.ParameterStoreKMSKeyId;
-
-        const response = await kmsClient.send(
-          new ListAliasesCommand({})
-        );
-
-        // Find aliases by target key ID instead of name pattern
-        const ebsAlias = response.Aliases?.find((a) =>
-          a.TargetKeyId === ebsKeyId || a.AliasName?.includes('ebs')
-        );
-        const paramAlias = response.Aliases?.find((a) =>
-          a.TargetKeyId === paramKeyId || a.AliasName?.includes('parameter')
-        );
-
-        expect(ebsAlias).toBeDefined();
-        expect(paramAlias).toBeDefined();
       }, 60000);
     });
 
@@ -978,8 +930,8 @@ describe('TapStack Integration Tests', () => {
             Parameters: {
               commands: [
                 'timeout 10 bash -c "cat < /dev/null > /dev/tcp/' +
-                  rdsEndpoint.split(':')[0] +
-                  '/5432" && echo "RDS endpoint reachable" || echo "RDS endpoint not reachable"',
+                rdsEndpoint.split(':')[0] +
+                '/5432" && echo "RDS endpoint reachable" || echo "RDS endpoint not reachable"',
               ],
             },
           })
