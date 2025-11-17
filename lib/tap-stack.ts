@@ -1,10 +1,10 @@
+import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
 import * as cdk from 'aws-cdk-lib';
-import { Construct } from 'constructs';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as eks from 'aws-cdk-lib/aws-eks';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as logs from 'aws-cdk-lib/aws-logs';
-import { KubectlV28Layer } from '@aws-cdk/lambda-layer-kubectl-v28';
+import { Construct } from 'constructs';
 
 export interface TapStackProps extends cdk.StackProps {
   environmentSuffix: string;
@@ -53,7 +53,7 @@ export class TapStack extends cdk.Stack {
 
     // CloudWatch Log Group for EKS control plane logs
     new logs.LogGroup(this, 'EksClusterLogGroup', {
-      logGroupName: `/aws/eks/payment-cluster-${environmentSuffix}/cluster`,
+      logGroupName: `/aws/eks/payment-cluster-v1-${environmentSuffix}/cluster`,
       retention: logs.RetentionDays.ONE_WEEK,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });

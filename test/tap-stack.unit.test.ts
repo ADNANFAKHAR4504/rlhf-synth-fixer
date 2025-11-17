@@ -265,7 +265,7 @@ describe('TapStack', () => {
   describe('CloudWatch Logs Configuration', () => {
     test('should create log group with correct name including environmentSuffix', () => {
       template.hasResourceProperties('AWS::Logs::LogGroup', {
-        LogGroupName: `/aws/eks/payment-cluster-${environmentSuffix}/cluster`,
+        LogGroupName: `/aws/eks/payment-cluster-v1-${environmentSuffix}/cluster`,
         RetentionInDays: 7,
       });
     });
