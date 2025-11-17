@@ -1,3 +1,10 @@
+# EKS Cluster Infrastructure - CloudFormation Template
+
+This CloudFormation template creates a production-ready EKS cluster infrastructure with VPC, security groups, IAM roles, KMS encryption, and CloudWatch logging.
+
+## File: lib/TapStack.yml
+
+```yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'EKS Cluster infrastructure for microservices hosting with VPC, security, and monitoring'
 
@@ -334,7 +341,6 @@ Resources:
   # EKS Node Group
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
-    DependsOn: EKSCluster
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-${EnvironmentSuffix}'
       ClusterName: !Ref EKSCluster
@@ -425,3 +431,73 @@ Outputs:
     Value: !Ref EKSClusterLogGroup
     Export:
       Name: !Sub '${AWS::StackName}-LogGroup'
+```
+
+## Deployment Instructions
+
+To deploy this EKS cluster infrastructure:
+
+1. **Prerequisites**:
+   - AWS CLI configured with appropriate credentials
+   - Permissions to create VPC, EKS, IAM, KMS resources
+   - Target region configured
+
+2. **Deploy the stack**:
+   ```bash
+   aws cloudformation create-stack \
+     --stack-name TapStackdev \
+     --template-body file://lib/TapStack.yml \
+     --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
+     --capabilities CAPABILITY_NAMED_IAM \
+     --region us-east-1
+   ```
+
+3. **Monitor deployment**:
+   ```bash
+   aws cloudformation describe-stacks \
+     --stack-name TapStackdev \
+     --region us-east-1 \
+     --query 'Stacks[0].StackStatus'
+   ```
+
+4. **Configure kubectl** (after deployment completes):
+   ```bash
+   aws eks update-kubeconfig \
+     --name eks-cluster-dev \
+     --region us-east-1
+   ```
+
+5. **Verify cluster**:
+   ```bash
+   kubectl get nodes
+   kubectl get pods --all-namespaces
+   ```
+
+## Key Features
+
+- **High Availability**: Multi-AZ deployment with nodes in private subnets across 2 availability zones
+- **Security**: KMS encryption for secrets, IAM roles with least privilege, security groups for network isolation
+- **Monitoring**: CloudWatch logging enabled for all control plane components
+- **Scalability**: Auto-scaling node group with configurable min/max/desired capacity
+- **Network Isolation**: VPC with public and private subnets, NAT Gateway for private subnet egress
+- **Production Ready**: Follows AWS best practices for EKS deployment
+
+## Resource Naming
+
+All resources include the environment suffix for uniqueness and easy identification:
+- VPC: `eks-vpc-{suffix}`
+- Cluster: `eks-cluster-{suffix}`
+- Node Group: `eks-nodegroup-{suffix}`
+- IAM Roles: `eks-cluster-role-{suffix}`, `eks-node-role-{suffix}`
+- KMS Key: `alias/eks-{suffix}`
+
+## Clean Up
+
+To delete all resources:
+```bash
+aws cloudformation delete-stack \
+  --stack-name TapStackdev \
+  --region us-east-1
+```
+
+Note: All resources are configured without Retain policies, so the entire infrastructure can be cleanly removed.
