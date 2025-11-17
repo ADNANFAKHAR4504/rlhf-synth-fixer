@@ -8,5 +8,6 @@
  * environments (development, staging, production, etc.).
  */
 
-// Import the main Pulumi program
-import '../lib/tap-stack';
+// Re-export everything from the main Pulumi program to ensure outputs are visible
+export * from '../lib/index';
+
