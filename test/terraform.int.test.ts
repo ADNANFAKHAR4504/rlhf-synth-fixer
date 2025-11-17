@@ -10,6 +10,318 @@ import {
   DescribeServicesCommand,
   ECSClient,
 } from "@aws-sdk/client-ecs";
+import {
+  DescribeTargetHealthCommand,
+  ElasticLoadBalancingV2Client,
+} from "@aws-sdk/client-elastic-load-balancing-v2";
+import {
+  DescribeDBInstancesCommand,
+  RDSClient,
+} from "@aws-sdk/client-rds";
+import {
+  DescribeSecretCommand,
+  SecretsManagerClient,
+} from "@aws-sdk/client-secrets-manager";
+import fs from "fs";
+import fetch from "node-fetch";
+import path from "path";
+
+jest.setTimeout(60000);
+
+type FlatOutputs = Record<string, unknown>;
+
+const OUTPUT_FILE = path.resolve(
+  __dirname,
+  "../cfn-outputs/all-outputs.json"
+);
+const MOCK_OUTPUT_ENV = "MOCK_TF_OUTPUTS";
+const MOCK_OUTPUT_FILE_ENV = "MOCK_TF_OUTPUTS_PATH";
+const isCI = process.env.CI === "true";
+
+function loadOutputs(): { data: FlatOutputs; source: string } {
+  if (fs.existsSync(OUTPUT_FILE)) {
+    return {
+      data: JSON.parse(fs.readFileSync(OUTPUT_FILE, "utf8")),
+      source: OUTPUT_FILE,
+    };
+  }
+
+  if (process.env[MOCK_OUTPUT_ENV]) {
+    if (isCI) {
+      throw new Error(
+        "MOCK_TF_OUTPUTS is not permitted in CI. Provide real Terraform outputs."
+      );
+    }
+    return {
+      data: JSON.parse(process.env[MOCK_OUTPUT_ENV] as string),
+      source: MOCK_OUTPUT_ENV,
+    };
+  }
+
+  if (process.env[MOCK_OUTPUT_FILE_ENV]) {
+    const mockPath = process.env[MOCK_OUTPUT_FILE_ENV] as string;
+    if (isCI) {
+      throw new Error(
+        "MOCK_TF_OUTPUTS_PATH is not permitted in CI. Provide real Terraform outputs."
+      );
+    }
+    return {
+      data: JSON.parse(fs.readFileSync(mockPath, "utf8")),
+      source: mockPath,
+    };
+  }
+
+  throw new Error(
+    `Terraform outputs not found at ${OUTPUT_FILE}. Provide real outputs or configure ${MOCK_OUTPUT_ENV} / ${MOCK_OUTPUT_FILE_ENV} for local testing.`
+  );
+}
+
+const outputsInfo = loadOutputs();
+const outputs = outputsInfo.data;
+
+const requireString = (key: string, optional = false): string => {
+  const raw = outputs[key];
+
+  const normalize = (value: unknown): string | null => {
+    if (typeof value === "string") {
+      return value;
+    }
+    if (value && typeof value === "object" && "value" in value) {
+      return normalize((value as Record<string, unknown>).value);
+    }
+    if (Array.isArray(value)) {
+      return JSON.stringify(value);
+    }
+    return null;
+  };
+
+  const normalized = normalize(raw);
+  if (normalized === null || normalized === "") {
+    if (optional) {
+      return "";
+    }
+    throw new Error(
+      `Required output "${key}" is missing or empty: ${JSON.stringify(raw)}`
+    );
+  }
+  return normalized;
+};
+
+const requireList = (key: string, optional = false): string[] => {
+  const raw = outputs[key];
+
+  if (Array.isArray(raw)) {
+    return raw as string[];
+  }
+
+  const normalized = requireString(key, optional);
+  if (!normalized) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(normalized);
+    if (Array.isArray(parsed)) {
+      return parsed as string[];
+    }
+  } catch {
+    // fall through to comma-separated parsing
+  }
+
+  return normalized.split(",").map((item) => item.trim());
+};
+
+const sleep = (ms: number) =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+async function probeAlbEndpoint(host: string): Promise<void> {
+  const protocols = ["https", "http"];
+  const paths = ["/health", "/"];
+  const maxAttempts = 5;
+  const backoffMs = 2500;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    for (const pathOption of paths) {
+      for (const protocol of protocols) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 5000);
+        try {
+          const response = await fetch(`${protocol}://${host}${pathOption}`, {
+            signal: controller.signal,
+          });
+          clearTimeout(timer);
+          if (response.status < 400) {
+            return;
+          }
+          console.warn(
+            `Attempt ${attempt + 1}: ${protocol.toUpperCase()} ${pathOption} returned ${response.status}`
+          );
+        } catch (error) {
+          console.warn(
+            `Attempt ${attempt + 1}: ${protocol.toUpperCase()} ${pathOption} failed - ${String(
+              error
+            )}`
+          );
+        } finally {
+          clearTimeout(timer);
+        }
+      }
+    }
+    await sleep(backoffMs * (attempt + 1));
+  }
+
+  throw new Error(
+    `Application endpoint at ${host} did not return a successful status after ${maxAttempts} attempts.`
+  );
+}
+
+describe("Terraform infrastructure integration", () => {
+  const region =
+    requireString("aws_region", true) ||
+    process.env.AWS_REGION ||
+    process.env.AWS_DEFAULT_REGION ||
+    "us-east-1";
+
+  describe("End-to-end workload validation", () => {
+    it("serves customer traffic via the public ALB and keeps targets healthy", async () => {
+      const albHost = requireString("alb_dns_name");
+      const targetGroupArn = requireString("alb_target_group_arn");
+
+      await probeAlbEndpoint(albHost);
+
+      const elbv2 = new ElasticLoadBalancingV2Client({ region });
+      const result = await elbv2.send(
+        new DescribeTargetHealthCommand({
+          TargetGroupArn: targetGroupArn,
+        })
+      );
+      const descriptions = result.TargetHealthDescriptions ?? [];
+      expect(descriptions.length).toBeGreaterThan(0);
+      descriptions.forEach((description) => {
+        expect(description.TargetHealth?.State).toBe("healthy");
+      });
+    });
+
+    it("confirms compute, registry, logging, and database planes are healthy", async () => {
+      const ecs = new ECSClient({ region });
+      const ecr = new ECRClient({ region });
+      const logs = new CloudWatchLogsClient({ region });
+      const rds = new RDSClient({ region });
+      const secrets = new SecretsManagerClient({ region });
+
+      const ecsResponse = await ecs.send(
+        new DescribeServicesCommand({
+          cluster: requireString("ecs_cluster_name"),
+          services: [requireString("ecs_service_name")],
+        })
+      );
+      const service = ecsResponse.services?.[0];
+      expect(service).toBeDefined();
+      expect(service?.status).toBe("ACTIVE");
+      expect(service?.desiredCount ?? 0).toBeGreaterThanOrEqual(2);
+      expect(service?.runningCount ?? 0).toBeGreaterThanOrEqual(2);
+
+      const repositoryName = requireString("ecr_repository_url")
+        .split("/")
+        .slice(-1)[0];
+      const ecrResponse = await ecr.send(
+        new DescribeRepositoriesCommand({
+          repositoryNames: [repositoryName],
+        })
+      );
+      expect(ecrResponse.repositories?.[0]?.repositoryUri).toBe(
+        requireString("ecr_repository_url")
+      );
+
+      const logResponse = await logs.send(
+        new DescribeLogGroupsCommand({
+          logGroupNamePrefix: requireString("cloudwatch_log_group"),
+          limit: 1,
+        })
+      );
+      const logGroup = logResponse.logGroups?.[0];
+      expect(logGroup?.logGroupName).toBe(requireString("cloudwatch_log_group"));
+      expect(logGroup?.retentionInDays).toBe(7);
+
+      const dbResponse = await rds.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: requireString("rds_identifier"),
+        })
+      );
+      const dbInstance = dbResponse.DBInstances?.[0];
+      expect(dbInstance).toBeDefined();
+      expect(dbInstance?.DBInstanceStatus).toBe("available");
+      expect(dbInstance?.MultiAZ).toBe(true);
+
+      const secret = await secrets.send(
+        new DescribeSecretCommand({
+          SecretId: requireString("rds_master_secret_arn"),
+        })
+      );
+      expect(secret.ARN).toBe(requireString("rds_master_secret_arn"));
+      expect(secret.Name).toBeDefined();
+      expect(secret.CreatedDate).toBeInstanceOf(Date);
+    });
+
+    it("validates networking and IAM outputs", () => {
+      const vpcId = requireString("vpc_id");
+      expect(vpcId).toMatch(/^vpc-/);
+
+      const privateSubnets = requireList("private_subnet_ids");
+      const publicSubnets = requireList("public_subnet_ids");
+
+      expect(privateSubnets.length).toBe(3);
+      expect(publicSubnets.length).toBe(3);
+      privateSubnets.forEach((subnet) => expect(subnet).toMatch(/^subnet-/));
+      publicSubnets.forEach((subnet) => expect(subnet).toMatch(/^subnet-/));
+
+      expect(requireString("task_execution_role_arn")).toMatch(/^arn:aws:iam::/);
+      expect(requireString("task_role_arn")).toMatch(/^arn:aws:iam::/);
+    });
+
+    it("confirms observability and DNS wiring", () => {
+      expect(requireString("cloudwatch_log_group")).toMatch(/^\/ecs\//);
+
+      const route53Fqdn = requireString("route53_record_fqdn", true);
+      if (route53Fqdn) {
+        expect(route53Fqdn).toContain(requireString("alb_dns_name"));
+      }
+    });
+  });
+
+  describe("Output compatibility checks", () => {
+    it("ensures critical outputs exist regardless of Terraform structure", () => {
+      const keys = [
+        "alb_dns_name",
+        "alb_target_group_arn",
+        "ecs_cluster_name",
+        "ecs_service_name",
+        "cloudwatch_log_group",
+        "rds_identifier",
+        "rds_master_secret_arn",
+      ];
+
+      keys.forEach((key) => {
+        expect(() => requireString(key)).not.toThrow();
+      });
+
+      expect(() => requireList("private_subnet_ids")).not.toThrow();
+      expect(() => requireList("public_subnet_ids")).not.toThrow();
+    });
+  });
+});
+import {
+  CloudWatchLogsClient,
+  DescribeLogGroupsCommand,
+} from "@aws-sdk/client-cloudwatch-logs";
+import {
+  DescribeRepositoriesCommand,
+  ECRClient,
+} from "@aws-sdk/client-ecr";
+import {
+  DescribeServicesCommand,
+  ECSClient,
+} from "@aws-sdk/client-ecs";
 import { DescribeTargetHealthCommand, ElasticLoadBalancingV2Client } from "@aws-sdk/client-elastic-load-balancing-v2";
 import {
   DescribeDBInstancesCommand,
