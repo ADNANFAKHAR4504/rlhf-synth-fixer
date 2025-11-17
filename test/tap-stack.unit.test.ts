@@ -96,17 +96,17 @@ describe('Webhook Processing Stack', () => {
       });
     });
 
-    test('should have Lambda functions with inline code', () => {
+    test('should have Lambda functions with container approach', () => {
       // Webhook validator function
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `webhook-validator-${environmentSuffix}`,
-        Runtime: 'nodejs18.x',
+        PackageType: 'Image',
       });
 
       // Webhook processor function
       template.hasResourceProperties('AWS::Lambda::Function', {
         FunctionName: `webhook-processor-${environmentSuffix}`,
-        Runtime: 'nodejs18.x',
+        PackageType: 'Image',
       });
     });
 
@@ -183,29 +183,29 @@ describe('Webhook Processing Stack', () => {
   });
 
   describe('Lambda Function Validation', () => {
-    test('should have webhook validator function with inline code', () => {
+    test('should have webhook validator function with container approach', () => {
       const lambdaFunctions = template.findResources('AWS::Lambda::Function');
       const validatorFunction = Object.values(lambdaFunctions).find((fn: any) =>
         fn.Properties.FunctionName.includes('webhook-validator')
       ) as any;
 
       expect(validatorFunction).toBeDefined();
-      expect(validatorFunction.Properties.Runtime).toBe('nodejs18.x');
-      expect(validatorFunction.Properties.Handler).toBe('index.handler');
+      expect(validatorFunction.Properties.PackageType).toBe('Image');
+      expect(validatorFunction.Properties.ImageConfig.Command).toEqual(['app.handler']);
       expect(validatorFunction.Properties.LoggingConfig).toHaveProperty(
         'LogGroup'
       );
     });
 
-    test('should have webhook processor function with inline code', () => {
+    test('should have webhook processor function with container approach', () => {
       const lambdaFunctions = template.findResources('AWS::Lambda::Function');
       const processorFunction = Object.values(lambdaFunctions).find((fn: any) =>
         fn.Properties.FunctionName.includes('webhook-processor')
       ) as any;
 
       expect(processorFunction).toBeDefined();
-      expect(processorFunction.Properties.Runtime).toBe('nodejs18.x');
-      expect(processorFunction.Properties.Handler).toBe('index.handler');
+      expect(processorFunction.Properties.PackageType).toBe('Image');
+      expect(processorFunction.Properties.ImageConfig.Command).toEqual(['processor.handler']);
       expect(processorFunction.Properties.LoggingConfig).toHaveProperty(
         'LogGroup'
       );

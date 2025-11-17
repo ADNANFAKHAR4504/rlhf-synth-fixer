@@ -146,7 +146,9 @@ export class TapStack extends cdk.Stack {
           type: cdk.aws_dynamodb.AttributeType.STRING,
         },
         billingMode: cdk.aws_dynamodb.BillingMode.PAY_PER_REQUEST,
-        pointInTimeRecovery: true,
+        pointInTimeRecoverySpecification: {
+          pointInTimeRecoveryEnabled: true,
+        },
         encryption: cdk.aws_dynamodb.TableEncryption.AWS_MANAGED,
         removalPolicy: cdk.RemovalPolicy.RETAIN,
       }
@@ -343,45 +345,18 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Webhook validator function using inline code
+    // Webhook validator function using container approach
     const validatorFunction = new cdk.aws_lambda.Function(
       this,
       `WebhookValidator${environmentSuffix}`,
       {
         functionName: `webhook-validator-${environmentSuffix}`,
-        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        runtime: cdk.aws_lambda.Runtime.FROM_IMAGE,
         architecture: cdk.aws_lambda.Architecture.ARM_64,
-        handler: 'index.handler',
-        code: cdk.aws_lambda.Code.fromInline(`
-const { SQSClient, SendMessageCommand } = require('@aws-sdk/client-sqs');
-const sqs = new SQSClient({});
-
-exports.handler = async (event) => {
-  console.log('Webhook received:', JSON.stringify(event));
-  
-  const body = JSON.parse(event.body || '{}');
-  const provider = body.provider || 'stripe';
-  
-  const queueUrls = {
-    stripe: process.env.STRIPE_QUEUE_URL,
-    paypal: process.env.PAYPAL_QUEUE_URL,
-    square: process.env.SQUARE_QUEUE_URL
-  };
-  
-  const queueUrl = queueUrls[provider];
-  if (!queueUrl) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'Invalid provider' }) };
-  }
-  
-  await sqs.send(new SendMessageCommand({
-    QueueUrl: queueUrl,
-    MessageBody: JSON.stringify(body),
-    MessageGroupId: provider
-  }));
-  
-  return { statusCode: 200, body: JSON.stringify({ status: 'queued' }) };
-};
-        `),
+        handler: cdk.aws_lambda.Handler.FROM_IMAGE,
+        code: cdk.aws_lambda.Code.fromAssetImage('./lib', {
+          cmd: ['app.handler'],
+        }),
         timeout: cdk.Duration.seconds(30),
         memorySize: 512,
         role: validatorRole,
@@ -395,51 +370,18 @@ exports.handler = async (event) => {
       }
     );
 
-    // Webhook processor function using inline code
+    // Webhook processor function using container approach
     const processorFunction = new cdk.aws_lambda.Function(
       this,
       `WebhookProcessor${environmentSuffix}`,
       {
         functionName: `webhook-processor-${environmentSuffix}`,
-        runtime: cdk.aws_lambda.Runtime.NODEJS_18_X,
+        runtime: cdk.aws_lambda.Runtime.FROM_IMAGE,
         architecture: cdk.aws_lambda.Architecture.ARM_64,
-        handler: 'index.handler',
-        code: cdk.aws_lambda.Code.fromInline(`
-const { DynamoDBClient, PutItemCommand } = require('@aws-sdk/client-dynamodb');
-const { EventBridgeClient, PutEventsCommand } = require('@aws-sdk/client-eventbridge');
-const dynamodb = new DynamoDBClient({});
-const eventbridge = new EventBridgeClient({});
-
-exports.handler = async (event) => {
-  console.log('Processing webhook:', JSON.stringify(event));
-  
-  for (const record of event.Records) {
-    const body = JSON.parse(record.body);
-    
-    await dynamodb.send(new PutItemCommand({
-      TableName: process.env.TABLE_NAME,
-      Item: {
-        webhookId: { S: body.webhookId || Date.now().toString() },
-        timestamp: { N: Date.now().toString() },
-        provider: { S: body.provider || 'unknown' },
-        data: { S: JSON.stringify(body) },
-        status: { S: 'processed' }
-      }
-    }));
-    
-    await eventbridge.send(new PutEventsCommand({
-      Entries: [{
-        Source: 'webhook.processor',
-        DetailType: 'Webhook Processed',
-        Detail: JSON.stringify(body),
-        EventBusName: process.env.EVENT_BUS_NAME
-      }]
-    }));
-  }
-  
-  return { statusCode: 200, body: 'Processed' };
-};
-        `),
+        handler: cdk.aws_lambda.Handler.FROM_IMAGE,
+        code: cdk.aws_lambda.Code.fromAssetImage('./lib', {
+          cmd: ['processor.handler'],
+        }),
         timeout: cdk.Duration.minutes(5),
         memorySize: 1024,
         role: processorRole,
