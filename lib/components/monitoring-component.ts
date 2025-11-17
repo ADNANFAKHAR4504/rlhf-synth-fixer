@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface MonitoringComponentArgs {
   environmentSuffix: string;
@@ -26,7 +26,7 @@ export class MonitoringComponent extends pulumi.ComponentResource {
     this.snsTopic = new aws.sns.Topic(
       `alerts-topic-${args.environmentSuffix}`,
       {
-        name: `alerts-topic-${args.environmentSuffix}`,
+        name: `alerts-topic-${args.environmentSuffix}-pw`,
         displayName: `Alerts for ${args.environmentSuffix} environment`,
         tags: {
           Name: `alerts-topic-${args.environmentSuffix}`,

@@ -37,4 +37,3 @@ export const rdsClusterReaderEndpoint = defaultStack?.rdsClusterReaderEndpoint;
 export const s3BucketName = defaultStack?.s3BucketName;
 export const dashboardName = defaultStack?.dashboardName;
 export const snsTopicArn = defaultStack?.snsTopicArn;
-

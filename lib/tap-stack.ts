@@ -8,7 +8,11 @@ import { RdsComponent } from './components/rds-component';
 import { S3Component } from './components/s3-component';
 import { SecurityComponent } from './components/security-component';
 import { VpcComponent } from './components/vpc-component';
-import { EnvironmentConfig, getEnvironmentConfig, getEnvironmentSuffix } from './config';
+import {
+  EnvironmentConfig,
+  getEnvironmentConfig,
+  getEnvironmentSuffix,
+} from './config';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
@@ -41,7 +45,11 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly dashboardName: pulumi.Output<string>;
   public readonly snsTopicArn: pulumi.Output<string>;
 
-  constructor(name: string, args?: TapStackArgs, opts?: pulumi.ComponentResourceOptions) {
+  constructor(
+    name: string,
+    args?: TapStackArgs,
+    opts?: pulumi.ComponentResourceOptions
+  ) {
     super('custom:stack:TapStack', name, {}, opts);
 
     // Get environment configuration
@@ -50,9 +58,13 @@ export class TapStack extends pulumi.ComponentResource {
     const region = args?.awsRegion || envConfig.region;
 
     // Configure AWS Provider for the appropriate region
-    this.provider = new aws.Provider('aws-provider', {
-      region: region,
-    }, { parent: this });
+    this.provider = new aws.Provider(
+      'aws-provider',
+      {
+        region: region,
+      },
+      { parent: this }
+    );
 
     // Create VPC with subnets
     this.vpcComponent = new VpcComponent(
@@ -116,7 +128,9 @@ export class TapStack extends pulumi.ComponentResource {
         dbInstanceCount: envConfig.dbInstanceCount,
         backupRetentionDays: envConfig.backupRetentionDays,
         instanceClass:
-          envConfig.instanceType === 't3.medium' ? 'db.t3.medium' : 'db.r5.large',
+          envConfig.instanceType === 't3.medium'
+            ? 'db.t3.medium'
+            : 'db.r5.large',
       },
       { provider: this.provider, parent: this }
     );

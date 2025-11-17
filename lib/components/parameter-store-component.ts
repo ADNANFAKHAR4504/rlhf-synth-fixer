@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface ParameterStoreComponentArgs {
   environmentSuffix: string;
@@ -23,7 +23,7 @@ export class ParameterStoreComponent extends pulumi.ComponentResource {
       const param = new aws.ssm.Parameter(
         `param-${key}-${args.environmentSuffix}`,
         {
-          name: `/trading-platform/${args.environmentSuffix}/${key}`,
+          name: `/trading-platform/${args.environmentSuffix}/${key}-pw`,
           type: 'String',
           value: value,
           description: `${key} parameter for ${args.environmentSuffix} environment`,

@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface EcsComponentArgs {
   environmentSuffix: string;
@@ -144,7 +144,7 @@ export class EcsComponent extends pulumi.ComponentResource {
     const logGroup = new aws.cloudwatch.LogGroup(
       `ecs-log-group-${args.environmentSuffix}`,
       {
-        name: `/ecs/trading-platform-${args.environmentSuffix}`,
+        name: `/ecs/trading-platform-${args.environmentSuffix}-pw`,
         retentionInDays: 7,
         tags: {
           Name: `ecs-log-group-${args.environmentSuffix}`,
