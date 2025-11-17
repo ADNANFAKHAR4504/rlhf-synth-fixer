@@ -42,24 +42,28 @@ class TapStack(TerraformStack):
         )
 
         # AWS Provider with cross-account role support
-        assume_role_config = None
-        if config.get("account_id"):
-            assume_role_config = [{
-                "role_arn": f"arn:aws:iam::{config['account_id']}:role/TerraformDeploymentRole"
-            }]
-
-        AwsProvider(
-            self,
-            "aws",
-            region=config["region"],
-            assume_role=assume_role_config,
-            default_tags=[{
+        provider_kwargs = {
+            "region": config["region"],
+            "default_tags": [{
                 "tags": {
                     "Environment": config["environment"],
                     "ManagedBy": "CDKTF",
                     "Project": "MultiEnvironmentInfra"
                 }
             }]
+        }
+
+        # Only add assume_role if account_id is present and valid
+        account_id = config.get("account_id")
+        if account_id and account_id.strip():
+            provider_kwargs["assume_role"] = [{
+                "role_arn": f"arn:aws:iam::{account_id}:role/TerraformDeploymentRole"
+            }]
+
+        AwsProvider(
+            self,
+            "aws",
+            **provider_kwargs
         )
 
         # State Backend Module
