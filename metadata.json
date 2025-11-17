@@ -4,11 +4,11 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "x08q1p",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T12:45:14+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Application Deployment"
+    "Web Application Deployment"
   ],
   "aws_services": [
     "VPC",
