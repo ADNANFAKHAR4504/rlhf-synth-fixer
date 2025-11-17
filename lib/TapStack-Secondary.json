@@ -1,0 +1,558 @@
+{
+    "AWSTemplateFormatVersion": "2010-09-09",
+    "Description": "Aurora Global Database - Secondary Region (us-west-2) - Disaster Recovery Cluster",
+    "Metadata": {
+        "AWS::CloudFormation::Interface": {
+            "ParameterGroups": [
+                {
+                    "Label": {
+                        "default": "Environment Configuration"
+                    },
+                    "Parameters": [
+                        "EnvironmentSuffix"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Global Database Configuration"
+                    },
+                    "Parameters": [
+                        "GlobalClusterIdentifier"
+                    ]
+                },
+                {
+                    "Label": {
+                        "default": "Network Configuration"
+                    },
+                    "Parameters": [
+                        "VpcId",
+                        "PrivateSubnetIds"
+                    ]
+                }
+            ]
+        }
+    },
+    "Parameters": {
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "dev",
+            "Description": "Environment suffix for resource naming (must match primary stack)",
+            "AllowedPattern": "^[a-zA-Z0-9]+$",
+            "ConstraintDescription": "Must contain only alphanumeric characters"
+        },
+        "GlobalClusterIdentifier": {
+            "Type": "String",
+            "Description": "Global cluster identifier from primary stack",
+            "Default": "aurora-global-cluster-dev"
+        },
+        "VpcId": {
+            "Type": "AWS::EC2::VPC::Id",
+            "Description": "VPC ID for Aurora cluster deployment in us-west-2"
+        },
+        "PrivateSubnetIds": {
+            "Type": "List<AWS::EC2::Subnet::Id>",
+            "Description": "List of private subnet IDs across 3 AZs for Aurora deployment in us-west-2"
+        }
+    },
+    "Resources": {
+        "SecondaryAuroraKmsKey": {
+            "Type": "AWS::KMS::Key",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "Description": {
+                    "Fn::Sub": "KMS key for Aurora Global Database encryption - Secondary Region - ${EnvironmentSuffix}"
+                },
+                "KeyPolicy": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Sid": "Enable IAM User Permissions",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": {
+                                    "Fn::Sub": "arn:aws:iam::${AWS::AccountId}:root"
+                                }
+                            },
+                            "Action": "kms:*",
+                            "Resource": "*"
+                        },
+                        {
+                            "Sid": "Allow RDS to use the key",
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "rds.amazonaws.com"
+                            },
+                            "Action": [
+                                "kms:Decrypt",
+                                "kms:GenerateDataKey",
+                                "kms:CreateGrant"
+                            ],
+                            "Resource": "*",
+                            "Condition": {
+                                "StringEquals": {
+                                    "kms:ViaService": {
+                                        "Fn::Sub": "rds.${AWS::Region}.amazonaws.com"
+                                    }
+                                }
+                            }
+                        }
+                    ]
+                }
+            }
+        },
+        "SecondaryAuroraKmsKeyAlias": {
+            "Type": "AWS::KMS::Alias",
+            "Properties": {
+                "AliasName": {
+                    "Fn::Sub": "alias/aurora-global-secondary-${EnvironmentSuffix}"
+                },
+                "TargetKeyId": {
+                    "Ref": "SecondaryAuroraKmsKey"
+                }
+            }
+        },
+        "SecondaryDBSubnetGroup": {
+            "Type": "AWS::RDS::DBSubnetGroup",
+            "Properties": {
+                "DBSubnetGroupName": {
+                    "Fn::Sub": "aurora-global-subnet-secondary-${EnvironmentSuffix}"
+                },
+                "DBSubnetGroupDescription": {
+                    "Fn::Sub": "Subnet group for Aurora Global Database Secondary - ${EnvironmentSuffix}"
+                },
+                "SubnetIds": {
+                    "Ref": "PrivateSubnetIds"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-global-subnet-secondary-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecondaryAuroraSecurityGroup": {
+            "Type": "AWS::EC2::SecurityGroup",
+            "Properties": {
+                "GroupName": {
+                    "Fn::Sub": "aurora-global-sg-secondary-${EnvironmentSuffix}"
+                },
+                "GroupDescription": {
+                    "Fn::Sub": "Security group for Aurora Global Database Secondary - ${EnvironmentSuffix}"
+                },
+                "VpcId": {
+                    "Ref": "VpcId"
+                },
+                "SecurityGroupIngress": [
+                    {
+                        "IpProtocol": "tcp",
+                        "FromPort": 3306,
+                        "ToPort": 3306,
+                        "CidrIp": "10.0.0.0/8",
+                        "Description": "Allow MySQL traffic from VPC"
+                    }
+                ],
+                "SecurityGroupEgress": [
+                    {
+                        "IpProtocol": -1,
+                        "CidrIp": "0.0.0.0/0",
+                        "Description": "Allow all outbound traffic"
+                    }
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-global-sg-secondary-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecondaryEnhancedMonitoringRole": {
+            "Type": "AWS::IAM::Role",
+            "Properties": {
+                "RoleName": {
+                    "Fn::Sub": "aurora-monitoring-role-secondary-${EnvironmentSuffix}"
+                },
+                "AssumeRolePolicyDocument": {
+                    "Version": "2012-10-17",
+                    "Statement": [
+                        {
+                            "Effect": "Allow",
+                            "Principal": {
+                                "Service": "monitoring.rds.amazonaws.com"
+                            },
+                            "Action": "sts:AssumeRole"
+                        }
+                    ]
+                },
+                "ManagedPolicyArns": [
+                    "arn:aws:iam::aws:policy/service-role/AmazonRDSEnhancedMonitoringRole"
+                ],
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-monitoring-role-secondary-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
+        "SecondaryDBCluster": {
+            "Type": "AWS::RDS::DBCluster",
+            "DeletionPolicy": "Delete",
+            "UpdateReplacePolicy": "Delete",
+            "Properties": {
+                "DBClusterIdentifier": {
+                    "Fn::Sub": "aurora-secondary-cluster-${EnvironmentSuffix}"
+                },
+                "Engine": "aurora-mysql",
+                "EngineVersion": "8.0.mysql_aurora.3.04.0",
+                "GlobalClusterIdentifier": {
+                    "Ref": "GlobalClusterIdentifier"
+                },
+                "DBSubnetGroupName": {
+                    "Ref": "SecondaryDBSubnetGroup"
+                },
+                "VpcSecurityGroupIds": [
+                    {
+                        "Ref": "SecondaryAuroraSecurityGroup"
+                    }
+                ],
+                "KmsKeyId": {
+                    "Fn::GetAtt": [
+                        "SecondaryAuroraKmsKey",
+                        "Arn"
+                    ]
+                },
+                "StorageEncrypted": true,
+                "EnableCloudwatchLogsExports": [
+                    "error",
+                    "general",
+                    "slowquery",
+                    "audit"
+                ],
+                "CopyTagsToSnapshot": true,
+                "DeletionProtection": false,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-secondary-cluster-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Role",
+                        "Value": "Secondary"
+                    }
+                ]
+            }
+        },
+        "SecondaryReaderInstance1": {
+            "Type": "AWS::RDS::DBInstance",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "aurora-secondary-reader1-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "SecondaryDBCluster"
+                },
+                "Engine": "aurora-mysql",
+                "DBInstanceClass": "db.r5.large",
+                "PubliclyAccessible": false,
+                "MonitoringInterval": 10,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "SecondaryEnhancedMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "EnablePerformanceInsights": true,
+                "PerformanceInsightsRetentionPeriod": 7,
+                "PerformanceInsightsKMSKeyId": {
+                    "Fn::GetAtt": [
+                        "SecondaryAuroraKmsKey",
+                        "Arn"
+                    ]
+                },
+                "PromotionTier": 0,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-secondary-reader1-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Role",
+                        "Value": "Reader-Secondary"
+                    }
+                ]
+            }
+        },
+        "SecondaryReaderInstance2": {
+            "Type": "AWS::RDS::DBInstance",
+            "DependsOn": "SecondaryReaderInstance1",
+            "Properties": {
+                "DBInstanceIdentifier": {
+                    "Fn::Sub": "aurora-secondary-reader2-${EnvironmentSuffix}"
+                },
+                "DBClusterIdentifier": {
+                    "Ref": "SecondaryDBCluster"
+                },
+                "Engine": "aurora-mysql",
+                "DBInstanceClass": "db.r5.large",
+                "PubliclyAccessible": false,
+                "MonitoringInterval": 10,
+                "MonitoringRoleArn": {
+                    "Fn::GetAtt": [
+                        "SecondaryEnhancedMonitoringRole",
+                        "Arn"
+                    ]
+                },
+                "EnablePerformanceInsights": true,
+                "PerformanceInsightsRetentionPeriod": 7,
+                "PerformanceInsightsKMSKeyId": {
+                    "Fn::GetAtt": [
+                        "SecondaryAuroraKmsKey",
+                        "Arn"
+                    ]
+                },
+                "PromotionTier": 1,
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-secondary-reader2-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    },
+                    {
+                        "Key": "Role",
+                        "Value": "Reader-Secondary"
+                    }
+                ]
+            }
+        },
+        "SecondaryHighCPUAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "aurora-secondary-high-cpu-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when secondary cluster CPU exceeds 80%",
+                "MetricName": "CPUUtilization",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Average",
+                "Period": 300,
+                "EvaluationPeriods": 2,
+                "Threshold": 80,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBClusterIdentifier",
+                        "Value": {
+                            "Ref": "SecondaryDBCluster"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        },
+        "SecondaryReplicationLagAlarm": {
+            "Type": "AWS::CloudWatch::Alarm",
+            "Properties": {
+                "AlarmName": {
+                    "Fn::Sub": "aurora-secondary-replication-lag-${EnvironmentSuffix}"
+                },
+                "AlarmDescription": "Alarm when secondary cluster replication lag exceeds 1 second",
+                "MetricName": "AuroraGlobalDBReplicationLag",
+                "Namespace": "AWS/RDS",
+                "Statistic": "Maximum",
+                "Period": 60,
+                "EvaluationPeriods": 3,
+                "Threshold": 1000,
+                "ComparisonOperator": "GreaterThanThreshold",
+                "Dimensions": [
+                    {
+                        "Name": "DBClusterIdentifier",
+                        "Value": {
+                            "Ref": "SecondaryDBCluster"
+                        }
+                    }
+                ],
+                "TreatMissingData": "notBreaching"
+            }
+        }
+    },
+    "Outputs": {
+        "SecondaryClusterIdentifier": {
+            "Description": "Secondary Aurora Cluster Identifier (us-west-2)",
+            "Value": {
+                "Ref": "SecondaryDBCluster"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryClusterIdentifier"
+                }
+            }
+        },
+        "SecondaryClusterEndpoint": {
+            "Description": "Secondary cluster endpoint (read-only until promoted)",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecondaryDBCluster",
+                    "Endpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryClusterEndpoint"
+                }
+            }
+        },
+        "SecondaryClusterReaderEndpoint": {
+            "Description": "Secondary cluster reader endpoint",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecondaryDBCluster",
+                    "ReadEndpoint.Address"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryClusterReaderEndpoint"
+                }
+            }
+        },
+        "SecondaryClusterPort": {
+            "Description": "Secondary cluster port",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecondaryDBCluster",
+                    "Endpoint.Port"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryClusterPort"
+                }
+            }
+        },
+        "SecondaryKmsKeyId": {
+            "Description": "KMS Key ID for secondary region encryption",
+            "Value": {
+                "Fn::GetAtt": [
+                    "SecondaryAuroraKmsKey",
+                    "Arn"
+                ]
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryKmsKeyId"
+                }
+            }
+        },
+        "SecondaryReaderInstance1Id": {
+            "Description": "Secondary reader instance 1 identifier",
+            "Value": {
+                "Ref": "SecondaryReaderInstance1"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryReaderInstance1Id"
+                }
+            }
+        },
+        "SecondaryReaderInstance2Id": {
+            "Description": "Secondary reader instance 2 identifier",
+            "Value": {
+                "Ref": "SecondaryReaderInstance2"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondaryReaderInstance2Id"
+                }
+            }
+        },
+        "SecondarySecurityGroupId": {
+            "Description": "Security group ID for secondary Aurora cluster",
+            "Value": {
+                "Ref": "SecondaryAuroraSecurityGroup"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-SecondarySecurityGroupId"
+                }
+            }
+        },
+        "PromotionInstructions": {
+            "Description": "Instructions to promote secondary cluster to primary",
+            "Value": {
+                "Fn::Sub": "PROMOTION INSTRUCTIONS (Secondary to Primary):\n1. Verify primary region is unavailable or experiencing issues\n2. Remove from global cluster: aws rds remove-from-global-cluster --region us-west-2 --db-cluster-identifier aurora-secondary-cluster-${EnvironmentSuffix} --global-cluster-identifier ${GlobalClusterIdentifier}\n3. Secondary cluster automatically becomes standalone with write capability\n4. Update application DNS/connection strings to: ${SecondaryDBCluster.Endpoint.Address}\n5. Verify write operations are functioning\n6. Update Route 53 records if using DNS-based failover\n7. Document promotion time and reason for post-mortem\n"
+            }
+        },
+        "StackName": {
+            "Description": "Name of this CloudFormation stack (Secondary Region)",
+            "Value": {
+                "Ref": "AWS::StackName"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-StackName"
+                }
+            }
+        },
+        "EnvironmentSuffix": {
+            "Description": "Environment suffix used for this deployment",
+            "Value": {
+                "Ref": "EnvironmentSuffix"
+            },
+            "Export": {
+                "Name": {
+                    "Fn::Sub": "${AWS::StackName}-EnvironmentSuffix"
+                }
+            }
+        }
+    }
+}

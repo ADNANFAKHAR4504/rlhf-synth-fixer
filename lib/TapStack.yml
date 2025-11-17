@@ -336,7 +336,7 @@ Resources:
         - general
         - slowquery
         - audit
-      BacktrackWindow: 86400
+      # BacktrackWindow not supported for Global Databases
       CopyTagsToSnapshot: true
       DeletionProtection: false
       Tags:
@@ -595,13 +595,15 @@ Outputs:
       6. After regional recovery, recreate global database and add original primary as secondary
 
   BacktrackInstructions:
-    Description: 'Instructions for using backtrack capability'
+    Description: 'Point-in-time recovery instructions (Backtrack not available for Global Databases)'
     Value: !Sub |
-      BACKTRACK INSTRUCTIONS:
-      1. Identify target timestamp (within last 24 hours): aws rds describe-db-cluster-backtracks --db-cluster-identifier aurora-primary-cluster-${EnvironmentSuffix}
-      2. Execute backtrack: aws rds backtrack-db-cluster --db-cluster-identifier aurora-primary-cluster-${EnvironmentSuffix} --backtrack-to "2024-01-01T12:00:00Z"
-      3. Verify data integrity after backtrack completes
-      4. Note: Backtrack causes brief interruption of database operations
+      POINT-IN-TIME RECOVERY INSTRUCTIONS:
+      Note: Backtrack is not supported for Aurora Global Databases.
+      Alternative recovery options:
+      1. Use point-in-time restore to create a new cluster: aws rds restore-db-cluster-to-point-in-time --source-db-cluster-identifier aurora-primary-cluster-${EnvironmentSuffix} --db-cluster-identifier aurora-restored-${EnvironmentSuffix} --restore-to-time "2024-01-01T12:00:00Z"
+      2. Use automated backups (35-day retention configured)
+      3. For immediate recovery needs, fail over to secondary region (us-west-2)
+      4. Consider implementing binlog-based recovery for finer granularity
 
   MonitoringDashboard:
     Description: 'CloudWatch dashboard URL for monitoring'

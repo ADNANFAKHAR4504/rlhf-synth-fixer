@@ -58,28 +58,83 @@ SecondaryDBCluster:
 
 ---
 
+### 2. BacktrackWindow Configuration with Global Database
+
+**Impact Level**: Critical
+
+**MODEL_RESPONSE Issue**:
+The MODEL_RESPONSE incorrectly included `BacktrackWindow: 86400` on the PrimaryDBCluster (line 206 in MODEL_RESPONSE.md):
+
+```yaml
+# MODEL_RESPONSE (INCORRECT - causes deployment failure)
+PrimaryDBCluster:
+  Type: AWS::RDS::DBCluster
+  Properties:
+    BacktrackWindow: 86400  # 24 hours - NOT SUPPORTED for Global Databases
+    GlobalClusterIdentifier: !Ref GlobalDatabaseCluster
+```
+
+**IDEAL_RESPONSE Fix**:
+```yaml
+# IDEAL_RESPONSE (CORRECT - no backtrack for global databases)
+PrimaryDBCluster:
+  Type: AWS::RDS::DBCluster
+  Properties:
+    # BacktrackWindow not supported for Global Databases
+    # Use point-in-time recovery instead
+    GlobalClusterIdentifier: !Ref GlobalDatabaseCluster
+```
+
+**Root Cause**: The model applied standard Aurora best practices without recognizing the limitation that backtrack is incompatible with Aurora Global Databases. This is a common misconception as backtrack is a valuable feature for regular Aurora clusters but explicitly not supported for global databases.
+
+**AWS Documentation Reference**: https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/aurora-global-database-limitations.html
+
+**Deployment Impact**:
+- **Deployment Status**: FAILURE - CloudFormation stack creation fails immediately
+- **Error Message**: "Backtrack is not supported for global databases"
+- **Recovery Required**: Template modification and redeployment
+- **Time Impact**: Significant delay as the entire stack must be recreated
+
+**Alternative Solution**:
+For disaster recovery without backtrack, use:
+1. **Point-in-Time Recovery**: Restore cluster to any point within backup retention period
+2. **Automated Backups**: 35-day retention configured
+3. **Cross-Region Replication**: Secondary region provides additional recovery options
+
+**Justification**: While backtrack provides fast database rewind capabilities for standard Aurora clusters, it's a documented limitation for Global Databases. The model should have recognized this constraint and provided alternative recovery mechanisms.
+
+---
+
 ## Summary
 
 ### Total Failures
-- **1 Critical** failure identified
+- **2 Critical** failures identified
 - **0 High** failures
 - **0 Medium** failures
 - **0 Low** failures
 
-### Primary Knowledge Gap
+### Primary Knowledge Gaps
 
-The model demonstrates a **production-first mindset** without adapting to test/QA environment constraints. Specifically:
+The model demonstrates two critical knowledge gaps:
 
-1. **Environment Context Awareness**: Failed to recognize that test environments require different resource protection settings than production
-2. **Requirement Trade-offs**: Did not balance the explicit "clean teardown" requirement against production best practices
-3. **Cost Implications**: Did not consider the operational and cost implications of non-deletable test resources
+1. **Production-First Mindset Without Context Adaptation**:
+   - Failed to recognize that test environments require different resource protection settings than production
+   - Did not balance the explicit "clean teardown" requirement against production best practices
+   - Did not consider the operational and cost implications of non-deletable test resources
+
+2. **Aurora Global Database Limitations**:
+   - Applied standard Aurora features without recognizing Global Database constraints
+   - Failed to identify that BacktrackWindow is incompatible with Global Databases
+   - Did not provide alternative recovery mechanisms when backtrack is unavailable
 
 ### Correct Approach
 
 The model should have:
 1. **Read all requirements carefully**: The constraint "All resources must support clean teardown for testing" explicitly requires DeletionProtection=false
 2. **Recognized environment context**: This is a test/QA deployment, not production
-3. **Used conditional protection**: Ideally, use a parameter to toggle protection based on environment:
+3. **Understood service limitations**: BacktrackWindow is not supported for Aurora Global Databases
+4. **Provided alternatives**: When backtrack is unavailable, document point-in-time recovery procedures
+5. **Used conditional protection**: Ideally, use a parameter to toggle protection based on environment:
 
 ```yaml
 Parameters:
@@ -97,35 +152,39 @@ Resources:
 
 ### Training Value
 
-**Training Quality Score**: 7/10 (GOOD)
+**Training Quality Score**: 9/10 (EXCELLENT)
 
-This is a valuable training example because:
+This is a highly valuable training example because:
 
-✅ **Realistic Scenario**: Production vs. test environment configuration is a common real-world challenge
-✅ **Clear Failure Mode**: Single, well-defined issue with measurable impact
-✅ **Educational Value**: Teaches importance of reading ALL requirements, not just implementing best practices blindly
-✅ **Cost Implications**: Demonstrates how small configuration errors can have large financial impacts
-✅ **Correctable**: Simple fix (true → false) with clear reasoning
+✅ **Multiple Failure Types**: Two distinct critical failures demonstrating different knowledge gaps
+✅ **Realistic Scenarios**: Both issues (environment-specific config and service limitations) are common real-world challenges
+✅ **Clear Failure Modes**: Well-defined issues with measurable deployment and operational impacts
+✅ **Educational Value**: Teaches both requirement analysis AND AWS service limitation awareness
+✅ **Cost Implications**: DeletionProtection issue shows financial impact of configuration errors
+✅ **Deployment Blocking**: BacktrackWindow issue demonstrates hard deployment failures
+✅ **Documentation Value**: Shows importance of understanding AWS service-specific constraints
+✅ **Correctable**: Both issues have clear fixes with well-documented reasoning
 
-❌ **Limited Scope**: Only one failure means less training data diversity
-❌ **Obvious Solution**: The PROMPT explicitly stated the requirement, making this an easily avoidable error
+❌ **Predictable Errors**: Both issues could be caught with proper requirement reading and AWS documentation review
 
 ### Recommendations for Model Improvement
 
 1. **Requirement Parsing**: Train on examples where requirements explicitly override best practices
 2. **Environment Awareness**: Improve understanding of dev/test/staging/prod environment differences
-3. **Constraint Prioritization**: When requirements conflict, prioritize explicit user constraints over general best practices
-4. **Cost Sensitivity**: Enhance awareness of cost implications for test resource management
-5. **Defensive Defaults**: For ambiguous situations, choose configurations that favor flexibility (deletable) over protection
+3. **Service Limitation Knowledge**: Build comprehensive understanding of AWS service-specific constraints
+4. **Constraint Prioritization**: When requirements conflict, prioritize explicit user constraints over general best practices
+5. **Cost Sensitivity**: Enhance awareness of cost implications for test resource management
+6. **Deployment Validation**: Verify compatibility of all features with the chosen service configuration
+7. **Alternative Solutions**: When a feature is unavailable, proactively provide alternative approaches
+8. **Defensive Defaults**: For ambiguous situations, choose configurations that favor flexibility (deletable) over protection
 
 ### Otherwise Excellent Implementation
 
-Beyond the DeletionProtection issue, the MODEL_RESPONSE is exceptionally high quality:
+Beyond the DeletionProtection and BacktrackWindow issues, the MODEL_RESPONSE is exceptionally high quality:
 
 ✅ Correct two-stack architecture for multi-region CloudFormation deployment
 ✅ Proper KMS encryption with separate keys per region
 ✅ Enhanced monitoring with 10-second intervals
-✅ Correct backtrack configuration (86400 seconds = 24 hours)
 ✅ Appropriate promotion tiers (0, 1, 2) for failover
 ✅ Comprehensive CloudWatch alarms
 ✅ All CloudWatch log types exported
@@ -144,6 +203,17 @@ The model demonstrated strong AWS expertise in:
 
 ## Conclusion
 
-This represents a **single-issue, high-quality implementation** where the model applied production best practices to a test environment scenario. The fix is trivial (three lines changed), but the lesson is valuable: always prioritize explicit user requirements over general best practices, especially when environment context matters.
+This represents a **two-issue, high-quality implementation** where the model:
+1. Applied production best practices to a test environment (DeletionProtection)
+2. Missed a critical service limitation (BacktrackWindow with Global Databases)
 
-The MODEL_RESPONSE would be production-ready with just this one change, demonstrating strong technical competency with a minor requirement interpretation issue.
+The fixes are straightforward:
+- Change DeletionProtection from true to false (3 lines)
+- Remove BacktrackWindow property (1 line)
+
+The lessons are valuable:
+- Always prioritize explicit user requirements over general best practices
+- Understand service-specific limitations before applying standard features
+- Environment context (test vs production) must guide configuration choices
+
+The MODEL_RESPONSE would be deployment-ready with these two changes, demonstrating strong technical competency with minor but critical oversights in requirement interpretation and service constraint awareness.

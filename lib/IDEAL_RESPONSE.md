@@ -30,7 +30,7 @@ Two-stack deployment approach:
 ✅ **Multi-Region HA**: Primary (us-east-1) + Secondary (us-west-2)  
 ✅ **Encryption**: Customer-managed KMS keys in each region  
 ✅ **Monitoring**: Enhanced monitoring (10s intervals) + CloudWatch alarms  
-✅ **Backups**: 35-day retention + 24-hour backtrack window  
+✅ **Backups**: 35-day retention with point-in-time recovery  
 ✅ **Security**: VPC isolation, private subnets, least-privilege security groups  
 ✅ **Failover Ready**: Promotion tiers configured (0, 1, 2)  
 ✅ **Comprehensive Outputs**: Endpoints, KMS ARNs, failover instructions  
@@ -117,12 +117,14 @@ aws rds remove-from-global-cluster \
   --global-cluster-identifier aurora-global-cluster-${ENV_SUFFIX}
 ```
 
-### Backtrack Database
+### Point-in-Time Recovery
 ```bash
-# Backtrack to specific point in time (within 24 hours)
-aws rds backtrack-db-cluster \
-  --db-cluster-identifier aurora-primary-cluster-${ENV_SUFFIX} \
-  --backtrack-to "2024-11-17T10:00:00Z" \
+# Note: Backtrack is not supported for Aurora Global Databases
+# Use point-in-time recovery instead for disaster recovery
+aws rds restore-db-cluster-to-point-in-time \
+  --source-db-cluster-identifier aurora-primary-cluster-${ENV_SUFFIX} \
+  --db-cluster-identifier aurora-primary-cluster-${ENV_SUFFIX}-restored \
+  --restore-to-time "2024-11-17T10:00:00Z" \
   --region us-east-1
 ```
 
@@ -144,10 +146,10 @@ aws rds backtrack-db-cluster \
 
 ## Disaster Recovery
 
-- **RPO**: < 5 minutes (automated backups + backtrack)
+- **RPO**: < 5 minutes (continuous replication + automated backups)
 - **RTO**: < 15 minutes (automated failover)
 - **Backup Retention**: 35 days
-- **Backtrack Window**: 24 hours
+- **Point-in-Time Recovery**: Available within backup retention period
 
 ## CloudWatch Alarms
 
