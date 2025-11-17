@@ -1162,7 +1162,7 @@ systemctl restart httpd
         aws.iam.RolePolicyAttachment(
             f"config-role-policy-{self.environment_suffix}",
             role=self.config_role.name,
-            policy_arn="arn:aws:iam::aws:policy/service-role/AWS_ConfigServiceRolePolicy",
+            policy_arn="arn:aws:iam::aws:policy/service-role/ConfigRole",
             opts=ResourceOptions(parent=self)
         )
 
@@ -1181,7 +1181,12 @@ systemctl restart httpd
                         "AWS": args['role_arn']
                     },
                     "Action": "s3:GetBucketAcl",
-                    "Resource": args['bucket_arn']
+                    "Resource": args['bucket_arn'],
+                    "Condition": {
+                        "StringEquals": {
+                            "AWS:SourceAccount": args['account_id']
+                        }
+                    }
                 },
                 {
                     "Effect": "Allow",
@@ -1192,7 +1197,8 @@ systemctl restart httpd
                     "Resource": f"{args['bucket_arn']}/AWSLogs/{args['account_id']}/Config/*",
                     "Condition": {
                         "StringEquals": {
-                            "s3:x-amz-acl": "bucket-owner-full-control"
+                            "s3:x-amz-acl": "bucket-owner-full-control",
+                            "AWS:SourceAccount": args['account_id']
                         }
                     }
                 },
@@ -1202,7 +1208,12 @@ systemctl restart httpd
                         "AWS": args['role_arn']
                     },
                     "Action": "s3:ListBucket",
-                    "Resource": args['bucket_arn']
+                    "Resource": args['bucket_arn'],
+                    "Condition": {
+                        "StringEquals": {
+                            "AWS:SourceAccount": args['account_id']
+                        }
+                    }
                 }
             ]
         }))
@@ -1214,12 +1225,12 @@ systemctl restart httpd
             opts=ResourceOptions(parent=self.config_bucket)
         )
 
-        # AWS Config Configuration Recorder
-        self.config_recorder = aws.config.ConfigurationRecorder(
+        # AWS Config Recorder (correct resource name)
+        self.config_recorder = aws.cfg.Recorder(
             f"banking-portal-config-recorder-{self.environment_suffix}",
             name=f"banking-portal-config-recorder-{self.environment_suffix}",
             role_arn=self.config_role.arn,
-            recording_group=aws.config.ConfigurationRecorderRecordingGroupArgs(
+            recording_group=aws.cfg.RecorderRecordingGroupArgs(
                 all_supported=True,
                 include_global_resource_types=True
             ),
@@ -1227,7 +1238,7 @@ systemctl restart httpd
         )
 
         # AWS Config Delivery Channel
-        self.config_delivery_channel = aws.config.DeliveryChannel(
+        self.config_delivery_channel = aws.cfg.DeliveryChannel(
             f"banking-portal-config-delivery-{self.environment_suffix}",
             name=f"banking-portal-config-delivery-{self.environment_suffix}",
             s3_bucket_name=self.config_bucket.bucket,
@@ -1236,10 +1247,10 @@ systemctl restart httpd
 
         # AWS Config Rules for security best practices
         # Rule: Encrypted EBS volumes
-        aws.config.ConfigRule(
+        aws.cfg.Rule(
             f"ebs-encrypted-volumes-{self.environment_suffix}",
             name=f"ebs-encrypted-volumes-{self.environment_suffix}",
-            source=aws.config.ConfigRuleSourceArgs(
+            source=aws.cfg.RuleSourceArgs(
                 owner="AWS",
                 source_identifier="ENCRYPTED_VOLUMES"
             ),
@@ -1247,10 +1258,10 @@ systemctl restart httpd
         )
 
         # Rule: Root access key check
-        aws.config.ConfigRule(
+        aws.cfg.Rule(
             f"root-access-key-check-{self.environment_suffix}",
             name=f"root-access-key-check-{self.environment_suffix}",
-            source=aws.config.ConfigRuleSourceArgs(
+            source=aws.cfg.RuleSourceArgs(
                 owner="AWS",
                 source_identifier="ROOT_ACCESS_KEY_CHECK"
             ),
@@ -1258,10 +1269,10 @@ systemctl restart httpd
         )
 
         # Rule: S3 bucket public read prohibited
-        aws.config.ConfigRule(
+        aws.cfg.Rule(
             f"s3-bucket-public-read-prohibited-{self.environment_suffix}",
             name=f"s3-bucket-public-read-prohibited-{self.environment_suffix}",
-            source=aws.config.ConfigRuleSourceArgs(
+            source=aws.cfg.RuleSourceArgs(
                 owner="AWS",
                 source_identifier="S3_BUCKET_PUBLIC_READ_PROHIBITED"
             ),
@@ -1269,10 +1280,10 @@ systemctl restart httpd
         )
 
         # Rule: S3 bucket public write prohibited
-        aws.config.ConfigRule(
+        aws.cfg.Rule(
             f"s3-bucket-public-write-prohibited-{self.environment_suffix}",
             name=f"s3-bucket-public-write-prohibited-{self.environment_suffix}",
-            source=aws.config.ConfigRuleSourceArgs(
+            source=aws.cfg.RuleSourceArgs(
                 owner="AWS",
                 source_identifier="S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
             ),
