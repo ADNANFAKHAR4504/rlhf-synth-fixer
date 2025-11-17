@@ -6,11 +6,19 @@ from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
 from cdktf_cdktf_provider_aws.s3_bucket_notification import S3BucketNotification
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
+)
 from cdktf_cdktf_provider_aws.iam_role import IamRole, IamRoleInlinePolicy
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex
+from cdktf_cdktf_provider_aws.dynamodb_table import (
+    DynamodbTable, DynamodbTableAttribute, DynamodbTableGlobalSecondaryIndex
+)
 from cdktf_cdktf_provider_aws.sns_topic import SnsTopic
 from cdktf_cdktf_provider_aws.sqs_queue import SqsQueue
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
@@ -83,11 +91,35 @@ class TapStack(TerraformStack):
         # S3 BUCKET FOR FILE STORAGE
         # =================================================================
 
-        uploads_bucket = S3Bucket(
+        # Store as instance attribute for testing
+        self.bucket = S3Bucket(
             self,
             "uploads_bucket",
             bucket=f"transaction-uploads-{environment_suffix}",
             force_destroy=True
+        )
+        uploads_bucket = self.bucket  # Keep local reference for consistency
+
+        # Enable bucket versioning
+        self.bucket_versioning = S3BucketVersioningA(
+            self,
+            "uploads_bucket_versioning",
+            bucket=self.bucket.id,
+            versioning_configuration={"status": "Enabled"}
+        )
+
+        # Enable bucket encryption
+        self.bucket_encryption = S3BucketServerSideEncryptionConfigurationA(
+            self,
+            "uploads_bucket_encryption",
+            bucket=self.bucket.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=(
+                    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                        sse_algorithm="AES256"
+                    )
+                )
+            )]
         )
 
         # =================================================================
