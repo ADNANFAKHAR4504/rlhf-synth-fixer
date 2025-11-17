@@ -14,7 +14,7 @@ locals {
   data_cidr = "10.2.0.0/16"
 
   account_id         = data.aws_caller_identity.current.account_id
-  logging_account_id = "123456789012" # Replace with actual logging account ID
+  logging_account_id = var.logging_account_id
 
   azs_primary   = data.aws_availability_zones.primary.names
   azs_secondary = data.aws_availability_zones.secondary.names
@@ -33,6 +33,10 @@ data "aws_availability_zones" "primary" {
 data "aws_availability_zones" "secondary" {
   provider = aws.secondary
   state    = "available"
+}
+
+data "aws_elb_service_account" "main" {
+  provider = aws.primary
 }
 
 # AWS Secrets Manager for secure password storage
@@ -241,6 +245,7 @@ resource "aws_subnet" "dmz_private" {
 
 # Internet Gateway for DMZ VPC
 resource "aws_internet_gateway" "dmz" {
+  provider = aws.primary
 
   vpc_id = aws_vpc.dmz.id
 
@@ -251,6 +256,7 @@ resource "aws_internet_gateway" "dmz" {
 
 # Elastic IPs for NAT Gateways
 resource "aws_eip" "dmz_nat" {
+  provider = aws.primary
 
   count  = 2
   domain = "vpc"
@@ -276,6 +282,7 @@ resource "aws_nat_gateway" "dmz" {
 
 # Route table for DMZ public subnets
 resource "aws_route_table" "dmz_public" {
+  provider = aws.primary
 
   vpc_id = aws_vpc.dmz.id
 
@@ -291,6 +298,7 @@ resource "aws_route_table" "dmz_public" {
 
 # Route table for DMZ private subnets
 resource "aws_route_table" "dmz_private" {
+  provider = aws.primary
 
   count  = 2
   vpc_id = aws_vpc.dmz.id
@@ -506,6 +514,7 @@ resource "aws_security_group" "database" {
 
 # CloudTrail S3 bucket
 resource "aws_s3_bucket" "cloudtrail" {
+  provider = aws.primary
 
   bucket = "${local.account_id}-cloudtrail-logs"
 
@@ -516,6 +525,7 @@ resource "aws_s3_bucket" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_versioning" "cloudtrail" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.cloudtrail.id
 
@@ -526,6 +536,7 @@ resource "aws_s3_bucket_versioning" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.cloudtrail.id
 
@@ -538,6 +549,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_public_access_block" "cloudtrail" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.cloudtrail.id
 
@@ -565,6 +577,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "cloudtrail" {
 }
 
 resource "aws_s3_bucket_policy" "cloudtrail" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.cloudtrail.id
 
@@ -600,6 +613,7 @@ resource "aws_s3_bucket_policy" "cloudtrail" {
 
 # VPC Flow Logs S3 bucket
 resource "aws_s3_bucket" "vpc_flow_logs" {
+  provider = aws.primary
 
   bucket = "${local.account_id}-vpc-flow-logs"
 
@@ -610,6 +624,7 @@ resource "aws_s3_bucket" "vpc_flow_logs" {
 }
 
 resource "aws_s3_bucket_versioning" "vpc_flow_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.vpc_flow_logs.id
 
@@ -620,6 +635,7 @@ resource "aws_s3_bucket_versioning" "vpc_flow_logs" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "vpc_flow_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.vpc_flow_logs.id
 
@@ -632,6 +648,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "vpc_flow_logs" {
 }
 
 resource "aws_s3_bucket_public_access_block" "vpc_flow_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.vpc_flow_logs.id
 
@@ -660,6 +677,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "vpc_flow_logs" {
 
 # Cross-account bucket policy for VPC Flow Logs
 resource "aws_s3_bucket_policy" "vpc_flow_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.vpc_flow_logs.id
 
@@ -702,6 +720,7 @@ resource "aws_s3_bucket_policy" "vpc_flow_logs" {
 
 # AWS Config S3 bucket
 resource "aws_s3_bucket" "config" {
+  provider = aws.primary
 
   bucket = "${local.account_id}-aws-config"
 
@@ -712,6 +731,7 @@ resource "aws_s3_bucket" "config" {
 }
 
 resource "aws_s3_bucket_versioning" "config" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.config.id
 
@@ -722,6 +742,7 @@ resource "aws_s3_bucket_versioning" "config" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.config.id
 
@@ -734,6 +755,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
 }
 
 resource "aws_s3_bucket_public_access_block" "config" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.config.id
 
@@ -744,6 +766,7 @@ resource "aws_s3_bucket_public_access_block" "config" {
 }
 
 resource "aws_s3_bucket_policy" "config" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.config.id
 
@@ -809,6 +832,7 @@ resource "aws_iam_role" "vpc_flow_logs" {
 }
 
 resource "aws_iam_role_policy" "vpc_flow_logs" {
+  provider = aws.primary
 
   name = "vpc-flow-logs-policy"
   role = aws_iam_role.vpc_flow_logs.id
@@ -896,6 +920,7 @@ resource "aws_cloudwatch_log_group" "cloudtrail" {
 
 # IAM role for CloudTrail
 resource "aws_iam_role" "cloudtrail" {
+  provider = aws.primary
 
   name = "cloudtrail-cloudwatch-role"
 
@@ -914,6 +939,7 @@ resource "aws_iam_role" "cloudtrail" {
 }
 
 resource "aws_iam_role_policy" "cloudtrail" {
+  provider = aws.primary
 
   name = "cloudtrail-cloudwatch-policy"
   role = aws_iam_role.cloudtrail.id
@@ -971,6 +997,7 @@ resource "aws_cloudtrail" "main" {
 
 # IAM role for AWS Config
 resource "aws_iam_role" "config" {
+  provider = aws.primary
 
   name = "aws-config-role"
 
@@ -995,6 +1022,7 @@ resource "aws_iam_role_policy_attachment" "config" {
 }
 
 resource "aws_iam_role_policy" "config_s3" {
+  provider = aws.primary
 
   name = "config-s3-policy"
   role = aws_iam_role.config.id
@@ -1024,6 +1052,7 @@ resource "aws_iam_role_policy" "config_s3" {
 
 # Config Recorder
 resource "aws_config_configuration_recorder" "main" {
+  provider = aws.primary
 
   name     = "pci-dss-recorder"
   role_arn = aws_iam_role.config.arn
@@ -1056,6 +1085,7 @@ resource "aws_config_configuration_recorder_status" "main" {
 
 # Config Rule: Encrypted EBS Volumes
 resource "aws_config_config_rule" "encrypted_volumes" {
+  provider = aws.primary
 
   name = "encrypted-ebs-volumes"
 
@@ -1071,6 +1101,7 @@ resource "aws_config_config_rule" "encrypted_volumes" {
 
 # Config Rule: No public S3 buckets
 resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
+  provider = aws.primary
 
   name = "s3-bucket-public-read-prohibited"
 
@@ -1086,6 +1117,7 @@ resource "aws_config_config_rule" "s3_bucket_public_read_prohibited" {
 
 # Config Rule: Security groups should not allow unrestricted access
 resource "aws_config_config_rule" "restricted_ssh" {
+  provider = aws.primary
 
   name = "restricted-ssh"
 
@@ -1140,7 +1172,7 @@ resource "aws_sns_topic_subscription" "guardduty_email" {
   provider  = aws.primary
   topic_arn = aws_sns_topic.guardduty.arn
   protocol  = "email"
-  endpoint  = "security-team@example.com" # Replace with actual email
+  endpoint  = var.security_notification_email
 }
 
 # SNS topic for CloudWatch alarms
@@ -1156,7 +1188,7 @@ resource "aws_sns_topic_subscription" "cloudwatch_email" {
   provider  = aws.primary
   topic_arn = aws_sns_topic.cloudwatch_alarms.arn
   protocol  = "email"
-  endpoint  = "security-team@example.com" # Replace with actual email
+  endpoint  = var.security_notification_email
 }
 
 # EventBridge rule for GuardDuty findings
@@ -1377,7 +1409,7 @@ resource "aws_ssm_parameter" "api_key" {
   name        = "/pci-dss/api/payment/key"
   description = "Payment API key"
   type        = "SecureString"
-  value       = "placeholder-api-key" # This should be changed immediately
+  value       = var.api_key_placeholder
   key_id      = aws_kms_key.parameter_store.key_id
 
   tags = merge(local.common_tags, {
@@ -1399,6 +1431,7 @@ resource "aws_iam_role" "ec2_instance" {
 }
 
 resource "aws_iam_role_policy" "ec2_instance" {
+  provider = aws.primary
 
   name = "pci-dss-ec2-policy"
   role = aws_iam_role.ec2_instance.id
@@ -1453,6 +1486,7 @@ resource "aws_iam_role_policy" "ec2_instance" {
 }
 
 resource "aws_iam_instance_profile" "ec2" {
+  provider = aws.primary
 
   name = "pci-dss-ec2-profile"
   role = aws_iam_role.ec2_instance.name
@@ -1470,6 +1504,7 @@ resource "aws_iam_role" "lambda_function" {
 }
 
 resource "aws_iam_role_policy" "lambda_function" {
+  provider = aws.primary
 
   name = "pci-dss-lambda-policy"
   role = aws_iam_role.lambda_function.id
@@ -1529,6 +1564,7 @@ resource "aws_iam_role" "ecs_task" {
 }
 
 resource "aws_iam_role_policy" "ecs_task" {
+  provider = aws.primary
 
   name = "pci-dss-ecs-task-policy"
   role = aws_iam_role.ecs_task.id
@@ -1624,6 +1660,7 @@ resource "aws_lb" "web" {
 
 # S3 bucket for ALB logs
 resource "aws_s3_bucket" "alb_logs" {
+  provider = aws.primary
 
   bucket = "${local.account_id}-alb-logs"
 
@@ -1634,6 +1671,7 @@ resource "aws_s3_bucket" "alb_logs" {
 }
 
 resource "aws_s3_bucket_versioning" "alb_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.alb_logs.id
 
@@ -1644,6 +1682,7 @@ resource "aws_s3_bucket_versioning" "alb_logs" {
 }
 
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.alb_logs.id
 
@@ -1656,6 +1695,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "alb_logs" {
 }
 
 resource "aws_s3_bucket_public_access_block" "alb_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.alb_logs.id
 
@@ -1666,6 +1706,7 @@ resource "aws_s3_bucket_public_access_block" "alb_logs" {
 }
 
 resource "aws_s3_bucket_policy" "alb_logs" {
+  provider = aws.primary
 
   bucket = aws_s3_bucket.alb_logs.id
 
@@ -1675,7 +1716,7 @@ resource "aws_s3_bucket_policy" "alb_logs" {
       {
         Effect = "Allow"
         Principal = {
-          AWS = "arn:aws:iam::127311923021:root" # ELB service account for us-east-1
+          AWS = data.aws_elb_service_account.main.arn
         }
         Action   = "s3:PutObject"
         Resource = "${aws_s3_bucket.alb_logs.arn}/*"

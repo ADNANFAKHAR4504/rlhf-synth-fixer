@@ -343,6 +343,137 @@ egress {
 
 ---
 
+### 17. **Code Quality & Best Practices Violations** ❌
+
+**MODEL_RESPONSE:**
+```hcl
+# Missing provider specifications on resources
+resource "aws_vpc" "dmz" {
+  cidr_block = "10.0.0.0/16"
+  # ❌ Missing: provider = aws.primary
+}
+
+# Hardcoded account ID
+resource "aws_s3_bucket_policy" "vpc_flow_logs" {
+  policy = jsonencode({
+    Statement = [{
+      Principal = {
+        AWS = "arn:aws:iam::123456789012:root"  # ❌ Hardcoded account ID
+      }
+    }]
+  })
+}
+
+# Hardcoded email address
+resource "aws_sns_topic_subscription" "guardduty_email" {
+  endpoint = "security-team@example.com"  # ❌ Hardcoded email
+}
+
+# Hardcoded secret
+output "api_key" {
+  value = "placeholder-api-key"  # ❌ Hardcoded secret
+}
+
+# Hardcoded region-specific ELB account ID
+resource "aws_s3_bucket_policy" "alb_logs" {
+  policy = jsonencode({
+    Statement = [{
+      Principal = {
+        AWS = "arn:aws:iam::127311923021:root"  # ❌ Hardcoded ELB account (us-east-1 specific)
+      }
+    }]
+  })
+}
+```
+
+**IDEAL_RESPONSE:**
+```hcl
+# Explicit provider specification on all 92 resources
+resource "aws_vpc" "dmz" {
+  provider   = aws.primary  # ✅ Explicit provider
+  cidr_block = "10.0.0.0/16"
+}
+
+# Variable for account ID
+variable "logging_account_id" {
+  description = "AWS account ID for centralized logging"
+  type        = string
+  default     = "123456789012"
+}
+
+resource "aws_s3_bucket_policy" "vpc_flow_logs" {
+  policy = jsonencode({
+    Statement = [{
+      Principal = {
+        AWS = "arn:aws:iam::${var.logging_account_id}:root"  # ✅ Variable
+      }
+    }]
+  })
+}
+
+# Variable for email
+variable "security_notification_email" {
+  description = "Email address for security notifications"
+  type        = string
+  default     = "security-team@example.com"
+}
+
+resource "aws_sns_topic_subscription" "guardduty_email" {
+  endpoint = var.security_notification_email  # ✅ Variable
+}
+
+# Sensitive variable for secrets
+variable "api_key_placeholder" {
+  description = "Placeholder API key"
+  type        = string
+  sensitive   = true  # ✅ Marked sensitive
+  default     = "placeholder-api-key"
+}
+
+output "api_key" {
+  value     = var.api_key_placeholder  # ✅ Variable
+  sensitive = true
+}
+
+# Data source for region-aware ELB account
+data "aws_elb_service_account" "main" {
+  provider = aws.primary
+}
+
+resource "aws_s3_bucket_policy" "alb_logs" {
+  policy = jsonencode({
+    Statement = [{
+      Principal = {
+        AWS = data.aws_elb_service_account.main.arn  # ✅ Data source (region-aware)
+      }
+    }]
+  })
+}
+```
+
+**Impact:** 
+- **CRITICAL** - Missing provider specifications cause ambiguity in multi-region deployments
+- **HIGH** - Hardcoded values make configuration inflexible and non-portable
+- **SECURITY** - Secrets exposed in code instead of marked sensitive
+- **PORTABILITY** - Region-specific hardcoded values break in other regions
+- **MAINTAINABILITY** - Changes require code edits instead of variable updates
+
+**Violations:**
+1. ❌ **92 resources missing `provider = aws.primary`** - In multi-region setups, resources without explicit provider may use default provider, causing deployment to wrong region
+2. ❌ **Hardcoded account IDs** - Should use variables for flexibility
+3. ❌ **Hardcoded email addresses** - Should use variables to avoid code changes
+4. ❌ **Hardcoded secrets without sensitivity marking** - Security risk, secrets visible in logs/state
+5. ❌ **Hardcoded region-specific AWS account IDs** - ELB service account varies by region, use data source
+
+**Best Practices:**
+- ✅ Always specify `provider` on resources in multi-region configurations
+- ✅ Use variables for all environment-specific values
+- ✅ Mark sensitive variables with `sensitive = true`
+- ✅ Use data sources for region-aware AWS service accounts
+- ✅ Externalize configuration to variables.tf
+
+---
+
 ## Summary of Critical Gaps
 
 ### Architecture Issues:
@@ -368,6 +499,13 @@ egress {
 6. ❌ Missing 90-day retention policies
 7. ❌ No lifecycle management to Glacier
 
+### Code Quality Failures:
+1. ❌ Missing provider specifications (92 resources)
+2. ❌ Hardcoded account IDs instead of variables
+3. ❌ Hardcoded emails instead of variables
+4. ❌ Hardcoded secrets without sensitivity marking
+5. ❌ Hardcoded region-specific values instead of data sources
+
 ### Operational Gaps:
 1. ❌ No Application Load Balancer
 2. ❌ Missing ALB logging
@@ -381,15 +519,19 @@ egress {
 
 **MODEL_RESPONSE:**
 - Would fail Terraform validation (deprecated syntax)
-- Would fail ~90% of unit tests (147 tests)
+- Would fail ~95% of unit tests (147 tests)
 - Would fail 100% of integration tests (45 tests)
 - Missing ~80% of required resources
+- Missing all provider specifications (92 resources)
+- Contains 5 critical code quality violations
 
 **IDEAL_RESPONSE:**
 - ✅ Terraform validation: Success
 - ✅ Unit tests: 147/147 passing (100%)
 - ✅ Integration tests: 45/45 passing (100%)
 - ✅ All required resources implemented
+- ✅ All 96 provider specifications present
+- ✅ All values properly parameterized
 
 ---
 
@@ -401,6 +543,7 @@ The MODEL_RESPONSE provides a **basic starting point** but falls critically shor
 2. **Compliance failures** (missing Flow Logs, incomplete Config, no alarms)
 3. **Architectural deficiencies** (single VPC, no multi-region, missing services)
 4. **Operational issues** (no ALB, no compute roles, insufficient logging)
+5. **Code quality violations** (no provider specs, hardcoded values, exposed secrets)
 
 The IDEAL_RESPONSE demonstrates **production-grade implementation** with:
 - ✅ Complete zero-trust architecture
@@ -408,5 +551,6 @@ The IDEAL_RESPONSE demonstrates **production-grade implementation** with:
 - ✅ Comprehensive security controls
 - ✅ 100% test pass rate (192 tests)
 - ✅ Operational readiness
+- ✅ Best practices adherence (96 provider specs, proper parameterization)
 
 **Gap Percentage:** The MODEL_RESPONSE implements approximately **20-25%** of the required infrastructure compared to the IDEAL_RESPONSE.

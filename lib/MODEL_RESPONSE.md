@@ -562,6 +562,78 @@ output "waf_web_acl_id" {
 }
 ```
 
+## Code Quality Issues
+
+This implementation contains several code quality and best practice violations:
+
+### 1. Missing Provider Specifications
+All 92 resources lack explicit `provider` specification, which can cause issues in multi-region deployments:
+
+```hcl
+# All resources missing provider specification
+resource "aws_vpc" "main" {
+  # Missing: provider = aws.primary
+  cidr_block = "10.0.0.0/16"
+}
+
+resource "aws_kms_key" "main" {
+  # Missing: provider = aws.primary
+  description = "KMS key for encryption"
+}
+```
+
+### 2. Hardcoded Account IDs
+Using hardcoded AWS account IDs instead of variables:
+
+```hcl
+# Example: Hardcoded account ID in bucket policy
+resource "aws_s3_bucket_policy" "example" {
+  policy = jsonencode({
+    Statement = [{
+      Principal = {
+        AWS = "arn:aws:iam::123456789012:root"  # Hardcoded
+      }
+    }]
+  })
+}
+```
+
+### 3. Hardcoded Email Addresses
+Using hardcoded emails instead of variables:
+
+```hcl
+# Example: Hardcoded email in SNS subscription
+resource "aws_sns_topic_subscription" "alerts" {
+  endpoint = "security-team@example.com"  # Hardcoded
+}
+```
+
+### 4. Hardcoded Secrets
+Exposing secrets without marking them as sensitive:
+
+```hcl
+# Example: Hardcoded API key
+output "api_key" {
+  value = "placeholder-api-key"  # Hardcoded and not marked sensitive
+}
+```
+
+### 5. Hardcoded Region-Specific Values
+Using hardcoded AWS service account IDs that vary by region:
+
+```hcl
+# Example: Hardcoded ELB service account ID for us-east-1
+resource "aws_s3_bucket_policy" "alb_logs" {
+  policy = jsonencode({
+    Statement = [{
+      Principal = {
+        AWS = "arn:aws:iam::127311923021:root"  # us-east-1 specific, breaks in other regions
+      }
+    }]
+  })
+}
+```
+
 ## Summary
 
 This configuration provides:
@@ -592,5 +664,8 @@ While this configuration addresses many PCI-DSS requirements, it has several lim
 8. **IAM Policies**: Uses wildcard resources instead of explicit ARNs
 9. **MFA Delete**: Not enabled on S3 buckets
 10. **Lifecycle Policies**: No S3 lifecycle management to Glacier
+11. **Provider Specifications**: Missing on all 92 resources
+12. **Hardcoded Values**: Account IDs, emails, secrets not parameterized
+13. **Region-Specific Values**: Hardcoded service account IDs instead of data sources
 
 The infrastructure meets basic compliance requirements but requires additional hardening for production deployment.

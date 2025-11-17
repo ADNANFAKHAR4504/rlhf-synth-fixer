@@ -35,3 +35,22 @@ variable "team" {
   type        = string
   default     = "unknown"
 }
+
+variable "logging_account_id" {
+  description = "AWS account ID for centralized logging"
+  type        = string
+  default     = "123456789012"
+}
+
+variable "security_notification_email" {
+  description = "Email address for security notifications"
+  type        = string
+  default     = "security-team@example.com"
+}
+
+variable "api_key_placeholder" {
+  description = "Placeholder API key for payment gateway"
+  type        = string
+  default     = "placeholder-api-key"
+  sensitive   = true
+}
