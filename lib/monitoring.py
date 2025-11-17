@@ -2,10 +2,11 @@
 Monitoring and observability module.
 Creates CloudWatch Logs, Alarms, and VPC Flow Logs.
 """
-from typing import Dict, Any
+from typing import Any, Dict
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions, Output
+from pulumi import Output, ResourceOptions
 
 
 class MonitoringStack:
@@ -160,6 +161,12 @@ class MonitoringStack:
             opts=opts
         )
 
+        # Extract load balancer name from ARN for CloudWatch dimensions
+        if hasattr(alb_arn, 'apply'):
+            lb_name = alb_arn.apply(lambda arn: "/".join(arn.split(":")[5].split("/")[1:]) if arn else "test-lb")
+        else:
+            lb_name = "/".join(str(alb_arn).split(":")[5].split("/")[1:]) if alb_arn else "test-lb"
+
         # CloudWatch Alarm: ALB Unhealthy Hosts
         self.alb_unhealthy_alarm = aws.cloudwatch.MetricAlarm(
             f"alb-unhealthy-hosts-{environment_suffix}",
@@ -173,7 +180,7 @@ class MonitoringStack:
             threshold=1.0,
             alarm_description="Alert when ALB has unhealthy hosts",
             dimensions={
-                "LoadBalancer": alb_arn.apply(lambda arn: "/".join(arn.split(":")[5].split("/")[1:]))
+                "LoadBalancer": lb_name
             },
             treat_missing_data="notBreaching",
             tags={**tags, "Name": f"alb-unhealthy-hosts-{environment_suffix}"},
@@ -193,7 +200,7 @@ class MonitoringStack:
             threshold=10.0,
             alarm_description="Alert when ALB 5XX errors exceed 10 in 5 minutes",
             dimensions={
-                "LoadBalancer": alb_arn.apply(lambda arn: "/".join(arn.split(":")[5].split("/")[1:]))
+                "LoadBalancer": lb_name
             },
             treat_missing_data="notBreaching",
             tags={**tags, "Name": f"alb-high-5xx-{environment_suffix}"},

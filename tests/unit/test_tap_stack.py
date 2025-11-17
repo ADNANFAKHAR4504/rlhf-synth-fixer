@@ -24,6 +24,8 @@ def pulumi_mocks(call: pulumi.runtime.MockCallArgs):
             return {
                 'json': '{"Version": "2012-10-17", "Statement": []}'
             }
+        elif call.token == 'aws:ec2/getAmi:getAmi':
+            return {'id': 'ami-latest'}
         return {}
 
     # Handle resources
@@ -66,7 +68,7 @@ def pulumi_mocks(call: pulumi.runtime.MockCallArgs):
     elif call.typ == "aws:lb/loadBalancer:LoadBalancer":
         return {
             "id": f"alb-{call.name}",
-            "arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/{call.name}/abc123",
+            "arn": pulumi.Output.from_input(f"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/{call.name}/abc123"),
             "dnsName": f"{call.name}-123456789.us-east-1.elb.amazonaws.com"
         }
     elif call.typ == "aws:lb/targetGroup:TargetGroup":
@@ -126,40 +128,45 @@ class TestTapStack(unittest.TestCase):
         """Clean up patches."""
         self.az_patcher.stop()
 
+    @pulumi.runtime.test
     def test_stack_creation(self):
         """Test that TapStack creates successfully with required resources."""
         import os
         import sys
         sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-        def check_stack(args):
-            from lib.tap_stack import TapStack, TapStackArgs
+        from lib.tap_stack import TapStack, TapStackArgs
 
-            # Mock configuration
-            with patch('pulumi.Config') as mock_config_cls:
-                mock_config = MagicMock()
-                mock_config.require.side_effect = lambda k: {
-                    'ami_id': 'ami-0c02fb55956c7d316',
-                    'owner': 'test-owner',
-                    'cost_center': 'test-cc',
-                    'project': 'test-project'
-                }.get(k, 'default')
-                mock_config.require_secret.return_value = pulumi.Output.from_input('test-password')
-                mock_config.get.return_value = None
-                mock_config.get_int.return_value = None
-                mock_config_cls.return_value = mock_config
+        # Mock configuration
+        with patch('pulumi.Config') as mock_config_cls, \
+             patch('pulumi_aws.get_availability_zones') as mock_azs:
+            mock_config = MagicMock()
+            mock_config.require.side_effect = lambda k: {
+                'ami_id': 'ami-0c02fb55956c7d316',
+                'owner': 'test-owner',
+                'cost_center': 'test-cc',
+                'project': 'test-project'
+            }.get(k, 'default')
+            mock_config.require_secret.return_value = pulumi.Output.from_input('test-password')
+            mock_config.get_secret.return_value = pulumi.Output.from_input('test-password')
+            mock_config.get.return_value = None
+            mock_config.get_int.return_value = None
+            mock_config_cls.return_value = mock_config
 
-                stack = TapStack(
-                    name="test-stack",
-                    args=TapStackArgs(environment_suffix="test")
-                )
+            mock_az = MagicMock()
+            mock_az.names = ['us-east-1a', 'us-east-1b', 'us-east-1c']
+            mock_az.state = 'available'
+            mock_azs.return_value = mock_az
 
-                return {
-                    'environment_suffix': stack.environment_suffix,
-                }
+            stack = TapStack(
+                name="test-stack",
+                args=TapStackArgs(environment_suffix="test", tags={"Test": "value"})
+            )
 
-        result = pulumi.Output.all().apply(check_stack)
-        return result
+            # Validate basic stack creation
+            self.assertEqual(stack.environment_suffix, "test")
+
+        return True
 
     @pulumi.runtime.test
     def test_networking_resources(self):
@@ -373,5 +380,61 @@ class TestTapStack(unittest.TestCase):
 
         # Validate flow logs exist
         self.assertIsNotNone(monitoring.vpc_flow_log)
+
+        return True
+
+    @pulumi.runtime.test
+    def test_web_tier_resources_without_ami(self):
+        """Test web tier resources are created correctly when AMI is not provided."""
+        import os
+        import sys
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+        from lib.web_tier import WebTier, WebTierArgs
+
+        web_tier_args = WebTierArgs(
+            vpc_id=pulumi.Output.from_input("vpc-12345"),
+            public_subnet_ids=[
+                pulumi.Output.from_input("subnet-pub-1"),
+                pulumi.Output.from_input("subnet-pub-2"),
+                pulumi.Output.from_input("subnet-pub-3")
+            ],
+            private_subnet_ids=[
+                pulumi.Output.from_input("subnet-priv-1"),
+                pulumi.Output.from_input("subnet-priv-2"),
+                pulumi.Output.from_input("subnet-priv-3")
+            ],
+            alb_security_group_id=pulumi.Output.from_input("sg-alb-12345"),
+            ec2_security_group_id=pulumi.Output.from_input("sg-ec2-12345"),
+            instance_profile_arn=pulumi.Output.from_input("arn:aws:iam::123456789012:instance-profile/test-profile"),
+            ami_id=None,  # AMI not provided, should trigger lookup
+            instance_type="t3.medium",
+            min_size=1,
+            max_size=5,
+            desired_capacity=2,
+            environment_suffix="test",
+            tags={"Environment": "test"}
+        )
+
+        web_tier = WebTier(
+            name="test-web-tier-no-ami",
+            args=web_tier_args,
+            opts=None
+        )
+
+        # Validate ALB exists
+        self.assertIsNotNone(web_tier.alb)
+
+        # Validate target group exists
+        self.assertIsNotNone(web_tier.target_group)
+
+        # Validate listener exists
+        self.assertIsNotNone(web_tier.listener)
+
+        # Validate launch template exists
+        self.assertIsNotNone(web_tier.launch_template)
+
+        # Validate ASG exists
+        self.assertIsNotNone(web_tier.asg)
 
         return True
