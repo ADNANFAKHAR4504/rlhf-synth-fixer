@@ -1,0 +1,5 @@
+name: migration-orchestrator
+runtime:
+  name: nodejs
+description: Multi-account migration orchestration framework
+main: bin/tap.ts
