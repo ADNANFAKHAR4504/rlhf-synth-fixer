@@ -284,6 +284,7 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
 
     test('Aurora Cluster should use Secrets Manager for credentials', () => {
       const cluster = template.Resources.AuroraCluster;
+      expect(cluster.Properties.MasterUsername.Ref).toBe('DBUsername');
       expect(cluster.Properties.MasterUserSecret).toBeDefined();
       expect(cluster.Properties.MasterUserSecret.SecretArn.Ref).toBe('DBPasswordSecret');
     });
@@ -393,29 +394,29 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
       expect(nameTag.Value['Fn::Sub']).toContain('${EnvironmentType}');
     });
 
-    test('security groups should use EnvironmentType in names', () => {
+    test('security groups should use EnvironmentSuffix in names', () => {
       const sg = template.Resources.ALBSecurityGroup;
-      expect(sg.Properties.GroupName['Fn::Sub']).toContain('${EnvironmentType}');
+      expect(sg.Properties.GroupName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('IAM role should use EnvironmentType in name', () => {
+    test('IAM role should use EnvironmentSuffix in name', () => {
       const role = template.Resources.InstanceRole;
-      expect(role.Properties.RoleName['Fn::Sub']).toContain('${EnvironmentType}');
+      expect(role.Properties.RoleName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('Launch Template should use EnvironmentType in name', () => {
+    test('Launch Template should use EnvironmentSuffix in name', () => {
       const lt = template.Resources.LaunchTemplate;
-      expect(lt.Properties.LaunchTemplateName['Fn::Sub']).toContain('${EnvironmentType}');
+      expect(lt.Properties.LaunchTemplateName['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('ALB should use EnvironmentType in name', () => {
+    test('ALB should use EnvironmentSuffix in name', () => {
       const alb = template.Resources.ApplicationLoadBalancer;
-      expect(alb.Properties.Name['Fn::Sub']).toContain('${EnvironmentType}');
+      expect(alb.Properties.Name['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
-    test('RDS cluster should use EnvironmentType in identifier', () => {
+    test('RDS cluster should use EnvironmentSuffix in identifier', () => {
       const cluster = template.Resources.AuroraCluster;
-      expect(cluster.Properties.DBClusterIdentifier['Fn::Sub']).toContain('${EnvironmentType}');
+      expect(cluster.Properties.DBClusterIdentifier['Fn::Sub']).toContain('${EnvironmentSuffix}');
     });
 
     test('S3 bucket should use EnvironmentSuffix in name', () => {

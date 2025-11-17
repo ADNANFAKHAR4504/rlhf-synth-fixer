@@ -909,6 +909,9 @@
                 },
                 "Engine": "aurora-postgresql",
                 "EngineVersion": "14.6",
+                "MasterUsername": {
+                    "Ref": "DBUsername"
+                },
                 "MasterUserSecret": {
                     "SecretArn": {
                         "Ref": "DBPasswordSecret"
