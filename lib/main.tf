@@ -439,7 +439,7 @@ resource "aws_emr_cluster" "main" {
   visible_to_all_users              = true
 
   ec2_attributes {
-    ec2_subnet_id    = local.emr_public_subnet_id
+    subnet_id        = local.emr_public_subnet_id
     instance_profile = aws_iam_instance_profile.emr_ec2_instance_profile.arn
     key_name         = var.ec2_key_pair_name
   }
