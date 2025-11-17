@@ -631,5 +631,77 @@ exports.handler = async (event) => {
       description: 'VPC ID',
       exportName: `vpc-id-${environmentSuffix}`,
     });
+
+    new cdk.CfnOutput(this, 'LambdaSecurityGroupId', {
+      value: lambdaSecurityGroup.securityGroupId,
+      description: 'Lambda security group ID',
+      exportName: `lambda-sg-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'EndpointSecurityGroupId', {
+      value: endpointSecurityGroup.securityGroupId,
+      description: 'VPC endpoint security group ID',
+      exportName: `endpoint-sg-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessorRoleArn', {
+      value: dataProcessorRole.roleArn,
+      description: 'Data processor Lambda role ARN',
+      exportName: `data-processor-role-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'PermissionBoundaryArn', {
+      value: permissionBoundary.managedPolicyArn,
+      description: 'Permission boundary managed policy ARN',
+      exportName: `permission-boundary-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DataProcessorLogGroupName', {
+      value: dataProcessorLogGroup.logGroupName,
+      description: 'Data processor log group name',
+      exportName: `data-processor-logs-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiGatewayLogGroupName', {
+      value: apiGatewayLogGroup.logGroupName,
+      description: 'API Gateway log group name',
+      exportName: `api-gateway-logs-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebAclArn', {
+      value: webAcl.attrArn,
+      description: 'WAF Web ACL ARN',
+      exportName: `waf-webacl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'SecurityAlarmTopicArn', {
+      value: securityAlarmTopic.topicArn,
+      description: 'Security alarm SNS topic ARN',
+      exportName: `security-alarm-topic-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'S3EventRuleName', {
+      value: s3EventRule.ruleName,
+      description: 'S3 EventBridge rule name',
+      exportName: `s3-event-rule-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApiErrorAlarmName', {
+      value: apiErrorAlarm.alarmName,
+      description: 'API 4xx error alarm name',
+      exportName: `api-error-alarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'LambdaErrorAlarmName', {
+      value: lambdaErrorAlarm.alarmName,
+      description: 'Lambda error alarm name',
+      exportName: `lambda-error-alarm-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WafBlockedRequestsAlarmName', {
+      value: wafBlockedRequestsAlarm.alarmName,
+      description: 'WAF blocked requests alarm name',
+      exportName: `waf-blocked-alarm-${environmentSuffix}`,
+    });
   }
 }

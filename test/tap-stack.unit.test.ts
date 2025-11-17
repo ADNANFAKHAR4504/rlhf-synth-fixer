@@ -2,7 +2,7 @@ import * as cdk from 'aws-cdk-lib';
 import { Template, Match } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
-const environmentSuffix = 'test-env';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'test';
 
 describe('TapStack Unit Tests', () => {
   let app: cdk.App;
@@ -13,7 +13,7 @@ describe('TapStack Unit Tests', () => {
     app = new cdk.App();
     stack = new TapStack(app, 'TestTapStack', {
       environmentSuffix,
-      env: { account: '123456789012', region: 'us-east-2' },
+      env: { account: '123456789012', region: 'us-east-1' },
     });
     template = Template.fromStack(stack);
   });
@@ -124,7 +124,7 @@ describe('TapStack Unit Tests', () => {
 
     test('creates raw data bucket with logging', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: `raw-data-${environmentSuffix}`,
+        BucketName: Match.stringLikeRegexp(`^raw-data-${environmentSuffix}-\\d+$`),
         LoggingConfiguration: Match.objectLike({
           LogFilePrefix: 'raw-data-logs/',
         }),
@@ -133,7 +133,7 @@ describe('TapStack Unit Tests', () => {
 
     test('creates processed data bucket with logging', () => {
       template.hasResourceProperties('AWS::S3::Bucket', {
-        BucketName: `processed-data-${environmentSuffix}`,
+        BucketName: Match.stringLikeRegexp(`^processed-data-${environmentSuffix}-\\d+$`),
         LoggingConfiguration: Match.objectLike({
           LogFilePrefix: 'processed-data-logs/',
         }),
@@ -456,14 +456,30 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('exports API Key ID', () => {
+      template.hasOutput('ApiKeyId', {
+        Export: {
+          Name: `api-key-id-${environmentSuffix}`,
+        },
+      });
+    });
+
     test('exports all S3 bucket names', () => {
       template.hasOutput('RawDataBucketName', {
         Export: {
           Name: `raw-data-bucket-${environmentSuffix}`,
         },
       });
-      template.hasOutput('ProcessedDataBucketName', {});
-      template.hasOutput('AuditLogsBucketName', {});
+      template.hasOutput('ProcessedDataBucketName', {
+        Export: {
+          Name: `processed-data-bucket-${environmentSuffix}`,
+        },
+      });
+      template.hasOutput('AuditLogsBucketName', {
+        Export: {
+          Name: `audit-logs-bucket-${environmentSuffix}`,
+        },
+      });
     });
 
     test('exports KMS key ARN', () => {
@@ -474,12 +490,106 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('exports Lambda function name', () => {
+      template.hasOutput('DataProcessorFunctionName', {
+        Export: {
+          Name: `data-processor-function-${environmentSuffix}`,
+        },
+      });
+    });
+
     test('exports VPC ID', () => {
       template.hasOutput('VpcId', {
         Export: {
           Name: `vpc-id-${environmentSuffix}`,
         },
       });
+    });
+
+    test('exports security group IDs', () => {
+      template.hasOutput('LambdaSecurityGroupId', {
+        Export: {
+          Name: `lambda-sg-${environmentSuffix}`,
+        },
+      });
+      template.hasOutput('EndpointSecurityGroupId', {
+        Export: {
+          Name: `endpoint-sg-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('exports IAM role and policy ARNs', () => {
+      template.hasOutput('DataProcessorRoleArn', {
+        Export: {
+          Name: `data-processor-role-${environmentSuffix}`,
+        },
+      });
+      template.hasOutput('PermissionBoundaryArn', {
+        Export: {
+          Name: `permission-boundary-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('exports CloudWatch log group names', () => {
+      template.hasOutput('DataProcessorLogGroupName', {
+        Export: {
+          Name: `data-processor-logs-${environmentSuffix}`,
+        },
+      });
+      template.hasOutput('ApiGatewayLogGroupName', {
+        Export: {
+          Name: `api-gateway-logs-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('exports WAF WebACL ARN', () => {
+      template.hasOutput('WebAclArn', {
+        Export: {
+          Name: `waf-webacl-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('exports SNS topic ARN', () => {
+      template.hasOutput('SecurityAlarmTopicArn', {
+        Export: {
+          Name: `security-alarm-topic-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('exports EventBridge rule name', () => {
+      template.hasOutput('S3EventRuleName', {
+        Export: {
+          Name: `s3-event-rule-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('exports CloudWatch alarm names', () => {
+      template.hasOutput('ApiErrorAlarmName', {
+        Export: {
+          Name: `api-error-alarm-${environmentSuffix}`,
+        },
+      });
+      template.hasOutput('LambdaErrorAlarmName', {
+        Export: {
+          Name: `lambda-error-alarm-${environmentSuffix}`,
+        },
+      });
+      template.hasOutput('WafBlockedRequestsAlarmName', {
+        Export: {
+          Name: `waf-blocked-alarm-${environmentSuffix}`,
+        },
+      });
+    });
+
+    test('has exactly 21 outputs', () => {
+      const outputs = Object.keys(template.findOutputs('*'));
+      expect(outputs.length).toBe(21);
     });
   });
 

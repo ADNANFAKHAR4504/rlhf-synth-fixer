@@ -13,11 +13,14 @@ if (!environmentSuffix) {
   );
 }
 
-new TapStack(app, 'TapStack', {
+const stackName = `TapStack${environmentSuffix}`;
+
+new TapStack(app, stackName, {
+  stackName: stackName, // This ensures CloudFormation stack name includes the suffix
   environmentSuffix,
   env: {
     account: process.env.CDK_DEFAULT_ACCOUNT,
-    region: process.env.CDK_DEFAULT_REGION || 'us-east-2',
+    region: process.env.CDK_DEFAULT_REGION,
   },
   description: `Secure data analytics platform with defense-in-depth security controls (${environmentSuffix})`,
 });

@@ -1,6 +1,6 @@
 Hey team,
 
-We need to build a secure data analytics platform for a financial services company that requires PCI-DSS compliance. The business is serious about defense-in-depth security, and they want everything locked down with multiple layers of protection. I've been asked to create this using **AWS CDK with TypeScript** and deploy to the us-east-2 region.
+We need to build a secure data analytics platform for a financial services company that requires PCI-DSS compliance. The business is serious about defense-in-depth security, and they want everything locked down with multiple layers of protection. I've been asked to create this using **AWS CDK with TypeScript** and deploy to the us-east-1 region
 
 The company processes sensitive financial data, and the security team has made it clear that they need encryption everywhere, strict access controls, complete audit logging, and network isolation. They're following a zero-trust approach and want to ensure that even if one security layer is compromised, others are still protecting the data. All traffic should stay within AWS using VPC endpoints with no internet gateways or NAT gateways.
 
@@ -8,7 +8,7 @@ This needs to handle a typical analytics workflow where raw data arrives in S3, 
 
 ## What we need to build
 
-Create a secure data analytics platform using **AWS CDK with TypeScript** for PCI-DSS compliant financial data processing in us-east-2.
+Create a secure data analytics platform using **AWS CDK with TypeScript** for PCI-DSS compliant financial data processing in us-east-1.
 
 ### Core Security Components
 
@@ -62,7 +62,7 @@ Create a secure data analytics platform using **AWS CDK with TypeScript** for PC
 ### Technical Requirements
 
 - All infrastructure defined using **AWS CDK with TypeScript**
-- Deploy to **us-east-2** region
+- Deploy to **us-east-1** region
 - Use KMS customer-managed keys for all encryption
 - VPC with private subnets only (no public subnets)
 - VPC endpoints for AWS service communication

@@ -43,21 +43,31 @@ import {
   DescribeAlarmsCommand,
 } from '@aws-sdk/client-cloudwatch';
 
-const outputs = JSON.parse(
-  fs.readFileSync('cfn-outputs/flat-outputs.json', 'utf8')
-);
+const path = require('path');
+import { fromIni } from '@aws-sdk/credential-provider-ini';
 
-const region = 'us-east-2';
+const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
+const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+
+const region = process.env.AWS_REGION || 'us-east-1';
+const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
+const awsProfile = process.env.AWS_PROFILE;
+
+// Configure AWS SDK client options
+const clientConfig: any = { region };
+if (awsProfile) {
+  clientConfig.credentials = fromIni({ profile: awsProfile });
+}
 
 // Initialize AWS SDK clients
-const s3Client = new S3Client({ region });
-const lambdaClient = new LambdaClient({ region });
-const cwLogsClient = new CloudWatchLogsClient({ region });
-const apiGatewayClient = new APIGatewayClient({ region });
-const kmsClient = new KMSClient({ region });
-const ec2Client = new EC2Client({ region });
-const wafClient = new WAFV2Client({ region });
-const cloudWatchClient = new CloudWatchClient({ region });
+const s3Client = new S3Client(clientConfig);
+const lambdaClient = new LambdaClient(clientConfig);
+const cwLogsClient = new CloudWatchLogsClient(clientConfig);
+const apiGatewayClient = new APIGatewayClient(clientConfig);
+const kmsClient = new KMSClient(clientConfig);
+const ec2Client = new EC2Client(clientConfig);
+const wafClient = new WAFV2Client(clientConfig);
+const cloudWatchClient = new CloudWatchClient(clientConfig);
 
 describe('Secure Data Analytics Platform Integration Tests', () => {
   describe('KMS Encryption', () => {
@@ -260,12 +270,12 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
     test('Lambda log group exists with correct configuration', async () => {
       const logGroupsResponse = await cwLogsClient.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/aws/lambda/',
+          logGroupNamePrefix: outputs.DataProcessorLogGroupName,
         })
       );
 
       const lambdaLogGroup = logGroupsResponse.logGroups?.find((lg) =>
-        lg.logGroupName?.includes('data-processor')
+        lg.logGroupName === outputs.DataProcessorLogGroupName
       );
 
       expect(lambdaLogGroup).toBeDefined();
@@ -276,12 +286,12 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
     test('API Gateway log group exists', async () => {
       const logGroupsResponse = await cwLogsClient.send(
         new DescribeLogGroupsCommand({
-          logGroupNamePrefix: '/aws/apigateway/',
+          logGroupNamePrefix: outputs.ApiGatewayLogGroupName,
         })
       );
 
       const apiLogGroup = logGroupsResponse.logGroups?.find((lg) =>
-        lg.logGroupName?.includes('analytics-api')
+        lg.logGroupName === outputs.ApiGatewayLogGroupName
       );
 
       expect(apiLogGroup).toBeDefined();
@@ -381,21 +391,26 @@ describe('Secure Data Analytics Platform Integration Tests', () => {
   describe('CloudWatch Alarms', () => {
     test('security alarms are configured', async () => {
       const alarmsResponse = await cloudWatchClient.send(
-        new DescribeAlarmsCommand({})
+        new DescribeAlarmsCommand({
+          AlarmNames: [
+            outputs.ApiErrorAlarmName,
+            outputs.LambdaErrorAlarmName,
+            outputs.WafBlockedRequestsAlarmName,
+          ],
+        })
       );
 
       const alarms = alarmsResponse.MetricAlarms || [];
-      const alarmNames = alarms.map((a) => a.AlarmName);
+      expect(alarms.length).toBe(3);
 
-      expect(alarmNames.some((n) => n?.includes('api-4xx-errors'))).toBe(true);
-      expect(alarmNames.some((n) => n?.includes('lambda-errors'))).toBe(true);
-      expect(alarmNames.some((n) => n?.includes('waf-blocked-requests'))).toBe(
-        true
-      );
+      const alarmNames = alarms.map((a) => a.AlarmName);
+      expect(alarmNames).toContain(outputs.ApiErrorAlarmName);
+      expect(alarmNames).toContain(outputs.LambdaErrorAlarmName);
+      expect(alarmNames).toContain(outputs.WafBlockedRequestsAlarmName);
 
       // Verify alarms have SNS actions configured
-      const apiErrorAlarm = alarms.find((a) =>
-        a.AlarmName?.includes('api-4xx-errors')
+      const apiErrorAlarm = alarms.find(
+        (a) => a.AlarmName === outputs.ApiErrorAlarmName
       );
       expect(apiErrorAlarm?.AlarmActions).toBeDefined();
       expect(apiErrorAlarm?.AlarmActions!.length).toBeGreaterThan(0);
