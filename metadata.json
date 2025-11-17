@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth-2",
+  "startedAt": "2025-11-18T00:00:00+00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "h87w6x",
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "S3",
+    "SQS",
+    "SNS",
+    "EventBridge",
+    "CloudWatch",
+    "API Gateway",
+    "VPC",
+    "IAM",
+    "Systems Manager",
+    "KMS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9
+}

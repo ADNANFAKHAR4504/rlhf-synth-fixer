@@ -11,11 +11,13 @@ fi
 
 PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
 LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+PO_ID=$(jq -r '.po_id // "unknown"' metadata.json)
 
 echo "Project: platform=$PLATFORM, language=$LANGUAGE"
 
 # Set default environment variables if not provided
-export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
+# Use po_id from metadata.json as the environment suffix
+export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-synth-${PO_ID}}
 export CI=${CI:-1}
 
 echo "Environment suffix: $ENVIRONMENT_SUFFIX"
