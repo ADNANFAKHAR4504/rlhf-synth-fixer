@@ -128,9 +128,9 @@ resource "aws_db_proxy_default_target_group" "main" {
 }
 
 resource "aws_db_proxy_target" "main" {
-  db_proxy_name          = aws_db_proxy.main.name
-  target_group_name      = aws_db_proxy_default_target_group.main.name
-  db_cluster_identifier  = var.rds_cluster_id
+  db_proxy_name         = aws_db_proxy.main.name
+  target_group_name     = aws_db_proxy_default_target_group.main.name
+  db_cluster_identifier = var.rds_cluster_id
 }
 
 # CloudWatch Log Group for RDS Proxy
