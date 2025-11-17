@@ -1,3 +1,34 @@
+# Secure Infrastructure Baseline - CDK TypeScript Implementation
+
+This implementation creates a security-hardened infrastructure baseline for a financial services company with comprehensive encryption, access control, monitoring, and compliance features designed to meet SOC2 and PCI-DSS requirements.
+
+## Architecture Overview
+
+The solution implements a defense-in-depth security model with the following key components:
+
+### Security Layers
+
+1. **Encryption Layer**: KMS customer-managed key with automatic rotation
+2. **Network Layer**: Multi-AZ VPC with isolated private subnets and flow logging
+3. **Data Layer**: Encrypted Aurora MySQL cluster and S3 buckets
+4. **Identity Layer**: IAM roles with least-privilege and MFA requirements
+5. **Monitoring Layer**: CloudWatch Logs, metric filters, and security alarms
+6. **Compliance Layer**: AWS Config rules for continuous compliance monitoring
+
+### Key Features
+
+- **Zero-Trust Security Model**: All components encrypted, strict access controls
+- **Multi-AZ High Availability**: Database and network resources across 3 AZs
+- **Comprehensive Audit Trail**: VPC flow logs, access logs, CloudWatch Logs
+- **Automated Compliance**: AWS Config rules with continuous monitoring
+- **Security Alerting**: Real-time notifications for security events via SNS
+- **Cost Optimized**: Aurora Serverless V2, S3 Intelligent Tiering, no NAT gateways
+
+## Implementation Files
+
+### File: lib/tap-stack.ts
+
+```typescript
 import * as cdk from 'aws-cdk-lib';
 import { Construct } from 'constructs';
 import * as kms from 'aws-cdk-lib/aws-kms';
@@ -657,71 +688,6 @@ export class TapStack extends cdk.Stack {
   }
 
   /**
-   * Helper method to get the environment suffix for testing purposes
-   * @returns The environment suffix used by this stack
-   */
-  public getEnvironmentSuffix(): string {
-    return this.node.tryGetContext('environmentSuffix') || 'test';
-  }
-
-  /**
-   * Helper method to get the stack name for testing purposes
-   * @returns The name of this stack
-   */
-  public getStackName(): string {
-    return this.stackName;
-  }
-
-  /**
-   * Helper method to check if stack has termination protection
-   * @returns Whether termination protection is enabled
-   */
-  public hasTerminationProtection(): boolean {
-    return this.terminationProtection !== undefined;
-  }
-
-  /**
-   * Helper method to get the AWS region
-   * @returns The AWS region for this stack
-   */
-  public getRegion(): string {
-    return this.region;
-  }
-
-  /**
-   * Helper method to get the AWS account
-   * @returns The AWS account for this stack
-   */
-  public getAccount(): string {
-    return this.account;
-  }
-
-  /**
-   * Helper method to validate stack configuration
-   * @returns True if stack is properly configured
-   */
-  public isConfigured(): boolean {
-    return !!this.stackName && !!this.region;
-  }
-
-  /**
-   * Helper method to get stack ID
-   * @returns The stack ID
-   */
-  public getStackId(): string {
-    return this.stackId;
-  }
-
-  /**
-   * Helper method to check if resource exists in stack
-   * @param logicalId The logical ID of the resource
-   * @returns True if resource exists
-   */
-  public hasResource(logicalId: string): boolean {
-    return !!this.node.tryFindChild(logicalId);
-  }
-
-  /**
    * Helper method to format subnet IDs as comma-separated string
    * @param subnets Array of subnets
    * @returns Comma-separated string of subnet IDs
@@ -730,3 +696,375 @@ export class TapStack extends cdk.Stack {
     return subnets.map(subnet => subnet.subnetId).join(',');
   }
 }
+```
+
+## Security Features
+
+### 1. Encryption and Key Management
+- **KMS Customer-Managed Key**: Automatic rotation enabled (annual)
+- **Encryption at Rest**: All data encrypted using KMS key
+  - RDS Aurora MySQL cluster
+  - S3 buckets (application data, audit logs, flow logs, config logs)
+  - CloudWatch Log groups
+  - SNS topic messages
+- **Encryption in Transit**: TLS 1.2+ enforced
+  - Database connections require TLS
+  - S3 buckets enforce SSL
+  - SNS messages encrypted
+
+### 2. Network Security
+- **VPC Configuration**:
+  - 3 availability zones for high availability
+  - Private isolated subnets only (no internet gateway)
+  - CIDR block: 10.0.0.0/16 with /24 subnets
+- **VPC Flow Logs**: All traffic logged to encrypted S3 bucket
+- **Security Groups**: Explicit egress rules, HTTPS-only outbound
+- **No NAT Gateways**: Prevents internet access, reduces cost
+
+### 3. Database Security
+- **RDS Aurora MySQL Serverless V2**:
+  - Multi-AZ deployment (writer + reader instances)
+  - KMS encryption at rest
+  - TLS 1.2+ required for connections
+  - Automated backups (30-day retention)
+  - Deletion protection enabled
+  - Private subnet deployment only
+  - Scales from 0.5 to 2 ACU
+
+### 4. Storage Security
+- **Application Data Bucket**:
+  - KMS encryption
+  - Versioning enabled
+  - Access logging to audit bucket
+  - Intelligent tiering after 30 days
+  - Public access blocked
+  - SSL enforcement
+- **Audit Logs Bucket**:
+  - 90-day retention policy
+  - 30-day non-current version expiration
+  - KMS encryption
+  - Public access blocked
+- **VPC Flow Logs Bucket**: 90-day retention
+- **Config Bucket**: 365-day retention
+
+### 5. Identity and Access Management
+- **IAM Role Features**:
+  - Least-privilege principle
+  - 1-hour maximum session duration
+  - MFA required for destructive operations
+  - Explicit deny for unencrypted uploads
+  - Service principal assumption only
+
+### 6. Monitoring and Alerting
+- **CloudWatch Log Groups**:
+  - KMS encrypted
+  - 1-year retention
+  - Separate groups for security and audit events
+- **Metric Filters**:
+  - Unauthorized API calls detection
+  - Privilege escalation attempts detection
+- **CloudWatch Alarms**:
+  - Real-time alerting via SNS
+  - Threshold: 1 security event triggers alarm
+- **SNS Topic**: Encrypted message delivery for security alerts
+
+### 7. Compliance Monitoring
+- **AWS Config Rules**:
+  - EBS encryption by default
+  - S3 public read/write prohibited
+  - RDS storage encryption
+  - IAM password policy (14+ chars, complexity, rotation)
+- **Continuous Monitoring**: Automatic compliance evaluation
+- **Compliance Reporting**: Stack outputs provide summary
+
+### 8. Configuration Management
+- **Systems Manager Parameter Store**:
+  - Database endpoint storage
+  - Database port storage
+  - Application bucket name storage
+  - Centralized configuration access
+
+## Deployment Instructions
+
+### Prerequisites
+- AWS CLI configured with appropriate credentials
+- Node.js 18 or later
+- AWS CDK CLI: `npm install -g aws-cdk`
+- Docker (for CDK asset building)
+
+### Step-by-Step Deployment
+
+#### 1. Install Dependencies
+```bash
+npm install
+```
+
+#### 2. Bootstrap CDK (First Time Only)
+```bash
+cdk bootstrap aws://ACCOUNT-ID/us-east-1
+```
+
+#### 3. Set Environment Variables
+```bash
+export ENVIRONMENT_SUFFIX="pr6663"  # Or your preferred suffix
+```
+
+#### 4. Synthesize CloudFormation Template
+```bash
+cdk synth -c environmentSuffix=$ENVIRONMENT_SUFFIX
+```
+
+#### 5. Deploy the Stack
+```bash
+cdk deploy -c environmentSuffix=$ENVIRONMENT_SUFFIX --require-approval never
+```
+
+#### 6. Enable Stack Termination Protection (Production)
+```bash
+aws cloudformation update-termination-protection \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --enable-termination-protection
+```
+
+### Verification Steps
+
+#### 1. Verify Stack Outputs
+```bash
+aws cloudformation describe-stacks \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --query 'Stacks[0].Outputs'
+```
+
+#### 2. Verify AWS Config Compliance
+```bash
+aws configservice describe-compliance-by-config-rule \
+  --config-rule-names \
+    encrypted-volumes-${ENVIRONMENT_SUFFIX} \
+    s3-bucket-public-read-prohibited-${ENVIRONMENT_SUFFIX} \
+    rds-storage-encrypted-${ENVIRONMENT_SUFFIX}
+```
+
+#### 3. Verify KMS Key Rotation
+```bash
+aws kms get-key-rotation-status \
+  --key-id $(aws cloudformation describe-stacks \
+    --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+    --query 'Stacks[0].Outputs[?OutputKey==`KmsKeyId`].OutputValue' \
+    --output text)
+```
+
+#### 4. Verify RDS Encryption
+```bash
+aws rds describe-db-clusters \
+  --db-cluster-identifier aurora-mysql-${ENVIRONMENT_SUFFIX} \
+  --query 'DBClusters[0].[StorageEncrypted,DeletionProtection]'
+```
+
+#### 5. Verify VPC Flow Logs
+```bash
+aws ec2 describe-flow-logs \
+  --filter "Name=tag:Environment,Values=${ENVIRONMENT_SUFFIX}"
+```
+
+## Testing
+
+### Unit Tests
+```bash
+npm test
+```
+
+### Integration Tests
+```bash
+npm run test:integration
+```
+
+### Security Validation Tests
+```bash
+# Test S3 public access is blocked
+aws s3api get-public-access-block \
+  --bucket app-data-${ENVIRONMENT_SUFFIX}-$(aws sts get-caller-identity --query Account --output text)
+
+# Test RDS encryption is enabled
+aws rds describe-db-clusters \
+  --db-cluster-identifier aurora-mysql-${ENVIRONMENT_SUFFIX} \
+  --query 'DBClusters[0].StorageEncrypted'
+
+# Test CloudWatch alarms are active
+aws cloudwatch describe-alarms \
+  --alarm-names unauthorized-api-calls-${ENVIRONMENT_SUFFIX}
+```
+
+## Cost Estimation
+
+### Development Environment (Low Usage)
+- **KMS Key**: $1/month
+- **Aurora Serverless V2**: $20-50/month (0.5-1 ACU average)
+- **S3 Storage**: $5-10/month (< 100GB)
+- **VPC**: $0/month (no NAT gateways)
+- **CloudWatch Logs**: $5-10/month
+- **AWS Config**: $10-20/month
+- **Total**: ~$50-100/month
+
+### Production Environment (Moderate Usage)
+- **KMS Key**: $1/month
+- **Aurora Serverless V2**: $100-200/month (1-2 ACU average)
+- **S3 Storage**: $20-50/month (500GB-1TB)
+- **VPC**: $0/month
+- **CloudWatch Logs**: $20-50/month
+- **AWS Config**: $20-30/month
+- **Total**: ~$200-400/month
+
+## Cleanup
+
+### Destroy Stack
+```bash
+# 1. Disable stack termination protection
+aws cloudformation update-termination-protection \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --no-enable-termination-protection
+
+# 2. Disable RDS deletion protection
+aws rds modify-db-cluster \
+  --db-cluster-identifier aurora-mysql-${ENVIRONMENT_SUFFIX} \
+  --no-deletion-protection \
+  --apply-immediately
+
+# 3. Wait for modification to complete (about 1 minute)
+aws rds wait db-cluster-available \
+  --db-cluster-identifier aurora-mysql-${ENVIRONMENT_SUFFIX}
+
+# 4. Destroy the CDK stack
+cdk destroy -c environmentSuffix=$ENVIRONMENT_SUFFIX --force
+```
+
+## Compliance Certifications
+
+This infrastructure baseline supports the following compliance frameworks:
+
+### SOC 2 Type II
+- **Security**: KMS encryption, MFA, security groups, VPC isolation
+- **Availability**: Multi-AZ deployment, automated backups
+- **Confidentiality**: Encryption at rest and in transit, access controls
+- **Processing Integrity**: CloudWatch monitoring, Config rules
+- **Privacy**: Data encryption, access logging, audit trails
+
+### PCI-DSS
+- **Build and Maintain a Secure Network**: VPC, security groups, TLS
+- **Protect Cardholder Data**: KMS encryption, secure transmission
+- **Maintain a Vulnerability Management Program**: AWS Config, monitoring
+- **Implement Strong Access Control Measures**: IAM, MFA, least privilege
+- **Regularly Monitor and Test Networks**: CloudWatch, VPC flow logs
+- **Maintain an Information Security Policy**: Infrastructure as code
+
+### Additional Certifications Supported
+- **HIPAA**: Encryption, access controls, audit logging (requires BAA)
+- **ISO 27001**: Information security controls, monitoring, access management
+- **GDPR**: Data encryption, access controls, audit trails, data residency
+
+## Troubleshooting
+
+### Common Issues
+
+#### 1. PrivateSubnetIds Export Error
+**Error**: "Cannot export output PrivateSubnetIds. Exported values must not be empty or whitespace-only."
+
+**Cause**: Using `vpc.privateSubnets` instead of `vpc.isolatedSubnets` when VPC only has `PRIVATE_ISOLATED` subnet type.
+
+**Solution**: Update the output to use `vpc.isolatedSubnets`:
+```typescript
+new cdk.CfnOutput(this, 'PrivateSubnetIds', {
+  value: this.formatSubnetIds(vpc.isolatedSubnets),
+  description: 'Private isolated subnet IDs across 3 AZs',
+  exportName: `${environmentSuffix}-private-subnet-ids`,
+});
+```
+
+#### 2. AWS Config Recorder Already Exists
+**Error**: "Configuration recorder already exists in this region."
+
+**Cause**: AWS Config allows only one recorder per region per account.
+
+**Solution**: Remove the recorder/delivery channel creation and rely on existing account-level Config setup. Only create Config Rules.
+
+#### 3. KMS Key Permission Denied for CloudWatch Logs
+**Error**: "CloudWatch Logs cannot use KMS key."
+
+**Cause**: Missing KMS key policy for CloudWatch Logs service principal.
+
+**Solution**: Add resource policy to KMS key (already included in implementation above).
+
+#### 4. RDS Cluster Deletion Fails
+**Error**: "Cannot delete DB cluster with deletion protection enabled."
+
+**Solution**: Disable deletion protection before destroying:
+```bash
+aws rds modify-db-cluster \
+  --db-cluster-identifier aurora-mysql-${ENVIRONMENT_SUFFIX} \
+  --no-deletion-protection \
+  --apply-immediately
+```
+
+#### 5. S3 Bucket Names Already Taken
+**Error**: "Bucket name already exists."
+
+**Cause**: S3 bucket names must be globally unique.
+
+**Solution**: Ensure `environmentSuffix` and account ID create unique names, or use custom bucket name prefix.
+
+## Best Practices
+
+### Security
+- Rotate KMS keys annually (automatic)
+- Review IAM policies quarterly
+- Monitor CloudWatch alarms daily
+- Audit AWS Config compliance weekly
+- Update security patches monthly
+
+### Operations
+- Tag all resources consistently
+- Use infrastructure as code exclusively
+- Enable stack termination protection for production
+- Implement drift detection automation
+- Document all manual changes
+
+### Cost Optimization
+- Use Aurora Serverless V2 auto-scaling
+- Implement S3 lifecycle policies
+- Monitor unused resources
+- Right-size instances based on metrics
+- Enable S3 Intelligent Tiering
+
+### Disaster Recovery
+- Test backup restoration monthly
+- Maintain 30-day backup retention
+- Document recovery procedures
+- Implement cross-region replication for critical data
+- Automate recovery processes
+
+## Additional Resources
+
+### Documentation
+- [AWS CDK Documentation](https://docs.aws.amazon.com/cdk/)
+- [AWS Security Best Practices](https://aws.amazon.com/security/best-practices/)
+- [AWS Config Rules](https://docs.aws.amazon.com/config/latest/developerguide/managed-rules-by-aws-config.html)
+- [RDS Security](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/UsingWithRDS.html)
+- [VPC Security](https://docs.aws.amazon.com/vpc/latest/userguide/security.html)
+
+### Compliance Resources
+- [AWS Compliance Programs](https://aws.amazon.com/compliance/programs/)
+- [SOC 2 Compliance on AWS](https://aws.amazon.com/compliance/soc-2-faqs/)
+- [PCI-DSS on AWS](https://aws.amazon.com/compliance/pci-dss-level-1-faqs/)
+- [AWS Artifact](https://aws.amazon.com/artifact/) - Compliance reports
+
+## Support and Maintenance
+
+For issues, questions, or contributions:
+1. Review this documentation thoroughly
+2. Check AWS service health dashboard
+3. Verify AWS Config compliance status
+4. Review CloudWatch Logs for errors
+5. Contact your AWS support team
+
+## License
+
+This infrastructure code is provided as-is for security baseline implementation. Ensure compliance with your organization's policies and regulatory requirements before deployment.
