@@ -1,0 +1,363 @@
+2025-11-17 00:30:32,341 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-17 00:30:32,427 - INFO - Starting CloudFront distribution analysis...
+/root/iac-test-automations/lib/analyse.py:344: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  end_time = datetime.utcnow()
+2025-11-17 00:30:32,823 - INFO - Skipping VU7BAZSLP03LL - ExcludeFromAnalysis tag
+2025-11-17 00:30:32,836 - INFO - Skipping K4N604I7TO6M5 - Internal only distribution
+2025-11-17 00:30:32,872 - INFO - Analyzing distribution: T683AIUNJ4IEI
+2025-11-17 00:30:32,906 - INFO - Analyzing distribution: CEKR2F21GYPMD
+2025-11-17 00:30:32,950 - INFO - Analyzing distribution: PGV51ICGLM2MY
+2025-11-17 00:30:33,013 - INFO - Analyzing distribution: WXLRY1J0JN70G
+2025-11-17 00:30:33,060 - INFO - Analyzing distribution: XJ2C7FPJSTPAW
+2025-11-17 00:30:33,105 - INFO - Analyzing distribution: UJVEMQEFF8HBV
+2025-11-17 00:30:33,140 - INFO - Analyzing distribution: N9SMMKFBDE4SW
+2025-11-17 00:30:33,176 - INFO - Analyzing distribution: L1ONIDQRQOI4R
+2025-11-17 00:30:33,304 - INFO - Analyzing distribution: QMM25VO474NJ7
+2025-11-17 00:30:33,363 - INFO - Analyzing distribution: OCJCDLT6PKJF9
+
+================================================================================
+Distribution: T683AIUNJ4IEI (ojgruxcdow9jn.cloudfront.net)
+Performance Score: 83/100
+Cache Hit Ratio: 92.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+3. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: CEKR2F21GYPMD (ogt5tjja9bqr0.cloudfront.net)
+Performance Score: 63/100
+Cache Hit Ratio: 60.0%
+Potential Monthly Savings: $0.94
+
+Top Issues:
+1. [HIGH] Low Cache Hit Ratio
+   Current: Cache hit ratio: 60.0%
+   Recommended: Improve caching strategy to achieve >80% cache hit ratio
+   Estimated Savings: $0.94/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: PGV51ICGLM2MY (sod8putfieii4.cloudfront.net)
+Performance Score: 72/100
+Cache Hit Ratio: 78.0%
+Potential Monthly Savings: $0.89
+
+Top Issues:
+1. [HIGH] Low Cache Hit Ratio
+   Current: Cache hit ratio: 78.0%
+   Recommended: Improve caching strategy to achieve >80% cache hit ratio
+   Estimated Savings: $0.48/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [MEDIUM] No Origin Shield
+   Current: Origin Shield disabled
+   Recommended: Enable Origin Shield for better cache efficiency
+   Estimated Savings: $0.41/month
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: WXLRY1J0JN70G (o4o17umkz37uw.cloudfront.net)
+Performance Score: 78/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $2.98
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Compression
+   Current: Compression not enabled for text content
+   Recommended: Enable compression for HTML, CSS, JS files
+   Estimated Savings: $2.98/month
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: XJ2C7FPJSTPAW (qsrgqadlcjfgo.cloudfront.net)
+Performance Score: 73/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.60
+
+Top Issues:
+1. [HIGH] Inadequate TTL
+   Current: Default TTL < 3600 seconds
+   Recommended: Set default TTL to at least 3600 seconds for static assets
+   Estimated Savings: $0.60/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: UJVEMQEFF8HBV (uzcpsc3136z9e.cloudfront.net)
+Performance Score: 83/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+3. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: N9SMMKFBDE4SW (w13gs9k948uxu.cloudfront.net)
+Performance Score: 73/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] HTTP Origin
+   Current: Origin using HTTP protocol
+   Recommended: Use HTTPS for all origins
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: L1ONIDQRQOI4R (nounr3mfm2lv4.cloudfront.net)
+Performance Score: 78/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $2.12
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] Inefficient Price Class
+   Current: Using PriceClass_All but traffic concentrated in fewer regions
+   Recommended: Use PriceClass_100
+   Estimated Savings: $2.12/month
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: QMM25VO474NJ7 (n31gne965jxgc.cloudfront.net)
+Performance Score: 73/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: OCJCDLT6PKJF9 (knmis04lojitj.cloudfront.net)
+Performance Score: 78/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+2025-11-17 00:30:33,399 - INFO - Analyzing distribution: QSZ5MYNIL7WL9
+2025-11-17 00:30:33,444 - INFO - Analyzing distribution: D5D2YY4EL9JXQ
+2025-11-17 00:30:33,481 - INFO - Analyzing distribution: DCP13PRK05DNV
+2025-11-17 00:30:33,543 - INFO - Analyzing distribution: M54ZWCRQS17NR
+2025-11-17 00:30:33,578 - INFO - Analyzing distribution: V29URHSWE8F9C
+/root/iac-test-automations/lib/analyse.py:723: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+  'report_date': datetime.utcnow().isoformat(),
+2025-11-17 00:30:33,616 - INFO - JSON report saved to cloudfront_optimization.json
+/root/iac-test-automations/lib/analyse.py:893: DeprecationWarning:
+
+datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
+
+2025-11-17 00:30:33,899 - INFO - HTML report saved to cache_efficiency_report.html
+2025-11-17 00:30:33,900 - INFO - CSV roadmap saved to cdn_optimization_roadmap.csv
+3. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: QSZ5MYNIL7WL9 (pch2xjbhofxvc.cloudfront.net)
+Performance Score: 78/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+3. [MEDIUM] No Lambda@Edge
+   Current: Serving dynamic content without edge compute
+   Recommended: Use Lambda@Edge for dynamic content optimization
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: D5D2YY4EL9JXQ (ewgld3kha8gip.cloudfront.net)
+Performance Score: 73/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] Insecure Viewer Protocol Policy
+   Current: Allowing HTTP viewer requests
+   Recommended: Use redirect-to-https or https-only
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: DCP13PRK05DNV (v12hh7buu9pac.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.23
+
+Top Issues:
+1. [HIGH] Forward All Cookies
+   Current: Forwarding all cookies to origin
+   Recommended: Only forward necessary cookies
+   Estimated Savings: $0.23/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] No Lambda@Edge
+   Current: Serving dynamic content without edge compute
+   Recommended: Use Lambda@Edge for dynamic content optimization
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: M54ZWCRQS17NR (y3j54uxygmirn.cloudfront.net)
+Performance Score: 83/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+3. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: V29URHSWE8F9C (cmykn0cfsmhdv.cloudfront.net)
+Performance Score: 83/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+3. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+CloudFront Optimization Summary
+| Distribution   | Domain                       |   Score | Cache Hit   |   Issue Count | Potential Savings   |
+|----------------|------------------------------|---------|-------------|---------------|---------------------|
+| T683AIUNJ4IEI  | ojgruxcdow9jn.cloudfront.net |      83 | 92.0%       |             3 | $0.00               |
+| CEKR2F21GYPMD  | ogt5tjja9bqr0.cloudfront.net |      63 | 60.0%       |             4 | $0.94               |
+| PGV51ICGLM2MY  | sod8putfieii4.cloudfront.net |      72 | 78.0%       |             4 | $0.89               |
+| WXLRY1J0JN70G  | o4o17umkz37uw.cloudfront.net |      78 | 85.0%       |             4 | $2.98               |
+| XJ2C7FPJSTPAW  | qsrgqadlcjfgo.cloudfront.net |      73 | 85.0%       |             4 | $0.60               |
+| UJVEMQEFF8HBV  | uzcpsc3136z9e.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
+| N9SMMKFBDE4SW  | w13gs9k948uxu.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
+| L1ONIDQRQOI4R  | nounr3mfm2lv4.cloudfront.net |      78 | 85.0%       |             4 | $2.12               |
+| QMM25VO474NJ7  | n31gne965jxgc.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
+| OCJCDLT6PKJF9  | knmis04lojitj.cloudfront.net |      78 | 85.0%       |             4 | $0.00               |
+| QSZ5MYNIL7WL9  | pch2xjbhofxvc.cloudfront.net |      78 | 85.0%       |             4 | $0.00               |
+| D5D2YY4EL9JXQ  | ewgld3kha8gip.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
+| DCP13PRK05DNV  | v12hh7buu9pac.cloudfront.net |      68 | 85.0%       |             5 | $0.23               |
+| M54ZWCRQS17NR  | y3j54uxygmirn.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
+| V29URHSWE8F9C  | cmykn0cfsmhdv.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
+Analyzed 15 distributions | Avg Cache Hit: 83.3% | Total Potential Savings: $7.75
