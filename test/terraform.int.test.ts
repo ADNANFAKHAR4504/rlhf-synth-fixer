@@ -118,6 +118,9 @@ function parseSubnetIds(subnetOutput: any): Record<string, string> {
 const outputs = loadDeploymentOutputs(); 
 const region = process.env.AWS_REGION || 'us-east-1';
 
+// Define the instance profile ARN (replace with the actual ARN)
+const instanceProfileArn = process.env.INSTANCE_PROFILE_ARN || 'arn:aws:iam::123456789012:instance-profile/YourInstanceProfileName';
+
 // Initialize AWS SDK v3 clients
 const ec2Client = new EC2Client({ region });
 const cloudWatchLogsClient = new CloudWatchLogsClient({ region });
@@ -499,7 +502,6 @@ describe('VPC Infrastructure Integration Tests', () => {
         ])
       );
     }, 45000);
-  });
 
   // ============================================================================
   // PART 2: SERVICE-LEVEL TESTS (Single Service Interactive)
@@ -859,22 +861,21 @@ describe('VPC Infrastructure Integration Tests', () => {
       
       // ACTION: Verify NAT Gateway connectivity by checking routes
       for (const [az, mapping] of azToNatMapping) {
-        const routesResponse = await ec2Client.send(new DescribeRouteTablesCommand({
-          Filters: [
-            { Name: 'route-table-id', Values: [mapping.rtId] },
-            { Name: 'destination-cidr-block', Values: ['0.0.0.0/0'] }
-          ]
-        }));
+      const routeTableResponse = await ec2Client.send(new DescribeRouteTablesCommand({
+        RouteTableIds: [mapping.rtId]
+      }));
+      
+      expect(routeTableResponse.RouteTables).toHaveLength(1);
+      const routeTable = routeTableResponse.RouteTables![0];
+      
         
-        expect(routesResponse.RouteTables).toHaveLength(1);
-        const routeTable = routesResponse.RouteTables![0];
-        const natRoute = routeTable.Routes?.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
-        expect(natRoute).toBeDefined();
-        expect(natRoute!.State).toBe('active');
-        expect(natRoute!.NatGatewayId).toBe(mapping.natId);
-      }
-    }, 60000);
-  });
+       const natRoute = routeTable.Routes?.find(r => r.DestinationCidrBlock === '0.0.0.0/0');
+      expect(natRoute).toBeDefined();
+      expect(natRoute!.State).toBe('active');
+      expect(natRoute!.NatGatewayId).toBe(mapping.natId);
+    }
+  }, 60000);
+});
 
   describe('[Cross-Service] VPC ↔ Internet Gateway Connectivity', () => {
     test('should validate VPC has proper internet connectivity through IGW', async () => {
@@ -906,11 +907,11 @@ describe('VPC Infrastructure Integration Tests', () => {
       
       // ACTION: Check route propagation
       const routesResponse = await ec2Client.send(new DescribeRouteTablesCommand({
-        Filters: [
-          { Name: 'route-table-id', Values: [publicRt.RouteTableId!] },
-          { Name: 'gateway-id', Values: [igw.InternetGatewayId!] }
-        ]
-      }));
+      Filters: [
+        { Name: 'route-table-id', Values: [publicRt.RouteTableId!] },
+        { Name: 'route.gateway-id', Values: [igw.InternetGatewayId!] }  // Correct filter name
+      ]
+    }));
       
       expect(routesResponse.RouteTables).toHaveLength(1);
       expect(routesResponse.RouteTables![0].Routes![0].State).toBe('active');
@@ -1215,18 +1216,22 @@ describe('VPC Infrastructure Integration Tests', () => {
         SecurityGroupIds: [sgId],
         // No KeyName is needed for this self-contained test
         UserData: Buffer.from(USER_DATA_SCRIPT).toString('base64'),
-        // NOTE: A Role with ec2:TerminateInstances permission is ideally needed here.
-        // For standard EC2 tests without IAM setup, we rely on the afterAll cleanup.
+        IamInstanceProfile: {
+            Arn: instanceProfileArn
+        },
+        // ----------------------
+        
         TagSpecifications: [{
           ResourceType: 'instance',
           Tags: [{ Key: 'Name', Value: `e2e-nat-test-instance-${testTag}` }]
         }]
       }));
 
-      const instanceId = runInstanceResponse.Instances![0].InstanceId!;
-      testResources.instanceIds.push(instanceId); // Add to cleanup list
-
-      console.log(` -> Launched test instance ${instanceId}. Waiting for self-termination (up to 10 min)...`);
+      // Extract the instance ID from the response
+      const instanceId = runInstanceResponse.Instances?.[0]?.InstanceId;
+      if (!instanceId) {
+        throw new Error('Failed to launch instance: Instance ID not found in response.');
+      }
 
       // 3. Wait: Wait for the instance to be terminated (by its own script).
       // This confirms the script ran successfully, which confirms NAT connectivity.
@@ -1337,4 +1342,5 @@ describe('VPC Infrastructure Integration Tests', () => {
       expect(allHealthy).toBe(true);
     }, 60000);
   });
+});
 });

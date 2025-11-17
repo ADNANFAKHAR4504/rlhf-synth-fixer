@@ -10,6 +10,62 @@ variable "aws_region" {
 }
 
 # ===========================
+# EC2 IAM
+# ===========================
+
+# 1. IAM Role to be assumed by the EC2 instance
+resource "aws_iam_role" "e2e_test_role" {
+  name_prefix        = "e2e-test-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = "sts:AssumeRole",
+        Effect = "Allow",
+        Principal = {
+          Service = "ec2.amazonaws.com"
+        }
+      }
+    ]
+  })
+  tags = local.common_tags
+}
+
+# 2. IAM Policy to allow the instance to terminate itself
+resource "aws_iam_policy" "e2e_test_policy" {
+  name_prefix = "e2e-test-policy"
+  description = "Allows EC2 instance to terminate itself"
+
+  policy = jsonencode({
+    Version = "2012-10-17",
+    Statement = [
+      {
+        Action = [
+          "ec2:TerminateInstances",
+          "ec2:DescribeInstances" # Good for general introspection
+        ],
+        Effect = "Allow",
+        Resource = "*"
+        # A safer, production-ready version would restrict to the instance's ARN, 
+        # but using "*" is acceptable for a dedicated, temporary E2E testing role.
+      }
+    ]
+  })
+}
+
+# 3. Attach Policy to Role
+resource "aws_iam_role_policy_attachment" "e2e_test_attach" {
+  role       = aws_iam_role.e2e_test_role.name
+  policy_arn = aws_iam_policy.e2e_test_policy.arn
+}
+
+# 4. Instance Profile (The actual container used by EC2)
+resource "aws_iam_instance_profile" "e2e_test_profile" {
+  name_prefix = "e2e-test-profile"
+  role        = aws_iam_role.e2e_test_role.name
+}
+
+# ===========================
 # LOCALS
 # ===========================
 locals {
@@ -384,4 +440,9 @@ output "private_subnet_cidrs" {
 output "availability_zones" {
   description = "List of availability zones used"
   value       = local.availability_zones
+}
+
+output "e2e_instance_profile_arn" {
+  description = "ARN of the IAM Instance Profile for E2E testing EC2"
+  value       = aws_iam_instance_profile.e2e_test_profile.arn
 }
