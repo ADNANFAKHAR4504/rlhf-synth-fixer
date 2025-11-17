@@ -14,26 +14,11 @@ export { S3Component } from './components/s3-component';
 export { SecurityComponent } from './components/security-component';
 export { VpcComponent } from './components/vpc-component';
 
-// Create and export the default stack instance
-import { TapStack } from './tap-stack';
+// Re-export the stack outputs from tap-stack.ts (which creates the instance)
+export {
+  albArn, albDnsName, dashboardName, ecsClusterArn,
+  ecsServiceArn, privateSubnetIds, publicSubnetIds, rdsClusterEndpoint,
+  rdsClusterReaderEndpoint,
+  s3BucketName, snsTopicArn, vpcId
+} from './tap-stack';
 
-// Only instantiate if not in test environment
-let defaultStack: TapStack | undefined;
-
-if (!process.env.JEST_WORKER_ID) {
-  defaultStack = new TapStack('TapStack');
-}
-
-// Export stack outputs (will be undefined in test environment)
-export const vpcId = defaultStack?.vpcId;
-export const publicSubnetIds = defaultStack?.publicSubnetIds;
-export const privateSubnetIds = defaultStack?.privateSubnetIds;
-export const albDnsName = defaultStack?.albDnsName;
-export const albArn = defaultStack?.albArn;
-export const ecsClusterArn = defaultStack?.ecsClusterArn;
-export const ecsServiceArn = defaultStack?.ecsServiceArn;
-export const rdsClusterEndpoint = defaultStack?.rdsClusterEndpoint;
-export const rdsClusterReaderEndpoint = defaultStack?.rdsClusterReaderEndpoint;
-export const s3BucketName = defaultStack?.s3BucketName;
-export const dashboardName = defaultStack?.dashboardName;
-export const snsTopicArn = defaultStack?.snsTopicArn;
