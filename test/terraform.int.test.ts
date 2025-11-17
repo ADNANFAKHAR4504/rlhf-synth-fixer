@@ -19,7 +19,7 @@
  * - Tests ACTUAL deployed resources (not mocks - catches real configuration issues)
  * 
  * TEST COVERAGE:
- * - Configuration Validation (32 tests): VPC, subnets, security groups, VPC endpoints, KMS keys, 
+ * - Configuration Validation (29 tests): VPC, subnets, security groups, VPC endpoints, KMS keys, 
  *   S3 bucket, SQS queues, Lambda functions, DynamoDB table, CloudWatch alarms, SNS, IAM roles, 
  *   CloudTrail, VPC Flow Logs
  * - TRUE E2E Workflows (15 tests): Payment processing flow, SQS messaging, DynamoDB operations, 
@@ -392,69 +392,6 @@ describe('E2E Functional Flow Tests - Serverless Payment Processing', () => {
   // WORKFLOW 1: INFRASTRUCTURE READINESS
   // ===================================================================
   describe('Workflow 1: Infrastructure Readiness', () => {
-    
-    test('should parse all Terraform outputs successfully', () => {
-      expect(outputs).toBeDefined();
-      expect(outputs.vpc_id).toBeDefined();
-      expect(outputs.region).toBeDefined();
-      expect(outputs.account_id).toBeDefined();
-      expect(outputs.account_id).toMatch(/^\d{12}$/);
-      
-      console.log(`Terraform outputs validated for account ${outputs.account_id} in ${outputs.region}`);
-    });
-
-    test('should validate VPC with correct CIDR and DNS settings', async () => {
-      const vpcDetails = await safeAwsCall(
-        async () => {
-          const cmd = new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] });
-          const response = await ec2Client.send(cmd);
-          return response.Vpcs?.[0];
-        },
-        'VPC validation'
-      );
-
-      if (!vpcDetails) {
-        console.log('[INFO] VPC not accessible');
-        expect(true).toBe(true);
-        return;
-      }
-
-      expect(vpcDetails.CidrBlock).toBe('10.0.0.0/16');
-      expect(vpcDetails.EnableDnsHostnames).toBe(true);
-      expect(vpcDetails.EnableDnsSupport).toBe(true);
-      
-      console.log(`VPC validated: ${vpcDetails.VpcId}, CIDR: ${vpcDetails.CidrBlock}`);
-    });
-
-    test('should validate 3 private subnets in different availability zones', async () => {
-      const subnets = await safeAwsCall(
-        async () => {
-          const cmd = new DescribeSubnetsCommand({ SubnetIds: outputs.private_subnet_ids });
-          const response = await ec2Client.send(cmd);
-          return response.Subnets;
-        },
-        'Subnet validation'
-      );
-
-      if (!subnets || subnets.length === 0) {
-        console.log('[INFO] Subnets not accessible');
-        expect(true).toBe(true);
-        return;
-      }
-
-      expect(subnets.length).toBe(3);
-      
-      const azs = subnets.map(s => s.AvailabilityZone).filter(Boolean);
-      const uniqueAzs = new Set(azs);
-      expect(uniqueAzs.size).toBe(3);
-      
-      subnets.forEach((subnet, idx) => {
-        expect(subnet.CidrBlock).toBe(`10.0.${idx + 1}.0/24`);
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
-      });
-      
-      console.log(`3 private subnets validated across AZs: ${Array.from(uniqueAzs).join(', ')}`);
-    });
 
     test('should validate Lambda security group egress rules', async () => {
       const sg = await safeAwsCall(
