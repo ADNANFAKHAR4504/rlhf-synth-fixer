@@ -966,11 +966,21 @@ from datetime import datetime
 
 def handler(event, context):
     try:
-        # Handle health check endpoint
+        # Handle health check endpoint - check multiple path formats
         raw_path = event.get('rawPath', event.get('path', ''))
+        route_key = event.get('routeKey', '')
         request_method = event.get('requestContext', {}).get('http', {}).get('method', '')
 
-        if raw_path == '/health' and request_method == 'GET':
+        # Also check for HTTP method in event directly for API Gateway v1/v2 compatibility
+        http_method = event.get('httpMethod', request_method)
+
+        # Health check can be accessed via GET /health or just /health
+        is_health_check = (
+            (raw_path == '/health' or raw_path.endswith('/health')) and
+            (http_method == 'GET' or route_key == 'GET /health')
+        )
+
+        if is_health_check:
             return {
                 'statusCode': 200,
                 'body': json.dumps({
@@ -980,7 +990,7 @@ def handler(event, context):
                 })
             }
 
-        # Validate environment variables
+        # For payment endpoint, validate environment variables
         table_name = os.environ.get('TABLE_NAME')
         if not table_name:
             return {
