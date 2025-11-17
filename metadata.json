@@ -1,6 +1,4 @@
 {
-  "task_id": "m2c0m5-v2",
-  "po_id": "m2c0m5",
   "platform": "cdk",
   "language": "ts",
   "complexity": "expert",
@@ -9,9 +7,10 @@
   "startedAt": "2025-11-17T21:45:30-05:00",
   "subtask": "Application Deployment",
   "subject_labels": [
-    "Application Deployment",
-    "Web Application Deployment"
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
   ],
+  "po_id": "m2c0m5",
   "aws_services": [
     "API Gateway",
     "Lambda",
@@ -28,27 +27,6 @@
     "S3",
     "IAM"
   ],
-  "enhanced_requirements_file": ".claude/enhanced-task-m2c0m5.md",
-  "enhancement_reason": "Retry with increased complexity for improved training quality",
-  "previous_attempt_score": 5,
-  "target_score": 8,
-  "requirements_count": 19,
-  "constraints_count": 15,
-  "enhanced_services": [
-    "API Gateway",
-    "Lambda",
-    "DynamoDB",
-    "SQS",
-    "SNS",
-    "EventBridge",
-    "CloudWatch",
-    "Step Functions",
-    "Kinesis Data Streams",
-    "CodeDeploy",
-    "AWS WAF",
-    "KMS",
-    "S3",
-    "IAM"
-  ],
+  "region": "us-east-1",
   "training_quality": 10
 }

@@ -49,7 +49,7 @@ export class ComputeStack extends cdk.Stack {
       'SharedDependenciesLayer',
       {
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda-packages/shared-layer')
+          path.join(__dirname, './lambda-packages/shared-layer')
         ),
         compatibleRuntimes: [lambda.Runtime.NODEJS_20_X],
         description: 'Shared dependencies for pattern detection functions',
@@ -84,7 +84,7 @@ export class ComputeStack extends cdk.Stack {
         ...commonLambdaProps,
         functionName: `PatternDetector-${environmentSuffix}`,
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda-packages/pattern-detector')
+          path.join(__dirname, './lambda-packages/pattern-detector')
         ),
         handler: 'index.handler',
         memorySize: 512,
@@ -113,7 +113,7 @@ export class ComputeStack extends cdk.Stack {
       ...commonLambdaProps,
       functionName: `AlertProcessor-${environmentSuffix}`,
       code: lambda.Code.fromAsset(
-        path.join(__dirname, '../lambda-packages/alert-processor')
+        path.join(__dirname, './lambda-packages/alert-processor')
       ),
       handler: 'index.handler',
       memorySize: 256,
@@ -148,7 +148,7 @@ export class ComputeStack extends cdk.Stack {
         ...commonLambdaProps,
         functionName: `ThresholdChecker-${environmentSuffix}`,
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda-packages/threshold-checker')
+          path.join(__dirname, './lambda-packages/threshold-checker')
         ),
         handler: 'index.handler',
         memorySize: 256,
@@ -174,7 +174,7 @@ export class ComputeStack extends cdk.Stack {
         ...commonLambdaProps,
         functionName: `KinesisConsumer-${environmentSuffix}`,
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda-packages/kinesis-consumer')
+          path.join(__dirname, './lambda-packages/kinesis-consumer')
         ),
         handler: 'index.handler',
         memorySize: 512,
@@ -208,7 +208,7 @@ export class ComputeStack extends cdk.Stack {
         ...commonLambdaProps,
         functionName: `ApprovalProcessor-${environmentSuffix}`,
         code: lambda.Code.fromAsset(
-          path.join(__dirname, '../lambda-packages/approval-processor')
+          path.join(__dirname, './lambda-packages/approval-processor')
         ),
         handler: 'index.handler',
         memorySize: 256,
@@ -255,7 +255,7 @@ export class ComputeStack extends cdk.Stack {
     this.liveAlias = new lambda.Alias(this, 'LiveAlias', {
       aliasName: 'live',
       version: version,
-      provisionedConcurrentExecutions: 10,
+      // provisionedConcurrentExecutions: 10, // Commented out - can cause deployment failures on initial deploy
     });
 
     // Create CodeDeploy application and deployment group

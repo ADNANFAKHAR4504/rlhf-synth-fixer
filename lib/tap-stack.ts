@@ -91,5 +91,83 @@ export class TapStack extends cdk.Stack {
     cdk.Tags.of(this).add('Project', 'StockPatternDetection');
     cdk.Tags.of(this).add('Environment', 'Production');
     cdk.Tags.of(this).add('CostCenter', 'Trading');
+
+    // Expose all nested stack outputs in main stack for flat-outputs.json
+    // DataStack outputs
+    new cdk.CfnOutput(this, 'AlertQueueUrl', {
+      value: dataStack.alertQueue.queueUrl,
+      description: 'SQS AlertQueue URL',
+      exportName: `AlertQueueUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'PendingApprovalsQueueUrl', {
+      value: dataStack.pendingApprovalsQueue.queueUrl,
+      description: 'SQS PendingApprovals queue URL',
+      exportName: `PendingApprovalsQueueUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'KinesisStreamArn', {
+      value: dataStack.marketDataStream.streamArn,
+      description: 'Kinesis stream ARN',
+      exportName: `KinesisStreamArn-${environmentSuffix}`,
+    });
+
+    // ComputeStack outputs
+    new cdk.CfnOutput(this, 'LiveAliasArn', {
+      value: computeStack.liveAlias.functionArn,
+      description: 'Lambda live alias ARN',
+      exportName: `LiveAliasArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'DeploymentGroupName', {
+      value: computeStack.deploymentGroup.deploymentGroupName,
+      description: 'CodeDeploy deployment group name',
+      exportName: `DeploymentGroupName-${environmentSuffix}`,
+    });
+
+    // ApiStack outputs
+    new cdk.CfnOutput(this, 'ApiGatewayUrl', {
+      value: apiStack.apiUrl,
+      description: 'API Gateway main endpoint URL',
+      exportName: `ApiGatewayUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'CanaryApiUrl', {
+      value: apiStack.canaryApiUrl,
+      description: 'API Gateway canary endpoint URL',
+      exportName: `CanaryApiUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'ApprovalApiUrl', {
+      value: apiStack.approvalApiUrl,
+      description: 'Approval API endpoint URL',
+      exportName: `ApprovalApiUrl-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'WebAclArn', {
+      value: apiStack.webAclArn,
+      description: 'WAF WebACL ARN',
+      exportName: `WebAclArn-${environmentSuffix}`,
+    });
+
+    // OrchestrationStack outputs
+    new cdk.CfnOutput(this, 'PatternAnalysisWorkflowArn', {
+      value: orchestrationStack.patternAnalysisWorkflow.stateMachineArn,
+      description: 'Step Functions PatternAnalysisWorkflow ARN',
+      exportName: `PatternAnalysisWorkflowArn-${environmentSuffix}`,
+    });
+
+    new cdk.CfnOutput(this, 'PowerTuningWorkflowArn', {
+      value: orchestrationStack.powerTuningWorkflow.stateMachineArn,
+      description: 'Step Functions PowerTuningWorkflow ARN',
+      exportName: `PowerTuningWorkflowArn-${environmentSuffix}`,
+    });
+
+    // MonitoringStack outputs
+    new cdk.CfnOutput(this, 'DashboardUrl', {
+      value: monitoringStack.dashboardUrl,
+      description: 'CloudWatch Dashboard URL',
+      exportName: `DashboardUrl-${environmentSuffix}`,
+    });
   }
 }

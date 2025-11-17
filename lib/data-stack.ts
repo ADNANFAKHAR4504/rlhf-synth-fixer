@@ -88,10 +88,13 @@ export class DataStack extends cdk.Stack {
       masterKey: kmsKey,
     });
 
-    // Add email subscription (using a placeholder email)
-    this.tradingAlertsTopic.addSubscription(
-      new sns_subscriptions.EmailSubscription('alerts@example.com')
-    );
+    // Add email subscription if ALERT_EMAIL environment variable is set
+    const alertEmail = process.env.ALERT_EMAIL;
+    if (alertEmail) {
+      this.tradingAlertsTopic.addSubscription(
+        new sns_subscriptions.EmailSubscription(alertEmail)
+      );
+    }
 
     // 6. SNS AlertApprovalRequests topic
     this.alertApprovalTopic = new sns.Topic(this, 'AlertApprovalRequests', {

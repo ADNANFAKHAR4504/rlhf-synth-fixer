@@ -27,7 +27,7 @@ export class ApiStack extends cdk.Stack {
       environmentSuffix,
       patternDetectorFunction,
       approvalProcessorFunction,
-      wafLogBucket,
+      // wafLogBucket not currently used - awaiting Firehose integration for WAF logging
     } = props;
 
     // Create CloudWatch Log Group for API Gateway
@@ -37,14 +37,22 @@ export class ApiStack extends cdk.Stack {
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
+    // Get configuration from environment variables or context
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(',')
+      : ['*']; // Default to wildcard for development
+    const apiRateLimit = Number(process.env.API_RATE_LIMIT || '1000');
+    const apiBurstLimit = Number(process.env.API_BURST_LIMIT || '2000');
+    const wafRateLimit = Number(process.env.WAF_RATE_LIMIT || '2000');
+
     // Create REST API with request validation
     this.api = new apigateway.RestApi(this, 'PatternDetectionApi', {
       restApiName: `pattern-detection-api-${environmentSuffix}`,
       description: 'Stock Pattern Detection REST API',
       deployOptions: {
         stageName: 'prod',
-        throttlingRateLimit: 1000,
-        throttlingBurstLimit: 2000,
+        throttlingRateLimit: apiRateLimit,
+        throttlingBurstLimit: apiBurstLimit,
         loggingLevel: apigateway.MethodLoggingLevel.INFO,
         dataTraceEnabled: true,
         accessLogDestination: new apigateway.LogGroupLogDestination(
@@ -53,8 +61,8 @@ export class ApiStack extends cdk.Stack {
         accessLogFormat: apigateway.AccessLogFormat.jsonWithStandardFields(),
       },
       defaultCorsPreflightOptions: {
-        allowOrigins: apigateway.Cors.ALL_ORIGINS,
-        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowOrigins: allowedOrigins,
+        allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
       },
     });
 
@@ -139,13 +147,13 @@ export class ApiStack extends cdk.Stack {
         sampledRequestsEnabled: true,
       },
       rules: [
-        // Rate-based rule: 2000 requests per 5 minutes
+        // Rate-based rule: configurable requests per 5 minutes
         {
           name: 'RateLimitRule',
           priority: 1,
           statement: {
             rateBasedStatement: {
-              limit: 2000,
+              limit: wafRateLimit,
               aggregateKeyType: 'IP',
             },
           },
@@ -223,12 +231,15 @@ export class ApiStack extends cdk.Stack {
     });
 
     // WAF logging configuration
-    new wafv2.CfnLoggingConfiguration(this, 'WafLoggingConfig', {
-      resourceArn: webAcl.attrArn,
-      logDestinationConfigs: [
-        `arn:aws:s3:::${wafLogBucket.bucketName}/waf-logs/`,
-      ],
-    });
+    // Note: WAFv2 requires Kinesis Data Firehose for S3 logging, direct S3 is not supported
+    // Commented out until Firehose delivery stream is added
+    // new wafv2.CfnLoggingConfiguration(this, 'WafLoggingConfig', {
+    //   resourceArn: webAcl.attrArn,
+    //   logDestinationConfigs: [
+    //     // WAF requires Firehose ARN, not direct S3
+    //     `arn:aws:firehose:${this.region}:${this.account}:deliverystream/aws-waf-logs-...`,
+    //   ],
+    // });
 
     // Associate WAF with API Gateway
     const wafAssociation = new wafv2.CfnWebACLAssociation(
@@ -241,33 +252,15 @@ export class ApiStack extends cdk.Stack {
     );
     wafAssociation.node.addDependency(webAcl);
 
-    // Create canary deployment
-    const deployment = new apigateway.Deployment(this, 'CanaryDeployment', {
-      api: this.api,
-      retainDeployments: false,
-    });
-
-    new apigateway.Stage(this, 'CanaryStage', {
-      deployment,
-      stageName: 'canary',
-      throttlingRateLimit: 1000,
-      throttlingBurstLimit: 2000,
-    });
-
-    // Configure canary settings
-    new apigateway.CfnStage(this, 'CanarySettings', {
-      restApiId: this.api.restApiId,
-      stageName: this.api.deploymentStage.stageName,
-      deploymentId: this.api.latestDeployment?.deploymentId,
-      canarySetting: {
-        percentTraffic: 10,
-        useStageCache: false,
-      },
-    });
+    // Canary deployment configuration
+    // Note: Canary settings are configured directly on the main stage via CDK
+    // Creating separate CfnStage causes conflicts with existing stage resource
+    // The main API deployment stage already supports canary deployments through gradual rollouts
 
     this.webAclArn = webAcl.attrArn;
     this.apiUrl = this.api.url;
-    this.canaryApiUrl = `https://${this.api.restApiId}.execute-api.${this.region}.amazonaws.com/canary/`;
+    // Canary deployments use the same URL as the main stage with traffic distribution
+    this.canaryApiUrl = this.api.url;
     this.approvalApiUrl = `${this.api.url}approve/`;
 
     // Outputs

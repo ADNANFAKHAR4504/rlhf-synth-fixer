@@ -144,6 +144,20 @@ export class MonitoringStack extends cdk.Stack {
               FunctionName: thresholdCheckerFunction.functionName,
             },
           }),
+          new cloudwatch.Metric({
+            namespace: 'AWS/Lambda',
+            metricName: 'ConcurrentExecutions',
+            dimensionsMap: {
+              FunctionName: kinesisConsumerFunction.functionName,
+            },
+          }),
+          new cloudwatch.Metric({
+            namespace: 'AWS/Lambda',
+            metricName: 'ConcurrentExecutions',
+            dimensionsMap: {
+              FunctionName: approvalProcessorFunction.functionName,
+            },
+          }),
         ],
         width: 12,
         height: 6,
