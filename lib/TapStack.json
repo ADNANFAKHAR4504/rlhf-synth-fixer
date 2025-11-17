@@ -128,6 +128,7 @@
     "PatientDataBucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "patient-data-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -247,7 +248,14 @@
               "Principal": {
                 "Service": "lambda.amazonaws.com"
               },
-              "Action": "sts:AssumeRole"
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Ref": "ExternalId"
+                  }
+                }
+              }
             }
           ]
         },
@@ -351,6 +359,7 @@
     "PatientDataProcessorLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "LogGroupName": {
           "Fn::Sub": "/aws/lambda/patient-data-processor-${EnvironmentSuffix}"
@@ -454,6 +463,9 @@
         },
         "Action": "lambda:InvokeFunction",
         "Principal": "s3.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
         "SourceArn": {
           "Fn::GetAtt": [
             "PatientDataBucket",
