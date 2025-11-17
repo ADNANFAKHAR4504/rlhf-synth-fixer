@@ -45,7 +45,7 @@ resource "aws_iam_role_policy" "lambda" {
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface"
         ]
-        Resource = "*"  # Network interfaces require * due to dynamic creation
+        Resource = "*" # Network interfaces require * due to dynamic creation
       },
       {
         Effect = "Allow"
@@ -72,7 +72,7 @@ resource "aws_iam_role_policy" "lambda" {
         Action = [
           "cloudwatch:PutMetricData"
         ]
-        Resource = "*"  # CloudWatch metrics don't support resource-level permissions
+        Resource = "*" # CloudWatch metrics don't support resource-level permissions
       },
       {
         Effect = "Allow"

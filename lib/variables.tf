@@ -68,6 +68,7 @@ variable "db_master_password" {
   description = "Master password for RDS"
   type        = string
   sensitive   = true
+  default     = "TempPassword123!"
 }
 
 variable "db_instance_class" {
@@ -108,4 +109,5 @@ variable "replication_lag_threshold" {
 variable "sns_email" {
   description = "Email address for SNS notifications"
   type        = string
+  default     = "admin@example.com"
 }

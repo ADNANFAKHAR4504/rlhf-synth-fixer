@@ -1,7 +1,7 @@
 # Random password generation for RDS
 resource "random_password" "db_master_password" {
-  length  = 32
-  special = true
+  length           = 32
+  special          = true
   override_special = "!#$%&*()-_=+[]{}<>:?"
 }
 

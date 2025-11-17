@@ -388,10 +388,10 @@ resource "aws_lb_listener" "main" {
 module "vpc_endpoints" {
   source = "../vpc_endpoints"
 
-  vpc_id      = aws_vpc.main.id
-  vpc_cidr    = var.vpc_cidr
-  region      = var.region
-  dr_role     = var.dr_role
+  vpc_id             = aws_vpc.main.id
+  vpc_cidr           = var.vpc_cidr
+  region             = var.region
+  dr_role            = var.dr_role
   environment_suffix = var.environment_suffix
 
   private_subnet_ids       = aws_subnet.private[*].id

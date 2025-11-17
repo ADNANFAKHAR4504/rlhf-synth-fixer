@@ -14,10 +14,10 @@ terraform {
 resource "aws_dynamodb_table" "session_state" {
   provider = aws.primary
 
-  name             = "session-state-${var.environment_suffix}"
-  billing_mode     = "PAY_PER_REQUEST"
-  hash_key         = "session_id"
-  range_key        = "timestamp"
+  name         = "session-state-${var.environment_suffix}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "session_id"
+  range_key    = "timestamp"
 
   # Enable Point-in-Time Recovery
   point_in_time_recovery {
@@ -92,10 +92,10 @@ resource "aws_dynamodb_table" "session_state" {
 resource "aws_dynamodb_table" "app_state" {
   provider = aws.primary
 
-  name             = "app-state-${var.environment_suffix}"
-  billing_mode     = "PAY_PER_REQUEST"
-  hash_key         = "state_key"
-  range_key        = "version"
+  name         = "app-state-${var.environment_suffix}"
+  billing_mode = "PAY_PER_REQUEST"
+  hash_key     = "state_key"
+  range_key    = "version"
 
   point_in_time_recovery {
     enabled = true

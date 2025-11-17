@@ -85,8 +85,8 @@ resource "aws_security_group" "rds_proxy" {
 
 # RDS Proxy
 resource "aws_db_proxy" "main" {
-  name                   = "rds-proxy-${var.dr_role}-${var.environment_suffix}"
-  engine_family          = "MYSQL"
+  name          = "rds-proxy-${var.dr_role}-${var.environment_suffix}"
+  engine_family = "MYSQL"
   auth {
     auth_scheme = "SECRETS"
     secret_arn  = var.secret_arn
@@ -98,11 +98,11 @@ resource "aws_db_proxy" "main" {
   vpc_security_group_ids = [aws_security_group.rds_proxy.id]
 
   # Connection pooling configuration
-  max_connections_percent        = 100
-  max_idle_connections_percent   = 50
-  connection_borrow_timeout      = 120
-  session_pinning_filters        = []
-  idle_client_timeout            = 1800
+  max_connections_percent      = 100
+  max_idle_connections_percent = 50
+  connection_borrow_timeout    = 120
+  session_pinning_filters      = []
+  idle_client_timeout          = 1800
 
   # Enable enhanced monitoring
   require_tls = true

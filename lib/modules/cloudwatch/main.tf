@@ -121,13 +121,13 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/RDS", "AuroraGlobalDBReplicationLag", {
-              stat = "Average",
-              label = "Primary → Secondary Lag",
+              stat   = "Average",
+              label  = "Primary → Secondary Lag",
               region = "us-east-1"
             }],
             ["...", {
-              stat = "Maximum",
-              label = "Max Lag",
+              stat   = "Maximum",
+              label  = "Max Lag",
               region = "us-east-1"
             }]
           ]
@@ -137,7 +137,7 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
           title  = "Global Database Replication Lag"
           yAxis = {
             left = {
-              min = 0
+              min   = 0
               label = "Milliseconds"
             }
           }
@@ -145,7 +145,7 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
             horizontal = [{
               value = var.replication_lag_threshold * 1000
               label = "Threshold"
-              fill = "above"
+              fill  = "above"
             }]
           }
         }
@@ -156,16 +156,16 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/RDS", "CPUUtilization", {
-              stat = "Average",
-              label = "Primary (us-east-1)",
+              stat   = "Average",
+              label  = "Primary (us-east-1)",
               region = "us-east-1",
               dimensions = {
                 DBClusterIdentifier = var.primary_cluster_id
               }
             }],
             ["...", {
-              stat = "Average",
-              label = "Secondary (us-west-2)",
+              stat   = "Average",
+              label  = "Secondary (us-west-2)",
               region = "us-west-2",
               dimensions = {
                 DBClusterIdentifier = var.secondary_cluster_id
@@ -178,8 +178,8 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
           title  = "RDS CPU Utilization - Multi-Region"
           yAxis = {
             left = {
-              min = 0
-              max = 100
+              min   = 0
+              max   = 100
               label = "Percent"
             }
           }
@@ -191,16 +191,16 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/RDS", "DatabaseConnections", {
-              stat = "Sum",
-              label = "Primary Connections",
+              stat   = "Sum",
+              label  = "Primary Connections",
               region = "us-east-1",
               dimensions = {
                 DBClusterIdentifier = var.primary_cluster_id
               }
             }],
             ["...", {
-              stat = "Sum",
-              label = "Secondary Connections",
+              stat   = "Sum",
+              label  = "Secondary Connections",
               region = "us-west-2",
               dimensions = {
                 DBClusterIdentifier = var.secondary_cluster_id
@@ -219,13 +219,13 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/Route53", "HealthCheckStatus", {
-              stat = "Minimum",
-              label = "Primary Health",
+              stat   = "Minimum",
+              label  = "Primary Health",
               region = "us-east-1"
             }],
             ["...", {
-              stat = "Minimum",
-              label = "Secondary Health",
+              stat   = "Minimum",
+              label  = "Secondary Health",
               region = "us-west-2"
             }]
           ]
@@ -247,13 +247,13 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/Lambda", "Invocations", {
-              stat = "Sum",
-              label = "Primary Health Monitor",
+              stat   = "Sum",
+              label  = "Primary Health Monitor",
               region = "us-east-1"
             }],
             ["...", {
-              stat = "Sum",
-              label = "Secondary Health Monitor",
+              stat   = "Sum",
+              label  = "Secondary Health Monitor",
               region = "us-west-2"
             }]
           ]
@@ -269,13 +269,13 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/RDS", "DatabaseConnectionsCurrent", {
-              stat = "Average",
-              label = "Primary Proxy",
+              stat   = "Average",
+              label  = "Primary Proxy",
               region = "us-east-1"
             }],
             ["...", {
-              stat = "Average",
-              label = "Secondary Proxy",
+              stat   = "Average",
+              label  = "Secondary Proxy",
               region = "us-west-2"
             }]
           ]
@@ -291,13 +291,13 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/EC2", "NetworkIn", {
-              stat = "Sum",
-              label = "Primary Network In",
+              stat   = "Sum",
+              label  = "Primary Network In",
               region = "us-east-1"
             }],
             ["...", {
-              stat = "Sum",
-              label = "Secondary Network In",
+              stat   = "Sum",
+              label  = "Secondary Network In",
               region = "us-west-2"
             }]
           ]
@@ -318,15 +318,15 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
         properties = {
           metrics = [
             ["AWS/S3", "ReplicationLatency", {
-              stat = "Average",
-              label = "Replication Latency",
+              stat   = "Average",
+              label  = "Replication Latency",
               region = "us-east-1"
             }],
             [".", "PendingReplicationBytes", {
-              stat = "Average",
-              label = "Pending Bytes",
+              stat   = "Average",
+              label  = "Pending Bytes",
               region = "us-east-1",
-              yAxis = "right"
+              yAxis  = "right"
             }]
           ]
           period = 300
