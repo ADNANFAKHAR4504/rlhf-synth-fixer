@@ -1215,7 +1215,7 @@ Resources:
       RecrawlPolicy:
         RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
       Schedule:
-        ScheduleExpression: 'rate(1 hour)'
+        ScheduleExpression: 'cron(0 * * * ? *)'
       Configuration: |
         {
           "Version": 1.0,
@@ -1245,7 +1245,7 @@ Resources:
       RecrawlPolicy:
         RecrawlBehavior: CRAWL_NEW_FOLDERS_ONLY
       Schedule:
-        ScheduleExpression: 'rate(1 hour)'
+        ScheduleExpression: 'cron(0 * * * ? *)'
       Tags:
         Environment: !Ref Environment
         CostCenter: !Ref CostCenter
