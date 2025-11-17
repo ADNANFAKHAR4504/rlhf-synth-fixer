@@ -334,7 +334,6 @@ Resources:
   # EKS Node Group
   EKSNodeGroup:
     Type: AWS::EKS::Nodegroup
-    DependsOn: EKSCluster
     Properties:
       NodegroupName: !Sub 'eks-nodegroup-${EnvironmentSuffix}'
       ClusterName: !Ref EKSCluster
