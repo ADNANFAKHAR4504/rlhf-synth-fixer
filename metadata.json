@@ -1,0 +1,26 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "x89r6c",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T20:54:28+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "SQS",
+    "SNS",
+    "CloudWatch",
+    "WAF",
+    "X-Ray",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9
+}
