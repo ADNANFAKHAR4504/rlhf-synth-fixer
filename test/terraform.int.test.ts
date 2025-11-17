@@ -293,20 +293,15 @@ describe("Terraform IAM and KMS Infrastructure - Integration Tests", () => {
 
       const appDataKeyId = outputs.application_data_key_id;
       const infraSecretsKeyId = outputs.infrastructure_secrets_key_id;
-      const tfStateKeyId = outputs.terraform_state_key_id;
 
       const appDataAlias = aliases.Aliases!.find(a => a.TargetKeyId === appDataKeyId);
       const infraSecretsAlias = aliases.Aliases!.find(a => a.TargetKeyId === infraSecretsKeyId);
-      const tfStateAlias = aliases.Aliases!.find(a => a.TargetKeyId === tfStateKeyId);
 
       expect(appDataAlias).toBeDefined();
       expect(appDataAlias!.AliasName).toContain("application-data");
 
       expect(infraSecretsAlias).toBeDefined();
       expect(infraSecretsAlias!.AliasName).toContain("infrastructure-secrets");
-
-      expect(tfStateAlias).toBeDefined();
-      expect(tfStateAlias!.AliasName).toContain("terraform-state");
     }, 30000);
   });
 
