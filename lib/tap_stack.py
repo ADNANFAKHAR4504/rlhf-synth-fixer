@@ -405,7 +405,7 @@ class TapStack(pulumi.ComponentResource):
             f"payment-db-{self.environment_suffix}",
             identifier=f"payment-db-{self.environment_suffix}",
             engine="postgres",
-            engine_version="15.8",
+            engine_version="15.12",
             instance_class="db.t3.medium",
             allocated_storage=100,
             storage_type="gp3",
