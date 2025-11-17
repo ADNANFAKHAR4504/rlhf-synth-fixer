@@ -6,7 +6,9 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T03:47:35+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
   "po_id": "9pw3e5",
   "aws_services": [
     "VPC",
@@ -20,5 +22,6 @@
     "SSM"
   ],
   "region": "us-east-1",
+  "author": "aj-turing",
   "training_quality": 9
 }
