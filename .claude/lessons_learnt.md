@@ -669,6 +669,46 @@ grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 
 ---
 
-*Last Updated: 2025-11-06*
+## Deployment Success Checklist (Reference During Code Generation)
+
+**Before generating code, ensure PROMPT.md includes**:
+
+- [ ] environmentSuffix requirement for ALL named resources
+- [ ] Destroyability requirement (no Retain policies)
+- [ ] GuardDuty warning (if GuardDuty mentioned)
+- [ ] AWS Config IAM policy requirement (if Config mentioned)
+- [ ] Lambda Node.js 18+ SDK warning (if Lambda mentioned)
+- [ ] CloudWatch Synthetics runtime version (if Synthetics mentioned)
+- [ ] RDS destroyability settings (if RDS mentioned)
+- [ ] NAT Gateway cost warning (if NAT mentioned)
+
+**After code generation, verify**:
+
+- [ ] All resource names include environmentSuffix
+- [ ] No RemovalPolicy.RETAIN found
+- [ ] No deletionProtection: true found
+- [ ] No deprecated AWS service versions
+- [ ] No GuardDuty detector creation
+- [ ] AWS Config uses correct IAM policy
+- [ ] Lambda functions compatible with Node.js 18+
+- [ ] No hardcoded environment values
+
+**Before deployment attempt, run code analysis**:
+
+- [ ] Scan for missing environmentSuffix in resource names
+- [ ] Scan for Retain policies and DeletionProtection
+- [ ] Scan for deprecated AWS service versions
+- [ ] Scan for GuardDuty detector creation
+- [ ] Scan for AWS Config IAM policy issues
+- [ ] Fix all issues found before deployment
+
+**Expected Outcome**:
+- Deployment success rate: 70-80% (up from 30-40%)
+- Average iterations per PR: 1-2 (down from 3-5)
+- Common preventable failures eliminated
+
+---
+
+*Last Updated: 2025-01-XX*
 *This document is maintained by the task-coordinator and updated after each task completion.*
 
