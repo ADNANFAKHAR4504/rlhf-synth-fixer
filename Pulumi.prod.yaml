@@ -1,5 +1,5 @@
 config:
   aws:region: us-east-1
-  payment-infra:environment: prod
-  payment-infra:dbPassword:
+  TapStack:environment: prod
+  TapStack:dbPassword:
     secure: AAABAOzKXtW9zGxIVCEpHW2fwIGDProdPassword123!
