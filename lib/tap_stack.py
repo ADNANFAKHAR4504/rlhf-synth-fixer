@@ -1215,11 +1215,11 @@ systemctl restart httpd
         )
 
         # AWS Config Configuration Recorder
-        self.config_recorder = aws.cfg.ConfigurationRecorder(
+        self.config_recorder = aws.config.ConfigurationRecorder(
             f"banking-portal-config-recorder-{self.environment_suffix}",
             name=f"banking-portal-config-recorder-{self.environment_suffix}",
             role_arn=self.config_role.arn,
-            recording_group=aws.cfg.ConfigurationRecorderRecordingGroupArgs(
+            recording_group=aws.config.ConfigurationRecorderRecordingGroupArgs(
                 all_supported=True,
                 include_global_resource_types=True
             ),
@@ -1227,7 +1227,7 @@ systemctl restart httpd
         )
 
         # AWS Config Delivery Channel
-        self.config_delivery_channel = aws.cfg.DeliveryChannel(
+        self.config_delivery_channel = aws.config.DeliveryChannel(
             f"banking-portal-config-delivery-{self.environment_suffix}",
             name=f"banking-portal-config-delivery-{self.environment_suffix}",
             s3_bucket_name=self.config_bucket.bucket,
@@ -1236,10 +1236,10 @@ systemctl restart httpd
 
         # AWS Config Rules for security best practices
         # Rule: Encrypted EBS volumes
-        aws.cfg.ConfigRule(
+        aws.config.ConfigRule(
             f"ebs-encrypted-volumes-{self.environment_suffix}",
             name=f"ebs-encrypted-volumes-{self.environment_suffix}",
-            source=aws.cfg.ConfigRuleSourceArgs(
+            source=aws.config.ConfigRuleSourceArgs(
                 owner="AWS",
                 source_identifier="ENCRYPTED_VOLUMES"
             ),
@@ -1247,10 +1247,10 @@ systemctl restart httpd
         )
 
         # Rule: Root access key check
-        aws.cfg.ConfigRule(
+        aws.config.ConfigRule(
             f"root-access-key-check-{self.environment_suffix}",
             name=f"root-access-key-check-{self.environment_suffix}",
-            source=aws.cfg.ConfigRuleSourceArgs(
+            source=aws.config.ConfigRuleSourceArgs(
                 owner="AWS",
                 source_identifier="ROOT_ACCESS_KEY_CHECK"
             ),
@@ -1258,10 +1258,10 @@ systemctl restart httpd
         )
 
         # Rule: S3 bucket public read prohibited
-        aws.cfg.ConfigRule(
+        aws.config.ConfigRule(
             f"s3-bucket-public-read-prohibited-{self.environment_suffix}",
             name=f"s3-bucket-public-read-prohibited-{self.environment_suffix}",
-            source=aws.cfg.ConfigRuleSourceArgs(
+            source=aws.config.ConfigRuleSourceArgs(
                 owner="AWS",
                 source_identifier="S3_BUCKET_PUBLIC_READ_PROHIBITED"
             ),
@@ -1269,10 +1269,10 @@ systemctl restart httpd
         )
 
         # Rule: S3 bucket public write prohibited
-        aws.cfg.ConfigRule(
+        aws.config.ConfigRule(
             f"s3-bucket-public-write-prohibited-{self.environment_suffix}",
             name=f"s3-bucket-public-write-prohibited-{self.environment_suffix}",
-            source=aws.cfg.ConfigRuleSourceArgs(
+            source=aws.config.ConfigRuleSourceArgs(
                 owner="AWS",
                 source_identifier="S3_BUCKET_PUBLIC_WRITE_PROHIBITED"
             ),
