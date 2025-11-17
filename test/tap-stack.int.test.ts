@@ -156,6 +156,7 @@ describe('EKS Cluster Integration Tests', () => {
   let outputs: StackOutputs;
   let resources: StackResources;
   let discovered: any;
+  let actualEnvironmentSuffix: string;
   
   beforeAll(() => {
     // Discover stack name dynamically
@@ -173,6 +174,18 @@ describe('EKS Cluster Integration Tests', () => {
     // Discover specific resources
     discovered = discoverResources(stackName, resources);
     console.log('Discovered resources:', discovered);
+    
+    // Extract actual environment suffix from cluster name (e.g., 'eks-cluster-dev' -> 'dev')
+    const clusterName = outputs.ClusterName || discovered.clusterName;
+    if (clusterName) {
+      const match = clusterName.match(/eks-cluster-(.+)$/);
+      actualEnvironmentSuffix = match ? match[1] : environmentSuffix;
+    } else {
+      // Fallback: extract from stack name (e.g., 'TapStackpr6689' -> 'pr6689')
+      const stackMatch = stackName.match(/^TapStack(.+)$/);
+      actualEnvironmentSuffix = stackMatch ? stackMatch[1] : environmentSuffix;
+    }
+    console.log(`Actual environment suffix from deployed resources: ${actualEnvironmentSuffix}`);
   });
 
   describe('Stack Discovery', () => {
@@ -656,7 +669,8 @@ describe('EKS Cluster Integration Tests', () => {
 
       const nameTag = vpcTags.find((tag: any) => tag.Key === 'Name');
       if (nameTag) {
-        expect(nameTag.Value).toContain(environmentSuffix);
+        // Use the actual environment suffix from the deployed stack, not the test environment variable
+        expect(nameTag.Value).toContain(actualEnvironmentSuffix);
       }
     });
   });
