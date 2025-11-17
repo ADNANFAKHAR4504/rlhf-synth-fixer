@@ -11,5 +11,6 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["Lambda", "S3", "DynamoDB", "KMS", "VPC", "CloudWatch", "IAM", "EventBridge"]
+  "aws_services": ["Lambda", "S3", "DynamoDB", "KMS", "VPC", "CloudWatch", "IAM", "EventBridge"],
+  "training_quality": 10
 }
