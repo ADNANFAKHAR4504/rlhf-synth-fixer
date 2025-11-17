@@ -70,23 +70,33 @@ class NetworkingStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-        # Get availability zones
-        azs = aws.get_availability_zones(
-            state="available",
-            filters=[aws.GetAvailabilityZonesFilterArgs(
-                name="region-name",
-                values=[args.region]
-            )]
-        )
+        # Get availability zones - use explicit list for reliability
+        # Different regions have different AZ counts, so we map explicitly
+        az_map = {
+            "us-east-1": ["us-east-1a", "us-east-1b", "us-east-1c"],
+            "us-east-2": ["us-east-2a", "us-east-2b", "us-east-2c"],
+            "us-west-1": ["us-west-1a", "us-west-1b", "us-west-1c"],
+            "us-west-2": ["us-west-2a", "us-west-2b", "us-west-2c"],
+            "eu-west-1": ["eu-west-1a", "eu-west-1b", "eu-west-1c"],
+            "eu-central-1": ["eu-central-1a", "eu-central-1b", "eu-central-1c"],
+            "ap-south-1": ["ap-south-1a", "ap-south-1b", "ap-south-1c"],
+            "ap-southeast-1": ["ap-southeast-1a", "ap-southeast-1b", "ap-southeast-1c"]
+        }
+
+        # Get AZs for the specified region, default to us-east-2
+        available_azs = az_map.get(args.region, ["us-east-2a", "us-east-2b", "us-east-2c"])
 
         # Create private subnets
         self.private_subnets: List[aws.ec2.Subnet] = []
         for i, cidr in enumerate(args.private_subnet_cidrs):
+            # Use modulo to safely wrap around available AZs
+            az_index = i % len(available_azs)
+
             subnet = aws.ec2.Subnet(
                 f"private-subnet-{i+1}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=cidr,
-                availability_zone=azs.names[i],
+                availability_zone=available_azs[az_index],
                 map_public_ip_on_launch=False,
                 tags={
                     "Name": f"private-subnet-{i+1}-{self.environment_suffix}",
