@@ -337,8 +337,9 @@ class TestAutomationStackResourceCreation(unittest.TestCase):
 
         # Verify EventBridge log role was created
         mock_role.assert_called_once()
-        call_kwargs = mock_role.call_args[1]
-        self.assertEqual(call_kwargs['name'], 'eventbridge-log-role-test')
+        # The first positional argument is the resource name in Pulumi
+        call_args = mock_role.call_args[0]
+        self.assertEqual(call_args[0], 'eventbridge-log-role-test')
 
     def test_automation_stack_configuration_parameters(self):
         """Test that AutomationStack args are configured correctly."""

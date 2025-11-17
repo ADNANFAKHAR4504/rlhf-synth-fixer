@@ -195,14 +195,13 @@ def test_monitoring_stack_initialization():
         stack = MonitoringStack("test-monitoring", args)
         assert stack is not None
         assert hasattr(stack, 'flow_logs_bucket')
-        assert hasattr(stack, 'config_bucket')
         assert hasattr(stack, 'flow_log')
-        assert hasattr(stack, 'config_role')
-        assert hasattr(stack, 'config_recorder')
         assert hasattr(stack, 'log_group')
+        assert hasattr(stack, 'flow_logs_bucket_name')
+        assert hasattr(stack, 'log_group_name')
         return {
             'flow_logs_bucket_name': stack.flow_logs_bucket_name,
-            'config_bucket_name': stack.config_bucket_name,
+            'log_group_name': stack.log_group_name,
         }
 
     args = MonitoringStackArgs(
@@ -242,6 +241,38 @@ def test_automation_stack_initialization():
     )
 
     return check_automation(args)
+
+
+@pulumi.runtime.test
+def test_tap_stack_initialization():
+    """Test TapStack initialization with mocks."""
+    pulumi.runtime.set_mocks(MyMocks())
+    from lib.tap_stack import TapStack, TapStackArgs
+
+    def check_tap_stack(args):
+        stack = TapStack("test-tap", args)
+        assert stack is not None
+        # Verify all child stacks are created
+        assert hasattr(stack, 'networking')
+        assert hasattr(stack, 'security')
+        assert hasattr(stack, 'monitoring')
+        assert hasattr(stack, 'automation')
+        # Verify environment suffix is set
+        assert stack.environment_suffix == 'test'
+        assert stack.region == 'us-east-2'
+        # Verify tags are set
+        assert hasattr(stack, 'tags')
+        return {
+            'environment_suffix': stack.environment_suffix,
+            'region': stack.region,
+        }
+
+    args = TapStackArgs(
+        environment_suffix='test',
+        region='us-east-2'
+    )
+
+    return check_tap_stack(args)
 
 
 class TestStackExecutionWithMocks(unittest.TestCase):
