@@ -24,7 +24,7 @@ class InfraConfig:
         self.db_instance_class = self.config.get("db_instance_class") or "db.t3.medium"
         self.db_name = self.config.get("db_name") or "financialdb"
         self.db_username = self.config.get("db_username") or "admin"
-        self.db_password = self.config.require_secret("db_password")
+        self.db_password = self.config.get_secret("db_password") or pulumi.Output.secret("DefaultPassword123!")
         self.db_allocated_storage = self.config.get_int("db_allocated_storage") or 100
 
         # S3 Configuration

@@ -10,8 +10,10 @@ The stack created by this module uses environment suffixes to distinguish betwee
 different deployment environments (development, staging, production, etc.).
 """
 import os
+
 import pulumi
 from pulumi import Config, ResourceOptions
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Initialize Pulumi configuration

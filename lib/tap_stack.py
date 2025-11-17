@@ -2,32 +2,43 @@
 Main Pulumi stack for financial services infrastructure.
 Orchestrates all infrastructure components.
 """
-from typing import Optional, Dict, Any
+from typing import Any, Dict, Optional
+
 import pulumi
-from pulumi import ComponentResource, ResourceOptions, Output
+from pulumi import ComponentResource, Output, ResourceOptions
 
 from lib.config import InfraConfig
-from lib.networking import NetworkingStack
-from lib.iam import IAMStack
-from lib.storage import StorageStack
 from lib.database import DatabaseStack
-from lib.web_tier import WebTier, WebTierArgs
+from lib.iam import IAMStack
 from lib.monitoring import MonitoringStack
+from lib.networking import NetworkingStack
+from lib.storage import StorageStack
+from lib.web_tier import WebTier, WebTierArgs
 
 
 class TapStackArgs:
     """Arguments for TapStack component."""
 
-    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[Dict[str, str]] = None):
+    def __init__(
+      self, 
+      environment_suffix: Optional[str] = None, 
+      tags: Optional[dict] = None,
+      environment: Optional[str] = None,
+      aws_region: Optional[str] = None
+  ):
         """
         Initialize TapStack arguments.
 
         Args:
             environment_suffix: Environment suffix for resource naming
             tags: Additional tags to apply
+            environment: Environment name
+            aws_region: AWS region
         """
         self.environment_suffix = environment_suffix or 'dev'
         self.tags = tags
+        self.environment = environment or 'dev'
+        self.aws_region = aws_region or 'us-east-1'
 
 
 class TapStack(ComponentResource):
