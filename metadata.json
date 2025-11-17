@@ -23,6 +23,8 @@
     "iam",
     "cloudwatch"
   ],
-  "training_quality": 10,
-  "code_reviewed": "2025-11-17T13:53:08+00:00"
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 10
 }
