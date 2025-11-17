@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to ensure uniqueness"
   type        = string
+  default     = "dev"
 }
 
 variable "environment" {
