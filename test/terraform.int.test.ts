@@ -22,9 +22,9 @@ import {
   DescribeSecretCommand,
   SecretsManagerClient,
 } from "@aws-sdk/client-secrets-manager";
-import fs from "fs";
+import * as fs from "fs";
 import fetch from "node-fetch";
-import path from "path";
+import * as path from "path";
 
 jest.setTimeout(60000);
 
@@ -219,6 +219,10 @@ describe("Terraform infrastructure integration", () => {
       const rds = new RDSClient({ region });
       const secrets = new SecretsManagerClient({ region });
 
+      const repositoryName = requireString("ecr_repository_url")
+        .split("/")
+        .slice(-1)[0];
+
       if (usingMockOutputs) {
         console.warn(
           "Skipping AWS SDK health checks while using mock Terraform outputs."
@@ -238,10 +242,6 @@ describe("Terraform infrastructure integration", () => {
       expect(service?.status).toBe("ACTIVE");
       expect(service?.desiredCount ?? 0).toBeGreaterThanOrEqual(2);
       expect(service?.runningCount ?? 0).toBeGreaterThanOrEqual(2);
-
-      const repositoryName = requireString("ecr_repository_url")
-        .split("/")
-        .slice(-1)[0];
       const ecrResponse = await ecr.send(
         new DescribeRepositoriesCommand({
           repositoryNames: [repositoryName],
