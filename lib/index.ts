@@ -1,6 +1,6 @@
 /**
  * index.ts
- * 
+ *
  * Main Pulumi program for the TapStack infrastructure.
  * This module instantiates all infrastructure resources and exports outputs.
  */
@@ -57,8 +57,8 @@ export const VPCId = stack.vpcId;
 export const LoadBalancerDNS = stack.albDnsName;
 export const LoadBalancerName = stack.albName;
 export const RDSClusterEndpoint = stack.rdsClusterEndpoint;
-export const RDSClusterReaderEndpoint = stack.rdsClusterEndpoint.apply((endpoint: string) =>
-  endpoint.replace('.cluster-', '.cluster-ro-')
+export const RDSClusterReaderEndpoint = stack.rdsClusterEndpoint.apply(
+  (endpoint: string) => endpoint.replace('.cluster-', '.cluster-ro-')
 );
 export const RDSClusterIdentifier = stack.clusterId;
 export const DMSReplicationTaskArn = stack.dmsTaskArn;
