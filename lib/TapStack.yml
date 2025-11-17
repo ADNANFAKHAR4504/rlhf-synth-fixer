@@ -33,7 +33,7 @@ Resources:
               Service: cloudtrail.amazonaws.com
             Action:
               - 'kms:GenerateDataKey*'
-              - 'kms:DecryptDataKey'
+              - 'kms:Decrypt'
             Resource: '*'
             Condition:
               StringLike:
