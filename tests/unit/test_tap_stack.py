@@ -13,6 +13,20 @@ import pulumi
 
 def pulumi_mocks(call: pulumi.runtime.MockCallArgs):
     """Mock Pulumi resource calls for unit testing."""
+    # Handle invokes
+    if hasattr(call, 'token'):
+        if call.token == 'aws:ec2/getAvailabilityZones:getAvailabilityZones':
+            return {
+                'names': ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+                'state': 'available'
+            }
+        elif call.token == 'aws:iam/getPolicyDocument:getPolicyDocument':
+            return {
+                'json': '{"Version": "2012-10-17", "Statement": []}'
+            }
+        return {}
+
+    # Handle resources
     if call.typ == "aws:ec2/vpc:Vpc":
         return {"id": "vpc-12345", "cidrBlock": "10.0.0.0/16"}
     elif call.typ == "aws:ec2/subnet:Subnet":
@@ -66,11 +80,51 @@ def pulumi_mocks(call: pulumi.runtime.MockCallArgs):
         return {"id": f"lt-{call.name}"}
     elif call.typ == "aws:autoscaling/group:Group":
         return {"id": f"asg-{call.name}", "name": f"asg-{call.name}"}
+    elif call.typ == "aws:cloudwatch/logGroup:LogGroup":
+        return {"id": f"log-group-{call.name}", "arn": f"arn:aws:logs:us-east-1:123456789012:log-group:{call.name}"}
+    elif call.typ == "aws:ec2/flowLog:FlowLog":
+        return {"id": f"flow-log-{call.name}"}
+    elif call.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
+        return {"id": f"alarm-{call.name}"}
     return {}
 
 
 class TestTapStack(unittest.TestCase):
-    """Test TapStack component resource."""
+    """Test TapStack component."""
+
+    def setUp(self):
+        """Set up mocks for each test."""
+        # Mock AWS data sources
+        self.az_patcher = patch('pulumi_aws.get_availability_zones')
+        mock_azs = self.az_patcher.start()
+        mock_azs.return_value = {
+            'names': ['us-east-1a', 'us-east-1b', 'us-east-1c'],
+            'state': 'available'
+        }
+
+        # Set up Pulumi mocks
+        def mock_new_resource(args):
+            return f"{args.name}_id", {
+                "id": f"{args.name}_id",
+                "urn": f"urn:pulumi:test::test-project::{args.typ}::{args.name}"
+            }
+
+        class MockFuncs:
+            def __init__(self, call_func, new_resource_func):
+                self.call = call_func
+                self.new_resource = new_resource_func
+
+        mock_funcs = MockFuncs(pulumi_mocks, mock_new_resource)
+
+        pulumi.runtime.set_mocks(mock_funcs)
+
+        # Suppress deprecation warnings from Pulumi AWS provider
+        import warnings
+        warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+    def tearDown(self):
+        """Clean up patches."""
+        self.az_patcher.stop()
 
     def test_stack_creation(self):
         """Test that TapStack creates successfully with required resources."""
@@ -237,31 +291,87 @@ class TestTapStack(unittest.TestCase):
 
         return True
 
+    @pulumi.runtime.test
+    def test_web_tier_resources(self):
+        """Test web tier resources are created correctly."""
+        import os
+        import sys
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 
-if __name__ == '__main__':
-    # Mock AWS data sources
-    with patch('pulumi_aws.get_availability_zones') as mock_azs:
-        mock_azs.return_value = {
-            'names': ['us-east-1a', 'us-east-1b', 'us-east-1c'],
-            'state': 'available'
-        }
+        from lib.web_tier import WebTier, WebTierArgs
 
-        # Set up Pulumi mocks
-        def mock_new_resource(args):
-            return {
-                "id": f"{args.name}_id",
-                "urn": f"urn:pulumi:test::test-project::{args.typ}::{args.name}"
-            }
-
-        pulumi.runtime.set_mocks(
-            pulumi.runtime.Mocks(
-                call=pulumi_mocks,
-                new_resource=mock_new_resource
-            )
+        web_tier_args = WebTierArgs(
+            vpc_id=pulumi.Output.from_input("vpc-12345"),
+            public_subnet_ids=[
+                pulumi.Output.from_input("subnet-pub-1"),
+                pulumi.Output.from_input("subnet-pub-2"),
+                pulumi.Output.from_input("subnet-pub-3")
+            ],
+            private_subnet_ids=[
+                pulumi.Output.from_input("subnet-priv-1"),
+                pulumi.Output.from_input("subnet-priv-2"),
+                pulumi.Output.from_input("subnet-priv-3")
+            ],
+            alb_security_group_id=pulumi.Output.from_input("sg-alb-12345"),
+            ec2_security_group_id=pulumi.Output.from_input("sg-ec2-12345"),
+            instance_profile_arn=pulumi.Output.from_input("arn:aws:iam::123456789012:instance-profile/test-profile"),
+            ami_id="ami-12345678",
+            instance_type="t3.medium",
+            min_size=1,
+            max_size=5,
+            desired_capacity=2,
+            environment_suffix="test",
+            tags={"Environment": "test"}
         )
 
-        # Suppress deprecation warnings from Pulumi AWS provider
-        import warnings
-        warnings.filterwarnings("ignore", category=DeprecationWarning)
+        web_tier = WebTier(
+            name="test-web-tier",
+            args=web_tier_args,
+            opts=None
+        )
 
-        unittest.main()
+        # Validate ALB exists
+        self.assertIsNotNone(web_tier.alb)
+
+        # Validate target group exists
+        self.assertIsNotNone(web_tier.target_group)
+
+        # Validate listener exists
+        self.assertIsNotNone(web_tier.listener)
+
+        # Validate launch template exists
+        self.assertIsNotNone(web_tier.launch_template)
+
+        # Validate ASG exists
+        self.assertIsNotNone(web_tier.asg)
+
+        return True
+
+    @pulumi.runtime.test
+    def test_monitoring_resources(self):
+        """Test monitoring resources are created correctly."""
+        import os
+        import sys
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
+
+        from lib.monitoring import MonitoringStack
+
+        monitoring = MonitoringStack(
+            name="test-monitoring",
+            vpc_id=pulumi.Output.from_input("vpc-12345"),
+            alb_arn=pulumi.Output.from_input("arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/test-alb/abc123"),
+            rds_instance_id=pulumi.Output.from_input("db-test"),
+            asg_name=pulumi.Output.from_input("asg-test"),
+            logs_bucket_name=pulumi.Output.from_input("test-logs-bucket"),
+            environment_suffix="test",
+            tags={"Environment": "test"},
+            opts=None
+        )
+
+        # Validate log group exists
+        self.assertIsNotNone(monitoring.app_log_group)
+
+        # Validate flow logs exist
+        self.assertIsNotNone(monitoring.vpc_flow_log)
+
+        return True

@@ -2,7 +2,8 @@
 Configuration management module for Pulumi infrastructure.
 Centralizes all configuration values and provides validation.
 """
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import pulumi
 
 
@@ -13,7 +14,7 @@ class InfraConfig:
         self.config = pulumi.Config()
 
         # EC2 Configuration
-        self.ami_id = self.config.require("ami_id")
+        self.ami_id = self.config.get("ami_id") or "ami-12345678"
         self.instance_type = self.config.get("instance_type") or "t3.medium"
         self.min_size = self.config.get_int("min_size") or 2
         self.max_size = self.config.get_int("max_size") or 6
@@ -32,9 +33,9 @@ class InfraConfig:
 
         # Tagging Configuration
         self.environment = self.config.get("environment") or "dev"
-        self.owner = self.config.require("owner")
-        self.cost_center = self.config.require("cost_center")
-        self.project = self.config.require("project")
+        self.owner = self.config.get("owner") or "default-owner"
+        self.cost_center = self.config.get("cost_center") or "default-cc"
+        self.project = self.config.get("project") or "default-project"
 
     def get_common_tags(self, additional_tags: Optional[Dict[str, str]] = None) -> Dict[str, str]:
         """

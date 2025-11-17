@@ -2,7 +2,8 @@
 Storage infrastructure module.
 Creates S3 buckets with encryption.
 """
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional
+
 import pulumi
 import pulumi_aws as aws
 from pulumi import ResourceOptions
