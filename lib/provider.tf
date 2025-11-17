@@ -10,8 +10,7 @@ terraform {
     }
   }
 
-  # Using local backend for QA testing
-  backend "local" {}
+  # Backend configuration moved to backend.tf
 }
 
 # Primary AWS provider for general resources
