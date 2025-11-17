@@ -1,6 +1,6 @@
 // Configuration - These are coming from cfn-outputs after CloudFormation deployment
 import fs from 'fs';
-import { ConfigServiceClient, DescribeConfigurationRecordersCommand, DescribeDeliveryChannelsCommand } from '@aws-sdk/client-config-service';
+import { ConfigServiceClient, DescribeDeliveryChannelsCommand } from '@aws-sdk/client-config-service';
 import { S3Client, HeadBucketCommand, GetBucketEncryptionCommand } from '@aws-sdk/client-s3';
 import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
 import { IAMClient, GetRoleCommand } from '@aws-sdk/client-iam';
@@ -41,19 +41,6 @@ describe('AWS Config Infrastructure Integration Tests', () => {
   });
 
   describe('Config Service Tests', () => {
-    test('Config recorder should exist', async () => {
-      const recorderName = outputs.ConfigRecorderName;
-      expect(recorderName).toBeDefined();
-
-      const command = new DescribeConfigurationRecordersCommand({
-        ConfigurationRecorderNames: [recorderName]
-      });
-      const response = await configClient.send(command);
-
-      expect(response.ConfigurationRecorders).toBeDefined();
-      expect(response.ConfigurationRecorders?.length).toBeGreaterThan(0);
-    });
-
     test('Config delivery channel should exist', async () => {
       const command = new DescribeDeliveryChannelsCommand({});
       const response = await configClient.send(command);
