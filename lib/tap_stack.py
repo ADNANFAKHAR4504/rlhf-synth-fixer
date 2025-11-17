@@ -75,17 +75,15 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
 
-        # Configure S3 Backend with native state locking
-        # Note: Using LocalBackend for development; CI/CD will use S3Backend
-        # Uncomment S3Backend configuration when deploying to production
-        # S3Backend(
-        #     self,
-        #     bucket=state_bucket,
-        #     key=f"{environment_suffix}/{construct_id}.tfstate",
-        #     region=state_bucket_region,
-        #     encrypt=True,
-        #     dynamodb_table="iac-rlhf-tf-state-lock",
-        # )
+        # Configure S3 Backend with native state locking for CI/CD
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{environment_suffix}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+            dynamodb_table="iac-rlhf-tf-state-lock",
+        )
 
         # =================================================================
         # S3 BUCKET FOR FILE STORAGE
