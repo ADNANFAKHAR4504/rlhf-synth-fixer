@@ -76,21 +76,6 @@ variable "worker_instance_type" {
   default     = "t3.large"
 }
 
-variable "web_ami_id" {
-  description = "AMI ID for web tier instances"
-  type        = string
-}
-
-variable "app_ami_id" {
-  description = "AMI ID for application tier instances"
-  type        = string
-}
-
-variable "worker_ami_id" {
-  description = "AMI ID for worker tier instances"
-  type        = string
-}
-
 # Auto Scaling variables
 variable "asg_configurations" {
   description = "Auto Scaling Group configurations"
