@@ -1,6 +1,6 @@
 # Application Deployment
 
-> **⚠️ CRITICAL REQUIREMENT: This task MUST be implemented using cdktf with py**
+> **CRITICAL REQUIREMENT: This task MUST be implemented using cdktf with py**
 > 
 > Platform: **cdktf**  
 > Language: **py**  
@@ -75,22 +75,22 @@ Production infrastructure deployed in us-east-1 across 3 availability zones. Cor
 
 #### AWS Config
 - **CRITICAL**: If creating AWS Config roles, use correct managed policy:
-  - ✅ CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
-  - ❌ WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
+  - CORRECT: `arn:aws:iam::aws:policy/service-role/AWS_ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/service-role/ConfigRole`
+  - WRONG: `arn:aws:iam::aws:policy/AWS_ConfigRole`
 - **Alternative**: Use service-linked role `AWSServiceRoleForConfig` (auto-created)
 
 #### Lambda Functions
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
-  - ✅ Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
-  - ✅ Or extract data from event object directly
+  - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
+  - Or extract data from event object directly
 - **Reserved Concurrency**: Avoid setting `reservedConcurrentExecutions` unless required
   - If required, use low values (1-5) to avoid account limit issues
 
 #### CloudWatch Synthetics
 - **CRITICAL**: Use current runtime version
-  - ✅ CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
-  - ❌ WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
+  - CORRECT: `synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0`
+  - WRONG: `SYNTHETICS_NODEJS_PUPPETEER_5_1` (deprecated)
 
 #### RDS Databases
 - **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
@@ -119,22 +119,22 @@ Production infrastructure deployed in us-east-1 across 3 availability zones. Cor
 ### Correct Resource Naming (CDK TypeScript)
 ```typescript
 const bucket = new s3.Bucket(this, 'DataBucket', {
-  bucketName: `data-bucket-${environmentSuffix}`,  // ✅ CORRECT
+  bucketName: `data-bucket-${environmentSuffix}`,  // CORRECT
   // ...
 });
 
-// ❌ WRONG:
+// WRONG:
 // bucketName: 'data-bucket-prod'  // Hardcoded, will fail
 ```
 
 ### Correct Removal Policy (CDK TypeScript)
 ```typescript
 const bucket = new s3.Bucket(this, 'DataBucket', {
-  removalPolicy: RemovalPolicy.DESTROY,  // ✅ CORRECT
+  removalPolicy: RemovalPolicy.DESTROY,  // CORRECT
   // ...
 });
 
-// ❌ WRONG:
+// WRONG:
 // removalPolicy: RemovalPolicy.RETAIN  // Will block cleanup
 ```
 
@@ -144,12 +144,12 @@ const configRole = new iam.Role(this, 'ConfigRole', {
   assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
   managedPolicies: [
     iam.ManagedPolicy.fromAwsManagedPolicyName(
-      'service-role/AWS_ConfigRole'  // ✅ CORRECT
+      'service-role/AWS_ConfigRole'  // CORRECT
     )
   ]
 });
 
-// ❌ WRONG:
+// WRONG:
 // 'service-role/ConfigRole'  // Policy doesn't exist
 // 'AWS_ConfigRole'  // Missing service-role/ prefix
 ```
