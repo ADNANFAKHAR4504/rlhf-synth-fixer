@@ -236,10 +236,10 @@ describe('TapStack CloudFormation Integration Tests', () => {
         `lambda get-function-configuration --function-name ${functionName}`
       );
 
-      expect(configResponse.KmsKeyArn).toBeDefined();
-      expect(configResponse.KmsKeyArn).toBe(
-        discovered.stackOutputs.KMSKeyArn
-      );
+      // KMS key ARN can be at top level or in Environment.KmsKeyArn
+      const kmsKeyArn = configResponse.KmsKeyArn || configResponse.Environment?.KmsKeyArn;
+      expect(kmsKeyArn).toBeDefined();
+      expect(kmsKeyArn).toBe(discovered.stackOutputs.KMSKeyArn);
     });
 
     test('Lambda function ARN should match output', () => {

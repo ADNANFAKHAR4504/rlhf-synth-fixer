@@ -1,8 +1,8 @@
 # HIPAA-Compliant Patient Data Processing Infrastructure
 
-CloudFormation JSON template for secure patient data processing with encryption, compliance, and audit logging.
+This CloudFormation template deploys a secure, HIPAA-compliant infrastructure for processing patient records with encrypted storage, secure compute, and comprehensive audit logging.
 
-## CloudFormation Template
+## File: lib/TapStack.json
 
 ```json
 {
@@ -19,12 +19,14 @@ CloudFormation JSON template for secure patient data processing with encryption,
     "ExternalId": {
       "Type": "String",
       "Description": "External ID for cross-account IAM role assumption",
+      "Default": "test-external-id-123",
       "MinLength": 8,
       "NoEcho": true
     },
     "DatabasePassword": {
       "Type": "String",
       "Description": "Database password to be encrypted in Lambda environment",
+      "Default": "TestPassword123!",
       "NoEcho": true,
       "MinLength": 12
     }
@@ -133,6 +135,7 @@ CloudFormation JSON template for secure patient data processing with encryption,
     "PatientDataBucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "patient-data-bucket-${EnvironmentSuffix}-${AWS::AccountId}"
@@ -252,7 +255,14 @@ CloudFormation JSON template for secure patient data processing with encryption,
               "Principal": {
                 "Service": "lambda.amazonaws.com"
               },
-              "Action": "sts:AssumeRole"
+              "Action": "sts:AssumeRole",
+              "Condition": {
+                "StringEquals": {
+                  "sts:ExternalId": {
+                    "Ref": "ExternalId"
+                  }
+                }
+              }
             }
           ]
         },
@@ -356,6 +366,7 @@ CloudFormation JSON template for secure patient data processing with encryption,
     "PatientDataProcessorLogGroup": {
       "Type": "AWS::Logs::LogGroup",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "LogGroupName": {
           "Fn::Sub": "/aws/lambda/patient-data-processor-${EnvironmentSuffix}"
@@ -404,7 +415,6 @@ CloudFormation JSON template for secure patient data processing with encryption,
         },
         "MemorySize": 1024,
         "Timeout": 300,
-        "ReservedConcurrentExecutions": 10,
         "KmsKeyArn": {
           "Fn::GetAtt": [
             "EncryptionKey",
@@ -460,6 +470,9 @@ CloudFormation JSON template for secure patient data processing with encryption,
         },
         "Action": "lambda:InvokeFunction",
         "Principal": "s3.amazonaws.com",
+        "SourceAccount": {
+          "Ref": "AWS::AccountId"
+        },
         "SourceArn": {
           "Fn::GetAtt": [
             "PatientDataBucket",
@@ -558,4 +571,67 @@ CloudFormation JSON template for secure patient data processing with encryption,
     }
   }
 }
+```
+
+## Key Features
+
+1. **Encrypted Storage**
+   - S3 bucket with AES-256 server-side encryption
+   - S3 bucket key encryption enabled for cost optimization
+   - Versioning enabled for data integrity
+   - Public access blocked
+   - Lifecycle policy for old version cleanup
+
+2. **Secure Compute**
+   - Lambda function with KMS encryption for environment variables
+   - IAM role with least-privilege access
+   - External ID condition for role assumption
+   - Comprehensive error handling and logging
+
+3. **Key Management**
+   - Customer-managed KMS key with automatic rotation
+   - Key policies for Lambda and CloudWatch Logs access
+   - KMS alias for easier key management
+
+4. **Compliance & Audit**
+   - CloudWatch Logs with 90-day retention
+   - DeletionPolicy and UpdateReplacePolicy: Retain for stateful resources
+   - Comprehensive resource tagging
+   - HIPAA-compliant data classification
+
+5. **Integration**
+   - Lambda permission for S3 event notifications
+   - SourceAccount specified for cross-account security
+   - Stack outputs for integration with other stacks
+
+## Deployment
+
+Deploy using AWS CLI:
+
+```bash
+aws cloudformation deploy \
+  --template-file lib/TapStack.json \
+  --stack-name TapStack${ENVIRONMENT_SUFFIX} \
+  --capabilities CAPABILITY_IAM CAPABILITY_NAMED_IAM \
+  --parameter-overrides \
+    EnvironmentSuffix=${ENVIRONMENT_SUFFIX} \
+    ExternalId=${EXTERNAL_ID} \
+    DatabasePassword=${DATABASE_PASSWORD} \
+  --region us-east-1
+```
+
+## Testing
+
+Integration tests are provided in `test/tap-stack.int.test.ts` that:
+- Dynamically discover the stack name from `ENVIRONMENT_SUFFIX`
+- Validate all deployed resources
+- Verify security configurations
+- Check compliance requirements
+
+Run integration tests:
+
+```bash
+export ENVIRONMENT_SUFFIX=pr6640
+export AWS_REGION=us-east-1
+npm run test:integration
 ```
