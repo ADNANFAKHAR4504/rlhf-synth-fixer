@@ -7,7 +7,7 @@ cost_center        = "engineering"
 # Database configuration
 database_name      = "transactions"
 db_master_username = "admin"
-db_master_password = "SuperSecretPassword123!"  # This should be stored in AWS Secrets Manager in production
+db_master_password = "SuperSecretPassword123!" # This should be stored in AWS Secrets Manager in production
 
 # Route 53 configuration
 domain_name = "dr-example.com"
