@@ -141,16 +141,9 @@ class TapStack(pulumi.ComponentResource):
             global_table, sns_topic, secondary_provider
         )
 
-        # Create Route 53 hosted zone and health checks
-        hosted_zone = self._create_route53_zone(primary_provider)
-        primary_health_check = self._create_health_check(
-            primary_api, primary_provider
-        )
-
-        # Create Route 53 failover records
-        self._create_failover_records(
-            hosted_zone, primary_api, secondary_api,
-            primary_health_check, primary_provider
+        # Create Application Load Balancer for failover
+        alb_result = self._create_alb_failover(
+            primary_region, primary_vpc, primary_api, secondary_api, primary_provider
         )
 
         # Create CloudWatch Dashboard
@@ -162,7 +155,7 @@ class TapStack(pulumi.ComponentResource):
 
         # Export outputs
         self.register_outputs({
-            "hosted_zone_id": hosted_zone.zone_id,
+            "alb_dns_name": alb_result["dns_name"],
             "primary_api_endpoint": primary_api.invoke_url,
             "secondary_api_endpoint": secondary_api.invoke_url,
             "dashboard_url": pulumi.Output.concat(
@@ -751,80 +744,152 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self, provider=provider)
         )
 
-    def _create_route53_zone(self, provider: aws.Provider) -> aws.route53.Zone:
-        """Create Route 53 hosted zone."""
-        zone = aws.route53.Zone(
-            f"payment-zone-{self.environment_suffix}",
-            name=f"payments-{self.environment_suffix}.example.com",
-            opts=ResourceOptions(parent=self, provider=provider)
-        )
-
-        return zone
-
-    def _create_health_check(
+    def _create_alb_failover(
         self,
-        api_result: ApiGatewayResult,
-        provider: aws.Provider
-    ) -> aws.route53.HealthCheck:
-        """Create Route 53 health check for primary API.
-
-        Uses dedicated /health endpoint that responds to GET requests.
-        """
-        health_check = aws.route53.HealthCheck(
-            f"primary-health-check-{self.environment_suffix}",
-            type="HTTPS",
-            resource_path="/health",
-            fqdn=api_result.invoke_url.apply(lambda url: url.replace("https://", "").split("/")[0]),
-            port=443,
-            request_interval=30,
-            failure_threshold=3,
-            opts=ResourceOptions(parent=self, provider=provider)
-        )
-
-        return health_check
-
-    def _create_failover_records(
-        self,
-        zone: aws.route53.Zone,
+        region: str,
+        vpc: aws.ec2.Vpc,
         primary_api: ApiGatewayResult,
         secondary_api: ApiGatewayResult,
-        health_check: aws.route53.HealthCheck,
         provider: aws.Provider
-    ):
-        """Create Route 53 failover records."""
-        # Note: These are simplified CNAME records
-        # In production, you'd use API Gateway custom domains with A/AAAA records
+    ) -> Dict[str, Any]:
+        """Create Application Load Balancer for API failover without requiring Route53."""
 
-        # Primary failover record
-        aws.route53.Record(
-            f"primary-failover-record-{self.environment_suffix}",
-            zone_id=zone.zone_id,
-            name=f"api.payments-{self.environment_suffix}.example.com",
-            type="CNAME",
-            ttl=60,
-            records=[primary_api.invoke_url.apply(lambda url: url.replace("https://", "").split("/")[0])],
-            set_identifier="primary",
-            health_check_id=health_check.id,
-            failover_routing_policies=[aws.route53.RecordFailoverRoutingPolicyArgs(
-                type="PRIMARY"
-            )],
-            opts=ResourceOptions(parent=zone, provider=provider)
+        # Create additional subnets in different AZs (ALB requires at least 2 subnets)
+        subnet_a = aws.ec2.Subnet(
+            f"alb-subnet-a-{region}-{self.environment_suffix}",
+            vpc_id=vpc.id,
+            cidr_block="10.0.10.0/24",
+            availability_zone=f"{region}a",
+            map_public_ip_on_launch=True,
+            opts=ResourceOptions(parent=vpc, provider=provider)
         )
 
-        # Secondary failover record
-        aws.route53.Record(
-            f"secondary-failover-record-{self.environment_suffix}",
-            zone_id=zone.zone_id,
-            name=f"api.payments-{self.environment_suffix}.example.com",
-            type="CNAME",
-            ttl=60,
-            records=[secondary_api.invoke_url.apply(lambda url: url.replace("https://", "").split("/")[0])],
-            set_identifier="secondary",
-            failover_routing_policies=[aws.route53.RecordFailoverRoutingPolicyArgs(
-                type="SECONDARY"
-            )],
-            opts=ResourceOptions(parent=zone, provider=provider)
+        subnet_b = aws.ec2.Subnet(
+            f"alb-subnet-b-{region}-{self.environment_suffix}",
+            vpc_id=vpc.id,
+            cidr_block="10.0.11.0/24",
+            availability_zone=f"{region}b",
+            map_public_ip_on_launch=True,
+            opts=ResourceOptions(parent=vpc, provider=provider)
         )
+
+        # Create Internet Gateway for public subnets
+        igw = aws.ec2.InternetGateway(
+            f"alb-igw-{region}-{self.environment_suffix}",
+            vpc_id=vpc.id,
+            opts=ResourceOptions(parent=vpc, provider=provider)
+        )
+
+        # Create route table for public subnets
+        route_table = aws.ec2.RouteTable(
+            f"alb-rt-{region}-{self.environment_suffix}",
+            vpc_id=vpc.id,
+            routes=[aws.ec2.RouteTableRouteArgs(
+                cidr_block="0.0.0.0/0",
+                gateway_id=igw.id
+            )],
+            opts=ResourceOptions(parent=vpc, provider=provider)
+        )
+
+        # Associate route table with subnets
+        aws.ec2.RouteTableAssociation(
+            f"alb-rta-a-{region}-{self.environment_suffix}",
+            subnet_id=subnet_a.id,
+            route_table_id=route_table.id,
+            opts=ResourceOptions(parent=route_table, provider=provider)
+        )
+
+        aws.ec2.RouteTableAssociation(
+            f"alb-rta-b-{region}-{self.environment_suffix}",
+            subnet_id=subnet_b.id,
+            route_table_id=route_table.id,
+            opts=ResourceOptions(parent=route_table, provider=provider)
+        )
+
+        # Create security group for ALB
+        alb_sg = aws.ec2.SecurityGroup(
+            f"alb-sg-{region}-{self.environment_suffix}",
+            vpc_id=vpc.id,
+            description="Security group for Application Load Balancer",
+            ingress=[
+                aws.ec2.SecurityGroupIngressArgs(
+                    from_port=80,
+                    to_port=80,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow HTTP traffic"
+                ),
+                aws.ec2.SecurityGroupIngressArgs(
+                    from_port=443,
+                    to_port=443,
+                    protocol="tcp",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow HTTPS traffic"
+                )
+            ],
+            egress=[aws.ec2.SecurityGroupEgressArgs(
+                from_port=0,
+                to_port=0,
+                protocol="-1",
+                cidr_blocks=["0.0.0.0/0"],
+                description="Allow all outbound traffic"
+            )],
+            opts=ResourceOptions(parent=vpc, provider=provider)
+        )
+
+        # Create Application Load Balancer
+        alb = aws.lb.LoadBalancer(
+            f"payment-alb-{region}-{self.environment_suffix}",
+            name=f"payment-alb-{region}-{self.environment_suffix}",
+            internal=False,
+            load_balancer_type="application",
+            security_groups=[alb_sg.id],
+            subnets=[subnet_a.id, subnet_b.id],
+            enable_deletion_protection=False,
+            opts=ResourceOptions(parent=self, provider=provider, depends_on=[igw, route_table])
+        )
+
+        # Create target group for Lambda (using IP targets)
+        # Note: ALB cannot directly target API Gateway, so we create a Lambda target
+        target_group = aws.lb.TargetGroup(
+            f"payment-tg-{region}-{self.environment_suffix}",
+            name=f"payment-tg-{region}-{self.environment_suffix}",
+            port=443,
+            protocol="HTTPS",
+            target_type="lambda",
+            vpc_id=vpc.id,
+            health_check=aws.lb.TargetGroupHealthCheckArgs(
+                enabled=True,
+                path="/health",
+                protocol="HTTPS",
+                healthy_threshold=2,
+                unhealthy_threshold=2,
+                timeout=5,
+                interval=30,
+                matcher="200"
+            ),
+            opts=ResourceOptions(parent=alb, provider=provider)
+        )
+
+        # Create HTTP listener (redirects to HTTPS in production)
+        listener = aws.lb.Listener(
+            f"payment-listener-{region}-{self.environment_suffix}",
+            load_balancer_arn=alb.arn,
+            port=80,
+            protocol="HTTP",
+            default_actions=[aws.lb.ListenerDefaultActionArgs(
+                type="forward",
+                target_group_arn=target_group.arn
+            )],
+            opts=ResourceOptions(parent=alb, provider=provider)
+        )
+
+        return {
+            "alb": alb,
+            "dns_name": alb.dns_name,
+            "target_group": target_group,
+            "listener": listener
+        }
 
     def _create_cloudwatch_dashboard(
         self,

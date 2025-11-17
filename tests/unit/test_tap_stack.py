@@ -67,11 +67,19 @@ class PulumiMocks(pulumi.runtime.Mocks):
         elif 'aws:apigatewayv2/stage:Stage' in resource_type:
             outputs['id'] = f"stage-{resource_id}"
             outputs['invoke_url'] = f"https://api-{resource_id}.execute-api.us-east-1.amazonaws.com/prod"
-        elif 'aws:route53/zone:Zone' in resource_type:
-            outputs['id'] = f"zone-{resource_id}"
-            outputs['zone_id'] = f"Z{resource_id.upper()}"
-        elif 'aws:route53/healthCheck:HealthCheck' in resource_type:
-            outputs['id'] = f"health-{resource_id}"
+        elif 'aws:lb/loadBalancer:LoadBalancer' in resource_type:
+            outputs['id'] = f"alb-{resource_id}"
+            outputs['arn'] = f"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/{args.inputs.get('name', resource_id)}"
+            outputs['dns_name'] = f"{args.inputs.get('name', 'alb')}.us-east-1.elb.amazonaws.com"
+        elif 'aws:lb/targetGroup:TargetGroup' in resource_type:
+            outputs['id'] = f"tg-{resource_id}"
+            outputs['arn'] = f"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/{args.inputs.get('name', resource_id)}"
+        elif 'aws:lb/listener:Listener' in resource_type:
+            outputs['id'] = f"listener-{resource_id}"
+        elif 'aws:ec2/internetGateway:InternetGateway' in resource_type:
+            outputs['id'] = f"igw-{resource_id}"
+        elif 'aws:ec2/routeTable:RouteTable' in resource_type:
+            outputs['id'] = f"rt-{resource_id}"
         elif 'aws:sns/topic:Topic' in resource_type:
             outputs['id'] = f"topic-{resource_id}"
             outputs['arn'] = f"arn:aws:sns:us-east-1:123456789012:{args.inputs.get('name', resource_id)}"
@@ -413,28 +421,28 @@ class TestAPIGateway(unittest.TestCase):
         self.assertIsNotNone(stack)
 
 
-class TestRoute53(unittest.TestCase):
-    """Test cases for Route 53 configuration."""
+class TestALBFailover(unittest.TestCase):
+    """Test cases for Application Load Balancer failover configuration."""
 
     @pulumi.runtime.test
-    def test_hosted_zone_creation(self):
-        """Test Route 53 hosted zone creation."""
+    def test_alb_creation(self):
+        """Test Application Load Balancer creation."""
         args = TapStackArgs(environment_suffix='test')
         stack = TapStack('test-stack', args)
 
         self.assertIsNotNone(stack)
 
     @pulumi.runtime.test
-    def test_health_check_creation(self):
-        """Test Route 53 health check creation."""
+    def test_alb_target_group_creation(self):
+        """Test ALB target group creation."""
         args = TapStackArgs(environment_suffix='test')
         stack = TapStack('test-stack', args)
 
         self.assertIsNotNone(stack)
 
     @pulumi.runtime.test
-    def test_failover_records_creation(self):
-        """Test Route 53 failover records creation."""
+    def test_alb_listener_creation(self):
+        """Test ALB listener creation."""
         args = TapStackArgs(environment_suffix='test')
         stack = TapStack('test-stack', args)
 
