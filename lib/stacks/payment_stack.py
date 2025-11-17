@@ -18,12 +18,14 @@ class PaymentMigrationStack(TerraformStack):
 
         # Configure S3 backend for state
         S3Backend(self,
-            bucket="payment-terraform-state",
-            key=f"payment-migration/{migration_phase}/terraform.tfstate",
+            bucket="iac-rlhf-tf-states",  # Using shared state bucket
+            key=f"payment-migration/{environment_suffix}/{migration_phase}/terraform.tfstate",
             region="us-east-1",
-            encrypt=True,
-            dynamodb_table="terraform-state-lock"
+            encrypt=True
         )
+        
+        # Add S3 state locking using escape hatch (dynamodb_table is deprecated)
+        self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Primary region provider
         self.primary_provider = AwsProvider(self, "aws-primary",
@@ -144,8 +146,4 @@ class PaymentMigrationStack(TerraformStack):
         
         TerraformOutput(self, "route53_zone_id",
             value=self.dns.hosted_zone.zone_id
-        )
-        
-        TerraformOutput(self, "state_lock_table",
-            value=self.security.state_lock_table.name
         )

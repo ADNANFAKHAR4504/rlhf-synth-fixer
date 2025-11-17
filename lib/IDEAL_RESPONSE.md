@@ -15,7 +15,7 @@ This implementation creates a multi-region payment processing migration system u
 - **Security**: Customer-managed KMS keys for encryption, IAM roles following least privilege
 - **Traffic Management**: Route 53 with weighted routing for gradual traffic shifting
 - **Monitoring**: CloudWatch alarms for all critical metrics with SNS notifications
-- **State Management**: S3 backend with DynamoDB locking for Terraform state
+- **State Management**: S3 backend with native file locking (use_lockfile=True) for Terraform state
 
 ### Architecture Pattern
 

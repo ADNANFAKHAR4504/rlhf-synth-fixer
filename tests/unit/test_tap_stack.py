@@ -62,9 +62,10 @@ class TestPaymentMigrationStack:
         synth_dict = json.loads(synth) if isinstance(synth, str) else synth
         backend = synth_dict.get("terraform", {}).get("backend", {})
         assert "s3" in backend
-        assert backend["s3"]["bucket"] == "payment-terraform-state"
+        assert backend["s3"]["bucket"] == "iac-rlhf-tf-states"
         assert backend["s3"]["encrypt"] is True
-        assert backend["s3"]["dynamodb_table"] == "terraform-state-lock"
+        assert backend["s3"]["use_lockfile"] is True
+        assert "payment-migration" in backend["s3"]["key"]
 
     def test_outputs_defined(self, stack):
         """Test all required outputs are defined."""
@@ -79,8 +80,7 @@ class TestPaymentMigrationStack:
             "database_endpoint_secondary",
             "primary_alb_dns",
             "secondary_alb_dns",
-            "route53_zone_id",
-            "state_lock_table"
+            "route53_zone_id"
         ]
         
         for output in expected_outputs:
@@ -124,10 +124,6 @@ class TestSecurityModule:
         assert hasattr(security, 'ecs_execution_role')
         assert hasattr(security, 'ecs_task_role')
         assert hasattr(security, 's3_replication_role')
-
-    def test_dynamodb_table_created(self, security):
-        """Test DynamoDB table for state locking is created."""
-        assert hasattr(security, 'state_lock_table')
 
 
 class TestNetworkingModule:

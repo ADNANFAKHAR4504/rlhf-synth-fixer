@@ -1,12 +1,14 @@
-from cdktf import TerraformStack
-from cdktf_cdktf_provider_aws.kms_key import KmsKey
-from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
-from cdktf_cdktf_provider_aws.iam_role import IamRole
-from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
-from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
-from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
-from constructs import Construct
 import json
+
+from cdktf import TerraformStack
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.iam_role import IamRole
+from cdktf_cdktf_provider_aws.iam_role_policy_attachment import \
+    IamRolePolicyAttachment
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from constructs import Construct
+
 
 class SecurityModule(Construct):
     def __init__(self, scope: Construct, id: str, primary_provider, secondary_provider,
@@ -230,19 +232,6 @@ class SecurityModule(Construct):
             policy_arn=s3_replication_policy.arn
         )
 
-        # DynamoDB table for state locking
-        self.state_lock_table = DynamodbTable(self, "state-lock-table",
-            provider=primary_provider,
-            name=f"terraform-state-lock-{environment_suffix}",
-            billing_mode="PAY_PER_REQUEST",
-            hash_key="LockID",
-            attribute=[{
-                "name": "LockID",
-                "type": "S"
-            }],
-            tags={
-                "Name": f"terraform-state-lock-{environment_suffix}",
-                "MigrationPhase": migration_phase
-            }
-        )
+        # Note: DynamoDB table for state locking is no longer needed 
+        # as we're using S3's native state locking with use_lockfile=True
 
