@@ -85,8 +85,20 @@ elif [ "$LANGUAGE" = "go" ]; then
     if [ -f "coverage.out" ]; then
       mv coverage.out coverage/coverage.out || true
       go tool cover -func=coverage/coverage.out -o coverage/coverage.txt || true
-      TOTAL_PCT=$(go tool cover -func=coverage/coverage.out 2>/dev/null | awk '/total:/ {print $3}' | sed 's/%//')
-      if [ -z "$TOTAL_PCT" ]; then TOTAL_PCT=100; fi
+      TOTAL_PCT_STR=$(go tool cover -func=coverage/coverage.out 2>/dev/null | awk '/total:/ {print $3}' | sed 's/%//')
+      
+      if [ -z "$TOTAL_PCT_STR" ]; then
+        TOTAL_PCT=100
+      else
+        TOTAL_PCT=$(echo "$TOTAL_PCT_STR" | awk '{print int($1)}')
+      fi
+
+      echo "Go coverage is $TOTAL_PCT%"
+      if [ "$TOTAL_PCT" -lt 90 ]; then
+        echo "Error: Go coverage is below the 90% threshold."
+        exit 1
+      fi
+
       cat > coverage/coverage-summary.json <<EOF
 {
   "total": {

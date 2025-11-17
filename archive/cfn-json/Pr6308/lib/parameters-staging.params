@@ -1,0 +1,42 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "staging"
+  },
+  {
+    "ParameterKey": "EnvironmentSuffix",
+    "ParameterValue": "test01"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-xxxxxxxxx"
+  },
+  {
+    "ParameterKey": "PrivateSubnet1",
+    "ParameterValue": "subnet-xxxxxxxxx"
+  },
+  {
+    "ParameterKey": "PrivateSubnet2",
+    "ParameterValue": "subnet-yyyyyyyyy"
+  },
+  {
+    "ParameterKey": "PrivateSubnet3",
+    "ParameterValue": "subnet-zzzzzzzzz"
+  },
+  {
+    "ParameterKey": "PublicSubnet1",
+    "ParameterValue": "subnet-aaaaaaaaa"
+  },
+  {
+    "ParameterKey": "PublicSubnet2",
+    "ParameterValue": "subnet-bbbbbbbbb"
+  },
+  {
+    "ParameterKey": "PublicSubnet3",
+    "ParameterValue": "subnet-ccccccccc"
+  },
+  {
+    "ParameterKey": "KeyPairName",
+    "ParameterValue": "my-keypair"
+  }
+]

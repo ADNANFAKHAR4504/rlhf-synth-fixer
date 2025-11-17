@@ -1,0 +1,38 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349981",
+  "team": "2",
+  "startedAt": "2025-10-16T12:48:28.410Z",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "Multi-Environment Consistency & Replication"
+  ],
+  "aws_services": [
+    "KMS",
+    "EC2",
+    "VPC",
+    "ELB",
+    "ASG",
+    "RDS",
+    "S3",
+    "Secrets Manager",
+    "CloudTrail",
+    "CloudWatch",
+    "SNS",
+    "Lambda",
+    "Events",
+    "IAM",
+    "SSM",
+    "NAT Gateway"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "kanishkah-turing",
+  "dockerS3Location": "",
+  "training_quality": 9
+}

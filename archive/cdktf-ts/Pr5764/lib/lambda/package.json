@@ -1,0 +1,10 @@
+{
+  "name": "data-processor",
+  "version": "1.0.0",
+  "description": "Data processing Lambda function",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.454.0",
+    "@aws-sdk/client-dynamodb": "^3.454.0"
+  }
+}

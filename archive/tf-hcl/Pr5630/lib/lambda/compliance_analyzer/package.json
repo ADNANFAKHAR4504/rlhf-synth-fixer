@@ -1,0 +1,11 @@
+{
+  "name": "compliance-analyzer",
+  "version": "1.0.0",
+  "description": "Lambda function to analyze AWS Config compliance",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-config-service": "^3.400.0",
+    "@aws-sdk/client-cloudwatch": "^3.400.0",
+    "@aws-sdk/client-sns": "^3.400.0"
+  }
+}

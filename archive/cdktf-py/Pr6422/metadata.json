@@ -1,0 +1,31 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth-2",
+  "turn_type": "single",
+  "startedAt": "2025-11-13T00:52:03.481978",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "7th83a",
+  "aws_services": [
+    "ECS",
+    "ALB",
+    "ECR",
+    "CloudWatch",
+    "IAM",
+    "VPC",
+    "Auto Scaling",
+    "ACM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

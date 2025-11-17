@@ -1,0 +1,44 @@
+{
+  "Parameters": [
+    {
+      "ParameterKey": "EnvironmentName",
+      "ParameterValue": "staging"
+    },
+    {
+      "ParameterKey": "EnvironmentSuffix",
+      "ParameterValue": "staging-001"
+    },
+    {
+      "ParameterKey": "VpcId",
+      "ParameterValue": "vpc-1a2b3c4d5e6f"
+    },
+    {
+      "ParameterKey": "PrivateSubnetIds",
+      "ParameterValue": "subnet-private1-stg,subnet-private2-stg,subnet-private3-stg"
+    },
+    {
+      "ParameterKey": "PublicSubnetIds",
+      "ParameterValue": "subnet-public1-stg,subnet-public2-stg,subnet-public3-stg"
+    },
+    {
+      "ParameterKey": "ProjectName",
+      "ParameterValue": "app-migration"
+    },
+    {
+      "ParameterKey": "CostCenter",
+      "ParameterValue": "engineering"
+    },
+    {
+      "ParameterKey": "HostedZoneId",
+      "ParameterValue": "Z1234567890ABC"
+    },
+    {
+      "ParameterKey": "DomainName",
+      "ParameterValue": "example.com"
+    },
+    {
+      "ParameterKey": "NestedStacksBucketName",
+      "ParameterValue": "my-cfn-templates-bucket"
+    }
+  ]
+}

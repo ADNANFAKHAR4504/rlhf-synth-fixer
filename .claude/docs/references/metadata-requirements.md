@@ -26,12 +26,12 @@ interface TaskMetadata {
   complexity: string;         // REQUIRED: Task complexity (medium, hard, expert)
   turn_type: string;          // REQUIRED: Turn type (single, multi)
   po_id: string;              // REQUIRED: Task ID (e.g., "1maext", "synth-abc123")
-  team: string;               // REQUIRED: Team identifier (1-6, synth, stf)
+  team: string;               // REQUIRED: Team identifier (1-6, synth, synth-N, stf) - read from settings.local.json if present
   startedAt: string;          // REQUIRED: ISO 8601 timestamp
   subtask: string;            // REQUIRED: Main subtask category
   subject_labels?: string[];  // OPTIONAL: Array of subject labels
   aws_services?: string[];    // OPTIONAL: Array of AWS service names
-  region?: string;            // OPTIONAL: AWS region (defaults to ap-southeast-1)
+  region?: string;            // OPTIONAL: AWS region (defaults to us-east-1)
   task_config?: {             // OPTIONAL: Platform-specific configuration
     deploy_env: string;       // For Terraform: tfvars file name
   };
@@ -222,7 +222,7 @@ See `.claude/docs/references/iac-subtasks-subject-labels.json` for the complete 
 ### region (OPTIONAL)
 
 **Type**: `string`
-**Default**: `ap-southeast-1`
+**Default**: `us-east-1`
 
 **Format**: AWS region format (e.g., `us-east-1`, `eu-west-2`)
 
@@ -380,7 +380,7 @@ If metadata validation fails:
 
 1. **Check the source**: Re-read from `.claude/tasks.csv` or user input
 2. **Don't guess**: If a field is unclear, ask the user or omit optional fields
-3. **Use defaults**: Only for `region` (defaults to `ap-southeast-1`)
+3. **Use defaults**: Only for `region` (defaults to `us-east-1`)
 4. **Report the error**: Be specific about what's wrong and how to fix it
 5. **Stop execution**: Do not proceed with invalid metadata
 

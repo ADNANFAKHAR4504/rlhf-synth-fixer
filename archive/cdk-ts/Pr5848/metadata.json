@@ -1,0 +1,30 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000347",
+  "team": "3",
+  "startedAt": "2025-11-05T12:14:42.397Z",
+  "subtask": "Network Foundation",
+  "subject_labels": [
+    "Network Infrastructure (VPC, Transit Gateway, NAT, Route53)"
+  ],
+  "aws_services": [
+    "VPC",
+    "Transit Gateway",
+    "S3 Bucket",
+    "Route53",
+    "Systems Manager",
+    "EC2 (NAT Instance)",
+    "VPC Endpoints",
+    "VPC Flow Logs"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "nemishv-creator",
+  "dockerS3Location": ""
+}

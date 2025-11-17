@@ -41,17 +41,22 @@ ext {
     googleCodeGsonVersion = '2.10.1'
 
     //Build settings
-    def platform = project.findProperty("platform") ?: "default"
+    def metadataFile = file("metadata.json")
+    def platform = "default"
+    if (metadataFile.exists()) {
+        def metadata = new groovy.json.JsonSlurper().parseText(metadataFile.text)
+        platform = metadata.platform ?: "default"
+    }
 
     switch (platform) {
         case "pulumi":
-            minimumTestCoverage = 1.0
+            minimumTestCoverage = 20.0
             break
         case "cdk":
-            minimumTestCoverage = 50.0
+            minimumTestCoverage = 90.0
             break
         case "cdktf":
-            minimumTestCoverage = 50.0
+            minimumTestCoverage = 90.0
             break
         default:
             minimumTestCoverage = 20.0
@@ -452,7 +457,6 @@ afterEvaluate {
     jacocoTestReport.configure {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                '**/Main.class',
                 '**/imports/**'
             ])
         }))

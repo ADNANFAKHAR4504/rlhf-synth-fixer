@@ -1,0 +1,39 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000193",
+  "team": "2",
+  "startedAt": "2025-11-04T14:39:05.865Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "CDK",
+    "ECS",
+    "Fargate",
+    "Application Load Balancer",
+    "Aurora PostgreSQL",
+    "S3",
+    "CloudFront",
+    "Secrets Manager",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "VPC",
+    "NAT Gateway",
+    "ACM",
+    "Route53",
+    "Backup",
+    "SNS"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aafaq-turing",
+  "dockerS3Location": ""
+}

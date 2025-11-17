@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-13T01:17:58.317789",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "po_id": "i92f2h",
+  "aws_services": [
+    "VPC",
+    "RDS Aurora",
+    "EC2",
+    "Auto Scaling",
+    "ALB",
+    "DMS",
+    "Route 53",
+    "CloudWatch",
+    "KMS",
+    "VPN",
+    "NAT Gateway",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

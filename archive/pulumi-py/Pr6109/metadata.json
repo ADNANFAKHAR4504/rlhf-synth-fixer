@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-08T00:10:44+05:30",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as code"
+  ],
+  "po_id": "aiyy6",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "API Gateway",
+    "Lambda",
+    "S3",
+    "DynamoDB",
+    "KMS",
+    "CloudWatch Logs",
+    "WAFv2",
+    "IAM"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

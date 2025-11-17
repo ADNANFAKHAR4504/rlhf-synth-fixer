@@ -1,0 +1,38 @@
+{
+  "platform": "cdk",
+  "language": "py",
+  "complexity": "medium",
+  "team": "synth",
+  "startedAt": "2025-10-14T20:11:23+05:30",
+  "subtask": "Application Deployment",
+  "background": "A federal agency requires a monitoring solution for their data processing system that adheres to FedRAMP Moderate compliance requirements. The system processes sensitive but unclassified (SBU) data and needs comprehensive monitoring of database activities, container metrics, and API access patterns.",
+  "subject_labels": [
+    "CI/CD Pipeline",
+    "Failure Recovery Automation",
+    "Infrastructure Analysis/Monitoring",
+    "Security Configuration as Code"
+  ],
+  "po_id": "3998050142",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "ECS",
+    "ElastiCache",
+    "API Gateway",
+    "Kinesis",
+    "KMS",
+    "CloudWatch Logs",
+    "IAM",
+    "WAF",
+    "Lambda",
+    "Secrets Manager"
+  ],
+  "region": "us-west-2",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

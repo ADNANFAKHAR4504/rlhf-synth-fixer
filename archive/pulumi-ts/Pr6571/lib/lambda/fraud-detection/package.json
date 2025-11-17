@@ -1,0 +1,9 @@
+{
+  "name": "fraud-detection",
+  "version": "1.0.0",
+  "description": "Lambda function for fraud detection",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-sqs": "^3.450.0"
+  }
+}

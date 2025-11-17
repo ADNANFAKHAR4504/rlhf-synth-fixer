@@ -23,8 +23,8 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 
 ### Testing Gate
 - [ ] Unit tests created for all lib/ code
-- [ ] Unit test coverage ≥ 90%
-- [ ] Unit tests PASSED
+- [ ] **Unit test coverage = 100%** (statements, functions, lines)
+- [ ] All unit tests PASSED
 
 ### Deployment Gate
 - [ ] Resources deployed successfully to AWS
@@ -47,7 +47,7 @@ This is a condensed checklist for quick validation of IaC synthetic tasks before
 | Lint errors | Run `npm run format` or `pipenv run format` |
 | "Bucket not empty" | Add `autoDeleteObjects: true` |
 | Wrong platform/language | Regenerate with correct platform in PROMPT.md |
-| Coverage < 90% | Add more unit tests for untested code paths |
+| Coverage < 100% | Add tests until all statements, functions, and lines are 100% covered |
 | Integration test failures | Use outputs from cfn-outputs/flat-outputs.json |
 | Pre-validate warnings | Fix hardcoded values and missing environmentSuffix |
 
@@ -84,8 +84,9 @@ cat cfn-outputs/flat-outputs.json
 - Platform/language mismatch with metadata.json
 - Pre-validate script has errors (not warnings)
 - Lint, build, or synth fails
-- Unit test coverage < 90%
+- **Unit test coverage < 100%**
 - Deployment fails after 5 attempts
+- Files in wrong locations (outside bin/, lib/, test/, tests/)
 
 ⚠️ **WARNING - High risk:**
 - Pre-validate script has > 3 warnings

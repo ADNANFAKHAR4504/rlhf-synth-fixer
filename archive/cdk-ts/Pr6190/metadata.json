@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-10T15:59:26+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "jgoss",
+  "aws_services": [
+    "DMS",
+    "RDS",
+    "Aurora",
+    "SecretsManager",
+    "KMS",
+    "CloudWatch",
+    "Lambda",
+    "VPC",
+    "SNS",
+    "IAM",
+    "CloudWatchLogs"
+  ],
+  "author": "mayanksethi-turing",
+  "region": "ap-southeast-2",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

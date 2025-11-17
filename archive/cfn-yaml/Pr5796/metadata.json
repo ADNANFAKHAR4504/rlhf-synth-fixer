@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000202",
+  "team": "2",
+  "startedAt": "2025-11-04T08:42:46.508Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "Step Functions",
+    "DynamoDB",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "SQS",
+    "CloudWatch Logs"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "training_quality": 10,
+  "author": "kanishkah-turing",
+  "dockerS3Location": ""
+}
