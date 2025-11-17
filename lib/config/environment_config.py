@@ -20,7 +20,7 @@ class EnvironmentConfig:
         "ecs_desired_count": 1,
         "enable_nat_gateway": False,
         "database_name": "appdb",
-        "master_username": "admin"
+        "master_username": "dbadmin"
     }
 
     # Staging configuration
@@ -38,7 +38,7 @@ class EnvironmentConfig:
         "ecs_desired_count": 2,
         "enable_nat_gateway": True,
         "database_name": "appdb",
-        "master_username": "admin"
+        "master_username": "dbadmin"
     }
 
     # Production configuration
@@ -56,7 +56,7 @@ class EnvironmentConfig:
         "ecs_desired_count": 3,
         "enable_nat_gateway": True,
         "database_name": "appdb",
-        "master_username": "admin"
+        "master_username": "dbadmin"
     }
 
     @classmethod
