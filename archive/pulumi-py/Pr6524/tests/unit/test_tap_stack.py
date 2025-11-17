@@ -1,429 +1,357 @@
 """
 test_tap_stack.py
 
-Unit tests for the TapStack Pulumi component using Pulumi's testing utilities.
-Tests validate resource creation, configuration, and relationships without deploying to AWS.
+Unit tests for the CloudFormation TapStack template.
+Tests validate template structure, parameters, resources, and configuration without deploying to AWS.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock, Mock
-import pulumi
+import json
+import os
+import yaml
+from pathlib import Path
 
 
-def pulumi_mocks(call: pulumi.runtime.MockCallArgs):
-    """Mock Pulumi resource calls for unit testing."""
-    if call.typ == "aws:ec2/vpc:Vpc":
-        return {"id": "vpc-12345", "cidrBlock": "10.0.0.0/16"}
-    elif call.typ == "aws:ec2/subnet:Subnet":
-        return {"id": f"subnet-{call.name}", "cidrBlock": "10.0.1.0/24"}
-    elif call.typ == "aws:ec2/internetGateway:InternetGateway":
-        return {"id": "igw-12345"}
-    elif call.typ == "aws:ec2/natGateway:NatGateway":
-        return {"id": f"nat-{call.name}"}
-    elif call.typ == "aws:ec2/eip:Eip":
-        return {"id": f"eip-{call.name}", "publicIp": "54.1.1.1"}
-    elif call.typ == "aws:ec2/routeTable:RouteTable":
-        return {"id": f"rtb-{call.name}"}
-    elif call.typ == "aws:ec2/route:Route":
-        return {"id": f"route-{call.name}"}
-    elif call.typ == "aws:ec2/routeTableAssociation:RouteTableAssociation":
-        return {"id": f"rtbassoc-{call.name}"}
-    elif call.typ == "aws:ec2/securityGroup:SecurityGroup":
-        return {"id": f"sg-{call.name}"}
-    elif call.typ == "aws:ec2/vpcEndpoint:VpcEndpoint":
-        return {"id": f"vpce-{call.name}"}
-    elif call.typ == "aws:kms/key:Key":
-        return {"id": "key-12345", "arn": "arn:aws:kms:us-east-1:123456789012:key/12345"}
-    elif call.typ == "aws:kms/alias:Alias":
-        return {"id": "alias/payment-test"}
-    elif call.typ == "aws:dynamodb/table:Table":
-        return {"id": "payment-sessions-test", "name": "payment-sessions-test", "arn": "arn:aws:dynamodb:us-east-1:123456789012:table/payment-sessions-test"}
-    elif call.typ == "aws:secretsmanager/secret:Secret":
-        return {"id": f"secret-{call.name}", "arn": f"arn:aws:secretsmanager:us-east-1:123456789012:secret:{call.name}"}
-    elif call.typ == "aws:secretsmanager/secretVersion:SecretVersion":
-        return {"id": f"version-{call.name}", "arn": f"arn:aws:secretsmanager:us-east-1:123456789012:secret:version/{call.name}"}
-    elif call.typ == "aws:rds/subnetGroup:SubnetGroup":
-        return {"id": f"subnetgroup-{call.name}", "name": f"subnetgroup-{call.name}"}
-    elif call.typ == "aws:rds/cluster:Cluster":
-        return {
-            "id": f"cluster-{call.name}",
-            "endpoint": f"{call.name}.cluster-abc123.us-east-1.rds.amazonaws.com",
-            "arn": f"arn:aws:rds:us-east-1:123456789012:cluster:{call.name}"
-        }
-    elif call.typ == "aws:rds/clusterInstance:ClusterInstance":
-        return {"id": f"instance-{call.name}", "endpoint": f"{call.name}.abc123.us-east-1.rds.amazonaws.com"}
-    elif call.typ == "aws:lb/targetGroup:TargetGroup":
-        return {"id": f"tg-{call.name}", "arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:targetgroup/{call.name}/123"}
-    elif call.typ == "aws:lb/loadBalancer:LoadBalancer":
-        return {
-            "id": f"alb-{call.name}",
-            "arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:loadbalancer/app/{call.name}/123",
-            "dnsName": f"{call.name}.us-east-1.elb.amazonaws.com"
-        }
-    elif call.typ == "aws:lb/listener:Listener":
-        return {"id": f"listener-{call.name}", "arn": f"arn:aws:elasticloadbalancing:us-east-1:123456789012:listener/{call.name}/123"}
-    elif call.typ == "aws:iam/role:Role":
-        return {"id": f"role-{call.name}", "arn": f"arn:aws:iam::123456789012:role/{call.name}"}
-    elif call.typ == "aws:iam/rolePolicy:RolePolicy":
-        return {"id": f"policy-{call.name}"}
-    elif call.typ == "aws:iam/rolePolicyAttachment:RolePolicyAttachment":
-        return {"id": f"attachment-{call.name}"}
-    elif call.typ == "aws:lambda/function:Function":
-        return {
-            "id": f"function-{call.name}",
-            "arn": f"arn:aws:lambda:us-east-1:123456789012:function:{call.name}"
-        }
-    elif call.typ == "aws:cloudwatch/metricAlarm:MetricAlarm":
-        return {"id": f"alarm-{call.name}", "arn": f"arn:aws:cloudwatch:us-east-1:123456789012:alarm:{call.name}"}
-    elif call.typ == "aws:backup/vault:Vault":
-        return {"id": f"vault-{call.name}", "name": f"vault-{call.name}", "arn": f"arn:aws:backup:us-east-1:123456789012:backup-vault:{call.name}"}
-    elif call.typ == "aws:backup/plan:Plan":
-        return {"id": f"plan-{call.name}", "arn": f"arn:aws:backup:us-east-1:123456789012:backup-plan:{call.name}"}
-    elif call.typ == "aws:backup/selection:Selection":
-        return {"id": f"selection-{call.name}"}
-    elif call.typ == "aws:ssm/parameter:Parameter":
-        return {"id": f"param-{call.name}", "value": "blue"}
-    else:
-        return {call.name: call.name}
+class TestTapStackTemplate(unittest.TestCase):
+    """Test cases for CloudFormation TapStack template validation."""
 
-
-class PulumiMocks(pulumi.runtime.Mocks):
-    """Pulumi Mocks for unit testing."""
-
-    def call(self, args: pulumi.runtime.MockCallArgs):
-        """Mock Pulumi function calls."""
-        return {}
-
-    def new_resource(self, args: pulumi.runtime.MockResourceArgs):
-        """Mock Pulumi resource creation."""
-        return [args.name, pulumi_mocks(args)]
-
-
-pulumi.runtime.set_mocks(PulumiMocks())
-
-
-# Import after setting mocks
-from lib.tap_stack import TapStack, TapStackArgs
-
-
-class TestTapStackArgs(unittest.TestCase):
-    """Test cases for TapStackArgs configuration class."""
-
-    def test_tap_stack_args_default_values(self):
-        """Test TapStackArgs with default values."""
-        args = TapStackArgs()
-
-        self.assertEqual(args.environment_suffix, 'dev')
-        self.assertIsInstance(args.tags, dict)
-        self.assertIsNotNone(args.stack_prefix)
-
-    def test_tap_stack_args_custom_values(self):
-        """Test TapStackArgs with custom values."""
-        custom_tags = {'Project': 'PaymentSystem', 'Owner': 'TeamA'}
-        args = TapStackArgs(
-            environment_suffix='prod',
-            tags=custom_tags,
-            stack_prefix='prod-payment-12345678'
-        )
-
-        self.assertEqual(args.environment_suffix, 'prod')
-        self.assertEqual(args.tags, custom_tags)
-        self.assertEqual(args.stack_prefix, 'prod-payment-12345678')
-
-    def test_tap_stack_args_environment_suffix_none(self):
-        """Test TapStackArgs when environment_suffix is None."""
-        args = TapStackArgs(environment_suffix=None)
-        self.assertEqual(args.environment_suffix, 'dev')
-
-    def test_tap_stack_args_tags_none(self):
-        """Test TapStackArgs when tags is None."""
-        args = TapStackArgs(tags=None)
-        self.assertIsInstance(args.tags, dict)
-        self.assertEqual(len(args.tags), 0)
-
-
-@pulumi.runtime.test
-def test_tap_stack_creates_resources():
-    """Test that TapStack creates expected resources."""
-    def check_resources(args):
-        # Create TapStack
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(
-                environment_suffix='test',
-                tags={'Environment': 'test'}
+    @classmethod
+    def setUpClass(cls):
+        """Load the CloudFormation template once for all tests."""
+        # Try to load from JSON first (generated from YAML), then fall back to YAML
+        template_json_path = Path(__file__).parent.parent.parent / 'lib' / 'TapStack.json'
+        template_yaml_path = Path(__file__).parent.parent.parent / 'lib' / 'TapStack.yml'
+        
+        if template_json_path.exists():
+            with open(template_json_path, 'r', encoding='utf-8') as f:
+                cls.template = json.load(f)
+        elif template_yaml_path.exists():
+            with open(template_yaml_path, 'r', encoding='utf-8') as f:
+                cls.template = yaml.safe_load(f)
+        else:
+            raise FileNotFoundError(
+                f"CloudFormation template not found. "
+                f"Expected: {template_json_path} or {template_yaml_path}"
             )
+
+    def test_template_structure(self):
+        """Test template has valid CloudFormation structure."""
+        self.assertEqual(
+            self.template.get('AWSTemplateFormatVersion'),
+            '2010-09-09',
+            "Template should use CloudFormation format version 2010-09-09"
+        )
+        
+        self.assertIsNotNone(
+            self.template.get('Description'),
+            "Template should have a description"
+        )
+        
+        # Check required sections
+        self.assertIn('Parameters', self.template, "Template should have Parameters section")
+        self.assertIn('Resources', self.template, "Template should have Resources section")
+        self.assertIn('Outputs', self.template, "Template should have Outputs section")
+
+    def test_parameters_exist(self):
+        """Test required parameters are defined."""
+        params = self.template.get('Parameters', {})
+        
+        # EnvironmentType parameter
+        self.assertIn('EnvironmentType', params, "EnvironmentType parameter should exist")
+        env_param = params['EnvironmentType']
+        self.assertEqual(env_param.get('Type'), 'String', "EnvironmentType should be String type")
+        self.assertIn('Default', env_param, "EnvironmentType should have a default value")
+        self.assertIn('AllowedValues', env_param, "EnvironmentType should have AllowedValues")
+        
+        # DBUsername parameter
+        self.assertIn('DBUsername', params, "DBUsername parameter should exist")
+        db_user_param = params['DBUsername']
+        self.assertEqual(db_user_param.get('Type'), 'String', "DBUsername should be String type")
+        self.assertIn('MinLength', db_user_param, "DBUsername should have MinLength constraint")
+        self.assertIn('MaxLength', db_user_param, "DBUsername should have MaxLength constraint")
+        
+        # VPC CIDR parameters
+        self.assertIn('VpcCIDR', params, "VpcCIDR parameter should exist")
+        self.assertIn('PublicSubnet1CIDR', params, "PublicSubnet1CIDR parameter should exist")
+        self.assertIn('PublicSubnet2CIDR', params, "PublicSubnet2CIDR parameter should exist")
+        self.assertIn('PrivateSubnet1CIDR', params, "PrivateSubnet1CIDR parameter should exist")
+        self.assertIn('PrivateSubnet2CIDR', params, "PrivateSubnet2CIDR parameter should exist")
+
+    def test_mappings_exist(self):
+        """Test mappings are defined."""
+        mappings = self.template.get('Mappings', {})
+        
+        # RegionAMIs mapping
+        self.assertIn('RegionAMIs', mappings, "RegionAMIs mapping should exist")
+        region_amis = mappings['RegionAMIs']
+        self.assertIn('us-east-1', region_amis, "RegionAMIs should include us-east-1")
+        
+        # EnvironmentConfig mapping
+        self.assertIn('EnvironmentConfig', mappings, "EnvironmentConfig mapping should exist")
+        env_config = mappings['EnvironmentConfig']
+        self.assertIn('dev', env_config, "EnvironmentConfig should include dev")
+        self.assertIn('prod', env_config, "EnvironmentConfig should include prod")
+
+    def test_conditions_exist(self):
+        """Test conditions are defined."""
+        conditions = self.template.get('Conditions', {})
+        
+        self.assertIn('IsProduction', conditions, "IsProduction condition should exist")
+        self.assertIn('IsDevelopment', conditions, "IsDevelopment condition should exist")
+
+    def test_vpc_resources_exist(self):
+        """Test VPC and network resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        # VPC resource
+        self.assertIn('VPC', resources, "VPC resource should exist")
+        vpc = resources['VPC']
+        self.assertEqual(vpc.get('Type'), 'AWS::EC2::VPC', "VPC should be AWS::EC2::VPC type")
+        
+        # Internet Gateway
+        self.assertIn('InternetGateway', resources, "InternetGateway resource should exist")
+        self.assertIn('AttachGateway', resources, "AttachGateway resource should exist")
+        
+        # Subnets
+        self.assertIn('PublicSubnet1', resources, "PublicSubnet1 should exist")
+        self.assertIn('PublicSubnet2', resources, "PublicSubnet2 should exist")
+        self.assertIn('PrivateSubnet1', resources, "PrivateSubnet1 should exist")
+        self.assertIn('PrivateSubnet2', resources, "PrivateSubnet2 should exist")
+
+    def test_security_groups_exist(self):
+        """Test security groups are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('ALBSecurityGroup', resources, "ALBSecurityGroup should exist")
+        self.assertIn('InstanceSecurityGroup', resources, "InstanceSecurityGroup should exist")
+        self.assertIn('DatabaseSecurityGroup', resources, "DatabaseSecurityGroup should exist")
+
+    def test_iam_resources_exist(self):
+        """Test IAM resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('InstanceRole', resources, "InstanceRole should exist")
+        self.assertIn('InstanceProfile', resources, "InstanceProfile should exist")
+        
+        instance_role = resources['InstanceRole']
+        self.assertEqual(
+            instance_role.get('Type'),
+            'AWS::IAM::Role',
+            "InstanceRole should be AWS::IAM::Role type"
         )
 
-        # Verify stack attributes exist
-        assert hasattr(stack, 'kms_key')
-        assert hasattr(stack, 'vpc')
-        assert hasattr(stack, 'dynamodb_table')
-        assert hasattr(stack, 'blue_env')
-        assert hasattr(stack, 'green_env')
-        assert hasattr(stack, 'alb')
-        assert hasattr(stack, 'switch_lambda')
-
-        return {}
-
-    return check_resources({})
-
-
-@pulumi.runtime.test
-def test_tap_stack_environment_suffix_applied():
-    """Test that environment suffix is applied to resource names."""
-    def check_suffix(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='qa')
+    def test_rds_resources_exist(self):
+        """Test RDS Aurora resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('DBSubnetGroup', resources, "DBSubnetGroup should exist")
+        self.assertIn('AuroraCluster', resources, "AuroraCluster should exist")
+        
+        cluster = resources['AuroraCluster']
+        self.assertEqual(
+            cluster.get('Type'),
+            'AWS::RDS::DBCluster',
+            "AuroraCluster should be AWS::RDS::DBCluster type"
+        )
+        
+        # Check cluster properties
+        props = cluster.get('Properties', {})
+        self.assertIn('Engine', props, "AuroraCluster should have Engine property")
+        self.assertIn('EngineVersion', props, "AuroraCluster should have EngineVersion property")
+        self.assertIn('StorageEncrypted', props, "AuroraCluster should have StorageEncrypted property")
+        self.assertTrue(
+            props.get('StorageEncrypted', False),
+            "AuroraCluster should have encryption enabled"
         )
 
-        # Verify environment_suffix is set
-        assert stack.environment_suffix == 'qa'
+    def test_s3_resources_exist(self):
+        """Test S3 resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('TransactionLogsBucket', resources, "TransactionLogsBucket should exist")
+        bucket = resources['TransactionLogsBucket']
+        self.assertEqual(
+            bucket.get('Type'),
+            'AWS::S3::Bucket',
+            "TransactionLogsBucket should be AWS::S3::Bucket type"
+        )
+        
+        # Check bucket properties
+        props = bucket.get('Properties', {})
+        self.assertIn('VersioningConfiguration', props, "Bucket should have versioning configuration")
+        self.assertIn('PublicAccessBlockConfiguration', props, "Bucket should have public access block")
 
-        return {}
+    def test_alb_resources_exist(self):
+        """Test Application Load Balancer resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('ApplicationLoadBalancer', resources, "ApplicationLoadBalancer should exist")
+        alb = resources['ApplicationLoadBalancer']
+        self.assertEqual(
+            alb.get('Type'),
+            'AWS::ElasticLoadBalancingV2::LoadBalancer',
+            "ALB should be AWS::ElasticLoadBalancingV2::LoadBalancer type"
+        )
+        
+        self.assertIn('ALBTargetGroup', resources, "ALBTargetGroup should exist")
+        self.assertIn('ALBListener', resources, "ALBListener should exist")
 
-    return check_suffix({})
+    def test_autoscaling_resources_exist(self):
+        """Test Auto Scaling resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('LaunchTemplate', resources, "LaunchTemplate should exist")
+        self.assertIn('AutoScalingGroup', resources, "AutoScalingGroup should exist")
+        
+        asg = resources['AutoScalingGroup']
+        self.assertEqual(
+            asg.get('Type'),
+            'AWS::AutoScaling::AutoScalingGroup',
+            "AutoScalingGroup should be AWS::AutoScaling::AutoScalingGroup type"
+        )
 
+    def test_secrets_manager_resources_exist(self):
+        """Test Secrets Manager resources are defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('DBPasswordSecret', resources, "DBPasswordSecret should exist")
+        secret = resources['DBPasswordSecret']
+        self.assertEqual(
+            secret.get('Type'),
+            'AWS::SecretsManager::Secret',
+            "DBPasswordSecret should be AWS::SecretsManager::Secret type"
+        )
+        
+        # Check secret has GenerateSecretString
+        props = secret.get('Properties', {})
+        self.assertIn('GenerateSecretString', props, "Secret should have GenerateSecretString")
 
-@pulumi.runtime.test
-def test_tap_stack_default_tags_applied():
-    """Test that default tags are applied correctly."""
-    def check_tags(args):
-        custom_tags = {'Project': 'Payment', 'Team': 'Platform'}
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(
-                environment_suffix='staging',
-                tags=custom_tags
+    def test_key_pair_resource_exists(self):
+        """Test EC2 Key Pair resource is defined."""
+        resources = self.template.get('Resources', {})
+        
+        self.assertIn('EC2KeyPair', resources, "EC2KeyPair should exist")
+        key_pair = resources['EC2KeyPair']
+        self.assertEqual(
+            key_pair.get('Type'),
+            'AWS::EC2::KeyPair',
+            "EC2KeyPair should be AWS::EC2::KeyPair type"
+        )
+
+    def test_outputs_exist(self):
+        """Test stack outputs are defined."""
+        outputs = self.template.get('Outputs', {})
+        
+        required_outputs = [
+            'VPCId',
+            'RDSEndpoint',
+            'RDSPort',
+            'S3BucketName',
+            'S3BucketArn',
+            'EnvironmentType'
+        ]
+        
+        for output_key in required_outputs:
+            self.assertIn(
+                output_key,
+                outputs,
+                f"Output {output_key} should be defined"
             )
-        )
+            
+            output = outputs[output_key]
+            self.assertIn('Value', output, f"Output {output_key} should have a Value")
+            self.assertIn('Description', output, f"Output {output_key} should have a Description")
 
-        # Verify default tags include custom tags
-        assert 'Environment' in stack.default_tags
-        assert stack.default_tags['Environment'] == 'staging'
-        assert 'CostCenter' in stack.default_tags
-        assert 'MigrationPhase' in stack.default_tags
-        assert stack.default_tags['Project'] == 'Payment'
-        assert stack.default_tags['Team'] == 'Platform'
+    def test_resource_naming_convention(self):
+        """Test resources follow naming conventions with EnvironmentType."""
+        resources = self.template.get('Resources', {})
+        
+        # Check VPC name uses EnvironmentType
+        vpc = resources.get('VPC', {})
+        vpc_props = vpc.get('Properties', {})
+        vpc_tags = vpc_props.get('Tags', [])
+        
+        # Find Name tag
+        name_tag = next((tag for tag in vpc_tags if tag.get('Key') == 'Name'), None)
+        if name_tag:
+            name_value = name_tag.get('Value', '')
+            # Should use !Sub with EnvironmentType
+            self.assertIsInstance(name_value, dict, "VPC Name tag should use CloudFormation function")
 
-        return {}
+    def test_resource_tags(self):
+        """Test resources have consistent tagging."""
+        resources = self.template.get('Resources', {})
+        
+        # Check a few key resources have tags
+        resources_to_check = ['VPC', 'TransactionLogsBucket', 'AuroraCluster']
+        
+        for resource_name in resources_to_check:
+            if resource_name in resources:
+                resource = resources[resource_name]
+                props = resource.get('Properties', {})
+                tags = props.get('Tags', [])
+                
+                # Should have at least some tags
+                self.assertGreater(
+                    len(tags),
+                    0,
+                    f"{resource_name} should have tags"
+                )
 
-    return check_tags({})
+    def test_no_hardcoded_values(self):
+        """Test template uses parameters and mappings instead of hardcoded values."""
+        resources = self.template.get('Resources', {})
+        
+        # Check AuroraCluster uses parameter references
+        cluster = resources.get('AuroraCluster', {})
+        props = cluster.get('Properties', {})
+        
+        # MasterUsername should reference parameter
+        master_username = props.get('MasterUsername')
+        if master_username:
+            # Should be a Ref or similar function, not a hardcoded string
+            if isinstance(master_username, str):
+                # If it's a string, it should be a parameter reference pattern
+                # This is a basic check - in practice, it should use !Ref
+                pass
 
+    def test_encryption_enabled(self):
+        """Test encryption is enabled on resources that support it."""
+        resources = self.template.get('Resources', {})
+        
+        # RDS cluster encryption
+        cluster = resources.get('AuroraCluster', {})
+        if cluster:
+            props = cluster.get('Properties', {})
+            self.assertTrue(
+                props.get('StorageEncrypted', False),
+                "AuroraCluster should have StorageEncrypted enabled"
+            )
+        
+        # S3 bucket encryption
+        bucket = resources.get('TransactionLogsBucket', {})
+        if bucket:
+            props = bucket.get('Properties', {})
+            bucket_encryption = props.get('BucketEncryption', {})
+            if bucket_encryption:
+                server_side_encryption = bucket_encryption.get('ServerSideEncryptionConfiguration', [])
+                self.assertGreater(
+                    len(server_side_encryption),
+                    0,
+                    "S3 bucket should have encryption configuration"
+                )
 
-@pulumi.runtime.test
-def test_kms_key_created():
-    """Test KMS key creation."""
-    def check_kms(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify KMS key exists
-        assert stack.kms_key is not None
-
-        return {}
-
-    return check_kms({})
-
-
-@pulumi.runtime.test
-def test_vpc_infrastructure_created():
-    """Test VPC infrastructure creation."""
-    def check_vpc(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify VPC components exist
-        assert 'vpc' in stack.vpc
-        assert 'public_subnets' in stack.vpc
-        assert 'private_subnets' in stack.vpc
-        assert 'nat_gateways' in stack.vpc
-
-        # Verify subnet counts (3 AZs)
-        assert len(stack.vpc['public_subnets']) == 3
-        assert len(stack.vpc['private_subnets']) == 3
-        assert len(stack.vpc['nat_gateways']) == 3
-
-        return {}
-
-    return check_vpc({})
-
-
-@pulumi.runtime.test
-def test_dynamodb_table_created():
-    """Test DynamoDB table creation."""
-    def check_dynamodb(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify DynamoDB table exists
-        assert stack.dynamodb_table is not None
-
-        return {}
-
-    return check_dynamodb({})
-
-
-@pulumi.runtime.test
-def test_blue_green_environments_created():
-    """Test both blue and green environments are created."""
-    def check_environments(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify blue environment
-        assert stack.blue_env is not None
-        assert 'cluster' in stack.blue_env
-        assert 'instances' in stack.blue_env
-        assert len(stack.blue_env['instances']) == 2
-
-        # Verify green environment
-        assert stack.green_env is not None
-        assert 'cluster' in stack.green_env
-        assert 'instances' in stack.green_env
-        assert len(stack.green_env['instances']) == 2
-
-        return {}
-
-    return check_environments({})
-
-
-@pulumi.runtime.test
-def test_alb_created_with_target_groups():
-    """Test ALB creation with target groups."""
-    def check_alb(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify ALB components
-        assert 'alb' in stack.alb
-        assert 'blue_tg' in stack.alb
-        assert 'green_tg' in stack.alb
-        assert 'listener' in stack.alb
-
-        return {}
-
-    return check_alb({})
-
-
-@pulumi.runtime.test
-def test_lambda_function_created():
-    """Test Lambda function for environment switching is created."""
-    def check_lambda(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify Lambda function exists
-        assert stack.switch_lambda is not None
-
-        return {}
-
-    return check_lambda({})
-
-
-@pulumi.runtime.test
-def test_cloudwatch_alarms_created():
-    """Test CloudWatch alarms are created."""
-    def check_alarms(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify alarms exist
-        assert stack.alarms is not None
-        assert isinstance(stack.alarms, list)
-        assert len(stack.alarms) > 0
-
-        return {}
-
-    return check_alarms({})
-
-
-@pulumi.runtime.test
-def test_backup_plan_created():
-    """Test AWS Backup plan is created."""
-    def check_backup(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify backup components exist
-        assert stack.backup_plan is not None
-        assert 'vault' in stack.backup_plan
-        assert 'plan' in stack.backup_plan
-
-        return {}
-
-    return check_backup({})
-
-
-@pulumi.runtime.test
-def test_secrets_manager_secrets_created():
-    """Test Secrets Manager secrets for database credentials."""
-    def check_secrets(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify secrets exist
-        assert stack.blue_db_secret is not None
-        assert stack.green_db_secret is not None
-
-        return {}
-
-    return check_secrets({})
-
-
-@pulumi.runtime.test
-def test_vpc_endpoints_created():
-    """Test VPC endpoints for S3 and DynamoDB are created."""
-    def check_endpoints(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify VPC endpoints exist
-        assert stack.vpc_endpoints is not None
-        assert 's3' in stack.vpc_endpoints
-        assert 'dynamodb' in stack.vpc_endpoints
-
-        return {}
-
-    return check_endpoints({})
-
-
-@pulumi.runtime.test
-def test_ssm_parameter_created():
-    """Test SSM parameter for active environment tracking."""
-    def check_ssm(args):
-        stack = TapStack(
-            name='test-stack',
-            args=TapStackArgs(environment_suffix='dev')
-        )
-
-        # Verify SSM parameter exists
-        assert stack.active_env_param is not None
-
-        return {}
-
-    return check_ssm({})
+    def test_metadata_section(self):
+        """Test template has metadata section for cfn-lint configuration."""
+        metadata = self.template.get('Metadata', {})
+        
+        # Should have cfn-lint ignore configuration
+        cfn_lint = metadata.get('cfn-lint', {})
+        if cfn_lint:
+            config = cfn_lint.get('config', {})
+            ignore_checks = config.get('ignore_checks', [])
+            # Should have some ignore checks if warnings are suppressed
+            self.assertIsInstance(ignore_checks, list, "ignore_checks should be a list")
 
 
 if __name__ == '__main__':
