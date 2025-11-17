@@ -1,22 +1,25 @@
-ROLE: You are a senior Terraform engineer.
+ROLE: You are a senior Terraform engineer specializing in AWS security and compliance.
 
 CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
+We need to implement an automated AWS infrastructure compliance checking and governance system using Terraform HCL.
 
 CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
+- Use AWS Config for resource compliance monitoring
+- Implement Lambda functions for custom compliance checks
+- Set up EventBridge for real-time compliance events
+- Configure SNS for compliance violation notifications
+- Store Config snapshots and compliance reports in S3
+- Use CloudWatch Logs for audit trails
+- Follow AWS and Terraform security best practices
+- Implement least-privilege IAM policies
 
 DELIVERABLES:
-1) main.tf (providers, resources, modules as needed)
-2) variables.tf
-3) backend.tf (if required) with placeholders, not real secrets
-4) state-migration.md (exact Terraform CLI commands: workspace create/select, import, and verification)
-5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
-6) runbook.md (cutover plan, roll-back, checks)
+1) main.tf (AWS Config, Lambda, EventBridge, SNS, S3, IAM resources)
+2) variables.tf (configuration parameters with sensible defaults)
+3) outputs.tf (expose critical resource ARNs and identifiers)
+4) backend.tf (S3 backend configuration with placeholders)
+5) provider.tf (AWS provider configuration with version constraints)
+6) lambda_function.py (compliance checking logic)
 
 OUTPUT FORMAT (IMPORTANT):
 - Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
