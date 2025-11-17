@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912285",
+  "team": "3",
+  "startedAt": "2025-11-14T06:06:04.583Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "training_quality": 8,
+  "aws_services": [
+    "EC2",
+    "VPC",
+    "ECS",
+    "Fargate",
+    "ECR",
+    "Application Load Balancer",
+    "CodeDeploy",
+    "IAM",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "Prakhar12s",
+  "dockerS3Location": ""
+}
