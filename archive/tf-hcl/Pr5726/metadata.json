@@ -1,0 +1,40 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000046",
+  "team": "4",
+  "startedAt": "2025-11-04T06:55:52.064Z",
+  "subtask": "IaC-Multi-Environment-Management",
+  "subject_labels": [
+    "Multi-Environment Consistency"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "RDS",
+    "S3",
+    "IAM",
+    "Route53",
+    "LoadBalancer",
+    "NAT",
+    "IGW",
+    "EIP",
+    "CloudWatch",
+    "SNS",
+    "SecretsManager",
+    "SecurityGroup",
+    "VPCPeering"
+  ],
+  "task_config": {
+    "deploy_env": "prod.tfvars"
+  },
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

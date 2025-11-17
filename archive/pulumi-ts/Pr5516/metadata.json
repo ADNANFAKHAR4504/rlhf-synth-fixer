@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "medium",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-10-31T13:20:00+05:30",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": [
+    "Failure Recovery and High Availability"
+  ],
+  "po_id": "qx221",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "ALB",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "NAT Gateway",
+    "Internet Gateway"
+  ],
+  "region": "eu-central-1",
+  "training_quality": 8,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

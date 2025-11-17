@@ -1,0 +1,37 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "101000842",
+  "team": "synth",
+  "startedAt": "2025-11-05T16:16:00+00:00",
+  "subtask": "Environment Migration",
+  "subject_labels": [
+    "VPC",
+    "Networking",
+    "Multi-AZ",
+    "Security Groups",
+    "NAT Gateway",
+    "S3"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "NAT Gateway",
+    "Internet Gateway",
+    "VPC Endpoint",
+    "Route Tables",
+    "Security Groups",
+    "Elastic IP"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "balasl342",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

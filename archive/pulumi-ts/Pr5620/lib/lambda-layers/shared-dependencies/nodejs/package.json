@@ -1,0 +1,17 @@
+{
+  "name": "image-processing-shared-dependencies",
+  "version": "1.0.0",
+  "description": "Shared dependencies for Lambda image processing functions",
+  "main": "index.js",
+  "dependencies": {
+    "sharp": "^0.33.0",
+    "@aws-sdk/client-s3": "^3.450.0",
+    "aws-xray-sdk-core": "^3.6.0"
+  },
+  "cpu": [
+    "arm64"
+  ],
+  "os": [
+    "linux"
+  ]
+}

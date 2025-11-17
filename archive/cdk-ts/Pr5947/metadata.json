@@ -1,0 +1,32 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T12:00:12Z",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Application Deployment"
+  ],
+  "po_id": "bo3zl",
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "KMS",
+    "SSM",
+    "IAM",
+    "S3"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

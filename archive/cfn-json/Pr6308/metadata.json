@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-11T14:36:19+00:00",
+  "subtask": "Multi-Environment Consistency & Replication",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "po_id": "101000907",
+  "aws_services": [
+    "RDS",
+    "SecretsManager",
+    "EC2",
+    "ElasticLoadBalancingV2",
+    "AutoScaling",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

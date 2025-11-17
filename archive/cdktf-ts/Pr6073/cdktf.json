@@ -1,0 +1,11 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node bin/tap.ts",
+  "projectId": "payment-app-ecs-fargate",
+  "sendCrashReports": "false",
+  "terraformProviders": [
+    "aws@~> 6.0"
+  ],
+  "terraformModules": [],
+  "context": {}
+}

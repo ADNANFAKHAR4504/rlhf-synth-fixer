@@ -1,0 +1,34 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6026",
+  "team": "5",
+  "startedAt": "2025-11-07T06:26:31.556Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Amazon ECS Fargate",
+    "Application Load Balancer",
+    "AWS Auto Scaling",
+    "AWS Application Auto Scaling",
+    "AWS Fargate Spot",
+    "Amazon CloudWatch",
+    "Amazon SNS",
+    "AWS Cost Anomaly Detection",
+    "AWS IAM",
+    "AWS Cloud Map",
+    "Amazon RDS Aurora",
+    "Amazon SQS",
+    "AWS Systems Manager Parameter Store"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sivakumar-turing",
+  "dockerS3Location": ""
+}

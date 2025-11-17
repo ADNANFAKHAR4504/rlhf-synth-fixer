@@ -1,0 +1,22 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "5335",
+  "team": "5",
+  "startedAt": "2025-10-29T14:53:11.634Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "A financial services company is expanding their cloud presence and needs a secure, multi-tier network architecture",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": "[\"vpc\", \"subnet\", \"internet-gateway\", \"nat-gateway\", \"elastic-ip\", \"route-table\", \"route-table-association\", \"network-acl\", \"db-subnet-group\"]",
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}
