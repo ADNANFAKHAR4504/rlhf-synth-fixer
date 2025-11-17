@@ -26,6 +26,9 @@ Parameters:
       - 'true'
       - 'false'
 
+Conditions:
+  ShouldEnableConfigRecorder: !Equals [!Ref EnableConfigRecorder, 'true']
+
 Resources:
   # S3 Bucket for AWS Config Delivery
   ConfigBucket:
@@ -150,6 +153,7 @@ Resources:
   # AWS Config Recorder
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldEnableConfigRecorder
     Properties:
       Name: !Sub 'config-recorder-${EnvironmentSuffix}'
       RoleARN: !GetAtt ConfigRole.Arn
@@ -160,6 +164,7 @@ Resources:
   # AWS Config Delivery Channel
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: ShouldEnableConfigRecorder
     Properties:
       Name: !Sub 'config-delivery-${EnvironmentSuffix}'
       S3BucketName: !Ref ConfigBucket
@@ -170,6 +175,7 @@ Resources:
   # Config Rule: Encrypted Volumes
   EncryptedVolumesRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldEnableConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'encrypted-volumes-${EnvironmentSuffix}'
       Description: 'Checks whether EBS volumes are encrypted'
@@ -186,6 +192,7 @@ Resources:
   # Config Rule: S3 Bucket Public Read Prohibited
   S3BucketPublicReadRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldEnableConfigRecorder
     Properties:
       ConfigRuleName: !Sub 's3-bucket-public-read-prohibited-${EnvironmentSuffix}'
       Description: 'Checks that S3 buckets do not allow public read access'
@@ -202,6 +209,7 @@ Resources:
   # Config Rule: Required Tags
   RequiredTagsRule:
     Type: AWS::Config::ConfigRule
+    Condition: ShouldEnableConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'required-tags-${EnvironmentSuffix}'
       Description: 'Checks whether resources are tagged with required tags'
@@ -250,6 +258,7 @@ Outputs:
       Name: !Sub '${AWS::StackName}-ConfigTopicArn'
 
   ConfigRecorderName:
+    Condition: ShouldEnableConfigRecorder
     Description: 'Name of the Config recorder'
     Value: !Ref ConfigRecorder
     Export:

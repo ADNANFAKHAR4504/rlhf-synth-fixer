@@ -231,7 +231,7 @@ aws cloudformation create-stack \
   --template-body file://lib/TapStack.yml \
   --parameters ParameterKey=EnvironmentSuffix,ParameterValue=dev \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-west-2
 ```
 
 Monitor stack creation:
@@ -239,7 +239,7 @@ Monitor stack creation:
 ```bash
 aws cloudformation describe-stacks \
   --stack-name aws-config-compliance-dev \
-  --region us-east-1
+  --region us-west-2
 ```
 
 This implementation provides AWS Config infrastructure with configuration recording, compliance rules for encrypted volumes, S3 public access, and required tags, along with SNS notifications and CloudWatch monitoring.
