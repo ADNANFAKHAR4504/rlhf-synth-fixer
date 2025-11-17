@@ -248,13 +248,13 @@ def handler(event, context):
         )
 
         # Create EventBridge target for CloudWatch Logs
+        # Note: CloudWatch Logs as a target does not require or support role_arn
         self.log_target = aws.cloudwatch.EventTarget(
             f"log-target-{self.environment_suffix}",
             rule=self.log_forwarding_rule.name,
             event_bus_name=self.event_bus.name,
             arn=args.log_group_arn,
-            role_arn=self.eventbridge_log_role.arn,
-            opts=ResourceOptions(parent=self.log_forwarding_rule, depends_on=[eventbridge_log_policy])
+            opts=ResourceOptions(parent=self.log_forwarding_rule)
         )
 
         # Register outputs

@@ -301,9 +301,9 @@ service iptables save
             # Associate route table with subnet
             aws.ec2.RouteTableAssociation(
                 f"private-rt-assoc-{i+1}-{self.environment_suffix}",
-                subnet_id=subnet.id,
+                subnet_id=private_subnet.id,
                 route_table_id=route_table.id,
-                opts=ResourceOptions(parent=route_table)
+                opts=ResourceOptions(parent=route_table, depends_on=[route_table])
             )
 
         # Register outputs
