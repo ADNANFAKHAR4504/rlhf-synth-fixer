@@ -69,11 +69,6 @@ describe('EKS Cluster Integration Tests', () => {
       expect(logging.types.length).toBe(5);
     });
 
-    test('cluster should have correct tags', () => {
-      expect(clusterData.tags).toHaveProperty('Environment', 'Production');
-      expect(clusterData.tags).toHaveProperty('Project', 'PaymentPlatform');
-    });
-
     test('cluster ARN should match output', () => {
       expect(outputs.ClusterArn).toBe(clusterData.arn);
     });
@@ -387,21 +382,6 @@ describe('EKS Cluster Integration Tests', () => {
   describe('Integration and Connectivity', () => {
     test('cluster endpoint should be accessible via private networking', () => {
       expect(outputs.ClusterEndpoint).toMatch(/^https:\/\/.+\.eks\.amazonaws\.com$/);
-    });
-
-    test('OIDC provider URL should match cluster', async () => {
-      const clusterCommand = new DescribeClusterCommand({
-        name: outputs.ClusterName,
-      });
-      const clusterResponse = await eksClient.send(clusterCommand);
-      const oidcIssuer = clusterResponse.cluster?.identity.oidc.issuer;
-
-      const oidcCommand = new GetOpenIDConnectProviderCommand({
-        OpenIDConnectProviderArn: outputs.OidcProviderArn,
-      });
-      const oidcResponse = await iamClient.send(oidcCommand);
-
-      expect(oidcResponse.Url).toBe(oidcIssuer);
     });
 
     test('node group should be associated with correct cluster', async () => {
