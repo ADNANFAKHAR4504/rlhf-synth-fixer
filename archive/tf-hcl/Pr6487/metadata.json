@@ -18,5 +18,11 @@
     "IAM",
     "CloudWatch",
     "SSM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "sanket-turing",
+  "dockerS3Location": ""
 }
