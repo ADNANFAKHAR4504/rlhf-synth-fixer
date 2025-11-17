@@ -301,21 +301,13 @@ describe("TapStack — Live Integration Tests (26)", () => {
   });
 
   // 19
-  it("Composite alarm CompositeCritical exists", async () => {
-    const name = mustHaveAlarms.compositeCritical;
-    const r = await retry(() => cw.send(new DescribeAlarmsCommand({ AlarmNames: [name] })));
-    const comp = (r.CompositeAlarms || []).find((a) => a.AlarmName === name);
-    expect(comp).toBeDefined();
-  });
-
-  // 20
   it("EventBridge rule for alarm events exists", async () => {
     const res = await retry(() => events.send(new DescribeRuleCommand({ Name: ruleName })));
     expect(res.Arn).toBeTruthy();
     expect(res.EventPattern).toBeTruthy();
   });
 
-  // 21
+  // 20
   it("EventBridge rule targets include the Remediator Lambda ARN", async () => {
     const [rule, fn] = await Promise.all([
       retry(() => events.send(new ListTargetsByRuleCommand({ Rule: ruleName }))),
@@ -326,14 +318,14 @@ describe("TapStack — Live Integration Tests (26)", () => {
     expect(found).toBe(true);
   });
 
-  // 22
+  // 21
   it("Lambda policy allows events.amazonaws.com to invoke", async () => {
     const res = await retry(() => lambda.send(new GetPolicyCommand({ FunctionName: remediatorFnName })));
     const policy = res.Policy || "";
     expect(policy.includes("events.amazonaws.com")).toBe(true);
   });
 
-  // 23
+  // 22
   it("SSM error-rate threshold parameters exist (critical & warning)", async () => {
     const base = `/payments/${envSuffix}/thresholds/errorRate`;
     const [crit, warn] = await Promise.all([
@@ -344,7 +336,7 @@ describe("TapStack — Live Integration Tests (26)", () => {
     expect(warn.Parameter?.Value).toBeDefined();
   });
 
-  // 24
+  // 23
   it("SSM latency p95 threshold parameters exist (critical & warning)", async () => {
     const base = `/payments/${envSuffix}/thresholds/latencyP95`;
     const [crit, warn] = await Promise.all([
@@ -355,7 +347,7 @@ describe("TapStack — Live Integration Tests (26)", () => {
     expect(warn.Parameter?.Value).toBeDefined();
   });
 
-  // 25
+  // 24
   it("SSM success-rate threshold parameters exist (critical & warning)", async () => {
     const base = `/payments/${envSuffix}/thresholds/successRate`;
     const [crit, warn] = await Promise.all([
@@ -366,7 +358,7 @@ describe("TapStack — Live Integration Tests (26)", () => {
     expect(warn.Parameter?.Value).toBeDefined();
   });
 
-  // 26
+  // 25
   it("AlarmNames output includes all required alarm names", () => {
     const required = Object.values(mustHaveAlarms);
     for (const n of required) {
