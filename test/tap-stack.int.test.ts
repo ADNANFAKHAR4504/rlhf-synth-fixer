@@ -129,15 +129,30 @@ async function discoverStack(): Promise<DiscoveredResources> {
       );
     }
 
+    // Get environment suffix from environment variable if available (for CI/CD)
+    const envSuffix = process.env.ENVIRONMENT_SUFFIX;
+    const expectedStackName = envSuffix ? `TapStack${envSuffix}` : null;
+
     // Get the most recently created stack - dynamically select the latest
-    // Prefer stacks with shorter names (main stacks vs nested) and sort by creation time
+    // Prefer: 1) Stack matching environment suffix, 2) Shorter names (main stacks vs nested), 3) Most recent
     const sortedStacks = tapStacks.sort((a, b) => {
       const aName = a.StackName || '';
       const bName = b.StackName || '';
-      // First sort by name length (shorter = main stack), then by creation time
+      
+      // First priority: match environment suffix if provided
+      if (expectedStackName) {
+        const aMatches = aName === expectedStackName;
+        const bMatches = bName === expectedStackName;
+        if (aMatches && !bMatches) return -1;
+        if (!aMatches && bMatches) return 1;
+      }
+      
+      // Second priority: shorter names (main stacks vs nested)
       if (aName.length !== bName.length) {
         return aName.length - bName.length;
       }
+      
+      // Third priority: most recently created
       return (
         (b.CreationTime?.getTime() || 0) - (a.CreationTime?.getTime() || 0)
       );
@@ -160,21 +175,55 @@ async function discoverStack(): Promise<DiscoveredResources> {
       const candidateStackName = candidateStack.StackName!;
       
       // Quick check: list resources to see if this stack has both VPC and EKS Cluster
+      // Handle pagination to get all resources
       try {
-        const testResourcesCommand = new ListStackResourcesCommand({
-          StackName: candidateStackName,
-        });
-        const testResourcesResponse = await cfnClient.send(testResourcesCommand);
-        const resources = testResourcesResponse.StackResourceSummaries || [];
-        const hasVPC = resources.some(
-          (r) => r.ResourceType === 'AWS::EC2::VPC' && r.ResourceStatus === 'CREATE_COMPLETE'
+        const allResources: any[] = [];
+        let resourcesNextToken: string | undefined;
+        
+        do {
+          const testResourcesCommand = new ListStackResourcesCommand({
+            StackName: candidateStackName,
+            NextToken: resourcesNextToken,
+          });
+          const testResourcesResponse = await cfnClient.send(testResourcesCommand);
+          
+          if (testResourcesResponse.StackResourceSummaries) {
+            allResources.push(...testResourcesResponse.StackResourceSummaries);
+          }
+          resourcesNextToken = testResourcesResponse.NextToken;
+        } while (resourcesNextToken);
+        
+        // Check for VPC (any status) and EKS-related resources
+        const hasVPC = allResources.some(
+          (r) => r.ResourceType === 'AWS::EC2::VPC'
         );
-        const hasEKSCluster = resources.some(
-          (r) => r.ResourceType === 'AWS::EKS::Cluster' && r.ResourceStatus === 'CREATE_COMPLETE'
+        const hasEKSCluster = allResources.some(
+          (r) => r.ResourceType === 'AWS::EKS::Cluster'
+        );
+        const hasEKSNodeGroup = allResources.some(
+          (r) => r.ResourceType === 'AWS::EKS::Nodegroup'
         );
         
-        // Only select stacks that have both VPC and EKS Cluster (indicates it's the EKS infrastructure stack)
-        if (hasVPC && hasEKSCluster) {
+        // Also check outputs for ClusterName as a fallback
+        let hasClusterInOutputs = false;
+        if (!hasEKSCluster) {
+          try {
+            const describeCmd = new DescribeStacksCommand({
+              StackName: candidateStackName,
+            });
+            const describeResp = await cfnClient.send(describeCmd);
+            const stack = describeResp.Stacks?.[0];
+            hasClusterInOutputs = stack?.Outputs?.some(
+              (o) => o.OutputKey === 'ClusterName' && o.OutputValue
+            ) || false;
+          } catch (error) {
+            // Ignore errors when checking outputs
+          }
+        }
+        
+        // Select stacks that have VPC and (EKS Cluster resource OR EKS Nodegroup OR ClusterName output)
+        // This handles various states: cluster creating, cluster created, or outputs available
+        if (hasVPC && (hasEKSCluster || hasEKSNodeGroup || hasClusterInOutputs)) {
           targetStack = candidateStack;
           stackName = candidateStackName;
           foundValidStack = true;
@@ -189,10 +238,12 @@ async function discoverStack(): Promise<DiscoveredResources> {
     // If we didn't find a valid stack with both VPC and EKS Cluster, throw an error
     if (!foundValidStack) {
       const stackNames = sortedStacks.slice(0, 5).map(s => s.StackName).join(', ');
+      const expectedMsg = expectedStackName ? ` Expected stack: ${expectedStackName}.` : '';
       throw new Error(
         `No TapStack found with both VPC and EKS Cluster resources. ` +
         `Found ${sortedStacks.length} TapStack(s) but none contain EKS infrastructure. ` +
-        `Checked stacks: ${stackNames}`
+        `Checked stacks: ${stackNames}.${expectedMsg} ` +
+        `Please ensure the EKS infrastructure stack is deployed and contains both VPC and EKS Cluster resources.`
       );
     }
 
