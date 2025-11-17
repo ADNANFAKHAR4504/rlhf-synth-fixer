@@ -3,13 +3,11 @@
   "language": "py",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T12:40:21+05:30",
   "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
-    "Security Configuration",
-    "Compliance Framework",
-    "Zero Trust Architecture"
+    "Security Configuration As Code"
   ],
   "po_id": "v8c5o9",
   "aws_services": [
