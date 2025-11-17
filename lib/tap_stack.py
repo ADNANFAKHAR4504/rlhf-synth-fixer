@@ -505,6 +505,7 @@ class TapStack(TerraformStack):
             cluster_identifier=f"aurora-secondary-{environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
+            master_username="admin",
             db_subnet_group_name=secondary_db_subnet_group.name,
             vpc_security_group_ids=[secondary_db_sg.id],
             backup_retention_period=7,
