@@ -132,29 +132,24 @@ describe('Terraform Plan Validation', () => {
   let terraformAvailable = false;
 
   beforeAll(() => {
-    try {
-      execSync('which terraform', { encoding: 'utf-8' });
-      terraformAvailable = true;
+    execSync('which terraform', { encoding: 'utf-8' });
+    terraformAvailable = true;
 
-      // Initialize Terraform with local backend for testing
-      console.log('Initializing Terraform with local backend...');
-      const backendOverride = `
+    // Initialize Terraform with local backend for testing
+    console.log('Initializing Terraform with local backend...');
+    const backendOverride = `
 terraform {
   backend "local" {}
 }
 `;
-      const overridePath = path.join(TERRAFORM_DIR, 'backend_override.tf');
-      fs.writeFileSync(overridePath, backendOverride);
+    const overridePath = path.join(TERRAFORM_DIR, 'backend_override.tf');
+    fs.writeFileSync(overridePath, backendOverride);
 
-      execSync('terraform init -reconfigure', {
-        cwd: TERRAFORM_DIR,
-        stdio: 'pipe',
-      });
-      console.log('Terraform initialized');
-    } catch (error) {
-      console.warn('Terraform not available - skipping plan validation tests');
-      terraformAvailable = false;
-    }
+    execSync('terraform init -reconfigure', {
+      cwd: TERRAFORM_DIR,
+      stdio: 'pipe',
+    });
+    console.log('Terraform initialized');
   });
 
   afterAll(() => {
@@ -179,17 +174,11 @@ terraform {
   test(
     'can generate valid plans for all environments',
     () => {
-      if (!terraformAvailable) {
-        console.log('Skipping - Terraform not available');
-        return;
-      }
+      expect(terraformAvailable).toBe(true);
 
       for (const envFile of environments) {
         const envPath = path.join(TERRAFORM_DIR, envFile);
-        if (!fs.existsSync(envPath)) {
-          console.warn(`${envFile} not found, skipping`);
-          continue;
-        }
+        expect(fs.existsSync(envPath)).toBe(true);
 
         console.log(`\nValidating plan for ${envFile}...`);
         const result = runTerraformPlan(envFile);
@@ -206,16 +195,10 @@ terraform {
 
 
   test('plans include all expected resource types', () => {
-    if (!terraformAvailable) {
-      console.log('Skipping - Terraform not available');
-      return;
-    }
+    expect(terraformAvailable).toBe(true);
 
     const plan = getTerraformPlanJson('dev.tfvars');
-    if (!plan) {
-      console.warn('Could not generate plan');
-      return;
-    }
+    expect(plan).toBeTruthy();
 
     const resources = extractResources(plan);
     const resourceTypes = Array.from(resources.keys());
@@ -652,7 +635,6 @@ describe('Deployed Infrastructure Validation', () => {
         );
 
         for (const sg of result!.SecurityGroups!) {
-          // Skip ALB security group (it's allowed to have 0.0.0.0/0 on 80/443)
           if (sg.GroupName?.includes('alb')) continue;
 
           const hasUnrestrictedAccess = sg.IpPermissions!.some(
@@ -686,23 +668,13 @@ describe('Application Health and Connectivity', () => {
   test(
     'ALB health check endpoint responds',
     async () => {
-      if (!outputs.alb_dns_name) {
-        console.warn('ALB DNS name not found, skipping health check');
-        return;
-      }
+      expect(outputs.alb_dns_name).toBeDefined();
+      expect(outputs.alb_dns_name).not.toBeNull();
 
-      try {
-        const response = await axios.get(`${albUrl}/health`, { timeout: 10000 });
-        expect(response.status).toBe(200);
-        expect(response.data).toHaveProperty('status');
-        console.log('  Health check response:', response.data);
-      } catch (error: any) {
-        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-          console.warn('  Service not yet available - this is expected during initial deployment');
-        } else {
-          throw error;
-        }
-      }
+      const response = await axios.get(`${albUrl}/health`, { timeout: 10000 });
+      expect(response.status).toBe(200);
+      expect(response.data).toHaveProperty('status');
+      console.log('  Health check response:', response.data);
     },
     TEST_TIMEOUT
   );
@@ -710,25 +682,13 @@ describe('Application Health and Connectivity', () => {
   test(
     'database connectivity check',
     async () => {
-      if (!outputs.alb_dns_name) {
-        console.warn('ALB DNS name not found, skipping DB check');
-        return;
-      }
+      expect(outputs.alb_dns_name).toBeDefined();
+      expect(outputs.alb_dns_name).not.toBeNull();
 
-      try {
-        const response = await axios.get(`${albUrl}/db-check`, { timeout: 10000 });
-        expect([200, 503]).toContain(response.status);
-        expect(response.data).toHaveProperty('connected');
-        console.log('  DB check response:', response.data);
-      } catch (error: any) {
-        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-          console.warn('  Service not yet available');
-        } else if (error.response?.status === 503) {
-          console.warn('  Database not yet accessible (expected during initial deployment)');
-        } else {
-          throw error;
-        }
-      }
+      const response = await axios.get(`${albUrl}/db-check`, { timeout: 10000 });
+      expect([200, 503]).toContain(response.status);
+      expect(response.data).toHaveProperty('connected');
+      console.log('  DB check response:', response.data);
     },
     TEST_TIMEOUT
   );
@@ -736,25 +696,13 @@ describe('Application Health and Connectivity', () => {
   test(
     'S3 connectivity check',
     async () => {
-      if (!outputs.alb_dns_name) {
-        console.warn('ALB DNS name not found, skipping S3 check');
-        return;
-      }
+      expect(outputs.alb_dns_name).toBeDefined();
+      expect(outputs.alb_dns_name).not.toBeNull();
 
-      try {
-        const response = await axios.get(`${albUrl}/s3-check`, { timeout: 10000 });
-        expect([200, 503]).toContain(response.status);
-        expect(response.data).toHaveProperty('accessible');
-        console.log('  S3 check response:', response.data);
-      } catch (error: any) {
-        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-          console.warn('  Service not yet available');
-        } else if (error.response?.status === 503) {
-          console.warn('  S3 not yet accessible');
-        } else {
-          throw error;
-        }
-      }
+      const response = await axios.get(`${albUrl}/s3-check`, { timeout: 10000 });
+      expect([200, 503]).toContain(response.status);
+      expect(response.data).toHaveProperty('accessible');
+      console.log('  S3 check response:', response.data);
     },
     TEST_TIMEOUT
   );
@@ -762,24 +710,14 @@ describe('Application Health and Connectivity', () => {
   test(
     'API status endpoint returns overall health',
     async () => {
-      if (!outputs.alb_dns_name) {
-        console.warn('ALB DNS name not found, skipping status check');
-        return;
-      }
+      expect(outputs.alb_dns_name).toBeDefined();
+      expect(outputs.alb_dns_name).not.toBeNull();
 
-      try {
-        const response = await axios.get(`${albUrl}/api/status`, { timeout: 10000, validateStatus: () => true });
-        expect(response.data).toHaveProperty('api');
-        expect(response.data).toHaveProperty('database');
-        expect(response.data).toHaveProperty('s3');
-        console.log('  API status:', response.data);
-      } catch (error: any) {
-        if (error.code === 'ECONNREFUSED' || error.code === 'ETIMEDOUT') {
-          console.warn('  Service not yet available');
-        } else {
-          throw error;
-        }
-      }
+      const response = await axios.get(`${albUrl}/api/status`, { timeout: 10000, validateStatus: () => true });
+      expect(response.data).toHaveProperty('api');
+      expect(response.data).toHaveProperty('database');
+      expect(response.data).toHaveProperty('s3');
+      console.log('  API status:', response.data);
     },
     TEST_TIMEOUT
   );
