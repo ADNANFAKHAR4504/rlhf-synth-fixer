@@ -6,10 +6,13 @@ module.exports = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node', 'mjs'],
   transform: {
     '^.+\\.tsx?$': 'ts-jest',
+    // Transform JS files (so ESM syntax in some node_modules can be transpiled)
+    '^.+\\.jsx?$': 'babel-jest',
     '^.+\\.mjs$': 'babel-jest',
   },
   transformIgnorePatterns: [
-    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy)/)',
+    // allow transforming some packages that ship ESM (including kubernetes client and its deps)
+    'node_modules/(?!(aws-cdk-lib|@aws-cdk|constructs|@aws-sdk|@smithy|@kubernetes/client-node|openid-client|oauth4webapi|jose)/)',
   ],
   collectCoverageFrom: [
     '<rootDir>/lib/**/*.ts',
