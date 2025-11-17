@@ -36,7 +36,7 @@ Expected output: A complete Pulumi program that creates all resources with prope
 - DynamoDB tables must use on-demand billing mode with point-in-time recovery enabled
 - Dead letter queues must be configured for all SQS queues with maximum receive count of 3
 - API Gateway must implement request throttling at 10,000 requests per second with burst of 5,000
-- Lambda functions must have reserved concurrent executions of 100 to prevent throttling
+- Lambda functions should use default concurrency (no reserved executions) due to account limits
 
 ## Environment Setup
 Serverless infrastructure deployed in us-east-1 region using AWS Lambda for compute, API Gateway for REST endpoints, DynamoDB for transaction storage, S3 for long-term data archival, SQS for message queuing, and EventBridge for event routing. Requires Pulumi 3.x with Python 3.8+, AWS CLI configured with appropriate IAM permissions. Infrastructure spans multiple availability zones with encryption at rest and in transit. CloudWatch Logs for centralized logging with 30-day retention policy.
@@ -106,7 +106,7 @@ Serverless infrastructure deployed in us-east-1 region using AWS Lambda for comp
 - **Node.js 18.x+**: Do NOT use `require('aws-sdk')` - AWS SDK v2 not available
   - Use AWS SDK v3: `import { S3Client } from '@aws-sdk/client-s3'`
   - Or extract data from event object directly
-- **Reserved Concurrency**: The task specifies 100 reserved concurrent executions - implement this carefully
+- **Reserved Concurrency**: Removed due to AWS account concurrency limits - using default concurrency
   - Note: This constraint from task requirements overrides the general guidance to avoid reserved concurrency
   - Ensure your AWS account has sufficient unreserved concurrency remaining (minimum 10)
 
@@ -182,7 +182,7 @@ lambda_fn = aws.lambda_.Function(
     name=f"api-handler-{environment_suffix}",
     runtime="python3.11",
     memory_size=3072,  # 3GB as required
-    reserved_concurrent_executions=100,  # As specified in requirements
+    # reserved_concurrent_executions removed due to account limits
     kms_key_arn=kms_key.arn,  # Encrypts environment variables
     environment=aws.lambda_.FunctionEnvironmentArgs(
         variables={

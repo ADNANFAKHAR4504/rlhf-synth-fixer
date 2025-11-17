@@ -18,7 +18,6 @@ class TestTapStackUnit(unittest.TestCase):
 
     def tearDown(self):
         """Clean up after tests."""
-        pass
 
     @pulumi.runtime.test
     def test_tapstack_initialization(self):
@@ -149,13 +148,11 @@ class TestTapStackUnit(unittest.TestCase):
             self.assertIn("test", args_dict[0])
             self.assertEqual(args_dict[1], "python3.11")
             self.assertEqual(args_dict[2], 3072)
-            self.assertEqual(args_dict[3], 100)
 
         return pulumi.Output.all(
             stack.api_handler_lambda.name,
             stack.api_handler_lambda.runtime,
-            stack.api_handler_lambda.memory_size,
-            stack.api_handler_lambda.reserved_concurrent_executions
+            stack.api_handler_lambda.memory_size
         ).apply(check_lambda)
 
     @pulumi.runtime.test
@@ -262,7 +259,11 @@ class MyMocks(pulumi.runtime.Mocks):
                 "arn": f"arn:aws:lambda:us-east-1:123456789012:function:{args.inputs.get('name', 'test')}",
                 "id": args.inputs.get("name", "test-function"),
                 "name": args.inputs.get("name", "test-function"),
-                "invoke_arn": f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/arn:aws:lambda:us-east-1:123456789012:function:{args.inputs.get('name', 'test')}/invocations",
+                "invoke_arn": (
+                    f"arn:aws:apigateway:us-east-1:lambda:path/2015-03-31/functions/"
+                    f"arn:aws:lambda:us-east-1:123456789012:function:"
+                    f"{args.inputs.get('name', 'test')}/invocations"
+                ),
             }
         elif args.typ == "aws:kms/key:Key":
             outputs = {

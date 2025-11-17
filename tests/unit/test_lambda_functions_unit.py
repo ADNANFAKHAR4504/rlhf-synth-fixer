@@ -213,7 +213,12 @@ class TestBatchProcessorLambda(unittest.TestCase):
             mock_table = Mock()
             mock_table.scan.return_value = {
                 'Items': [
-                    {'transaction_id': 'txn-001', 'amount': Decimal('100.50'), 'timestamp': 1234567890, 'customer_id': 'cust-001'}
+                    {
+                        'transaction_id': 'txn-001', 
+                        'amount': Decimal('100.50'), 
+                        'timestamp': 1234567890, 
+                        'customer_id': 'cust-001'
+                    }
                 ]
             }
             mock_dynamodb = Mock()
@@ -264,7 +269,12 @@ class TestBatchProcessorLambda(unittest.TestCase):
         batch_processor = load_lambda_module('batch_processor')
         # Create more than 10 transactions to trigger frequency anomaly
         transactions = [
-            {'transaction_id': f'txn-{i:03d}', 'amount': Decimal('100'), 'customer_id': 'cust-001', 'timestamp': 1234567890 + i}
+            {
+                'transaction_id': f'txn-{i:03d}', 
+                'amount': Decimal('100'), 
+                'customer_id': 'cust-001', 
+                'timestamp': 1234567890 + i
+            }
             for i in range(12)
         ]
 
@@ -281,13 +291,23 @@ class TestBatchProcessorLambda(unittest.TestCase):
             mock_table.scan.side_effect = [
                 {
                     'Items': [
-                        {'transaction_id': 'txn-001', 'amount': Decimal('100'), 'timestamp': 1234567890, 'customer_id': 'cust-001'}
+                        {
+                            'transaction_id': 'txn-001', 
+                            'amount': Decimal('100'), 
+                            'timestamp': 1234567890, 
+                            'customer_id': 'cust-001'
+                        }
                     ],
                     'LastEvaluatedKey': {'transaction_id': 'txn-001'}
                 },
                 {
                     'Items': [
-                        {'transaction_id': 'txn-002', 'amount': Decimal('200'), 'timestamp': 1234567891, 'customer_id': 'cust-002'}
+                        {
+                            'transaction_id': 'txn-002', 
+                            'amount': Decimal('200'), 
+                            'timestamp': 1234567891, 
+                            'customer_id': 'cust-002'
+                        }
                     ]
                 }
             ]
@@ -310,7 +330,12 @@ class TestBatchProcessorLambda(unittest.TestCase):
             mock_table = Mock()
             # Create transactions that will trigger anomaly detection
             transactions = [
-                {'transaction_id': f'txn-{i:03d}', 'amount': Decimal('100'), 'timestamp': 1234567890 + i, 'customer_id': 'cust-001'}
+                {
+                    'transaction_id': f'txn-{i:03d}', 
+                    'amount': Decimal('100'), 
+                    'timestamp': 1234567890 + i, 
+                    'customer_id': 'cust-001'
+                }
                 for i in range(12)
             ]
             mock_table.scan.return_value = {'Items': transactions}

@@ -449,7 +449,7 @@ class TapStack(pulumi.ComponentResource):
             role=self.api_handler_role.arn,
             memory_size=3072,  # 3GB as required
             timeout=30,
-            reserved_concurrent_executions=100,  # As specified in requirements
+            # reserved_concurrent_executions removed due to account limit constraints
             kms_key_arn=self.kms_key.arn,
             code=pulumi.AssetArchive({
                 '.': pulumi.FileArchive('./lib/lambda/api_handler')
@@ -474,7 +474,7 @@ class TapStack(pulumi.ComponentResource):
             role=self.queue_consumer_role.arn,
             memory_size=3072,  # 3GB as required
             timeout=300,  # 5 minutes to match SQS visibility timeout
-            reserved_concurrent_executions=100,  # As specified in requirements
+            # reserved_concurrent_executions removed due to account limit constraints
             kms_key_arn=self.kms_key.arn,
             code=pulumi.AssetArchive({
                 '.': pulumi.FileArchive('./lib/lambda/queue_consumer')
@@ -508,7 +508,7 @@ class TapStack(pulumi.ComponentResource):
             role=self.batch_processor_role.arn,
             memory_size=3072,  # 3GB as required
             timeout=300,  # 5 minutes for batch processing
-            reserved_concurrent_executions=100,  # As specified in requirements
+            # reserved_concurrent_executions removed due to account limit constraints
             kms_key_arn=self.kms_key.arn,
             code=pulumi.AssetArchive({
                 '.': pulumi.FileArchive('./lib/lambda/batch_processor')
@@ -533,7 +533,7 @@ class TapStack(pulumi.ComponentResource):
             role=self.report_generator_role.arn,
             memory_size=3072,  # 3GB as required
             timeout=300,  # 5 minutes for report generation
-            reserved_concurrent_executions=100,  # As specified in requirements
+            # reserved_concurrent_executions removed due to account limit constraints
             kms_key_arn=self.kms_key.arn,
             code=pulumi.AssetArchive({
                 '.': pulumi.FileArchive('./lib/lambda/report_generator')
@@ -771,4 +771,3 @@ class TapStack(pulumi.ComponentResource):
             source_arn=report_rule.arn,
             opts=ResourceOptions(parent=self)
         )
-

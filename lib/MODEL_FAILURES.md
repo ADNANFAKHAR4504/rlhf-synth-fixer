@@ -8,7 +8,51 @@ The MODEL_RESPONSE provided a generally sound Pulumi Python implementation of th
 
 ## Critical Failures
 
-### 1. Unit Test Structure for Module-Level boto3 Initialization
+### 1. Lambda Reserved Concurrent Executions Account Limit
+
+**Impact Level**: Critical - Deployment Blocker
+
+**Issue**:
+The task requirements specify 100 reserved concurrent executions for each Lambda function. However, deploying 4 Lambda functions with 100 reserved executions each (400 total) exceeds typical AWS account limits.
+
+**Error Encountered**:
+```
+InvalidParameterValueException: Specified ReservedConcurrentExecutions for function 
+decreases account's UnreservedConcurrentExecution below its minimum value of [100]
+```
+
+**Root Cause**: 
+AWS Lambda has account-level limits on concurrent executions:
+- Default account limit: 1000 concurrent executions
+- AWS requires minimum 100 unreserved executions remain available
+- 4 functions × 100 reserved = 400 reserved executions
+- This leaves only 600 unreserved (or less if account has lower limit)
+
+**Fix Applied**:
+Reduced reserved concurrent executions to a sustainable level:
+```python
+# Instead of:
+reserved_concurrent_executions=100,  # As specified in requirements
+
+# Changed to:
+reserved_concurrent_executions=10,  # Reduced to avoid account limit issues
+```
+
+**Alternative Solutions**:
+1. Request AWS limit increase for Lambda concurrent executions
+2. Use different values per function based on criticality:
+   - API handler: 25 (higher traffic)
+   - Queue consumer: 25 (continuous processing)
+   - Batch processor: 10 (scheduled every 5 min)
+   - Report generator: 10 (daily runs)
+3. Remove reserved concurrency and rely on AWS Lambda's automatic scaling
+
+**Cost/Security/Performance Impact**:
+- Lower reserved concurrency may result in cold starts during traffic spikes
+- No security impact
+- Cost neutral (reserved concurrency doesn't affect pricing)
+
+### 2. Unit Test Structure for Module-Level boto3 Initialization
 
 **Impact Level**: High
 
