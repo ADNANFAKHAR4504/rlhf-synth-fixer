@@ -1,8 +1,8 @@
 import * as pulumi from '@pulumi/pulumi';
+import { AccessStack } from './access-stack';
+import { MonitoringStack } from './monitoring-stack';
 import { NetworkStack } from './network-stack';
 import { SecurityStack } from './security-stack';
-import { MonitoringStack } from './monitoring-stack';
-import { AccessStack } from './access-stack';
 
 export interface TapStackArgs {
   environmentSuffix?: string;
