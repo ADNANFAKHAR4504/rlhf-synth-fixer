@@ -399,7 +399,6 @@
         },
         "MemorySize": 1024,
         "Timeout": 300,
-        "ReservedConcurrentExecutions": 10,
         "KmsKeyArn": {
           "Fn::GetAtt": [
             "EncryptionKey",

@@ -725,7 +725,7 @@ aws cloudformation create-stack \
     ParameterKey=ExternalId,ParameterValue=your-secure-external-id \
     ParameterKey=DatabasePassword,ParameterValue=your-secure-password \
   --capabilities CAPABILITY_NAMED_IAM \
-  --region us-east-1
+  --region us-east-2
 ```
 
 ### Enable MFA Delete (Post-Deployment)
@@ -754,7 +754,7 @@ echo "Test patient record" > test-record.txt
 aws s3 cp test-record.txt \
   s3://$BUCKET_NAME/test-record.txt \
   --server-side-encryption AES256 \
-  --region us-east-1
+  --region us-east-2
 ```
 
 Verify processing in CloudWatch Logs:
@@ -800,7 +800,7 @@ To delete the stack while preserving data:
 ```bash
 aws cloudformation delete-stack \
   --stack-name patient-data-processing-prod \
-  --region us-east-1
+  --region us-east-2
 ```
 
 To delete bucket contents (requires MFA):

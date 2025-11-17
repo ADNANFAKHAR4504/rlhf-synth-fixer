@@ -2,7 +2,7 @@ Hey team,
 
 We've got a critical project for a healthcare technology company that needs to implement secure data processing infrastructure for handling patient records. They're dealing with HIPAA compliance requirements and need everything encrypted at rest and in transit. The system will process sensitive patient data, so we need to be really careful about access controls and audit logging.
 
-The business wants this deployed in us-east-1 and they've asked us to build it using **CloudFormation with JSON**. They're particular about this because their ops team has standardized on CloudFormation templates in JSON format for their healthcare workloads. The infrastructure needs to handle patient record uploads to S3, process them securely through Lambda functions, and maintain comprehensive audit trails for compliance audits.
+The business wants this deployed in us-east-2 and they've asked us to build it using **CloudFormation with JSON**. They're particular about this because their ops team has standardized on CloudFormation templates in JSON format for their healthcare workloads. The infrastructure needs to handle patient record uploads to S3, process them securely through Lambda functions, and maintain comprehensive audit trails for compliance audits.
 
 The interesting challenge here is the level of security hardening required. We're not just talking about basic encryption - they need MFA delete protection on buckets, explicit denials for unencrypted uploads, KMS encryption for Lambda environment variables, and strict least-privilege IAM roles with no wildcard permissions. Plus, everything needs to be tagged for compliance tracking and have retention policies that meet their 90-day audit requirements.
 
@@ -58,7 +58,7 @@ Create a secure patient data processing system using **CloudFormation with JSON*
 - Use **IAM** for least-privilege roles with external ID support
 - Resource names must include **environmentSuffix** for uniqueness
 - Follow naming convention: `{resource-type}-{environment-suffix}`
-- Deploy to **us-east-1** region
+- Deploy to **us-east-2** region
 
 ### Constraints
 
