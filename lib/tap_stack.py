@@ -442,7 +442,7 @@ class TapStack(TerraformStack):
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-primary-{environment_suffix}", "DR-Role": "primary"},
             lifecycle={
-                "ignore_changes": ["master_password"]
+                "ignore_changes": ["master_password", "kms_key_id"]
             },
             provider=primary_provider
         )
@@ -518,6 +518,9 @@ class TapStack(TerraformStack):
             deletion_protection=False,
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-secondary-{environment_suffix}", "DR-Role": "secondary"},
+            lifecycle={
+                "ignore_changes": ["kms_key_id"]
+            },
             provider=secondary_provider,
             depends_on=[primary_cluster]
         )
