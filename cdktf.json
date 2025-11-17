@@ -1,6 +1,6 @@
 {
   "language": "python",
-  "app": "python3 main.py",
+  "app": "pipenv run python tap.py",
   "projectId": "fraud-detection-system",
   "terraformProviders": [
     "aws@~> 5.0"
