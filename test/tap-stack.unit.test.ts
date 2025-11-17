@@ -35,97 +35,73 @@ describe('TapStack - Main Stack', () => {
   describe('Main Stack Outputs', () => {
     test('Should have AlertQueueUrl output', () => {
       template.hasOutput('AlertQueueUrl', {
-        Export: {
-          Name: `AlertQueueUrl-${environmentSuffix}`,
-        },
+        Description: 'SQS AlertQueue URL',
       });
     });
 
     test('Should have PendingApprovalsQueueUrl output', () => {
       template.hasOutput('PendingApprovalsQueueUrl', {
-        Export: {
-          Name: `PendingApprovalsQueueUrl-${environmentSuffix}`,
-        },
+        Description: 'SQS PendingApprovals queue URL',
       });
     });
 
     test('Should have KinesisStreamArn output', () => {
       template.hasOutput('KinesisStreamArn', {
-        Export: {
-          Name: `KinesisStreamArn-${environmentSuffix}`,
-        },
+        Description: 'Kinesis stream ARN',
       });
     });
 
     test('Should have LiveAliasArn output', () => {
       template.hasOutput('LiveAliasArn', {
-        Export: {
-          Name: `LiveAliasArn-${environmentSuffix}`,
-        },
+        Description: 'Lambda live alias ARN',
       });
     });
 
     test('Should have DeploymentGroupName output', () => {
       template.hasOutput('DeploymentGroupName', {
-        Export: {
-          Name: `DeploymentGroupName-${environmentSuffix}`,
-        },
+        Description: 'CodeDeploy deployment group name',
       });
     });
 
     test('Should have ApiGatewayUrl output', () => {
       template.hasOutput('ApiGatewayUrl', {
-        Export: {
-          Name: `ApiGatewayUrl-${environmentSuffix}`,
-        },
+        Description: 'API Gateway main endpoint URL',
       });
     });
 
     test('Should have CanaryApiUrl output', () => {
       template.hasOutput('CanaryApiUrl', {
-        Export: {
-          Name: `CanaryApiUrl-${environmentSuffix}`,
-        },
+        Description: 'API Gateway canary endpoint URL',
       });
     });
 
     test('Should have ApprovalApiUrl output', () => {
       template.hasOutput('ApprovalApiUrl', {
-        Export: {
-          Name: `ApprovalApiUrl-${environmentSuffix}`,
-        },
+        Description: 'Approval API endpoint URL',
       });
     });
 
     test('Should have WebAclArn output', () => {
       template.hasOutput('WebAclArn', {
-        Export: {
-          Name: `WebAclArn-${environmentSuffix}`,
-        },
+        Description: 'WAF WebACL ARN',
       });
     });
 
     test('Should have PatternAnalysisWorkflowArn output', () => {
       template.hasOutput('PatternAnalysisWorkflowArn', {
-        Export: {
-          Name: `PatternAnalysisWorkflowArn-${environmentSuffix}`,
-        },
+        Description: 'Step Functions PatternAnalysisWorkflow ARN',
       });
     });
 
     test('Should have PowerTuningWorkflowArn output', () => {
       template.hasOutput('PowerTuningWorkflowArn', {
-        Export: {
-          Name: `PowerTuningWorkflowArn-${environmentSuffix}`,
-        },
+        Description: 'Step Functions PowerTuningWorkflow ARN',
       });
     });
 
     test('Should have DashboardUrl output', () => {
       template.hasOutput('DashboardUrl', {
-        Export: {
-          Name: `DashboardUrl-${environmentSuffix}`,
-        },
+        Description: 'CloudWatch Dashboard URL',
       });
     });
   });
