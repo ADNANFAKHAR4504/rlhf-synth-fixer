@@ -36,15 +36,15 @@ pulumi.runtime.setMocks({
   },
 });
 
-import { TapStack } from '../lib/tap-stack';
-import { NetworkingStack } from '../lib/networking';
-import { IamRolesStack } from '../lib/iam';
 import { DatabaseStack } from '../lib/database';
-import { EcsStack } from '../lib/ecs';
-import { LoadBalancerStack } from '../lib/load-balancer';
 import { DmsStack } from '../lib/dms';
+import { EcsStack } from '../lib/ecs';
+import { IamRolesStack } from '../lib/iam';
 import { LambdaStack } from '../lib/lambda-stack';
+import { LoadBalancerStack } from '../lib/load-balancer';
 import { MonitoringStack } from '../lib/monitoring';
+import { NetworkingStack } from '../lib/networking';
+import { TapStack } from '../lib/tap-stack';
 
 describe('TapStack Structure', () => {
   describe('TapStack Component', () => {
