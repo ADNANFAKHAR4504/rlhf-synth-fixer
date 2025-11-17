@@ -10,9 +10,91 @@ from __future__ import annotations
 
 import os
 import sys
+from types import ModuleType
 from unittest.mock import MagicMock, patch
 
 import pytest
+
+
+def _install_optional_stubs():
+    """Provide lightweight stand-ins for optional dependencies such as pandas/plotly."""
+    if 'pandas' not in sys.modules:
+        pandas_stub = ModuleType('pandas')
+
+        class _StubSeries(list):
+            def map(self, func):
+                return [func(v) for v in self]
+
+        class _StubDataFrame:
+            def __init__(self, rows=None):
+                rows = rows or []
+                self._rows = [dict(row) for row in rows]
+                self.columns = list(rows[0].keys()) if rows else []
+
+            def copy(self):
+                return _StubDataFrame([dict(row) for row in self._rows])
+
+            def __getitem__(self, key):
+                return _StubSeries(row.get(key) for row in self._rows)
+
+            def __setitem__(self, key, values):
+                values = list(values)
+                if key not in self.columns:
+                    self.columns.append(key)
+                for row, value in zip(self._rows, values):
+                    row[key] = value
+
+            def to_html(self, **kwargs):
+                header_html = ''.join(f"<th>{col}</th>" for col in self.columns)
+                body_rows = []
+                for row in self._rows:
+                    cells = ''.join(f"<td>{row.get(col, '')}</td>" for col in self.columns)
+                    body_rows.append(f"<tr>{cells}</tr>")
+                body_html = ''.join(body_rows)
+                return f"<table><thead><tr>{header_html}</tr></thead><tbody>{body_html}</tbody></table>"
+
+        pandas_stub.DataFrame = _StubDataFrame
+        sys.modules['pandas'] = pandas_stub
+
+    if 'plotly' not in sys.modules:
+        plotly_module = ModuleType('plotly')
+        go_module = ModuleType('plotly.graph_objects')
+        px_module = ModuleType('plotly.express')
+        subplots_module = ModuleType('plotly.subplots')
+
+        class _StubTrace:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        class _StubFigure:
+            def __init__(self):
+                self.traces = []
+
+            def add_trace(self, trace, row=None, col=None):
+                self.traces.append((trace, row, col))
+
+            def update_layout(self, **kwargs):
+                pass
+
+            def to_html(self, **kwargs):
+                return "<div>plot</div>"
+
+        def _bar(**kwargs):
+            return _StubTrace(**kwargs)
+
+        go_module.Bar = lambda **kwargs: _StubTrace(**kwargs)
+        go_module.Pie = lambda **kwargs: _StubTrace(**kwargs)
+        go_module.Scatter = lambda **kwargs: _StubTrace(**kwargs)
+        px_module.bar = lambda *args, **kwargs: _StubFigure()
+        subplots_module.make_subplots = lambda **kwargs: _StubFigure()
+
+        sys.modules['plotly'] = plotly_module
+        sys.modules['plotly.graph_objects'] = go_module
+        sys.modules['plotly.express'] = px_module
+        sys.modules['plotly.subplots'] = subplots_module
+
+
+_install_optional_stubs()
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', '..', 'lib'))
 
