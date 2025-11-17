@@ -42,13 +42,14 @@ class SecretsModule(Construct):
         # Create database credentials secret
         self.db_secret = SecretsmanagerSecret(
             self,
-            f"db-credentials-{environment_suffix}",
-            name=f"{workspace}/database/credentials-{environment_suffix}",
+            f"db-credentials-v1-{environment_suffix}",
+            name=f"{workspace}/database/credentials-{environment_suffix}-v1",
             description=f"Database credentials for {workspace} environment",
             recovery_window_in_days=0,  # Set to 0 for immediate deletion (destroyability)
             tags={
-                "Name": f"db-credentials-{environment_suffix}",
+                "Name": f"db-credentials-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
@@ -65,7 +66,7 @@ class SecretsModule(Construct):
 
         self.db_secret_version = SecretsmanagerSecretVersion(
             self,
-            f"db-secret-version-{environment_suffix}",
+            f"db-secret-version-v1-{environment_suffix}",
             secret_id=self.db_secret.id,
             secret_string=json.dumps(db_credentials)
         )
@@ -73,13 +74,14 @@ class SecretsModule(Construct):
         # Create application config secret
         self.app_secret = SecretsmanagerSecret(
             self,
-            f"app-config-{environment_suffix}",
-            name=f"{workspace}/application/config-{environment_suffix}",
+            f"app-config-v1-{environment_suffix}",
+            name=f"{workspace}/application/config-{environment_suffix}-v1",
             description=f"Application configuration for {workspace} environment",
             recovery_window_in_days=0,
             tags={
-                "Name": f"app-config-{environment_suffix}",
+                "Name": f"app-config-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
@@ -93,7 +95,7 @@ class SecretsModule(Construct):
 
         self.app_secret_version = SecretsmanagerSecretVersion(
             self,
-            f"app-secret-version-{environment_suffix}",
+            f"app-secret-version-v1-{environment_suffix}",
             secret_id=self.app_secret.id,
             secret_string=json.dumps(app_config)
         )

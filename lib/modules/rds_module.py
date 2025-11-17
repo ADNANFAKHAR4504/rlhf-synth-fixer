@@ -56,20 +56,21 @@ class RdsModule(Construct):
         # Create DB subnet group
         self.db_subnet_group = DbSubnetGroup(
             self,
-            f"db-subnet-group-{environment_suffix}",
-            name=f"db-subnet-group-{environment_suffix}",
+            f"db-subnet-group-v1-{environment_suffix}",
+            name=f"db-subnet-group-{environment_suffix}-v1",
             subnet_ids=subnet_ids,
             tags={
-                "Name": f"db-subnet-group-{environment_suffix}",
+                "Name": f"db-subnet-group-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create security group for RDS
         self.db_security_group = SecurityGroup(
             self,
-            f"db-sg-{environment_suffix}",
-            name=f"db-sg-{environment_suffix}",
+            f"db-sg-v1-{environment_suffix}",
+            name=f"db-sg-{environment_suffix}-v1",
             description=f"Security group for RDS Aurora cluster - {workspace}",
             vpc_id=vpc_id,
             ingress=[
@@ -91,16 +92,17 @@ class RdsModule(Construct):
                 )
             ],
             tags={
-                "Name": f"db-sg-{environment_suffix}",
+                "Name": f"db-sg-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create RDS Aurora cluster
         self.db_cluster = RdsCluster(
             self,
-            f"aurora-cluster-{environment_suffix}",
-            cluster_identifier=f"aurora-cluster-{environment_suffix}",
+            f"aurora-cluster-v1-{environment_suffix}",
+            cluster_identifier=f"aurora-cluster-{environment_suffix}-v1",
             engine="aurora-postgresql",
             engine_version="15.5",  # Updated to valid version for aurora-postgresql
             database_name=database_name,
@@ -116,8 +118,9 @@ class RdsModule(Construct):
             enabled_cloudwatch_logs_exports=["postgresql"],
             storage_encrypted=True,
             tags={
-                "Name": f"aurora-cluster-{environment_suffix}",
+                "Name": f"aurora-cluster-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
@@ -128,17 +131,18 @@ class RdsModule(Construct):
         for i in range(instance_count):
             instance = RdsClusterInstance(
                 self,
-                f"aurora-instance-{i}-{environment_suffix}",
-                identifier=f"aurora-instance-{i}-{environment_suffix}",
+                f"aurora-instance-{i}-v1-{environment_suffix}",
+                identifier=f"aurora-instance-{i}-{environment_suffix}-v1",
                 cluster_identifier=self.db_cluster.id,
                 instance_class=instance_class,
                 engine=self.db_cluster.engine,
                 engine_version=self.db_cluster.engine_version,
                 publicly_accessible=False,
                 tags={
-                    "Name": f"aurora-instance-{i}-{environment_suffix}",
+                    "Name": f"aurora-instance-{i}-{environment_suffix}-v1",
                     "Workspace": workspace,
                     "Instance": str(i),
+                    "Version": "v1"
                 }
             )
             self.db_instances.append(instance)

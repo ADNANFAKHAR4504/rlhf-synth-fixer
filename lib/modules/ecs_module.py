@@ -62,35 +62,37 @@ class EcsModule(Construct):
         # Create CloudWatch Log Group for ECS tasks
         self.log_group = CloudwatchLogGroup(
             self,
-            f"ecs-log-group-{environment_suffix}",
-            name=f"/ecs/{workspace}-app-{environment_suffix}",
+            f"ecs-log-group-v1-{environment_suffix}",
+            name=f"/ecs/{workspace}-app-{environment_suffix}-v1",
             retention_in_days=7 if workspace != "prod" else 30,
             tags={
-                "Name": f"ecs-log-group-{environment_suffix}",
+                "Name": f"ecs-log-group-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create ECS Cluster
         self.cluster = EcsCluster(
             self,
-            f"ecs-cluster-{environment_suffix}",
-            name=f"ecs-cluster-{environment_suffix}",
+            f"ecs-cluster-v1-{environment_suffix}",
+            name=f"ecs-cluster-{environment_suffix}-v1",
             setting=[{
                 "name": "containerInsights",
                 "value": "enabled" if workspace == "prod" else "disabled"
             }],
             tags={
-                "Name": f"ecs-cluster-{environment_suffix}",
+                "Name": f"ecs-cluster-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create security group for ALB
         self.alb_security_group = SecurityGroup(
             self,
-            f"alb-sg-{environment_suffix}",
-            name=f"alb-sg-{environment_suffix}",
+            f"alb-sg-v1-{environment_suffix}",
+            name=f"alb-sg-{environment_suffix}-v1",
             description=f"Security group for ALB - {workspace}",
             vpc_id=vpc_id,
             ingress=[
@@ -119,16 +121,17 @@ class EcsModule(Construct):
                 )
             ],
             tags={
-                "Name": f"alb-sg-{environment_suffix}",
+                "Name": f"alb-sg-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create security group for ECS tasks
         self.ecs_security_group = SecurityGroup(
             self,
-            f"ecs-sg-{environment_suffix}",
-            name=f"ecs-sg-{environment_suffix}",
+            f"ecs-sg-v1-{environment_suffix}",
+            name=f"ecs-sg-{environment_suffix}-v1",
             description=f"Security group for ECS tasks - {workspace}",
             vpc_id=vpc_id,
             ingress=[
@@ -150,32 +153,34 @@ class EcsModule(Construct):
                 )
             ],
             tags={
-                "Name": f"ecs-sg-{environment_suffix}",
+                "Name": f"ecs-sg-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create Application Load Balancer
         self.alb = Lb(
             self,
-            f"app-alb-{environment_suffix}",
-            name=f"app-alb-{environment_suffix}",
+            f"app-alb-v1-{environment_suffix}",
+            name=f"app-alb-{environment_suffix}-v1",
             internal=False,
             load_balancer_type="application",
             security_groups=[self.alb_security_group.id],
             subnets=public_subnet_ids,
             enable_deletion_protection=enable_alb_deletion_protection,
             tags={
-                "Name": f"app-alb-{environment_suffix}",
+                "Name": f"app-alb-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create target group
         self.target_group = LbTargetGroup(
             self,
-            f"app-tg-{environment_suffix}",
-            name=f"app-tg-{environment_suffix}",
+            f"app-tg-v1-{environment_suffix}",
+            name=f"app-tg-{environment_suffix}-v1",
             port=8080,
             protocol="HTTP",
             vpc_id=vpc_id,
@@ -193,15 +198,16 @@ class EcsModule(Construct):
             },
             deregistration_delay="30",
             tags={
-                "Name": f"app-tg-{environment_suffix}",
+                "Name": f"app-tg-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create ALB listener
         self.alb_listener = LbListener(
             self,
-            f"alb-listener-{environment_suffix}",
+            f"alb-listener-v1-{environment_suffix}",
             load_balancer_arn=self.alb.arn,
             port=80,
             protocol="HTTP",
@@ -212,15 +218,16 @@ class EcsModule(Construct):
                 )
             ],
             tags={
-                "Name": f"alb-listener-{environment_suffix}",
+                "Name": f"alb-listener-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create ECS Task Definition
         container_definitions = [
             {
-                "name": f"app-container-{workspace}",
+                "name": f"app-container-{workspace}-v1",
                 "image": "nginx:latest",  # Placeholder image
                 "cpu": 256,
                 "memory": 512,
@@ -255,8 +262,8 @@ class EcsModule(Construct):
 
         self.task_definition = EcsTaskDefinition(
             self,
-            f"app-task-def-{environment_suffix}",
-            family=f"app-task-{environment_suffix}",
+            f"app-task-def-v1-{environment_suffix}",
+            family=f"app-task-{environment_suffix}-v1",
             network_mode="awsvpc",
             requires_compatibilities=["FARGATE"],
             cpu="256",
@@ -265,16 +272,17 @@ class EcsModule(Construct):
             task_role_arn=task_role_arn,
             container_definitions=json.dumps(container_definitions),
             tags={
-                "Name": f"app-task-def-{environment_suffix}",
+                "Name": f"app-task-def-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Create ECS Service
         self.service = EcsService(
             self,
-            f"app-service-{environment_suffix}",
-            name=f"app-service-{environment_suffix}",
+            f"app-service-v1-{environment_suffix}",
+            name=f"app-service-{environment_suffix}-v1",
             cluster=self.cluster.id,
             task_definition=self.task_definition.arn,
             desired_count=container_count,
@@ -287,14 +295,15 @@ class EcsModule(Construct):
             load_balancer=[
                 EcsServiceLoadBalancer(
                     target_group_arn=self.target_group.arn,
-                    container_name=f"app-container-{workspace}",
+                    container_name=f"app-container-{workspace}-v1",
                     container_port=8080
                 )
             ],
             depends_on=[self.alb_listener],
             tags={
-                "Name": f"app-service-{environment_suffix}",
+                "Name": f"app-service-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 

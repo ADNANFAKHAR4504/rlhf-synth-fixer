@@ -68,24 +68,21 @@ class TapStack(TerraformStack):
         )
 
         # Configure S3 Backend with workspace-specific state files
-        # Temporarily commented out for testing/deployment validation
-        # S3Backend(
-        #     self,
-        #     bucket=state_bucket,
-        #     key=f"{workspace}/{construct_id}.tfstate",
-        #     region=state_bucket_region,
-        #     encrypt=True,
-        # )
-
-        # Add DynamoDB for state locking using escape hatch
-        # self.add_override("terraform.backend.s3.dynamodb_table", f"terraform-state-lock-{workspace}")
+        S3Backend(
+            self,
+            bucket=state_bucket,
+            key=f"{workspace}/{construct_id}.tfstate",
+            region=state_bucket_region,
+            encrypt=True,
+            dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-v1"
+        )
 
         # Create DynamoDB table for state locking
         # Use unique name per environment suffix to avoid conflicts
         state_lock_table = DynamodbTable(
             self,
-            f"state-lock-table-{environment_suffix}",
-            name=f"terraform-state-lock-{workspace}-{environment_suffix}",
+            f"state-lock-table-v1-{environment_suffix}",
+            name=f"terraform-state-lock-{workspace}-{environment_suffix}-v1",
             billing_mode="PAY_PER_REQUEST",
             hash_key="LockID",
             attribute=[{
@@ -94,28 +91,30 @@ class TapStack(TerraformStack):
             }],
             deletion_protection_enabled=False,  # CRITICAL: For destroyability
             tags={
-                "Name": f"terraform-state-lock-{workspace}-{environment_suffix}",
+                "Name": f"terraform-state-lock-{workspace}-{environment_suffix}-v1",
                 "Workspace": workspace,
-                "Purpose": "Terraform state locking"
+                "Purpose": "Terraform state locking",
+                "Version": "v1"
             }
         )
 
         # Create S3 bucket for static assets
         assets_bucket = S3Bucket(
             self,
-            f"assets-bucket-{environment_suffix}",
-            bucket=f"app-assets-{workspace}-{environment_suffix}",
+            f"assets-bucket-v1-{environment_suffix}",
+            bucket=f"app-assets-{workspace}-{environment_suffix}-v1",
             force_destroy=True,  # CRITICAL: For destroyability
             tags={
-                "Name": f"app-assets-{workspace}-{environment_suffix}",
+                "Name": f"app-assets-{workspace}-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Configure S3 bucket versioning using separate resource
         S3BucketVersioningA(
             self,
-            f"assets-bucket-versioning-{environment_suffix}",
+            f"assets-bucket-versioning-v1-{environment_suffix}",
             bucket=assets_bucket.id,
             versioning_configuration=S3BucketVersioningVersioningConfiguration(
                 status="Enabled"
@@ -125,7 +124,7 @@ class TapStack(TerraformStack):
         # Configure S3 bucket encryption using separate resource
         S3BucketServerSideEncryptionConfigurationA(
             self,
-            f"assets-bucket-encryption-{environment_suffix}",
+            f"assets-bucket-encryption-v1-{environment_suffix}",
             bucket=assets_bucket.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
                 apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(

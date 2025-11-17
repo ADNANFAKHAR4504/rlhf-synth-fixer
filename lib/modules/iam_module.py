@@ -41,8 +41,8 @@ class IamModule(Construct):
         # ECS Task Execution Role (used by ECS agent)
         self.ecs_execution_role = IamRole(
             self,
-            f"ecs-execution-role-{environment_suffix}",
-            name=f"{workspace}-ecs-execution-role-{environment_suffix}",
+            f"ecs-execution-role-v1-{environment_suffix}",
+            name=f"{workspace}-ecs-execution-role-{environment_suffix}-v1",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -56,15 +56,16 @@ class IamModule(Construct):
                 ]
             }),
             tags={
-                "Name": f"{workspace}-ecs-execution-role-{environment_suffix}",
+                "Name": f"{workspace}-ecs-execution-role-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Attach AWS managed policy for ECS task execution
         IamRolePolicyAttachment(
             self,
-            f"ecs-execution-policy-attachment-{environment_suffix}",
+            f"ecs-execution-policy-attachment-v1-{environment_suffix}",
             role=self.ecs_execution_role.name,
             policy_arn="arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
         )
@@ -72,7 +73,7 @@ class IamModule(Construct):
         # Additional policy for Secrets Manager access
         IamRolePolicy(
             self,
-            f"ecs-execution-secrets-policy-{environment_suffix}",
+            f"ecs-execution-secrets-policy-v1-{environment_suffix}",
             role=self.ecs_execution_role.id,
             policy=json.dumps({
                 "Version": "2012-10-17",
@@ -103,8 +104,8 @@ class IamModule(Construct):
         # ECS Task Role (used by the container)
         self.ecs_task_role = IamRole(
             self,
-            f"ecs-task-role-{environment_suffix}",
-            name=f"{workspace}-ecs-task-role-{environment_suffix}",
+            f"ecs-task-role-v1-{environment_suffix}",
+            name=f"{workspace}-ecs-task-role-{environment_suffix}-v1",
             assume_role_policy=json.dumps({
                 "Version": "2012-10-17",
                 "Statement": [
@@ -118,15 +119,16 @@ class IamModule(Construct):
                 ]
             }),
             tags={
-                "Name": f"{workspace}-ecs-task-role-{environment_suffix}",
+                "Name": f"{workspace}-ecs-task-role-{environment_suffix}-v1",
                 "Workspace": workspace,
+                "Version": "v1"
             }
         )
 
         # Task role policy (least privilege - add specific permissions as needed)
         IamRolePolicy(
             self,
-            f"ecs-task-policy-{environment_suffix}",
+            f"ecs-task-policy-v1-{environment_suffix}",
             role=self.ecs_task_role.id,
             policy=json.dumps({
                 "Version": "2012-10-17",
