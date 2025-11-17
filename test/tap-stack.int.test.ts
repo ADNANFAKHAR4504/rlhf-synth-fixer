@@ -101,14 +101,22 @@ async function discoverStack(): Promise<DiscoveredResources> {
 
       const listResponse = await cfnClient.send(listCommand);
 
-      // Find TapStack stacks (excluding notification stacks) - dynamically discover by name pattern
+      // Find TapStack stacks (excluding notification stacks, nested stacks, and CDK stacks) - dynamically discover by name pattern
       const foundStacks =
         listResponse.StackSummaries?.filter(
-          (stack) =>
-            stack.StackName?.startsWith('TapStack') &&
-            !stack.StackName?.includes('Notification') &&
-            (stack.StackStatus === 'CREATE_COMPLETE' ||
-              stack.StackStatus === 'UPDATE_COMPLETE')
+          (stack) => {
+            const stackName = stack.StackName || '';
+            return (
+              stackName.startsWith('TapStack') &&
+              !stackName.includes('Notification') &&
+              !stackName.includes('NestedStack') && // Exclude nested stacks
+              !stackName.includes('awscdk') && // Exclude CDK nested stacks
+              !stackName.includes('CDK') && // Exclude CDK stacks
+              stackName.length < 100 && // Main stacks are typically shorter than nested stacks
+              (stack.StackStatus === 'CREATE_COMPLETE' ||
+                stack.StackStatus === 'UPDATE_COMPLETE')
+            );
+          }
         ) || [];
 
       tapStacks.push(...foundStacks);
@@ -122,15 +130,54 @@ async function discoverStack(): Promise<DiscoveredResources> {
     }
 
     // Get the most recently created stack - dynamically select the latest
-    const targetStack = tapStacks.sort(
-      (a, b) =>
+    // Prefer stacks with shorter names (main stacks vs nested) and sort by creation time
+    const sortedStacks = tapStacks.sort((a, b) => {
+      const aName = a.StackName || '';
+      const bName = b.StackName || '';
+      // First sort by name length (shorter = main stack), then by creation time
+      if (aName.length !== bName.length) {
+        return aName.length - bName.length;
+      }
+      return (
         (b.CreationTime?.getTime() || 0) - (a.CreationTime?.getTime() || 0)
-    )[0];
+      );
+    });
 
-    const stackName = targetStack.StackName!;
+    // Try to find a stack that actually has EKS resources (has VPC)
+    let targetStack = sortedStacks[0];
+    let stackName = targetStack.StackName!;
+    
     if (!stackName) {
       throw new Error('Failed to discover stack name');
     }
+
+    // Validate that the selected stack has a VPC resource (indicates it's the main stack, not nested)
+    // If not, try the next stack in the list
+    for (let i = 0; i < Math.min(sortedStacks.length, 5); i++) {
+      const candidateStack = sortedStacks[i];
+      const candidateStackName = candidateStack.StackName!;
+      
+      // Quick check: list resources to see if this stack has a VPC
+      try {
+        const testResourcesCommand = new ListStackResourcesCommand({
+          StackName: candidateStackName,
+        });
+        const testResourcesResponse = await cfnClient.send(testResourcesCommand);
+        const hasVPC = testResourcesResponse.StackResourceSummaries?.some(
+          (r) => r.ResourceType === 'AWS::EC2::VPC'
+        );
+        
+        if (hasVPC) {
+          targetStack = candidateStack;
+          stackName = candidateStackName;
+          break;
+        }
+      } catch (error) {
+        // If we can't check this stack, continue to next
+        continue;
+      }
+    }
+
     console.log(`🔍 Discovered stack: ${stackName} in region ${region}`);
 
     // Get stack details and outputs
