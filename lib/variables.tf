@@ -119,7 +119,7 @@ EOT
 variable "manage_kubernetes_resources" {
   description = "Whether to create Kubernetes resources (namespaces, service accounts, deployments). Set to false if Terraform runner cannot access the private EKS endpoint."
   type        = bool
-  default     = true
+  default     = false
 }
 
 locals {

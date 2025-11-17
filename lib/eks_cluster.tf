@@ -55,6 +55,27 @@ data "aws_iam_policy_document" "kms" {
 
     resources = ["*"]
   }
+
+  statement {
+    sid    = "AllowEC2"
+    effect = "Allow"
+
+    principals {
+      type        = "Service"
+      identifiers = ["ec2.amazonaws.com"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey",
+      "kms:CreateGrant"
+    ]
+
+    resources = ["*"]
+  }
 }
 
 resource "aws_kms_key" "eks" {
