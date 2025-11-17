@@ -43,6 +43,7 @@ class FraudDetectionStack(TerraformStack):
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         aws_region = kwargs.get('aws_region', 'us-east-1')
         use_dynamodb_lock = kwargs.get('use_dynamodb_lock', False)
+        default_tags = kwargs.get('default_tags', {})
 
         # Configure S3 Backend for state management
         backend_config = {
@@ -58,15 +59,25 @@ class FraudDetectionStack(TerraformStack):
 
         S3Backend(self, **backend_config)
 
-        # Provider
-        AwsProvider(self, "aws", region=aws_region)
+        # Provider with default tags
+        provider_config = {"region": aws_region}
+        if default_tags:
+            provider_config["default_tags"] = [default_tags]
 
-        # Tags for all resources
-        self.common_tags = {
+        AwsProvider(self, "aws", **provider_config)
+
+        # Tags for all resources (merge with default tags)
+        base_tags = {
             "Environment": f"{self.environment_suffix}",
             "Project": "FraudDetection",
             "CostCenter": "Engineering"
         }
+
+        # Merge default_tags with base_tags
+        if default_tags and "tags" in default_tags:
+            self.common_tags = {**base_tags, **default_tags["tags"]}
+        else:
+            self.common_tags = base_tags
 
         # KMS Key for encryption
         self.kms_key = self.create_kms_key()
