@@ -206,10 +206,19 @@ class TestBankingPortalIntegration(unittest.TestCase):
                      f"ALB DNS should be in {self.region} region format")
 
         # Get ALB details using describe-load-balancers
+        # Extract ALB name from DNS (first part before first dot)
+        alb_name_from_dns = alb_dns.split('.')[0]
+        
         try:
-            response = self.elbv2_client.describe_load_balancers(
-                Names=[alb_dns.split('.')[0]]
-            )
+            # List all load balancers and filter by DNS name since ALB name might be >32 chars
+            response = self.elbv2_client.describe_load_balancers()
+            matching_albs = [alb for alb in response['LoadBalancers'] 
+                           if alb['DNSName'] == alb_dns]
+            
+            if not matching_albs:
+                self.fail(f"No ALB found with DNS name {alb_dns}")
+            
+            response = {'LoadBalancers': matching_albs}
         except ClientError as e:
             self.fail(f"Failed to describe ALB {alb_dns}: {e}")
 
@@ -246,8 +255,12 @@ class TestBankingPortalIntegration(unittest.TestCase):
         self.assertEqual(target_group['TargetType'], 'instance', "Should target EC2 instances")
 
         # Verify health check configuration
-        self.assertIn('HealthCheck', target_group)
-        self.assertEqual(target_group['HealthCheckProtocol'], 'HTTP')
+        self.assertEqual(target_group['HealthCheckProtocol'], 'HTTP', "Should use HTTP for health checks")
+        self.assertEqual(target_group['HealthCheckPath'], '/health', "Should use /health path")
+        self.assertTrue(target_group['HealthCheckEnabled'], "Health checks should be enabled")
+        self.assertEqual(target_group['HealthCheckIntervalSeconds'], 30, "Health check interval should be 30 seconds")
+        self.assertEqual(target_group['HealthyThresholdCount'], 2, "Healthy threshold should be 2")
+        self.assertEqual(target_group['UnhealthyThresholdCount'], 2, "Unhealthy threshold should be 2")
 
     def test_auto_scaling_group_configuration(self):
         """Test Auto Scaling Group is configured for banking application scaling."""
@@ -302,13 +315,16 @@ class TestBankingPortalIntegration(unittest.TestCase):
                 if e.response['Error']['Code'] != 'ServerSideEncryptionConfigurationNotFoundError':
                     self.fail(f"Failed to check encryption for bucket {bucket_name}: {e}")
 
-            # Verify versioning is enabled
+            # Verify public access is blocked
             try:
-                versioning = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
-                self.assertEqual(versioning.get('Status'), 'Enabled',
-                               f"Versioning should be enabled for {bucket_name}")
+                pab = self.s3_client.get_public_access_block(Bucket=bucket_name)
+                config = pab['PublicAccessBlockConfiguration']
+                self.assertTrue(config['BlockPublicAcls'], f"Public ACLs should be blocked for {bucket_name}")
+                self.assertTrue(config['BlockPublicPolicy'], f"Public policy should be blocked for {bucket_name}")
+                self.assertTrue(config['IgnorePublicAcls'], f"Public ACLs should be ignored for {bucket_name}")
+                self.assertTrue(config['RestrictPublicBuckets'], f"Public buckets should be restricted for {bucket_name}")
             except ClientError as e:
-                self.fail(f"Failed to check versioning for bucket {bucket_name}: {e}")
+                self.fail(f"Failed to check public access block for bucket {bucket_name}: {e}")
 
     def test_cloudfront_distribution_active(self):
         """Test CloudFront distribution is active and properly configured."""
