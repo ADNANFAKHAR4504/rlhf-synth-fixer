@@ -18,42 +18,105 @@ Parameters:
     Description: Custom CloudWatch metric namespace for derived metrics.
   PrimaryEmailCritical:
     Type: String
+    Default: noreply-critical@example.com
     Description: Email for CRITICAL alerts (must be confirmed in SNS).
   PrimaryEmailWarning:
     Type: String
+    Default: noreply-warning@example.com
     Description: Email for WARNING alerts (must be confirmed in SNS).
   PrimaryEmailInfo:
     Type: String
+    Default: noreply-info@example.com
     Description: Email for INFO alerts (must be confirmed in SNS).
   PrimarySmsCritical:
     Type: String
+    Default: "+15555550100"
     Description: E.164 phone for CRITICAL alerts (e.g., +15551234567).
   PrimarySmsWarning:
     Type: String
+    Default: "+15555550101"
     Description: E.164 phone for WARNING alerts.
   PrimarySmsInfo:
     Type: String
+    Default: "+15555550102"
     Description: E.164 phone for INFO alerts.
-  SSMErrorRateCriticalParam:
-    Type: String
-    Description: SSM parameter name/path for ERROR rate (%) critical threshold (e.g., /payments/alerts/errorRate/critical).
-  SSMErrorRateWarningParam:
-    Type: String
-    Description: SSM parameter name/path for ERROR rate (%) warning threshold.
-  SSMLatencyP95CriticalParam:
-    Type: String
-    Description: SSM parameter name/path for p95 latency (ms) critical threshold.
-  SSMLatencyP95WarningParam:
-    Type: String
-    Description: SSM parameter name/path for p95 latency (ms) warning threshold.
-  SSMSuccessRateCriticalParam:
-    Type: String
-    Description: SSM parameter name/path for success rate (%) critical threshold.
-  SSMSuccessRateWarningParam:
-    Type: String
-    Description: SSM parameter name/path for success rate (%) warning threshold.
 
 Resources:
+  #######################################################
+  # SSM PARAMETERS (thresholds) — names include ENV suffix
+  #######################################################
+  SsmErrorRateCritical:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/errorRate/critical"
+      Type: String
+      Value: "5"            # percent
+      Description: !Sub "Critical error-rate (%) threshold for ${EnvironmentSuffix}"
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Owner: Platform
+        Severity: Critical
+
+  SsmErrorRateWarning:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/errorRate/warning"
+      Type: String
+      Value: "2"            # percent
+      Description: !Sub "Warning error-rate (%) threshold for ${EnvironmentSuffix}"
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Owner: Platform
+        Severity: Warning
+
+  SsmLatencyP95Critical:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/latencyP95/critical"
+      Type: String
+      Value: "1500"         # milliseconds
+      Description: !Sub "Critical p95 latency (ms) threshold for ${EnvironmentSuffix}"
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Owner: Platform
+        Severity: Critical
+
+  SsmLatencyP95Warning:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/latencyP95/warning"
+      Type: String
+      Value: "800"          # milliseconds
+      Description: !Sub "Warning p95 latency (ms) threshold for ${EnvironmentSuffix}"
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Owner: Platform
+        Severity: Warning
+
+  SsmSuccessRateCritical:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/successRate/critical"
+      Type: String
+      Value: "95"           # percent; alarm if <= 95
+      Description: !Sub "Critical success-rate (%) threshold for ${EnvironmentSuffix}"
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Owner: Platform
+        Severity: Critical
+
+  SsmSuccessRateWarning:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/successRate/warning"
+      Type: String
+      Value: "98"           # percent; alarm if <= 98
+      Description: !Sub "Warning success-rate (%) threshold for ${EnvironmentSuffix}"
+      Tags:
+        Environment: !Ref EnvironmentSuffix
+        Owner: Platform
+        Severity: Warning
+
   #######################################################
   # LOG GROUPS (90-day retention)
   #######################################################
@@ -249,7 +312,7 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:${SSMErrorRateCriticalParam}}}"
+      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/errorRate/critical}}"
       Metrics:
         - Id: errors
           MetricStat:
@@ -283,7 +346,7 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:${SSMErrorRateWarningParam}}}"
+      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/errorRate/warning}}"
       Metrics:
         - Id: errors
           MetricStat:
@@ -317,7 +380,7 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:${SSMLatencyP95CriticalParam}}}"
+      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/latencyP95/critical}}"
       Metrics:
         - Id: latency
           MetricStat:
@@ -341,7 +404,7 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:${SSMLatencyP95WarningParam}}}"
+      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/latencyP95/warning}}"
       Metrics:
         - Id: latency
           MetricStat:
@@ -365,7 +428,7 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:${SSMSuccessRateCriticalParam}}}"
+      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/successRate/critical}}"
       Metrics:
         - Id: success
           MetricStat:
@@ -399,7 +462,7 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:${SSMSuccessRateWarningParam}}}"
+      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/successRate/warning}}"
       Metrics:
         - Id: success
           MetricStat:
