@@ -6,7 +6,7 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T13:14:38+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": ["Provisioning of Infrastructure Environments"],
   "po_id": "z45hp3",
   "aws_services": [
     "ACM",
