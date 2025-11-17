@@ -4,6 +4,7 @@ import * as cloudwatch from 'aws-cdk-lib/aws-cloudwatch';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as events from 'aws-cdk-lib/aws-events';
 import * as targets from 'aws-cdk-lib/aws-events-targets';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as s3 from 'aws-cdk-lib/aws-s3';
@@ -46,7 +47,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for data storage
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
-      bucketName: `etl-data-bucket-${environmentSuffix}`,
+      bucketName: `etl-data-bucket-serverless-${environmentSuffix}`,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,
@@ -266,8 +267,10 @@ export class TapStack extends cdk.Stack {
     const stateMachine = new sfn.StateMachine(this, 'ETLStateMachine', {
       stateMachineName: `etl-state-machine-${environmentSuffix}`,
       definition,
-      stateMachineType: sfn.StateMachineType.EXPRESS, // Add this line
-      timeout: cdk.Duration.minutes(30),
+      stateMachineType: sfn.StateMachineType.EXPRESS,
+      // Express workflows have a maximum execution duration of 5 minutes
+      // The timeout here represents the maximum execution time for a single execution
+      timeout: cdk.Duration.minutes(5), // Changed from 30 to 5 for Express workflows
       tracingEnabled: true,
     });
 
@@ -281,11 +284,21 @@ export class TapStack extends cdk.Stack {
       environment: {
         STATE_MACHINE_ARN: stateMachine.stateMachineArn,
         METADATA_TABLE: metadataTable.tableName,
+        STATE_MACHINE_TYPE: 'EXPRESS', // Add this to help Lambda functions know it's Express
       },
       logGroup: triggerHandlerLogGroup,
     });
 
+    // Grant both StartExecution and StartSyncExecution permissions for Express workflows
     stateMachine.grantStartExecution(triggerFunction);
+    // For Express workflows, also grant StartSyncExecution permission explicitly
+    triggerFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['states:StartSyncExecution'],
+        resources: [stateMachine.stateMachineArn],
+      })
+    );
     metadataTable.grantReadWriteData(triggerFunction);
 
     // S3 event notification
@@ -305,12 +318,21 @@ export class TapStack extends cdk.Stack {
       environment: {
         METADATA_TABLE: metadataTable.tableName,
         STATE_MACHINE_ARN: stateMachine.stateMachineArn,
+        STATE_MACHINE_TYPE: 'EXPRESS', // Add this to help Lambda functions know it's Express
       },
       logGroup: apiHandlerLogGroup,
     });
 
     metadataTable.grantReadData(apiHandlerFunction);
     stateMachine.grantStartExecution(apiHandlerFunction);
+    // For Express workflows, also grant StartSyncExecution permission explicitly
+    apiHandlerFunction.addToRolePolicy(
+      new iam.PolicyStatement({
+        effect: iam.Effect.ALLOW,
+        actions: ['states:StartSyncExecution'],
+        resources: [stateMachine.stateMachineArn],
+      })
+    );
 
     // API Gateway
     const api = new apigateway.RestApi(this, 'ETLApi', {
