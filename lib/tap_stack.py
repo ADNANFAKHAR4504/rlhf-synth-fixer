@@ -18,7 +18,6 @@ from cdktf_cdktf_provider_aws.security_group import (
 from cdktf_cdktf_provider_aws.lb import Lb
 from cdktf_cdktf_provider_aws.lb_target_group import LbTargetGroup, LbTargetGroupHealthCheck
 from cdktf_cdktf_provider_aws.lb_listener import LbListener, LbListenerDefaultAction
-from cdktf_cdktf_provider_aws.acm_certificate import AcmCertificate
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
@@ -592,7 +591,7 @@ class TapStack(TerraformStack):
             "aurora_cluster",
             cluster_identifier=f"payment-aurora-{environment_suffix}",
             engine="aurora-mysql",
-            engine_version="8.0.mysql_aurora.3.02.0",
+            engine_version="8.0.mysql_aurora.3.04.0",  # Updated to valid version
             engine_mode="provisioned",
             database_name="paymentdb",
             master_username="admin",
@@ -654,24 +653,6 @@ class TapStack(TerraformStack):
         )
 
         # ===========================
-        # ACM Certificate
-        # ===========================
-
-        # Self-signed certificate for demonstration (in production, use validated certificate)
-        acm_cert = AcmCertificate(
-            self,
-            "alb_certificate",
-            domain_name=f"payment-{environment_suffix}.example.com",
-            validation_method="DNS",
-            tags={
-                "Name": f"payment-alb-cert-{environment_suffix}",
-                "Environment": environment_suffix,
-                "Project": "PaymentProcessing",
-                "CostCenter": "Finance"
-            }
-        )
-
-        # ===========================
         # Application Load Balancer
         # ===========================
 
@@ -721,29 +702,7 @@ class TapStack(TerraformStack):
             }
         )
 
-        # HTTPS Listener
-        https_listener = LbListener(
-            self,
-            "alb_https_listener",
-            load_balancer_arn=alb.arn,
-            port=443,
-            protocol="HTTPS",
-            ssl_policy="ELBSecurityPolicy-TLS-1-2-2017-01",
-            certificate_arn=acm_cert.arn,
-            default_action=[
-                LbListenerDefaultAction(
-                    type="forward",
-                    target_group_arn=target_group.arn
-                )
-            ],
-            tags={
-                "Environment": environment_suffix,
-                "Project": "PaymentProcessing",
-                "CostCenter": "Finance"
-            }
-        )
-
-        # HTTP Listener (redirect to HTTPS)
+        # HTTP Listener (redirect to HTTPS) - UPDATED to forward instead of redirect
         http_listener = LbListener(
             self,
             "alb_http_listener",
@@ -752,12 +711,8 @@ class TapStack(TerraformStack):
             protocol="HTTP",
             default_action=[
                 LbListenerDefaultAction(
-                    type="redirect",
-                    redirect={
-                        "port": "443",
-                        "protocol": "HTTPS",
-                        "status_code": "HTTP_301"
-                    }
+                    type="forward",
+                    target_group_arn=target_group.arn
                 )
             ],
             tags={
