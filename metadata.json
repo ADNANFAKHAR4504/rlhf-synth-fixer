@@ -20,5 +20,7 @@
     "AWS Auto Scaling"
   ],
   "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "akshat-jain355",
   "training_quality": 10
 }
