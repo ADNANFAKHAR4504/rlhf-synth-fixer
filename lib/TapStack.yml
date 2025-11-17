@@ -1805,8 +1805,8 @@ Resources:
               "properties": {
                 "title": "Data Ingestion Rate",
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingRecords", {"stat": "Sum", "label": "Records/min", "period": 60}],
-                  [".", "IncomingBytes", {"stat": "Sum", "label": "Bytes/min", "yAxis": "right", "period": 60}]
+                  ["AWS/Kinesis/IncomingRecords", {"stat": "Sum", "label": "Records/min", "period": 60}],
+                  ["AWS/Kinesis/IncomingBytes", {"stat": "Sum", "label": "Bytes/min", "yAxis": "right", "period": 60}]
                 ],
                 "period": 60,
                 "stat": "Sum",
@@ -1820,8 +1820,8 @@ Resources:
               "properties": {
                 "title": "Validation Lambda Latency",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", {"stat": "Average", "label": "Validation Avg", "dimensions": {"FunctionName": "${DataValidationFunction}"}}],
-                  ["...", {"stat": "Maximum", "label": "Validation Max"}]
+                  ["AWS/Lambda/Duration", {"stat": "Average", "label": "Validation Avg", "dimensions": {"FunctionName": "${DataValidationFunction}"}}],
+                  ["AWS/Lambda/Duration", {"stat": "Maximum", "label": "Validation Max", "dimensions": {"FunctionName": "${DataValidationFunction}"}}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1833,8 +1833,8 @@ Resources:
               "properties": {
                 "title": "Kinesis Consumer Latency",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", {"stat": "Average", "label": "Consumer Avg", "dimensions": {"FunctionName": "${KinesisConsumerFunction}"}}],
-                  ["...", {"stat": "Maximum", "label": "Consumer Max"}]
+                  ["AWS/Lambda/Duration", {"stat": "Average", "label": "Consumer Avg", "dimensions": {"FunctionName": "${KinesisConsumerFunction}"}}],
+                  ["AWS/Lambda/Duration", {"stat": "Maximum", "label": "Consumer Max", "dimensions": {"FunctionName": "${KinesisConsumerFunction}"}}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1846,8 +1846,8 @@ Resources:
               "properties": {
                 "title": "Error Tracking",
                 "metrics": [
-                  ["AWS/Lambda", "Errors", {"stat": "Sum", "label": "Lambda Errors"}],
-                  ["FinancialPipeline", "ValidationFailures", {"stat": "Sum", "label": "Validation Failures"}]
+                  ["AWS/Lambda/Errors", {"stat": "Sum", "label": "Lambda Errors"}],
+                  ["FinancialPipeline/ValidationFailures", {"stat": "Sum", "label": "Validation Failures"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1860,7 +1860,7 @@ Resources:
               "properties": {
                 "title": "Dead Letter Queue",
                 "metrics": [
-                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", {"dimensions": {"QueueName": "${ValidationDeadLetterQueue.QueueName}"}, "label": "DLQ Messages"}]
+                  ["AWS/SQS/ApproximateNumberOfMessagesVisible", {"dimensions": {"QueueName": "${ValidationDeadLetterQueue.QueueName}"}, "label": "DLQ Messages"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1873,8 +1873,8 @@ Resources:
               "properties": {
                 "title": "S3 Storage Utilization",
                 "metrics": [
-                  ["AWS/S3", "BucketSizeBytes", {"dimensions": {"BucketName": "${RawDataBucket}", "StorageType": "StandardStorage"}, "stat": "Average", "label": "Raw Data"}],
-                  ["...", {"dimensions": {"BucketName": "${ProcessedDataBucket}", "StorageType": "StandardStorage"}, "label": "Processed Data"}]
+                  ["AWS/S3/BucketSizeBytes", {"dimensions": {"BucketName": "${RawDataBucket}", "StorageType": "StandardStorage"}, "stat": "Average", "label": "Raw Data"}],
+                  ["AWS/S3/BucketSizeBytes", {"dimensions": {"BucketName": "${ProcessedDataBucket}", "StorageType": "StandardStorage"}, "stat": "Average", "label": "Processed Data"}]
                 ],
                 "period": 86400,
                 "region": "${AWS::Region}",
@@ -1886,7 +1886,7 @@ Resources:
               "properties": {
                 "title": "S3 Archived Storage",
                 "metrics": [
-                  ["AWS/S3", "BucketSizeBytes", {"dimensions": {"BucketName": "${ArchivedDataBucket}", "StorageType": "StandardStorage"}, "stat": "Average", "label": "Archived Data"}]
+                  ["AWS/S3/BucketSizeBytes", {"dimensions": {"BucketName": "${ArchivedDataBucket}", "StorageType": "StandardStorage"}, "stat": "Average", "label": "Archived Data"}]
                 ],
                 "period": 86400,
                 "region": "${AWS::Region}",
@@ -1898,8 +1898,8 @@ Resources:
               "properties": {
                 "title": "Processing Job Table Performance",
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"dimensions": {"TableName": "${ProcessingJobTable}"}, "stat": "Sum", "label": "Read"}],
-                  [".", "ConsumedWriteCapacityUnits", {"dimensions": {"TableName": "${ProcessingJobTable}"}, "stat": "Sum", "label": "Write"}]
+                  ["AWS/DynamoDB/ConsumedReadCapacityUnits", {"dimensions": {"TableName": "${ProcessingJobTable}"}, "stat": "Sum", "label": "Read"}],
+                  ["AWS/DynamoDB/ConsumedWriteCapacityUnits", {"dimensions": {"TableName": "${ProcessingJobTable}"}, "stat": "Sum", "label": "Write"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1911,8 +1911,8 @@ Resources:
               "properties": {
                 "title": "Data Lineage Table Performance",
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", {"dimensions": {"TableName": "${DataLineageTable}"}, "stat": "Sum", "label": "Read"}],
-                  [".", "ConsumedWriteCapacityUnits", {"dimensions": {"TableName": "${DataLineageTable}"}, "stat": "Sum", "label": "Write"}]
+                  ["AWS/DynamoDB/ConsumedReadCapacityUnits", {"dimensions": {"TableName": "${DataLineageTable}"}, "stat": "Sum", "label": "Read"}],
+                  ["AWS/DynamoDB/ConsumedWriteCapacityUnits", {"dimensions": {"TableName": "${DataLineageTable}"}, "stat": "Sum", "label": "Write"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1924,8 +1924,8 @@ Resources:
               "properties": {
                 "title": "Glue Job Tasks",
                 "metrics": [
-                  ["AWS/Glue", "glue.driver.aggregate.numCompletedTasks", {"dimensions": {"JobName": "${JsonToParquetJob}", "JobRunId": "ALL"}, "label": "Completed Tasks"}],
-                  [".", "glue.driver.aggregate.numFailedTasks", {"dimensions": {"JobName": "${JsonToParquetJob}", "JobRunId": "ALL"}, "label": "Failed Tasks"}]
+                  ["AWS/Glue/glue.driver.aggregate.numCompletedTasks", {"dimensions": {"JobName": "${JsonToParquetJob}", "JobRunId": "ALL"}, "label": "Completed Tasks"}],
+                  ["AWS/Glue/glue.driver.aggregate.numFailedTasks", {"dimensions": {"JobName": "${JsonToParquetJob}", "JobRunId": "ALL"}, "label": "Failed Tasks"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1937,7 +1937,7 @@ Resources:
               "properties": {
                 "title": "Glue Job Elapsed Time",
                 "metrics": [
-                  ["AWS/Glue", "glue.driver.aggregate.elapsedTime", {"dimensions": {"JobName": "${JsonToParquetJob}", "JobRunId": "ALL"}, "stat": "Average", "label": "Elapsed Time"}]
+                  ["AWS/Glue/glue.driver.aggregate.elapsedTime", {"dimensions": {"JobName": "${JsonToParquetJob}", "JobRunId": "ALL"}, "stat": "Average", "label": "Elapsed Time"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1949,8 +1949,8 @@ Resources:
               "properties": {
                 "title": "Data Quality Metrics",
                 "metrics": [
-                  ["FinancialPipeline", "ValidatedRecords", {"stat": "Sum", "label": "Valid Records"}],
-                  [".", "ValidationFailures", {"stat": "Sum", "label": "Failed Validations"}]
+                  ["FinancialPipeline/ValidatedRecords", {"stat": "Sum", "label": "Valid Records"}],
+                  ["FinancialPipeline/ValidationFailures", {"stat": "Sum", "label": "Failed Validations"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1962,7 +1962,7 @@ Resources:
               "properties": {
                 "title": "Kinesis Processing",
                 "metrics": [
-                  ["FinancialPipeline", "KinesisRecordsProcessed", {"stat": "Sum", "label": "Kinesis Processed"}]
+                  ["FinancialPipeline/KinesisRecordsProcessed", {"stat": "Sum", "label": "Kinesis Processed"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
@@ -1974,7 +1974,7 @@ Resources:
               "properties": {
                 "title": "Pipeline Health Score",
                 "metrics": [
-                  ["FinancialPipeline", "KinesisProcessingSuccess", {"stat": "Average", "label": "Processing Success Rate"}]
+                  ["FinancialPipeline/KinesisProcessingSuccess", {"stat": "Average", "label": "Processing Success Rate"}]
                 ],
                 "period": 300,
                 "region": "${AWS::Region}",
