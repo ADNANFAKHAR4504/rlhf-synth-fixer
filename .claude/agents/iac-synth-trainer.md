@@ -20,6 +20,19 @@ Fix failed synthetic PRs assigned to `mayanksethi-turing` by:
 6. Only marking PR as FIXED when ALL GitHub stages pass ✅
 7. Cleaning up worktrees after completion
 
+## Related Documents
+
+Before using this agent, familiarize yourself with these related documents:
+
+- **[Error Handling Patterns](.claude/docs/references/error-handling.md)** - Standard error handling and reporting patterns
+- **[Error Recovery Guide](.claude/docs/guides/error-recovery-guide.md)** - Detailed recovery decision trees for when things go wrong
+- **[Pre-Submission Checklist](.claude/docs/references/pre-submission-checklist.md)** - Quality requirements before marking PR as fixed
+- **[CI/CD File Restrictions](.claude/docs/references/cicd-file-restrictions.md)** - File location rules and restrictions
+- **[PR Fix Checkpoints](.claude/docs/references/pr-fix-checkpoints.md)** - Detailed checkpoint documentation
+- **[Lessons Learnt](.claude/lessons_learnt.md)** - Common failure patterns and fixes
+
+**Note**: This document references these files throughout. Ensure they exist before starting work.
+
 ## Critical Success Principle
 
 **A PR is NOT fixed until ALL GitHub pipeline stages show green checkmarks ✅**
@@ -436,52 +449,69 @@ if [ -n "$RUN_ID" ]; then
 fi
 ```
 
-**Document Root Cause** (be specific and structured):
+**Document Root Cause** (use concise template):
 
 ```bash
-# Enhanced root cause analysis format (similar to MODEL_FAILURES.md structure)
+# Concise root cause analysis template
 ROOT_CAUSE="
 Root Cause Analysis for PR #${PR_NUMBER}:
 
 ## Failure Category: <Critical/High/Medium/Low>
-
 Failure Type: ${FAILURE_REASON}
 
-## Specific Issues Identified
+## Issues Identified
 
-### Issue 1: [Category - e.g., 'Missing environmentSuffix']
-**Impact Level**: <Critical/High/Medium/Low>
-**Specific Problem**: [Exact issue with file path and line number]
-  - Example: 'S3 bucket name missing environmentSuffix at line 45 in lib/storage-stack.ts'
-  - Resource: [specific resource name]
-  - Location: [file:line]
-
-**Evidence**:
-- GitHub log shows: [exact error message from logs]
-- Code inspection reveals: [exact code problem]
-- Similar to known issue in lessons_learnt.md: [reference if applicable]
-
-**Impact**:
-- [What broke and why]
-- [Cost/Security/Performance impact if applicable]
-
-**Root Cause** (WHY it happened, not just what):
-- [Why did this happen? Model misunderstanding? Missing requirement? Configuration error?]
-
----
+### Issue 1: [Category]
+- **Location**: [file:line] - [specific resource/function]
+- **Problem**: [exact issue]
+- **Evidence**: [GitHub error message or code snippet]
+- **Root Cause**: [WHY it happened - model misunderstanding/missing requirement/etc.]
+- **Impact**: [What broke and why]
 
 ### Issue 2: [Next issue...]
-[Same structure]
+[Same format]
 
 ## Summary
 - Total issues: X Critical, Y High, Z Medium, W Low
-- Primary root causes: [2-3 key areas]
+- Primary causes: [2-3 key areas]
 - Fix complexity: [Simple/Moderate/Complex]
 "
 
 echo "📝 Root Cause Analysis:"
 echo "$ROOT_CAUSE"
 ```
+
+**Example from Real PR**:
+
+```markdown
+Root Cause Analysis for PR #6323:
+
+## Failure Category: High
+Failure Type: Deploy
+
+## Issues Identified
+
+### Issue 1: Missing environmentSuffix
+- **Location**: lib/storage-stack.ts:45 - S3 bucket 'my-bucket'
+- **Problem**: Bucket name missing environmentSuffix, causing name conflict
+- **Evidence**: GitHub log: "BucketAlreadyExists: The requested bucket name is not available"
+- **Root Cause**: Model didn't include environmentSuffix in resource naming pattern
+- **Impact**: Deployment fails due to bucket name collision
+
+### Issue 2: Retain Policy
+- **Location**: lib/database-stack.ts:78 - RDS instance
+- **Problem**: RemovalPolicy.RETAIN prevents cleanup
+- **Evidence**: Code inspection: `removalPolicy: RemovalPolicy.RETAIN`
+- **Root Cause**: Model used RETAIN instead of DESTROY for test environments
+- **Impact**: Resources persist after PR cleanup, causing quota issues
+
+## Summary
+- Total issues: 0 Critical, 2 High, 0 Medium, 0 Low
+- Primary causes: Resource naming pattern, cleanup policy
+- Fix complexity: Simple
+```
+
+**Template File**: For a reusable template, see `.claude/docs/templates/root-cause-analysis-template.md` (create if needed).
 
 #### 2.0.2 Fix Plan Development
 
@@ -1283,9 +1313,11 @@ fi
 
 **⚠️ MANDATORY**: Run pre-deployment validation BEFORE attempting any deployment.
 
-**Purpose**: Catch common errors early to avoid unnecessary AWS deployment attempts (cost optimization).
+**Purpose**: Catch common errors early through script validation and code analysis to avoid unnecessary AWS deployment attempts (cost optimization).
 
 **Validation**: Run Checkpoint PR-E: Pre-Deployment Validation
+
+**Reference**: For detailed error handling patterns, see [Error Handling Patterns](.claude/docs/references/error-handling.md). For recovery procedures, see [Error Recovery Guide](.claude/docs/guides/error-recovery-guide.md).
 
 ```bash
 # Update progress
@@ -1306,70 +1338,162 @@ fi
 export ENVIRONMENT_SUFFIX="${ENVIRONMENT_SUFFIX:-fix${PR_NUMBER}}"
 echo "Using ENVIRONMENT_SUFFIX=$ENVIRONMENT_SUFFIX"
 
-# Run pre-deployment validation script
-echo "🔍 Running pre-deployment validation..."
+VALIDATION_ISSUES=()
+VALIDATION_FIXES_NEEDED=false
+
+# Step 1: Run pre-deployment validation script
+echo "🔍 Step 1: Running pre-deployment validation script..."
 if [ -f "scripts/pre-validate-iac.sh" ]; then
   bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output.txt
   PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
 else
   echo "⚠️ WARNING: scripts/pre-validate-iac.sh not found"
-  echo "Skipping pre-validation (may miss common errors)"
+  echo "Skipping script validation (will rely on code analysis)"
   PRE_VALIDATE_STATUS=0
 fi
-```
 
-**Validation Checks** (from pre-validate-iac.sh):
-- ✅ Resource naming includes environmentSuffix
-- ✅ No hardcoded environment values (prod-, dev-, stage-)
-- ✅ No Retain policies or DeletionProtection
-- ✅ No expensive configurations
-- ✅ Valid cross-resource references
-- ✅ Platform-specific requirements
+# Step 2: Code analysis for deployment blockers
+echo ""
+echo "🔍 Step 2: Analyzing code for deployment blockers..."
 
-**Action Based on Results**:
+# 2.1 Scan for Missing environmentSuffix
+echo "📋 2.1 Scanning for missing environmentSuffix in resource names..."
+case "$PLATFORM-$LANGUAGE" in
+  "cdk-ts"|"cdktf-ts"|"pulumi-ts")
+    NO_SUFFIX=$(grep -rnE "(bucketName|functionName|tableName|roleName|queueName|topicName|streamName|clusterName|dbInstanceIdentifier).*['\"][^'\"]*['\"]" lib/ --include="*.ts" --include="*.js" 2>/dev/null | grep -v "environmentSuffix" | head -10 || true)
+    if [ -n "$NO_SUFFIX" ]; then
+      echo "⚠️  Found resources without environmentSuffix:"
+      echo "$NO_SUFFIX"
+      VALIDATION_ISSUES+=("Missing environmentSuffix in resource names")
+      VALIDATION_FIXES_NEEDED=true
+    fi
+    ;;
+  "cdk-py"|"cdktf-py"|"pulumi-py")
+    NO_SUFFIX=$(grep -rnE "(bucket_name|function_name|table_name|role_name|queue_name|topic_name|stream_name|cluster_name|db_instance_identifier).*['\"][^'\"]*['\"]" lib/ --include="*.py" 2>/dev/null | grep -v "environment_suffix" | head -10 || true)
+    if [ -n "$NO_SUFFIX" ]; then
+      echo "⚠️  Found resources without environment_suffix:"
+      echo "$NO_SUFFIX"
+      VALIDATION_ISSUES+=("Missing environment_suffix in resource names")
+      VALIDATION_FIXES_NEEDED=true
+    fi
+    ;;
+esac
 
-```bash
-if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
+# 2.2 Scan for Retain Policies and DeletionProtection
+echo ""
+echo "📋 2.2 Scanning for Retain policies and DeletionProtection..."
+RETAIN_POLICIES=$(grep -rnE "(RemovalPolicy\.RETAIN|DeletionPolicy.*Retain|deletion_protection.*true|skip_final_snapshot.*false)" lib/ --include="*.ts" --include="*.py" --include="*.js" --include="*.yaml" --include="*.json" --include="*.hcl" --include="*.tf" 2>/dev/null || true)
+if [ -n "$RETAIN_POLICIES" ]; then
+  echo "⚠️  Found Retain policies or DeletionProtection:"
+  echo "$RETAIN_POLICIES" | head -10
+  VALIDATION_ISSUES+=("Retain policies or DeletionProtection found")
+  VALIDATION_FIXES_NEEDED=true
+fi
+
+# 2.3 Scan for Deprecated Versions
+echo ""
+echo "📋 2.3 Scanning for deprecated AWS service versions..."
+DEPRECATED_SYNTHETICS=$(grep -rnE "SYNTHETICS_NODEJS_PUPPETEER_[0-5]\." lib/ --include="*.ts" --include="*.py" --include="*.js" 2>/dev/null || true)
+if [ -n "$DEPRECATED_SYNTHETICS" ]; then
+  echo "⚠️  Found deprecated CloudWatch Synthetics runtime:"
+  echo "$DEPRECATED_SYNTHETICS"
+  VALIDATION_ISSUES+=("Deprecated Synthetics runtime version")
+  VALIDATION_FIXES_NEEDED=true
+fi
+
+DEPRECATED_SDK=$(grep -rnE "require\(['\"]aws-sdk['\"]\)" lib/ --include="*.js" --include="*.ts" 2>/dev/null || true)
+if [ -n "$DEPRECATED_SDK" ]; then
+  echo "⚠️  Found AWS SDK v2 usage (not available in Node.js 18+):"
+  echo "$DEPRECATED_SDK"
+  VALIDATION_ISSUES+=("AWS SDK v2 usage in Node.js 18+")
+  VALIDATION_FIXES_NEEDED=true
+fi
+
+# 2.4 Scan for GuardDuty Detectors
+echo ""
+echo "📋 2.4 Scanning for GuardDuty detector creation..."
+GUARDDUTY_DETECTORS=$(grep -rnE "(GuardDuty.*Detector|aws_guardduty_detector)" lib/ --include="*.ts" --include="*.py" --include="*.tf" 2>/dev/null || true)
+if [ -n "$GUARDDUTY_DETECTORS" ]; then
+  echo "⚠️  Found GuardDuty detector creation (account-level resource):"
+  echo "$GUARDDUTY_DETECTORS"
+  VALIDATION_ISSUES+=("GuardDuty detector creation (only one per account)")
+  VALIDATION_FIXES_NEEDED=true
+fi
+
+# 2.5 Scan for AWS Config IAM Issues
+echo ""
+echo "📋 2.5 Scanning for AWS Config IAM policy issues..."
+CONFIG_IAM=$(grep -rnE "(ConfigRole|AWS_ConfigRole)" lib/ --include="*.ts" --include="*.py" 2>/dev/null | grep -v "service-role/AWS_ConfigRole" || true)
+if [ -n "$CONFIG_IAM" ]; then
+  echo "⚠️  Found potentially incorrect AWS Config IAM policy:"
+  echo "$CONFIG_IAM"
+  VALIDATION_ISSUES+=("Incorrect AWS Config IAM policy name")
+  VALIDATION_FIXES_NEEDED=true
+fi
+
+# Step 3: Summary and fixes
+echo ""
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Pre-Deployment Validation Summary"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+if [ $PRE_VALIDATE_STATUS -ne 0 ] || [ "$VALIDATION_FIXES_NEEDED" = true ]; then
   echo "❌ Pre-deployment validation FAILED"
   echo ""
-  echo "Errors found:"
-  grep -i "error\|failed" /tmp/pre-validate-output.txt | head -20
+  
+  if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
+    echo "Script validation errors:"
+    grep -i "error\|failed" /tmp/pre-validate-output.txt | head -20
+  fi
+  
+  if [ "$VALIDATION_FIXES_NEEDED" = true ]; then
+    echo "Code analysis issues:"
+    printf '  - %s\n' "${VALIDATION_ISSUES[@]}"
+  fi
   
   echo ""
   echo "🔧 Fixing validation errors before deployment..."
   
-  # Common fixes based on validation output:
-  
-  # 1. Missing environmentSuffix
-  if grep -qi "environmentSuffix\|environment suffix" /tmp/pre-validate-output.txt; then
-    echo "  → Adding environmentSuffix to resource names..."
-    # Fix will be applied in deployment fix section
-  fi
-  
-  # 2. Retain policies
-  if grep -qi "retain\|RETAIN" /tmp/pre-validate-output.txt; then
-    echo "  → Changing RemovalPolicy from RETAIN to DESTROY..."
+  # Apply automated fixes
+  # 1. Retain policies
+  if echo "${VALIDATION_ISSUES[@]}" | grep -q "Retain policies" || grep -qi "retain\|RETAIN" /tmp/pre-validate-output.txt 2>/dev/null; then
+    echo "  → Fixing Retain policies..."
     find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
     find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/removalPolicy.*=.*RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' {} \;
-  fi
-  
-  # 3. DeletionProtection
-  if grep -qi "deletionProtection\|deletion_protection" /tmp/pre-validate-output.txt; then
-    echo "  → Disabling DeletionProtection..."
     find lib/ -type f -exec sed -i.bak 's/deletionProtection.*true/deletionProtection: false/g' {} \;
     find lib/ -type f -exec sed -i.bak 's/deletion_protection.*True/deletion_protection=False/g' {} \;
+  fi
+  
+  # 2. Deprecated Synthetics runtime
+  if echo "${VALIDATION_ISSUES[@]}" | grep -q "Deprecated Synthetics"; then
+    echo "  → Fixing deprecated Synthetics runtime..."
+    find lib/ -type f -exec sed -i.bak 's/SYNTHETICS_NODEJS_PUPPETEER_[0-5]\./SYNTHETICS_NODEJS_PUPPETEER_7_0/g' {} \;
+  fi
+  
+  # 3. AWS Config IAM policy
+  if echo "${VALIDATION_ISSUES[@]}" | grep -q "AWS Config IAM"; then
+    echo "  → Fixing AWS Config IAM policy..."
+    find lib/ -type f -exec sed -i.bak 's/service-role\/ConfigRole/service-role\/AWS_ConfigRole/g' {} \;
+    find lib/ -type f -exec sed -i.bak 's/AWS_ConfigRole[^"]/service-role\/AWS_ConfigRole/g' {} \;
+  fi
+  
+  # Note: environmentSuffix and GuardDuty fixes require manual code changes
+  if echo "${VALIDATION_ISSUES[@]}" | grep -q "environmentSuffix\|GuardDuty"; then
+    echo "  → Manual fixes needed for environmentSuffix/GuardDuty (documenting in root cause analysis)"
   fi
   
   # Re-run validation after fixes
   echo ""
   echo "🔄 Re-running validation after fixes..."
-  bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
-  PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
+  if [ -f "scripts/pre-validate-iac.sh" ]; then
+    bash scripts/pre-validate-iac.sh 2>&1 | tee /tmp/pre-validate-output-2.txt
+    PRE_VALIDATE_STATUS=${PIPESTATUS[0]}
+  fi
   
   if [ $PRE_VALIDATE_STATUS -ne 0 ]; then
     echo "❌ Validation still failing after fixes"
     echo "Review errors and fix manually:"
-    cat /tmp/pre-validate-output-2.txt
+    cat /tmp/pre-validate-output-2.txt 2>/dev/null || cat /tmp/pre-validate-output.txt
     # Continue to deployment fix section - it will handle remaining issues
   else
     echo "✅ Validation passed after fixes"
@@ -1380,8 +1504,13 @@ else
 fi
 ```
 
+**Validation Checks Performed**:
+- ✅ Script validation (pre-validate-iac.sh): Resource naming, hardcoded values, Retain policies, DeletionProtection, expensive configurations, cross-resource references
+- ✅ Code analysis: Missing environmentSuffix, Retain policies, deprecated versions, GuardDuty detectors, AWS Config IAM issues
+
 **CHECKPOINT PR-E**: Pre-Deployment Validation
 - ✅ Pre-validation script executed
+- ✅ Code analysis completed
 - ✅ Common errors fixed (environmentSuffix, Retain policies, etc.)
 - ✅ Ready for deployment attempts
 
@@ -1393,172 +1522,7 @@ fi
 **VALIDATION RESULT**: <PASSED/FAILED>
 **ISSUES FOUND**: <list or NONE>
 **FIXES APPLIED**: <list or NONE>
-**NEXT ACTION**: Proceed to code analysis
-**BLOCKED**: NO
-```
-
----
-
-#### 2.5.1: Code Analysis Before Deployment (NEW)
-
-**Purpose**: Analyze generated code for deployment blockers BEFORE attempting deployment
-
-**Analysis Steps**:
-
-```bash
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "PHASE 2.5.1: CODE ANALYSIS BEFORE DEPLOYMENT"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-# Update progress
-bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Code analysis before deployment"
-
-CODE_ANALYSIS_ISSUES=()
-CODE_ANALYSIS_FIXES_NEEDED=false
-
-# 1. Scan for Missing environmentSuffix
-echo "📋 1. Scanning for missing environmentSuffix in resource names..."
-case "$PLATFORM-$LANGUAGE" in
-  "cdk-ts"|"cdktf-ts"|"pulumi-ts")
-    # Check for bucketName, functionName, etc. without environmentSuffix
-    NO_SUFFIX=$(grep -rnE "(bucketName|functionName|tableName|roleName|queueName|topicName|streamName|clusterName|dbInstanceIdentifier).*['\"][^'\"]*['\"]" lib/ --include="*.ts" --include="*.js" 2>/dev/null | grep -v "environmentSuffix" | head -10 || true)
-    if [ -n "$NO_SUFFIX" ]; then
-      echo "⚠️  Found resources without environmentSuffix:"
-      echo "$NO_SUFFIX"
-      CODE_ANALYSIS_ISSUES+=("Missing environmentSuffix in resource names")
-      CODE_ANALYSIS_FIXES_NEEDED=true
-    fi
-    ;;
-  "cdk-py"|"cdktf-py"|"pulumi-py")
-    NO_SUFFIX=$(grep -rnE "(bucket_name|function_name|table_name|role_name|queue_name|topic_name|stream_name|cluster_name|db_instance_identifier).*['\"][^'\"]*['\"]" lib/ --include="*.py" 2>/dev/null | grep -v "environment_suffix" | head -10 || true)
-    if [ -n "$NO_SUFFIX" ]; then
-      echo "⚠️  Found resources without environment_suffix:"
-      echo "$NO_SUFFIX"
-      CODE_ANALYSIS_ISSUES+=("Missing environment_suffix in resource names")
-      CODE_ANALYSIS_FIXES_NEEDED=true
-    fi
-    ;;
-esac
-
-# 2. Scan for Retain Policies
-echo ""
-echo "📋 2. Scanning for Retain policies and DeletionProtection..."
-RETAIN_POLICIES=$(grep -rnE "(RemovalPolicy\.RETAIN|DeletionPolicy.*Retain|deletion_protection.*true|skip_final_snapshot.*false)" lib/ --include="*.ts" --include="*.py" --include="*.js" --include="*.yaml" --include="*.json" --include="*.hcl" --include="*.tf" 2>/dev/null || true)
-if [ -n "$RETAIN_POLICIES" ]; then
-  echo "⚠️  Found Retain policies or DeletionProtection:"
-  echo "$RETAIN_POLICIES" | head -10
-  CODE_ANALYSIS_ISSUES+=("Retain policies or DeletionProtection found")
-  CODE_ANALYSIS_FIXES_NEEDED=true
-fi
-
-# 3. Scan for Deprecated Versions
-echo ""
-echo "📋 3. Scanning for deprecated AWS service versions..."
-DEPRECATED_SYNTHETICS=$(grep -rnE "SYNTHETICS_NODEJS_PUPPETEER_[0-5]\." lib/ --include="*.ts" --include="*.py" --include="*.js" 2>/dev/null || true)
-if [ -n "$DEPRECATED_SYNTHETICS" ]; then
-  echo "⚠️  Found deprecated CloudWatch Synthetics runtime:"
-  echo "$DEPRECATED_SYNTHETICS"
-  CODE_ANALYSIS_ISSUES+=("Deprecated Synthetics runtime version")
-  CODE_ANALYSIS_FIXES_NEEDED=true
-fi
-
-DEPRECATED_SDK=$(grep -rnE "require\(['\"]aws-sdk['\"]\)" lib/ --include="*.js" --include="*.ts" 2>/dev/null || true)
-if [ -n "$DEPRECATED_SDK" ]; then
-  echo "⚠️  Found AWS SDK v2 usage (not available in Node.js 18+):"
-  echo "$DEPRECATED_SDK"
-  CODE_ANALYSIS_ISSUES+=("AWS SDK v2 usage in Node.js 18+")
-  CODE_ANALYSIS_FIXES_NEEDED=true
-fi
-
-# 4. Scan for GuardDuty Detectors
-echo ""
-echo "📋 4. Scanning for GuardDuty detector creation..."
-GUARDDUTY_DETECTORS=$(grep -rnE "(GuardDuty.*Detector|aws_guardduty_detector)" lib/ --include="*.ts" --include="*.py" --include="*.tf" 2>/dev/null || true)
-if [ -n "$GUARDDUTY_DETECTORS" ]; then
-  echo "⚠️  Found GuardDuty detector creation (account-level resource):"
-  echo "$GUARDDUTY_DETECTORS"
-  CODE_ANALYSIS_ISSUES+=("GuardDuty detector creation (only one per account)")
-  CODE_ANALYSIS_FIXES_NEEDED=true
-fi
-
-# 5. Scan for AWS Config IAM Issues
-echo ""
-echo "📋 5. Scanning for AWS Config IAM policy issues..."
-CONFIG_IAM=$(grep -rnE "(ConfigRole|AWS_ConfigRole)" lib/ --include="*.ts" --include="*.py" 2>/dev/null | grep -v "service-role/AWS_ConfigRole" || true)
-if [ -n "$CONFIG_IAM" ]; then
-  echo "⚠️  Found potentially incorrect AWS Config IAM policy:"
-  echo "$CONFIG_IAM"
-  CODE_ANALYSIS_ISSUES+=("Incorrect AWS Config IAM policy name")
-  CODE_ANALYSIS_FIXES_NEEDED=true
-fi
-
-# Summary
-echo ""
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "Code Analysis Summary"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-
-if [ "$CODE_ANALYSIS_FIXES_NEEDED" = true ]; then
-  echo "❌ Code analysis found issues that will cause deployment failures:"
-  printf '  - %s\n' "${CODE_ANALYSIS_ISSUES[@]}"
-  echo ""
-  echo "🔧 Fixing issues before deployment attempt..."
-  
-  # Apply fixes
-  # 1. Fix Retain policies
-  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "Retain policies"; then
-    echo "  → Fixing Retain policies..."
-    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
-    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/removalPolicy.*=.*RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' {} \;
-    find lib/ -type f -exec sed -i.bak 's/deletionProtection.*true/deletionProtection: false/g' {} \;
-    find lib/ -type f -exec sed -i.bak 's/deletion_protection.*True/deletion_protection=False/g' {} \;
-  fi
-  
-  # 2. Fix deprecated Synthetics runtime
-  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "Deprecated Synthetics"; then
-    echo "  → Fixing deprecated Synthetics runtime..."
-    find lib/ -type f -exec sed -i.bak 's/SYNTHETICS_NODEJS_PUPPETEER_[0-5]\./SYNTHETICS_NODEJS_PUPPETEER_7_0/g' {} \;
-  fi
-  
-  # 3. Fix AWS Config IAM policy
-  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "AWS Config IAM"; then
-    echo "  → Fixing AWS Config IAM policy..."
-    find lib/ -type f -exec sed -i.bak 's/service-role\/ConfigRole/service-role\/AWS_ConfigRole/g' {} \;
-    find lib/ -type f -exec sed -i.bak 's/AWS_ConfigRole[^"]/service-role\/AWS_ConfigRole/g' {} \;
-  fi
-  
-  # Note: environmentSuffix and GuardDuty fixes require manual code changes (too complex for sed)
-  if echo "${CODE_ANALYSIS_ISSUES[@]}" | grep -q "environmentSuffix\|GuardDuty"; then
-    echo "  → Manual fixes needed for environmentSuffix/GuardDuty (documenting in root cause analysis)"
-  fi
-  
-  echo "✅ Code fixes applied (where possible)"
-  echo "⚠️  Note: Some fixes may require manual code changes"
-else
-  echo "✅ Code analysis PASSED - no deployment blockers found"
-fi
-
-echo ""
-```
-
-**Action Based on Findings**:
-- If issues found → Fix BEFORE deployment attempt
-- Document fixes in root cause analysis (Phase 2.0)
-- Re-run analysis after fixes
-- Only proceed to deployment if analysis passes or fixes applied
-
-**Benefits**:
-- Catches issues before AWS deployment (saves time and cost)
-- Reduces iterations from 3-5 to 1-2
-- Prevents known failure patterns
-
-**Report Status**:
-```markdown
-**SYNTH TRAINER STATUS**: PHASE 2.5.1 - CODE ANALYSIS - PR #<number>
-**ANALYSIS RESULT**: <PASSED/ISSUES_FOUND>
-**ISSUES FOUND**: <list or NONE>
-**FIXES APPLIED**: <list or NONE>
-**NEXT ACTION**: Proceed to deployment / Apply fixes
+**NEXT ACTION**: Proceed to deployment
 **BLOCKED**: NO
 ```
 
@@ -2813,23 +2777,105 @@ Recovery: Check GitHub Actions status manually, verify pipeline completion
 
 ### Error Recovery Decision Tree
 
+**Reference**: For detailed recovery procedures, see [Error Recovery Guide](.claude/docs/guides/error-recovery-guide.md).
+
+#### Decision Flow
+
 ```
 Error Encountered
 │
-├─ Blocking Error?
-│  ├─ Yes → Report BLOCKED
-│  │   ├─ Can fix automatically?
-│  │   │  ├─ Yes → Apply fix, re-validate, continue
-│  │   │  └─ No → Document issue, mark PR as failed, continue to next
-│  │   └─ Max retries reached?
-│  │      ├─ Yes → Mark PR as failed, continue to next
-│  │      └─ No → Retry with fix
+├─ Is this a Blocking Error?
 │  │
-│  └─ No → Log warning, continue
-│
-└─ Non-Blocking Error?
-   └─ Yes → Log warning, document, continue
+│  ├─ YES → Report BLOCKED status
+│  │   │
+│  │   ├─ Can fix automatically?
+│  │   │   │
+│  │   │   ├─ YES → Apply fix → Re-validate → Continue
+│  │   │   │   Example: Missing environmentSuffix → Add suffix → Re-run validation
+│  │   │   │
+│  │   │   └─ NO → Check retry count
+│  │   │       │
+│  │   │       ├─ Retries < Max (5)?
+│  │   │       │   ├─ YES → Retry with different approach
+│  │   │       │   │   Example: Deployment failed → Fix code → Retry deploy
+│  │   │       │   │
+│  │   │       │   └─ NO → Mark PR as failed → Continue to next PR
+│  │   │       │       Example: Max iterations reached → Add comment → Move on
+│  │   │       │
+│  │   │       └─ Requires user intervention?
+│  │   │           ├─ YES → Document issue → Mark needs-manual-review → Continue
+│  │   │           │   Example: AWS quota limit → Escalate to user → Skip PR
+│  │   │           │
+│  │   │           └─ NO → Document → Mark failed → Continue
+│  │   │               Example: Unfixable code issue → Document → Mark failed
+│  │   │
+│  │   └─ NO → Log warning → Document → Continue
+│  │       Example: Minor lint warning → Log → Continue
+│  │
+│  └─ NO (Non-Blocking) → Log warning → Document → Continue
+│      Example: Coverage at 99.5% → Log → Add test → Continue
 ```
+
+#### Examples by Error Type
+
+**Example 1: Blocking - Auto-Fixable**
+```
+Error: Missing environmentSuffix in S3 bucket name
+Type: Blocking
+Can Fix: YES
+Action: Add environmentSuffix to bucket name in lib/storage-stack.ts:45
+Re-validate: Run pre-deployment validation
+Result: ✅ Fixed → Continue
+```
+
+**Example 2: Blocking - Requires Retry**
+```
+Error: Deployment failed - Resource dependency error
+Type: Blocking
+Can Fix: YES (but needs retry)
+Retry Count: 2/5
+Action: Fix dependency order → Retry deployment
+Result: ✅ Fixed on retry 3 → Continue
+```
+
+**Example 3: Blocking - Max Retries Reached**
+```
+Error: Deployment failed - Same error after 5 attempts
+Type: Blocking
+Can Fix: NO (max retries reached)
+Action: Mark PR as failed → Add comment → Continue to next PR
+Result: ❌ PR marked as failed → Next PR
+```
+
+**Example 4: Blocking - User Intervention Required**
+```
+Error: AWS quota limit exceeded for VPCs
+Type: Blocking
+Can Fix: NO (requires user action)
+Action: Document issue → Mark needs-manual-review → Continue
+Recovery: See [Error Recovery Guide](.claude/docs/guides/error-recovery-guide.md#category-1-deployment-failures)
+Result: ⚠️ PR marked needs-manual-review → Next PR
+```
+
+**Example 5: Non-Blocking**
+```
+Error: Test coverage at 99.5% (target: 100%)
+Type: Non-Blocking
+Action: Log warning → Add test for uncovered line → Re-run
+Result: ✅ Coverage improved to 100% → Continue
+```
+
+#### Quick Reference
+
+| Error Type | Blocking? | Auto-Fix? | Action | Reference |
+|------------|-----------|-----------|--------|-----------|
+| Missing environmentSuffix | Yes | Yes | Add suffix | Phase 2.5 |
+| Retain policies | Yes | Yes | Change to DESTROY | Phase 2.5 |
+| Deployment quota limit | Yes | No | Escalate to user | [Error Recovery Guide](.claude/docs/guides/error-recovery-guide.md#1-quotalimit-errors) |
+| Test coverage < 100% | Yes | Yes | Add tests | Phase 2.6 |
+| Lint warnings | No | Yes | Auto-fix | Phase 2.5 |
+| Pipeline timeout | Yes | No | Mark needs-verification | Error Recovery section |
+| Max iterations | Yes | No | Mark failed | Iteration Policy |
 
 ### Error Reporting Template
 
@@ -2852,13 +2898,117 @@ Error Encountered
 
 ### Standard Status Report Format
 
+Use this template function for consistent reporting:
+
+```bash
+report_status() {
+  local PHASE="$1"
+  local STATUS="$2"
+  local STEP="$3"
+  local PR_NUMBER="$4"
+  local PROGRESS="$5"
+  local NEXT_ACTION="$6"
+  local ISSUES="${7:-NONE}"
+  local BLOCKED="${8:-NO}"
+  
+  cat <<EOF
+**SYNTH TRAINER STATUS**: ${PHASE} - ${STATUS} - ${STEP}
+**PR**: #${PR_NUMBER}
+**PROGRESS**: ${PROGRESS}
+**NEXT ACTION**: ${NEXT_ACTION}
+**ISSUES**: ${ISSUES}
+**BLOCKED**: ${BLOCKED}
+EOF
+}
+
+# Usage examples:
+# report_status "PHASE 2.0" "ANALYSIS COMPLETE" "Root cause documented" "$PR_NUMBER" "2.0/2.12" "Create worktree" "NONE" "NO"
+# report_status "PHASE 2.5" "VALIDATION" "Pre-deployment check" "$PR_NUMBER" "2.5/2.12" "Apply fixes" "Missing environmentSuffix" "NO"
+```
+
+### Status Report Examples by Phase
+
+**Phase 0 - Pre-Execution Validation**:
 ```markdown
-**SYNTH TRAINER STATUS**: [PHASE] - [STATUS] - [CURRENT_STEP]
-**PR**: #<number>
-**PROGRESS**: [X/Y] steps completed
-**NEXT ACTION**: [Next planned action]
-**ISSUES**: [Blocking issues or NONE]
-**BLOCKED**: [YES/NO - If YES, explain and resolution needed]
+**SYNTH TRAINER STATUS**: PHASE 0 - PRE-EXECUTION VALIDATION
+**PR**: N/A (not yet selected)
+**PROGRESS**: 0/0 steps completed
+**NEXT ACTION**: Load PR status file and check availability
+**ISSUES**: NONE
+**BLOCKED**: NO
+**VALIDATION**: ✅ Documentation reviewed | ✅ Scripts verified | ✅ Ready to proceed
+```
+
+**Phase 1.5 - PR Selection**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 1.5 - PR SELECTED
+**PR**: #6323
+**PROGRESS**: 1.5/2.12 phases completed
+**NEXT ACTION**: Begin root cause analysis
+**ISSUES**: NONE
+**BLOCKED**: NO
+**FAILURE REASON**: Deploy
+```
+
+**Phase 2.0 - Root Cause Analysis**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.0 - ANALYSIS COMPLETE
+**PR**: #6323
+**PROGRESS**: 2.0/2.12 phases completed
+**NEXT ACTION**: Create isolated worktree for PR branch
+**ISSUES**: NONE
+**BLOCKED**: NO
+**ANALYSIS**: ✅ Root cause documented | ✅ Fix plan created | ✅ Solution approach defined
+```
+
+**Phase 2.5 - Pre-Deployment Validation**:
+```markdown
+**SYNTH TRAINER STATUS**: PHASE 2.5 - PRE-DEPLOYMENT VALIDATION
+**PR**: #6323
+**PROGRESS**: 2.5/2.12 phases completed
+**NEXT ACTION**: Proceed to deployment
+**ISSUES**: Missing environmentSuffix (fixed), Retain policies (fixed)
+**BLOCKED**: NO
+**VALIDATION RESULT**: PASSED after fixes
+```
+
+**Phase 2.6.5 - Quality Gates**:
+```markdown
+**SYNTH TRAINER STATUS**: QUALITY GATES - PR #6323
+**PR**: #6323
+**PROGRESS**: 2.6.5/2.12 phases completed
+**NEXT ACTION**: Commit and push changes
+**ISSUES**: NONE
+**BLOCKED**: NO
+**GATE RESULTS**: ✅ Pre-Fix Analysis | ✅ Pre-Deployment | ✅ File Location | ✅ Pre-Submission | ✅ Local Validations
+```
+
+**Phase 2.12 - PR Completion**:
+```markdown
+**SYNTH TRAINER STATUS**: PR #6323 COMPLETE - FIXED
+**PR**: #6323
+**PROGRESS**: 2.12/2.12 phases completed
+**RESULT**: FIXED
+**ITERATIONS**: 1
+**GITHUB PIPELINE**: ALL_PASSED
+**NEXT ACTION**: Process next PR
+**ISSUES**: NONE
+**BLOCKED**: NO
+**CLEANUP**: ✅ Worktree removed
+```
+
+**Error Encountered**:
+```markdown
+**SYNTH TRAINER STATUS**: ERROR ENCOUNTERED - PR #6323
+**ERROR TYPE**: Blocking
+**ERROR CATEGORY**: Deployment
+**SPECIFIC ERROR**: AWS quota limit exceeded for VPCs
+**CONTEXT**: Attempting deployment after fixes
+**IMPACT**: Cannot deploy infrastructure
+**RECOVERY ACTION**: Request quota increase or switch region
+**RETRY COUNT**: 0/5
+**STATUS**: BLOCKED
+**NEXT ACTION**: Mark PR as needs-manual-review, continue to next PR
 ```
 
 ### Required Reporting Points
