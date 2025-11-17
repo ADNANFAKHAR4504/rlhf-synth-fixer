@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { EnvironmentConfig, TagsConfig } from '../types';
 
 export interface LambdaComponentArgs {
@@ -159,7 +159,7 @@ export class LambdaComponent extends pulumi.ComponentResource {
         timeout: 30,
         reservedConcurrentExecutions: envConfig.lambdaConcurrency,
         code: new pulumi.asset.AssetArchive({
-          '.': new pulumi.asset.FileArchive('./lib/lambda'),
+          '.': new pulumi.asset.FileArchive('./lambda'),
         }),
         vpcConfig: {
           subnetIds: privateSubnetIds,
