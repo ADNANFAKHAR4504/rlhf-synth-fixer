@@ -437,11 +437,11 @@ class TradingPlatformStack(TerraformStack):
         )
 
         # Lambda Function
-        # Note: Lambda code is in ./lambda/index.py
-        # Run scripts/package-lambda.sh before synth to create lambda_function.zip
+        # Note: Lambda code is in ./lib/lambda/index.py
+        # Reference the Python file directly - Terraform will package it
         self.lambda_function = LambdaFunction(self, f"lambda-function-{self.environment_suffix}",
             function_name=f"trading-processor-{self.environment_suffix}",
-            filename="${path.module}/../../../lambda_function.zip",
+            filename="${path.module}/../../../lib/lambda/index.py",
             handler="index.handler",
             runtime="python3.11",
             role=self.lambda_role.arn,
