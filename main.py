@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 from cdktf import App
-from stacks.payment_stack import PaymentMigrationStack
+from lib.stacks.payment_stack import PaymentMigrationStack
 
 app = App()
 

@@ -5,9 +5,20 @@ from cdktf_cdktf_provider_aws.route53_health_check import Route53HealthCheck
 from constructs import Construct
 
 class DnsModule(Construct):
-    def __init__(self, scope: Construct, id: str, primary_provider, compute,
-                 environment_suffix: str, migration_phase: str):
+    def __init__(self, scope: Construct, id: str, primary_provider, secondary_provider,
+                 compute, environment_suffix: str, migration_phase: str):
         super().__init__(scope, id)
+        
+        # Determine weights based on migration phase
+        if migration_phase == "legacy":
+            primary_weight = 100
+            secondary_weight = 0
+        elif migration_phase == "migration":
+            primary_weight = 50
+            secondary_weight = 50
+        else:  # production
+            primary_weight = 0
+            secondary_weight = 100
 
         # Route 53 Hosted Zone
         self.hosted_zone = Route53Zone(self, "hosted-zone",
@@ -34,6 +45,21 @@ class DnsModule(Construct):
             }
         )
 
+        # Health check for secondary ALB
+        self.secondary_health_check = Route53HealthCheck(self, "secondary-health-check",
+            provider=primary_provider,
+            fqdn=compute.secondary_alb.dns_name,
+            port=80,
+            type="HTTP",
+            resource_path="/health",
+            failure_threshold=3,
+            request_interval=30,
+            tags={
+                "Name": f"payment-health-secondary-{environment_suffix}",
+                "MigrationPhase": migration_phase
+            }
+        )
+
         # Weighted routing record for primary region
         self.primary_record = Route53Record(self, "primary-record",
             provider=primary_provider,
@@ -41,7 +67,7 @@ class DnsModule(Construct):
             name=f"api.payments-{environment_suffix}.example.com",
             type="A",
             set_identifier="primary",
-            weighted_routing_policy={"weight": 100},  # ISSUE: Should support variable weights for gradual migration
+            weighted_routing_policy={"weight": primary_weight},
             health_check_id=self.primary_health_check.id,
             alias=Route53RecordAlias(
                 name=compute.primary_alb.dns_name,
@@ -50,7 +76,18 @@ class DnsModule(Construct):
             )
         )
 
-        # ISSUE: Missing secondary region DNS record
-        # Should have weighted record for secondary region ALB
-
-        # ISSUE: Missing health check for secondary region
+        # Weighted routing record for secondary region
+        self.secondary_record = Route53Record(self, "secondary-record",
+            provider=primary_provider,
+            zone_id=self.hosted_zone.zone_id,
+            name=f"api.payments-{environment_suffix}.example.com",
+            type="A",
+            set_identifier="secondary",
+            weighted_routing_policy={"weight": secondary_weight},
+            health_check_id=self.secondary_health_check.id,
+            alias=Route53RecordAlias(
+                name=compute.secondary_alb.dns_name,
+                zone_id=compute.secondary_alb.zone_id,
+                evaluate_target_health=True
+            )
+        )

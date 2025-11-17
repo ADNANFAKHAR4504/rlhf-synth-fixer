@@ -4,7 +4,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
 )
 from cdktf_cdktf_provider_aws.s3_bucket_lifecycle_configuration import (
     S3BucketLifecycleConfiguration,
@@ -49,7 +49,7 @@ class StorageModule(Construct):
             provider=primary_provider,
             bucket=self.transaction_logs_primary.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
-                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                     sse_algorithm="aws:kms",
                     kms_master_key_id=security.primary_kms_key.arn
                 ),
@@ -96,7 +96,7 @@ class StorageModule(Construct):
             provider=secondary_provider,
             bucket=self.transaction_logs_secondary.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
-                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                     sse_algorithm="aws:kms",
                     kms_master_key_id=security.secondary_kms_key.arn
                 ),
@@ -126,7 +126,7 @@ class StorageModule(Construct):
             provider=primary_provider,
             bucket=self.audit_trails_primary.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
-                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                     sse_algorithm="aws:kms",
                     kms_master_key_id=security.primary_kms_key.arn
                 ),
@@ -163,7 +163,37 @@ class StorageModule(Construct):
             )]
         )
 
-        # FIXED: Cross-region replication for audit trails
+        # Audit trails bucket - Secondary
+        self.audit_trails_secondary = S3Bucket(self, "audit-trails-secondary",
+            provider=secondary_provider,
+            bucket=f"payment-audit-trails-secondary-{environment_suffix}",
+            tags={
+                "Name": f"payment-audit-trails-secondary-{environment_suffix}",
+                "MigrationPhase": migration_phase
+            }
+        )
+
+        # Enable versioning on secondary
+        S3BucketVersioningA(self, "audit-trails-secondary-versioning",
+            provider=secondary_provider,
+            bucket=self.audit_trails_secondary.id,
+            versioning_configuration={"status": "Enabled"}
+        )
+
+        # Encryption configuration for secondary
+        S3BucketServerSideEncryptionConfigurationA(self, "audit-trails-secondary-encryption",
+            provider=secondary_provider,
+            bucket=self.audit_trails_secondary.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                    sse_algorithm="aws:kms",
+                    kms_master_key_id=security.secondary_kms_key.arn
+                ),
+                bucket_key_enabled=True
+            )]
+        )
+
+        # Cross-region replication for audit trails
         S3BucketReplicationConfigurationA(self, "audit-trails-replication",
             provider=primary_provider,
             bucket=self.audit_trails_primary.id,
@@ -189,14 +219,4 @@ class StorageModule(Construct):
                 ),
                 filter={}
             )]
-        )
-
-        # Audit trails bucket - Secondary
-        self.audit_trails_secondary = S3Bucket(self, "audit-trails-secondary",
-            provider=secondary_provider,
-            bucket=f"payment-audit-trails-secondary-{environment_suffix}",
-            tags={
-                "Name": f"payment-audit-trails-secondary-{environment_suffix}",
-                "MigrationPhase": migration_phase
-            }
         )

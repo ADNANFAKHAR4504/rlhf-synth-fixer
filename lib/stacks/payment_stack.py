@@ -111,6 +111,7 @@ class PaymentMigrationStack(TerraformStack):
         # DNS module
         self.dns = DnsModule(self, "dns",
             primary_provider=self.primary_provider,
+            secondary_provider=self.secondary_provider,
             compute=self.compute,
             environment_suffix=environment_suffix,
             migration_phase=migration_phase
@@ -125,10 +126,26 @@ class PaymentMigrationStack(TerraformStack):
             value=self.networking.secondary_vpc.id
         )
 
-        TerraformOutput(self, "database_endpoint",
-            value=self.database.global_cluster.engine
+        TerraformOutput(self, "database_endpoint_primary",
+            value=self.database.primary_cluster.endpoint
+        )
+        
+        TerraformOutput(self, "database_endpoint_secondary",
+            value=self.database.secondary_cluster.endpoint
         )
 
         TerraformOutput(self, "primary_alb_dns",
             value=self.compute.primary_alb.dns_name
+        )
+        
+        TerraformOutput(self, "secondary_alb_dns",
+            value=self.compute.secondary_alb.dns_name
+        )
+        
+        TerraformOutput(self, "route53_zone_id",
+            value=self.dns.hosted_zone.zone_id
+        )
+        
+        TerraformOutput(self, "state_lock_table",
+            value=self.security.state_lock_table.name
         )

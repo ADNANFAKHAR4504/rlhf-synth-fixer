@@ -81,7 +81,7 @@ class DatabaseModule(Construct):
             engine_version="14.6",
             database_name="payments",
             master_username="admin",
-            master_password=f"${{jsondecode({self.db_credentials.secret_string}).password}}",
+            master_password=Fn.lookup(Fn.jsondecode(self.db_credentials.secret_string), "password", ""),
             db_subnet_group_name=self.primary_db_subnet_group.name,
             vpc_security_group_ids=[networking.primary_rds_sg.id],
             backup_retention_period=7,

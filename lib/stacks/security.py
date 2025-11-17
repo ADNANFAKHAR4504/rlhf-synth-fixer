@@ -206,6 +206,24 @@ class SecurityModule(Construct):
             })
         )
 
+        # S3 Replication Role must be created first
+        self.s3_replication_role = IamRole(self, "s3-replication-role",
+            provider=primary_provider,
+            name=f"payment-s3-replication-role-{environment_suffix}",
+            assume_role_policy=json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [{
+                    "Effect": "Allow",
+                    "Principal": {"Service": "s3.amazonaws.com"},
+                    "Action": "sts:AssumeRole"
+                }]
+            }),
+            tags={
+                "Name": f"payment-s3-replication-role-{environment_suffix}",
+                "MigrationPhase": migration_phase
+            }
+        )
+
         IamRolePolicyAttachment(self, "s3-replication-policy-attachment",
             provider=primary_provider,
             role=self.s3_replication_role.name,
@@ -228,23 +246,3 @@ class SecurityModule(Construct):
             }
         )
 
-        # S3 Replication Role (needed for cross-region replication)
-        self.s3_replication_role = IamRole(self, "s3-replication-role",
-            provider=primary_provider,
-            name=f"payment-s3-replication-role-{environment_suffix}",
-            assume_role_policy=json.dumps({
-                "Version": "2012-10-17",
-                "Statement": [{
-                    "Effect": "Allow",
-                    "Principal": {"Service": "s3.amazonaws.com"},
-                    "Action": "sts:AssumeRole"
-                }]
-            }),
-            tags={
-                "Name": f"payment-s3-replication-role-{environment_suffix}",
-                "MigrationPhase": migration_phase
-            }
-        )
-
-        # ISSUE: Missing IAM policy for S3 replication role
-        # Should have policy allowing s3:GetReplicationConfiguration, s3:ListBucket, s3:GetObjectVersionForReplication, s3:ReplicateObject, etc.
