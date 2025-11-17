@@ -68,17 +68,19 @@ class TapStack(TerraformStack):
         )
 
         # Configure S3 Backend with workspace-specific state files
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{workspace}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-            dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-v1"
-        )
+        # Note: Backend configuration is disabled during initial deployment
+        # Uncomment after the first successful deployment
+        # S3Backend(
+        #     self,
+        #     bucket=state_bucket,
+        #     key=f"{workspace}/{construct_id}.tfstate",
+        #     region=state_bucket_region,
+        #     encrypt=True,
+        #     dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-v1"
+        # )
 
         # Create DynamoDB table for state locking
-        # Use unique name per environment suffix to avoid conflicts
+        # This table is created first, then the S3 backend can be enabled
         state_lock_table = DynamodbTable(
             self,
             f"state-lock-table-v1-{environment_suffix}",
