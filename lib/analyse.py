@@ -216,6 +216,9 @@ class CloudFrontAnalyzer:
     def _check_request_volume(self, distribution_id: str) -> bool:
         """Check if distribution has >10,000 requests/day average over 30 days"""
         total_requests = self._fetch_metric_value(distribution_id, 'Requests')
+        if total_requests is None:
+            logger.warning(f"No request metrics for {distribution_id}; including for analysis.")
+            return True
         avg_requests_per_day = total_requests / DAYS_TO_ANALYZE if DAYS_TO_ANALYZE else 0
         return avg_requests_per_day >= MIN_REQUESTS_PER_DAY
     
@@ -408,7 +411,7 @@ class CloudFrontAnalyzer:
         statistics: str = 'Sum',
         region: str = 'Global',
         period: int = 86400
-    ) -> float:
+    ) -> Optional[float]:
         """Generic helper to aggregate CloudWatch metrics"""
         end_time = datetime.utcnow()
         start_time = end_time - timedelta(days=DAYS_TO_ANALYZE)
@@ -428,11 +431,11 @@ class CloudFrontAnalyzer:
             )
         except Exception as exc:
             logger.error(f"Error getting {metric_name} for {distribution_id}: {exc}")
-            return 0.0
+            return None
         
         datapoints = response.get('Datapoints', [])
         if not datapoints:
-            return 0.0
+            return None
         
         key = 'Average' if statistics == 'Average' else statistics
         values = [dp.get(key, 0.0) for dp in datapoints]
@@ -448,7 +451,7 @@ class CloudFrontAnalyzer:
             'CacheHitRate',
             statistics='Average'
         )
-        if avg_hit_rate == 0:
+        if avg_hit_rate is None:
             return 0.85
         return avg_hit_rate / 100
     
@@ -535,7 +538,7 @@ class CloudFrontAnalyzer:
                 distribution_id,
                 'Requests',
                 region=region
-            )
+            ) or 0.0
             region_totals[region] = value
             total_requests += value
         
@@ -647,7 +650,7 @@ class CloudFrontAnalyzer:
     def _get_origin_requests(self, distribution_id: str) -> int:
         """Get monthly origin requests"""
         total = self._fetch_metric_value(distribution_id, 'OriginRequests')
-        return int(total)
+        return int(total or 0)
     
     def _calculate_origin_shield_savings(self, distribution_id: str) -> float:
         """Calculate savings from Origin Shield"""
@@ -670,7 +673,7 @@ class CloudFrontAnalyzer:
     def _get_data_transfer(self, distribution_id: str) -> float:
         """Get monthly data transfer in GB"""
         bytes_downloaded = self._fetch_metric_value(distribution_id, 'BytesDownloaded')
-        return bytes_downloaded / (1024 ** 3)
+        return (bytes_downloaded or 0.0) / (1024 ** 3)
     
     def _calculate_ttl_savings(self, distribution_id: str) -> float:
         """Calculate savings from improved TTL"""
@@ -723,7 +726,7 @@ class CloudFrontAnalyzer:
     def _get_total_requests(self, distribution_id: str) -> int:
         """Get total monthly requests"""
         total = self._fetch_metric_value(distribution_id, 'Requests')
-        return int(total)
+        return int(total or 0)
     
     def _print_console_output(self, analysis: DistributionAnalysis):
         """Print analysis results to console"""

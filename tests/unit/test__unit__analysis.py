@@ -270,7 +270,7 @@ def test_fetch_metric_value_handles_average_and_sum(analyzer_instance):
     none = analyzer._fetch_metric_value('DIST', 'BytesDownloaded')
     assert avg == pytest.approx(70.0)
     assert total == 1500.0
-    assert none == 0.0
+    assert none is None
 
 
 def test_reporting_helpers_generate_artifacts(tmp_path, analyzer_instance):
@@ -387,7 +387,7 @@ def test_fetch_metric_value_handles_exception(analyzer_instance):
     analyzer = analyzer_instance
     analyzer.cloudwatch = MagicMock()
     analyzer.cloudwatch.get_metric_statistics.side_effect = RuntimeError("boom")
-    assert analyzer._fetch_metric_value('DIST', 'Requests') == 0.0
+    assert analyzer._fetch_metric_value('DIST', 'Requests') is None
 
 
 def test_get_cache_hit_ratio_defaults_on_missing_data(analyzer_instance):
