@@ -6,7 +6,7 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T03:58:39+05:30",
   "subtask": "Failure Recovery and High Availability",
-  "subject_labels": [],
+  "subject_labels": ["Failure Recovery"],
   "po_id": "0pb2v0",
   "aws_services": [
     "DynamoDB",
