@@ -41,16 +41,42 @@ Parameters:
     Default: "+15555550102"
     Description: E.164 phone for INFO alerts.
 
+  # Local numeric thresholds (used directly by alarms). These values are also written into SSM by this stack.
+  ThresholdErrorRateCritical:
+    Type: Number
+    Default: 5
+    Description: Error rate (%) critical threshold.
+  ThresholdErrorRateWarning:
+    Type: Number
+    Default: 2
+    Description: Error rate (%) warning threshold.
+  ThresholdLatencyP95Critical:
+    Type: Number
+    Default: 1500
+    Description: p95 latency (ms) critical threshold.
+  ThresholdLatencyP95Warning:
+    Type: Number
+    Default: 800
+    Description: p95 latency (ms) warning threshold.
+  ThresholdSuccessRateCritical:
+    Type: Number
+    Default: 95
+    Description: Success rate (%) critical threshold (alarm when <=).
+  ThresholdSuccessRateWarning:
+    Type: Number
+    Default: 98
+    Description: Success rate (%) warning threshold (alarm when <=).
+
 Resources:
   #######################################################
-  # SSM PARAMETERS (thresholds) — names include ENV suffix
+  # SSM PARAMETERS (store thresholds for compliance/auditing)
   #######################################################
   SsmErrorRateCritical:
     Type: AWS::SSM::Parameter
     Properties:
       Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/errorRate/critical"
       Type: String
-      Value: "5"            # percent
+      Value: !Ref ThresholdErrorRateCritical
       Description: !Sub "Critical error-rate (%) threshold for ${EnvironmentSuffix}"
       Tags:
         Environment: !Ref EnvironmentSuffix
@@ -62,7 +88,7 @@ Resources:
     Properties:
       Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/errorRate/warning"
       Type: String
-      Value: "2"            # percent
+      Value: !Ref ThresholdErrorRateWarning
       Description: !Sub "Warning error-rate (%) threshold for ${EnvironmentSuffix}"
       Tags:
         Environment: !Ref EnvironmentSuffix
@@ -74,7 +100,7 @@ Resources:
     Properties:
       Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/latencyP95/critical"
       Type: String
-      Value: "1500"         # milliseconds
+      Value: !Ref ThresholdLatencyP95Critical
       Description: !Sub "Critical p95 latency (ms) threshold for ${EnvironmentSuffix}"
       Tags:
         Environment: !Ref EnvironmentSuffix
@@ -86,7 +112,7 @@ Resources:
     Properties:
       Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/latencyP95/warning"
       Type: String
-      Value: "800"          # milliseconds
+      Value: !Ref ThresholdLatencyP95Warning
       Description: !Sub "Warning p95 latency (ms) threshold for ${EnvironmentSuffix}"
       Tags:
         Environment: !Ref EnvironmentSuffix
@@ -98,7 +124,7 @@ Resources:
     Properties:
       Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/successRate/critical"
       Type: String
-      Value: "95"           # percent; alarm if <= 95
+      Value: !Ref ThresholdSuccessRateCritical
       Description: !Sub "Critical success-rate (%) threshold for ${EnvironmentSuffix}"
       Tags:
         Environment: !Ref EnvironmentSuffix
@@ -110,7 +136,7 @@ Resources:
     Properties:
       Name: !Sub "/payments/${EnvironmentSuffix}/thresholds/successRate/warning"
       Type: String
-      Value: "98"           # percent; alarm if <= 98
+      Value: !Ref ThresholdSuccessRateWarning
       Description: !Sub "Warning success-rate (%) threshold for ${EnvironmentSuffix}"
       Tags:
         Environment: !Ref EnvironmentSuffix
@@ -312,9 +338,10 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/errorRate/critical}}"
+      Threshold: !Ref ThresholdErrorRateCritical
       Metrics:
         - Id: errors
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -322,6 +349,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: total
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -329,7 +357,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: erate
-          Expression: "(errors / MAX([total,1])) * 100"
+          Expression: "IF(total>0,(errors/total)*100,0)"
           Label: "ErrorRatePercent"
           ReturnData: true
       AlarmActions:
@@ -346,9 +374,10 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/errorRate/warning}}"
+      Threshold: !Ref ThresholdErrorRateWarning
       Metrics:
         - Id: errors
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -356,6 +385,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: total
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -363,7 +393,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: erate
-          Expression: "(errors / MAX([total,1])) * 100"
+          Expression: "IF(total>0,(errors/total)*100,0)"
           Label: "ErrorRatePercent"
           ReturnData: true
       AlarmActions:
@@ -380,16 +410,16 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/latencyP95/critical}}"
+      Threshold: !Ref ThresholdLatencyP95Critical
       Metrics:
         - Id: latency
+          ReturnData: true
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
               MetricName: !Sub "LatencyMs-${EnvironmentSuffix}"
             Period: 60
             Stat: p95
-          ReturnData: true
       AlarmActions:
         - !Ref TopicCritical
       OKActions:
@@ -404,16 +434,16 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/latencyP95/warning}}"
+      Threshold: !Ref ThresholdLatencyP95Warning
       Metrics:
         - Id: latency
+          ReturnData: true
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
               MetricName: !Sub "LatencyMs-${EnvironmentSuffix}"
             Period: 60
             Stat: p95
-          ReturnData: true
       AlarmActions:
         - !Ref TopicWarning
       OKActions:
@@ -428,9 +458,10 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/successRate/critical}}"
+      Threshold: !Ref ThresholdSuccessRateCritical
       Metrics:
         - Id: success
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -438,6 +469,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: total
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -445,7 +477,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: srate
-          Expression: "(success / MAX([total,1])) * 100"
+          Expression: "IF(total>0,(success/total)*100,100)"
           Label: "SuccessRatePercent"
           ReturnData: true
       AlarmActions:
@@ -462,9 +494,10 @@ Resources:
       EvaluationPeriods: 1
       DatapointsToAlarm: 1
       TreatMissingData: breaching
-      Threshold: !Sub "{{resolve:ssm:/payments/${EnvironmentSuffix}/thresholds/successRate/warning}}"
+      Threshold: !Ref ThresholdSuccessRateWarning
       Metrics:
         - Id: success
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -472,6 +505,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: total
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -479,7 +513,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: srate
-          Expression: "(success / MAX([total,1])) * 100"
+          Expression: "IF(total>0,(success/total)*100,100)"
           Label: "SuccessRatePercent"
           ReturnData: true
       AlarmActions:
@@ -488,7 +522,7 @@ Resources:
         - !Ref TopicInfo
 
   #######################################################
-  # SERVICE HEALTH SCORE (metric math alarm)
+  # SERVICE HEALTH SCORE (metric math alarm) — EXACTLY ONE ReturnData: true
   #######################################################
   AlarmServiceHealthCritical:
     Type: AWS::CloudWatch::Alarm
@@ -502,6 +536,7 @@ Resources:
       Threshold: 70
       Metrics:
         - Id: errors
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -509,6 +544,7 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: total
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -516,8 +552,10 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: erate
-          Expression: "(errors / MAX([total,1])) * 100"
+          Expression: "IF(total>0,(errors/total)*100,0)"
+          ReturnData: false
         - Id: success
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -525,8 +563,10 @@ Resources:
             Period: 60
             Stat: Sum
         - Id: srate
-          Expression: "(success / MAX([total,1])) * 100"
+          Expression: "IF(total>0,(success/total)*100,100)"
+          ReturnData: false
         - Id: p95
+          ReturnData: false
           MetricStat:
             Metric:
               Namespace: !Ref MetricNamespace
@@ -536,6 +576,7 @@ Resources:
         - Id: p95n
           Expression: "100 - (100 * (1 / (1 + (p95 / 1000))))"
           Label: "NormalizedLatencyPenalty(0..100)"
+          ReturnData: false
         - Id: health
           Expression: "100 - (0.5*erate + 0.3*p95n + 0.2*(100 - srate))"
           Label: "ServiceHealthScore(0..100)"
@@ -546,18 +587,14 @@ Resources:
         - !Ref TopicInfo
 
   #######################################################
-  # COMPOSITE ALARM (combines member alarm states)
+  # COMPOSITE ALARM (combines member alarm states) — single-line AlarmRule
   #######################################################
   CompositeCritical:
     Type: AWS::CloudWatch::CompositeAlarm
     Properties:
       AlarmName: !Sub "CompositeCritical-${EnvironmentSuffix}"
       AlarmDescription: !Sub "Composite: any critical condition for ${EnvironmentSuffix}"
-      AlarmRule: !Sub >
-        ALARM("${AlarmErrorRateCritical.Arn}") OR
-        ALARM("${AlarmLatencyP95Critical.Arn}") OR
-        ALARM("${AlarmSuccessRateCritical.Arn}") OR
-        ALARM("${AlarmServiceHealthCritical.Arn}")
+      AlarmRule: !Sub "ALARM(\"${AlarmErrorRateCritical.Arn}\") OR ALARM(\"${AlarmLatencyP95Critical.Arn}\") OR ALARM(\"${AlarmSuccessRateCritical.Arn}\") OR ALARM(\"${AlarmServiceHealthCritical.Arn}\")"
       AlarmActions:
         - !Ref TopicCritical
       OKActions:
@@ -578,17 +615,13 @@ Resources:
               Service: lambda.amazonaws.com
             Action: sts:AssumeRole
       Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
       Policies:
         - PolicyName: !Sub "RemediatorPolicy-${EnvironmentSuffix}"
           PolicyDocument:
             Version: '2012-10-17'
             Statement:
-              - Sid: LogsWrite
-                Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: "*"
               - Sid: ExampleActions
                 Effect: Allow
                 Action:
@@ -701,30 +734,6 @@ Resources:
         - !Ref AppLogGroup
 
   #######################################################
-  # OPTIONAL: CONTRIBUTOR INSIGHTS (top error-producing IPs)
-  #######################################################
-  ContributorInsightsErrorsByIP:
-    Type: AWS::CloudWatch::InsightRule
-    Properties:
-      RuleName: !Sub "ErrorsByIP-${EnvironmentSuffix}"
-      RuleState: ENABLED
-      RuleBody: !Sub |
-        {
-          "Schema": {
-            "Name": "CloudWatchLogRule",
-            "Version": 1
-          },
-          "LogFormat": "JSON",
-          "LogGroupNames": ["${AppLogGroup}"],
-          "Filter": "status = \"ERROR\"",
-          "Contribution": {
-            "Keys": ["source_ip"],
-            "ValueOf": "1"
-          },
-          "AggregateOn": "Sum"
-        }
-
-  #######################################################
   # DASHBOARD (liveData, cross-region examples)
   #######################################################
   OperationsDashboard:
@@ -793,7 +802,7 @@ Resources:
                 "stat": "Average",
                 "period": 60,
                 "metrics": [
-                  [ { "expression": "(m2 / MAX([m1,1])) * 100", "label": "SuccessRate%", "id": "e1", "region": "us-east-1" } ],
+                  [ { "expression": "IF(m1>0,(m2/m1)*100,100)", "label": "SuccessRate%", "id": "e1", "region": "us-east-1" } ],
                   [ "${MetricNamespace}", "TransactionsCount-${EnvironmentSuffix}", { "id": "m1", "stat": "Sum", "visible": false } ],
                   [ "${MetricNamespace}", "TransactionsSuccess-${EnvironmentSuffix}", { "id": "m2", "stat": "Sum", "visible": false } ]
                 ],
@@ -810,7 +819,7 @@ Resources:
                 "view": "timeSeries",
                 "period": 60,
                 "metrics": [
-                  [ { "expression": "100 - (0.5*((m3 / MAX([m1,1]))*100) + 0.3*(100 - (100*(1/(1+(p95/1000))))) + 0.2*(100 - ((m2 / MAX([m1,1]))*100)))", "label": "Health", "id": "health" } ],
+                  [ { "expression": "100 - (0.5*IF(m1>0,(m3/m1)*100,0) + 0.3*(100 - (100*(1/(1+(p95/1000))))) + 0.2*(100 - IF(m1>0,(m2/m1)*100,100)))", "label": "Health", "id": "health" } ],
                   [ "${MetricNamespace}", "TransactionsCount-${EnvironmentSuffix}", { "id": "m1", "stat": "Sum", "visible": false } ],
                   [ "${MetricNamespace}", "TransactionsSuccess-${EnvironmentSuffix}", { "id": "m2", "stat": "Sum", "visible": false } ],
                   [ "${MetricNamespace}", "TransactionsErrors-${EnvironmentSuffix}", { "id": "m3", "stat": "Sum", "visible": false } ],
