@@ -23,42 +23,24 @@ Parameters:
     Description: Primary AWS Region
     Default: ap-southeast-1
 
-  DRRegion:
-    Type: String
-    Description: DR AWS Region
-    Default: ap-southeast-2
-
   DBSecretArn:
     Type: String
     Description: ARN of existing Secrets Manager secret for database credentials
     Default: ''
 
-  UseS3Templates:
-    Type: String
-    Description: Whether to use S3 URLs for nested templates
-    Default: 'false'
-    AllowedValues:
-      - 'true'
-      - 'false'
-
   S3BucketName:
     Type: String
-    Description: S3 bucket name for templates (required if UseS3Templates is true)
-    Default: ''
+    Description: S3 bucket name for templates
+    Default: 'cfn-templates'
 
 Conditions:
-  UseS3: !Equals [!Ref UseS3Templates, 'true']
-  UseLocalFiles: !Not [!Equals [!Ref UseS3Templates, 'true']]
   HasDBSecret: !Not [!Equals [!Ref DBSecretArn, '']]
 
 Resources:
   NetworkStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !If
-        - UseS3
-        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/network-stack.yaml'
-        - './network-stack.yaml'
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}-${EnvironmentSuffix}/network-stack.yaml'
       Parameters:
         EnvironmentSuffix: !Ref EnvironmentSuffix
       Tags:
@@ -71,12 +53,8 @@ Resources:
 
   DatabaseStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: NetworkStack
     Properties:
-      TemplateURL: !If
-        - UseS3
-        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/database-stack.yaml'
-        - './database-stack.yaml'
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}-${EnvironmentSuffix}/database-stack.yaml'
       Parameters:
         EnvironmentSuffix: !Ref EnvironmentSuffix
         VPCId: !GetAtt NetworkStack.Outputs.VPCId
@@ -100,10 +78,7 @@ Resources:
   QueueStack:
     Type: AWS::CloudFormation::Stack
     Properties:
-      TemplateURL: !If
-        - UseS3
-        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/queue-stack.yaml'
-        - './queue-stack.yaml'
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}-${EnvironmentSuffix}/queue-stack.yaml'
       Parameters:
         EnvironmentSuffix: !Ref EnvironmentSuffix
       Tags:
@@ -116,15 +91,8 @@ Resources:
 
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - NetworkStack
-      - DatabaseStack
-      - QueueStack
     Properties:
-      TemplateURL: !If
-        - UseS3
-        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/compute-stack.yaml'
-        - './compute-stack.yaml'
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}-${EnvironmentSuffix}/compute-stack.yaml'
       Parameters:
         EnvironmentSuffix: !Ref EnvironmentSuffix
         VPCId: !GetAtt NetworkStack.Outputs.VPCId
@@ -144,14 +112,8 @@ Resources:
 
   MonitoringStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn:
-      - DatabaseStack
-      - ComputeStack
     Properties:
-      TemplateURL: !If
-        - UseS3
-        - !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}/monitoring-stack.yaml'
-        - './monitoring-stack.yaml'
+      TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/${S3BucketName}-${EnvironmentSuffix}/monitoring-stack.yaml'
       Parameters:
         EnvironmentSuffix: !Ref EnvironmentSuffix
         DBClusterIdentifier: !GetAtt DatabaseStack.Outputs.DBClusterIdentifier
