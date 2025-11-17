@@ -82,7 +82,7 @@ class FraudDetectionStack(TerraformStack):
         # SQS Queue Policy to allow SNS to send messages
         queue_policy = SqsQueuePolicy(
             self,
-            f"fraud-alerts-queue-policy-{environment_suffix}",
+            f"fraud-alerts-queue-policy-{self.environment_suffix}",
             queue_url=self.sqs_queue.url,
             policy=json.dumps({
                 "Version": "2012-10-17",
@@ -105,7 +105,7 @@ class FraudDetectionStack(TerraformStack):
         # Subscribe SQS to SNS
         SnsTopicSubscription(
             self,
-            f"fraud-alerts-subscription-{environment_suffix}",
+            f"fraud-alerts-subscription-{self.environment_suffix}",
             topic_arn=self.sns_topic.arn,
             protocol="sqs",
             endpoint=self.sqs_queue.arn,
