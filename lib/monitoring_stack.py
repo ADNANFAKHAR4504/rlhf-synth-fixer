@@ -63,6 +63,16 @@ class MonitoringStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Configure bucket ownership controls to allow ACLs
+        aws.s3.BucketOwnershipControls(
+            f"flow-logs-bucket-ownership-{self.environment_suffix}",
+            bucket=self.flow_logs_bucket.id,
+            rule=aws.s3.BucketOwnershipControlsRuleArgs(
+                object_ownership="BucketOwnerPreferred"
+            ),
+            opts=ResourceOptions(parent=self.flow_logs_bucket)
+        )
+
         # Configure bucket ACL using separate resource
         aws.s3.BucketAcl(
             f"flow-logs-bucket-acl-{self.environment_suffix}",
@@ -168,6 +178,16 @@ class MonitoringStack(pulumi.ComponentResource):
                 "CostCenter": "compliance"
             },
             opts=ResourceOptions(parent=self)
+        )
+
+        # Configure bucket ownership controls to allow ACLs
+        aws.s3.BucketOwnershipControls(
+            f"config-bucket-ownership-{self.environment_suffix}",
+            bucket=self.config_bucket.id,
+            rule=aws.s3.BucketOwnershipControlsRuleArgs(
+                object_ownership="BucketOwnerPreferred"
+            ),
+            opts=ResourceOptions(parent=self.config_bucket)
         )
 
         # Configure bucket ACL using separate resource
