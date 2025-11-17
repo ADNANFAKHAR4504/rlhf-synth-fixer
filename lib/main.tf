@@ -439,11 +439,9 @@ resource "aws_emr_cluster" "main" {
   visible_to_all_users              = true
 
   ec2_attributes {
-    ec2_subnet_id                     = local.emr_public_subnet_id
-    emr_managed_master_security_group = aws_security_group.emr_master.id
-    emr_managed_slave_security_group  = aws_security_group.emr_core_task.id
-    instance_profile                  = aws_iam_instance_profile.emr_ec2_instance_profile.arn
-    key_name                          = var.ec2_key_pair_name
+    ec2_subnet_id    = local.emr_public_subnet_id
+    instance_profile = aws_iam_instance_profile.emr_ec2_instance_profile.arn
+    key_name         = var.ec2_key_pair_name
   }
 
   master_instance_group {
