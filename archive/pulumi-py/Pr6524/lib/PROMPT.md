@@ -1,79 +1,47 @@
-Hey team,
+# Task: Blue-Green Migration Strategy for Payment Processing System
 
-We need to set up AWS Config for infrastructure compliance monitoring across our AWS environment. The business has been asking for better visibility into our infrastructure configuration and wants to ensure we're meeting compliance standards. This is part of our broader security and governance initiative to maintain proper oversight of our cloud resources
+## Platform & Language
+**MANDATORY:** This task MUST be implemented using **Pulumi with Python**.
 
-The compliance team needs a way to continuously monitor our infrastructure against established policies and get alerts when resources drift from our standards. Right now we don't have good visibility into configuration changes or compliance posture, and that's creating risk for the organization. We need to implement AWS Config to track resource configurations, evaluate compliance rules, and notify the team when issues are detected.
+## Background
+A financial services company needs to migrate their legacy on-premises payment processing system to AWS. The current system handles credit card transactions and requires strict compliance with PCI DSS standards. The migration must be performed with zero downtime using a blue-green deployment strategy.
 
-## What we need to build
+## Problem Statement
+Create a CloudFormation template to implement a blue-green migration strategy for a payment processing system.
 
-Create an infrastructure compliance monitoring system using **CloudFormation with YAML** that implements AWS Config for continuous monitoring of our AWS resources.
+## Requirements
 
-### Core Requirements
+The configuration must implement the following:
 
-1. **Configuration Recording**
-   - Enable AWS Config to record all supported resource types
-   - Store configuration snapshots and history in S3
-   - Set up the configuration recorder with proper IAM permissions
-   - Record both configuration changes and relationships between resources
+1. Define two identical environments (blue and green) with RDS Aurora clusters in private subnets
+2. Create an Application Load Balancer with weighted target groups for traffic shifting
+3. Configure DynamoDB tables with point-in-time recovery for session data
+4. Implement CloudFormation custom resources for pre-migration data validation
+5. Set up CloudWatch alarms for database connection counts and response times
+6. Create Lambda functions to handle environment switching logic
+7. Configure AWS Backup plans with 7-day retention for both environments
+8. Implement stack outputs that display current active environment and migration status
 
-2. **Compliance Rules**
-   - Implement managed Config rules for common compliance checks
-   - Include rules for encrypted storage (EBS, S3, RDS)
-   - Add rules for proper IAM configurations
-   - Monitor for public access and security group compliance
-   - Check for required tags on resources
+## Environment Details
+Blue-green migration infrastructure deployed in us-east-1 across 3 availability zones. Uses RDS Aurora MySQL 8.0 for transaction data and DynamoDB for session management. Requires VPC with private subnets, NAT gateways for outbound traffic, and VPC endpoints for S3 and DynamoDB. AWS account must have KMS key creation permissions and Secrets Manager access. CloudFormation stack will manage approximately 25 resources including load balancers, auto-scaling groups, and security configurations.
 
-3. **Alerting and Notifications**
-   - Send notifications when compliance rules are violated
-   - Use SNS to deliver alerts to the operations team
-   - Include relevant resource details in notifications
-   - Enable notifications for configuration changes
+## Constraints
 
-4. **Storage and Retention**
-   - Create S3 bucket for Config snapshots with proper encryption
-   - Implement lifecycle policies for cost optimization
-   - Ensure bucket policies prevent unauthorized access
-   - Store configuration history for audit purposes
+1. All data must be encrypted at rest using AWS KMS customer-managed keys
+2. Database credentials must be stored in AWS Secrets Manager with automatic rotation enabled
+3. The template must support rollback to the previous environment within 5 minutes
+4. Network traffic between components must use VPC endpoints to avoid internet exposure
+5. All resources must be tagged with Environment, CostCenter, and MigrationPhase tags
+6. The template must use CloudFormation drift detection compatible resources only
+7. Parameter validation must enforce naming conventions matching ^(dev|staging|prod)-payment-[a-z0-9]{8}$
 
-### Technical Requirements
+## Expected Output
+A CloudFormation YAML template that enables controlled migration between blue and green environments with automated rollback capabilities and comprehensive monitoring.
 
-- All infrastructure defined using **CloudFormation with YAML**
-- Use **AWS Config** for configuration recording and compliance evaluation
-- Use **S3** for storing configuration snapshots and history
-- Use **SNS** for compliance violation notifications
-- Use **IAM** roles and policies for Config service permissions
-- Resource names must include **environmentSuffix** for uniqueness
-- Follow naming convention: resource-type-environment-suffix
-- Deploy to **us-east-1** region
+## Region
+us-east-1 (default)
 
-### Constraints
-
-- All Config rules must be managed rules (not custom Lambda-based)
-- S3 bucket must use server-side encryption
-- IAM role must follow least privilege principle
-- Config recorder must support all resource types
-- All resources must be destroyable (no Retain policies)
-- Include proper error handling and logging
-- Cost-optimize by using appropriate delivery frequency
-
-## Success Criteria
-
-- Functionality: AWS Config successfully records all resource configurations
-- Compliance: Config rules properly evaluate resource compliance
-- Notifications: SNS alerts are sent when violations are detected
-- Security: All data is encrypted at rest and in transit
-- Auditability: Configuration history is retained for compliance reviews
-- Resource Naming: All resources include environmentSuffix parameter
-- Code Quality: Clean YAML syntax, well-documented, production-ready
-
-## What to deliver
-
-- Complete CloudFormation YAML template implementation
-- AWS Config configuration recorder and delivery channel
-- S3 bucket for configuration storage with encryption
-- Multiple AWS Config managed rules for compliance
-- SNS topic and subscriptions for notifications
-- IAM service role with required permissions
-- Unit tests for template validation
-- Integration tests for deployed resources
-- Documentation and deployment instructions
+## Subject Labels
+- aws
+- infrastructure
+- environment-migration
