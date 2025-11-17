@@ -10,4 +10,3 @@
 
 // Re-export everything from the main Pulumi program to ensure outputs are visible
 export * from '../lib/index';
-
