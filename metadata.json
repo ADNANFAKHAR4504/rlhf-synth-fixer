@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "multi",
+  "po_id": "IAC-101912343",
+  "team": "synth",
+  "startedAt": "2025-11-17T23:00:00Z",
+  "subtask": "Application Deployment",
+  "aws_services": [
+    "ECS",
+    "ECR",
+    "ALB",
+    "CloudMap",
+    "CloudWatch",
+    "AutoScaling",
+    "IAM",
+    "SecretsManager",
+    "XRay"
+  ],
+  "subject_labels": [
+    "Containerized Application Deployment",
+    "Microservices Architecture"
+  ],
+  "description": "Multi-service containerized application on ECS with ALB, CloudMap service discovery, auto-scaling, Container Insights, and X-Ray tracing",
+  "training_quality": 8,
+  "deployment_status": "skipped",
+  "deployment_skipped_reason": "user_requested_pr_only"
+}
