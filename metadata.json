@@ -1,31 +1,27 @@
 {
-  "task_id": "101912456",
-  "po_id": "101912456",
-  "platform": "pulumi",
-  "language": "py",
+  "platform": "cfn",
+  "language": "yaml",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
-  "startedAt": "2025-11-14T00:55:26Z",
-  "subtask": "Failure Recovery and High Availability",
+  "startedAt": "2025-11-17T00:00:00Z",
+  "subtask": "Security, Compliance, and Governance",
   "subject_labels": [
     "aws",
     "infrastructure",
-    "environment-migration"
+    "security-configuration-as-code"
   ],
   "aws_services": [
-    "VPC",
-    "EC2",
-    "RDS",
-    "DynamoDB",
-    "ELB",
+    "S3",
     "Lambda",
+    "DynamoDB",
     "IAM",
-    "KMS",
-    "Secrets Manager",
+    "VPC",
+    "CloudTrail",
+    "SecretsManager",
     "CloudWatch",
-    "AWS Backup",
-    "SSM"
+    "KMS"
   ],
-  "training_quality": 10
+  "po_id": "101912420",
+  "training_quality": 9
 }

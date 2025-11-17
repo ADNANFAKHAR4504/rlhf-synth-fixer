@@ -1,47 +1,103 @@
-# Task: Blue-Green Migration Strategy for Payment Processing System
+# Secure Financial Transaction Processing Pipeline
 
-## Platform & Language
-**MANDATORY:** This task MUST be implemented using **Pulumi with Python**.
+Hey team,
 
-## Background
-A financial services company needs to migrate their legacy on-premises payment processing system to AWS. The current system handles credit card transactions and requires strict compliance with PCI DSS standards. The migration must be performed with zero downtime using a blue-green deployment strategy.
+We're building a secure data processing pipeline for a financial services company that needs to handle customer transaction analysis. The compliance team has been breathing down our necks about encryption requirements and audit logging, so this needs to be done right. I've been asked to create this using **CloudFormation with YAML** to match our standard deployment practices.
 
-## Problem Statement
-Create a CloudFormation template to implement a blue-green migration strategy for a payment processing system.
+The business problem is pretty straightforward - we're ingesting financial transaction data, processing it through serverless functions, and storing metadata for compliance reporting. But the security requirements are strict: everything needs to be encrypted at rest and in transit, we need comprehensive audit trails, and the access controls have to follow least-privilege principles to the letter.
 
-## Requirements
+What makes this interesting is that we can't just throw together a basic pipeline. The compliance team requires specific controls like customer-managed KMS keys, VPC endpoints to avoid internet traffic, CloudTrail data event logging with file validation, and we need to make sure nothing gets accidentally deleted by setting retention policies on critical resources.
 
-The configuration must implement the following:
+## What we need to build
 
-1. Define two identical environments (blue and green) with RDS Aurora clusters in private subnets
-2. Create an Application Load Balancer with weighted target groups for traffic shifting
-3. Configure DynamoDB tables with point-in-time recovery for session data
-4. Implement CloudFormation custom resources for pre-migration data validation
-5. Set up CloudWatch alarms for database connection counts and response times
-6. Create Lambda functions to handle environment switching logic
-7. Configure AWS Backup plans with 7-day retention for both environments
-8. Implement stack outputs that display current active environment and migration status
+Create a secure serverless data processing pipeline using **CloudFormation with YAML** for financial transaction analysis. This infrastructure will handle sensitive customer data with strict security and compliance requirements.
 
-## Environment Details
-Blue-green migration infrastructure deployed in us-east-1 across 3 availability zones. Uses RDS Aurora MySQL 8.0 for transaction data and DynamoDB for session management. Requires VPC with private subnets, NAT gateways for outbound traffic, and VPC endpoints for S3 and DynamoDB. AWS account must have KMS key creation permissions and Secrets Manager access. CloudFormation stack will manage approximately 25 resources including load balancers, auto-scaling groups, and security configurations.
+### Core Requirements
 
-## Constraints
+1. **Data Storage with Encryption**
+   - S3 bucket with SSE-KMS encryption using customer-managed CMK
+   - Enable bucket versioning for data integrity
+   - Configure lifecycle policy to transition objects to Infrequent Access after 30 days
+   - Apply DeletionPolicy: Retain to prevent accidental data loss
 
-1. All data must be encrypted at rest using AWS KMS customer-managed keys
-2. Database credentials must be stored in AWS Secrets Manager with automatic rotation enabled
-3. The template must support rollback to the previous environment within 5 minutes
-4. Network traffic between components must use VPC endpoints to avoid internet exposure
-5. All resources must be tagged with Environment, CostCenter, and MigrationPhase tags
-6. The template must use CloudFormation drift detection compatible resources only
-7. Parameter validation must enforce naming conventions matching ^(dev|staging|prod)-payment-[a-z0-9]{8}$
+2. **Serverless Processing**
+   - Lambda function to process files uploaded to S3
+   - Store Lambda environment variables in Secrets Manager
+   - Configure CloudWatch Logs with 90-day retention
+   - Implement error handling and structured logging
 
-## Expected Output
-A CloudFormation YAML template that enables controlled migration between blue and green environments with automated rollback capabilities and comprehensive monitoring.
+3. **Metadata Storage**
+   - DynamoDB table for transaction metadata
+   - Enable point-in-time recovery for disaster recovery
+   - Apply DeletionPolicy: Retain
 
-## Region
-us-east-1 (default)
+4. **Network Security**
+   - VPC with private subnets across 2 availability zones
+   - VPC endpoints for S3 and DynamoDB to avoid internet traffic
+   - No internet gateways or NAT gateways (private-only architecture)
 
-## Subject Labels
-- aws
-- infrastructure
-- environment-migration
+5. **Access Control**
+   - IAM role for Lambda with least-privilege permissions
+   - Specific permissions for S3 GetObject/PutObject
+   - Specific permissions for DynamoDB read/write operations
+   - No wildcard permissions on actions
+
+6. **Audit and Compliance**
+   - CloudTrail to log S3 data events
+   - Enable CloudTrail log file validation
+   - Store CloudTrail logs in separate S3 bucket
+   - Apply DeletionPolicy: Retain to audit logs
+
+7. **Encryption Keys**
+   - Customer-managed KMS key for S3 encryption
+   - Key policy allowing CloudTrail and Lambda to use the key
+   - Enable automatic key rotation
+
+### Technical Requirements
+
+- All infrastructure defined using **CloudFormation with YAML**
+- Use **S3** for encrypted data storage with versioning
+- Use **Lambda** for serverless file processing
+- Use **DynamoDB** for transaction metadata
+- Use **KMS** for customer-managed encryption keys
+- Use **Secrets Manager** for sensitive Lambda configuration
+- Use **CloudTrail** for audit logging with log file validation
+- Use **VPC** with private subnets and VPC endpoints
+- Deploy to **us-east-1** region
+- Resource names must include **environmentSuffix** parameter for uniqueness
+- Follow naming convention: resource-type-environment-suffix
+- All resources must use DeletionPolicy: Retain except CloudWatch Log Groups
+
+### Constraints
+
+- All S3 buckets must have versioning enabled and use SSE-KMS encryption with customer-managed keys
+- Lambda functions must use environment variables stored in Secrets Manager for sensitive configuration
+- All IAM roles must follow least-privilege principles with no wildcard permissions on actions
+- VPC endpoints must be used for S3 and DynamoDB to avoid internet-based traffic
+- CloudTrail must be configured to log all data events for the S3 buckets with log file validation enabled
+- All resources must have DeletionPolicy set to Retain except for CloudWatch Log Groups
+- No public internet access - private VPC architecture only
+
+## Success Criteria
+
+- **Functionality**: S3 bucket accepts uploads, Lambda processes files, metadata stored in DynamoDB
+- **Security**: All data encrypted with customer-managed KMS keys, no internet traffic, least-privilege IAM
+- **Compliance**: CloudTrail logging enabled with validation, point-in-time recovery on DynamoDB
+- **Reliability**: Multi-AZ deployment, versioning enabled, lifecycle policies configured
+- **Resource Naming**: All resources include environmentSuffix parameter
+- **Data Protection**: DeletionPolicy: Retain on all critical resources (S3, DynamoDB, KMS, CloudTrail)
+- **Code Quality**: Clean YAML, well-documented, follows CloudFormation best practices
+
+## What to deliver
+
+- Complete CloudFormation YAML template implementation
+- S3 bucket with SSE-KMS encryption and lifecycle policies
+- Lambda function with Secrets Manager integration
+- DynamoDB table with point-in-time recovery
+- VPC with private subnets and VPC endpoints for S3 and DynamoDB
+- IAM roles with least-privilege permissions
+- CloudTrail with S3 data event logging and log file validation
+- KMS customer-managed key with automatic rotation
+- CloudWatch Logs configuration
+- All resources properly configured with DeletionPolicy
+- Documentation and deployment instructions
