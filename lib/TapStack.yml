@@ -3,15 +3,17 @@ Description: 'Secure and Compliant AWS Infrastructure with Production Security S
 
 Parameters:
   EnvironmentName:
-    Description: Environment name prefix for resources
+    Description: Environment name prefix for resources (lowercase only)
     Type: String
-    Default: SecureProd
-  
+    Default: secureprod
+    AllowedPattern: ^[a-z][a-z0-9-]*$
+    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
+
   KeyPairName:
-    Description: EC2 Key Pair for SSH access
-    Type: AWS::EC2::KeyPair::KeyName
-    ConstraintDescription: Must be the name of an existing EC2 KeyPair
-  
+    Description: (Optional) EC2 Key Pair for SSH access - leave empty to disable SSH
+    Type: String
+    Default: ''
+
   DBUsername:
     Description: Database master username
     Type: String
@@ -19,14 +21,47 @@ Parameters:
     MinLength: 1
     MaxLength: 16
     AllowedPattern: '[a-zA-Z][a-zA-Z0-9]*'
-  
+
   CertificateArn:
     Description: ARN of the SSL certificate for ALB (from ACM)
     Type: String
     Default: ''
 
+  CreateNATGateways:
+    Description: Create NAT Gateways for private subnet internet access (requires 2 EIPs)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  CreateAWSConfig:
+    Description: Create AWS Config resources (only 1 recorder/channel allowed per region)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  CreateCloudTrail:
+    Description: Create CloudTrail resources (AWS limit is 5 trails per region)
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+  LatestAmiId:
+    Description: Latest Amazon Linux 2 AMI ID from SSM Parameter Store
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
+
 Conditions:
   HasSSLCertificate: !Not [!Equals [!Ref CertificateArn, '']]
+  HasKeyPair: !Not [!Equals [!Ref KeyPairName, '']]
+  ShouldCreateNATGateways: !Equals [!Ref CreateNATGateways, 'true']
+  ShouldCreateAWSConfig: !Equals [!Ref CreateAWSConfig, 'true']
+  ShouldCreateCloudTrail: !Equals [!Ref CreateCloudTrail, 'true']
 
 Mappings:
   SubnetConfig:
@@ -44,10 +79,6 @@ Mappings:
       CIDR: '10.0.20.0/24'
     DatabaseSubnet2:
       CIDR: '10.0.21.0/24'
-  
-  AmiRegionMap:
-    us-east-1:
-      AMI: ami-0c02fb55731490381  # Amazon Linux 2 AMI
 
 Resources:
   # ==========================================
@@ -144,21 +175,30 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database-Subnet-AZ2'
 
-  # NAT Gateways
+  # NAT Gateways (Optional - requires 2 EIPs)
   NatGateway1EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-EIP-AZ1'
 
   NatGateway2EIP:
     Type: AWS::EC2::EIP
+    Condition: ShouldCreateNATGateways
     DependsOn: AttachGateway
     Properties:
       Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub '${EnvironmentName}-NAT-EIP-AZ2'
 
   NatGateway1:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NatGateway1EIP.AllocationId
       SubnetId: !Ref PublicSubnet1
@@ -168,6 +208,7 @@ Resources:
 
   NatGateway2:
     Type: AWS::EC2::NatGateway
+    Condition: ShouldCreateNATGateways
     Properties:
       AllocationId: !GetAtt NatGateway2EIP.AllocationId
       SubnetId: !Ref PublicSubnet2
@@ -214,6 +255,7 @@ Resources:
 
   PrivateRoute1:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable1
       DestinationCidrBlock: 0.0.0.0/0
@@ -235,6 +277,7 @@ Resources:
 
   PrivateRoute2:
     Type: AWS::EC2::Route
+    Condition: ShouldCreateNATGateways
     Properties:
       RouteTableId: !Ref PrivateRouteTable2
       DestinationCidrBlock: 0.0.0.0/0
@@ -266,12 +309,6 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
           Description: HTTP from Internet (redirect to HTTPS)
-      SecurityGroupEgress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          DestinationSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: HTTP to Web Servers
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-ALB-SG'
@@ -283,11 +320,6 @@ Resources:
       VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          SourceSecurityGroupId: !Ref ALBSecurityGroup
-          Description: HTTP from ALB
-        - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           SourceSecurityGroupId: !Ref BastionSecurityGroup
@@ -298,14 +330,29 @@ Resources:
           ToPort: 443
           CidrIp: 0.0.0.0/0
           Description: HTTPS to Internet for updates
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
-          Description: PostgreSQL to RDS
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-WebServer-SG'
+
+  ALBToWebServerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      SourceSecurityGroupId: !Ref ALBSecurityGroup
+      Description: HTTP from ALB
+
+  ALBToWebServerEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref ALBSecurityGroup
+      IpProtocol: tcp
+      FromPort: 80
+      ToPort: 80
+      DestinationSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: HTTP to Web Servers
 
   BastionSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -327,15 +374,29 @@ Resources:
     Properties:
       GroupDescription: Security group for RDS PostgreSQL
       VpcId: !Ref VPC
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 5432
-          ToPort: 5432
-          SourceSecurityGroupId: !Ref WebServerSecurityGroup
-          Description: PostgreSQL from Web Servers
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Database-SG'
+
+  WebServerToDatabaseEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref WebServerSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      DestinationSecurityGroupId: !Ref DatabaseSecurityGroup
+      Description: PostgreSQL to RDS
+
+  DatabaseFromWebServerIngress:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref DatabaseSecurityGroup
+      IpProtocol: tcp
+      FromPort: 5432
+      ToPort: 5432
+      SourceSecurityGroupId: !Ref WebServerSecurityGroup
+      Description: PostgreSQL from Web Servers
 
   # ==========================================
   # IAM Roles and Policies
@@ -344,7 +405,6 @@ Resources:
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-EC2-Instance-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -383,8 +443,8 @@ Resources:
 
   CloudTrailRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateCloudTrail
     Properties:
-      RoleName: !Sub '${EnvironmentName}-CloudTrail-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -411,8 +471,8 @@ Resources:
 
   ConfigRole:
     Type: AWS::IAM::Role
+    Condition: ShouldCreateAWSConfig
     Properties:
-      RoleName: !Sub '${EnvironmentName}-Config-Role'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -421,7 +481,7 @@ Resources:
               Service: config.amazonaws.com
             Action: 'sts:AssumeRole'
       ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
+        - arn:aws:iam::aws:policy/service-role/AWS_ConfigRole
       Policies:
         - PolicyName: ConfigBucketPolicy
           PolicyDocument:
@@ -497,12 +557,61 @@ Resources:
   # ==========================================
   # S3 Buckets
   # ==========================================
-  
+
+  # Lambda function to empty S3 buckets before deletion
+  EmptyS3BucketLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: S3BucketEmptyPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - s3:ListBucket
+                  - s3:ListBucketVersions
+                  - s3:DeleteObject
+                  - s3:DeleteObjectVersion
+                Resource: '*'
+
+  EmptyS3BucketLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Runtime: python3.11
+      Handler: index.handler
+      Role: !GetAtt EmptyS3BucketLambdaRole.Arn
+      Timeout: 300
+      Code:
+        ZipFile: |
+          import boto3
+          import cfnresponse
+          def handler(event, context):
+              try:
+                  if event['RequestType'] == 'Delete':
+                      bucket_name = event['ResourceProperties']['BucketName']
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket_name)
+                      bucket.object_versions.all().delete()
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                  print(f'Error: {str(e)}')
+                  cfnresponse.send(event, context, cfnresponse.FAILED, {'Error': str(e)})
+
   LoggingBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${EnvironmentName}-logging-bucket-${AWS::AccountId}'
-      AccessControl: LogDeliveryWrite
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -523,8 +632,15 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Logging-Bucket'
 
+  EmptyLoggingBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref LoggingBucket
+
   ApplicationBucket:
     Type: AWS::S3::Bucket
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${EnvironmentName}-application-bucket-${AWS::AccountId}'
       BucketEncryption:
@@ -545,8 +661,16 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Application-Bucket'
 
+  EmptyApplicationBucket:
+    Type: Custom::EmptyS3Bucket
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ApplicationBucket
+
   CloudTrailBucket:
     Type: AWS::S3::Bucket
+    Condition: ShouldCreateCloudTrail
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${EnvironmentName}-cloudtrail-bucket-${AWS::AccountId}'
       BucketEncryption:
@@ -567,8 +691,16 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentName}-CloudTrail-Bucket'
 
+  EmptyCloudTrailBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateCloudTrail
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref CloudTrailBucket
+
   CloudTrailBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateCloudTrail
     Properties:
       Bucket: !Ref CloudTrailBucket
       PolicyDocument:
@@ -592,6 +724,8 @@ Resources:
 
   ConfigBucket:
     Type: AWS::S3::Bucket
+    Condition: ShouldCreateAWSConfig
+    DeletionPolicy: Delete
     Properties:
       BucketName: !Sub '${EnvironmentName}-config-bucket-${AWS::AccountId}'
       BucketEncryption:
@@ -609,8 +743,16 @@ Resources:
         - Key: Name
           Value: !Sub '${EnvironmentName}-Config-Bucket'
 
+  EmptyConfigBucket:
+    Type: Custom::EmptyS3Bucket
+    Condition: ShouldCreateAWSConfig
+    Properties:
+      ServiceToken: !GetAtt EmptyS3BucketLambda.Arn
+      BucketName: !Ref ConfigBucket
+
   ConfigBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateAWSConfig
     Properties:
       Bucket: !Ref ConfigBucket
       PolicyDocument:
@@ -639,11 +781,12 @@ Resources:
                 's3:x-amz-acl': bucket-owner-full-control
 
   # ==========================================
-  # CloudTrail
+  # CloudTrail (Optional - limit 5 per region)
   # ==========================================
-  
+
   CloudTrail:
     Type: AWS::CloudTrail::Trail
+    Condition: ShouldCreateCloudTrail
     DependsOn:
       - CloudTrailBucketPolicy
     Properties:
@@ -665,16 +808,17 @@ Resources:
           Value: !Sub '${EnvironmentName}-CloudTrail'
 
   # ==========================================
-  # AWS Config
+  # AWS Config (Optional - limit 1 per region)
   # ==========================================
-  
+
   ConfigRecorder:
     Type: AWS::Config::ConfigurationRecorder
+    Condition: ShouldCreateAWSConfig
     DependsOn:
       - ConfigBucketPolicy
     Properties:
       Name: !Sub '${EnvironmentName}-ConfigRecorder'
-      RoleArn: !GetAtt ConfigRole.Arn
+      RoleARN: !GetAtt ConfigRole.Arn
       RecordingGroup:
         AllSupported: true
         IncludeGlobalResourceTypes: true
@@ -687,25 +831,18 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    Condition: ShouldCreateAWSConfig
     Properties:
       Name: !Sub '${EnvironmentName}-ConfigDeliveryChannel'
       S3BucketName: !Ref ConfigBucket
       ConfigSnapshotDeliveryProperties:
         DeliveryFrequency: TwentyFour_Hours
 
-  ConfigRecorderStatus:
-    Type: AWS::Config::ConfigurationRecorderStatus
-    DependsOn:
-      - ConfigRecorder
-      - ConfigDeliveryChannel
-    Properties:
-      Name: !Ref ConfigRecorder
-      IsEnabled: true
-
   # Config Rules for Compliance
   RequiredTagsRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorderStatus
+    Condition: ShouldCreateAWSConfig
+    DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: required-tags
       Description: Checks whether resources contain all required tags
@@ -718,7 +855,8 @@ Resources:
 
   EncryptedVolumesRule:
     Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorderStatus
+    Condition: ShouldCreateAWSConfig
+    DependsOn: ConfigRecorder
     Properties:
       ConfigRuleName: encrypted-volumes
       Description: Checks whether EBS volumes are encrypted
@@ -756,9 +894,9 @@ Resources:
     Properties:
       Name: !Sub '/${EnvironmentName}/app/config'
       Type: String
-      Value: |
+      Value: !Sub |
         {
-          "database_endpoint": "${DatabaseEndpoint}",
+          "database_endpoint": "${PostgreSQLDatabase.Endpoint.Address}",
           "s3_bucket": "${ApplicationBucket}",
           "region": "${AWS::Region}"
         }
@@ -775,9 +913,9 @@ Resources:
     Properties:
       LaunchTemplateName: !Sub '${EnvironmentName}-LaunchTemplate'
       LaunchTemplateData:
-        ImageId: !FindInMap [AmiRegionMap, !Ref 'AWS::Region', AMI]
+        ImageId: !Ref LatestAmiId
         InstanceType: t3.medium
-        KeyName: !Ref KeyPairName
+        KeyName: !If [HasKeyPair, !Ref KeyPairName, !Ref 'AWS::NoValue']
         IamInstanceProfile:
           Arn: !GetAtt EC2InstanceProfile.Arn
         SecurityGroupIds:
@@ -938,8 +1076,9 @@ Resources:
   
   BastionHost:
     Type: AWS::EC2::Instance
+    Condition: HasKeyPair
     Properties:
-      ImageId: !FindInMap [AmiRegionMap, !Ref 'AWS::Region', AMI]
+      ImageId: !Ref LatestAmiId
       InstanceType: t3.micro
       KeyName: !Ref KeyPairName
       SubnetId: !Ref PublicSubnet1
@@ -981,7 +1120,7 @@ Resources:
     Type: AWS::RDS::DBParameterGroup
     Properties:
       Description: PostgreSQL parameter group with security settings
-      Family: postgres13
+      Family: postgres16
       Parameters:
         log_statement: all
         log_connections: 1
@@ -993,13 +1132,14 @@ Resources:
 
   PostgreSQLDatabase:
     Type: AWS::RDS::DBInstance
+    DeletionPolicy: Delete
     Properties:
       DBInstanceIdentifier: !Sub '${EnvironmentName}-postgres-db'
       DBName: applicationdb
       AllocatedStorage: 100
       DBInstanceClass: db.t3.medium
       Engine: postgres
-      EngineVersion: '13.7'
+      EngineVersion: '16'
       MasterUsername: !Ref DBUsername
       MasterUserPassword: !Sub '{{resolve:secretsmanager:${DBPasswordSecret}:SecretString:password}}'
       VPCSecurityGroups:
@@ -1015,7 +1155,7 @@ Resources:
       StorageType: gp3
       EnableCloudwatchLogsExports:
         - postgresql
-      DeletionProtection: true
+      DeletionProtection: false
       Tags:
         - Key: Name
           Value: !Sub '${EnvironmentName}-PostgreSQL'
@@ -1071,7 +1211,6 @@ Resources:
   MaintenanceWindowRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub '${EnvironmentName}-MaintenanceWindowRole'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -1147,18 +1286,21 @@ Outputs:
       Name: !Sub '${EnvironmentName}-App-Bucket'
 
   BastionPublicIP:
+    Condition: HasKeyPair
     Description: Bastion Host Public IP
     Value: !GetAtt BastionHost.PublicIp
     Export:
       Name: !Sub '${EnvironmentName}-Bastion-IP'
 
   CloudTrailName:
+    Condition: ShouldCreateCloudTrail
     Description: CloudTrail Name
     Value: !Ref CloudTrail
     Export:
       Name: !Sub '${EnvironmentName}-CloudTrail'
 
   ConfigRecorderName:
+    Condition: ShouldCreateAWSConfig
     Description: AWS Config Recorder Name
     Value: !Ref ConfigRecorder
     Export:
