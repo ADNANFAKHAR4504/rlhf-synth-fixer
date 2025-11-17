@@ -8,7 +8,6 @@
   "startedAt": "2025-11-17T03:40:00.000Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments",
     "Environment Migration"
   ],
   "aws_services": [
@@ -25,5 +24,7 @@
     "SecurityGroups",
     "NAT"
   ],
+  "author": "aj-turing",
+  "region": "us-east-1",
   "training_quality": 9
 }
