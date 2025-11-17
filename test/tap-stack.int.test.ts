@@ -919,7 +919,6 @@ describe("TapStack - Live AWS Web Application Integration Tests", () => {
         expect(outputs[outputKey]).toMatch(/^arn:aws:/);
       });
 
-      // Verify URL formats
       expect(outputs.S3BucketWebsiteURL).toMatch(/^http:\/\//);
       expect(outputs.CloudFrontDistributionURL).toMatch(/^https:\/\//);
     });
