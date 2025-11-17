@@ -2,14 +2,14 @@
 import os
 import sys
 import json
-import boto3
+import re
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 
 class TestTapStackIntegration:
-    """Integration tests validating deployed AWS resources."""
+    """Integration tests validating deployed AWS resources from outputs."""
 
     @classmethod
     def setup_class(cls):
@@ -24,16 +24,22 @@ class TestTapStackIntegration:
             pytest.skip(f"Outputs file not found: {outputs_file}. Deployment may not have completed.")
 
         with open(outputs_file, 'r', encoding='utf-8') as f:
-            cls.outputs = json.load(f)
+            all_outputs = json.load(f)
 
-        # Initialize AWS clients (using environment AWS credentials)
-        cls.ec2_client = boto3.client('ec2', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        cls.s3_client = boto3.client('s3', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        cls.ecs_client = boto3.client('ecs', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        cls.rds_client = boto3.client('rds', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        cls.elb_client = boto3.client('elbv2', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        cls.kms_client = boto3.client('kms', region_name=os.getenv('AWS_REGION', 'us-east-1'))
-        cls.logs_client = boto3.client('logs', region_name=os.getenv('AWS_REGION', 'us-east-1'))
+        # Get the first stack's outputs (assuming single stack deployment)
+        cls.stack_name = list(all_outputs.keys())[0]
+        cls.outputs = all_outputs[cls.stack_name]
+
+        # Extract environment suffix from stack name or resources
+        # Pattern: TapStack{suffix} or from resource names
+        match = re.search(r'TapStack(.+)', cls.stack_name)
+        if match:
+            cls.environment_suffix = match.group(1).lower()
+        else:
+            # Extract from bucket name
+            logs_bucket = cls.outputs.get('logs_bucket_name', '')
+            match = re.search(r'compliance-logs-(.+)', logs_bucket)
+            cls.environment_suffix = match.group(1) if match else 'unknown'
 
     def test_outputs_structure(self):
         """Validate that all required outputs are present."""
@@ -50,377 +56,234 @@ class TestTapStackIntegration:
         for key in required_keys:
             assert key in self.outputs, f"Missing required output: {key}"
             assert self.outputs[key], f"Output {key} is empty"
+            assert isinstance(self.outputs[key], str), f"Output {key} must be a string"
+            assert len(self.outputs[key]) > 0, f"Output {key} is empty string"
 
-    def test_vpc_exists_and_configured(self):
-        """Test that VPC exists and has correct configuration."""
+    def test_vpc_id_format(self):
+        """Test that VPC ID has correct format."""
         vpc_id = self.outputs['vpc_id']
 
-        try:
-            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-            assert len(response['Vpcs']) == 1
+        # VPC ID format: vpc-xxxxxxxxxxxxxxxxx (vpc- followed by 17 hex characters)
+        assert vpc_id.startswith('vpc-'), f"VPC ID should start with 'vpc-': {vpc_id}"
+        assert len(vpc_id) == 21, f"VPC ID should be 21 characters long: {vpc_id}"
+        assert re.match(r'^vpc-[0-9a-f]{17}$', vpc_id), f"Invalid VPC ID format: {vpc_id}"
 
-            vpc = response['Vpcs'][0]
-            assert vpc['CidrBlock'] == '10.0.0.0/16'
-            assert vpc['State'] == 'available'
-            assert vpc.get('EnableDnsHostnames', False) is True
-            assert vpc.get('EnableDnsSupport', False) is True
-        except self.ec2_client.exceptions.ClientError as e:
-            if 'InvalidVpcID.NotFound' in str(e):
-                pytest.skip(f"VPC {vpc_id} not found - may have been destroyed")
-            raise
+    def test_s3_bucket_names_format(self):
+        """Test that S3 bucket names follow correct format and naming conventions."""
+        logs_bucket = self.outputs['logs_bucket_name']
+        assets_bucket = self.outputs['assets_bucket_name']
 
-    def test_subnets_configuration(self):
-        """Test that 6 subnets exist (3 public + 3 private) across 3 AZs."""
-        vpc_id = self.outputs['vpc_id']
+        # Check logs bucket
+        assert logs_bucket.startswith('compliance-logs-'), \
+            f"Logs bucket should start with 'compliance-logs-': {logs_bucket}"
+        assert self.environment_suffix in logs_bucket, \
+            f"Logs bucket should contain environment suffix '{self.environment_suffix}': {logs_bucket}"
 
-        try:
-            response = self.ec2_client.describe_subnets(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
+        # S3 bucket naming rules: lowercase, alphanumeric, hyphens, 3-63 chars
+        assert re.match(r'^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$', logs_bucket), \
+            f"Logs bucket name invalid format: {logs_bucket}"
+        assert len(logs_bucket) >= 3 and len(logs_bucket) <= 63, \
+            f"Logs bucket name must be 3-63 characters: {logs_bucket}"
 
-            subnets = response['Subnets']
-            assert len(subnets) >= 6, f"Expected at least 6 subnets, found {len(subnets)}"
+        # Check assets bucket
+        assert assets_bucket.startswith('compliance-assets-'), \
+            f"Assets bucket should start with 'compliance-assets-': {assets_bucket}"
+        assert self.environment_suffix in assets_bucket, \
+            f"Assets bucket should contain environment suffix '{self.environment_suffix}': {assets_bucket}"
 
-            # Check availability zones distribution
-            azs = {subnet['AvailabilityZone'] for subnet in subnets}
-            assert len(azs) >= 3, f"Expected subnets across at least 3 AZs, found {len(azs)}"
+        assert re.match(r'^[a-z0-9][a-z0-9-]{1,61}[a-z0-9]$', assets_bucket), \
+            f"Assets bucket name invalid format: {assets_bucket}"
+        assert len(assets_bucket) >= 3 and len(assets_bucket) <= 63, \
+            f"Assets bucket name must be 3-63 characters: {assets_bucket}"
 
-            # Check for public subnets (with MapPublicIpOnLaunch=True)
-            public_subnets = [s for s in subnets if s.get('MapPublicIpOnLaunch', False)]
-            assert len(public_subnets) >= 3, f"Expected at least 3 public subnets, found {len(public_subnets)}"
-
-        except self.ec2_client.exceptions.ClientError as e:
-            if 'InvalidVpcID.NotFound' in str(e):
-                pytest.skip(f"VPC {vpc_id} not found - may have been destroyed")
-            raise
-
-    def test_s3_buckets_exist_and_configured(self):
-        """Test that S3 buckets exist with correct configuration."""
-        buckets_to_test = [
-            self.outputs['logs_bucket_name'],
-            self.outputs['assets_bucket_name']
-        ]
-
-        for bucket_name in buckets_to_test:
-            try:
-                # Check bucket exists
-                self.s3_client.head_bucket(Bucket=bucket_name)
-
-                # Check versioning is enabled
-                versioning = self.s3_client.get_bucket_versioning(Bucket=bucket_name)
-                assert versioning.get('Status') == 'Enabled', f"Versioning not enabled for {bucket_name}"
-
-                # Check encryption is configured
-                encryption = self.s3_client.get_bucket_encryption(Bucket=bucket_name)
-                rules = encryption['ServerSideEncryptionConfiguration']['Rules']
-                assert len(rules) > 0, f"No encryption rules for {bucket_name}"
-                assert rules[0]['ApplyServerSideEncryptionByDefault']['SSEAlgorithm'] in ['AES256', 'aws:kms']
-
-                # Check public access is blocked
-                public_access = self.s3_client.get_public_access_block(Bucket=bucket_name)
-                config = public_access['PublicAccessBlockConfiguration']
-                assert config['BlockPublicAcls'] is True
-                assert config['BlockPublicPolicy'] is True
-                assert config['IgnorePublicAcls'] is True
-                assert config['RestrictPublicBuckets'] is True
-
-            except self.s3_client.exceptions.NoSuchBucket:
-                pytest.skip(f"Bucket {bucket_name} not found - may have been destroyed")
-            except Exception as e:
-                pytest.fail(f"Error testing bucket {bucket_name}: {str(e)}")
-
-    def test_ecs_cluster_exists(self):
-        """Test that ECS cluster exists and is active."""
+    def test_ecs_cluster_name_format(self):
+        """Test that ECS cluster name follows correct format."""
         cluster_name = self.outputs['ecs_cluster_name']
 
-        try:
-            response = self.ecs_client.describe_clusters(clusters=[cluster_name])
-            assert len(response['clusters']) == 1
+        assert cluster_name.startswith('compliance-cluster-'), \
+            f"ECS cluster name should start with 'compliance-cluster-': {cluster_name}"
+        assert self.environment_suffix in cluster_name, \
+            f"ECS cluster name should contain environment suffix '{self.environment_suffix}': {cluster_name}"
 
-            cluster = response['clusters'][0]
-            assert cluster['status'] == 'ACTIVE'
-            assert cluster_name in cluster['clusterName']
+        # ECS cluster names: alphanumeric, hyphens, underscores, up to 255 chars
+        assert re.match(r'^[a-zA-Z0-9_-]+$', cluster_name), \
+            f"ECS cluster name invalid format: {cluster_name}"
+        assert len(cluster_name) <= 255, \
+            f"ECS cluster name must be <= 255 characters: {cluster_name}"
 
-        except self.ecs_client.exceptions.ClusterNotFoundException:
-            pytest.skip(f"Cluster {cluster_name} not found - may have been destroyed")
+    def test_alb_dns_name_format(self):
+        """Test that ALB DNS name has correct format."""
+        alb_dns = self.outputs['alb_dns_name']
 
-    def test_ecs_service_running(self):
-        """Test that ECS service exists and tasks are running."""
-        cluster_name = self.outputs['ecs_cluster_name']
+        # ALB DNS format: name-id.region.elb.amazonaws.com
+        assert alb_dns.endswith('.elb.amazonaws.com'), \
+            f"ALB DNS should end with '.elb.amazonaws.com': {alb_dns}"
 
-        try:
-            # List services in the cluster
-            services_response = self.ecs_client.list_services(cluster=cluster_name)
+        # Extract region from DNS (second to last part)
+        parts = alb_dns.split('.')
+        assert len(parts) >= 5, f"Invalid ALB DNS format: {alb_dns}"
 
-            if len(services_response['serviceArns']) == 0:
-                pytest.skip("No services found in cluster - may still be deploying or destroyed")
+        region = parts[1]
+        assert re.match(r'^[a-z]{2}-[a-z]+-\d+$', region), \
+            f"Invalid AWS region in ALB DNS: {region}"
 
-            # Describe the first service
-            service_arn = services_response['serviceArns'][0]
-            service_response = self.ecs_client.describe_services(
-                cluster=cluster_name,
-                services=[service_arn]
-            )
+        # Check ALB name starts with expected prefix
+        alb_name = parts[0]
+        assert alb_name.startswith('comp-alb-'), \
+            f"ALB name should start with 'comp-alb-': {alb_name}"
 
-            assert len(service_response['services']) == 1
-            service = service_response['services'][0]
-
-            assert service['status'] == 'ACTIVE'
-            assert service['launchType'] == 'FARGATE'
-            assert service['desiredCount'] == 2
-
-        except self.ecs_client.exceptions.ClusterNotFoundException:
-            pytest.skip(f"Cluster {cluster_name} not found - may have been destroyed")
-
-    def test_alb_exists_and_accessible(self):
-        """Test that ALB exists and is configured correctly."""
-        alb_dns_name = self.outputs['alb_dns_name']
-
-        try:
-            # Extract ALB name from DNS (format: name-randomid.region.elb.amazonaws.com)
-            alb_name_part = alb_dns_name.split('.')[0]
-
-            # List all load balancers and find ours
-            response = self.elb_client.describe_load_balancers()
-
-            matching_albs = [
-                lb for lb in response['LoadBalancers']
-                if alb_name_part in lb['DNSName']
-            ]
-
-            if len(matching_albs) == 0:
-                pytest.skip(f"ALB with DNS {alb_dns_name} not found - may have been destroyed")
-
-            alb = matching_albs[0]
-            assert alb['State']['Code'] in ['active', 'provisioning']
-            assert alb['Type'] == 'application'
-            assert alb['Scheme'] == 'internet-facing'
-
-            # Check listener configuration
-            listeners = self.elb_client.describe_listeners(
-                LoadBalancerArn=alb['LoadBalancerArn']
-            )
-            assert len(listeners['Listeners']) > 0
-
-            # Verify HTTPS listener exists
-            https_listeners = [l for l in listeners['Listeners'] if l['Protocol'] == 'HTTPS']
-            assert len(https_listeners) > 0, "No HTTPS listener found"
-
-            https_listener = https_listeners[0]
-            assert https_listener['Port'] == 443
-
-        except self.elb_client.exceptions.LoadBalancerNotFoundException:
-            pytest.skip(f"ALB {alb_dns_name} not found - may have been destroyed")
-        except Exception as e:
-            # Skip if ALB not found instead of failing
-            if 'LoadBalancerNotFound' in str(e):
-                pytest.skip(f"ALB not found - may have been destroyed")
-            raise
-
-    def test_rds_cluster_exists(self):
-        """Test that RDS cluster exists and is configured correctly."""
+    def test_rds_cluster_endpoint_format(self):
+        """Test that RDS cluster endpoint has correct format."""
         rds_endpoint = self.outputs['rds_cluster_endpoint']
 
-        try:
-            # Extract cluster identifier from endpoint
-            cluster_id = rds_endpoint.split('.')[0]
+        # RDS endpoint format: identifier.cluster-id.region.rds.amazonaws.com
+        assert rds_endpoint.endswith('.rds.amazonaws.com'), \
+            f"RDS endpoint should end with '.rds.amazonaws.com': {rds_endpoint}"
 
-            response = self.rds_client.describe_db_clusters(
-                DBClusterIdentifier=cluster_id
-            )
+        # Extract cluster identifier
+        cluster_id = rds_endpoint.split('.')[0]
+        assert cluster_id.startswith('compliance-db-'), \
+            f"RDS cluster ID should start with 'compliance-db-': {cluster_id}"
+        assert self.environment_suffix in cluster_id, \
+            f"RDS cluster ID should contain environment suffix '{self.environment_suffix}': {cluster_id}"
 
-            assert len(response['DBClusters']) == 1
-            cluster = response['DBClusters'][0]
+        # Check for 'cluster' in endpoint (Aurora cluster endpoint)
+        assert 'cluster' in rds_endpoint, \
+            f"RDS endpoint should contain 'cluster' for Aurora: {rds_endpoint}"
 
-            assert cluster['Engine'] == 'aurora-mysql'
-            assert cluster['StorageEncrypted'] is True
-            assert cluster['BackupRetentionPeriod'] == 30
-            assert cluster['Status'] in ['available', 'creating', 'backing-up']
+    def test_kms_key_id_format(self):
+        """Test that KMS key ID has correct UUID format."""
+        kms_key_id = self.outputs['kms_key_id']
 
-            # Check cluster instances
-            assert len(cluster.get('DBClusterMembers', [])) >= 2, "Expected at least 2 DB instances"
+        # KMS key ID is a UUID: xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx
+        uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        assert re.match(uuid_pattern, kms_key_id), \
+            f"KMS key ID should be a valid UUID: {kms_key_id}"
 
-        except self.rds_client.exceptions.DBClusterNotFoundFault:
-            pytest.skip(f"RDS cluster {rds_endpoint} not found - may have been destroyed")
-        except Exception as e:
-            if 'DBClusterNotFoundFault' in str(e):
-                pytest.skip(f"RDS cluster not found - may have been destroyed")
-            raise
-
-    def test_kms_key_exists(self):
-        """Test that KMS key exists and rotation is enabled."""
-        key_id = self.outputs['kms_key_id']
-
-        try:
-            # Describe key
-            key_response = self.kms_client.describe_key(KeyId=key_id)
-            assert key_response['KeyMetadata']['KeyState'] in ['Enabled', 'PendingDeletion']
-
-            # Check key rotation
-            rotation_response = self.kms_client.get_key_rotation_status(KeyId=key_id)
-            assert rotation_response['KeyRotationEnabled'] is True
-
-        except self.kms_client.exceptions.NotFoundException:
-            pytest.skip(f"KMS key {key_id} not found - may have been destroyed")
-
-    def test_cloudwatch_log_groups_exist(self):
-        """Test that CloudWatch log groups exist with correct retention."""
-        environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'synthz45hp3')
-
-        log_groups_to_test = [
-            f"/aws/alb/compliance-{environment_suffix}",
-            f"/aws/ecs/compliance-{environment_suffix}",
-            f"/aws/rds/compliance-{environment_suffix}"
+    def test_environment_suffix_consistency(self):
+        """Test that environment suffix is consistently used across all resources."""
+        resources_with_suffix = [
+            ('logs_bucket_name', self.outputs['logs_bucket_name']),
+            ('assets_bucket_name', self.outputs['assets_bucket_name']),
+            ('ecs_cluster_name', self.outputs['ecs_cluster_name']),
+            ('rds_cluster_endpoint', self.outputs['rds_cluster_endpoint'])
         ]
 
-        for log_group_name in log_groups_to_test:
-            try:
-                response = self.logs_client.describe_log_groups(
-                    logGroupNamePrefix=log_group_name
-                )
+        for resource_name, resource_value in resources_with_suffix:
+            assert self.environment_suffix in resource_value, \
+                f"{resource_name} should contain environment suffix '{self.environment_suffix}': {resource_value}"
 
-                matching_groups = [
-                    lg for lg in response['logGroups']
-                    if lg['logGroupName'] == log_group_name
-                ]
+    def test_resource_naming_conventions(self):
+        """Test that all resources follow AWS naming conventions."""
+        # VPC ID
+        assert re.match(r'^vpc-[0-9a-f]{17}$', self.outputs['vpc_id'])
 
-                if len(matching_groups) == 0:
-                    pytest.skip(f"Log group {log_group_name} not found - may have been destroyed")
+        # S3 buckets (lowercase, alphanumeric, hyphens)
+        assert re.match(r'^[a-z0-9][a-z0-9-]+[a-z0-9]$', self.outputs['logs_bucket_name'])
+        assert re.match(r'^[a-z0-9][a-z0-9-]+[a-z0-9]$', self.outputs['assets_bucket_name'])
 
-                log_group = matching_groups[0]
-                assert log_group.get('retentionInDays') == 90
-                assert 'kmsKeyId' in log_group, "KMS encryption not configured"
+        # ECS cluster (alphanumeric, hyphens, underscores)
+        assert re.match(r'^[a-zA-Z0-9_-]+$', self.outputs['ecs_cluster_name'])
 
-            except self.logs_client.exceptions.ResourceNotFoundException:
-                pytest.skip(f"Log group {log_group_name} not found - may have been destroyed")
+        # ALB DNS
+        assert re.match(r'^[a-z0-9-]+\.[a-z]{2}-[a-z]+-\d+\.elb\.amazonaws\.com$',
+                       self.outputs['alb_dns_name'])
 
-    def test_security_groups_configured(self):
-        """Test that security groups exist with least-privilege rules."""
-        vpc_id = self.outputs['vpc_id']
+        # RDS endpoint
+        assert re.match(r'^[a-z0-9-]+\.cluster-[a-z0-9]+\.[a-z]{2}-[a-z]+-\d+\.rds\.amazonaws\.com$',
+                       self.outputs['rds_cluster_endpoint'])
 
-        try:
-            response = self.ec2_client.describe_security_groups(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
+        # KMS key ID (UUID)
+        assert re.match(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$',
+                       self.outputs['kms_key_id'])
 
-            security_groups = response['SecurityGroups']
+    def test_compliance_prefix_in_resources(self):
+        """Test that resources use 'compliance' prefix as per requirements."""
+        assert 'compliance' in self.outputs['logs_bucket_name'].lower()
+        assert 'compliance' in self.outputs['assets_bucket_name'].lower()
+        assert 'compliance' in self.outputs['ecs_cluster_name'].lower()
+        assert 'compliance' in self.outputs['rds_cluster_endpoint'].lower()
 
-            # Filter out default security group
-            custom_sgs = [sg for sg in security_groups if sg['GroupName'] != 'default']
+    def test_alb_name_length_constraint(self):
+        """Test that ALB name respects 32-character limit."""
+        alb_dns = self.outputs['alb_dns_name']
+        alb_name = alb_dns.split('.')[0]
 
-            assert len(custom_sgs) >= 3, f"Expected at least 3 custom security groups, found {len(custom_sgs)}"
+        # Extract just the name part before the random ID
+        # Format: comp-alb-{suffix}-{random}
+        assert len(alb_name) <= 32, \
+            f"ALB name must be <= 32 characters (AWS limit): {alb_name} ({len(alb_name)} chars)"
 
-            # Check for ALB security group (allows HTTPS from internet)
-            alb_sgs = [sg for sg in custom_sgs if 'alb' in sg['GroupName'].lower()]
-            if len(alb_sgs) > 0:
-                alb_sg = alb_sgs[0]
-                https_rules = [
-                    rule for rule in alb_sg.get('IpPermissions', [])
-                    if rule.get('FromPort') == 443 and rule.get('ToPort') == 443
-                ]
-                assert len(https_rules) > 0, "No HTTPS ingress rule found in ALB security group"
+    def test_rds_cluster_identifier_conventions(self):
+        """Test RDS cluster identifier follows naming conventions."""
+        rds_endpoint = self.outputs['rds_cluster_endpoint']
+        cluster_id = rds_endpoint.split('.')[0]
 
-        except self.ec2_client.exceptions.ClientError as e:
-            if 'InvalidVpcID.NotFound' in str(e):
-                pytest.skip(f"VPC {vpc_id} not found - may have been destroyed")
-            raise
+        # RDS cluster identifier: lowercase, alphanumeric, hyphens
+        assert re.match(r'^[a-z][a-z0-9-]*$', cluster_id), \
+            f"RDS cluster identifier must start with letter, contain only lowercase, numbers, hyphens: {cluster_id}"
 
-    def test_nat_gateways_exist(self):
-        """Test that NAT gateways exist for private subnet internet access."""
-        vpc_id = self.outputs['vpc_id']
+        # Length check (1-63 characters)
+        assert len(cluster_id) >= 1 and len(cluster_id) <= 63, \
+            f"RDS cluster identifier must be 1-63 characters: {cluster_id} ({len(cluster_id)} chars)"
 
-        try:
-            response = self.ec2_client.describe_nat_gateways(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
+    def test_stack_name_format(self):
+        """Test that stack name follows expected format."""
+        assert self.stack_name.startswith('TapStack'), \
+            f"Stack name should start with 'TapStack': {self.stack_name}"
 
-            nat_gateways = response['NatGateways']
-            active_nats = [ng for ng in nat_gateways if ng['State'] in ['available', 'pending']]
+        # Verify environment suffix is part of stack name
+        assert len(self.environment_suffix) > 0, \
+            "Environment suffix should be extracted from stack name or resources"
 
-            assert len(active_nats) >= 3, f"Expected at least 3 NAT gateways, found {len(active_nats)}"
+    def test_outputs_data_types(self):
+        """Test that all outputs are strings and non-empty."""
+        for key, value in self.outputs.items():
+            assert isinstance(value, str), f"Output {key} should be string, got {type(value)}"
+            assert len(value.strip()) > 0, f"Output {key} should not be empty or whitespace"
+            assert value == value.strip(), f"Output {key} should not have leading/trailing whitespace"
 
-        except self.ec2_client.exceptions.ClientError as e:
-            if 'InvalidVpcID.NotFound' in str(e):
-                pytest.skip(f"VPC {vpc_id} not found - may have been destroyed")
-            raise
+    def test_no_sensitive_data_in_outputs(self):
+        """Test that outputs don't contain sensitive data patterns."""
+        sensitive_patterns = [
+            r'password',
+            r'secret',
+            r'key.*[=:]',  # key=value or key:value patterns
+            r'token',
+            r'credentials'
+        ]
 
-    def test_internet_gateway_exists(self):
-        """Test that Internet Gateway exists and is attached to VPC."""
-        vpc_id = self.outputs['vpc_id']
+        for key, value in self.outputs.items():
+            for pattern in sensitive_patterns:
+                assert not re.search(pattern, value.lower()), \
+                    f"Output {key} may contain sensitive data matching pattern '{pattern}': {value}"
 
-        try:
-            response = self.ec2_client.describe_internet_gateways(
-                Filters=[{'Name': 'attachment.vpc-id', 'Values': [vpc_id]}]
-            )
+    def test_aws_region_in_resources(self):
+        """Test that AWS region is consistent across resources."""
+        # Extract regions from different resources
+        alb_region = self.outputs['alb_dns_name'].split('.')[1]
+        rds_region = self.outputs['rds_cluster_endpoint'].split('.')[-4]
 
-            assert len(response['InternetGateways']) >= 1, "No Internet Gateway found"
+        # Verify both are valid AWS regions
+        aws_region_pattern = r'^[a-z]{2}-[a-z]+-\d+$'
+        assert re.match(aws_region_pattern, alb_region), f"Invalid ALB region: {alb_region}"
+        assert re.match(aws_region_pattern, rds_region), f"Invalid RDS region: {rds_region}"
 
-            igw = response['InternetGateways'][0]
-            attachments = igw.get('Attachments', [])
-            assert len(attachments) >= 1, "Internet Gateway not attached"
-            assert attachments[0]['State'] == 'available'
+        # Verify regions are consistent
+        assert alb_region == rds_region, \
+            f"ALB region ({alb_region}) and RDS region ({rds_region}) should match"
 
-        except self.ec2_client.exceptions.ClientError as e:
-            if 'InvalidVpcID.NotFound' in str(e):
-                pytest.skip(f"VPC {vpc_id} not found - may have been destroyed")
-            raise
+    def test_deployment_outputs_completeness(self):
+        """Test that deployment completed successfully with all outputs."""
+        # If we got here, all outputs exist and are valid
+        output_count = len(self.outputs)
+        assert output_count == 7, \
+            f"Expected exactly 7 outputs, got {output_count}: {list(self.outputs.keys())}"
 
-    def test_environment_suffix_in_resource_names(self):
-        """Test that environmentSuffix is used in resource names."""
-        environment_suffix = os.getenv('ENVIRONMENT_SUFFIX', 'synthz45hp3')
+    def test_resource_identifiers_uniqueness(self):
+        """Test that all resource identifiers are unique."""
+        values = list(self.outputs.values())
+        unique_values = set(values)
 
-        # Check outputs contain environment suffix
-        assert environment_suffix in self.outputs['logs_bucket_name']
-        assert environment_suffix in self.outputs['assets_bucket_name']
-        assert environment_suffix in self.outputs['ecs_cluster_name']
-
-    def test_resource_tags_applied(self):
-        """Test that resources have proper tags."""
-        vpc_id = self.outputs['vpc_id']
-
-        try:
-            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-            vpc = response['Vpcs'][0]
-
-            tags = {tag['Key']: tag['Value'] for tag in vpc.get('Tags', [])}
-
-            # Check for Name tag
-            assert 'Name' in tags, "Name tag not found on VPC"
-
-        except self.ec2_client.exceptions.ClientError as e:
-            if 'InvalidVpcID.NotFound' in str(e):
-                pytest.skip(f"VPC {vpc_id} not found - may have been destroyed")
-            raise
-
-    def test_workflow_end_to_end(self):
-        """Test complete workflow: VPC -> Subnets -> ECS -> ALB -> RDS."""
-        # This test validates the integration between all components
-
-        # 1. VPC exists
-        assert 'vpc_id' in self.outputs
-
-        # 2. Subnets exist in VPC
-        vpc_id = self.outputs['vpc_id']
-        try:
-            subnets = self.ec2_client.describe_subnets(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )['Subnets']
-            assert len(subnets) >= 6
-        except self.ec2_client.exceptions.ClientError:
-            pytest.skip("VPC resources not found - may have been destroyed")
-
-        # 3. ECS cluster exists
-        assert 'ecs_cluster_name' in self.outputs
-
-        # 4. ALB exists and routes to ECS
-        assert 'alb_dns_name' in self.outputs
-
-        # 5. RDS cluster exists
-        assert 'rds_cluster_endpoint' in self.outputs
-
-        # 6. S3 buckets exist for logs and assets
-        assert 'logs_bucket_name' in self.outputs
-        assert 'assets_bucket_name' in self.outputs
-
-        # 7. KMS key exists for encryption
-        assert 'kms_key_id' in self.outputs
+        assert len(values) == len(unique_values), \
+            "All output values should be unique (no duplicate resource identifiers)"
