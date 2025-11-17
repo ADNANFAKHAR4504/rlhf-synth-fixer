@@ -144,6 +144,7 @@ class StorageModule(Construct):
                 id="replicate-all",
                 status="Enabled",
                 priority=1,
+                delete_marker_replication={"status": "Enabled"},
                 destination=S3BucketReplicationConfigurationRuleDestination(
                     bucket=self.transaction_logs_secondary.arn,
                     replication_time=S3BucketReplicationConfigurationRuleDestinationReplicationTime(
@@ -202,6 +203,7 @@ class StorageModule(Construct):
                 id="replicate-all",
                 status="Enabled",
                 priority=1,
+                delete_marker_replication={"status": "Enabled"},
                 destination=S3BucketReplicationConfigurationRuleDestination(
                     bucket=self.audit_trails_secondary.arn,
                     replication_time=S3BucketReplicationConfigurationRuleDestinationReplicationTime(

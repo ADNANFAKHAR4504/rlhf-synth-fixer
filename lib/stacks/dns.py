@@ -23,7 +23,7 @@ class DnsModule(Construct):
         # Route 53 Hosted Zone
         self.hosted_zone = Route53Zone(self, "hosted-zone",
             provider=primary_provider,
-            name=f"payments-{environment_suffix}.example.com",
+            name=f"payment-system-{environment_suffix}.internal",
             tags={
                 "Name": f"payment-zone-{environment_suffix}",
                 "MigrationPhase": migration_phase

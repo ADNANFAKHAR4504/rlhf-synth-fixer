@@ -1,11 +1,10 @@
-from cdktf import TerraformStack, Fn
+from cdktf import TerraformStack
 from cdktf_cdktf_provider_aws.rds_global_cluster import RdsGlobalCluster
 from cdktf_cdktf_provider_aws.rds_cluster import RdsCluster
 from cdktf_cdktf_provider_aws.rds_cluster_instance import RdsClusterInstance
 from cdktf_cdktf_provider_aws.db_subnet_group import DbSubnetGroup
 from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
 from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
-from cdktf_cdktf_provider_aws.data_aws_secretsmanager_secret_version import DataAwsSecretsmanagerSecretVersion
 from constructs import Construct
 import json
 
@@ -27,7 +26,7 @@ class DatabaseModule(Construct):
         )
 
         # Generate initial password
-        SecretsmanagerSecretVersion(self, "db-secret-version",
+        self.db_secret_version = SecretsmanagerSecretVersion(self, "db-secret-version",
             provider=primary_provider,
             secret_id=self.db_secret.id,
             secret_string=json.dumps({
@@ -35,12 +34,9 @@ class DatabaseModule(Construct):
                 "password": "TempPassword123!ChangeMe"  # Should be rotated immediately
             })
         )
-
-        # Retrieve secret for use
-        self.db_credentials = DataAwsSecretsmanagerSecretVersion(self, "db-credentials",
-            provider=primary_provider,
-            secret_id=self.db_secret.id
-        )
+        
+        # Store the password for use in cluster creation
+        self.db_password = "TempPassword123!ChangeMe"
 
         # DB Subnet Groups
         self.primary_db_subnet_group = DbSubnetGroup(self, "primary-db-subnet-group",
@@ -81,7 +77,7 @@ class DatabaseModule(Construct):
             engine_version="14.6",
             database_name="payments",
             master_username="admin",
-            master_password=Fn.lookup(Fn.jsondecode(self.db_credentials.secret_string), "password", ""),
+            master_password=self.db_password,
             db_subnet_group_name=self.primary_db_subnet_group.name,
             vpc_security_group_ids=[networking.primary_rds_sg.id],
             backup_retention_period=7,

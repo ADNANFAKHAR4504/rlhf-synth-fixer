@@ -63,7 +63,8 @@ class TestPaymentMigrationStack:
         backend = synth_dict.get("terraform", {}).get("backend", {})
         assert "s3" in backend
         # The bucket name should come from environment variable or default
-        assert backend["s3"]["bucket"] == "iac-rlhf-tf-states"
+        # It may include account ID suffix like iac-rlhf-tf-states-342597974367
+        assert backend["s3"]["bucket"].startswith("iac-rlhf-tf-states")
         assert backend["s3"]["encrypt"] is True
         assert backend["s3"]["use_lockfile"] is True
         # Key format should be {state_bucket_key}/{stack_name}.tfstate
