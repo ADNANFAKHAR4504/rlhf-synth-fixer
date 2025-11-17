@@ -13,11 +13,6 @@ Metadata:
         Parameters:
           - DatabaseName
           - MasterUsername
-      - Label:
-          default: 'Network Configuration'
-        Parameters:
-          - VpcId
-          - PrivateSubnetIds
 
 Parameters:
   EnvironmentSuffix:
@@ -41,15 +36,176 @@ Parameters:
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
 
-  VpcId:
-    Type: AWS::EC2::VPC::Id
-    Description: 'VPC ID for Aurora cluster deployment'
-
-  PrivateSubnetIds:
-    Type: List<AWS::EC2::Subnet::Id>
-    Description: 'List of private subnet IDs across 3 AZs for Aurora deployment'
-
 Resources:
+  # VPC Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  AttachGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Private Subnet 1
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.1.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-private-subnet-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private Subnet 2
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.2.0/24
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-private-subnet-2-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private Subnet 3
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.3.0/24
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: false
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-private-subnet-3-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Public Subnet for NAT Gateway
+  PublicSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: 10.0.10.0/24
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-public-subnet-1-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Elastic IP for NAT Gateway
+  NATGatewayEIP:
+    Type: AWS::EC2::EIP
+    DependsOn: AttachGateway
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-nat-eip-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateway
+  NATGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NATGatewayEIP.AllocationId
+      SubnetId: !Ref PublicSubnet1
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-nat-gateway-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-public-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: AttachGateway
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnet1
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-private-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NATGateway
+
+  PrivateSubnetRouteTableAssociation1:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet1
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation2:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet2
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetRouteTableAssociation3:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnet3
+      RouteTableId: !Ref PrivateRouteTable
+
   # KMS Key for Aurora Encryption
   AuroraKmsKey:
     Type: AWS::KMS::Key
@@ -91,7 +247,10 @@ Resources:
     Properties:
       DBSubnetGroupName: !Sub 'aurora-global-subnet-${EnvironmentSuffix}'
       DBSubnetGroupDescription: !Sub 'Subnet group for Aurora Global Database - ${EnvironmentSuffix}'
-      SubnetIds: !Ref PrivateSubnetIds
+      SubnetIds:
+        - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
       Tags:
         - Key: Name
           Value: !Sub 'aurora-global-subnet-${EnvironmentSuffix}'
@@ -104,7 +263,7 @@ Resources:
     Properties:
       GroupName: !Sub 'aurora-global-sg-${EnvironmentSuffix}'
       GroupDescription: !Sub 'Security group for Aurora Global Database - ${EnvironmentSuffix}'
-      VpcId: !Ref VpcId
+      VpcId: !Ref VPC
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
@@ -147,7 +306,7 @@ Resources:
     Properties:
       GlobalClusterIdentifier: !Sub 'aurora-global-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql
-      EngineVersion: '8.0.mysql_aurora.3.02.0'
+      EngineVersion: '8.0.mysql_aurora.3.04.0'
       DeletionProtection: false
       StorageEncrypted: true
 
@@ -159,7 +318,7 @@ Resources:
     Properties:
       DBClusterIdentifier: !Sub 'aurora-primary-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql
-      EngineVersion: '8.0.mysql_aurora.3.02.0'
+      EngineVersion: '8.0.mysql_aurora.3.04.0'
       GlobalClusterIdentifier: !Ref GlobalDatabaseCluster
       MasterUsername: !Ref MasterUsername
       ManageMasterUserPassword: true
@@ -332,6 +491,22 @@ Resources:
       TreatMissingData: notBreaching
 
 Outputs:
+  VPCId:
+    Description: 'VPC ID'
+    Value: !Ref VPC
+    Export:
+      Name: !Sub '${AWS::StackName}-VPCId'
+
+  PrivateSubnetIds:
+    Description: 'Private Subnet IDs for Aurora deployment'
+    Value: !Join
+      - ','
+      - - !Ref PrivateSubnet1
+        - !Ref PrivateSubnet2
+        - !Ref PrivateSubnet3
+    Export:
+      Name: !Sub '${AWS::StackName}-PrivateSubnetIds'
+
   GlobalClusterIdentifier:
     Description: 'Aurora Global Database Cluster Identifier'
     Value: !Ref GlobalDatabaseCluster
