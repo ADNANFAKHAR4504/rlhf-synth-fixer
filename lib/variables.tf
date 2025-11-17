@@ -116,6 +116,12 @@ variable "database_secret_string" {
 EOT
 }
 
+variable "manage_kubernetes_resources" {
+  description = "Whether to create Kubernetes resources (namespaces, service accounts, deployments). Set to false if Terraform runner cannot access the private EKS endpoint."
+  type        = bool
+  default     = true
+}
+
 locals {
   cluster_name             = "${var.cluster_name_prefix}-${var.environment_suffix}"
   frontend_node_group_name = "${local.cluster_name}-frontend"

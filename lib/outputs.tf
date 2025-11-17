@@ -126,12 +126,12 @@ output "kubectl_config" {
 
 output "payments_namespace" {
   description = "Kubernetes namespace that hosts the payments workloads."
-  value       = kubernetes_namespace.payments.metadata[0].name
+  value       = var.manage_kubernetes_resources ? kubernetes_namespace.payments[0].metadata[0].name : null
 }
 
 output "payments_service_account" {
   description = "IRSA-enabled service account bound to the payments namespace."
-  value       = kubernetes_service_account.payments_app.metadata[0].name
+  value       = var.manage_kubernetes_resources ? kubernetes_service_account.payments_app[0].metadata[0].name : null
 }
 
 output "alerts_topic_arn" {
@@ -146,11 +146,11 @@ output "database_secret_name" {
 
 output "frontend_service_name" {
   description = "ClusterIP service fronting the payments frontend workload."
-  value       = kubernetes_service.frontend.metadata[0].name
+  value       = var.manage_kubernetes_resources ? kubernetes_service.frontend[0].metadata[0].name : null
 }
 
 output "backend_service_name" {
   description = "ClusterIP service fronting the payments backend workload."
-  value       = kubernetes_service.backend.metadata[0].name
+  value       = var.manage_kubernetes_resources ? kubernetes_service.backend[0].metadata[0].name : null
 }
  

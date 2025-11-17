@@ -1,4 +1,6 @@
 resource "kubernetes_namespace" "payments" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name = local.namespace_name
 
@@ -17,9 +19,11 @@ resource "kubernetes_namespace" "payments" {
 }
 
 resource "kubernetes_service_account" "payments_app" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name      = "payments-app-sa-${var.environment_suffix}"
-    namespace = kubernetes_namespace.payments.metadata[0].name
+    namespace = kubernetes_namespace.payments[0].metadata[0].name
 
     annotations = {
       "eks.amazonaws.com/role-arn" = aws_iam_role.app_irsa.arn
@@ -35,14 +39,17 @@ resource "kubernetes_service_account" "payments_app" {
   depends_on = [
     aws_iam_role.app_irsa,
     aws_iam_openid_connect_provider.eks,
-    aws_eks_cluster.main
+    aws_eks_cluster.main,
+    kubernetes_namespace.payments
   ]
 }
 
 resource "kubernetes_deployment" "backend" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name      = "payments-backend-${var.environment_suffix}"
-    namespace = kubernetes_namespace.payments.metadata[0].name
+    namespace = kubernetes_namespace.payments[0].metadata[0].name
 
     labels = {
       app       = "payments-backend"
@@ -118,7 +125,7 @@ resource "kubernetes_deployment" "backend" {
           effect   = "NoSchedule"
         }
 
-        service_account_name = kubernetes_service_account.payments_app.metadata[0].name
+        service_account_name = kubernetes_service_account.payments_app[0].metadata[0].name
       }
     }
   }
@@ -131,9 +138,11 @@ resource "kubernetes_deployment" "backend" {
 }
 
 resource "kubernetes_service" "backend" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name      = "payments-backend-svc-${var.environment_suffix}"
-    namespace = kubernetes_namespace.payments.metadata[0].name
+    namespace = kubernetes_namespace.payments[0].metadata[0].name
     labels = {
       app = "payments-backend"
     }
@@ -153,12 +162,16 @@ resource "kubernetes_service" "backend" {
 
     type = "ClusterIP"
   }
+
+  depends_on = [kubernetes_deployment.backend]
 }
 
 resource "kubernetes_deployment" "frontend" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name      = "payments-frontend-${var.environment_suffix}"
-    namespace = kubernetes_namespace.payments.metadata[0].name
+    namespace = kubernetes_namespace.payments[0].metadata[0].name
 
     labels = {
       app       = "payments-frontend"
@@ -196,7 +209,7 @@ resource "kubernetes_deployment" "frontend" {
 
           env {
             name  = "BACKEND_BASE_URL"
-            value = "http://payments-backend-svc-${var.environment_suffix}.${kubernetes_namespace.payments.metadata[0].name}.svc.cluster.local:8080"
+            value = "http://payments-backend-svc-${var.environment_suffix}.${kubernetes_namespace.payments[0].metadata[0].name}.svc.cluster.local:8080"
           }
 
           liveness_probe {
@@ -229,7 +242,7 @@ resource "kubernetes_deployment" "frontend" {
           effect   = "NoSchedule"
         }
 
-        service_account_name = kubernetes_service_account.payments_app.metadata[0].name
+        service_account_name = kubernetes_service_account.payments_app[0].metadata[0].name
       }
     }
   }
@@ -243,9 +256,11 @@ resource "kubernetes_deployment" "frontend" {
 }
 
 resource "kubernetes_service" "frontend" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name      = "payments-frontend-svc-${var.environment_suffix}"
-    namespace = kubernetes_namespace.payments.metadata[0].name
+    namespace = kubernetes_namespace.payments[0].metadata[0].name
     labels = {
       app = "payments-frontend"
     }
@@ -265,5 +280,7 @@ resource "kubernetes_service" "frontend" {
 
     type = "ClusterIP"
   }
+
+  depends_on = [kubernetes_deployment.frontend]
 }
 

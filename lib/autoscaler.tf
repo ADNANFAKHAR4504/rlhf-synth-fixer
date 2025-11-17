@@ -8,6 +8,8 @@ locals {
 }
 
 resource "kubernetes_service_account" "cluster_autoscaler" {
+  count = var.manage_kubernetes_resources ? 1 : 0
+
   metadata {
     name      = "cluster-autoscaler-${var.environment_suffix}"
     namespace = "kube-system"

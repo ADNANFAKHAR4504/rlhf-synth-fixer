@@ -131,13 +131,8 @@ resource "aws_launch_template" "frontend" {
     associate_public_ip_address = false
   }
 
-  user_data = base64encode(templatefile("${path.module}/templates/userdata.sh", {
-    cluster_name        = aws_eks_cluster.main.name
-    cluster_endpoint    = aws_eks_cluster.main.endpoint
-    cluster_ca          = aws_eks_cluster.main.certificate_authority[0].data
-    node_group_name     = local.frontend_node_group_name
-    bootstrap_arguments = "--kubelet-extra-args '--node-labels=app=frontend,tier=web'"
-  }))
+  # Note: EKS managed node groups automatically handle bootstrap, so user_data is not needed
+  # Labels and taints are configured in the aws_eks_node_group resource
 
   tag_specifications {
     resource_type = "instance"
@@ -189,13 +184,8 @@ resource "aws_launch_template" "backend" {
     associate_public_ip_address = false
   }
 
-  user_data = base64encode(templatefile("${path.module}/templates/userdata.sh", {
-    cluster_name        = aws_eks_cluster.main.name
-    cluster_endpoint    = aws_eks_cluster.main.endpoint
-    cluster_ca          = aws_eks_cluster.main.certificate_authority[0].data
-    node_group_name     = local.backend_node_group_name
-    bootstrap_arguments = "--kubelet-extra-args '--node-labels=app=backend,tier=api'"
-  }))
+  # Note: EKS managed node groups automatically handle bootstrap, so user_data is not needed
+  # Labels and taints are configured in the aws_eks_node_group resource
 
   tag_specifications {
     resource_type = "instance"
