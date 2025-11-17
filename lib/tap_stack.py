@@ -653,7 +653,7 @@ class TapStack(pulumi.ComponentResource):
             f"banking-portal-alb-{self.environment_suffix}",
             name=f"banking-portal-alb-{self.environment_suffix}",
             load_balancer_type="application",
-            scheme="internet-facing",
+            internal=False,  # False = internet-facing, True = internal
             security_groups=[self.alb_security_group.id],
             subnets=[subnet.id for subnet in self.public_subnets],
             enable_deletion_protection=False,  # Set to True in production
