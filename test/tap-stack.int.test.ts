@@ -6,6 +6,7 @@ import {
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeSecurityGroupsCommand,
   DescribeInstancesCommand,
@@ -183,15 +184,21 @@ describe('PaymentProcessing Stack - Integration Tests', () => {
 
     test('VPC should have DNS support enabled', async () => {
       const vpcId = outputs.VPCId || resources.VPC;
-      const command = new DescribeVpcsCommand({
-        VpcIds: [vpcId],
+      
+      // DNS attributes must be queried separately using DescribeVpcAttributeCommand
+      const dnsSupportCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsSupport',
       });
-      const response = await ec2Client.send(command);
+      const dnsSupportResponse = await ec2Client.send(dnsSupportCommand);
+      expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
 
-      const vpc = response.Vpcs[0];
-      // AWS SDK returns lowercase field names
-      expect(vpc.EnableDnsSupport ?? vpc.enableDnsSupport).toBe(true);
-      expect(vpc.EnableDnsHostnames ?? vpc.enableDnsHostnames).toBe(true);
+      const dnsHostnamesCommand = new DescribeVpcAttributeCommand({
+        VpcId: vpcId,
+        Attribute: 'enableDnsHostnames',
+      });
+      const dnsHostnamesResponse = await ec2Client.send(dnsHostnamesCommand);
+      expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
     });
 
     test('should have exactly 4 subnets (2 public, 2 private)', async () => {
