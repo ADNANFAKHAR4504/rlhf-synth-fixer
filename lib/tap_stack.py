@@ -1,5 +1,5 @@
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, Fn
+from cdktf import TerraformStack, TerraformOutput, Fn, S3Backend
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.kms_key import KmsKey
 from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
@@ -34,17 +34,36 @@ import json
 
 
 class FraudDetectionStack(TerraformStack):
-    def __init__(self, scope: Construct, id: str, environment_suffix: str):
+    def __init__(self, scope: Construct, id: str, **kwargs):
         super().__init__(scope, id)
 
-        self.environment_suffix = environment_suffix
+        # Extract configuration
+        self.environment_suffix = kwargs.get('environment_suffix', 'dev')
+        state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
+        state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
+        aws_region = kwargs.get('aws_region', 'us-east-1')
+        use_dynamodb_lock = kwargs.get('use_dynamodb_lock', False)
+
+        # Configure S3 Backend for state management
+        backend_config = {
+            "bucket": state_bucket,
+            "key": f"fraud-detection/{self.environment_suffix}/terraform.tfstate",
+            "region": state_bucket_region,
+            "encrypt": True
+        }
+
+        # Only add DynamoDB locking if explicitly enabled and table exists
+        if use_dynamodb_lock:
+            backend_config["dynamodb_table"] = f"{state_bucket}-lock"
+
+        S3Backend(self, **backend_config)
 
         # Provider
-        AwsProvider(self, "aws", region="us-east-1")
+        AwsProvider(self, "aws", region=aws_region)
 
         # Tags for all resources
         self.common_tags = {
-            "Environment": f"{environment_suffix}",
+            "Environment": f"{self.environment_suffix}",
             "Project": "FraudDetection",
             "CostCenter": "Engineering"
         }
@@ -404,8 +423,8 @@ class FraudDetectionStack(TerraformStack):
             runtime="python3.11",
             handler="transaction_processor.handler",
             role=role.arn,
-            filename="../../../lib/lambda_functions/transaction_processor.zip",
-            source_code_hash=Fn.filebase64sha256("../../../lib/lambda_functions/transaction_processor.zip"),
+            filename="lib/lambda_functions/transaction_processor.zip",
+            source_code_hash=Fn.filebase64sha256("lib/lambda_functions/transaction_processor.zip"),
             timeout=30,
             memory_size=512,
             reserved_concurrent_executions=5,
@@ -496,8 +515,8 @@ class FraudDetectionStack(TerraformStack):
             runtime="python3.11",
             handler="pattern_analyzer.handler",
             role=role.arn,
-            filename="../../../lib/lambda_functions/pattern_analyzer.zip",
-            source_code_hash=Fn.filebase64sha256("../../../lib/lambda_functions/pattern_analyzer.zip"),
+            filename="lib/lambda_functions/pattern_analyzer.zip",
+            source_code_hash=Fn.filebase64sha256("lib/lambda_functions/pattern_analyzer.zip"),
             timeout=60,
             memory_size=1024,
             reserved_concurrent_executions=2,
