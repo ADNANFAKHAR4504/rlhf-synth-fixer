@@ -72,7 +72,7 @@ csv_to_json() {
         environment = fields[10]
         constraints = fields[11]
         
-        # Clean quotes from fields
+        # Clean quotes from fields (but preserve JSON array format for subject_labels)
         gsub(/^"|"$/, "", task_id)
         gsub(/^"|"$/, "", status)
         gsub(/^"|"$/, "", platform)
@@ -83,7 +83,25 @@ csv_to_json() {
         gsub(/^"|"$/, "", language)
         gsub(/^"|"$/, "", environment)
         gsub(/^"|"$/, "", constraints)
-        gsub(/^"|"$/, "", subject_labels)
+        
+        # For subject_labels, preserve JSON array format if present
+        # Remove outer quotes but keep inner structure
+        if (subject_labels ~ /^\[.*\]$/) {
+            # Already a JSON array, just remove outer quotes if present
+            gsub(/^"|"$/, "", subject_labels)
+        } else if (subject_labels == "") {
+            # Empty, set to empty array
+            subject_labels = "[]"
+        } else {
+            # Not empty but not a JSON array - might be a string that needs conversion
+            # Remove outer quotes and check if it needs to be wrapped in array
+            gsub(/^"|"$/, "", subject_labels)
+            if (subject_labels !~ /^\[.*\]$/) {
+                # Not a JSON array, wrap it as a single-element array
+                gsub(/"/, "\\\"", subject_labels)
+                subject_labels = "[\"" subject_labels "\"]"
+            }
+        }
         
         # Escape quotes in string values for JSON
         gsub(/"/, "\\\"", background)
@@ -92,7 +110,7 @@ csv_to_json() {
         gsub(/"/, "\\\"", environment)
         
         printf "{\"task_id\":\"%s\",\"status\":\"%s\",\"platform\":\"%s\",\"difficulty\":\"%s\",\"subtask\":\"%s\",\"background\":\"%s\",\"problem\":\"%s\",\"language\":\"%s\",\"environment\":\"%s\",\"constraints\":\"%s\",\"subject_labels\":%s}\n",
-               task_id, status, platform, difficulty, subtask, background, problem, language, environment, constraints, (subject_labels == "" ? "[]" : subject_labels)
+               task_id, status, platform, difficulty, subtask, background, problem, language, environment, constraints, subject_labels
     }'
 }
 
@@ -143,9 +161,70 @@ COMPLEXITY="$DIFFICULTY"
 # Get timestamp
 STARTED_AT=$(date -Iseconds 2>/dev/null || date +%Y-%m-%dT%H:%M:%S%z)
 
-# Extract subject_labels (handle array format)
-SUBJECT_LABELS=$(echo "$TASK_JSON" | grep -o '"subject_labels":\[[^\]]*\]' | cut -d':' -f2 || echo "")
-[ -z "$SUBJECT_LABELS" ] && SUBJECT_LABELS='[]'
+# Extract subject_labels (handle array format robustly)
+# FIXED: Previously used fragile regex that failed on arrays with spaces like ["Label 1", "Label 2"]
+# Now uses awk to properly track bracket depth and extract complete JSON arrays
+# This ensures subject_labels from CSV are correctly preserved in metadata.json
+SUBJECT_LABELS=""
+
+# Use awk to extract subject_labels value by finding the pattern and extracting until matching bracket
+# This handles arrays with spaces, commas, and quoted strings properly
+SUBJECT_LABELS=$(echo "$TASK_JSON" | awk '
+{
+    # Find "subject_labels" field
+    match($0, /"subject_labels"[[:space:]]*:[[:space:]]*/)
+    if (RSTART > 0) {
+        # Extract from after the colon
+        start_pos = RSTART + RLENGTH
+        rest = substr($0, start_pos)
+        
+        # Find the opening bracket
+        match(rest, /\[/)
+        if (RSTART > 0) {
+            bracket_pos = RSTART
+            depth = 1
+            i = bracket_pos + 1
+            
+            # Track bracket depth to find matching closing bracket
+            while (i <= length(rest) && depth > 0) {
+                char = substr(rest, i, 1)
+                if (char == "[") depth++
+                if (char == "]") depth--
+                i++
+            }
+            
+            if (depth == 0) {
+                # Found matching bracket
+                print substr(rest, bracket_pos, i - bracket_pos)
+            }
+        }
+    }
+}' 2>/dev/null || echo "")
+
+# If awk method failed, try sed as fallback
+if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" = "" ]; then
+    # Try sed with a pattern that matches arrays (including those with spaces)
+    SUBJECT_LABELS=$(echo "$TASK_JSON" | sed -n 's/.*"subject_labels"[[:space:]]*:[[:space:]]*\(\[[^]]*\]\).*/\1/p' 2>/dev/null || echo "")
+fi
+
+# Validate and normalize the extracted value
+if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" = "null" ] || [ "$SUBJECT_LABELS" = '""' ]; then
+    SUBJECT_LABELS='[]'
+elif ! echo "$SUBJECT_LABELS" | grep -qE '^\s*\[.*\]\s*$'; then
+    # Not a valid JSON array format - check if it's a string that needs conversion
+    CLEANED=$(echo "$SUBJECT_LABELS" | sed 's/^"\(.*\)"$/\1/')
+    if [ "$CLEANED" != "$SUBJECT_LABELS" ]; then
+        # It was a quoted string, convert to single-element array
+        ESCAPED=$(echo "$CLEANED" | sed 's/"/\\"/g')
+        SUBJECT_LABELS="[\"$ESCAPED\"]"
+    else
+        # Unknown format, default to empty array
+        SUBJECT_LABELS='[]'
+    fi
+fi
+
+# Trim whitespace
+SUBJECT_LABELS=$(echo "$SUBJECT_LABELS" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
 
 # Extract fields for PROMPT.md (needed early for region extraction)
 BACKGROUND=$(json_val "$TASK_JSON" "background")
