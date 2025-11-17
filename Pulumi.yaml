@@ -1,0 +1,6 @@
+name: TapStack
+runtime:
+  name: python
+  options:
+    virtualenv: venv
+description: Serverless fraud detection pipeline infrastructure
