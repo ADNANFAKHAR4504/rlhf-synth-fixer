@@ -301,7 +301,7 @@ class FraudDetectionStack(TerraformStack):
         SsmParameter(
             self,
             f"fraud-threshold-param-{self.resource_suffix}",
-            name=f"/fraud-detection/{self.environment_suffix}/fraud_threshold",
+            name=f"/fraud-detection/{self.resource_suffix}/fraud_threshold",
             type="String",
             value="0.85",
             description="Fraud detection threshold",
@@ -311,7 +311,7 @@ class FraudDetectionStack(TerraformStack):
         SsmParameter(
             self,
             f"alert-email-param-{self.resource_suffix}",
-            name=f"/fraud-detection/{self.environment_suffix}/alert_email",
+            name=f"/fraud-detection/{self.resource_suffix}/alert_email",
             type="String",
             value="alerts@example.com",
             description="Alert email address",
@@ -398,7 +398,7 @@ class FraudDetectionStack(TerraformStack):
                         "ssm:GetParameter",
                         "ssm:GetParameters"
                     ],
-                    "Resource": f"arn:aws:ssm:us-east-1:*:parameter/fraud-detection/{self.environment_suffix}/*"
+                    "Resource": f"arn:aws:ssm:us-east-1:*:parameter/fraud-detection/{self.resource_suffix}/*"
                 },
                 {
                     "Effect": "Allow",
@@ -491,7 +491,7 @@ class FraudDetectionStack(TerraformStack):
                         "ssm:GetParameter",
                         "ssm:GetParameters"
                     ],
-                    "Resource": f"arn:aws:ssm:us-east-1:*:parameter/fraud-detection/{self.environment_suffix}/*"
+                    "Resource": f"arn:aws:ssm:us-east-1:*:parameter/fraud-detection/{self.resource_suffix}/*"
                 },
                 {
                     "Effect": "Allow",
