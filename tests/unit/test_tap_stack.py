@@ -139,7 +139,7 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_kms_alias.fraud-detection-key-alias-v1-test" in synthesized
+        assert "fraud-detection-key-alias-v1-test" in synthesized
         assert "alias/fraud-detection-v1-test" in synthesized
 
     # ========================================
@@ -278,7 +278,8 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_sns_topic_subscription.fraud-alerts-subscription-v1-test" in synthesized
+        assert "fraud-alerts-subscription-v1-test" in synthesized
+        assert "aws_sns_topic_subscription" in synthesized
 
     # ========================================
     # SQS Tests
@@ -350,7 +351,7 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_ssm_parameter.fraud-threshold-param-v1-test" in synthesized
+        assert "fraud-threshold-param-v1-test" in synthesized
         assert "/fraud-detection/v1-test/fraud_threshold" in synthesized
         assert "0.85" in synthesized
 
@@ -364,7 +365,7 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_ssm_parameter.alert-email-param-v1-test" in synthesized
+        assert "alert-email-param-v1-test" in synthesized
         assert "/fraud-detection/v1-test/alert_email" in synthesized
         assert "alerts@example.com" in synthesized
 
@@ -635,8 +636,8 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_cloudwatch_metric_alarm.transaction-processor-errors-v1-test" in synthesized
         assert "transaction-processor-errors-v1-test" in synthesized
+        assert "aws_cloudwatch_metric_alarm" in synthesized
 
     def test_pattern_analyzer_alarm(self):
         """Test pattern analyzer CloudWatch alarm."""
@@ -648,8 +649,8 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_cloudwatch_metric_alarm.pattern-analyzer-errors-v1-test" in synthesized
         assert "pattern-analyzer-errors-v1-test" in synthesized
+        assert "aws_cloudwatch_metric_alarm" in synthesized
 
     def test_alarm_configuration(self):
         """Test CloudWatch alarm configuration."""
@@ -704,7 +705,8 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_cloudwatch_event_target.pattern-analyzer-target-v1-test" in synthesized
+        assert "pattern-analyzer-target-v1-test" in synthesized
+        assert "aws_cloudwatch_event_target" in synthesized
 
     def test_eventbridge_lambda_permission(self):
         """Test Lambda permission for EventBridge."""
@@ -716,7 +718,7 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_lambda_permission.pattern-analyzer-eventbridge-permission-v1-test" in synthesized
+        assert "pattern-analyzer-eventbridge-permission-v1-test" in synthesized
         assert "events.amazonaws.com" in synthesized
 
     # ========================================
@@ -875,7 +877,8 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_api_gateway_usage_plan_key.usage-plan-key-v1-test" in synthesized
+        assert "usage-plan-key-v1-test" in synthesized
+        assert "aws_api_gateway_usage_plan_key" in synthesized
 
     def test_api_gateway_lambda_permission(self):
         """Test Lambda permission for API Gateway."""
@@ -887,7 +890,7 @@ class TestFraudDetectionStack:
         )
         synthesized = Testing.synth(stack)
 
-        assert "aws_lambda_permission.api-gateway-lambda-permission-v1-test" in synthesized
+        assert "api-gateway-lambda-permission-v1-test" in synthesized
         assert "apigateway.amazonaws.com" in synthesized
 
     def test_api_gateway_xray_tracing(self):

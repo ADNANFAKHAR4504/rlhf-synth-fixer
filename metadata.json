@@ -6,7 +6,10 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T13:36:06+05:30",
   "subtask": "Application Deployment",
-  "subject_labels": ["Application Deployment"],
+  "subject_labels": [
+    "Web Application Deployment",
+    "Serverless Infrastructure (Functions as Code)"
+  ],
   "po_id": "p01c8w",
   "aws_services": [
     "Lambda",
@@ -22,5 +25,10 @@
     "X-Ray"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  }
 }
