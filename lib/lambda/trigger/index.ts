@@ -1,5 +1,5 @@
-import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
 import { DynamoDBClient, PutItemCommand } from '@aws-sdk/client-dynamodb';
+import { SFNClient, StartSyncExecutionCommand } from '@aws-sdk/client-sfn';
 import { S3Event } from 'aws-lambda';
 
 const sfnClient = new SFNClient({});
@@ -38,14 +38,39 @@ export const handler = async (event: S3Event): Promise<void> => {
         jobId,
       };
 
-      const command = new StartExecutionCommand({
+      const command = new StartSyncExecutionCommand({
         stateMachineArn: process.env.STATE_MACHINE_ARN!,
         input: JSON.stringify(input),
-        name: jobId,
       });
 
       const result = await sfnClient.send(command);
-      console.log(`Started execution: ${result.executionArn}`);
+
+      // Handle sync execution result
+      if (result.status === 'SUCCEEDED') {
+        console.log(`Execution succeeded: ${result.executionArn}`);
+        // Optionally update metadata with success status
+      } else if (result.status === 'FAILED') {
+        console.error(`Execution failed: ${result.error}`, result.cause);
+        // Update metadata with error
+        await dynamoClient.send(
+          new PutItemCommand({
+            TableName: process.env.METADATA_TABLE!,
+            Item: {
+              jobId: { S: jobId },
+              fileName: { S: key.split('/').pop() || key },
+              status: { S: 'execution_failed' },
+              timestamp: { N: Date.now().toString() },
+              error: {
+                S: result.error || 'Execution failed',
+              },
+            },
+          })
+        );
+      } else {
+        console.log(
+          `Execution status: ${result.status}, executionArn: ${result.executionArn}`
+        );
+      }
     } catch (error) {
       console.error(`Error processing ${key}:`, error);
 

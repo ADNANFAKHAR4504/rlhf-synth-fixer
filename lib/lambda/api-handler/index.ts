@@ -1,5 +1,5 @@
 import { DynamoDBClient, QueryCommand } from '@aws-sdk/client-dynamodb';
-import { SFNClient, StartExecutionCommand } from '@aws-sdk/client-sfn';
+import { SFNClient, StartSyncExecutionCommand } from '@aws-sdk/client-sfn';
 import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 
 const dynamoClient = new DynamoDBClient({});
@@ -92,23 +92,52 @@ export const handler = async (
         jobId,
       };
 
-      const command = new StartExecutionCommand({
+      const command = new StartSyncExecutionCommand({
         stateMachineArn: process.env.STATE_MACHINE_ARN!,
         input: JSON.stringify(input),
-        name: jobId,
       });
 
       const result = await sfnClient.send(command);
 
-      return {
-        statusCode: 200,
-        body: JSON.stringify({
-          jobId,
-          executionArn: result.executionArn,
-          message: 'ETL workflow triggered successfully',
-        }),
-        headers: { 'Content-Type': 'application/json' },
-      };
+      // Handle sync execution result
+      if (result.status === 'SUCCEEDED') {
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            jobId,
+            executionArn: result.executionArn,
+            status: result.status,
+            output: result.output ? JSON.parse(result.output) : undefined,
+            message: 'ETL workflow completed successfully',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        };
+      } else if (result.status === 'FAILED') {
+        return {
+          statusCode: 500,
+          body: JSON.stringify({
+            jobId,
+            executionArn: result.executionArn,
+            status: result.status,
+            error: result.error,
+            cause: result.cause,
+            message: 'ETL workflow execution failed',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        };
+      } else {
+        // TIMED_OUT or other statuses
+        return {
+          statusCode: 200,
+          body: JSON.stringify({
+            jobId,
+            executionArn: result.executionArn,
+            status: result.status,
+            message: 'ETL workflow triggered',
+          }),
+          headers: { 'Content-Type': 'application/json' },
+        };
+      }
     }
 
     return {

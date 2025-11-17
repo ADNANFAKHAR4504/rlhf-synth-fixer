@@ -16,7 +16,7 @@ import {
 import {
   DescribeExecutionCommand,
   SFNClient,
-  StartExecutionCommand
+  StartSyncExecutionCommand
 } from '@aws-sdk/client-sfn';
 import fs from 'fs';
 
@@ -338,92 +338,45 @@ tx-direct-001,300.00,1634567894,merchant-111`;
       await new Promise((resolve) => setTimeout(resolve, 2000));
 
       try {
-        // For Express workflows, use StartExecution (async)
-        // Note: StartSyncExecution causes Jest environment issues with dynamic imports,
-        // so we use async execution which works reliably in Jest
-        const startCommand = new StartExecutionCommand({
+        // For Express workflows, use StartSyncExecution (synchronous)
+        // This matches the actual Lambda implementation
+        const startCommand = new StartSyncExecutionCommand({
           stateMachineArn: outputs.StateMachineArn,
           input: JSON.stringify(executionInput),
-          name: `test-execution-${Date.now()}`,
+          // Note: 'name' parameter is optional for sync execution
         });
 
         const execution = await sfnClient.send(startCommand);
-        const executionArn = execution.executionArn;
 
-        // Verify execution was started
-        expect(executionArn).toBeDefined();
-        expect(execution.startDate).toBeDefined();
+        // StartSyncExecution returns status immediately
+        // Check the status directly from the response
+        expect(execution.status).toBeDefined();
+        expect(['SUCCEEDED', 'FAILED', 'TIMED_OUT']).toContain(execution.status);
 
-        console.log(`Step Functions execution started: ${executionArn}`);
-
-        // For Express workflows, executions complete very quickly
-        // Wait a short time and then check status
-        await new Promise((resolve) => setTimeout(resolve, 5000));
-
-        // Try to get execution status
-        // Express workflows may have different ARN formats, so handle errors gracefully
-        try {
-          const status = await waitForExecutionCompletion(executionArn!);
-
-          // If execution failed, get details for debugging
-          if (status === 'FAILED') {
-            try {
-              const describeCommand = new DescribeExecutionCommand({
-                executionArn: executionArn!,
-              });
-              const executionDetails = await sfnClient.send(describeCommand);
-              console.error('Step Functions execution failed:', JSON.stringify({
-                status: executionDetails.status,
-                error: executionDetails.error,
-                cause: executionDetails.cause,
-                stopDate: executionDetails.stopDate,
-              }, null, 2));
-            } catch (describeError: any) {
-              // Express workflows may not support DescribeExecution in the same way
-              if (describeError.name === 'InvalidArn' && describeError.message?.includes('express')) {
-                console.log('Express workflow - DescribeExecution not supported, but execution was started');
-              } else {
-                console.warn('Could not describe execution:', describeError.message);
-              }
-            }
-          }
-
-          // Accept SUCCEEDED, RUNNING, TIMED_OUT, or FAILED
-          // The important thing is that we successfully started the execution
-          expect(['SUCCEEDED', 'RUNNING', 'TIMED_OUT', 'FAILED']).toContain(status);
-
-          if (status === 'RUNNING') {
-            console.log('Execution is still running, which is acceptable for this test');
-          }
-        } catch (statusError: any) {
-          // If we can't check status (e.g., Express workflow ARN format issue),
-          // that's okay - we verified the execution was started successfully
-          if (statusError.name === 'InvalidArn' && statusError.message?.includes('express')) {
-            console.log('Express workflow - status checking not supported, but execution was started');
-            // Test passes because we successfully started the execution
-            expect(true).toBe(true);
-          } else {
-            // For other errors, log but don't fail - execution was started
-            console.warn('Could not check execution status:', statusError.message);
-            console.log('Execution was started successfully, which is the main test goal');
-            expect(true).toBe(true);
-          }
-        }
-      } catch (error: any) {
-        // Handle any errors during execution start
-        if (error.name === 'InvalidArn' && error.message?.includes('express')) {
-          console.log('Express workflow detected - execution semantics differ');
-          console.log('Test passed: State machine execution was attempted');
-          expect(true).toBe(true); // Pass the test
-        } else if (error.name === 'StateMachineDoesNotExist') {
-          console.error('State machine does not exist:', error.message);
-          throw error; // This is a real error
+        if (execution.executionArn) {
+          console.log(`Step Functions execution completed: ${execution.executionArn}, status: ${execution.status}`);
         } else {
-          // Log the error but don't fail if it's a known Express workflow issue
-          console.warn('Execution start error:', error.name, error.message);
-          // If we can't start execution, that's a real failure
-          throw error;
+          // Express workflows may return executionArn in a different format
+          console.log(`Step Functions execution completed with status: ${execution.status}`);
         }
+
+        // If execution failed, log details
+        if (execution.status === 'FAILED') {
+          console.error('Step Functions execution failed:', JSON.stringify({
+            status: execution.status,
+            error: execution.error,
+            cause: execution.cause,
+          }, null, 2));
+        }
+
+        // For sync execution, we get immediate results
+        // The test passes if we successfully received a response
+        expect(execution.status).toBeDefined();
+
+      } catch (error: any) {
+        // Handle errors appropriately
+        console.error('Execution error:', error);
+        throw error;
       }
     }, 90000);
   });
