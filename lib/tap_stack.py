@@ -99,6 +99,9 @@ class TapStack(pulumi.ComponentResource):
         # Create CloudFront distribution
         self._create_cloudfront()
         
+        # Create CloudWatch log group
+        self._create_cloudwatch_log_group()
+        
         # Create CloudWatch monitoring
         self._create_cloudwatch_monitoring()
         
@@ -112,7 +115,8 @@ class TapStack(pulumi.ComponentResource):
             'rds_endpoint': self.rds_instance.endpoint,
             'vpc_id': self.vpc.id,
             'static_assets_bucket': self.static_assets_bucket.bucket,
-            'logs_bucket': self.logs_bucket.bucket
+            'logs_bucket': self.logs_bucket.bucket,
+            'cloudwatch_log_group_name': self.cloudwatch_log_group.name
         })
 
     def _create_vpc(self):
@@ -997,6 +1001,21 @@ systemctl restart httpd
             bucket=self.static_assets_bucket.id,
             policy=s3_policy,
             opts=ResourceOptions(parent=self.static_assets_bucket)
+        )
+
+    def _create_cloudwatch_log_group(self):
+        """Create CloudWatch log group for application logging."""
+        
+        self.cloudwatch_log_group = aws.cloudwatch.LogGroup(
+            f"banking-portal-app-logs-{self.environment_suffix}",
+            name=f"/aws/ec2/banking-portal-{self.environment_suffix}",
+            retention_in_days=30,
+            tags={
+                "Name": f"banking-portal-app-logs-{self.environment_suffix}",
+                "Purpose": "Application Logs",
+                **self.tags
+            },
+            opts=ResourceOptions(parent=self)
         )
 
     def _create_cloudwatch_monitoring(self):

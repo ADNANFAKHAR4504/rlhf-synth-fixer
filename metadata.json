@@ -11,7 +11,17 @@
     "Web Application Deployment"
   ],
   "aws_services": [
-    "RDS"
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "ELB",
+    "Auto Scaling",
+    "CloudFront",
+    "CloudWatch",
+    "SNS"
   ],
   "training_quality": 10,
   "coverage": {
