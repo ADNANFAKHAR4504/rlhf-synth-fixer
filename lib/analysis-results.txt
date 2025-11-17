@@ -1,22 +1,22 @@
-2025-11-17 11:02:20,908 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
-2025-11-17 11:02:21,057 - INFO - Starting CloudFront distribution analysis...
+2025-11-17 11:49:36,129 - INFO - Found credentials in shared credentials file: ~/.aws/credentials
+2025-11-17 11:49:36,201 - INFO - Starting CloudFront distribution analysis...
 /root/iac-test-automations/lib/analyse.py:416: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
   end_time = datetime.utcnow()
-2025-11-17 11:02:21,732 - INFO - Skipping PTZ9GXOJLX8NO - ExcludeFromAnalysis tag
-2025-11-17 11:02:21,742 - INFO - Skipping E2MZRWC1VKLPY - Internal only distribution
-2025-11-17 11:02:21,778 - INFO - Analyzing distribution: U4KCOC9JYN7LG
-2025-11-17 11:02:21,829 - INFO - Analyzing distribution: Z76EFKWO6302P
-2025-11-17 11:02:21,892 - INFO - Analyzing distribution: Z3Q7RNUA9L7LC
-2025-11-17 11:02:21,978 - INFO - Analyzing distribution: K2I6T7KU47Z7O
-2025-11-17 11:02:22,065 - INFO - Analyzing distribution: Z7YFAV2KM3H97
-2025-11-17 11:02:22,218 - INFO - Analyzing distribution: X2L0IECFRDUTA
-2025-11-17 11:02:22,413 - INFO - Analyzing distribution: YCD5OLV043SAQ
-2025-11-17 11:02:22,546 - INFO - Analyzing distribution: OLWITJSY9XU3E
-2025-11-17 11:02:22,765 - INFO - Analyzing distribution: XUE4TMW2LGOHU
-2025-11-17 11:02:22,809 - INFO - Analyzing distribution: UKU0PZPUD45Z4
+2025-11-17 11:49:36,653 - INFO - Skipping T2XVVONBGH4XG - ExcludeFromAnalysis tag
+2025-11-17 11:49:36,660 - INFO - Skipping JQZWAM646I29C - Internal only distribution
+2025-11-17 11:49:36,690 - INFO - Analyzing distribution: BT2FT1JGIO9UW
+2025-11-17 11:49:36,729 - INFO - Analyzing distribution: E5WMRMB2GKS5S
+2025-11-17 11:49:36,775 - INFO - Analyzing distribution: J320FB6FNR2KX
+2025-11-17 11:49:36,828 - INFO - Analyzing distribution: V6UPSAHNBI0S9
+2025-11-17 11:49:36,872 - INFO - Analyzing distribution: LI6CO65L5GWEA
+2025-11-17 11:49:36,919 - INFO - Analyzing distribution: TJB6THZNLUC1V
+2025-11-17 11:49:36,958 - INFO - Analyzing distribution: APG5HNNWI59PJ
+2025-11-17 11:49:36,993 - INFO - Analyzing distribution: JEL9S6E1M9Y3R
+2025-11-17 11:49:37,102 - INFO - Analyzing distribution: T480AUC2D3J9H
+2025-11-17 11:49:37,166 - INFO - Analyzing distribution: WO2XLYP747C5G
 
 ================================================================================
-Distribution: U4KCOC9JYN7LG (uss38jjj2nu2s.cloudfront.net)
+Distribution: BT2FT1JGIO9UW (mepkldy5gjgus.cloudfront.net)
 Performance Score: 83/100
 Cache Hit Ratio: 92.0%
 Potential Monthly Savings: $0.00
@@ -34,16 +34,16 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: Z76EFKWO6302P (ovjkiw8g9trg7.cloudfront.net)
+Distribution: E5WMRMB2GKS5S (kleuhwoon9cmc.cloudfront.net)
 Performance Score: 63/100
 Cache Hit Ratio: 60.0%
-Potential Monthly Savings: $0.94
+Potential Monthly Savings: $1.25
 
 Top Issues:
 1. [HIGH] Low Cache Hit Ratio
    Current: Cache hit ratio: 60.0%
    Recommended: Improve caching strategy to achieve >80% cache hit ratio
-   Estimated Savings: $0.94/month
+   Estimated Savings: $1.25/month
 2. [HIGH] Missing Security Headers
    Current: No response headers policy configured
    Recommended: Add security headers: X-Frame-Options, CSP, HSTS
@@ -56,7 +56,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: Z3Q7RNUA9L7LC (vmlt27a3xye42.cloudfront.net)
+Distribution: J320FB6FNR2KX (cwovx4m6eyo4r.cloudfront.net)
 Performance Score: 72/100
 Cache Hit Ratio: 78.0%
 Potential Monthly Savings: $0.89
@@ -79,7 +79,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: K2I6T7KU47Z7O (ola9yd9na4uvs.cloudfront.net)
+Distribution: V6UPSAHNBI0S9 (jot6bh1jyqtvd.cloudfront.net)
 Performance Score: 78/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $2.98
@@ -101,7 +101,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: Z7YFAV2KM3H97 (r6myfbglgmoku.cloudfront.net)
+Distribution: LI6CO65L5GWEA (gcd2u8rttxk4w.cloudfront.net)
 Performance Score: 73/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.60
@@ -123,7 +123,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: X2L0IECFRDUTA (tt9b2i7ep6s8l.cloudfront.net)
+Distribution: TJB6THZNLUC1V (ei81wptc24s46.cloudfront.net)
 Performance Score: 83/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -141,7 +141,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: YCD5OLV043SAQ (k0pazmj6wpi9s.cloudfront.net)
+Distribution: APG5HNNWI59PJ (utjb2ow37qb3m.cloudfront.net)
 Performance Score: 73/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -162,7 +162,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: OLWITJSY9XU3E (relvwbthq6rv5.cloudfront.net)
+Distribution: JEL9S6E1M9Y3R (wrric1gdflp90.cloudfront.net)
 Performance Score: 78/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $2.12
@@ -184,7 +184,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: XUE4TMW2LGOHU (bvcz75iz8yy6g.cloudfront.net)
+Distribution: T480AUC2D3J9H (sb8gwwgtlbrio.cloudfront.net)
 Performance Score: 73/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -205,7 +205,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: UKU0PZPUD45Z4 (eodx8si4dutfi.cloudfront.net)
+Distribution: WO2XLYP747C5G (vhx6szk1tdntq.cloudfront.net)
 Performance Score: 78/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -217,20 +217,20 @@ Top Issues:
 2. [MEDIUM] No Origin Failover
    Current: Single origin without failover
    Recommended: Configure origin group with failover
-2025-11-17 11:02:22,862 - INFO - Analyzing distribution: ZEEGDW2E1SUMG
-2025-11-17 11:02:22,940 - INFO - Analyzing distribution: ZW8UCQMGUECVP
-2025-11-17 11:02:23,020 - INFO - Analyzing distribution: HDXBZ3QD671IF
-2025-11-17 11:02:23,117 - INFO - Analyzing distribution: C130UQ13HUI0W
-2025-11-17 11:02:23,162 - INFO - Analyzing distribution: VRFI9EYJCY231
+2025-11-17 11:49:37,219 - INFO - Analyzing distribution: Q0ORSHFQBNHEV
+2025-11-17 11:49:37,288 - INFO - Analyzing distribution: EI6OCOXOGZ71T
+2025-11-17 11:49:37,331 - INFO - Analyzing distribution: WKC1XLYNMO9BL
+2025-11-17 11:49:37,407 - INFO - Analyzing distribution: A0H78W1310F09
+2025-11-17 11:49:37,455 - INFO - Analyzing distribution: RFP9VBHHFB9CG
 /root/iac-test-automations/lib/analyse.py:795: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
   'report_date': datetime.utcnow().isoformat(),
-2025-11-17 11:02:23,213 - INFO - JSON report saved to cloudfront_optimization.json
+2025-11-17 11:49:37,501 - INFO - JSON report saved to cloudfront_optimization.json
 /root/iac-test-automations/lib/analyse.py:965: DeprecationWarning:
 
 datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).
 
-2025-11-17 11:02:23,567 - INFO - HTML report saved to cache_efficiency_report.html
-2025-11-17 11:02:23,568 - INFO - CSV roadmap saved to cdn_optimization_roadmap.csv
+2025-11-17 11:49:37,793 - INFO - HTML report saved to cache_efficiency_report.html
+2025-11-17 11:49:37,794 - INFO - CSV roadmap saved to cdn_optimization_roadmap.csv
 3. [MEDIUM] Logging Disabled
    Current: CloudFront access logging disabled
    Recommended: Enable access logging to S3
@@ -240,7 +240,7 @@ datetime.datetime.utcnow() is deprecated and scheduled for removal in a future v
 ================================================================================
 
 ================================================================================
-Distribution: ZEEGDW2E1SUMG (sh2p5hv0n3ike.cloudfront.net)
+Distribution: Q0ORSHFQBNHEV (rbv89yl24bkrg.cloudfront.net)
 Performance Score: 78/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -261,7 +261,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: ZW8UCQMGUECVP (nrldewfx588t2.cloudfront.net)
+Distribution: EI6OCOXOGZ71T (dfxqfpjd6fvfo.cloudfront.net)
 Performance Score: 73/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -282,7 +282,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: HDXBZ3QD671IF (ot7wpitqzrrcb.cloudfront.net)
+Distribution: WKC1XLYNMO9BL (brh69dumpgmee.cloudfront.net)
 Performance Score: 68/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.23
@@ -307,7 +307,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: C130UQ13HUI0W (qdu4l3p1j5fvp.cloudfront.net)
+Distribution: A0H78W1310F09 (nxd9dxf2erdxv.cloudfront.net)
 Performance Score: 83/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -325,7 +325,7 @@ Top Issues:
 ================================================================================
 
 ================================================================================
-Distribution: VRFI9EYJCY231 (srbfcfzfkvtoi.cloudfront.net)
+Distribution: RFP9VBHHFB9CG (cng1lf8ywn1wv.cloudfront.net)
 Performance Score: 83/100
 Cache Hit Ratio: 85.0%
 Potential Monthly Savings: $0.00
@@ -345,19 +345,19 @@ Top Issues:
 CloudFront Optimization Summary
 | Distribution   | Domain                       |   Score | Cache Hit   |   Issue Count | Potential Savings   |
 |----------------|------------------------------|---------|-------------|---------------|---------------------|
-| U4KCOC9JYN7LG  | uss38jjj2nu2s.cloudfront.net |      83 | 92.0%       |             3 | $0.00               |
-| Z76EFKWO6302P  | ovjkiw8g9trg7.cloudfront.net |      63 | 60.0%       |             4 | $0.94               |
-| Z3Q7RNUA9L7LC  | vmlt27a3xye42.cloudfront.net |      72 | 78.0%       |             4 | $0.89               |
-| K2I6T7KU47Z7O  | ola9yd9na4uvs.cloudfront.net |      78 | 85.0%       |             4 | $2.98               |
-| Z7YFAV2KM3H97  | r6myfbglgmoku.cloudfront.net |      73 | 85.0%       |             4 | $0.60               |
-| X2L0IECFRDUTA  | tt9b2i7ep6s8l.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
-| YCD5OLV043SAQ  | k0pazmj6wpi9s.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
-| OLWITJSY9XU3E  | relvwbthq6rv5.cloudfront.net |      78 | 85.0%       |             4 | $2.12               |
-| XUE4TMW2LGOHU  | bvcz75iz8yy6g.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
-| UKU0PZPUD45Z4  | eodx8si4dutfi.cloudfront.net |      78 | 85.0%       |             4 | $0.00               |
-| ZEEGDW2E1SUMG  | sh2p5hv0n3ike.cloudfront.net |      78 | 85.0%       |             4 | $0.00               |
-| ZW8UCQMGUECVP  | nrldewfx588t2.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
-| HDXBZ3QD671IF  | ot7wpitqzrrcb.cloudfront.net |      68 | 85.0%       |             5 | $0.23               |
-| C130UQ13HUI0W  | qdu4l3p1j5fvp.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
-| VRFI9EYJCY231  | srbfcfzfkvtoi.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
-Analyzed 15 distributions | Avg Cache Hit: 83.3% | Total Potential Savings: $7.75
+| BT2FT1JGIO9UW  | mepkldy5gjgus.cloudfront.net |      83 | 92.0%       |             3 | $0.00               |
+| E5WMRMB2GKS5S  | kleuhwoon9cmc.cloudfront.net |      63 | 60.0%       |             4 | $1.25               |
+| J320FB6FNR2KX  | cwovx4m6eyo4r.cloudfront.net |      72 | 78.0%       |             4 | $0.89               |
+| V6UPSAHNBI0S9  | jot6bh1jyqtvd.cloudfront.net |      78 | 85.0%       |             4 | $2.98               |
+| LI6CO65L5GWEA  | gcd2u8rttxk4w.cloudfront.net |      73 | 85.0%       |             4 | $0.60               |
+| TJB6THZNLUC1V  | ei81wptc24s46.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
+| APG5HNNWI59PJ  | utjb2ow37qb3m.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
+| JEL9S6E1M9Y3R  | wrric1gdflp90.cloudfront.net |      78 | 85.0%       |             4 | $2.12               |
+| T480AUC2D3J9H  | sb8gwwgtlbrio.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
+| WO2XLYP747C5G  | vhx6szk1tdntq.cloudfront.net |      78 | 85.0%       |             4 | $0.00               |
+| Q0ORSHFQBNHEV  | rbv89yl24bkrg.cloudfront.net |      78 | 85.0%       |             4 | $0.00               |
+| EI6OCOXOGZ71T  | dfxqfpjd6fvfo.cloudfront.net |      73 | 85.0%       |             4 | $0.00               |
+| WKC1XLYNMO9BL  | brh69dumpgmee.cloudfront.net |      68 | 85.0%       |             5 | $0.23               |
+| A0H78W1310F09  | nxd9dxf2erdxv.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
+| RFP9VBHHFB9CG  | cng1lf8ywn1wv.cloudfront.net |      83 | 85.0%       |             3 | $0.00               |
+Analyzed 15 distributions | Avg Cache Hit: 83.3% | Total Potential Savings: $8.06

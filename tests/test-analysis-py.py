@@ -259,7 +259,14 @@ def setup_cloudfront_environment() -> None:
             "bytes_gb": 320,
             "tags": [{"Key": "Environment", "Value": "prod"}],
         },
-        {"name": "low-cache", "comment": "cache tuning", "cache_hit": 60},
+        {
+            "name": "low-cache",
+            "comment": "cache tuning",
+            "cache_hit": 60,
+            "requests": 500_000,
+            "origin_requests": 200_000,
+            "bytes_gb": 180,
+        },
         {
             "name": "origin-shield-needed",
             "comment": "multi origin",
@@ -407,8 +414,15 @@ def run_analysis_script():
             path.unlink()
     env = os.environ.copy()
     env.setdefault("AWS_DEFAULT_REGION", "us-east-1")
+
+    # Run with coverage if available
+    cmd = [sys.executable]
+    if os.environ.get("COVERAGE_RUN"):
+        cmd.extend(["-m", "coverage", "run", "--source=lib", "--parallel-mode"])
+    cmd.append(str(script))
+
     result = subprocess.run(
-        [sys.executable, str(script)],
+        cmd,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
