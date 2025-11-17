@@ -1,5 +1,4 @@
-
-#!/usr/bin / env node
+#!/usr/bin/env node
 
 import { confirm, input, select } from '@inquirer/prompts';
 import * as fs from 'fs-extra';
