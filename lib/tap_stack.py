@@ -7,6 +7,12 @@ from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.s3_bucket import S3Bucket
+from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA, S3BucketVersioningVersioningConfiguration
+from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
+    S3BucketServerSideEncryptionConfigurationA,
+    S3BucketServerSideEncryptionConfigurationRuleA,
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
+)
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 
 from lib.config.variables import EnvironmentConfig
@@ -75,10 +81,11 @@ class TapStack(TerraformStack):
         # self.add_override("terraform.backend.s3.dynamodb_table", f"terraform-state-lock-{workspace}")
 
         # Create DynamoDB table for state locking
+        # Use unique name per environment suffix to avoid conflicts
         state_lock_table = DynamodbTable(
             self,
             f"state-lock-table-{environment_suffix}",
-            name=f"terraform-state-lock-{workspace}",
+            name=f"terraform-state-lock-{workspace}-{environment_suffix}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="LockID",
             attribute=[{
@@ -87,7 +94,7 @@ class TapStack(TerraformStack):
             }],
             deletion_protection_enabled=False,  # CRITICAL: For destroyability
             tags={
-                "Name": f"terraform-state-lock-{workspace}",
+                "Name": f"terraform-state-lock-{workspace}-{environment_suffix}",
                 "Workspace": workspace,
                 "Purpose": "Terraform state locking"
             }
@@ -98,21 +105,33 @@ class TapStack(TerraformStack):
             self,
             f"assets-bucket-{environment_suffix}",
             bucket=f"app-assets-{workspace}-{environment_suffix}",
-            versioning={
-                "enabled": True
-            },
-            server_side_encryption_configuration={
-                "rule": {
-                    "apply_server_side_encryption_by_default": {
-                        "sse_algorithm": "AES256"
-                    }
-                }
-            },
             force_destroy=True,  # CRITICAL: For destroyability
             tags={
                 "Name": f"app-assets-{workspace}-{environment_suffix}",
                 "Workspace": workspace,
             }
+        )
+
+        # Configure S3 bucket versioning using separate resource
+        S3BucketVersioningA(
+            self,
+            f"assets-bucket-versioning-{environment_suffix}",
+            bucket=assets_bucket.id,
+            versioning_configuration=S3BucketVersioningVersioningConfiguration(
+                status="Enabled"
+            )
+        )
+
+        # Configure S3 bucket encryption using separate resource
+        S3BucketServerSideEncryptionConfigurationA(
+            self,
+            f"assets-bucket-encryption-{environment_suffix}",
+            bucket=assets_bucket.id,
+            rule=[S3BucketServerSideEncryptionConfigurationRuleA(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                    sse_algorithm="AES256"
+                )
+            )]
         )
 
         # Module 1: VPC Module

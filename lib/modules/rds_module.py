@@ -102,7 +102,7 @@ class RdsModule(Construct):
             f"aurora-cluster-{environment_suffix}",
             cluster_identifier=f"aurora-cluster-{environment_suffix}",
             engine="aurora-postgresql",
-            engine_version="15.4",
+            engine_version="15.5",  # Updated to valid version for aurora-postgresql
             database_name=database_name,
             master_username=master_username,
             master_password="ChangeMe123!",  # Should be from Secrets Manager in production
