@@ -1,3 +1,4 @@
+// microservices.ts
 import * as cdk from 'aws-cdk-lib';
 import * as appmesh from 'aws-cdk-lib/aws-appmesh';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -21,7 +22,7 @@ export interface MicroserviceConstructProps {
   secrets: { [key: string]: secretsmanager.Secret };
   securityGroup: ec2.SecurityGroup;
   virtualNode: appmesh.VirtualNode;
-  environment: { [key: string]: string };
+  environment?: { [key: string]: string };
   healthCheckPath: string;
 }
 
@@ -35,14 +36,14 @@ export class MicroserviceConstruct extends Construct {
   constructor(scope: Construct, id: string, props: MicroserviceConstructProps) {
     super(scope, id);
 
-    // Create CloudWatch Log Group
+    const stackName = cdk.Stack.of(this).stackName;
+
     this.logGroup = new logs.LogGroup(this, 'LogGroup', {
-      logGroupName: `/ecs/${props.serviceName}`,
+      logGroupName: `/ecs/${stackName}/${props.serviceName}`,
       retention: logs.RetentionDays.ONE_MONTH,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
 
-    // Create Task Execution Role
     const executionRole = new iam.Role(this, 'TaskExecutionRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
       managedPolicies: [
@@ -52,7 +53,6 @@ export class MicroserviceConstruct extends Construct {
       ],
     });
 
-    // Add permissions to pull from ECR
     executionRole.addToPolicy(
       new iam.PolicyStatement({
         actions: [
@@ -65,7 +65,6 @@ export class MicroserviceConstruct extends Construct {
       })
     );
 
-    // Add permissions to access secrets
     executionRole.addToPolicy(
       new iam.PolicyStatement({
         actions: ['secretsmanager:GetSecretValue'],
@@ -73,17 +72,14 @@ export class MicroserviceConstruct extends Construct {
       })
     );
 
-    // Create Task Role
     const taskRole = new iam.Role(this, 'TaskRole', {
       assumedBy: new iam.ServicePrincipal('ecs-tasks.amazonaws.com'),
     });
 
-    // Add App Mesh permissions
     taskRole.addManagedPolicy(
       iam.ManagedPolicy.fromAwsManagedPolicyName('AWSAppMeshEnvoyAccess')
     );
 
-    // Add CloudWatch Logs permissions
     taskRole.addToPolicy(
       new iam.PolicyStatement({
         actions: [
@@ -95,7 +91,6 @@ export class MicroserviceConstruct extends Construct {
       })
     );
 
-    // Create Fargate Task Definition
     this.taskDefinition = new ecs.FargateTaskDefinition(
       this,
       'TaskDefinition',
@@ -103,8 +98,8 @@ export class MicroserviceConstruct extends Construct {
         family: props.serviceName,
         cpu: props.cpu,
         memoryLimitMiB: props.memory,
-        executionRole: executionRole,
-        taskRole: taskRole,
+        executionRole,
+        taskRole,
         proxyConfiguration: new ecs.AppMeshProxyConfiguration({
           containerName: 'envoy',
           properties: {
@@ -118,17 +113,16 @@ export class MicroserviceConstruct extends Construct {
       }
     );
 
-    // Add main application container
+    const imageTag = props.image.includes(':')
+      ? props.image.split(':')[1]
+      : 'latest';
     const appContainer = this.taskDefinition.addContainer(props.serviceName, {
       containerName: props.serviceName,
-      image: ecs.ContainerImage.fromEcrRepository(
-        props.repository,
-        props.image.split(':')[1] || 'latest'
-      ),
-      cpu: props.cpu - 256, // Reserve 256 CPU units for Envoy
-      memoryLimitMiB: props.memory - 512, // Reserve 512 MiB for Envoy
+      image: ecs.ContainerImage.fromEcrRepository(props.repository, imageTag),
+      cpu: Math.max(128, props.cpu - 256),
+      memoryLimitMiB: Math.max(256, props.memory - 512),
       environment: {
-        ...props.environment,
+        ...(props.environment || {}),
         PORT: props.port.toString(),
         AWS_REGION: cdk.Stack.of(this).region,
         APPMESH_VIRTUAL_NODE_NAME: `mesh/${props.virtualNode.mesh.meshName}/virtualNode/${props.virtualNode.virtualNodeName}`,
@@ -137,7 +131,7 @@ export class MicroserviceConstruct extends Construct {
         DATABASE_URL: ecs.Secret.fromSecretsManager(props.secrets.databaseUrl),
         API_KEY: ecs.Secret.fromSecretsManager(props.secrets.apiKey),
       },
-      logging: new ecs.AwsLogDriver({
+      logging: ecs.LogDriver.awsLogs({
         logGroup: this.logGroup,
         streamPrefix: props.serviceName,
       }),
@@ -151,15 +145,15 @@ export class MicroserviceConstruct extends Construct {
         startPeriod: cdk.Duration.seconds(60),
         retries: 3,
       },
-      portMappings: [
-        {
-          containerPort: props.port,
-          protocol: ecs.Protocol.TCP,
-        },
-      ],
+      portMappings: [{ containerPort: props.port, protocol: ecs.Protocol.TCP }],
     });
 
-    // Add Envoy sidecar container
+    const envoyLogGroup = new logs.LogGroup(this, 'EnvoyLogGroup', {
+      logGroupName: `/ecs/${stackName}/${props.serviceName}/envoy`,
+      retention: logs.RetentionDays.ONE_WEEK,
+      removalPolicy: cdk.RemovalPolicy.DESTROY,
+    });
+
     const envoyContainer = this.taskDefinition.addContainer('envoy', {
       containerName: 'envoy',
       image: ecs.ContainerImage.fromRegistry(
@@ -174,12 +168,8 @@ export class MicroserviceConstruct extends Construct {
         ENABLE_ENVOY_DOG_STATSD: '1',
       },
       user: '1337',
-      logging: new ecs.AwsLogDriver({
-        logGroup: new logs.LogGroup(this, 'EnvoyLogGroup', {
-          logGroupName: `/ecs/${props.serviceName}/envoy`,
-          retention: logs.RetentionDays.ONE_WEEK,
-          removalPolicy: cdk.RemovalPolicy.DESTROY,
-        }),
+      logging: ecs.LogDriver.awsLogs({
+        logGroup: envoyLogGroup,
         streamPrefix: 'envoy',
       }),
       healthCheck: {
@@ -194,13 +184,11 @@ export class MicroserviceConstruct extends Construct {
       },
     });
 
-    // Container dependency
     appContainer.addContainerDependencies({
       container: envoyContainer,
       condition: ecs.ContainerDependencyCondition.HEALTHY,
     });
 
-    // Create Fargate Service
     this.service = new ecs.FargateService(this, 'Service', {
       serviceName: props.serviceName,
       cluster: props.cluster,
@@ -208,26 +196,17 @@ export class MicroserviceConstruct extends Construct {
       desiredCount: props.desiredCount,
       assignPublicIp: false,
       securityGroups: [props.securityGroup],
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-      },
+      vpcSubnets: { subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS },
       healthCheckGracePeriod: cdk.Duration.seconds(60),
       enableECSManagedTags: true,
       propagateTags: ecs.PropagatedTagSource.SERVICE,
       enableExecuteCommand: true,
       capacityProviderStrategies: [
-        {
-          capacityProvider: 'FARGATE_SPOT',
-          weight: 2,
-        },
-        {
-          capacityProvider: 'FARGATE',
-          weight: 1,
-        },
+        { capacityProvider: 'FARGATE_SPOT', weight: 2 },
+        { capacityProvider: 'FARGATE', weight: 1 },
       ],
     });
 
-    // Configure Auto Scaling
     const autoScalingTarget = this.service.autoScaleTaskCount({
       minCapacity: 2,
       maxCapacity: 10,
@@ -245,7 +224,6 @@ export class MicroserviceConstruct extends Construct {
       scaleOutCooldown: cdk.Duration.seconds(60),
     });
 
-    // Add CloudWatch Alarms
     this.cpuAlarm = this.service
       .metricCpuUtilization()
       .createAlarm(this, 'CpuAlarm', {

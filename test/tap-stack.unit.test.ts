@@ -98,7 +98,9 @@ describe('TapStack Unit Tests', () => {
     });
 
     // Get the nested ECS stack for testing
-    ecsStack = stack.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+    ecsStack = stack.node.children.find(
+      child => child instanceof cdk.Stack
+    ) as cdk.Stack;
     if (!ecsStack) {
       throw new Error('ECS stack not found');
     }
@@ -278,7 +280,9 @@ describe('TapStack Unit Tests', () => {
         environmentSuffix: 'test-env',
         env: { account, region },
       });
-      const ecsStack = stackWithProps.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStack = stackWithProps.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       expect(ecsStack?.stackName).toContain('test-env');
     });
 
@@ -291,7 +295,9 @@ describe('TapStack Unit Tests', () => {
       const stackWithContext = new TapStack(appWithContext, 'TestStack', {
         env: { account, region },
       });
-      const ecsStack = stackWithContext.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStack = stackWithContext.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       expect(ecsStack?.stackName).toContain('ctx');
     });
 
@@ -300,7 +306,9 @@ describe('TapStack Unit Tests', () => {
       const stackDefault = new TapStack(appDefault, 'TestStack', {
         env: { account, region },
       });
-      const ecsStack = stackDefault.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStack = stackDefault.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       expect(ecsStack?.stackName).toContain('dev');
     });
   });
@@ -324,7 +332,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
@@ -343,7 +353,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::EC2::VPC', {
         Tags: Match.arrayWith([
@@ -375,7 +387,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       const subnets = templateCustom.findResources('AWS::EC2::Subnet');
       const publicSubnets = Object.values(subnets).filter((subnet: any) =>
@@ -407,7 +421,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::Logs::LogGroup', {
         LogGroupName: '/custom/vpc/flowlogs',
@@ -420,7 +436,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::Logs::LogGroup', {
         RetentionInDays: Match.anyValue(),
@@ -458,7 +476,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::ECS::Cluster', {
         ClusterSettings: Match.arrayWith([
@@ -476,7 +496,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::ECS::Cluster', {
         ClusterName: 'custom-cluster-name',
@@ -514,7 +536,10 @@ describe('TapStack Unit Tests', () => {
         );
       } else {
         // When deletion protection is false, the property might not be set or set to false
-        template.resourceCountIs('AWS::ElasticLoadBalancingV2::LoadBalancer', 1);
+        template.resourceCountIs(
+          'AWS::ElasticLoadBalancingV2::LoadBalancer',
+          1
+        );
       }
     });
 
@@ -524,11 +549,15 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
 
       // Check that ALB resource exists
-      const albResources = templateCustom.findResources('AWS::ElasticLoadBalancingV2::LoadBalancer');
+      const albResources = templateCustom.findResources(
+        'AWS::ElasticLoadBalancingV2::LoadBalancer'
+      );
       expect(Object.keys(albResources).length).toBeGreaterThan(0);
 
       // Since deletion protection is enabled via CDK property, we just verify the ALB exists
@@ -548,7 +577,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties(
         'AWS::ElasticLoadBalancingV2::LoadBalancer',
@@ -564,7 +595,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties(
         'AWS::ElasticLoadBalancingV2::LoadBalancer',
@@ -585,7 +618,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties(
         'AWS::ElasticLoadBalancingV2::LoadBalancer',
@@ -613,7 +648,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       // Should not have S3 bucket for ALB logs
       const buckets = templateCustom.findResources('AWS::S3::Bucket');
@@ -655,7 +692,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::AppMesh::Mesh', {
         MeshName: 'custom-mesh-name',
@@ -668,7 +707,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::AppMesh::Mesh', {
         Spec: Match.objectLike({
@@ -720,8 +761,8 @@ describe('TapStack Unit Tests', () => {
     test('ECR repositories should have lifecycle policies', () => {
       const maxImageCount = parseInt(
         process.env.TEST_ECR_MAX_IMAGE_COUNT ||
-        process.env.ECR_MAX_IMAGE_COUNT ||
-        '10',
+          process.env.ECR_MAX_IMAGE_COUNT ||
+          '10',
         10
       );
       servicesToTest.forEach(() => {
@@ -741,7 +782,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::ECR::Repository', {
         LifecyclePolicy: Match.objectLike({
@@ -768,7 +811,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       servicesToTest.forEach(service => {
         templateCustom.hasResourceProperties('AWS::ECS::Service', {
@@ -876,10 +921,10 @@ describe('TapStack Unit Tests', () => {
             Statement: Match.arrayWith([
               Match.objectLike({
                 Principal: {
-                  Service: 'ecs-tasks.amazonaws.com'
-                }
-              })
-            ])
+                  Service: 'ecs-tasks.amazonaws.com',
+                },
+              }),
+            ]),
           },
           ManagedPolicyArns: Match.anyValue(), // Allow any managed policies structure
         });
@@ -967,7 +1012,9 @@ describe('TapStack Unit Tests', () => {
       const stackCustom = new TapStack(appCustom, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackCustom = stackCustom.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackCustom = stackCustom.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateCustom = Template.fromStack(ecsStackCustom!);
       templateCustom.hasResourceProperties('AWS::SecretsManager::Secret', {
         Name: Match.stringLikeRegexp('.*/custom/prefix.*'),
@@ -1149,7 +1196,9 @@ describe('TapStack Unit Tests', () => {
       const stackWithOptional = new TapStack(appWithOptional, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackWithOptional = stackWithOptional.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackWithOptional = stackWithOptional.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateWithOptional = Template.fromStack(ecsStackWithOptional!);
       const allServices = SERVICES.filter(s => !s.optional || true); // All services when includeOptional is true
       templateWithOptional.resourceCountIs(
@@ -1161,11 +1210,19 @@ describe('TapStack Unit Tests', () => {
     test('Should exclude optional services by default', () => {
       delete process.env.TEST_INCLUDE_OPTIONAL;
       const appWithoutOptional = new cdk.App();
-      const stackWithoutOptional = new TapStack(appWithoutOptional, 'TestStack', {
-        env: { account, region },
-      });
-      const ecsStackWithoutOptional = stackWithoutOptional.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
-      const templateWithoutOptional = Template.fromStack(ecsStackWithoutOptional!);
+      const stackWithoutOptional = new TapStack(
+        appWithoutOptional,
+        'TestStack',
+        {
+          env: { account, region },
+        }
+      );
+      const ecsStackWithoutOptional = stackWithoutOptional.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
+      const templateWithoutOptional = Template.fromStack(
+        ecsStackWithoutOptional!
+      );
       const mandatoryServices = SERVICES.filter(s => !s.optional);
       templateWithoutOptional.resourceCountIs(
         'AWS::ECS::Service',
@@ -1180,11 +1237,11 @@ describe('TapStack Unit Tests', () => {
       const stackWithContext = new TapStack(appWithContext, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackWithContext = stackWithContext.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackWithContext = stackWithContext.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateWithContext = Template.fromStack(ecsStackWithContext!);
-      const allServices = SERVICES.filter(
-        s => !s.optional || true
-      );
+      const allServices = SERVICES.filter(s => !s.optional || true);
       templateWithContext.resourceCountIs(
         'AWS::ECS::Service',
         allServices.length
@@ -1198,17 +1255,25 @@ describe('TapStack Unit Tests', () => {
       const stackWithOptional = new TapStack(appWithOptional, 'TestStack', {
         env: { account, region },
       });
-      const ecsStackWithOptional = stackWithOptional.node.children.find(child => child instanceof cdk.Stack) as cdk.Stack;
+      const ecsStackWithOptional = stackWithOptional.node.children.find(
+        child => child instanceof cdk.Stack
+      ) as cdk.Stack;
       const templateWithOptional = Template.fromStack(ecsStackWithOptional!);
 
       // Check that security group ingress rules exist for transaction-api
-      templateWithOptional.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-        Description: 'Transaction API to Payment API',
-      });
+      templateWithOptional.hasResourceProperties(
+        'AWS::EC2::SecurityGroupIngress',
+        {
+          Description: 'Transaction API to Payment API',
+        }
+      );
 
-      templateWithOptional.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
-        Description: 'Transaction API to Fraud Detector',
-      });
+      templateWithOptional.hasResourceProperties(
+        'AWS::EC2::SecurityGroupIngress',
+        {
+          Description: 'Transaction API to Fraud Detector',
+        }
+      );
     });
   });
 });

@@ -1,3 +1,4 @@
+// ecs-microservices-stack.ts
 import * as cdk from 'aws-cdk-lib';
 import * as appmesh from 'aws-cdk-lib/aws-appmesh';
 import * as ec2 from 'aws-cdk-lib/aws-ec2';
@@ -6,6 +7,7 @@ import * as ecs from 'aws-cdk-lib/aws-ecs';
 import * as elbv2 from 'aws-cdk-lib/aws-elasticloadbalancingv2';
 import * as logs from 'aws-cdk-lib/aws-logs';
 import * as secretsmanager from 'aws-cdk-lib/aws-secretsmanager';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 import { Construct } from 'constructs';
 import { SERVICES } from '../config/service-config';
 import { AppMeshServiceConstruct } from '../constructs/app-mesh-service';
@@ -21,29 +23,22 @@ export class EcsMicroservicesStack extends cdk.Stack {
   private alb: elbv2.ApplicationLoadBalancer;
   private mesh: appmesh.Mesh;
   private secrets: { [key: string]: secretsmanager.Secret };
-  private httpListener: elbv2.ApplicationListener;
+  private httpListener!: elbv2.ApplicationListener;
   private isLocalStack: boolean;
 
-  constructor(scope: Construct, id: string, props?: EcsMicroservicesStackProps) {
+  constructor(
+    scope: Construct,
+    id: string,
+    props?: EcsMicroservicesStackProps
+  ) {
     super(scope, id, props);
     this.isLocalStack = props?.isLocalStack ?? false;
 
-    // Create VPC with 3 AZs
     this.createVpc();
-
-    // Create ECS Cluster
     this.createEcsCluster();
-
-    // Create Secrets
     this.createSecrets();
-
-    // Create App Mesh
     this.createAppMesh();
-
-    // Create Application Load Balancer
     this.createLoadBalancer();
-
-    // Deploy Microservices
     this.deployMicroservices();
   }
 
@@ -58,8 +53,8 @@ export class EcsMicroservicesStack extends cdk.Stack {
     );
     const natGateways = parseInt(
       this.node.tryGetContext('natGateways') ||
-      process.env.VPC_NAT_GATEWAYS ||
-      '3',
+        process.env.VPC_NAT_GATEWAYS ||
+        '3',
       10
     );
     const vpcCidr =
@@ -72,37 +67,34 @@ export class EcsMicroservicesStack extends cdk.Stack {
     );
 
     this.vpc = new ec2.Vpc(this, 'MicroservicesVpc', {
-      vpcName: vpcName,
-      maxAzs: maxAzs,
-      natGateways: natGateways,
+      vpcName,
+      maxAzs,
+      natGateways,
       ipAddresses: ec2.IpAddresses.cidr(vpcCidr),
       subnetConfiguration: [
-        {
-          name: 'public',
-          subnetType: ec2.SubnetType.PUBLIC,
-          cidrMask: cidrMask,
-        },
+        { name: 'public', subnetType: ec2.SubnetType.PUBLIC, cidrMask },
         {
           name: 'private',
           subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS,
-          cidrMask: cidrMask,
+          cidrMask,
         },
       ],
       enableDnsHostnames: true,
       enableDnsSupport: true,
     });
 
-    // Add VPC Flow Logs
-    const logRetentionDays =
+    const logRetentionKey =
       this.node.tryGetContext('logRetentionDays') ||
       process.env.LOG_RETENTION_DAYS ||
       'ONE_MONTH';
     const retentionDays =
-      logs.RetentionDays[logRetentionDays as keyof typeof logs.RetentionDays] ||
+      logs.RetentionDays[logRetentionKey as keyof typeof logs.RetentionDays] ||
       logs.RetentionDays.ONE_MONTH;
 
     new logs.LogGroup(this, 'VpcFlowLogs', {
-      logGroupName: process.env.VPC_FLOW_LOG_GROUP_NAME || '/aws/vpc/flowlogs',
+      logGroupName:
+        process.env.VPC_FLOW_LOG_GROUP_NAME ||
+        `/aws/vpc/flowlogs/${this.stackName}`,
       retention: retentionDays,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -122,13 +114,12 @@ export class EcsMicroservicesStack extends cdk.Stack {
       process.env.ECS_ENABLE_CONTAINER_INSIGHTS !== 'false';
 
     this.cluster = new ecs.Cluster(this, 'MicroservicesCluster', {
-      clusterName: clusterName,
+      clusterName,
       vpc: this.vpc,
       containerInsights: enableContainerInsights,
       enableFargateCapacityProviders: true,
     });
 
-    // Add capacity provider strategy
     this.cluster.enableFargateCapacityProviders();
   }
 
@@ -169,7 +160,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createAppMesh(): void {
-    // Create App Mesh
     const meshName =
       this.node.tryGetContext('meshName') ||
       process.env.APP_MESH_NAME ||
@@ -180,13 +170,12 @@ export class EcsMicroservicesStack extends cdk.Stack {
         : appmesh.MeshFilterType.ALLOW_ALL;
 
     this.mesh = new appmesh.Mesh(this, 'MicroservicesMesh', {
-      meshName: meshName,
-      egressFilter: egressFilter,
+      meshName,
+      egressFilter,
     });
   }
 
   private createLoadBalancer(): void {
-    // Create ALB Security Group
     const albSecurityGroup = new ec2.SecurityGroup(this, 'AlbSecurityGroup', {
       vpc: this.vpc,
       description: 'Security group for ALB',
@@ -198,19 +187,16 @@ export class EcsMicroservicesStack extends cdk.Stack {
       ec2.Port.tcp(443),
       'Allow HTTPS traffic'
     );
-
     albSecurityGroup.addIngressRule(
       ec2.Peer.anyIpv4(),
       ec2.Port.tcp(80),
       'Allow HTTP traffic'
     );
 
-    // Create Application Load Balancer
-    // ALB names have a 32 character limit
     const albName =
       this.node.tryGetContext('albName') ||
       process.env.ALB_NAME ||
-      `ms-alb-${this.stackName.substring(0, 20)}`.substring(0, 32);
+      `ms-alb-${this.stackName}`.substring(0, 32);
     const enableHttp2 = process.env.ALB_ENABLE_HTTP2 !== 'false';
     const idleTimeout = parseInt(process.env.ALB_IDLE_TIMEOUT || '60', 10);
     const enableDeletionProtection =
@@ -221,17 +207,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
       vpc: this.vpc,
       internetFacing: true,
       securityGroup: albSecurityGroup,
-      vpcSubnets: {
-        subnetType: ec2.SubnetType.PUBLIC,
-      },
+      vpcSubnets: { subnetType: ec2.SubnetType.PUBLIC },
       deletionProtection: enableDeletionProtection,
       http2Enabled: enableHttp2,
       idleTimeout: cdk.Duration.seconds(idleTimeout),
     });
 
-    // Add ALB access logs
-    const enableLogBucket = !this.isLocalStack && process.env.ALB_ENABLE_ACCESS_LOGS !== 'false';
-
+    const enableLogBucket =
+      !this.isLocalStack && process.env.ALB_ENABLE_ACCESS_LOGS !== 'false';
     if (enableLogBucket) {
       const logBucketName =
         process.env.ALB_LOGS_BUCKET_NAME ||
@@ -241,14 +224,10 @@ export class EcsMicroservicesStack extends cdk.Stack {
         10
       );
 
-      const albLogsBucket = new cdk.aws_s3.Bucket(this, 'AlbLogsBucket', {
+      const albLogsBucket = new s3.Bucket(this, 'AlbLogsBucket', {
         bucketName: logBucketName,
-        encryption: cdk.aws_s3.BucketEncryption.S3_MANAGED,
-        lifecycleRules: [
-          {
-            expiration: cdk.Duration.days(logRetentionDays),
-          },
-        ],
+        encryption: s3.BucketEncryption.S3_MANAGED,
+        lifecycleRules: [{ expiration: cdk.Duration.days(logRetentionDays) }],
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         autoDeleteObjects: true,
       });
@@ -256,7 +235,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
       this.alb.logAccessLogs(albLogsBucket);
     }
 
-    // Create HTTP listener with redirect to HTTPS (for production)
     const httpListener = this.alb.addListener('HttpListener', {
       port: 80,
       protocol: elbv2.ApplicationProtocol.HTTP,
@@ -266,14 +244,12 @@ export class EcsMicroservicesStack extends cdk.Stack {
       }),
     });
 
-    // Store listener for later use
     this.httpListener = httpListener;
   }
 
   private deployMicroservices(): void {
     const deployedServices: { [key: string]: MicroserviceConstruct } = {};
 
-    // Filter services based on optional flag
     const servicesToDeploy = SERVICES.filter(
       service =>
         !service.optional ||
@@ -281,10 +257,8 @@ export class EcsMicroservicesStack extends cdk.Stack {
           this.node.tryGetContext('includeOptional') === 'true')
     );
 
-    // Create security groups for inter-service communication
     const serviceSecurityGroups: { [key: string]: ec2.SecurityGroup } = {};
 
-    // First, create all security groups
     servicesToDeploy.forEach(serviceConfig => {
       const sg = new ec2.SecurityGroup(
         this,
@@ -296,21 +270,16 @@ export class EcsMicroservicesStack extends cdk.Stack {
         }
       );
 
-      // Allow egress to HTTPS (443) for external APIs
       sg.addEgressRule(
         ec2.Peer.anyIpv4(),
         ec2.Port.tcp(443),
         'Allow HTTPS outbound'
       );
-
-      // Allow egress to HTTP (80) for external APIs
       sg.addEgressRule(
         ec2.Peer.anyIpv4(),
         ec2.Port.tcp(80),
         'Allow HTTP outbound'
       );
-
-      // Allow egress for App Mesh Envoy
       sg.addEgressRule(
         ec2.Peer.anyIpv4(),
         ec2.Port.tcp(9901),
@@ -330,19 +299,16 @@ export class EcsMicroservicesStack extends cdk.Stack {
       serviceSecurityGroups[serviceConfig.name] = sg;
     });
 
-    // Configure inter-service communication rules
     if (
       serviceSecurityGroups['payment-api'] &&
       serviceSecurityGroups['fraud-detector']
     ) {
-      // Payment API can call Fraud Detector
       serviceSecurityGroups['payment-api'].connections.allowTo(
         serviceSecurityGroups['fraud-detector'],
         ec2.Port.tcp(8081),
         'Payment API to Fraud Detector'
       );
 
-      // Fraud Detector can call Payment API
       serviceSecurityGroups['fraud-detector'].connections.allowTo(
         serviceSecurityGroups['payment-api'],
         ec2.Port.tcp(8080),
@@ -351,7 +317,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
     }
 
     if (serviceSecurityGroups['transaction-api']) {
-      // Transaction API can call Payment API
       if (serviceSecurityGroups['payment-api']) {
         serviceSecurityGroups['transaction-api'].connections.allowTo(
           serviceSecurityGroups['payment-api'],
@@ -360,7 +325,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
         );
       }
 
-      // Transaction API can call Fraud Detector
       if (serviceSecurityGroups['fraud-detector']) {
         serviceSecurityGroups['transaction-api'].connections.allowTo(
           serviceSecurityGroups['fraud-detector'],
@@ -370,7 +334,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
       }
     }
 
-    // Allow ALB to reach all services
     const albSg = this.alb.connections.securityGroups[0];
     servicesToDeploy.forEach(serviceConfig => {
       albSg.connections.allowTo(
@@ -380,9 +343,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
       );
     });
 
-    // Deploy each microservice
-    servicesToDeploy.forEach((serviceConfig, _index) => {
-      // Create ECR Repository
+    servicesToDeploy.forEach(serviceConfig => {
       const repository = new ecr.Repository(
         this,
         `${serviceConfig.name}Repository`,
@@ -405,7 +366,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
         }
       );
 
-      // Create App Mesh components
       const appMeshService = new AppMeshServiceConstruct(
         this,
         `${serviceConfig.name}AppMesh`,
@@ -417,7 +377,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
         }
       );
 
-      // Create the microservice
       const service = new MicroserviceConstruct(
         this,
         `${serviceConfig.name}Service`,
@@ -425,7 +384,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
           cluster: this.cluster,
           vpc: this.vpc,
           serviceName: serviceConfig.name,
-          repository: repository,
+          repository,
           image: serviceConfig.image,
           cpu: serviceConfig.cpu,
           memory: serviceConfig.memory,
@@ -441,7 +400,6 @@ export class EcsMicroservicesStack extends cdk.Stack {
 
       deployedServices[serviceConfig.name] = service;
 
-      // Add service to ALB target group
       const targetGroup = new elbv2.ApplicationTargetGroup(
         this,
         `${serviceConfig.name}TargetGroup`,
@@ -464,10 +422,8 @@ export class EcsMicroservicesStack extends cdk.Stack {
         }
       );
 
-      // Register ECS service with target group
       service.service.attachToApplicationTargetGroup(targetGroup);
 
-      // Add path-based routing rule
       this.httpListener.addTargetGroups(`${serviceConfig.name}Route`, {
         targetGroups: [targetGroup],
         priority: serviceConfig.priority,
@@ -480,19 +436,16 @@ export class EcsMicroservicesStack extends cdk.Stack {
       });
     });
 
-    // Output important information
     new cdk.CfnOutput(this, 'AlbDnsName', {
       value: this.alb.loadBalancerDnsName,
       description: 'ALB DNS Name',
       exportName: 'AlbDnsName',
     });
-
     new cdk.CfnOutput(this, 'ClusterName', {
       value: this.cluster.clusterName,
       description: 'ECS Cluster Name',
       exportName: 'ClusterName',
     });
-
     new cdk.CfnOutput(this, 'MeshName', {
       value: this.mesh.meshName,
       description: 'App Mesh Name',

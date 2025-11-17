@@ -21,7 +21,6 @@ export class AppMeshServiceConstruct extends Construct {
   ) {
     super(scope, id);
 
-    // Create Virtual Node
     this.virtualNode = new appmesh.VirtualNode(this, 'VirtualNode', {
       virtualNodeName: `${props.serviceName}-vn`,
       mesh: props.mesh,
@@ -47,14 +46,12 @@ export class AppMeshServiceConstruct extends Construct {
       accessLog: appmesh.AccessLog.fromFilePath('/dev/stdout'),
     });
 
-    // Create Virtual Router
     this.virtualRouter = new appmesh.VirtualRouter(this, 'VirtualRouter', {
       virtualRouterName: `${props.serviceName}-vr`,
       mesh: props.mesh,
       listeners: [appmesh.VirtualRouterListener.http(props.port)],
     });
 
-    // Create Route
     this.virtualRouter.addRoute('Route', {
       routeName: `${props.serviceName}-route`,
       routeSpec: appmesh.RouteSpec.http({
@@ -71,7 +68,6 @@ export class AppMeshServiceConstruct extends Construct {
       }),
     });
 
-    // Create Virtual Service
     this.virtualService = new appmesh.VirtualService(this, 'VirtualService', {
       virtualServiceName: `${props.serviceName}.local`,
       virtualServiceProvider: appmesh.VirtualServiceProvider.virtualRouter(
