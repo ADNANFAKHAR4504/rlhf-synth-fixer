@@ -9,6 +9,7 @@ import * as path from 'path';
 
 describe('TAP Stack Integration Tests', () => {
   let outputs: any;
+  let privateSubnetIds: string[];
 
   beforeAll(() => {
     // Load deployment outputs
@@ -23,6 +24,20 @@ describe('TAP Stack Integration Tests', () => {
 
     const rawData = fs.readFileSync(outputsPath, 'utf-8');
     outputs = JSON.parse(rawData);
+
+    // Parse privateSubnetIds if it's a JSON string (Pulumi exports arrays as JSON strings)
+    if (typeof outputs.privateSubnetIds === 'string') {
+      try {
+        privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
+      } catch (e) {
+        // If parsing fails, treat as single value or empty array
+        privateSubnetIds = [];
+      }
+    } else if (Array.isArray(outputs.privateSubnetIds)) {
+      privateSubnetIds = outputs.privateSubnetIds;
+    } else {
+      privateSubnetIds = [];
+    }
   });
 
   describe('Deployment Metadata', () => {
@@ -54,25 +69,26 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should have valid private subnet IDs', () => {
       expect(outputs.privateSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
-      expect(outputs.privateSubnetIds.length).toBeGreaterThan(0);
+      expect(Array.isArray(privateSubnetIds)).toBe(true);
+      expect(privateSubnetIds.length).toBeGreaterThan(0);
 
-      outputs.privateSubnetIds.forEach((subnetId: string) => {
+      privateSubnetIds.forEach((subnetId: string) => {
         expect(subnetId).toMatch(/^subnet-[a-f0-9]{8,17}$/);
       });
     });
 
     test('should have correct number of private subnets', () => {
       // Should have 3 private subnets (one per AZ)
-      expect(outputs.privateSubnetIds.length).toBe(3);
+      expect(privateSubnetIds.length).toBe(3);
     });
   });
 
   describe('Security Configuration', () => {
     test('should have valid secret ARN', () => {
       expect(outputs.secretArn).toBeDefined();
+      // Handle masked account IDs (***) in ARNs
       expect(outputs.secretArn).toMatch(
-        /^arn:aws:secretsmanager:[a-z0-9-]+:\d{12}:secret:[a-zA-Z0-9/_+=.@-]+$/
+        /^arn:aws:secretsmanager:[a-z0-9-]+:(\d{12}|\*\*\*):secret:[a-zA-Z0-9/_+=.@-]+$/
       );
     });
 
@@ -80,19 +96,19 @@ describe('TAP Stack Integration Tests', () => {
       // Check if KMS keys are exported (they might be in nested outputs)
       if (outputs.logsKmsKeyArn) {
         expect(outputs.logsKmsKeyArn).toMatch(
-          /^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+          /^arn:aws:kms:[a-z0-9-]+:(\d{12}|\*\*\*):key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
         );
       }
 
       if (outputs.secretsKmsKeyArn) {
         expect(outputs.secretsKmsKeyArn).toMatch(
-          /^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+          /^arn:aws:kms:[a-z0-9-]+:(\d{12}|\*\*\*):key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
         );
       }
 
       if (outputs.s3KmsKeyArn) {
         expect(outputs.s3KmsKeyArn).toMatch(
-          /^arn:aws:kms:[a-z0-9-]+:\d{12}:key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+          /^arn:aws:kms:[a-z0-9-]+:(\d{12}|\*\*\*):key\/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
         );
       }
     });
@@ -100,7 +116,7 @@ describe('TAP Stack Integration Tests', () => {
     test('should have valid ABAC role ARN if exported', () => {
       if (outputs.abacRoleArn) {
         expect(outputs.abacRoleArn).toMatch(
-          /^arn:aws:iam::\d{12}:role\/[a-zA-Z0-9_+=,.@-]+$/
+          /^arn:aws:iam::(\d{12}|\*\*\*):role\/[a-zA-Z0-9_+=,.@-]+$/
         );
       }
     });
@@ -134,7 +150,7 @@ describe('TAP Stack Integration Tests', () => {
       if (outputs.sessionManagerRoleArn) {
         expect(outputs.sessionManagerRoleArn).toBeDefined();
         expect(outputs.sessionManagerRoleArn).toMatch(
-          /^arn:aws:iam::\d{12}:role\/[a-zA-Z0-9_+=,.@-]+$/
+          /^arn:aws:iam::(\d{12}|\*\*\*):role\/[a-zA-Z0-9_+=,.@-]+$/
         );
       }
     });
@@ -169,14 +185,15 @@ describe('TAP Stack Integration Tests', () => {
       expect(outputs.vpcId).toMatch(/^vpc-[a-f0-9]{8,17}$/);
 
       // Subnet IDs
-      outputs.privateSubnetIds.forEach((subnetId: string) => {
+      privateSubnetIds.forEach((subnetId: string) => {
         expect(subnetId).toMatch(/^subnet-[a-f0-9]{8,17}$/);
       });
     });
 
     test('should have valid AWS ARN format for secret', () => {
+      // Handle masked account IDs (***) in ARNs
       expect(outputs.secretArn).toMatch(
-        /^arn:aws:[a-z-]+:[a-z0-9-]*:\d{12}:[a-zA-Z0-9/_+=.@-]+$/
+        /^arn:aws:[a-z-]+:[a-z0-9-]*:(\d{12}|\*\*\*):[a-zA-Z0-9/_+=.@-]+$/
       );
     });
 
@@ -232,9 +249,9 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should have non-empty array for privateSubnetIds', () => {
-      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
-      expect(outputs.privateSubnetIds.length).toBeGreaterThan(0);
-      outputs.privateSubnetIds.forEach((subnetId: string) => {
+      expect(Array.isArray(privateSubnetIds)).toBe(true);
+      expect(privateSubnetIds.length).toBeGreaterThan(0);
+      privateSubnetIds.forEach((subnetId: string) => {
         expect(subnetId.length).toBeGreaterThan(0);
       });
     });
@@ -247,7 +264,7 @@ describe('TAP Stack Integration Tests', () => {
     });
 
     test('should follow consistent naming pattern for subnets', () => {
-      outputs.privateSubnetIds.forEach((subnetId: string) => {
+      privateSubnetIds.forEach((subnetId: string) => {
         expect(subnetId).toMatch(/^subnet-[a-f0-9]+$/);
       });
     });
@@ -277,7 +294,7 @@ describe('TAP Stack Integration Tests', () => {
     test('should have subnets in the same VPC', () => {
       // Subnets are created in the VPC, so they should be consistent
       expect(outputs.vpcId).toBeDefined();
-      expect(outputs.privateSubnetIds.length).toBeGreaterThan(0);
+      expect(privateSubnetIds.length).toBeGreaterThan(0);
     });
   });
 
@@ -293,7 +310,7 @@ describe('TAP Stack Integration Tests', () => {
     test('should have private subnets only', () => {
       // This stack uses private subnets only (no public subnets)
       expect(outputs.privateSubnetIds).toBeDefined();
-      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
+      expect(Array.isArray(privateSubnetIds)).toBe(true);
       // No public subnet IDs should be present
       expect(outputs.publicSubnetIds).toBeUndefined();
     });
@@ -302,13 +319,13 @@ describe('TAP Stack Integration Tests', () => {
   describe('Data Type Validation', () => {
     test('should have correct data types for outputs', () => {
       expect(typeof outputs.vpcId).toBe('string');
-      expect(Array.isArray(outputs.privateSubnetIds)).toBe(true);
+      expect(Array.isArray(privateSubnetIds)).toBe(true);
       expect(typeof outputs.flowLogsBucketName).toBe('string');
       expect(typeof outputs.secretArn).toBe('string');
     });
 
     test('should have string elements in privateSubnetIds array', () => {
-      outputs.privateSubnetIds.forEach((subnetId: any) => {
+      privateSubnetIds.forEach((subnetId: any) => {
         expect(typeof subnetId).toBe('string');
       });
     });
@@ -326,7 +343,7 @@ describe('TAP Stack Integration Tests', () => {
     test('should have consistent resource naming', () => {
       // All resources should follow naming conventions
       expect(outputs.vpcId).toMatch(/^vpc-/);
-      outputs.privateSubnetIds.forEach((id: string) => {
+      privateSubnetIds.forEach((id: string) => {
         expect(id).toMatch(/^subnet-/);
       });
       expect(outputs.secretArn).toMatch(/^arn:aws:secretsmanager:/);
@@ -373,7 +390,7 @@ describe('TAP Stack Integration Tests', () => {
       ];
 
       optionalOutputs.forEach((output) => {
-        // If present, should be valid ARN format
+        // If present, should be valid ARN format (handle masked account IDs)
         if (outputs[output]) {
           expect(outputs[output]).toMatch(/^arn:aws:/);
         }
@@ -389,7 +406,7 @@ describe('TAP Stack Integration Tests', () => {
 
     test('should handle optional AccessStack outputs gracefully', () => {
       if (outputs.sessionManagerRoleArn) {
-        expect(outputs.sessionManagerRoleArn).toMatch(/^arn:aws:iam::\d{12}:role\//);
+        expect(outputs.sessionManagerRoleArn).toMatch(/^arn:aws:iam::(\d{12}|\*\*\*):role\//);
       }
     });
   });
