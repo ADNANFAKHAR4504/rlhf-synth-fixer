@@ -228,6 +228,9 @@ resource "aws_s3_bucket_lifecycle_configuration" "primary" {
     id     = "transition-old-versions"
     status = "Enabled"
 
+    # Apply to all objects
+    filter {}
+
     noncurrent_version_transition {
       noncurrent_days = 30
       storage_class   = "GLACIER"

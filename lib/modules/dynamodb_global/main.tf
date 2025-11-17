@@ -20,7 +20,7 @@ resource "aws_dynamodb_table" "session_state" {
   range_key    = "timestamp"
 
   # Enable Point-in-Time Recovery
-  point_in_time_recovery {
+  point_in_time_recovery = {
     enabled = true
   }
 
@@ -97,7 +97,7 @@ resource "aws_dynamodb_table" "app_state" {
   hash_key     = "state_key"
   range_key    = "version"
 
-  point_in_time_recovery {
+  point_in_time_recovery = {
     enabled = true
   }
 

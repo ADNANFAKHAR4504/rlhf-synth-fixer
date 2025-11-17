@@ -10,17 +10,23 @@ resource "aws_secretsmanager_secret" "db_credentials" {
   name_prefix = "rds-credentials-${var.environment_suffix}-"
   description = "RDS Aurora database master credentials"
 
-  # Enable automatic rotation every 30 days
-  rotation_rules {
-    automatically_after_days = 30
-  }
-
   tags = {
     Name        = "secret-rds-${var.environment_suffix}"
     Environment = var.environment
     CostCenter  = var.cost_center
   }
 }
+
+# Note: Automatic rotation would require a Lambda function
+# This is a placeholder for rotation configuration
+# In production, you would add:
+# resource "aws_secretsmanager_secret_rotation" "db_credentials" {
+#   secret_id           = aws_secretsmanager_secret.db_credentials.id
+#   rotation_lambda_arn = aws_lambda_function.rotate_secret.arn
+#   rotation_rules {
+#     automatically_after_days = 30
+#   }
+# }
 
 # Store the credentials in Secrets Manager
 resource "aws_secretsmanager_secret_version" "db_credentials" {
