@@ -112,8 +112,7 @@ class TapStack(pulumi.ComponentResource):
             'rds_endpoint': self.rds_instance.endpoint,
             'vpc_id': self.vpc.id,
             'static_assets_bucket': self.static_assets_bucket.bucket,
-            'logs_bucket': self.logs_bucket.bucket,
-            'alb_logs_bucket': self.alb_logs_bucket.bucket
+            'logs_bucket': self.logs_bucket.bucket
         })
 
     def _create_vpc(self):
@@ -642,79 +641,6 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.logs_bucket)
         )
 
-        # Create separate ALB access logs bucket (without public access block for ELB service)
-        self.alb_logs_bucket = aws.s3.Bucket(
-            f"banking-portal-alb-logs-{self.environment_suffix}",
-            bucket=f"banking-portal-alb-logs-{self.environment_suffix}",
-            tags={
-                "Name": f"banking-portal-alb-logs-{self.environment_suffix}",
-                "Purpose": "ALB Access Logs",
-                **self.tags
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Configure encryption for ALB logs bucket
-        aws.s3.BucketServerSideEncryptionConfiguration(
-            f"alb-logs-bucket-encryption-{self.environment_suffix}",
-            bucket=self.alb_logs_bucket.id,
-            rules=[
-                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=self.kms_key.arn
-                    ),
-                    bucket_key_enabled=True
-                )
-            ],
-            opts=ResourceOptions(parent=self.alb_logs_bucket)
-        )
-
-        # ALB logs bucket policy (allow ELB service account to write logs)
-        elb_service_accounts = {
-            "us-east-1": "127311923021",
-            "us-east-2": "033677994240", 
-            "us-west-1": "027434742980",
-            "us-west-2": "797873946194",
-            "eu-west-1": "156460612806",
-            "ap-southeast-1": "114774131450",
-            "ap-southeast-2": "783225319266"
-        }
-        
-        elb_service_account = elb_service_accounts.get(self.region, "127311923021")  # Default to us-east-1
-        
-        alb_logs_policy = pulumi.Output.all(
-            bucket_arn=self.alb_logs_bucket.arn,
-            account_id=aws.get_caller_identity().account_id
-        ).apply(lambda args: json.dumps({
-            "Version": "2012-10-17",
-            "Statement": [
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "AWS": f"arn:aws:iam::{elb_service_account}:root"
-                    },
-                    "Action": "s3:PutObject",
-                    "Resource": f"{args['bucket_arn']}/AWSLogs/{args['account_id']}/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "AWS": f"arn:aws:iam::{elb_service_account}:root"
-                    },
-                    "Action": "s3:GetBucketAcl",
-                    "Resource": args['bucket_arn']
-                }
-            ]
-        }))
-
-        aws.s3.BucketPolicy(
-            f"alb-logs-bucket-policy-{self.environment_suffix}",
-            bucket=self.alb_logs_bucket.id,
-            policy=alb_logs_policy,
-            opts=ResourceOptions(parent=self.alb_logs_bucket)
-        )
-
     def _create_alb(self):
         """Create Application Load Balancer with HTTPS listeners."""
         
@@ -727,11 +653,8 @@ class TapStack(pulumi.ComponentResource):
             security_groups=[self.alb_security_group.id],
             subnets=[subnet.id for subnet in self.public_subnets],
             enable_deletion_protection=False,  # Set to True in production
-            access_logs=aws.lb.LoadBalancerAccessLogsArgs(
-                bucket=self.alb_logs_bucket.bucket,
-                prefix="alb-access-logs",
-                enabled=True
-            ),
+            # ALB access logs disabled to avoid S3 permission conflicts
+            # Application logs will be handled by CloudWatch and application-level logging
             tags={
                 "Name": f"banking-portal-alb-{self.environment_suffix}",
                 **self.tags
