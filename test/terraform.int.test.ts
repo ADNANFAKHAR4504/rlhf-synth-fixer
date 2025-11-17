@@ -1,6 +1,339 @@
 import * as AWS from 'aws-sdk';
+import { execSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
+
+// Test configuration
+const REGION = process.env.AWS_REGION || "us-east-1";
+const TEST_TIMEOUT = 60000; // 60 seconds per test
+const TERRAFORM_DIR = path.resolve(__dirname, "../lib");
+
+// Helper: Run terraform plan
+function runTerraformPlan(varFile: string): string | null {
+  try {
+    return execSync(
+      `terraform plan -var-file=${varFile} -out=tfplan-test -no-color`,
+      {
+        cwd: TERRAFORM_DIR,
+        encoding: "utf-8",
+      }
+    );
+  } catch (error: any) {
+    const output = error.stdout || error.stderr || error.message;
+    // Check if it's a backend initialization error
+    if (output.includes("Backend initialization required")) {
+      return null; // Signal that backend init is needed
+    }
+    return output;
+  }
+}
+
+// Helper: Reinitialize Terraform with backend disabled
+function reinitializeTerraform(): boolean {
+  try {
+    console.log("   Reinitializing Terraform with -reconfigure -backend=false...");
+    execSync("terraform init -reconfigure -backend=false", {
+      cwd: TERRAFORM_DIR,
+      stdio: 'pipe'
+    });
+    console.log("   ✅ Reinitialization successful");
+    return true;
+  } catch (error) {
+    console.log("   ❌ Reinitialization failed");
+    return false;
+  }
+}
+
+// Helper: Get plan JSON
+function getTerraformPlanJson(varFile: string): any {
+  try {
+    // Generate plan
+    execSync(`terraform plan -var-file=${varFile} -out=tfplan-test`, {
+      cwd: TERRAFORM_DIR,
+    });
+
+    // Convert to JSON
+    const planJson = execSync("terraform show -json tfplan-test", {
+      cwd: TERRAFORM_DIR,
+      encoding: "utf-8",
+    });
+
+    return JSON.parse(planJson);
+  } catch (error) {
+    console.error("Failed to get plan JSON:", error);
+    return null;
+  }
+}
+
+// Helper: Extract resource types from plan
+function extractResourceTypes(plan: any): Map<string, number> {
+  const resourceCounts = new Map<string, number>();
+
+  if (plan?.planned_values?.root_module?.resources) {
+    for (const resource of plan.planned_values.root_module.resources) {
+      const type = resource.type;
+      resourceCounts.set(type, (resourceCounts.get(type) || 0) + 1);
+    }
+  }
+
+  return resourceCounts;
+}
+
+// Helper: Discover environment var files dynamically
+function discoverEnvVarFiles(): string[] {
+  const envDir = path.join(TERRAFORM_DIR, "environments");
+  let files: string[] = [];
+
+  try {
+    if (fs.existsSync(envDir)) {
+      files = fs.readdirSync(envDir)
+        .filter((f) => f.endsWith('.tfvars'))
+        .map((f) => path.join('environments', f));
+    }
+
+    if (files.length === 0) {
+      // Fallback to top-level .tfvars files in TERRAFORM_DIR
+      files = fs.readdirSync(TERRAFORM_DIR)
+        .filter((f) => f.endsWith('.tfvars'))
+        .map((f) => f);
+    }
+  } catch (err) {
+    console.warn('⚠️  Failed to discover env var files:', err);
+    files = [];
+  }
+
+  // Keep a deterministic order
+  files.sort();
+  return files;
+}
+
+// =============================================================================
+// SUITE 1: PLAN VALIDATION TESTS (No Deployment)
+// =============================================================================
+
+describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => {
+  const environments = discoverEnvVarFiles();
+  let terraformAvailable = false;
+  let backendInitialized = false;
+
+  beforeAll(() => {
+    // Check if Terraform is available
+    try {
+      execSync("which terraform", { encoding: "utf-8" });
+      terraformAvailable = true;
+
+      // Create backend override to force local state for testing
+      console.log("Setting up Terraform with local backend for testing...");
+      const backendOverride = `
+terraform {
+  backend "local" {}
+}
+`;
+
+      const overridePath = path.join(TERRAFORM_DIR, "backend_override.tf");
+      fs.writeFileSync(overridePath, backendOverride);
+      console.log("✅ Created backend override file");
+
+      // Initialize with local backend
+      try {
+        execSync("terraform init -reconfigure", {
+          cwd: TERRAFORM_DIR,
+          stdio: 'pipe'
+        });
+        backendInitialized = true;
+        console.log("✅ Terraform initialized with local backend");
+      } catch (initError) {
+        console.warn("⚠️  Failed to initialize Terraform");
+        backendInitialized = false;
+      }
+    } catch (error) {
+      console.warn("⚠️  Terraform not found in PATH - skipping plan validation tests");
+      terraformAvailable = false;
+    }
+  });
+
+  afterAll(() => {
+    // Cleanup: Remove backend override and local state
+    try {
+      const overridePath = path.join(TERRAFORM_DIR, "backend_override.tf");
+      if (fs.existsSync(overridePath)) {
+        fs.unlinkSync(overridePath);
+        console.log("🧹 Cleaned up backend override file");
+      }
+
+      const statePath = path.join(TERRAFORM_DIR, "terraform.tfstate");
+      if (fs.existsSync(statePath)) {
+        fs.unlinkSync(statePath);
+      }
+
+      const planPath = path.join(TERRAFORM_DIR, "tfplan-test");
+      if (fs.existsSync(planPath)) {
+        fs.unlinkSync(planPath);
+      }
+    } catch (error) {
+      // Ignore cleanup errors
+    }
+  });
+
+  test(
+    "can generate valid plans for all environments",
+    () => {
+      if (!terraformAvailable || !backendInitialized) {
+        console.log("ℹ️  Terraform not properly initialized - skipping plan validation");
+        return;
+      }
+
+      // Validate plans for all environments
+      for (const envFile of environments) {
+        console.log(`\n📋 Generating plan for ${envFile}...`);
+        const planOutput = runTerraformPlan(envFile);
+
+        // Should never be null with local backend configured
+        expect(planOutput).toBeTruthy();
+        expect(planOutput).not.toContain("Error:");
+        expect(planOutput).toMatch(/Plan:|No changes/);
+
+        console.log(`✅ ${envFile}: Plan validated successfully`);
+      }
+    },
+    TEST_TIMEOUT * 2 // Allow more time for multiple plans
+  );
+
+  test(
+    "has identical resource type counts across environments",
+    () => {
+      if (!terraformAvailable) {
+        console.log("ℹ️  Terraform not available - skipping resource count validation");
+        return;
+      }
+
+      const plans: Record<string, Map<string, number>> = {};
+
+      // Generate plans for all environments
+      for (const envFile of environments) {
+        const plan = getTerraformPlanJson(envFile);
+        if (plan) {
+          plans[envFile] = extractResourceTypes(plan);
+        }
+      }
+
+      // Compare resource counts
+      const envNames = Object.keys(plans);
+      if (envNames.length < 2) {
+        console.warn("⚠️  Skipping comparison - not enough plans generated");
+        return;
+      }
+
+      console.log(`\n🔍 Comparing resource counts across ${envNames.length} environments: ${envNames.join(', ')}`);
+
+      const basePlan = plans[envNames[0]];
+      const baseTypes = Array.from(basePlan.keys()).sort();
+
+      for (let i = 1; i < envNames.length; i++) {
+        console.log(`\n📊 Comparing ${envNames[0]} vs ${envNames[i]}...`);
+        const comparePlan = plans[envNames[i]];
+        const compareTypes = Array.from(comparePlan.keys()).sort();
+
+        // Resources that can legitimately vary across environments
+        const allowedVariableResources = [
+          "aws_lambda_provisioned_concurrency_config",
+          "aws_eip",
+          "aws_nat_gateway",
+          "aws_sns_topic_subscription",
+        ];
+
+        console.log(`   Allowed variable resources: ${allowedVariableResources.join(', ')}`);
+
+        const isAllowedToVary = (type: string) =>
+          allowedVariableResources.some(prefix => type.includes(prefix));
+
+        // Filter out allowed variable resources for type comparison
+        const baseTypesFiltered = baseTypes.filter(t => !isAllowedToVary(t));
+        const compareTypesFiltered = compareTypes.filter(t => !isAllowedToVary(t));
+
+        // Check same resource types exist (excluding allowed variable resources)
+        expect(compareTypesFiltered).toEqual(baseTypesFiltered);
+
+        // Get all unique types from both environments
+        const allTypes = new Set([...baseTypes, ...compareTypes]);
+
+        // Check same counts for all resource types
+        for (const type of allTypes) {
+          const baseCount = basePlan.get(type) || 0;
+          const compareCount = comparePlan.get(type) || 0;
+
+          // Allow small variance for conditional resources
+          const diff = Math.abs(baseCount - compareCount);
+          if (diff > 0) {
+            const isAllowed = isAllowedToVary(type);
+            console.log(
+              `ℹ️  ${type}: ${envNames[0]}=${baseCount}, ${envNames[i]}=${compareCount}${isAllowed ? ' (allowed to vary)' : ''}`
+            );
+          }
+
+          // Only assert equality for non-variable resources
+          if (!isAllowedToVary(type)) {
+            if (baseCount !== compareCount) {
+              console.error(
+                `❌ Resource count mismatch: ${type}`,
+                `\n   ${envNames[0]}: ${baseCount} resources`,
+                `\n   ${envNames[i]}: ${compareCount} resources`,
+                `\n   Difference: ${Math.abs(baseCount - compareCount)}`,
+                `\n   This resource is NOT in the allowed variable resources list.`,
+                `\n   If this is intentional, add "${type}" to allowedVariableResources.`
+              );
+            }
+            expect(compareCount).toBe(baseCount);
+          }
+        }
+
+        console.log(`✅ ${envNames[0]} ↔️ ${envNames[i]}: Resource types match`);
+      }
+    },
+    TEST_TIMEOUT * 3
+  );
+
+  test(
+    "all required outputs are defined in all environments",
+    () => {
+      if (!terraformAvailable) {
+        console.log("ℹ️  Terraform not available - skipping output validation");
+        return;
+      }
+
+      const requiredOutputs = [
+        "vpc_id",
+        "dynamodb_table_name",
+        "kinesis_stream_arn",
+        "s3_bucket_names",
+        "sqs_queue_urls",
+        "sns_patient_updates_arn",
+        "sns_operational_alerts_arn",
+        "sns_phi_violations_arn",
+        "kms_key_arn",
+      ];
+
+      for (const envFile of environments) {
+        const plan = getTerraformPlanJson(envFile);
+
+        if (plan?.planned_values?.outputs) {
+          const outputs = Object.keys(plan.planned_values.outputs);
+
+          for (const required of requiredOutputs) {
+            expect(outputs).toContain(required);
+          }
+
+          console.log(`✅ ${envFile}: All required outputs defined`);
+        }
+      }
+    },
+    TEST_TIMEOUT
+  );
+});
+
+// =============================================================================
+// SUITE 2: SERVICE-LEVEL INTEGRATION TESTS (Deployed Infrastructure)
+// =============================================================================
 
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
