@@ -107,11 +107,11 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     echo "🔧 Go Pulumi project detected"
     cd lib
     echo "Selecting dev stack..."
-    pulumi stack select "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --create || echo "Stack selection failed"
+    pulumi stack select "${PULUMI_ORG}/pulumi-infra/TapStack${ENVIRONMENT_SUFFIX}" --create || echo "Stack selection failed"
     echo "Destroying Pulumi infrastructure..."
-    pulumi destroy --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" || echo "No resources to destroy or destruction failed"
+    pulumi destroy --yes --refresh --stack "${PULUMI_ORG}/pulumi-infra/TapStack${ENVIRONMENT_SUFFIX}" || echo "No resources to destroy or destruction failed"
     echo "Removing Pulumi stack..."
-    pulumi stack rm "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}" --yes --force || echo "Stack removal failed or stack doesn't exist"
+    pulumi stack rm "${PULUMI_ORG}/pulumi-infra/TapStack${ENVIRONMENT_SUFFIX}" --yes --force || echo "Stack removal failed or stack doesn't exist"
     cd ..
   else
     echo "🔧 Python Pulumi project detected"
