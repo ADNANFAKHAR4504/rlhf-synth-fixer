@@ -12,12 +12,14 @@
     "ExternalId": {
       "Type": "String",
       "Description": "External ID for cross-account IAM role assumption",
+      "Default": "test-external-id-123",
       "MinLength": 8,
       "NoEcho": true
     },
     "DatabasePassword": {
       "Type": "String",
       "Description": "Database password to be encrypted in Lambda environment",
+      "Default": "TestPassword123!",
       "NoEcho": true,
       "MinLength": 12
     }
