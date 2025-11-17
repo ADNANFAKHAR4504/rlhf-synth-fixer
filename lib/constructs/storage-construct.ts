@@ -32,7 +32,8 @@ export class StorageConstruct extends Construct {
     );
 
     const bucketProps: s3.BucketProps = {
-      bucketName: `fintech-uploads-${props.environmentSuffix}`,
+      // Remove hardcoded bucketName to allow CDK to generate unique names
+      // This prevents 409 conflicts from pending operations or previous deployments
       encryption: s3.BucketEncryption.KMS,
       encryptionKey: this.encryptionKey,
       versioned: true,
@@ -52,6 +53,12 @@ export class StorageConstruct extends Construct {
       ],
     };
 
+    this.bucket = new s3.Bucket(
+      this,
+      `UserUploadsBucket-${props.environmentSuffix}`,
+      bucketProps
+    );
+
     if (props.isPrimary && props.replicationDestinationBucketArn) {
       const replicationRole = new iam.Role(
         this,
@@ -61,12 +68,11 @@ export class StorageConstruct extends Construct {
         }
       );
 
+      // Grant replication permissions using the actual bucket ARN
       replicationRole.addToPolicy(
         new iam.PolicyStatement({
           actions: ['s3:GetReplicationConfiguration', 's3:ListBucket'],
-          resources: [
-            `arn:aws:s3:::fintech-uploads-${props.environmentSuffix}`,
-          ],
+          resources: [this.bucket.bucketArn],
         })
       );
 
@@ -76,9 +82,7 @@ export class StorageConstruct extends Construct {
             's3:GetObjectVersionForReplication',
             's3:GetObjectVersionAcl',
           ],
-          resources: [
-            `arn:aws:s3:::fintech-uploads-${props.environmentSuffix}/*`,
-          ],
+          resources: [`${this.bucket.bucketArn}/*`],
         })
       );
 
@@ -105,12 +109,6 @@ export class StorageConstruct extends Construct {
         );
       }
     }
-
-    this.bucket = new s3.Bucket(
-      this,
-      `UserUploadsBucket-${props.environmentSuffix}`,
-      bucketProps
-    );
 
     cdk.Tags.of(this.bucket).add('Region', props.region);
   }
