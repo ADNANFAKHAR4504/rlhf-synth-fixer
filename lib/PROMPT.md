@@ -95,7 +95,6 @@ Create a refactored infrastructure using **Pulumi with Python** that improves pe
 - **Type Safety**: Type hints on all function signatures and return values
 - **Tagging**: Centralized tagging strategy applied to all resources
 - **Outputs**: ALB DNS, RDS endpoint, and S3 ARNs exported as stack outputs
-- **Security**: IAM policies follow least-privilege with no wildcards
 - **Resource Naming**: All resources include environmentSuffix parameter
 
 ## What to deliver

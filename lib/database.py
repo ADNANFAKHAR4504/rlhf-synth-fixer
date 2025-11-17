@@ -19,7 +19,7 @@ class DatabaseStack:
                  security_group_id: Output[str],
                  db_name: str,
                  db_username: str,
-                 db_password: "testpassword123",
+                 db_password: str,
                  instance_class: str,
                  allocated_storage: int,
                  environment_suffix: str,

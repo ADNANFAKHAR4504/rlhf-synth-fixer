@@ -93,7 +93,7 @@ class MonitoringStack:
                         "logs:DescribeLogGroups",
                         "logs:DescribeLogStreams"
                     ],
-                    resources=["*"]
+                    resources=[f"arn:aws:logs:us-east-1:*:log-group:/aws/vpc/flowlogs/{environment_suffix}*"]
                 )
             ]
         )
