@@ -28,6 +28,8 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_archive.provider import ArchiveProvider
+from cdktf_cdktf_provider_archive.data_archive_file import DataArchiveFile
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
@@ -88,6 +90,9 @@ class TradingPlatformStack(TerraformStack):
         AwsProvider(self, "aws",
             region=self.region
         )
+
+        # Archive Provider (for creating Lambda ZIP files)
+        ArchiveProvider(self, "archive")
 
         # Create all infrastructure components
         self.create_kms_key()
@@ -436,12 +441,19 @@ class TradingPlatformStack(TerraformStack):
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         )
 
+        # Create ZIP file from Lambda source code automatically
+        lambda_archive = DataArchiveFile(self, f"lambda-archive-{self.environment_suffix}",
+            type="zip",
+            source_file="${path.module}/../../../lib/lambda/index.py",
+            output_path="${path.module}/../../../lib/lambda/lambda_function.zip"
+        )
+
         # Lambda Function
-        # Note: Lambda code is in ./lib/lambda/index.py
-        # Reference the Python file directly - Terraform will package it
+        # Note: Lambda code is automatically zipped from ./lib/lambda/index.py
         self.lambda_function = LambdaFunction(self, f"lambda-function-{self.environment_suffix}",
             function_name=f"trading-processor-{self.environment_suffix}",
-            filename="${path.module}/../../../lib/lambda/index.py",
+            filename=lambda_archive.output_path,
+            source_code_hash=lambda_archive.output_base64_sha256,
             handler="index.handler",
             runtime="python3.11",
             role=self.lambda_role.arn,
