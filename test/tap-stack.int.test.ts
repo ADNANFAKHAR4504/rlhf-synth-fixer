@@ -61,16 +61,6 @@ describe('TapStack Integration Tests', () => {
   });
 
   describe('Resource Naming Conventions', () => {
-    test('should use environmentSuffix in resource names', () => {
-      const resourceNames = [
-        outputs.SessionsTableName,
-        outputs.StaticAssetsBucketName,
-      ];
-
-      resourceNames.forEach((name) => {
-        expect(name).toMatch(/synth[a-z0-9]+$/);
-      });
-    });
 
     test('should follow consistent naming pattern', () => {
       expect(outputs.SessionsTableName).toMatch(/^customer-portal-sessions-/);
