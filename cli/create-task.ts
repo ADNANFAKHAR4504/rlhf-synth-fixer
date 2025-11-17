@@ -345,8 +345,8 @@ async function main(): Promise<void> {
         ? {
           aws_services: resourcesText
             .split(',')
-            .map((s) => s.trim())
-            .filter((s) => s.length > 0),
+            .map(s => s.trim())
+            .filter(s => s.length > 0),
         }
         : {}),
       ...(deployEnv
