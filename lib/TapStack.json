@@ -24,6 +24,7 @@
     "ComplianceReportsBucket": {
       "Type": "AWS::S3::Bucket",
       "DeletionPolicy": "Retain",
+      "UpdateReplacePolicy": "Retain",
       "Properties": {
         "BucketName": {
           "Fn::Sub": "compliance-reports-${EnvironmentSuffix}"
@@ -229,6 +230,9 @@
             },
             "ENVIRONMENT_SUFFIX": {
               "Ref": "EnvironmentSuffix"
+            },
+            "APPROVED_AMI_LIST": {
+              "Fn::Join": [",", {"Ref": "ApprovedAMIList"}]
             }
           }
         },
