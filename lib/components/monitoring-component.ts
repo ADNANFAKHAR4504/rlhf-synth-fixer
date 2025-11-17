@@ -40,7 +40,7 @@ export class MonitoringComponent extends pulumi.ComponentResource {
     this.dashboard = new aws.cloudwatch.Dashboard(
       `dashboard-${args.environmentSuffix}`,
       {
-        dashboardName: `trading-platform-${args.environmentSuffix}`,
+        dashboardName: `trading-platform-${args.environmentSuffix}-pw`,
         dashboardBody: pulumi
           .all([
             args.clusterName,

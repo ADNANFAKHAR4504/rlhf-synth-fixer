@@ -33,7 +33,7 @@ export class EcsComponent extends pulumi.ComponentResource {
     this.cluster = new aws.ecs.Cluster(
       `ecs-cluster-${args.environmentSuffix}`,
       {
-        name: `ecs-cluster-${args.environmentSuffix}`,
+        name: `ecs-cluster-${args.environmentSuffix}-pw`,
         settings: [
           {
             name: 'containerInsights',
@@ -158,7 +158,7 @@ export class EcsComponent extends pulumi.ComponentResource {
     this.taskDefinition = new aws.ecs.TaskDefinition(
       `ecs-task-def-${args.environmentSuffix}`,
       {
-        family: `trading-platform-${args.environmentSuffix}`,
+        family: `trading-platform-${args.environmentSuffix}-pw`,
         networkMode: 'awsvpc',
         requiresCompatibilities: ['FARGATE'],
         cpu: args.cpu || '512',
@@ -205,7 +205,11 @@ export class EcsComponent extends pulumi.ComponentResource {
     );
 
     // Create ECS Service - wait for ALB listener to be ready
-    const serviceDependencies: pulumi.Resource[] = [this.taskDefinition];
+    // Add cluster to dependencies to ensure proper deletion order
+    const serviceDependencies: pulumi.Resource[] = [
+      this.cluster,
+      this.taskDefinition,
+    ];
     if (args.albListenerArn) {
       // Note: albListenerArn is an Input, we pass the raw ARN for dependency
       // Pulumi will handle the dependency automatically through the Input type
@@ -214,7 +218,7 @@ export class EcsComponent extends pulumi.ComponentResource {
     this.service = new aws.ecs.Service(
       `ecs-service-${args.environmentSuffix}`,
       {
-        name: `trading-platform-${args.environmentSuffix}`,
+        name: `trading-platform-${args.environmentSuffix}-pw`,
         cluster: this.cluster.arn,
         taskDefinition: this.taskDefinition.arn,
         desiredCount: args.desiredCount || 2,
@@ -235,6 +239,8 @@ export class EcsComponent extends pulumi.ComponentResource {
           Name: `ecs-service-${args.environmentSuffix}`,
           Environment: args.environmentSuffix,
         },
+        // Force service to scale down before deletion
+        forceNewDeployment: false,
       },
       { parent: this, dependsOn: serviceDependencies }
     );

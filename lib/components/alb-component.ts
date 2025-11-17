@@ -24,7 +24,7 @@ export class AlbComponent extends pulumi.ComponentResource {
     this.alb = new aws.lb.LoadBalancer(
       `alb-${args.environmentSuffix}`,
       {
-        name: `alb-${args.environmentSuffix}`,
+        name: `alb-${args.environmentSuffix}-pw`,
         internal: false,
         loadBalancerType: 'application',
         securityGroups: [args.albSecurityGroupId],
@@ -42,7 +42,7 @@ export class AlbComponent extends pulumi.ComponentResource {
     this.targetGroup = new aws.lb.TargetGroup(
       `tg-${args.environmentSuffix}`,
       {
-        name: `tg-${args.environmentSuffix}`,
+        name: `tg-${args.environmentSuffix}-pw`,
         port: 8080,
         protocol: 'HTTP',
         vpcId: args.vpcId,
