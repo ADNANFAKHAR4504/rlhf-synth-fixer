@@ -2,10 +2,11 @@
 Web tier ComponentResource.
 Encapsulates ALB, Target Group, and Auto Scaling Group.
 """
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ComponentResource, ResourceOptions, Output
+from pulumi import ComponentResource, Output, ResourceOptions
 
 
 class WebTierArgs:
@@ -18,7 +19,7 @@ class WebTierArgs:
                  alb_security_group_id: Output[str],
                  ec2_security_group_id: Output[str],
                  instance_profile_arn: Output[str],
-                 ami_id: str,
+                 ami_id: Optional[str],
                  instance_type: str,
                  min_size: int,
                  max_size: int,
@@ -35,7 +36,7 @@ class WebTierArgs:
             alb_security_group_id: ALB security group ID
             ec2_security_group_id: EC2 security group ID
             instance_profile_arn: IAM instance profile ARN
-            ami_id: AMI ID for EC2 instances
+            ami_id: AMI ID for EC2 instances (optional, will use latest AL2 if not provided)
             instance_type: EC2 instance type
             min_size: Minimum ASG size
             max_size: Maximum ASG size
@@ -74,6 +75,27 @@ class WebTier(ComponentResource):
             opts: Pulumi resource options
         """
         super().__init__("custom:infrastructure:WebTier", name, None, opts)
+
+        # Get AMI ID
+        if args.ami_id:
+            ami_id = args.ami_id
+        else:
+            # Get the latest Amazon Linux 2 AMI
+            ami = aws.ec2.get_ami(
+                most_recent=True,
+                owners=["amazon"],
+                filters=[
+                    aws.ec2.GetAmiFilterArgs(
+                        name="name",
+                        values=["amzn2-ami-hvm-*-x86_64-gp2"]
+                    ),
+                    aws.ec2.GetAmiFilterArgs(
+                        name="state",
+                        values=["available"]
+                    )
+                ]
+            )
+            ami_id = ami.id
 
         # Application Load Balancer
         self.alb = aws.lb.LoadBalancer(
@@ -136,7 +158,7 @@ echo "OK" > /var/www/html/health
         self.launch_template = aws.ec2.LaunchTemplate(
             f"lt-{args.environment_suffix}",
             name_prefix=f"lt-{args.environment_suffix}-",
-            image_id=args.ami_id,
+            image_id=ami_id,
             instance_type=args.instance_type,
             vpc_security_group_ids=[args.ec2_security_group_id],
             iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(

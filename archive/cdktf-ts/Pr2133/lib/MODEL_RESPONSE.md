@@ -754,7 +754,7 @@ class SecureInfrastructureStack extends TerraformStack {
 
     // Bastion Host
     const bastionInstance = new Instance(this, "bastion-instance", {
-      ami: "ami-0c55b159cbfafe1d0", // Amazon Linux 2 AMI (update as needed)
+      ami: "ami-0c02fb55956c7d316", // Amazon Linux 2 AMI (update as needed)
       instanceType: "t3.micro",
       keyName: "your-key-pair", // Replace with your key pair name
       vpcSecurityGroupIds: [bastionSg.id],
@@ -779,7 +779,7 @@ yum install -y amazon-cloudwatch-agent
 
     // Application Server
     const appInstance = new Instance(this, "app-instance", {
-      ami: "ami-0c55b159cbfafe1d0", // Amazon Linux 2 AMI (update as needed)
+      ami: "ami-0c02fb55956c7d316", // Amazon Linux 2 AMI (update as needed)
       instanceType: "t3.small",
       keyName: "your-key-pair", // Replace with your key pair name
       vpcSecurityGroupIds: [appSg.id],

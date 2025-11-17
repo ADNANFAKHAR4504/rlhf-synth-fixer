@@ -14,7 +14,7 @@ class InfraConfig:
         self.config = pulumi.Config()
 
         # EC2 Configuration
-        self.ami_id = self.config.get("ami_id") or "ami-0c55b159cbfafe1d0"
+        self.ami_id = self.config.get("ami_id") or "ami-0c02fb55956c7d316"
         self.instance_type = self.config.get("instance_type") or "t3.medium"
         self.min_size = self.config.get_int("min_size") or 2
         self.max_size = self.config.get_int("max_size") or 6
