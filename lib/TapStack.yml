@@ -40,7 +40,7 @@ Parameters:
   MasterPassword:
     Type: String
     NoEcho: true
-    Default: !Sub 'Pass${EnvironmentSuffix}123'
+    Default: 'TempPass123456'
     Description: 'Master password for Aurora cluster (min 8 characters)'
     MinLength: 8
     MaxLength: 41
