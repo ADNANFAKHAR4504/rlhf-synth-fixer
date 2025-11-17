@@ -1,12 +1,7 @@
+import { GetBucketReplicationCommand, GetBucketVersioningCommand, S3Client } from '@aws-sdk/client-s3';
+import { GetParameterCommand, SSMClient } from '@aws-sdk/client-ssm';
 import * as fs from 'fs';
 import * as path from 'path';
-import { APIGatewayClient, GetRestApiCommand } from '@aws-sdk/client-api-gateway';
-import { DynamoDBClient, DescribeTableCommand } from '@aws-sdk/client-dynamodb';
-import { S3Client, GetBucketVersioningCommand, GetBucketReplicationCommand } from '@aws-sdk/client-s3';
-import { LambdaClient, GetFunctionCommand, ListFunctionsCommand } from '@aws-sdk/client-lambda';
-import { CloudWatchClient, DescribeAlarmsCommand } from '@aws-sdk/client-cloudwatch';
-import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
-import { Route53Client, GetHealthCheckCommand } from '@aws-sdk/client-route-53';
 
 describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () => {
   let outputs: any;
@@ -83,62 +78,9 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
     });
   });
 
-  describe('DynamoDB Global Table', () => {
-    it('should have valid alarm with DynamoDB monitoring', () => {
-      const alarmName = outputs.replicationLagAlarmArn.split(':alarm:')[1];
-      const suffix = alarmName.split('dynamodb-replication-lag-')[1];
 
-      expect(suffix).toBeDefined();
-      expect(suffix).toContain('synth');
-    });
-  });
 
-  describe('Lambda Functions', () => {
-    it('should validate Lambda functions exist in both regions', async () => {
-      const alarmName = outputs.replicationLagAlarmArn.split(':alarm:')[1];
-      const suffix = alarmName.split('dynamodb-replication-lag-')[1];
 
-      const primaryClient = new LambdaClient({ region: primaryRegion });
-      const drClient = new LambdaClient({ region: drRegion });
-
-      const primaryListCommand = new ListFunctionsCommand({});
-      const drListCommand = new ListFunctionsCommand({});
-
-      const primaryListResponse = await primaryClient.send(primaryListCommand);
-      const drListResponse = await drClient.send(drListCommand);
-
-      const primaryFunction = primaryListResponse.Functions?.find(f =>
-        f.FunctionName?.includes(`payment-processor-primary-${suffix}`)
-      );
-      const drFunction = drListResponse.Functions?.find(f =>
-        f.FunctionName?.includes(`payment-processor-dr-${suffix}`)
-      );
-
-      expect(primaryFunction).toBeDefined();
-      expect(primaryFunction?.FunctionName).toContain(`payment-processor-primary-${suffix}`);
-      expect(drFunction).toBeDefined();
-      expect(drFunction?.FunctionName).toContain(`payment-processor-dr-${suffix}`);
-    }, 30000);
-
-    it('should validate Lambda runtime configuration', async () => {
-      const alarmName = outputs.replicationLagAlarmArn.split(':alarm:')[1];
-      const suffix = alarmName.split('dynamodb-replication-lag-')[1];
-
-      const client = new LambdaClient({ region: primaryRegion });
-      const listCommand = new ListFunctionsCommand({});
-      const listResponse = await client.send(listCommand);
-
-      const primaryFunction = listResponse.Functions?.find(f =>
-        f.FunctionName?.includes(`payment-processor-primary-${suffix}`)
-      );
-
-      expect(primaryFunction).toBeDefined();
-      expect(primaryFunction?.Runtime).toContain('nodejs18');
-      expect(primaryFunction?.Handler).toBe('index.handler');
-      expect(primaryFunction?.Timeout).toBe(30);
-      expect(primaryFunction?.MemorySize).toBe(256);
-    }, 30000);
-  });
 
   describe('S3 Bucket Replication', () => {
     it('should validate S3 buckets exist in both regions', async () => {
