@@ -29,6 +29,7 @@ from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
+from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
 from cdktf_cdktf_provider_aws.api_gateway_resource import ApiGatewayResource
 from cdktf_cdktf_provider_aws.api_gateway_method import ApiGatewayMethod
@@ -39,6 +40,7 @@ from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
 from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
 from cdktf_cdktf_provider_aws.route53_record import Route53Record
 import json
+import os
 
 
 class RegionConfig:
@@ -435,9 +437,11 @@ class TradingPlatformStack(TerraformStack):
         )
 
         # Lambda Function
+        # Note: Lambda code is in ./lambda/index.py
+        # Run scripts/package-lambda.sh before synth to create lambda_function.zip
         self.lambda_function = LambdaFunction(self, f"lambda-function-{self.environment_suffix}",
             function_name=f"trading-processor-{self.environment_suffix}",
-            filename="lambda_function.zip",
+            filename="${path.module}/../../../lambda_function.zip",
             handler="index.handler",
             runtime="python3.11",
             role=self.lambda_role.arn,
@@ -490,7 +494,7 @@ class TradingPlatformStack(TerraformStack):
         )
 
         # Lambda Integration
-        ApiGatewayIntegration(self, f"api-integration-{self.environment_suffix}",
+        integration = ApiGatewayIntegration(self, f"api-integration-{self.environment_suffix}",
             rest_api_id=self.api.id,
             resource_id=resource.id,
             http_method=method.http_method,
@@ -511,7 +515,7 @@ class TradingPlatformStack(TerraformStack):
         # API Deployment
         deployment = ApiGatewayDeployment(self, f"api-deployment-{self.environment_suffix}",
             rest_api_id=self.api.id,
-            depends_on=[method],
+            depends_on=[method, integration],
             lifecycle={
                 "create_before_destroy": True
             }
