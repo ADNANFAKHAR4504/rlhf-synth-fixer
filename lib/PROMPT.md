@@ -1,25 +1,33 @@
-ROLE: You are a senior Terraform engineer.
+Task Title: Production-Ready, Highly Available AWS VPC Network Architecture (Single File)
 
-CONTEXT:
-We must migrate an AWS application from region us-west-1 to us-west-2 using Terraform HCL.
+Design and implement a complete, production-ready AWS Virtual Private Cloud (VPC) network architecture using Terraform HCL. The entire solution—including resources, variables, locals, and outputs—must be contained within a single file named main.tf. Do not include any terraform or provider blocks, as AWS authentication is handled by a separate, pre-configured provider.tf file.
 
-CONSTRAINTS:
-- Preserve logical identity: keep the same names/tags/topology.
-- Resource IDs are region-scoped; provide an old→new ID mapping plan using terraform import (do NOT recreate).
-- Migrate Terraform state to the new region/workspace without data loss.
-- Preserve all SG rules and network configuration semantics.
-- Minimize downtime; propose DNS cutover steps and TTL strategy.
+The configuration must enforce high availability, proper network segmentation, and least-privilege security standards by strictly adhering to the following eight requirements:
 
-DELIVERABLES:
-1) main.tf (providers, resources, modules as needed)
-2) variables.tf
-3) backend.tf (if required) with placeholders, not real secrets
-4) state-migration.md (exact Terraform CLI commands: workspace create/select, import, and verification)
-5) id-mapping.csv sample (headers: resource,address,old_id,new_id,notes)
-6) runbook.md (cutover plan, roll-back, checks)
+ VPC and Network Core
+1.  VPC Base: Create a VPC with the CIDR block 10.0.0.0/16. Ensure DNS Hostnames are enabled on the VPC.
+2.  Availability Zones (AZs): Define a list of three distinct AWS Availability Zones (AZs) to ensure high availability.
+3.  Subnet Creation: Deploy a total of six subnets across the three defined AZs (three Public and three Private).
+     All subnets must use a /24 CIDR block.
+     The CIDR blocks must be calculated dynamically using only Terraform built-in functions (e.g., cidrsubnet) starting from the main 10.0.0.0/16 VPC range.
+4.  Gateways and NAT: Create an Internet Gateway (IGW) and attach it to the VPC. Deploy exactly three NAT Gateways (NGWs), one in each of the three public subnets, to ensure redundancy.
 
-OUTPUT FORMAT (IMPORTANT):
-- Provide each file in a separate fenced code block with its filename as the first line in a comment, e.g.:
-```hcl
-# main.tf
-...
+ Routing and Segmentation
+5.  Public Routing: Create a single Public Route Table. Configure a route to send all external traffic (0.0.0.0/0) through the Internet Gateway. Explicitly associate each of the three public subnets with this table.
+6.  Private Routing: Create three separate Private Route Tables, one for each AZ/private subnet. Configure each table with a route for all external traffic (0.0.0.0/0) pointing to the NAT Gateway deployed in the corresponding AZ's public subnet. Explicitly associate each private route table with its respective private subnet.
+
+ Security and Standards
+7.  Security Groups (SGs): Create two specialized security groups:
+     Web Tier SG: Allows ingress on TCP Port 443 from 0.0.0.0/0 (anywhere).
+     App Tier SG: Allows ingress on TCP Port 8080 only from the Web Tier Security Group ID.
+     Implementation Requirement: All ingress rules in both security groups must use a dynamic block.
+8.  Implementation Best Practices:
+     Iteration: All repeatable resources (Subnets, NAT Gateways, Route Tables, and Route Table Associations) must use for_each for resource creation and management (do not use count).
+     Tagging: All created resources must be tagged with Environment = "Production", ManagedBy = "Terraform", and CostCenter = "Web-App-Service".
+
+ Required Outputs
+The configuration must provide the following named outputs:
+ vpc_id
+ public_subnet_ids (map or list)
+ private_subnet_ids (map or list)
+ nat_gateway_ids (map or list)
