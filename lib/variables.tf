@@ -2,6 +2,7 @@
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
+  default     = "dev"
 
   validation {
     condition     = can(regex("^(dev|staging|prod)$", var.environment))
@@ -12,6 +13,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid conflicts"
   type        = string
+  default     = "devtest"
 
   validation {
     condition     = can(regex("^[a-z0-9]{6,12}$", var.environment_suffix))
@@ -22,6 +24,7 @@ variable "environment_suffix" {
 variable "project_name" {
   description = "Project name for resource tagging"
   type        = string
+  default     = "iac-test-automations"
 
   validation {
     condition     = length(var.project_name) > 2 && length(var.project_name) <= 32
@@ -208,6 +211,7 @@ variable "db_master_username" {
 variable "db_master_password" {
   description = "Master password for RDS clusters"
   type        = string
+  default     = "TempPassword123!"
   sensitive   = true
 
   validation {
