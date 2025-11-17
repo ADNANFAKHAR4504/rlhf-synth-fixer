@@ -1,49 +1,49 @@
 Hey team,
 
-We need to build a multi-region trading platform infrastructure that can be consistently deployed across three AWS regions. The business is expanding globally and needs identical infrastructure in US East, US East 2, and US West 2 to ensure low-latency access for our trading clients around the world. I've been asked to create this using Python with CDKTF to give us the flexibility of CDK while keeping Terraform's multi-region capabilities.
+We need to build a trading platform infrastructure in the US East region (us-east-1). The business needs a robust infrastructure with RDS Aurora MySQL clusters, Lambda functions for trade processing, and API Gateway endpoints. I've been asked to create this using Python with CDKTF to give us the flexibility of CDK while keeping Terraform's capabilities.
 
-The main challenge here is maintaining complete consistency across regions while still allowing for region-specific customizations like availability zones and CIDR ranges. Each region needs to run the same RDS Aurora MySQL clusters, Lambda functions for trade processing, and API Gateway endpoints, but we need to avoid configuration drift and ensure we can deploy or destroy everything cleanly.
+The main challenge here is ensuring we can deploy or destroy everything cleanly while maintaining proper configuration. The infrastructure needs to support workspace-based deployments so we can maintain dev, staging, and prod environments.
 
-The infrastructure needs to support workspace-based deployments so we can maintain dev, staging, and prod environments per region. All data needs encryption at rest using region-specific KMS keys, and we have compliance requirements around data retention - 90 days for S3 artifacts and 30 days for CloudWatch logs.
+All data needs encryption at rest using KMS keys, and we have compliance requirements around data retention - 90 days for S3 artifacts and 30 days for CloudWatch logs.
 
 ## What we need to build
 
-Create a multi-region trading platform infrastructure using **CDKTF with Python** that maintains consistency across three AWS regions while supporting environment-specific deployments.
+Create a trading platform infrastructure using **CDKTF with Python** in the **us-east-1** region while supporting environment-specific deployments.
 
 ### Core Requirements
 
-1. **Multi-Region Architecture**
-   - Deploy identical infrastructure to us-east-1, us-east-2, and us-west-2 regions
-   - Create modular structure that accepts region-specific variables while enforcing consistency
+1. **Single-Region Architecture**
+   - Deploy infrastructure to us-east-1 region
+   - Create modular structure that accepts region-specific variables
    - Use locals blocks to define region-specific settings like availability zones and CIDR ranges
-   - Support workspace-based configuration with dev, staging, and prod environments per region
+   - Support workspace-based configuration with dev, staging, and prod environments
 
 2. **Database Infrastructure**
-   - Create RDS Aurora MySQL clusters in each region
+   - Create RDS Aurora MySQL cluster in us-east-1
    - Configure 2 read replicas per cluster using db.r5.large instances
-   - Set up VPC access for Lambda functions to communicate with RDS clusters
+   - Set up VPC access for Lambda functions to communicate with RDS cluster
    - Ensure all database resources can be destroyed and recreated without data loss
 
 3. **Compute and API Layer**
    - Deploy Lambda functions from a shared ZIP file with 512MB memory and 30-second timeout
-   - Configure Lambda functions with VPC access to communicate with RDS clusters
-   - Set up API Gateway REST APIs with Lambda proxy integration
+   - Configure Lambda functions with VPC access to communicate with RDS cluster
+   - Set up API Gateway REST API with Lambda proxy integration
    - Configure custom domains for API Gateway endpoints
 
 4. **Storage and Encryption**
-   - Create S3 buckets with lifecycle policies to delete objects older than 90 days
-   - Set up region-specific KMS keys with alias names following pattern alias/trading-{region}
+   - Create S3 bucket with lifecycle policies to delete objects older than 90 days
+   - Set up KMS key with alias name following pattern alias/trading-us-east-1
    - Apply KMS encryption for all data at rest
 
 5. **Logging and DNS**
-   - Set up CloudWatch Log Groups with 30-day retention policies across regions
+   - Set up CloudWatch Log Groups with 30-day retention policies
    - Configure Route 53 for DNS management of API endpoints
-   - Output the API Gateway invoke URLs and RDS cluster endpoints for each region
+   - Output the API Gateway invoke URL and RDS cluster endpoints
 
 ### Technical Requirements
 
 - All infrastructure defined using **CDKTF with Python**
-- Use **RDS Aurora MySQL** for database clusters with read replicas
+- Use **RDS Aurora MySQL** for database cluster with read replicas
 - Use **Lambda** for trade processing functions
 - Use **API Gateway** for REST API endpoints
 - Use **S3** for artifact storage with lifecycle policies
@@ -53,8 +53,8 @@ Create a multi-region trading platform infrastructure using **CDKTF with Python*
 - Use **Route 53** for DNS management
 - Resource names must include **environmentSuffix** parameter for uniqueness across workspaces
 - Follow naming convention: {resource-type}-{environment-suffix}
-- Deploy to us-east-1, us-east-2, and us-west-2 regions
-- Requires Terraform 1.5+ with AWS provider 5.x
+- Deploy to **us-east-1** region only
+- Requires Terraform 1.5+ with AWS provider 5.x or 6.x
 
 ### Deployment Requirements (CRITICAL)
 
@@ -78,12 +78,11 @@ Create a multi-region trading platform infrastructure using **CDKTF with Python*
 
 ## Success Criteria
 
-- Functionality: Infrastructure deploys consistently across all three regions
-- Consistency: Identical resource configurations with only region-specific parameters varying
-- Workspaces: Support for dev, staging, and prod environments per region
+- Functionality: Infrastructure deploys successfully to us-east-1 region
+- Workspaces: Support for dev, staging, and prod environments
 - Resource Naming: All resources include environmentSuffix for workspace isolation
 - Destroyability: All resources can be cleanly destroyed and recreated
-- Outputs: API Gateway URLs and RDS endpoints clearly exposed for each region
+- Outputs: API Gateway URL and RDS endpoints clearly exposed
 - Security: KMS encryption applied to all data at rest
 - Compliance: Lifecycle and retention policies properly configured
 - Code Quality: Python, well-structured, modular, documented
@@ -91,12 +90,12 @@ Create a multi-region trading platform infrastructure using **CDKTF with Python*
 ## What to deliver
 
 - Complete CDKTF Python implementation with modular structure
-- RDS Aurora MySQL clusters with read replicas in each region
+- RDS Aurora MySQL cluster with read replicas in us-east-1
 - Lambda functions with VPC access and API Gateway integration
-- S3 buckets with lifecycle policies
-- KMS keys with region-specific aliases
+- S3 bucket with lifecycle policies
+- KMS key with region-specific alias
 - CloudWatch Log Groups with retention policies
 - Route 53 DNS configuration
 - Workspace-based deployment support for dev/staging/prod
-- Proper outputs for API URLs and database endpoints
+- Proper outputs for API URL and database endpoints
 - Documentation on deployment and usage

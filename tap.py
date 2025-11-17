@@ -5,20 +5,22 @@ import os
 
 app = App()
 
-# Get environment suffix from Terraform workspace or environment variable
-environment_suffix = os.getenv("TF_WORKSPACE", os.getenv("ENVIRONMENT_SUFFIX", "dev"))
+# Get environment suffix
+environment_suffix = os.getenv("ENVIRONMENT_SUFFIX") or os.getenv("TF_WORKSPACE") or "dev"
 
-# Define regions to deploy
-regions = ["us-east-1", "us-east-2", "us-west-2"]
+# AWS environment configuration
+region = os.getenv("AWS_REGION") or "us-east-1"
 
-# Create a stack for each region
-for region in regions:
-    stack_id = f"trading-platform-{region.replace('-', '')}-{environment_suffix}"
-    TradingPlatformStack(
-        app,
-        stack_id,
-        region=region,
-        environment_suffix=environment_suffix
-    )
+# Repository metadata
+repository_name = os.getenv("REPOSITORY", "unknown")
+commit_author = os.getenv("COMMIT_AUTHOR", "unknown")
+
+# Main stack
+TradingPlatformStack(
+    app,
+    f"TapStack{environment_suffix}",
+    region=region,
+    environment_suffix=environment_suffix
+)
 
 app.synth()

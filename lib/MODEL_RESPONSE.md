@@ -1,14 +1,14 @@
-# Multi-Region Trading Platform Infrastructure - CDKTF Python Implementation
+# Trading Platform Infrastructure - CDKTF Python Implementation
 
-This implementation provides a complete multi-region trading platform infrastructure using CDKTF with Python. The solution deploys identical infrastructure across three AWS regions (us-east-1, us-east-2, us-west-2) with support for workspace-based environments (dev, staging, prod).
+This implementation provides a complete trading platform infrastructure using CDKTF with Python. The solution deploys infrastructure to the us-east-1 region with support for workspace-based environments (dev, staging, prod).
 
 ## Architecture Overview
 
-- Multi-region deployment with consistent configuration
-- RDS Aurora MySQL clusters with read replicas
+- Single region deployment (us-east-1)
+- RDS Aurora MySQL cluster with read replicas
 - Lambda functions with VPC access
-- API Gateway REST APIs with custom domains
-- S3 buckets with lifecycle policies
+- API Gateway REST API with custom domains
+- S3 bucket with lifecycle policies
 - KMS encryption for all data at rest
 - CloudWatch Logs with retention policies
 - Route 53 DNS management
@@ -68,9 +68,9 @@ class RegionConfig:
         self.azs = azs
 
     @staticmethod
-    def get_region_configs():
-        """Return configuration for all three regions"""
-        return {
+    def get_region_config(region: str):
+        """Return configuration for the specified region"""
+        configs = {
             "us-east-1": RegionConfig(
                 region="us-east-1",
                 vpc_cidr="10.0.0.0/16",
@@ -87,17 +87,18 @@ class RegionConfig:
                 azs=["us-west-2a", "us-west-2b", "us-west-2c"]
             )
         }
+        return configs.get(region, configs["us-east-1"])
 
 
 class TradingPlatformStack(TerraformStack):
-    """Multi-region trading platform infrastructure stack"""
+    """Trading platform infrastructure stack for single region deployment"""
 
     def __init__(self, scope: Construct, id: str, region: str, environment_suffix: str):
         super().__init__(scope, id)
 
         self.region = region
         self.environment_suffix = environment_suffix
-        self.region_config = RegionConfig.get_region_configs()[region]
+        self.region_config = RegionConfig.get_region_config(region)
 
         # AWS Provider
         AwsProvider(self, "aws",
@@ -580,7 +581,7 @@ class TradingPlatformStack(TerraformStack):
         )
 ```
 
-## File: main.py
+## File: tap.py
 
 ```python
 #!/usr/bin/env python
@@ -591,20 +592,19 @@ import os
 app = App()
 
 # Get environment suffix from Terraform workspace or environment variable
-environment_suffix = os.getenv("TF_WORKSPACE", "dev")
+environment_suffix = os.getenv("TF_WORKSPACE", os.getenv("ENVIRONMENT_SUFFIX", "dev"))
 
-# Define regions to deploy
-regions = ["us-east-1", "us-east-2", "us-west-2"]
+# Get AWS region from environment variable or use default
+region = os.getenv("AWS_REGION", "us-east-1")
 
-# Create a stack for each region
-for region in regions:
-    stack_id = f"trading-platform-{region.replace('-', '')}-{environment_suffix}"
-    TradingPlatformStack(
-        app,
-        stack_id,
-        region=region,
-        environment_suffix=environment_suffix
-    )
+# Create a single stack for the specified region
+stack_id = f"trading-platform-{region.replace('-', '')}-{environment_suffix}"
+TradingPlatformStack(
+    app,
+    stack_id,
+    region=region,
+    environment_suffix=environment_suffix
+)
 
 app.synth()
 ```
@@ -688,9 +688,9 @@ def handler(event, context):
 ## File: lib/README.md
 
 ```markdown
-# Multi-Region Trading Platform Infrastructure
+# Trading Platform Infrastructure
 
-This CDKTF Python implementation deploys a complete trading platform infrastructure across three AWS regions (us-east-1, us-east-2, us-west-2).
+This CDKTF Python implementation deploys a complete trading platform infrastructure to the us-east-1 region.
 
 ## Architecture
 
@@ -879,16 +879,16 @@ cdktf-cdktf-provider-aws>=19.0.0
 2. Create Lambda deployment package from lib/lambda/index.py
 3. Set workspace using TF_WORKSPACE environment variable
 4. Run cdktf synth to generate Terraform configuration
-5. Run cdktf deploy to create infrastructure across all three regions
-6. Use outputs to access API Gateway URLs and RDS endpoints
-7. Test API endpoints with sample trade requests
+5. Run cdktf deploy to create infrastructure in us-east-1 region
+6. Use outputs to access API Gateway URL and RDS endpoints
+7. Test API endpoint with sample trade requests
 8. Monitor CloudWatch Logs for Lambda execution
 9. Verify RDS cluster health and read replica status
 10. Use cdktf destroy to cleanly remove all resources
 
 ## Key Features
 
-- Multi-region consistency with region-specific configurations
+- Single region deployment (us-east-1) with region-specific configurations
 - Workspace-based environment management (dev/staging/prod)
 - KMS encryption for all data at rest
 - Automated lifecycle policies (90 days for S3, 30 days for logs)

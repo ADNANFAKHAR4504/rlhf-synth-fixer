@@ -42,7 +42,7 @@ import json
 
 
 class RegionConfig:
-    """Configuration for each region including CIDR and availability zones"""
+    """Configuration for region including CIDR and availability zones"""
 
     def __init__(self, region: str, vpc_cidr: str, azs: list[str]):
         self.region = region
@@ -50,9 +50,9 @@ class RegionConfig:
         self.azs = azs
 
     @staticmethod
-    def get_region_configs():
-        """Return configuration for all three regions"""
-        return {
+    def get_region_config(region: str):
+        """Return configuration for the specified region"""
+        configs = {
             "us-east-1": RegionConfig(
                 region="us-east-1",
                 vpc_cidr="10.0.0.0/16",
@@ -69,17 +69,18 @@ class RegionConfig:
                 azs=["us-west-2a", "us-west-2b", "us-west-2c"]
             )
         }
+        return configs.get(region, configs["us-east-1"])
 
 
 class TradingPlatformStack(TerraformStack):
-    """Multi-region trading platform infrastructure stack"""
+    """Trading platform infrastructure stack for single region deployment"""
 
-    def __init__(self, scope: Construct, id: str, region: str, environment_suffix: str):
-        super().__init__(scope, id)
+    def __init__(self, scope: Construct, stack_id: str, region: str, environment_suffix: str):
+        super().__init__(scope, stack_id)
 
         self.region = region
         self.environment_suffix = environment_suffix
-        self.region_config = RegionConfig.get_region_configs()[region]
+        self.region_config = RegionConfig.get_region_config(region)
 
         # AWS Provider
         AwsProvider(self, "aws",
@@ -142,9 +143,11 @@ class TradingPlatformStack(TerraformStack):
         # Public Subnets (for NAT Gateway)
         self.public_subnets = []
         for idx, az in enumerate(self.region_config.azs[:2]):  # Use 2 AZs
+            vpc_octets = self.region_config.vpc_cidr.split('.')
+            cidr = f"{vpc_octets[0]}.{vpc_octets[1]}.{idx}.0/24"
             subnet = Subnet(self, f"public-subnet-{idx}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
-                cidr_block=f"{self.region_config.vpc_cidr.split('.')[0]}.{self.region_config.vpc_cidr.split('.')[1]}.{idx}.0/24",
+                cidr_block=cidr,
                 availability_zone=az,
                 map_public_ip_on_launch=True,
                 tags={
@@ -157,9 +160,11 @@ class TradingPlatformStack(TerraformStack):
         # Private Subnets (for RDS and Lambda)
         self.private_subnets = []
         for idx, az in enumerate(self.region_config.azs[:2]):  # Use 2 AZs
+            vpc_octets = self.region_config.vpc_cidr.split('.')
+            cidr = f"{vpc_octets[0]}.{vpc_octets[1]}.{idx + 10}.0/24"
             subnet = Subnet(self, f"private-subnet-{idx}-{self.environment_suffix}",
                 vpc_id=self.vpc.id,
-                cidr_block=f"{self.region_config.vpc_cidr.split('.')[0]}.{self.region_config.vpc_cidr.split('.')[1]}.{idx + 10}.0/24",
+                cidr_block=cidr,
                 availability_zone=az,
                 tags={
                     "Name": f"trading-private-{idx}-{self.environment_suffix}",
@@ -291,14 +296,19 @@ class TradingPlatformStack(TerraformStack):
         )
 
         # S3 Bucket Encryption
-        S3BucketServerSideEncryptionConfigurationA(self, f"s3-encryption-{self.environment_suffix}",
+        encryption_default = (
+            S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
+                sse_algorithm="aws:kms",
+                kms_master_key_id=self.kms_key.arn
+            )
+        )
+        S3BucketServerSideEncryptionConfigurationA(
+            self,
+            f"s3-encryption-{self.environment_suffix}",
             bucket=self.s3_bucket.id,
             rule=[
                 S3BucketServerSideEncryptionConfigurationRuleA(
-                    apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
-                        sse_algorithm="aws:kms",
-                        kms_master_key_id=self.kms_key.arn
-                    )
+                    apply_server_side_encryption_by_default=encryption_default
                 )
             ]
         )
@@ -522,7 +532,6 @@ class TradingPlatformStack(TerraformStack):
         """Create Route 53 hosted zone (placeholder for custom domains)"""
         # Note: In production, you would create Route53 records for custom domains
         # This is a placeholder as actual domain setup requires domain ownership
-        pass
 
     def create_outputs(self):
         """Create stack outputs"""

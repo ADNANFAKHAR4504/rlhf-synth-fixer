@@ -6,7 +6,11 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T05:41:15+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": [],
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
   "po_id": "2db2r6",
   "aws_services": [
     "VPC",
