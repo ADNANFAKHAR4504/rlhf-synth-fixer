@@ -11,5 +11,19 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC", "CloudWatch", "IAM", "KMS", "CloudTrail", "S3", "SNS"]
+  "aws_services": [
+    "VPC",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "S3",
+    "SNS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
