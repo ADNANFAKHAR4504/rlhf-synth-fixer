@@ -2,10 +2,11 @@
 Database infrastructure module.
 Creates RDS MySQL instance.
 """
-from typing import List, Dict, Any
+from typing import Any, Dict, List
+
 import pulumi
 import pulumi_aws as aws
-from pulumi import ResourceOptions, Output
+from pulumi import Output, ResourceOptions
 
 
 class DatabaseStack:
@@ -18,7 +19,7 @@ class DatabaseStack:
                  security_group_id: Output[str],
                  db_name: str,
                  db_username: str,
-                 db_password: Output[str],
+                 db_password: "testpassword123",
                  instance_class: str,
                  allocated_storage: int,
                  environment_suffix: str,
