@@ -112,7 +112,8 @@ class TapStack(pulumi.ComponentResource):
             'rds_endpoint': self.rds_instance.endpoint,
             'vpc_id': self.vpc.id,
             'static_assets_bucket': self.static_assets_bucket.bucket,
-            'logs_bucket': self.logs_bucket.bucket
+            'logs_bucket': self.logs_bucket.bucket,
+            'alb_logs_bucket': self.alb_logs_bucket.bucket
         })
 
     def _create_vpc(self):
@@ -641,8 +642,35 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self.logs_bucket)
         )
 
-        # ALB access logs bucket policy (allow ELB service account to write logs)
-        # ELB service account IDs by region: https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html
+        # Create separate ALB access logs bucket (without public access block for ELB service)
+        self.alb_logs_bucket = aws.s3.Bucket(
+            f"banking-portal-alb-logs-{self.environment_suffix}",
+            bucket=f"banking-portal-alb-logs-{self.environment_suffix}",
+            tags={
+                "Name": f"banking-portal-alb-logs-{self.environment_suffix}",
+                "Purpose": "ALB Access Logs",
+                **self.tags
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Configure encryption for ALB logs bucket
+        aws.s3.BucketServerSideEncryptionConfiguration(
+            f"alb-logs-bucket-encryption-{self.environment_suffix}",
+            bucket=self.alb_logs_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="aws:kms",
+                        kms_master_key_id=self.kms_key.arn
+                    ),
+                    bucket_key_enabled=True
+                )
+            ],
+            opts=ResourceOptions(parent=self.alb_logs_bucket)
+        )
+
+        # ALB logs bucket policy (allow ELB service account to write logs)
         elb_service_accounts = {
             "us-east-1": "127311923021",
             "us-east-2": "033677994240", 
@@ -656,7 +684,7 @@ class TapStack(pulumi.ComponentResource):
         elb_service_account = elb_service_accounts.get(self.region, "127311923021")  # Default to us-east-1
         
         alb_logs_policy = pulumi.Output.all(
-            bucket_arn=self.logs_bucket.arn,
+            bucket_arn=self.alb_logs_bucket.arn,
             account_id=aws.get_caller_identity().account_id
         ).apply(lambda args: json.dumps({
             "Version": "2012-10-17",
@@ -667,20 +695,7 @@ class TapStack(pulumi.ComponentResource):
                         "AWS": f"arn:aws:iam::{elb_service_account}:root"
                     },
                     "Action": "s3:PutObject",
-                    "Resource": f"{args['bucket_arn']}/alb-access-logs/AWSLogs/{args['account_id']}/*"
-                },
-                {
-                    "Effect": "Allow",
-                    "Principal": {
-                        "Service": "delivery.logs.amazonaws.com"
-                    },
-                    "Action": "s3:PutObject",
-                    "Resource": f"{args['bucket_arn']}/alb-access-logs/AWSLogs/{args['account_id']}/*",
-                    "Condition": {
-                        "StringEquals": {
-                            "s3:x-amz-acl": "bucket-owner-full-control"
-                        }
-                    }
+                    "Resource": f"{args['bucket_arn']}/AWSLogs/{args['account_id']}/*"
                 },
                 {
                     "Effect": "Allow",
@@ -694,10 +709,10 @@ class TapStack(pulumi.ComponentResource):
         }))
 
         aws.s3.BucketPolicy(
-            f"logs-bucket-alb-policy-{self.environment_suffix}",
-            bucket=self.logs_bucket.id,
+            f"alb-logs-bucket-policy-{self.environment_suffix}",
+            bucket=self.alb_logs_bucket.id,
             policy=alb_logs_policy,
-            opts=ResourceOptions(parent=self.logs_bucket)
+            opts=ResourceOptions(parent=self.alb_logs_bucket)
         )
 
     def _create_alb(self):
@@ -713,7 +728,7 @@ class TapStack(pulumi.ComponentResource):
             subnets=[subnet.id for subnet in self.public_subnets],
             enable_deletion_protection=False,  # Set to True in production
             access_logs=aws.lb.LoadBalancerAccessLogsArgs(
-                bucket=self.logs_bucket.bucket,
+                bucket=self.alb_logs_bucket.bucket,
                 prefix="alb-access-logs",
                 enabled=True
             ),
