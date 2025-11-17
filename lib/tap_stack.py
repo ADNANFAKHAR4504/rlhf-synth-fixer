@@ -128,17 +128,18 @@ class TapStack(pulumi.ComponentResource):
             secondary_region, secondary_payment_lambda, secondary_provider
         )
 
-        # Create SNS topic for failover notifications
-        sns_topic = self._create_sns_topic(primary_provider)
+        # Create SNS topics for failover notifications (one per region)
+        primary_sns_topic = self._create_sns_topic(primary_region, primary_provider)
+        secondary_sns_topic = self._create_sns_topic(secondary_region, secondary_provider)
 
-        # Create CloudWatch alarms
+        # Create CloudWatch alarms (only for region-specific resources)
         self._create_cloudwatch_alarms(
             primary_region, primary_api, primary_payment_lambda,
-            global_table, sns_topic, primary_provider
+            primary_sns_topic, primary_provider
         )
         self._create_cloudwatch_alarms(
             secondary_region, secondary_api, secondary_payment_lambda,
-            global_table, sns_topic, secondary_provider
+            secondary_sns_topic, secondary_provider
         )
 
         # Create Application Load Balancer for failover
@@ -673,11 +674,11 @@ class TapStack(pulumi.ComponentResource):
 
         return ApiGatewayResult(stage, api.id, invoke_url)
 
-    def _create_sns_topic(self, provider: aws.Provider) -> aws.sns.Topic:
+    def _create_sns_topic(self, region: str, provider: aws.Provider) -> aws.sns.Topic:
         """Create SNS topic for failover notifications."""
         topic = aws.sns.Topic(
-            f"failover-notifications-{self.environment_suffix}",
-            name=f"failover-notifications-{self.environment_suffix}",
+            f"failover-notifications-{region}-{self.environment_suffix}",
+            name=f"failover-notifications-{region}-{self.environment_suffix}",
             opts=ResourceOptions(parent=self, provider=provider)
         )
 
@@ -688,11 +689,10 @@ class TapStack(pulumi.ComponentResource):
         region: str,
         api_result: ApiGatewayResult,
         lambda_fn: aws.lambda_.Function,
-        table: aws.dynamodb.Table,
         sns_topic: aws.sns.Topic,
         provider: aws.Provider
     ):
-        """Create CloudWatch alarms for monitoring."""
+        """Create CloudWatch alarms for monitoring region-specific resources."""
         # API Gateway latency alarm
         aws.cloudwatch.MetricAlarm(
             f"api-latency-alarm-{region}-{self.environment_suffix}",
@@ -724,23 +724,6 @@ class TapStack(pulumi.ComponentResource):
             alarm_description="Lambda function errors detected",
             alarm_actions=[sns_topic.arn],
             dimensions={"FunctionName": lambda_fn.name},
-            opts=ResourceOptions(parent=self, provider=provider)
-        )
-
-        # DynamoDB throttling alarm
-        aws.cloudwatch.MetricAlarm(
-            f"dynamodb-throttle-alarm-{region}-{self.environment_suffix}",
-            name=f"dynamodb-throttle-{region}-{self.environment_suffix}",
-            comparison_operator="GreaterThanThreshold",
-            evaluation_periods=1,
-            metric_name="UserErrors",
-            namespace="AWS/DynamoDB",
-            period=60,
-            statistic="Sum",
-            threshold=10,
-            alarm_description="DynamoDB throttling detected",
-            alarm_actions=[sns_topic.arn],
-            dimensions={"TableName": table.name},
             opts=ResourceOptions(parent=self, provider=provider)
         )
 
