@@ -23,6 +23,7 @@ import {
 import {
   EC2Client,
   DescribeVpcsCommand,
+  DescribeVpcAttributeCommand,
   DescribeSubnetsCommand,
   DescribeNatGatewaysCommand,
   DescribeInstancesCommand,
@@ -482,7 +483,7 @@ describe('WebApp ECS Fargate Infrastructure Integration Tests', () => {
         const vpcId = outputs.VPCId;
 
         try {
-          // ACTION: Describe VPC
+          // ACTION 1: Describe VPC
           const response = await ec2Client.send(
             new DescribeVpcsCommand({
               VpcIds: [vpcId],
@@ -496,8 +497,26 @@ describe('WebApp ECS Fargate Infrastructure Integration Tests', () => {
           expect(vpc.VpcId).toBe(vpcId);
           expect(vpc.State).toBe('available');
           expect(vpc.CidrBlock).toBeDefined();
-          expect(vpc.EnableDnsHostnames).toBe(true);
-          expect(vpc.EnableDnsSupport).toBe(true);
+
+          // ACTION 2: Check DNS Hostnames attribute
+          const dnsHostnamesResponse = await ec2Client.send(
+            new DescribeVpcAttributeCommand({
+              VpcId: vpcId,
+              Attribute: 'enableDnsHostnames',
+            })
+          );
+
+          expect(dnsHostnamesResponse.EnableDnsHostnames?.Value).toBe(true);
+
+          // ACTION 3: Check DNS Support attribute
+          const dnsSupportResponse = await ec2Client.send(
+            new DescribeVpcAttributeCommand({
+              VpcId: vpcId,
+              Attribute: 'enableDnsSupport',
+            })
+          );
+
+          expect(dnsSupportResponse.EnableDnsSupport?.Value).toBe(true);
         } catch (error: any) {
           console.error('VPC test failed:', error);
           throw error;
