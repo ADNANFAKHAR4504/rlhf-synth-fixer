@@ -36,6 +36,8 @@ export class TapStack extends pulumi.ComponentResource {
             type: 'S',
           },
         ],
+        streamEnabled: true,
+        streamViewType: 'NEW_AND_OLD_IMAGES',
         pointInTimeRecovery: {
           enabled: true,
         },
