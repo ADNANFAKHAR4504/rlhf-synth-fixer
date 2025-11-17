@@ -1,0 +1,39 @@
+name: VpcPeeringStack
+runtime:
+  name: nodejs
+  options:
+    typescript: true
+description: Pulumi infrastructure for VPC Peering with comprehensive security controls
+main: bin/tap.ts
+config:
+  paymentVpcId:
+    description: VPC ID for payment processing VPC (optional, will be created if not provided)
+    type: string
+    secret: false
+  auditVpcId:
+    description: VPC ID for audit logging VPC (optional, will be created if not provided)
+    type: string
+    secret: false
+  paymentVpcCidr:
+    description: CIDR block for payment VPC
+    default: 10.100.0.0/16
+  auditVpcCidr:
+    description: CIDR block for audit VPC
+    default: 10.200.0.0/16
+  paymentAccountId:
+    description: AWS account ID for payment account (optional, will use current account if not provided)
+    type: string
+    secret: false
+  auditAccountId:
+    description: AWS account ID for audit account (optional, will use current account if not provided)
+    type: string
+    secret: false
+  environment:
+    description: Environment name (dev/staging/prod)
+    default: dev
+  dataClassification:
+    description: Data classification tag
+    default: Sensitive
+  flowLogsRetentionDays:
+    description: S3 lifecycle retention for flow logs in days
+    default: 90

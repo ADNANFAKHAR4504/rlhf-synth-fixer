@@ -1,0 +1,11 @@
+config:
+  aws:region: us-east-1
+  VpcPeeringStack:paymentVpcId: vpc-0123456789abcdef0
+  VpcPeeringStack:auditVpcId: vpc-0fedcba987654321
+  VpcPeeringStack:paymentVpcCidr: 10.100.0.0/16
+  VpcPeeringStack:auditVpcCidr: 10.200.0.0/16
+  VpcPeeringStack:paymentAccountId: "111111111111"
+  VpcPeeringStack:auditAccountId: "222222222222"
+  VpcPeeringStack:environment: dev
+  VpcPeeringStack:dataClassification: Sensitive
+  VpcPeeringStack:flowLogsRetentionDays: 90

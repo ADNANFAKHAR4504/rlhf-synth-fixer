@@ -1,0 +1,34 @@
+{
+  "platform": "pulumi",
+  "language": "typescript",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "w19bp2",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T00:00:00.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "VPC Peering",
+    "Multi-Account"
+  ],
+  "aws_services": [
+    "VPC",
+    "VPC Peering",
+    "Route Tables",
+    "Security Groups",
+    "Network ACLs",
+    "VPC Flow Logs",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "task_config": {},
+  "coverage": {
+    "lines": 0,
+    "branches": 0
+  },
+  "author": "synth-2",
+  "dockerS3Location": ""
+}
