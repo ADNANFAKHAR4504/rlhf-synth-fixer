@@ -151,31 +151,49 @@ async function discoverStack(): Promise<DiscoveredResources> {
       throw new Error('Failed to discover stack name');
     }
 
-    // Validate that the selected stack has a VPC resource (indicates it's the main stack, not nested)
+    // Validate that the selected stack has both VPC and EKS Cluster resources
+    // This ensures we're testing the correct EKS infrastructure stack, not other stacks
     // If not, try the next stack in the list
-    for (let i = 0; i < Math.min(sortedStacks.length, 5); i++) {
+    let foundValidStack = false;
+    for (let i = 0; i < Math.min(sortedStacks.length, 10); i++) {
       const candidateStack = sortedStacks[i];
       const candidateStackName = candidateStack.StackName!;
       
-      // Quick check: list resources to see if this stack has a VPC
+      // Quick check: list resources to see if this stack has both VPC and EKS Cluster
       try {
         const testResourcesCommand = new ListStackResourcesCommand({
           StackName: candidateStackName,
         });
         const testResourcesResponse = await cfnClient.send(testResourcesCommand);
-        const hasVPC = testResourcesResponse.StackResourceSummaries?.some(
-          (r) => r.ResourceType === 'AWS::EC2::VPC'
+        const resources = testResourcesResponse.StackResourceSummaries || [];
+        const hasVPC = resources.some(
+          (r) => r.ResourceType === 'AWS::EC2::VPC' && r.ResourceStatus === 'CREATE_COMPLETE'
+        );
+        const hasEKSCluster = resources.some(
+          (r) => r.ResourceType === 'AWS::EKS::Cluster' && r.ResourceStatus === 'CREATE_COMPLETE'
         );
         
-        if (hasVPC) {
+        // Only select stacks that have both VPC and EKS Cluster (indicates it's the EKS infrastructure stack)
+        if (hasVPC && hasEKSCluster) {
           targetStack = candidateStack;
           stackName = candidateStackName;
+          foundValidStack = true;
           break;
         }
       } catch (error) {
         // If we can't check this stack, continue to next
         continue;
       }
+    }
+
+    // If we didn't find a valid stack with both VPC and EKS Cluster, throw an error
+    if (!foundValidStack) {
+      const stackNames = sortedStacks.slice(0, 5).map(s => s.StackName).join(', ');
+      throw new Error(
+        `No TapStack found with both VPC and EKS Cluster resources. ` +
+        `Found ${sortedStacks.length} TapStack(s) but none contain EKS infrastructure. ` +
+        `Checked stacks: ${stackNames}`
+      );
     }
 
     console.log(`🔍 Discovered stack: ${stackName} in region ${region}`);
