@@ -21,7 +21,7 @@ import os
 import subprocess
 import sys
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -188,7 +188,7 @@ def publish_metrics(
     data_transfer_gb: float,
     regional_requests: Optional[Dict[str, int]] = None,
 ) -> None:
-    timestamp = datetime.utcnow()
+    timestamp = datetime.now(timezone.utc)
     bytes_downloaded = data_transfer_gb * (1024 ** 3)
     base_dimensions = [
         {"Name": "DistributionId", "Value": distribution_id},
@@ -427,6 +427,7 @@ def run_analysis_script():
         stderr=subprocess.PIPE,
         text=True,
         env=env,
+        check=False,
     )
     if result.returncode != 0:
         raise AssertionError(f"analysis script failed: {result.stderr}\n{result.stdout}")

@@ -10,7 +10,7 @@ import json
 import csv
 import logging
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Any, Optional
 from dataclasses import dataclass
 from pathlib import Path
@@ -166,7 +166,7 @@ class CloudFrontAnalyzer:
         analyses = []
         
         for dist in distributions:
-            logger.info(f"Analyzing distribution: {dist['Id']}")
+            logger.info("Analyzing distribution: %s", dist['Id'])
             analysis = self._analyze_distribution(dist)
             if analysis:
                 analyses.append(analysis)
@@ -200,7 +200,7 @@ class CloudFrontAnalyzer:
                     tags_resp = self.cloudfront.list_tags_for_resource(Resource=resource_arn)
                     dist_tags = {tag['Key']: tag['Value'] for tag in tags_resp.get('Tags', {}).get('Items', [])}
                 except Exception as e:
-                    logger.warning(f"Could not get tags for {dist_id}: {e}")
+                    logger.warning("Could not get tags for %s: %s", dist_id, e)
                 
                 if self._should_skip_distribution(dist, dist_tags):
                     continue
@@ -209,7 +209,7 @@ class CloudFrontAnalyzer:
                     full_dist = self.cloudfront.get_distribution(Id=dist_id)
                     eligible.append(full_dist['Distribution'])
                 else:
-                    logger.info(f"Skipping {dist_id} - Low request volume")
+                    logger.info("Skipping %s - Low request volume", dist_id)
         
         return eligible
     
@@ -217,7 +217,7 @@ class CloudFrontAnalyzer:
         """Check if distribution has >10,000 requests/day average over 30 days"""
         total_requests = self._fetch_metric_value(distribution_id, 'Requests')
         if total_requests is None:
-            logger.warning(f"No request metrics for {distribution_id}; including for analysis.")
+            logger.warning("No request metrics for %s; including for analysis.", distribution_id)
             return True
         avg_requests_per_day = total_requests / DAYS_TO_ANALYZE if DAYS_TO_ANALYZE else 0
         return avg_requests_per_day >= MIN_REQUESTS_PER_DAY
@@ -227,7 +227,7 @@ class CloudFrontAnalyzer:
         dist_id = distribution.get('Id')
         
         if tags.get('ExcludeFromAnalysis', '').lower() == 'true':
-            logger.info(f"Skipping {dist_id} - ExcludeFromAnalysis tag")
+            logger.info("Skipping %s - ExcludeFromAnalysis tag", dist_id)
             return True
         
         comment = distribution.get('Comment', '') or distribution.get('DistributionConfig', {}).get('Comment', '')
@@ -240,7 +240,7 @@ class CloudFrontAnalyzer:
         ]
         
         if 'internal' in comment.lower() or 'internal' in domain.lower() or 'internal' in "".join(internal_markers):
-            logger.info(f"Skipping {dist_id} - Internal only distribution")
+            logger.info("Skipping %s - Internal only distribution", dist_id)
             return True
         
         return False
@@ -413,7 +413,7 @@ class CloudFrontAnalyzer:
         period: int = 86400
     ) -> Optional[float]:
         """Generic helper to aggregate CloudWatch metrics"""
-        end_time = datetime.utcnow()
+        end_time = datetime.now(timezone.utc)
         start_time = end_time - timedelta(days=DAYS_TO_ANALYZE)
         
         try:
@@ -430,7 +430,7 @@ class CloudFrontAnalyzer:
                 Statistics=[statistics]
             )
         except Exception as exc:
-            logger.error(f"Error getting {metric_name} for {distribution_id}: {exc}")
+            logger.error("Error getting %s for %s: %s", metric_name, distribution_id, exc)
             return None
         
         datapoints = response.get('Datapoints', [])
@@ -452,11 +452,16 @@ class CloudFrontAnalyzer:
             statistics='Average'
         )
         if avg_hit_rate is None:
+            # No metrics available - return a neutral baseline that won't
+            # trigger false positives but will still allow analysis
+            logger.warning("No cache hit metrics for %s; using baseline 85%%", distribution_id)
             return 0.85
         return avg_hit_rate / 100
     
     def _requires_origin_shield(self, config: Dict[str, Any]) -> bool:
         """Determine if distribution would benefit from Origin Shield"""
+        # Origin Shield can benefit distributions with multiple origins
+        # or high-traffic single origin configurations
         origins = config.get('Origins', {}).get('Items', [])
         return len(origins) > 1
     
@@ -473,14 +478,16 @@ class CloudFrontAnalyzer:
         default_behavior = config.get('DefaultCacheBehavior', {})
         if not default_behavior.get('Compress', False):
             return False
-        
-        # Check other cache behaviors
+
+        # Check ALL cache behaviors for compressible content patterns
+        compressible_extensions = ('.html', '.css', '.js', '.json', '.xml', '.txt', '.svg')
         for behavior in config.get('CacheBehaviors', {}).get('Items', []):
             path = behavior.get('PathPattern', '').lower()
-            if path.endswith(('.html', '.css', '.js', '.json', '.xml')):
+            # Check if this behavior serves compressible content
+            if any(ext in path for ext in compressible_extensions):
                 if not behavior.get('Compress', False):
                     return False
-        
+
         return True
     
     def _check_low_ttl(self, config: Dict[str, Any]) -> bool:
@@ -792,7 +799,7 @@ class CloudFrontAnalyzer:
     def _save_json_report(self, analyses: List[DistributionAnalysis], summary: Dict[str, Any]):
         """Save JSON report"""
         report_data = {
-            'report_date': datetime.utcnow().isoformat(),
+            'report_date': datetime.now(timezone.utc).isoformat(),
             'distributions': [
                 {
                     'distribution_id': a.distribution_id,
@@ -962,7 +969,7 @@ class CloudFrontAnalyzer:
         """)
         
         html_content = html_template.render(
-            report_date=datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+            report_date=datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
             summary=summary,
             analyses=analyses,
             plotly_html=plotly_html,
