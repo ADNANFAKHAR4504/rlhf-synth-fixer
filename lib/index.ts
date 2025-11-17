@@ -1,4 +1,4 @@
-﻿import * as pulumi from '@pulumi/pulumi';
+import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import { PaymentStack } from './payment-stack';
 
@@ -51,3 +51,4 @@ export const dynamoTableName = paymentStack.dynamoTableName;
 export const dynamoTableArn = paymentStack.dynamoTableArn;
 export const auditBucketName = paymentStack.auditBucketName;
 export const auditBucketArn = paymentStack.auditBucketArn;
+
