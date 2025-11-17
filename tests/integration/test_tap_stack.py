@@ -31,6 +31,18 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         with open(outputs_file, 'r', encoding='utf-8') as f:
             cls.outputs = json.load(f)
 
+        # Parse JSON string values back to their proper types
+        # Some outputs (like subnet IDs) are stored as JSON strings and need to be parsed
+        for key, value in cls.outputs.items():
+            if isinstance(value, str):
+                # Try to parse as JSON if it looks like JSON (starts with [ or {)
+                if value.startswith('[') or value.startswith('{'):
+                    try:
+                        cls.outputs[key] = json.loads(value)
+                    except json.JSONDecodeError:
+                        # If parsing fails, keep as string
+                        pass
+
         # Initialize AWS clients
         cls.region = os.getenv('AWS_REGION', 'us-east-1')
         cls.ec2_client = boto3.client('ec2', region_name=cls.region)
