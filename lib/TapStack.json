@@ -521,9 +521,7 @@
                 "SourceSecurityGroupId": {
                     "Ref": "NodeSecurityGroup"
                 },
-                "IpProtocol": -1,
-                "FromPort": -1,
-                "ToPort": -1
+                "IpProtocol": -1
             }
         },
         "NodeSecurityGroupFromClusterIngress": {
@@ -767,7 +765,6 @@
         },
         "EKSNodeGroup": {
             "Type": "AWS::EKS::Nodegroup",
-            "DependsOn": "EKSCluster",
             "Properties": {
                 "NodegroupName": {
                     "Fn::Sub": "eks-nodegroup-${environmentSuffix}"

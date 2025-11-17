@@ -292,8 +292,9 @@ describe('EKS CloudFormation Template Unit Tests', () => {
 
     test('node group should depend on EKS cluster', () => {
       const nodeGroup = template.Resources.EKSNodeGroup;
-      expect(nodeGroup.DependsOn).toBeDefined();
-      expect(nodeGroup.DependsOn).toContain('EKSCluster');
+      // Dependency is implicit through ClusterName reference (better practice than explicit DependsOn)
+      expect(nodeGroup.Properties.ClusterName).toBeDefined();
+      expect(nodeGroup.Properties.ClusterName.Ref || nodeGroup.Properties.ClusterName['Ref']).toBe('EKSCluster');
     });
 
     test('node group should have scaling configuration', () => {

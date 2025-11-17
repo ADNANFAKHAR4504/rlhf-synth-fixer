@@ -1,85 +1,90 @@
 # Model Failures and Issues Found
 
-## Issue 1: Missing EKS Cluster Tagging for Security Group Auto-Discovery
+## Issue 1: CloudFormation Lint Warning W3687 - Invalid Port Specification with IpProtocol -1
 
-**Severity**: Medium
+**Severity**: High (Blocks CI/CD Pipeline)
 
-**Description**: The subnets are tagged with `kubernetes.io/role/elb` and `kubernetes.io/role/internal-elb` for load balancer discovery, but the cluster name tag is missing. EKS requires subnets to be tagged with `kubernetes.io/cluster/<cluster-name>: shared` for proper integration.
+**Description**: When using `IpProtocol: -1` (which means all protocols), the `FromPort` and `ToPort` fields are ignored by AWS and should not be specified. Including these fields causes cfn-lint to emit warning W3687, which results in a non-zero exit code that fails the CI/CD pipeline.
 
-**Impact**: Kubernetes services of type LoadBalancer may fail to automatically create ELBs or may not correctly associate them with the appropriate subnets.
+**Impact**: The lint stage fails with exit code 4, causing the entire CI/CD pipeline to fail. This prevents code from being merged or deployed.
 
-**Location**: PublicSubnet1, PublicSubnet2, PrivateSubnet1, PrivateSubnet2 resource definitions
+**Location**: 
+- `NodeSecurityGroupIngress` resource in `lib/TapStack.yml` (line 267-269 in MODEL_RESPONSE)
+- `NodeSecurityGroupIngress` resource in `lib/TapStack.json` (line 524-526 in MODEL_RESPONSE)
 
-**Fix Required**: Add cluster name tag to all subnets
+**Original Code (MODEL_RESPONSE)**:
+```yaml
+NodeSecurityGroupIngress:
+  Type: AWS::EC2::SecurityGroupIngress
+  Properties:
+    Description: Allow nodes to communicate with each other
+    GroupId: !Ref NodeSecurityGroup
+    SourceSecurityGroupId: !Ref NodeSecurityGroup
+    IpProtocol: -1
+    FromPort: -1
+    ToPort: -1
+```
 
-## Issue 2: IAM Role Names May Conflict
+**Fix Applied (IDEAL_RESPONSE)**:
+```yaml
+NodeSecurityGroupIngress:
+  Type: AWS::EC2::SecurityGroupIngress
+  Properties:
+    Description: Allow nodes to communicate with each other
+    GroupId: !Ref NodeSecurityGroup
+    SourceSecurityGroupId: !Ref NodeSecurityGroup
+    IpProtocol: -1
+```
 
-**Severity**: Medium
+**Root Cause**: The `FromPort` and `ToPort` fields are only valid for TCP and UDP protocols. When `IpProtocol: -1` is used (all protocols), these fields are meaningless and should be omitted.
 
-**Description**: The IAM roles (EKSClusterRole and EKSNodeRole) have explicit RoleNames using the environmentSuffix. If multiple stacks are deployed in the same account with different stack names but the same environmentSuffix, there will be naming conflicts.
+**Fix Required**: Remove `FromPort: -1` and `ToPort: -1` when `IpProtocol: -1` is specified.
 
-**Impact**: Stack creation will fail with "Role already exists" error when attempting to deploy multiple instances.
+---
 
-**Location**: EKSClusterRole and EKSNodeRole resource definitions
+## Issue 2: CloudFormation Lint Warning W3005 - Redundant Dependency Declaration
 
-**Fix Required**: Either remove explicit RoleName to let CloudFormation auto-generate unique names, or include stack name in the role naming pattern
+**Severity**: High (Blocks CI/CD Pipeline)
 
-## Issue 3: Missing KMS Key Deletion Protection
+**Description**: The `EKSNodeGroup` resource explicitly declares `DependsOn: EKSCluster`, but this dependency is already implicitly enforced by the `ClusterName: !Ref EKSCluster` property reference. CloudFormation automatically creates dependencies when using intrinsic functions like `!Ref`, making the explicit `DependsOn` redundant.
 
-**Severity**: High
+**Impact**: The lint stage fails with warning W3005, causing a non-zero exit code that fails the CI/CD pipeline. This prevents code from being merged or deployed.
 
-**Description**: The KMS key does not have DeletionProtectionEnabled set, and lacks a DeletionPolicy. The constraint specifies all resources must be destroyable, but KMS keys should use a PendingWindowInDays for safe deletion rather than immediate deletion.
+**Location**: 
+- `EKSNodeGroup` resource in `lib/TapStack.yml` (line 416 in MODEL_RESPONSE)
+- `EKSNodeGroup` resource in `lib/TapStack.json` (line 770 in MODEL_RESPONSE)
 
-**Impact**: KMS key could be deleted immediately during stack deletion, potentially causing data loss if secrets encrypted with this key need to be recovered.
+**Original Code (MODEL_RESPONSE)**:
+```yaml
+EKSNodeGroup:
+  Type: AWS::EKS::Nodegroup
+  DependsOn: EKSCluster
+  Properties:
+    NodegroupName: !Sub 'eks-nodegroup-${environmentSuffix}'
+    ClusterName: !Ref EKSCluster
+    ...
+```
 
-**Location**: EKSKMSKey resource definition
+**Fix Applied (IDEAL_RESPONSE)**:
+```yaml
+EKSNodeGroup:
+  Type: AWS::EKS::Nodegroup
+  Properties:
+    NodegroupName: !Sub 'eks-nodegroup-${environmentSuffix}'
+    ClusterName: !Ref EKSCluster
+    ...
+```
 
-**Fix Required**: Add PendingWindowInDays property to KMS key for safe deletion
+**Root Cause**: CloudFormation best practices recommend using implicit dependencies through resource references rather than explicit `DependsOn` declarations when possible. The `!Ref EKSCluster` in the `ClusterName` property already ensures the cluster is created before the node group, making the explicit `DependsOn` redundant.
 
-## Issue 4: No Resource Dependency Between Node Group and Routes
+**Fix Required**: Remove the `DependsOn: EKSCluster` declaration from the `EKSNodeGroup` resource. The dependency is automatically handled by the `ClusterName: !Ref EKSCluster` property reference.
 
-**Severity**: Medium
+---
 
-**Description**: The EKSNodeGroup depends only on EKSCluster but does not depend on the private route tables or NAT gateways being fully configured. Nodes could attempt to launch before network routing is complete.
+## Summary
 
-**Impact**: Node initialization might fail or timeout if NAT gateways are not ready, causing slower cluster provisioning.
+Both issues are CloudFormation lint warnings that cause the CI/CD pipeline to fail:
+1. **W3687**: Invalid port specification with `IpProtocol: -1` - Fixed by removing `FromPort` and `ToPort` fields
+2. **W3005**: Redundant dependency declaration - Fixed by removing explicit `DependsOn` and relying on implicit dependency through `!Ref`
 
-**Location**: EKSNodeGroup resource definition
-
-**Fix Required**: Add DependsOn for PrivateRoute1 and PrivateRoute2 to ensure routing is established
-
-## Issue 5: Missing VPC Flow Logs for Security Monitoring
-
-**Severity**: Low
-
-**Description**: For an expert-level, production-ready EKS deployment, VPC Flow Logs should be enabled for security monitoring and network troubleshooting.
-
-**Impact**: Reduced visibility into network traffic patterns and potential security issues.
-
-**Location**: VPC configuration
-
-**Fix Required**: Add VPC Flow Logs resource with CloudWatch Logs destination
-
-## Issue 6: CloudWatch Log Group Retention Too Short
-
-**Severity**: Low
-
-**Description**: The CloudWatch log group retention is set to 7 days. For production environments, this is typically too short for compliance and troubleshooting purposes.
-
-**Impact**: Important control plane logs may be lost before they can be analyzed for security or operational issues.
-
-**Location**: EKSClusterLogGroup
-
-**Fix Required**: Consider increasing retention to 30 or 90 days for production environments
-
-## Issue 7: No Cluster Endpoint Access Control
-
-**Severity**: Low
-
-**Description**: The cluster has both public and private endpoint access enabled without CIDR restrictions. For enhanced security, public access should be restricted to specific IP ranges.
-
-**Impact**: Cluster API endpoint is accessible from any internet IP address, increasing attack surface.
-
-**Location**: EKSCluster ResourcesVpcConfig
-
-**Fix Required**: Add PublicAccessCidrs parameter to restrict public endpoint access to known IP ranges
+These fixes ensure the template passes all lint checks and can be successfully deployed through CI/CD pipelines without manual intervention.
