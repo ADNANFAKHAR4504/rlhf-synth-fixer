@@ -47,7 +47,7 @@ export class TapStack extends cdk.Stack {
 
     // S3 Bucket for data storage
     const dataBucket = new s3.Bucket(this, 'DataBucket', {
-      bucketName: `etl-data-bucket-serverless-${environmentSuffix}`,
+      bucketName: `etl-data-bucket-${environmentSuffix}`,
       versioned: true,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
       autoDeleteObjects: true,

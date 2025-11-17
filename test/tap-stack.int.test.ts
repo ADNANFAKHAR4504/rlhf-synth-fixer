@@ -114,9 +114,9 @@ describe('ETL Pipeline Integration Tests', () => {
 
     test('should have Lambda functions deployed', async () => {
       const functionNames = [
-        outputs.DataBucketName.replace('etl-data-bucket-serverless-', 'validator-'),
-        outputs.DataBucketName.replace('etl-data-bucket-serverless-', 'transformer-'),
-        outputs.DataBucketName.replace('etl-data-bucket-serverless-', 'enricher-'),
+        outputs.DataBucketName.replace('etl-data-bucket-', 'validator-'),
+        outputs.DataBucketName.replace('etl-data-bucket-', 'transformer-'),
+        outputs.DataBucketName.replace('etl-data-bucket-', 'enricher-'),
       ];
 
       for (const functionName of functionNames) {
