@@ -36,7 +36,8 @@ locals {
       Environment       = terraform.workspace
       EnvironmentSuffix = var.environment_suffix
       ManagedBy         = "Terraform"
-      LastUpdated       = timestamp()
+      # LastUpdated removed to prevent constant drift
+      # Consider using a static version tag or deployment date instead
     }
   )
 }
