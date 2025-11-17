@@ -16,9 +16,16 @@ export { VpcComponent } from './components/vpc-component';
 
 // Re-export the stack outputs from tap-stack.ts (which creates the instance)
 export {
-  albArn, albDnsName, dashboardName, ecsClusterArn,
-  ecsServiceArn, privateSubnetIds, publicSubnetIds, rdsClusterEndpoint,
+  albArn,
+  albDnsName,
+  dashboardName,
+  ecsClusterArn,
+  ecsServiceArn,
+  privateSubnetIds,
+  publicSubnetIds,
+  rdsClusterEndpoint,
   rdsClusterReaderEndpoint,
-  s3BucketName, snsTopicArn, vpcId
+  s3BucketName,
+  snsTopicArn,
+  vpcId,
 } from './tap-stack';
-
