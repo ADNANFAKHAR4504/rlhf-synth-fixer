@@ -1,0 +1,12 @@
+environment             = "dev"
+aws_region             = "us-east-1"
+vpc_cidr               = "10.0.0.0/16"
+db_instance_class      = "db.t3.micro"
+ec2_instance_type      = "t3.micro"
+backup_retention_period = 0
+rds_cpu_threshold      = 80
+instance_count         = 2
+db_username            = "dbadmin"
+db_password            = "DevPassword123!"  # Change this in production
+ssh_key_name           = "payment-app-dev-key"
+ami_id                 = "ami-0c55b159cbfafe1f0"  # Amazon Linux 2023
