@@ -21,7 +21,7 @@
     "IAM",
     "VPC"
   ],
-  "region": "us-east-1",
+  "region": "eu-west-1",
   "author": "iamarpit-turing",
   "reviewer": "chriscrsov",
   "training_quality": 8
