@@ -282,11 +282,10 @@ describe('PaymentProcessing CloudFormation Template - Unit Tests', () => {
       expect(cluster.Properties.Engine).toBe('aurora-postgresql');
     });
 
-    test('Aurora Cluster should use Secrets Manager for credentials', () => {
+    test('Aurora Cluster should use RDS-managed password', () => {
       const cluster = template.Resources.AuroraCluster;
       expect(cluster.Properties.MasterUsername.Ref).toBe('DBUsername');
-      expect(cluster.Properties.MasterUserSecret).toBeDefined();
-      expect(cluster.Properties.MasterUserSecret.SecretArn.Ref).toBe('DBPasswordSecret');
+      expect(cluster.Properties.ManageMasterUserPassword).toBe(true);
     });
 
     test('Aurora Cluster should have encryption enabled', () => {

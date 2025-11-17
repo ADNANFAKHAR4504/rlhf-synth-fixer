@@ -912,11 +912,7 @@
                 "MasterUsername": {
                     "Ref": "DBUsername"
                 },
-                "MasterUserSecret": {
-                    "SecretArn": {
-                        "Ref": "DBPasswordSecret"
-                    }
-                },
+                "ManageMasterUserPassword": true,
                 "DatabaseName": "paymentdb",
                 "DBSubnetGroupName": {
                     "Ref": "DBSubnetGroup"

@@ -491,8 +491,7 @@ Resources:
       Engine: aurora-postgresql
       EngineVersion: '14.6'
       MasterUsername: !Ref DBUsername
-      MasterUserSecret:
-        SecretArn: !Ref DBPasswordSecret
+      ManageMasterUserPassword: true
       DatabaseName: paymentdb
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
