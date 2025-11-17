@@ -389,9 +389,29 @@ export class TapStack extends cdk.Stack {
     );
     autoscalerDeployment.node.addDependency(autoscalerSa);
 
+    // 🔹 Network Policies - Create namespace first
+    const paymentNs = `payment-processing-${environmentSuffix}`;
+    const paymentNamespace = new eks.KubernetesManifest(
+      this,
+      'PaymentNamespace',
+      {
+        cluster: this.cluster,
+        manifest: [
+          {
+            apiVersion: 'v1',
+            kind: 'Namespace',
+            metadata: {
+              name: paymentNs,
+              labels: { name: paymentNs },
+            },
+          },
+        ],
+      }
+    );
+
     // 🔹 Pod Disruption Budgets
-    ['default', 'payment-processing', 'kube-system'].forEach(namespace => {
-      new eks.KubernetesManifest(this, `PDB-${namespace}`, {
+    ['default', paymentNs, 'kube-system'].forEach(namespace => {
+      const pdb = new eks.KubernetesManifest(this, `PDB-${namespace}`, {
         cluster: this.cluster,
         manifest: [
           {
@@ -408,24 +428,15 @@ export class TapStack extends cdk.Stack {
           },
         ],
       });
+
+      // Ensure PDB for payment-processing namespace waits for namespace creation
+      if (namespace === paymentNs) {
+        pdb.node.addDependency(paymentNamespace);
+      }
     });
 
-    // 🔹 Network Policies
-    new eks.KubernetesManifest(this, 'PaymentNamespace', {
-      cluster: this.cluster,
-      manifest: [
-        {
-          apiVersion: 'v1',
-          kind: 'Namespace',
-          metadata: {
-            name: `payment-processing-${environmentSuffix}`,
-            labels: { name: `payment-processing-${environmentSuffix}` },
-          },
-        },
-      ],
-    });
-
-    new eks.KubernetesManifest(this, 'NetworkPolicy', {
+    // 🔹 Network Policy - Must depend on namespace creation
+    const networkPolicy = new eks.KubernetesManifest(this, 'NetworkPolicy', {
       cluster: this.cluster,
       manifest: [
         {
@@ -433,7 +444,7 @@ export class TapStack extends cdk.Stack {
           kind: 'NetworkPolicy',
           metadata: {
             name: `namespace-isolation-${environmentSuffix}`,
-            namespace: `payment-processing-${environmentSuffix}`,
+            namespace: paymentNs,
           },
           spec: {
             podSelector: {},
@@ -444,7 +455,7 @@ export class TapStack extends cdk.Stack {
                   {
                     namespaceSelector: {
                       matchLabels: {
-                        name: `payment-processing-${environmentSuffix}`,
+                        name: paymentNs,
                       },
                     },
                   },
@@ -473,6 +484,7 @@ export class TapStack extends cdk.Stack {
         },
       ],
     });
+    networkPolicy.node.addDependency(paymentNamespace);
 
     // Outputs
     this.clusterEndpoint = this.cluster.clusterEndpoint;

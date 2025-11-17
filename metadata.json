@@ -10,12 +10,15 @@
   "subject_labels": [
     "Web Application Deployment"
   ],
+  "training_quality": 9,
   "aws_services": [
-    "S3 Bucket",
-    "CloudFormation",
+    "EC2",
+    "EKS",
+    "IAM",
+    "KMS",
+    "VPC",
     "Lambda",
-    "EventBridge",
-    "CloudWatch LogGroup",
-    "VPC"
+    "CloudWatch",
+    "Elastic Load Balancing"
   ]
 }
