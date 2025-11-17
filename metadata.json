@@ -1,0 +1,21 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T04:14:40+00:00",
+  "subtask": "EKS",
+  "subject_labels": [],
+  "po_id": "101912434",
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "CloudWatch"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10
+}
