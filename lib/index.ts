@@ -51,4 +51,3 @@ export const dynamoTableName = paymentStack.dynamoTableName;
 export const dynamoTableArn = paymentStack.dynamoTableArn;
 export const auditBucketName = paymentStack.auditBucketName;
 export const auditBucketArn = paymentStack.auditBucketArn;
-
