@@ -84,7 +84,7 @@ Resources:
   # ==========================================
   # VPC and Networking Resources
   # ==========================================
-  
+
   VPC:
     Type: AWS::EC2::VPC
     Properties:
@@ -292,7 +292,7 @@ Resources:
   # ==========================================
   # Security Groups
   # ==========================================
-  
+
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -401,7 +401,7 @@ Resources:
   # ==========================================
   # IAM Roles and Policies
   # ==========================================
-  
+
   EC2InstanceRole:
     Type: AWS::IAM::Role
     Properties:
@@ -504,7 +504,7 @@ Resources:
   # ==========================================
   # KMS Keys for Encryption
   # ==========================================
-  
+
   EBSKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -867,7 +867,7 @@ Resources:
   # ==========================================
   # Systems Manager Parameters
   # ==========================================
-  
+
   DBPasswordParameter:
     Type: AWS::SSM::Parameter
     Properties:
@@ -907,7 +907,7 @@ Resources:
   # ==========================================
   # Launch Template for EC2 Instances
   # ==========================================
-  
+
   EC2LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
@@ -936,12 +936,12 @@ Resources:
             yum install -y amazon-cloudwatch-agent
             systemctl enable amazon-ssm-agent
             systemctl start amazon-ssm-agent
-            
+
             # Install necessary software
             yum install -y httpd
             systemctl enable httpd
             systemctl start httpd
-            
+
             # Configure CloudWatch Agent
             cat > /opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json <<EOF
             {
@@ -963,7 +963,7 @@ Resources:
               }
             }
             EOF
-            
+
             /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
               -a query -m ec2 -c file:/opt/aws/amazon-cloudwatch-agent/etc/cloudwatch-config.json \
               -s
@@ -978,7 +978,7 @@ Resources:
   # ==========================================
   # Auto Scaling Group
   # ==========================================
-  
+
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -1007,7 +1007,7 @@ Resources:
   # ==========================================
   # Application Load Balancer
   # ==========================================
-  
+
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
@@ -1071,7 +1071,7 @@ Resources:
   # ==========================================
   # Bastion Host
   # ==========================================
-  
+
   BastionHost:
     Type: AWS::EC2::Instance
     Condition: HasKeyPair
@@ -1101,7 +1101,7 @@ Resources:
   # ==========================================
   # RDS PostgreSQL Database
   # ==========================================
-  
+
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
@@ -1163,7 +1163,7 @@ Resources:
   # ==========================================
   # Systems Manager Maintenance Window
   # ==========================================
-  
+
   MaintenanceWindow:
     Type: AWS::SSM::MaintenanceWindow
     Properties:
@@ -1225,7 +1225,7 @@ Resources:
   # ==========================================
   # CloudWatch Alarms
   # ==========================================
-  
+
   HighCPUAlarm:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -1303,3 +1303,169 @@ Outputs:
     Value: !Ref ConfigRecorder
     Export:
       Name: !Sub '${EnvironmentName}-ConfigRecorder'
+
+  LoggingBucketName:
+    Description: Logging S3 Bucket Name
+    Value: !Ref LoggingBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-Logging-Bucket'
+
+  CloudTrailBucketName:
+    Condition: ShouldCreateCloudTrail
+    Description: CloudTrail S3 Bucket Name
+    Value: !Ref CloudTrailBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-CloudTrail-Bucket'
+
+  ConfigBucketName:
+    Condition: ShouldCreateAWSConfig
+    Description: Config S3 Bucket Name
+    Value: !Ref ConfigBucket
+    Export:
+      Name: !Sub '${EnvironmentName}-Config-Bucket'
+
+  DBPasswordSecretArn:
+    Description: ARN of Database Password Secret
+    Value: !Ref DBPasswordSecret
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Secret-ARN'
+
+  AutoScalingGroupName:
+    Description: Auto Scaling Group Name
+    Value: !Ref AutoScalingGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ASG-Name'
+
+  ALBTargetGroupArn:
+    Description: ALB Target Group ARN
+    Value: !Ref ALBTargetGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-TG-ARN'
+
+  PublicSubnet1Id:
+    Description: Public Subnet 1 ID
+    Value: !Ref PublicSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Public-Subnet-1'
+
+  PublicSubnet2Id:
+    Description: Public Subnet 2 ID
+    Value: !Ref PublicSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Public-Subnet-2'
+
+  PrivateSubnet1Id:
+    Description: Private Subnet 1 ID
+    Value: !Ref PrivateSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Private-Subnet-1'
+
+  PrivateSubnet2Id:
+    Description: Private Subnet 2 ID
+    Value: !Ref PrivateSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Private-Subnet-2'
+
+  DatabaseSubnet1Id:
+    Description: Database Subnet 1 ID
+    Value: !Ref DatabaseSubnet1
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-Subnet-1'
+
+  DatabaseSubnet2Id:
+    Description: Database Subnet 2 ID
+    Value: !Ref DatabaseSubnet2
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-Subnet-2'
+
+  InternetGatewayId:
+    Description: Internet Gateway ID
+    Value: !Ref InternetGateway
+    Export:
+      Name: !Sub '${EnvironmentName}-IGW-ID'
+
+  NATGateway1Id:
+    Condition: ShouldCreateNATGateways
+    Description: NAT Gateway 1 ID
+    Value: !Ref NatGateway1
+    Export:
+      Name: !Sub '${EnvironmentName}-NAT-Gateway-1'
+
+  NATGateway2Id:
+    Condition: ShouldCreateNATGateways
+    Description: NAT Gateway 2 ID
+    Value: !Ref NatGateway2
+    Export:
+      Name: !Sub '${EnvironmentName}-NAT-Gateway-2'
+
+  ALBSecurityGroupId:
+    Description: ALB Security Group ID
+    Value: !Ref ALBSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-ALB-SG-ID'
+
+  WebServerSecurityGroupId:
+    Description: Web Server Security Group ID
+    Value: !Ref WebServerSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-WebServer-SG-ID'
+
+  DatabaseSecurityGroupId:
+    Description: Database Security Group ID
+    Value: !Ref DatabaseSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Database-SG-ID'
+
+  BastionSecurityGroupId:
+    Description: Bastion Security Group ID
+    Value: !Ref BastionSecurityGroup
+    Export:
+      Name: !Sub '${EnvironmentName}-Bastion-SG-ID'
+
+  EBSKMSKeyId:
+    Description: EBS KMS Key ID
+    Value: !Ref EBSKMSKey
+    Export:
+      Name: !Sub '${EnvironmentName}-EBS-KMS-Key-ID'
+
+  ParameterStoreKMSKeyId:
+    Description: Parameter Store KMS Key ID
+    Value: !Ref ParameterStoreKMSKey
+    Export:
+      Name: !Sub '${EnvironmentName}-ParameterStore-KMS-Key-ID'
+
+  EC2InstanceRoleArn:
+    Description: EC2 Instance Role ARN
+    Value: !GetAtt EC2InstanceRole.Arn
+    Export:
+      Name: !Sub '${EnvironmentName}-EC2-Role-ARN'
+
+  MaintenanceWindowId:
+    Description: Maintenance Window ID
+    Value: !Ref MaintenanceWindow
+    Export:
+      Name: !Sub '${EnvironmentName}-Maintenance-Window-ID'
+
+  HighCPUAlarmName:
+    Description: High CPU Alarm Name
+    Value: !Ref HighCPUAlarm
+    Export:
+      Name: !Sub '${EnvironmentName}-HighCPU-Alarm'
+
+  DatabaseStorageAlarmName:
+    Description: Database Storage Alarm Name
+    Value: !Ref DatabaseStorageAlarm
+    Export:
+      Name: !Sub '${EnvironmentName}-DatabaseStorage-Alarm'
+
+  DBPasswordParameterName:
+    Description: Database Password Parameter Name
+    Value: !Ref DBPasswordParameter
+    Export:
+      Name: !Sub '${EnvironmentName}-DB-Password-Parameter'
+
+  ApplicationConfigParameterName:
+    Description: Application Config Parameter Name
+    Value: !Ref ApplicationConfigParameter
+    Export:
+      Name: !Sub '${EnvironmentName}-App-Config-Parameter'
