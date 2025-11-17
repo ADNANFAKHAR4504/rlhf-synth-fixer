@@ -23,6 +23,36 @@ resource "aws_iam_role_policy_attachment" "emr_service_role" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonEMRServicePolicy_v2"
 }
 
+# Additional EC2 permissions for EMR to create managed security groups in public subnets
+# Note: EMR requires these permissions to create its own managed security groups when
+# launching clusters in public subnets. These permissions are scoped to the account's VPCs.
+resource "aws_iam_role_policy" "emr_service_ec2_permissions" {
+  name = "${local.bucket_prefix}-emr-service-ec2-permissions"
+  role = aws_iam_role.emr_service_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateSecurityGroup",
+          "ec2:DescribeSecurityGroups",
+          "ec2:AuthorizeSecurityGroupIngress",
+          "ec2:AuthorizeSecurityGroupEgress",
+          "ec2:RevokeSecurityGroupIngress",
+          "ec2:RevokeSecurityGroupEgress",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DescribeNetworkInterfaces",
+          "ec2:DescribeVpcs",
+          "ec2:DescribeSubnets"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
 # EMR EC2 Instance Profile Role
 resource "aws_iam_role" "emr_ec2_role" {
   name = "${local.bucket_prefix}-emr-ec2-role"
