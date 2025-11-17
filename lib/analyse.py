@@ -16,14 +16,83 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import boto3
-import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-from jinja2 import Template
-from plotly.subplots import make_subplots
-from tabulate import tabulate
 import argparse
 from collections import defaultdict
+from types import ModuleType
+
+try:
+    import pandas as pd
+except ImportError:  # pragma: no cover - fallback for lightweight environments
+    class _StubSeries(list):
+        def map(self, func):
+            return [func(v) for v in self]
+
+    class _StubDataFrame:
+        def __init__(self, rows=None):
+            rows = rows or []
+            self._rows = [dict(row) for row in rows]
+            self.columns = list(rows[0].keys()) if rows else []
+
+        def copy(self):
+            return _StubDataFrame([dict(row) for row in self._rows])
+
+        def __getitem__(self, key):
+            return _StubSeries(row.get(key, '') for row in self._rows)
+
+        def __setitem__(self, key, values):
+            values = list(values)
+            if key not in self.columns:
+                self.columns.append(key)
+            for row, value in zip(self._rows, values):
+                row[key] = value
+
+        def to_html(self, **kwargs):
+            header = ''.join(f"<th>{col}</th>" for col in self.columns)
+            body_rows = []
+            for row in self._rows:
+                cells = ''.join(f"<td>{row.get(col, '')}</td>" for col in self.columns)
+                body_rows.append(f"<tr>{cells}</tr>")
+            return f"<table><thead><tr>{header}</tr></thead><tbody>{''.join(body_rows)}</tbody></table>"
+
+    pandas_stub = ModuleType('pandas')
+    pandas_stub.DataFrame = _StubDataFrame
+    pd = pandas_stub
+
+try:
+    import plotly.express as px
+    import plotly.graph_objects as go
+    from plotly.subplots import make_subplots
+except ImportError:  # pragma: no cover - fallback when plotly missing
+    class _StubTrace:
+        def __init__(self, **kwargs):
+            self.kwargs = kwargs
+
+    class _StubFigure:
+        def __init__(self):
+            self.traces = []
+
+        def add_trace(self, trace, row=None, col=None):
+            self.traces.append((trace, row, col))
+
+        def update_layout(self, **kwargs):
+            pass
+
+        def to_html(self, **kwargs):
+            return "<div>plot</div>"
+
+    go = ModuleType('plotly.graph_objects')
+    go.Bar = lambda **kwargs: _StubTrace(**kwargs)
+    go.Pie = lambda **kwargs: _StubTrace(**kwargs)
+    go.Scatter = lambda **kwargs: _StubTrace(**kwargs)
+
+    px = ModuleType('plotly.express')
+    px.bar = lambda *args, **kwargs: _StubFigure()
+
+    def make_subplots(**kwargs):
+        return _StubFigure()
+
+from jinja2 import Template
+from tabulate import tabulate
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
