@@ -410,7 +410,6 @@
         "Family": "aurora-mysql8.0",
         "Parameters": {
           "innodb_flush_log_at_trx_commit": "1",
-          "sync_binlog": "1",
           "binlog_format": "ROW",
           "transaction_isolation": "READ-COMMITTED",
           "max_connections": "2000",
@@ -503,6 +502,7 @@
     "AuroraDBCluster": {
       "Type": "AWS::RDS::DBCluster",
       "DeletionPolicy": "Snapshot",
+      "UpdateReplacePolicy": "Snapshot",
       "Properties": {
         "DBClusterIdentifier": {
           "Fn::Sub": "aurora-mysql-cluster-${EnvironmentSuffix}"
