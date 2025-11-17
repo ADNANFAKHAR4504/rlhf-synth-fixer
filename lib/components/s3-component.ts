@@ -19,7 +19,7 @@ export class S3Component extends pulumi.ComponentResource {
     this.bucket = new aws.s3.Bucket(
       `data-bucket-${args.environmentSuffix}`,
       {
-        bucket: `trading-data-${args.environmentSuffix}`,
+        bucket: `trading-data-${args.environmentSuffix.toLowerCase()}`,
         acl: 'private',
         serverSideEncryptionConfiguration: {
           rule: {
