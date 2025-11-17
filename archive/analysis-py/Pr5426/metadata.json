@@ -1,0 +1,27 @@
+{
+  "platform": "analysis",
+  "language": "py",
+  "complexity": "medium",
+  "turn_type": "single",
+  "po_id": "356265",
+  "team": "stf",
+  "startedAt": "2025-10-30T10:54:22.245Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Infrastructure Analysis/Monitoring"
+  ],
+  "aws_services": [
+    "ApplicationELB",
+    "EC2",
+    "CloudWatch",
+    "S3",
+    "EIP"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "paulsony13",
+  "dockerS3Location": ""
+}

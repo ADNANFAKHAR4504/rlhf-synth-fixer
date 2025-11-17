@@ -1,0 +1,31 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-06T12:26:00.429441",
+  "subtask": "Cloud Environment Setup",
+  "subject_labels": [
+    "Networking",
+    "VPC",
+    "Security",
+    "Compliance"
+  ],
+  "po_id": "101000849",
+  "aws_services": [
+    "CloudWatch",
+    "EC2",
+    "IAM",
+    "VPC"
+  ],
+  "region": "us-east-1",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101000838",
+  "team": "synth",
+  "startedAt": "2025-11-05T13:49:03",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "Lambda",
+    "DynamoDB",
+    "SQS",
+    "IAM",
+    "CloudWatch Logs",
+    "SSM Parameter Store",
+    "X-Ray"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

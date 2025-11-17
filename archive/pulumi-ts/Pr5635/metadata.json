@@ -1,0 +1,39 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-03T14:48:09+05:30",
+  "subtask": "Infrastructure QA and Management",
+  "subject_labels": [
+    "Compliance and Governance Platform"
+  ],
+  "po_id": "1au4og",
+  "aws_services": [
+    "S3",
+    "SNS",
+    "CloudWatch",
+    "Lambda",
+    "VPC",
+    "IAM",
+    "KMS",
+    "Security Hub",
+    "Inspector",
+    "Audit Manager",
+    "Detective",
+    "DevOps Guru",
+    "Compute Optimizer",
+    "Health",
+    "Well-Architected",
+    "EventBridge"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

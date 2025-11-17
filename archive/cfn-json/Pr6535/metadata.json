@@ -1,0 +1,34 @@
+{
+  "platform": "cfn",
+  "language": "json",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912445",
+  "team": "synth",
+  "startedAt": "2025-11-14T06:20:30+00:00",
+  "subtask": "EKS",
+  "author": "iamarpit-turing",
+  "review": "adnan-turing",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "kubernetes",
+    "eks",
+    "container-orchestration"
+  ],
+  "aws_services": [
+    "EKS",
+    "VPC",
+    "EC2",
+    "IAM",
+    "KMS",
+    "CloudWatch",
+    "AutoScaling"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

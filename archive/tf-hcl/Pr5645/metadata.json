@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101000208",
+  "team": "4",
+  "startedAt": "2025-11-03T12:02:04.811Z",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "Lambda",
+    "Eventbridge",
+    "S3",
+    "SQS",
+    "IAM",
+    "KMS",
+    "DynamoDB"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "aj-turing",
+  "dockerS3Location": ""
+}

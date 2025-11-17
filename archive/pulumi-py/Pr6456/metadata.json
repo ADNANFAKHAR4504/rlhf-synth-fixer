@@ -1,0 +1,31 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912484",
+  "team": "synth",
+  "startedAt": "2025-11-13T06:14:24.819563+00:00",
+  "subtask": "AWS CloudFormation",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "serverless-infrastructure"
+  ],
+  "aws_services": [
+    "Lambda",
+    "DynamoDB",
+    "CloudWatch Logs",
+    "IAM",
+    "X-Ray"
+  ],
+  "region": "eu-south-2",
+  "author": "iamarpit-turing",
+  "reviewer": "chriscrsov",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

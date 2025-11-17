@@ -1,0 +1,41 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-11T13:21:38+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Infrastructure Environments"
+  ],
+  "po_id": "6cy03t",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Transit Gateway",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "ALB",
+    "ELB",
+    "WAF",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "Route53",
+    "KMS",
+    "CloudWatch",
+    "SNS",
+    "IAM"
+  ],
+  "region": "eu-central-1",
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "reviewer": "raghav-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

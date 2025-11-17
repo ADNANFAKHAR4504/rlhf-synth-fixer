@@ -1,0 +1,39 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "348982",
+  "team": "5",
+  "startedAt": "2025-10-29T05:27:06.509Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "IAM",
+    "AWS Organizations",
+    "KMS",
+    "S3",
+    "RDS",
+    "EBS",
+    "CloudWatch",
+    "CloudTrail",
+    "Systems Manager",
+    "EC2",
+    "AWS Config",
+    "IAM Identity Center",
+    "VPC",
+    "SNS",
+    "Lambda",
+    "EventBridge"
+  ],
+  "training_quality": 9,
+  "background": "Financial services company implementing PCI-DSS compliant zero-trust security framework across multi-account AWS environment with comprehensive IAM controls, encryption at rest, regional restrictions, continuous compliance monitoring, and secure access patterns",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
+}

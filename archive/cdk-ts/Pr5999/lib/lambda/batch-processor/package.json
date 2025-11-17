@@ -1,0 +1,14 @@
+    totalTransactions: transactions.length,
+    totalAmount,
+    averageAmount,
+    maxAmount,
+    uniqueMerchants,
+    uniqueCards,
+    suspiciousPatterns,
+  };
+}
+```
+
+## File: lib/lambda/batch-processor/package.json
+
+```json

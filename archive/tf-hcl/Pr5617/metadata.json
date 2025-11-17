@@ -1,0 +1,37 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350171",
+  "team": "4",
+  "startedAt": "2025-11-03T04:37:41.965Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "Auto Scaling",
+    "Application Load Balancer",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "CloudTrail",
+    "CloudWatch Logs",
+    "AWS Config",
+    "Systems Manager",
+    "ACM",
+    "Security Groups"
+  ],
+  "training_quality": 9,
+  "background": "Production-ready secure AWS infrastructure with comprehensive compliance monitoring, encryption at rest and in transit, multi-tier VPC architecture across 2 availability zones, CloudTrail audit logging with 90-day retention, automated patching via Systems Manager, and least-privilege IAM roles. All resources are tagged, encrypted, and deployable/destroyable for testing pipelines.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

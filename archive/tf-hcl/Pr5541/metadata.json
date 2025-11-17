@@ -1,0 +1,31 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "5513",
+  "team": "5",
+  "startedAt": "2025-10-31T08:01:53.188Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "This automation focuses on provisioning secure and compliant cloud infrastructure environments using Infrastructure as Code (IaC) principles. It covers the setup of essential services such as Identity and Access Management (IAM), Key Management Service (KMS), and monitoring tools to ensure robust security and compliance standards are met.",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "iam",
+    "kms",
+    "s3",
+    "rds",
+    "lambda",
+    "cloudwatch",
+    "securityhub",
+    "vpc"
+  ],
+  "training_quality": 9.5,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

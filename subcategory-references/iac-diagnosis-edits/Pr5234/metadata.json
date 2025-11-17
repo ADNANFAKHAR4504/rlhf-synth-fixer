@@ -1,0 +1,29 @@
+{
+  "platform": "cdk",
+  "language": "java",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6024",
+  "team": "stf",
+  "startedAt": "2025-10-28T01:48:09.678Z",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "IaC Diagnosis/Edits"
+  ],
+  "aws_services": [
+    "ssm",
+    "kms",
+    "s3",
+    "lambda",
+    "iam",
+    "cloudwatch",
+    "ec2"
+  ],
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "okorie-turing",
+  "dockerS3Location": ""
+}
