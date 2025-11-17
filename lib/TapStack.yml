@@ -89,7 +89,7 @@ Resources:
   DBPasswordSecret:
     Type: AWS::SecretsManager::Secret
     Properties:
-      Name: !Sub 'PaymentProcessing-${EnvironmentType}-DB-Credentials'
+      Name: !Sub 'PaymentProcessing-${EnvironmentSuffix}-DB-Credentials'
       Description: Auto-generated credentials for PaymentProcessing RDS database
       GenerateSecretString:
         SecretStringTemplate: !Sub '{"username": "${DBUsername}"}'
@@ -105,7 +105,7 @@ Resources:
   EC2KeyPair:
     Type: AWS::EC2::KeyPair
     Properties:
-      KeyName: !Sub 'PaymentProcessing-${EnvironmentType}-KeyPair'
+      KeyName: !Sub 'PaymentProcessing-${EnvironmentSuffix}-KeyPair'
       KeyType: rsa
       Tags:
         - Key: Name
@@ -229,7 +229,7 @@ Resources:
   ALBSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'PaymentProcessing-ALB-SG-${EnvironmentType}'
+      GroupName: !Sub 'PaymentProcessing-ALB-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for Application Load Balancer
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -250,7 +250,7 @@ Resources:
   InstanceSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'PaymentProcessing-Instance-SG-${EnvironmentType}'
+      GroupName: !Sub 'PaymentProcessing-Instance-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for EC2 instances
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -275,7 +275,7 @@ Resources:
   DatabaseSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
-      GroupName: !Sub 'PaymentProcessing-DB-SG-${EnvironmentType}'
+      GroupName: !Sub 'PaymentProcessing-DB-SG-${EnvironmentSuffix}'
       GroupDescription: Security group for RDS Aurora cluster
       VpcId: !Ref VPC
       SecurityGroupIngress:
@@ -293,7 +293,7 @@ Resources:
   InstanceRole:
     Type: AWS::IAM::Role
     Properties:
-      RoleName: !Sub 'PaymentProcessing-InstanceRole-${EnvironmentType}'
+      RoleName: !Sub 'PaymentProcessing-InstanceRole-${EnvironmentSuffix}'
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -326,7 +326,7 @@ Resources:
   InstanceProfile:
     Type: AWS::IAM::InstanceProfile
     Properties:
-      InstanceProfileName: !Sub 'PaymentProcessing-InstanceProfile-${EnvironmentType}'
+      InstanceProfileName: !Sub 'PaymentProcessing-InstanceProfile-${EnvironmentSuffix}'
       Roles:
         - !Ref InstanceRole
 
@@ -334,7 +334,7 @@ Resources:
   LaunchTemplate:
     Type: AWS::EC2::LaunchTemplate
     Properties:
-      LaunchTemplateName: !Sub 'PaymentProcessing-LaunchTemplate-${EnvironmentType}'
+      LaunchTemplateName: !Sub 'PaymentProcessing-LaunchTemplate-${EnvironmentSuffix}'
       LaunchTemplateData:
         ImageId: !FindInMap [RegionAMIs, !Ref 'AWS::Region', AMI]
         InstanceType: !FindInMap [EnvironmentConfig, !Ref EnvironmentType, InstanceType]
@@ -392,7 +392,7 @@ Resources:
   ApplicationLoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
     Properties:
-      Name: !Sub 'PaymentProcessing-ALB-${EnvironmentType}'
+      Name: !Sub 'PaymentProcessing-ALB-${EnvironmentSuffix}'
       Type: application
       Scheme: internet-facing
       IpAddressType: ipv4
@@ -412,7 +412,7 @@ Resources:
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
-      Name: !Sub 'PaymentProcessing-TG-${EnvironmentType}'
+      Name: !Sub 'PaymentProcessing-TG-${EnvironmentSuffix}'
       Port: 80
       Protocol: HTTP
       VpcId: !Ref VPC
@@ -426,7 +426,7 @@ Resources:
       TargetType: instance
       Tags:
         - Key: Name
-          Value: !Sub 'PaymentProcessing-TG-${EnvironmentType}'
+          Value: !Sub 'PaymentProcessing-TG-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentType
 
@@ -444,7 +444,7 @@ Resources:
   AutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      AutoScalingGroupName: !Sub 'PaymentProcessing-ASG-${EnvironmentType}'
+      AutoScalingGroupName: !Sub 'PaymentProcessing-ASG-${EnvironmentSuffix}'
       LaunchTemplate:
         LaunchTemplateId: !Ref LaunchTemplate
         Version: !GetAtt LaunchTemplate.LatestVersionNumber
@@ -473,7 +473,7 @@ Resources:
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupName: !Sub 'paymentprocessing-dbsubnet-${EnvironmentType}'
+      DBSubnetGroupName: !Sub 'paymentprocessing-dbsubnet-${EnvironmentSuffix}'
       DBSubnetGroupDescription: Subnet group for Aurora PostgreSQL cluster
       SubnetIds:
         - !Ref PrivateSubnet1
@@ -487,7 +487,7 @@ Resources:
   AuroraCluster:
     Type: AWS::RDS::DBCluster
     Properties:
-      DBClusterIdentifier: !Sub 'paymentprocessing-cluster-${EnvironmentType}'
+      DBClusterIdentifier: !Sub 'paymentprocessing-cluster-${EnvironmentSuffix}'
       Engine: aurora-postgresql
       EngineVersion: '14.6'
       MasterUserSecret:
@@ -511,7 +511,7 @@ Resources:
   AuroraInstance1:
     Type: AWS::RDS::DBInstance
     Properties:
-      DBInstanceIdentifier: !Sub 'paymentprocessing-instance1-${EnvironmentType}'
+      DBInstanceIdentifier: !Sub 'paymentprocessing-instance1-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref AuroraCluster
       Engine: aurora-postgresql
       DBInstanceClass: !If [IsProduction, db.r5.large, db.t3.medium]
@@ -526,7 +526,7 @@ Resources:
     Type: AWS::RDS::DBInstance
     Condition: IsProduction
     Properties:
-      DBInstanceIdentifier: !Sub 'paymentprocessing-instance2-${EnvironmentType}'
+      DBInstanceIdentifier: !Sub 'paymentprocessing-instance2-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref AuroraCluster
       Engine: aurora-postgresql
       DBInstanceClass: db.r5.large

@@ -112,7 +112,7 @@
             "Type": "AWS::SecretsManager::Secret",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "PaymentProcessing-${EnvironmentType}-DB-Credentials"
+                    "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}-DB-Credentials"
                 },
                 "Description": "Auto-generated credentials for PaymentProcessing RDS database",
                 "GenerateSecretString": {
@@ -143,7 +143,7 @@
             "Type": "AWS::EC2::KeyPair",
             "Properties": {
                 "KeyName": {
-                    "Fn::Sub": "PaymentProcessing-${EnvironmentType}-KeyPair"
+                    "Fn::Sub": "PaymentProcessing-${EnvironmentSuffix}-KeyPair"
                 },
                 "KeyType": "rsa",
                 "Tags": [
@@ -419,7 +419,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "PaymentProcessing-ALB-SG-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-ALB-SG-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for Application Load Balancer",
                 "VpcId": {
@@ -459,7 +459,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "PaymentProcessing-Instance-SG-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-Instance-SG-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for EC2 instances",
                 "VpcId": {
@@ -509,7 +509,7 @@
             "Type": "AWS::EC2::SecurityGroup",
             "Properties": {
                 "GroupName": {
-                    "Fn::Sub": "PaymentProcessing-DB-SG-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-DB-SG-${EnvironmentSuffix}"
                 },
                 "GroupDescription": "Security group for RDS Aurora cluster",
                 "VpcId": {
@@ -545,7 +545,7 @@
             "Type": "AWS::IAM::Role",
             "Properties": {
                 "RoleName": {
-                    "Fn::Sub": "PaymentProcessing-InstanceRole-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-InstanceRole-${EnvironmentSuffix}"
                 },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -612,7 +612,7 @@
             "Type": "AWS::IAM::InstanceProfile",
             "Properties": {
                 "InstanceProfileName": {
-                    "Fn::Sub": "PaymentProcessing-InstanceProfile-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-InstanceProfile-${EnvironmentSuffix}"
                 },
                 "Roles": [
                     {
@@ -625,7 +625,7 @@
             "Type": "AWS::EC2::LaunchTemplate",
             "Properties": {
                 "LaunchTemplateName": {
-                    "Fn::Sub": "PaymentProcessing-LaunchTemplate-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-LaunchTemplate-${EnvironmentSuffix}"
                 },
                 "LaunchTemplateData": {
                     "ImageId": {
@@ -697,7 +697,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "PaymentProcessing-ALB-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-ALB-${EnvironmentSuffix}"
                 },
                 "Type": "application",
                 "Scheme": "internet-facing",
@@ -739,7 +739,7 @@
             "Type": "AWS::ElasticLoadBalancingV2::TargetGroup",
             "Properties": {
                 "Name": {
-                    "Fn::Sub": "PaymentProcessing-TG-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-TG-${EnvironmentSuffix}"
                 },
                 "Port": 80,
                 "Protocol": "HTTP",
@@ -758,7 +758,7 @@
                     {
                         "Key": "Name",
                         "Value": {
-                            "Fn::Sub": "PaymentProcessing-TG-${EnvironmentType}"
+                            "Fn::Sub": "PaymentProcessing-TG-${EnvironmentSuffix}"
                         }
                     },
                     {
@@ -792,7 +792,7 @@
             "Type": "AWS::AutoScaling::AutoScalingGroup",
             "Properties": {
                 "AutoScalingGroupName": {
-                    "Fn::Sub": "PaymentProcessing-ASG-${EnvironmentType}"
+                    "Fn::Sub": "PaymentProcessing-ASG-${EnvironmentSuffix}"
                 },
                 "LaunchTemplate": {
                     "LaunchTemplateId": {
@@ -874,7 +874,7 @@
             "Type": "AWS::RDS::DBSubnetGroup",
             "Properties": {
                 "DBSubnetGroupName": {
-                    "Fn::Sub": "paymentprocessing-dbsubnet-${EnvironmentType}"
+                    "Fn::Sub": "paymentprocessing-dbsubnet-${EnvironmentSuffix}"
                 },
                 "DBSubnetGroupDescription": "Subnet group for Aurora PostgreSQL cluster",
                 "SubnetIds": [
@@ -905,7 +905,7 @@
             "Type": "AWS::RDS::DBCluster",
             "Properties": {
                 "DBClusterIdentifier": {
-                    "Fn::Sub": "paymentprocessing-cluster-${EnvironmentType}"
+                    "Fn::Sub": "paymentprocessing-cluster-${EnvironmentSuffix}"
                 },
                 "Engine": "aurora-postgresql",
                 "EngineVersion": "14.6",
@@ -957,7 +957,7 @@
             "Type": "AWS::RDS::DBInstance",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "paymentprocessing-instance1-${EnvironmentType}"
+                    "Fn::Sub": "paymentprocessing-instance1-${EnvironmentSuffix}"
                 },
                 "DBClusterIdentifier": {
                     "Ref": "AuroraCluster"
@@ -992,7 +992,7 @@
             "Condition": "IsProduction",
             "Properties": {
                 "DBInstanceIdentifier": {
-                    "Fn::Sub": "paymentprocessing-instance2-${EnvironmentType}"
+                    "Fn::Sub": "paymentprocessing-instance2-${EnvironmentSuffix}"
                 },
                 "DBClusterIdentifier": {
                     "Ref": "AuroraCluster"
