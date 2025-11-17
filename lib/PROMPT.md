@@ -2,7 +2,7 @@
 
 ## Business Context
 
-Hey, we're building a production-grade network foundation for our new payment processing platform that must comply with PCI DSS requirements for network segmentation, access control, and comprehensive audit logging. The architecture needs strict isolation between public-facing load balancers, application servers, database instances, and management tools across three availability zones with encryption at rest, API activity tracking, and real-time security monitoring. **We'll use Terraform with HCL** to deploy this secure, highly available VPC infrastructure in us-east-1.
+Hey, we're building a production-grade network foundation for our new payment processing platform that must comply with PCI DSS requirements for network segmentation, access control, and comprehensive audit logging. The architecture needs strict isolation between public-facing load balancers, application servers, database instances, and management tools across three availability zones with encryption at rest, API activity tracking, and real-time security monitoring. **We'll use Terraform with HCL** to deploy this secure, highly available VPC infrastructure in ap-southeast-1.
 
 ## Technical Requirements
 
@@ -16,11 +16,11 @@ Set up an S3 bucket using the naming pattern "s3-cloudtrail-logs-production-ACCO
 
 ### CloudTrail API Logging
 
-Enable CloudTrail with a trail named "cloudtrail-vpc-api-production" capturing all management events across the entire AWS account for comprehensive API activity auditing required by PCI DSS. Configure the trail to write encrypted logs to the dedicated S3 bucket using the CloudTrail KMS key and enable log file validation for tamper detection. Include management events for read and write operations to track all VPC configuration changes, security group modifications, and route table updates. Set include_global_service_events to true and is_multi_region_trail to false since we're focusing on us-east-1 resources. Add explicit depends_on to the S3 bucket and bucket policy to ensure proper creation order.
+Enable CloudTrail with a trail named "cloudtrail-vpc-api-production" capturing all management events across the entire AWS account for comprehensive API activity auditing required by PCI DSS. Configure the trail to write encrypted logs to the dedicated S3 bucket using the CloudTrail KMS key and enable log file validation for tamper detection. Include management events for read and write operations to track all VPC configuration changes, security group modifications, and route table updates. Set include_global_service_events to true and is_multi_region_trail to false since we're focusing on ap-southeast-1 resources. Add explicit depends_on to the S3 bucket and bucket policy to ensure proper creation order.
 
 ### VPC Foundation
 
-Create a VPC with CIDR block 10.50.0.0/16 providing 65,536 IP addresses for future growth while maintaining the /24 subnet structure for each tier. Enable DNS hostnames and DNS resolution for internal service discovery and proper hostname assignment. The VPC must span exactly three availability zones (us-east-1a, us-east-1b, us-east-1c) with identical subnet configurations in each zone to support symmetric workload distribution and failover scenarios.
+Create a VPC with CIDR block 10.50.0.0/16 providing 65,536 IP addresses for future growth while maintaining the /24 subnet structure for each tier. Enable DNS hostnames and DNS resolution for internal service discovery and proper hostname assignment. The VPC must span exactly three availability zones (ap-southeast-1a, ap-southeast-1b, ap-southeast-1c) with identical subnet configurations in each zone to support symmetric workload distribution and failover scenarios.
 
 ### Subnet Architecture
 

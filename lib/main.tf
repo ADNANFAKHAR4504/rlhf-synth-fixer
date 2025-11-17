@@ -17,7 +17,6 @@ locals {
 # ==========================================
 
 # KMS Key for CloudWatch Logs
-# KMS Key for CloudWatch Logs
 resource "aws_kms_key" "cloudwatch_logs" {
   description             = "KMS key for CloudWatch Logs encryption - PCI compliance"
   deletion_window_in_days = 7
