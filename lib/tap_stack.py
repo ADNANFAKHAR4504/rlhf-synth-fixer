@@ -343,7 +343,7 @@ class TapStack(TerraformStack):
         primary_db_sg = SecurityGroup(
             self,
             "primary_db_sg",
-            name=f"sg-db-primary-{environment_suffix}",
+            name=f"db-primary-sg-{environment_suffix}",
             description="Security group for primary Aurora cluster",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -362,7 +362,7 @@ class TapStack(TerraformStack):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**common_tags, "Name": f"sg-db-primary-{environment_suffix}", "DR-Role": "primary"},
+            tags={**common_tags, "Name": f"db-primary-sg-{environment_suffix}", "DR-Role": "primary"},
             provider=primary_provider
         )
 
@@ -419,7 +419,7 @@ class TapStack(TerraformStack):
         secondary_db_sg = SecurityGroup(
             self,
             "secondary_db_sg",
-            name=f"sg-db-secondary-{environment_suffix}",
+            name=f"db-secondary-sg-{environment_suffix}",
             description="Security group for secondary Aurora cluster",
             vpc_id=secondary_vpc.id,
             ingress=[
@@ -438,7 +438,7 @@ class TapStack(TerraformStack):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**common_tags, "Name": f"sg-db-secondary-{environment_suffix}", "DR-Role": "secondary"},
+            tags={**common_tags, "Name": f"db-secondary-sg-{environment_suffix}", "DR-Role": "secondary"},
             provider=secondary_provider
         )
 
@@ -1020,7 +1020,7 @@ class TapStack(TerraformStack):
         primary_alb_sg = SecurityGroup(
             self,
             "primary_alb_sg",
-            name=f"sg-alb-primary-{environment_suffix}",
+            name=f"alb-primary-sg-{environment_suffix}",
             description="Security group for primary ALB",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -1039,7 +1039,7 @@ class TapStack(TerraformStack):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**common_tags, "Name": f"sg-alb-primary-{environment_suffix}", "DR-Role": "primary"},
+            tags={**common_tags, "Name": f"alb-primary-sg-{environment_suffix}", "DR-Role": "primary"},
             provider=primary_provider
         )
 
@@ -1047,7 +1047,7 @@ class TapStack(TerraformStack):
         primary_ec2_sg = SecurityGroup(
             self,
             "primary_ec2_sg",
-            name=f"sg-ec2-primary-{environment_suffix}",
+            name=f"ec2-primary-sg-{environment_suffix}",
             description="Security group for primary EC2 instances",
             vpc_id=primary_vpc.id,
             ingress=[
@@ -1066,7 +1066,7 @@ class TapStack(TerraformStack):
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**common_tags, "Name": f"sg-ec2-primary-{environment_suffix}", "DR-Role": "primary"},
+            tags={**common_tags, "Name": f"ec2-primary-sg-{environment_suffix}", "DR-Role": "primary"},
             provider=primary_provider,
             depends_on=[primary_alb_sg]
         )
@@ -1198,7 +1198,7 @@ echo "OK" > /var/www/html/health
         secondary_alb_sg = SecurityGroup(
             self,
             "secondary_alb_sg",
-            name=f"sg-alb-secondary-{environment_suffix}",
+            name=f"alb-secondary-sg-{environment_suffix}",
             description="Security group for secondary ALB",
             vpc_id=secondary_vpc.id,
             ingress=[
@@ -1217,7 +1217,7 @@ echo "OK" > /var/www/html/health
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**common_tags, "Name": f"sg-alb-secondary-{environment_suffix}", "DR-Role": "secondary"},
+            tags={**common_tags, "Name": f"alb-secondary-sg-{environment_suffix}", "DR-Role": "secondary"},
             provider=secondary_provider
         )
 
@@ -1225,7 +1225,7 @@ echo "OK" > /var/www/html/health
         secondary_ec2_sg = SecurityGroup(
             self,
             "secondary_ec2_sg",
-            name=f"sg-ec2-secondary-{environment_suffix}",
+            name=f"ec2-secondary-sg-{environment_suffix}",
             description="Security group for secondary EC2 instances",
             vpc_id=secondary_vpc.id,
             ingress=[
@@ -1244,7 +1244,7 @@ echo "OK" > /var/www/html/health
                     cidr_blocks=["0.0.0.0/0"]
                 )
             ],
-            tags={**common_tags, "Name": f"sg-ec2-secondary-{environment_suffix}", "DR-Role": "secondary"},
+            tags={**common_tags, "Name": f"ec2-secondary-sg-{environment_suffix}", "DR-Role": "secondary"},
             provider=secondary_provider,
             depends_on=[secondary_alb_sg]
         )
