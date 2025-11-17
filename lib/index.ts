@@ -74,4 +74,3 @@ export { LoadBalancerStack } from './load-balancer';
 export { MonitoringStack } from './monitoring';
 export { NetworkingStack } from './networking';
 export { TapStack } from './tap-stack';
-
