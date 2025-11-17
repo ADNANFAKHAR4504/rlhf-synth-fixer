@@ -1,0 +1,28 @@
+{
+  "task_id": "101912512",
+  "po_id": "101912512",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T13:18:25+00:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "infrastructure-analysis-/-qa"
+  ],
+  "aws_services": [
+    "config",
+    "lambda",
+    "dynamodb",
+    "s3",
+    "eventbridge",
+    "sns",
+    "iam",
+    "cloudwatch"
+  ],
+  "training_quality": 10,
+  "code_reviewed": "2025-11-17T13:53:08+00:00"
+}
