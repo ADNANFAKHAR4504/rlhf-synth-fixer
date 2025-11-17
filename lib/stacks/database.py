@@ -30,7 +30,7 @@ class DatabaseModule(Construct):
             provider=primary_provider,
             secret_id=self.db_secret.id,
             secret_string=json.dumps({
-                "username": "admin",
+                "username": "dbadmin",
                 "password": "TempPassword123!ChangeMe"  # Should be rotated immediately
             })
         )
@@ -76,7 +76,7 @@ class DatabaseModule(Construct):
             engine="aurora-postgresql",
             engine_version="14.6",
             database_name="payments",
-            master_username="admin",
+            master_username="dbadmin",
             master_password=self.db_password,
             db_subnet_group_name=self.primary_db_subnet_group.name,
             vpc_security_group_ids=[networking.primary_rds_sg.id],
