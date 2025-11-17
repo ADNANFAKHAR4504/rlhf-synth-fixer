@@ -251,6 +251,7 @@ All infrastructure resources implement comprehensive tagging strategy enabling c
     },
     "AlertEmail": {
       "Type": "String",
+      "Default": "admin@example.com",
       "Description": "Email address for CloudWatch alarm notifications",
       "AllowedPattern": "^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$"
     }
@@ -1966,9 +1967,7 @@ All infrastructure resources implement comprehensive tagging strategy enabling c
           "Ref": "BastionInstanceProfile"
         },
         "UserData": {
-          "Fn::Base64": {
-            "Fn::Sub": "#!/bin/bash\nset -e\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
-          }
+          "Fn::Base64": "#!/bin/bash\nset -e\nyum update -y\nyum install -y amazon-ssm-agent\nsystemctl enable amazon-ssm-agent\nsystemctl start amazon-ssm-agent\n"
         },
         "Tags": [
           {
