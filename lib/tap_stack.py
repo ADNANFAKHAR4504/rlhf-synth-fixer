@@ -77,13 +77,15 @@ class TapStack(TerraformStack):
 
         # Configure S3 Backend for CI/CD state persistence
         # Note: DynamoDB table for state locking removed as table doesn't exist
-        S3Backend(
-            self,
-            bucket=state_bucket,
-            key=f"{environment_suffix}/{construct_id}.tfstate",
-            region=state_bucket_region,
-            encrypt=True,
-        )
+        # Only configure S3 backend if state_bucket is provided (for CI/CD)
+        if state_bucket and state_bucket.strip():
+            S3Backend(
+                self,
+                bucket=state_bucket,
+                key=f"{environment_suffix}/{construct_id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True,
+            )
 
         # =================================================================
         # S3 BUCKET FOR FILE STORAGE

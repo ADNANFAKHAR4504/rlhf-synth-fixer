@@ -82,15 +82,43 @@ ApiGatewayUsagePlan(quota_settings={...}, throttle_settings={...})
 
 ---
 
+### 4. Resource Already Exists Errors
+
+**Impact Level**: Critical - Prevents Deployment in CI/CD
+
+**Current Issue**: Deployment fails with multiple "already exists" errors:
+```
+Error: creating CloudWatch Logs Log Group: ResourceAlreadyExistsException
+Error: creating AWS DynamoDB Table: ResourceInUseException: Table already exists
+Error: creating S3 Bucket: BucketAlreadyExists
+Error: creating SNS Topic: InvalidParameter: Topic already exists with different tags
+Error: creating SQS Queue: QueueAlreadyExists with different tags
+```
+
+**Root Cause**: Resources from previous deployment attempts remain in AWS, and Terraform cannot create resources that already exist.
+
+**Fix Options**:
+1. **Import existing resources** (not suitable for CI/CD ephemeral environments)
+2. **Add lifecycle rules to handle existing resources**
+3. **Delete existing resources before deployment** (preferred for dev/test)
+4. **Use data sources to reference existing resources**
+
+**IDEAL_RESPONSE Fix**: For development environments, ensure resources are properly destroyed between deployments. In the code, we already have `force_destroy=True` on the S3 bucket. For CloudWatch Log Groups, we can add a check or use a unique naming pattern.
+
+**Impact**: Complete deployment blocker in CI/CD pipeline
+
+---
+
 ##Summary
 
-- **Total failures**: 3 Critical/High impacting deployment
+- **Total failures**: 4 Critical/High impacting deployment
 - **Key issues**:
   1. Lambda deployment method selection (container vs ZIP)
   2. Terraform state management configuration
   3. CDKTF provider parameter naming
+  4. Resource lifecycle management in CI/CD environments
 
-- **Training value**: High - demonstrates critical infrastructure patterns for serverless pipelines
+- **Training value**: High - demonstrates critical infrastructure patterns for serverless pipelines and CI/CD considerations
 
 ## Validation Results After Fixes
 
@@ -99,3 +127,4 @@ ApiGatewayUsagePlan(quota_settings={...}, throttle_settings={...})
 - Lambda Packaging: Automated ZIP creation for ARM64
 - Infrastructure: All 11 AWS services configured with environment suffix
 - Cost Optimization: Removed 3 unnecessary ECR repositories
+- Resource Management: Proper lifecycle handling for CI/CD deployments

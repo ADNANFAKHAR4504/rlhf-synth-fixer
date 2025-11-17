@@ -4,7 +4,8 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "9lh0b7",
-  "team": "synth-2",
+  "team": "synth",
+  "author": "raaj1021",
   "startedAt": "2025-11-17T03:28:41+05:30",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -21,7 +22,8 @@
     "CloudWatch",
     "IAM",
     "EventBridge",
-    "X-Ray"
+    "X-Ray",
+    "ECR"
   ],
   "training_quality": 9
 }
