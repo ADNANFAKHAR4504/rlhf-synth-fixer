@@ -17,10 +17,13 @@ export interface TapStackProps extends cdk.StackProps {
 }
 
 export class TapStack extends cdk.Stack {
+  private readonly environmentSuffix: string;
+
   constructor(scope: Construct, id: string, props: TapStackProps) {
     super(scope, id, props);
 
     const { environmentSuffix } = props;
+    this.environmentSuffix = environmentSuffix;
 
     // Apply required tags to all resources
     cdk.Tags.of(this).add('DataClassification', 'Confidential');
@@ -661,7 +664,7 @@ export class TapStack extends cdk.Stack {
    * @returns The environment suffix used by this stack
    */
   public getEnvironmentSuffix(): string {
-    return this.node.tryGetContext('environmentSuffix') || 'test';
+    return this.environmentSuffix;
   }
 
   /**
