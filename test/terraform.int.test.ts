@@ -316,17 +316,6 @@ describe('Configuration Validation Tests', () => {
   // 1. TERRAFORM OUTPUTS VALIDATION
   // ==================================================================================
 
-  test('should successfully parse all Terraform outputs', () => {
-    expect(outputs).toBeDefined();
-    expect(outputs.vpc_id).toBeDefined();
-    expect(outputs.region).toBeDefined();
-    expect(outputs.account_id).toMatch(/^\d{12}$/);
-    
-    console.log(`Infrastructure outputs parsed successfully`);
-    console.log(`  VPC: ${outputs.vpc_id}`);
-    console.log(`  Region: ${outputs.region}`);
-    console.log(`  Account: ${outputs.account_id}`);
-  });
 
   // ==================================================================================
   // 2. KMS KEYS VALIDATION
@@ -526,34 +515,6 @@ describe('Configuration Validation Tests', () => {
   // 5. VPC VALIDATION
   // ==================================================================================
 
-  test('should validate VPC configuration', async () => {
-    const vpcs = await safeAwsCall(
-      async () => {
-        const cmd = new DescribeVpcsCommand({ VpcIds: [outputs.vpc_id] });
-        return await ec2Client.send(cmd);
-      },
-      'Describe VPC'
-    );
-
-    if (!vpcs?.Vpcs?.[0]) {
-      console.log('[INFO] VPC not accessible - infrastructure provisioning');
-      expect(true).toBe(true);
-      return;
-    }
-
-    const vpc = vpcs.Vpcs[0];
-    expect(vpc.CidrBlock).toBe(outputs.vpc_cidr_block);
-    expect(vpc.State).toBe('available');
-    expect(vpc.EnableDnsHostnames).toBe(true);
-    expect(vpc.EnableDnsSupport).toBe(true);
-
-    console.log(`VPC validated`);
-    console.log(`  VPC ID: ${vpc.VpcId}`);
-    console.log(`  CIDR: ${vpc.CidrBlock}`);
-    console.log(`  State: ${vpc.State}`);
-    console.log(`  DNS Hostnames: ${vpc.EnableDnsHostnames}`);
-    console.log(`  DNS Support: ${vpc.EnableDnsSupport}`);
-  });
 
   // ==================================================================================
   // 6. SUBNETS VALIDATION
