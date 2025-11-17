@@ -1,0 +1,42 @@
+[
+  {
+    "ParameterKey": "Environment",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "EnvironmentSuffix",
+    "ParameterValue": "s907"
+  },
+  {
+    "ParameterKey": "VpcId",
+    "ParameterValue": "vpc-07ed7c76d880d731f"
+  },
+  {
+    "ParameterKey": "PrivateSubnet1",
+    "ParameterValue": "subnet-0df50712879dbb7ae"
+  },
+  {
+    "ParameterKey": "PrivateSubnet2",
+    "ParameterValue": "subnet-0f45db8175f36a809"
+  },
+  {
+    "ParameterKey": "PrivateSubnet3",
+    "ParameterValue": "subnet-059c4efe1f1d0847f"
+  },
+  {
+    "ParameterKey": "PublicSubnet1",
+    "ParameterValue": "subnet-019a91a1e9aebc118"
+  },
+  {
+    "ParameterKey": "PublicSubnet2",
+    "ParameterValue": "subnet-0dbe3a442b58efe43"
+  },
+  {
+    "ParameterKey": "PublicSubnet3",
+    "ParameterValue": "subnet-04f8480f3152370f0"
+  },
+  {
+    "ParameterKey": "KeyPairName",
+    "ParameterValue": "iac-test-key-synth37490"
+  }
+]

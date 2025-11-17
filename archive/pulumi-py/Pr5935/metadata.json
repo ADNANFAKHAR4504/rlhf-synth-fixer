@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "349214",
+  "team": "6",
+  "startedAt": "2025-11-06T08:40:45.468Z",
+  "subtask": "Application Deployment",
+  "background": "Serverless infrastructure allows building scalable applications and services without thinking about servers. AWS provides a range of services like AWS Lambda, API Gateway, DynamoDB, and more to accomplish this.",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "S3",
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "Step Functions",
+    "SNS",
+    "SQS",
+    "KMS",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "tr-brian-karicha",
+  "dockerS3Location": ""
+}

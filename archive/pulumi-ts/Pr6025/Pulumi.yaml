@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Multi-environment VPC infrastructure for payment processing platform
+main: bin/tap.ts

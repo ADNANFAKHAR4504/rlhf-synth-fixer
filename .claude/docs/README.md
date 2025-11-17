@@ -29,6 +29,7 @@ This directory contains organized documentation for the IaC Test Automation syst
 │   └── references/      # Quick reference materials
 │       ├── shared-validations.md
 │       ├── validation-checkpoints.md
+│       ├── cicd-file-restrictions.md
 │       ├── error-handling.md
 │       └── quick_validation_checklist.md
 │
@@ -63,6 +64,7 @@ This directory contains organized documentation for the IaC Test Automation syst
 
 - `shared-validations.md`: Common validation rules across agents
 - `validation-checkpoints.md`: Named checkpoints for reuse
+- `cicd-file-restrictions.md`: **CRITICAL** File location rules enforced by CI/CD (check-project-files.sh)
 - `error-handling.md`: Error patterns and reporting standards
 - `quick_validation_checklist.md`: Fast checklist for common tasks
 

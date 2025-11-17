@@ -1,0 +1,50 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "350144",
+  "team": "3",
+  "startedAt": "2025-11-13T11:07:54.504Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 Subnet",
+    "Internet Gateway",
+    "NAT Gateway",
+    "EIP",
+    "Route Table",
+    "Security Group",
+    "VPC Flow Logs",
+    "VPC Endpoint",
+    "S3 Bucket",
+    "KMS",
+    "Certificate Manager",
+    "IAM",
+    "Secrets Manager",
+    "Lambda",
+    "RDS Aurora",
+    "RDS DB Subnet Group",
+    "RDS Parameter Group",
+    "AWS Backup",
+    "ECS Cluster",
+    "ECS Service",
+    "ECS Task Definition",
+    "ECR Repository",
+    "Application Load Balancer",
+    "Auto Scaling",
+    "CloudWatch LogGroup",
+    "SNS Topic",
+    "CloudFormation"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

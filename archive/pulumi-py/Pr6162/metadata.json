@@ -1,0 +1,42 @@
+{
+  "platform": "pulumi",
+  "language": "python",
+  "complexity": "medium",
+  "team": "synth",
+  "author": "iamarpit-turing",
+  "reviewer": "adnan-turing",
+  "turn_type": "single",
+  "startedAt": "2025-11-10T07:10:45Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Payment Processing",
+    "Three-Tier Architecture",
+    "VPC",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "Multi-AZ",
+    "Security",
+    "Compliance"
+  ],
+  "po_id": "101000881",
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ALB",
+    "Auto Scaling",
+    "RDS",
+    "S3",
+    "KMS",
+    "ACM",
+    "Security Groups",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

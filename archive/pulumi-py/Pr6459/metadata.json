@@ -1,0 +1,35 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "hard",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-13T06:30:08+00:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "po_id": "101912481",
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeDeploy",
+    "ECR",
+    "ECS",
+    "IAM",
+    "CloudWatch",
+    "KMS",
+    "S3",
+    "VPC",
+    "ALB"
+  ],
+  "region": "ap-southeast-1",
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

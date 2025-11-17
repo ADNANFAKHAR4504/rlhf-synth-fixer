@@ -1,0 +1,35 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350218",
+  "team": "4",
+  "startedAt": "2025-11-13T04:16:53.602Z",
+  "subtask": "Security, Compliance and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3 Bucket",
+    "Network Load Balancer",
+    "Auto Scaling Group",
+    "KMS",
+    "Secrets Manager",
+    "CloudWatch",
+    "SNS",
+    "AWS Config",
+    "IAM"
+  ],
+  "training_quality": 9,
+  "background": "Enterprise-grade TAP stack implementation requiring secure, highly available web application infrastructure on AWS with comprehensive security, encryption, monitoring, and compliance features including multi-AZ deployment, KMS encryption, AWS Config tracking, and proper IAM least privilege implementation.",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "koushik-turing",
+  "dockerS3Location": ""
+}

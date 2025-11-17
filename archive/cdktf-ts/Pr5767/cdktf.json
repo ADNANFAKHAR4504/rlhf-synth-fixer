@@ -1,0 +1,50 @@
+{
+  "language": "typescript",
+  "app": "npx ts-node bin/tap.ts",
+  "projectId": "data-pipeline-multi-env",
+  "sendCrashReports": "false",
+  "terraformProviders": ["aws@~> 5.0", "archive@~> 2.0"],
+  "terraformModules": [],
+  "context": {
+    "excludeStackIdFromLogicalIds": "true",
+    "allowSepCharsInLogicalIds": "true",
+    "environments": {
+      "dev": {
+        "name": "dev",
+        "region": "ap-southeast-1",
+        "lambdaMemory": 512,
+        "dynamodbReadCapacity": 5,
+        "dynamodbWriteCapacity": 5,
+        "dynamodbBillingMode": "PAY_PER_REQUEST",
+        "s3LifecycleDays": 30,
+        "enableXrayTracing": false,
+        "snsEmail": "dev-alerts@example.com",
+        "costCenter": "development"
+      },
+      "staging": {
+        "name": "staging",
+        "region": "ap-southeast-1",
+        "lambdaMemory": 1024,
+        "dynamodbReadCapacity": 10,
+        "dynamodbWriteCapacity": 10,
+        "dynamodbBillingMode": "PROVISIONED",
+        "s3LifecycleDays": 90,
+        "enableXrayTracing": true,
+        "snsEmail": "staging-alerts@example.com",
+        "costCenter": "staging"
+      },
+      "prod": {
+        "name": "prod",
+        "region": "ap-southeast-1",
+        "lambdaMemory": 2048,
+        "dynamodbReadCapacity": 25,
+        "dynamodbWriteCapacity": 25,
+        "dynamodbBillingMode": "PROVISIONED",
+        "s3LifecycleDays": 365,
+        "enableXrayTracing": true,
+        "snsEmail": "prod-alerts@example.com",
+        "costCenter": "production"
+      }
+    }
+  }
+}

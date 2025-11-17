@@ -163,18 +163,39 @@ PROBLEM=$(unescape_json_string "$PROBLEM")
 CONSTRAINTS=$(unescape_json_string "$CONSTRAINTS")
 ENVIRONMENT=$(unescape_json_string "$ENVIRONMENT")
 
-# Extract region from constraints if present
+# Extract region from environment or constraints if present
 extract_region() {
-    local constraints="$1"
-    local region=$(echo "$constraints" | grep -oE '(us|eu|ap|ca|sa|me|af)-[a-z]+-[0-9]+' | head -1)
-    if [ -n "$region" ]; then
-        echo "$region"
+    local environment="$1"
+    local constraints="$2"
+    
+    # First, try to find region in environment field (where regions are actually mentioned)
+    local region=$(echo "$environment" | grep -oE '(us-east-[12]|us-west-[12]|eu-[a-z]+-[0-9]+|ap-[a-z]+-[0-9]+|ca-central-[0-9]+|sa-east-[0-9]+|af-south-[0-9]+|me-south-[0-9]+)' | head -1)
+    
+    # If not found, check constraints
+    if [ -z "$region" ]; then
+        region=$(echo "$constraints" | grep -oE '(us-east-[12]|us-west-[12]|eu-[a-z]+-[0-9]+|ap-[a-z]+-[0-9]+|ca-central-[0-9]+|sa-east-[0-9]+|af-south-[0-9]+|me-south-[0-9]+)' | head -1)
+    fi
+    
+    # Default to us-east-1 if no region found
+    if [ -z "$region" ]; then
+        echo "us-east-1"
     else
-        echo "ap-southeast-1"
+        echo "$region"
     fi
 }
 
-REGION=$(extract_region "$CONSTRAINTS")
+REGION=$(extract_region "$ENVIRONMENT" "$CONSTRAINTS")
+
+# Read team value from settings.local.json
+# If team is mentioned in settings, use that value (e.g., synth-2, synth-1)
+# Otherwise, default to "synth"
+SETTINGS_FILE=".claude/settings.local.json"
+if [ -f "$SETTINGS_FILE" ]; then
+    TEAM=$(json_val "$(cat "$SETTINGS_FILE")" "team")
+    [ -z "$TEAM" ] && TEAM="synth"
+else
+    TEAM="synth"
+fi
 
 # Create metadata.json
 METADATA_FILE="$OUTPUT_DIR/metadata.json"
@@ -184,7 +205,7 @@ cat > "$METADATA_FILE" <<EOF
   "language": "$LANGUAGE",
   "complexity": "$COMPLEXITY",
   "turn_type": "single",
-  "team": "synth",
+  "team": "$TEAM",
   "startedAt": "$STARTED_AT",
   "subtask": "$SUBTASK",
   "subject_labels": $SUBJECT_LABELS,
@@ -304,6 +325,114 @@ $FORMATTED_ENVIRONMENT
 - Use AWS Secrets Manager for credential management where applicable
 - Enable appropriate logging and monitoring
 
+## Deployment Requirements (CRITICAL)
+
+### Resource Naming
+- **MANDATORY**: All named resources MUST include \`environmentSuffix\` in their names
+- Pattern: \`{resource-name}-\${environmentSuffix}\` or \`{resource-name}-\${props.environmentSuffix}\`
+- Examples:
+  - S3 Bucket: \`my-bucket-\${environmentSuffix}\`
+  - Lambda Function: \`my-function-\${environmentSuffix}\`
+  - DynamoDB Table: \`my-table-\${environmentSuffix}\`
+- **Validation**: Every resource with a \`name\`, \`bucketName\`, \`functionName\`, \`tableName\`, \`roleName\`, \`queueName\`, \`topicName\`, \`streamName\`, \`clusterName\`, or \`dbInstanceIdentifier\` property MUST include environmentSuffix
+
+### Resource Lifecycle
+- **MANDATORY**: All resources MUST be destroyable after testing
+- **FORBIDDEN**: 
+  - \`RemovalPolicy.RETAIN\` (CDK/CDKTF) → Use \`RemovalPolicy.DESTROY\` instead
+  - \`DeletionPolicy: Retain\` (CloudFormation) → Remove or use \`Delete\`
+  - \`deletionProtection: true\` (RDS, DynamoDB) → Use \`deletionProtection: false\`
+  - \`skip_final_snapshot: false\` (RDS) → Use \`skip_final_snapshot: true\`
+- **Rationale**: CI/CD needs to clean up resources after testing
+
+### AWS Service-Specific Requirements
+
+#### GuardDuty
+- **CRITICAL**: Do NOT create GuardDuty detectors in code
+- GuardDuty allows only ONE detector per AWS account/region
+- If task requires GuardDuty, add comment: "GuardDuty should be enabled manually at account level"
+
+#### AWS Config
+- **CRITICAL**: If creating AWS Config roles, use correct managed policy:
+  - ✅ CORRECT: \`arn:aws:iam::aws:policy/service-role/AWS_ConfigRole\`
+  - ❌ WRONG: \`arn:aws:iam::aws:policy/service-role/ConfigRole\`
+  - ❌ WRONG: \`arn:aws:iam::aws:policy/AWS_ConfigRole\`
+- **Alternative**: Use service-linked role \`AWSServiceRoleForConfig\` (auto-created)
+
+#### Lambda Functions
+- **Node.js 18.x+**: Do NOT use \`require('aws-sdk')\` - AWS SDK v2 not available
+  - ✅ Use AWS SDK v3: \`import { S3Client } from '@aws-sdk/client-s3'\`
+  - ✅ Or extract data from event object directly
+- **Reserved Concurrency**: Avoid setting \`reservedConcurrentExecutions\` unless required
+  - If required, use low values (1-5) to avoid account limit issues
+
+#### CloudWatch Synthetics
+- **CRITICAL**: Use current runtime version
+  - ✅ CORRECT: \`synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0\`
+  - ❌ WRONG: \`SYNTHETICS_NODEJS_PUPPETEER_5_1\` (deprecated)
+
+#### RDS Databases
+- **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
+- **If Multi-AZ required**: Set \`backup_retention_period = 1\` (minimum) and \`skip_final_snapshot = true\`
+- **Note**: Multi-AZ RDS takes 20-30 minutes to provision
+
+#### NAT Gateways
+- **Cost Warning**: NAT Gateways cost ~\$32/month each
+- **Prefer**: VPC Endpoints for S3, DynamoDB (free)
+- **If NAT required**: Create only 1 NAT Gateway (not per AZ) for synthetic tasks
+
+### Hardcoded Values (FORBIDDEN)
+- **DO NOT** hardcode:
+  - Environment names: \`prod-\`, \`dev-\`, \`stage-\`, \`production\`, \`development\`, \`staging\`
+  - Account IDs: \`123456789012\`, \`arn:aws:.*:.*:account\`
+  - Regions: Hardcoded \`us-east-1\` or \`us-west-2\` in resource names (use variables)
+- **USE**: Environment variables, context values, or parameters instead
+
+### Cross-Resource References
+- Ensure all resource references use proper ARNs or resource objects
+- Verify dependencies are explicit (use \`DependsOn\` in CloudFormation, \`dependsOn\` in CDK)
+- Test that referenced resources exist before use
+
+## Code Examples (Reference)
+
+### Correct Resource Naming (CDK TypeScript)
+\`\`\`typescript
+const bucket = new s3.Bucket(this, 'DataBucket', {
+  bucketName: \`data-bucket-\${environmentSuffix}\`,  // ✅ CORRECT
+  // ...
+});
+
+// ❌ WRONG:
+// bucketName: 'data-bucket-prod'  // Hardcoded, will fail
+\`\`\`
+
+### Correct Removal Policy (CDK TypeScript)
+\`\`\`typescript
+const bucket = new s3.Bucket(this, 'DataBucket', {
+  removalPolicy: RemovalPolicy.DESTROY,  // ✅ CORRECT
+  // ...
+});
+
+// ❌ WRONG:
+// removalPolicy: RemovalPolicy.RETAIN  // Will block cleanup
+\`\`\`
+
+### Correct AWS Config IAM Role (CDK TypeScript)
+\`\`\`typescript
+const configRole = new iam.Role(this, 'ConfigRole', {
+  assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+  managedPolicies: [
+    iam.ManagedPolicy.fromAwsManagedPolicyName(
+      'service-role/AWS_ConfigRole'  // ✅ CORRECT
+    )
+  ]
+});
+
+// ❌ WRONG:
+// 'service-role/ConfigRole'  // Policy doesn't exist
+// 'AWS_ConfigRole'  // Missing service-role/ prefix
+\`\`\`
+
 ## Target Region
 All resources should be deployed to: **$REGION**
 EOF
@@ -358,6 +487,114 @@ $FORMATTED_ENVIRONMENT
 - Infrastructure should be fully destroyable for CI/CD workflows
 - **Important**: Secrets should be fetched from existing Secrets Manager entries, not created
 - Avoid DeletionPolicy: Retain unless required
+
+## Deployment Requirements (CRITICAL)
+
+### Resource Naming
+- **MANDATORY**: All named resources MUST include \`environmentSuffix\` in their names
+- Pattern: \`{resource-name}-\${environmentSuffix}\` or \`{resource-name}-\${props.environmentSuffix}\`
+- Examples:
+  - S3 Bucket: \`my-bucket-\${environmentSuffix}\`
+  - Lambda Function: \`my-function-\${environmentSuffix}\`
+  - DynamoDB Table: \`my-table-\${environmentSuffix}\`
+- **Validation**: Every resource with a \`name\`, \`bucketName\`, \`functionName\`, \`tableName\`, \`roleName\`, \`queueName\`, \`topicName\`, \`streamName\`, \`clusterName\`, or \`dbInstanceIdentifier\` property MUST include environmentSuffix
+
+### Resource Lifecycle
+- **MANDATORY**: All resources MUST be destroyable after testing
+- **FORBIDDEN**: 
+  - \`RemovalPolicy.RETAIN\` (CDK/CDKTF) → Use \`RemovalPolicy.DESTROY\` instead
+  - \`DeletionPolicy: Retain\` (CloudFormation) → Remove or use \`Delete\`
+  - \`deletionProtection: true\` (RDS, DynamoDB) → Use \`deletionProtection: false\`
+  - \`skip_final_snapshot: false\` (RDS) → Use \`skip_final_snapshot: true\`
+- **Rationale**: CI/CD needs to clean up resources after testing
+
+### AWS Service-Specific Requirements
+
+#### GuardDuty
+- **CRITICAL**: Do NOT create GuardDuty detectors in code
+- GuardDuty allows only ONE detector per AWS account/region
+- If task requires GuardDuty, add comment: "GuardDuty should be enabled manually at account level"
+
+#### AWS Config
+- **CRITICAL**: If creating AWS Config roles, use correct managed policy:
+  - ✅ CORRECT: \`arn:aws:iam::aws:policy/service-role/AWS_ConfigRole\`
+  - ❌ WRONG: \`arn:aws:iam::aws:policy/service-role/ConfigRole\`
+  - ❌ WRONG: \`arn:aws:iam::aws:policy/AWS_ConfigRole\`
+- **Alternative**: Use service-linked role \`AWSServiceRoleForConfig\` (auto-created)
+
+#### Lambda Functions
+- **Node.js 18.x+**: Do NOT use \`require('aws-sdk')\` - AWS SDK v2 not available
+  - ✅ Use AWS SDK v3: \`import { S3Client } from '@aws-sdk/client-s3'\`
+  - ✅ Or extract data from event object directly
+- **Reserved Concurrency**: Avoid setting \`reservedConcurrentExecutions\` unless required
+  - If required, use low values (1-5) to avoid account limit issues
+
+#### CloudWatch Synthetics
+- **CRITICAL**: Use current runtime version
+  - ✅ CORRECT: \`synthetics.Runtime.SYNTHETICS_NODEJS_PUPPETEER_7_0\`
+  - ❌ WRONG: \`SYNTHETICS_NODEJS_PUPPETEER_5_1\` (deprecated)
+
+#### RDS Databases
+- **Prefer**: Aurora Serverless v2 (faster provisioning, auto-scaling)
+- **If Multi-AZ required**: Set \`backup_retention_period = 1\` (minimum) and \`skip_final_snapshot = true\`
+- **Note**: Multi-AZ RDS takes 20-30 minutes to provision
+
+#### NAT Gateways
+- **Cost Warning**: NAT Gateways cost ~\$32/month each
+- **Prefer**: VPC Endpoints for S3, DynamoDB (free)
+- **If NAT required**: Create only 1 NAT Gateway (not per AZ) for synthetic tasks
+
+### Hardcoded Values (FORBIDDEN)
+- **DO NOT** hardcode:
+  - Environment names: \`prod-\`, \`dev-\`, \`stage-\`, \`production\`, \`development\`, \`staging\`
+  - Account IDs: \`123456789012\`, \`arn:aws:.*:.*:account\`
+  - Regions: Hardcoded \`us-east-1\` or \`us-west-2\` in resource names (use variables)
+- **USE**: Environment variables, context values, or parameters instead
+
+### Cross-Resource References
+- Ensure all resource references use proper ARNs or resource objects
+- Verify dependencies are explicit (use \`DependsOn\` in CloudFormation, \`dependsOn\` in CDK)
+- Test that referenced resources exist before use
+
+## Code Examples (Reference)
+
+### Correct Resource Naming (CDK TypeScript)
+\`\`\`typescript
+const bucket = new s3.Bucket(this, 'DataBucket', {
+  bucketName: \`data-bucket-\${environmentSuffix}\`,  // ✅ CORRECT
+  // ...
+});
+
+// ❌ WRONG:
+// bucketName: 'data-bucket-prod'  // Hardcoded, will fail
+\`\`\`
+
+### Correct Removal Policy (CDK TypeScript)
+\`\`\`typescript
+const bucket = new s3.Bucket(this, 'DataBucket', {
+  removalPolicy: RemovalPolicy.DESTROY,  // ✅ CORRECT
+  // ...
+});
+
+// ❌ WRONG:
+// removalPolicy: RemovalPolicy.RETAIN  // Will block cleanup
+\`\`\`
+
+### Correct AWS Config IAM Role (CDK TypeScript)
+\`\`\`typescript
+const configRole = new iam.Role(this, 'ConfigRole', {
+  assumedBy: new iam.ServicePrincipal('config.amazonaws.com'),
+  managedPolicies: [
+    iam.ManagedPolicy.fromAwsManagedPolicyName(
+      'service-role/AWS_ConfigRole'  // ✅ CORRECT
+    )
+  ]
+});
+
+// ❌ WRONG:
+// 'service-role/ConfigRole'  // Policy doesn't exist
+// 'AWS_ConfigRole'  // Missing service-role/ prefix
+\`\`\`
 
 ## Target Region
 Deploy all resources to: **$REGION**

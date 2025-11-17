@@ -22,11 +22,11 @@
 ---
 
 ## Multi-Environment Consistency and Replication
-> Reuse one module/template to deploy identical topologies across dev/stage/prod with param differences only.  
+> Reuse one module/template to deploy identical topologies across dev/stage/prod with param differences only.
 > Prove parity by diffing plans/stacks and enforcing environment-specific tags/limits.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5474](https://github.com/TuringGpt/iac-test-automations/pull/5474) - tf-hcl
 
 ---
 
@@ -67,11 +67,13 @@
 ---
 
 ## Infrastructure Analysis/Monitoring
-> Use Boto3/CLI scripts to inventory, detect waste/misconfig (unused EBS, open SGs, NAT/EIP, log sizes).  
+> Use Boto3/CLI scripts to inventory, detect waste/misconfig (unused EBS, open SGs, NAT/EIP, log sizes).
 > Emit JSON/CSV reports and wire to CI to continuously flag cost/security issues.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5304](https://github.com/TuringGpt/iac-test-automations/pull/5304) - analysis-py
+- [PR #5426](https://github.com/TuringGpt/iac-test-automations/pull/5426) - analysis-py
+- [PR #5548](https://github.com/TuringGpt/iac-test-automations/pull/5548) - analysis-py 
 
 ---
 
@@ -84,21 +86,24 @@
 
 ---
 
-## CI/CD Pipeline
-> Build secure, keys-free pipelines (OIDC) that lint/test/plan and promote infra/app changes across stages.  
-> Gate production via approvals/change sets and publish artifacts/reports for auditability.
+## CI/CD Pipeline Optimization
+> Design and implement multi-account, multi-stage CI/CD pipelines with secure OIDC authentication.
+> Focus on automated build/test/deploy workflows with security scanning (cdk-nag), manual approval gates,
+> cross-account role assumptions, KMS-encrypted artifacts, and CloudFormation change sets for safe deployments.
+> Include branch-based deployments (dev branch → dev env, main branch → prod env with approvals) and
+> notification integrations (Slack/webhooks) for deployment status visibility.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5600](https://github.com/TuringGpt/iac-test-automations/pull/5600) - cicd-yml
 
 ---
 
 ## IaC Diagnosis/Edits
-> Fix broken stacks/modules: permissions, dependencies, state imports, and template modularization.  
+> Fix broken stacks/modules: permissions, dependencies, state imports, and template modularization.
 > Preserve live resources, add tests/linting, and justify any necessary suppressions or refactors.
 
-**PR Reference:**  
-- _(To be linked when available)_
+**PR Reference:**
+- [PR #5234](https://github.com/TuringGpt/iac-test-automations/pull/5234) - cdk-java
 
 ---
 

@@ -1,0 +1,4 @@
+name: TapStack
+runtime: python
+description: Multi-environment infrastructure with Pulumi Python
+main: lib/tap_stack.py
