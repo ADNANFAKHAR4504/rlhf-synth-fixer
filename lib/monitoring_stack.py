@@ -53,7 +53,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create S3 bucket for VPC Flow Logs
         self.flow_logs_bucket = aws.s3.Bucket(
             f"vpc-flow-logs-{self.environment_suffix}",
-            bucket=f"vpc-flow-logs-{self.environment_suffix}",
             force_destroy=True,
             tags={
                 "Name": f"vpc-flow-logs-{self.environment_suffix}",
@@ -161,7 +160,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create S3 bucket for AWS Config
         self.config_bucket = aws.s3.Bucket(
             f"aws-config-{self.environment_suffix}",
-            bucket=f"aws-config-{self.environment_suffix}",
             force_destroy=True,
             tags={
                 "Name": f"aws-config-{self.environment_suffix}",
@@ -218,7 +216,6 @@ class MonitoringStack(pulumi.ComponentResource):
 
         self.config_role = aws.iam.Role(
             f"aws-config-role-{self.environment_suffix}",
-            name=f"aws-config-role-{self.environment_suffix}",
             assume_role_policy=config_assume_role.json,
             tags={
                 "Name": f"aws-config-role-{self.environment_suffix}",
@@ -259,7 +256,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create AWS Config recorder
         self.config_recorder = aws.cfg.Recorder(
             f"config-recorder-{self.environment_suffix}",
-            name=f"config-recorder-{self.environment_suffix}",
             role_arn=self.config_role.arn,
             recording_group=aws.cfg.RecorderRecordingGroupArgs(
                 all_supported=True,
@@ -271,7 +267,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create AWS Config delivery channel
         self.delivery_channel = aws.cfg.DeliveryChannel(
             f"config-delivery-{self.environment_suffix}",
-            name=f"config-delivery-{self.environment_suffix}",
             s3_bucket_name=self.config_bucket.bucket,
             opts=ResourceOptions(parent=self.config_recorder, depends_on=[self.config_recorder])
         )
@@ -287,7 +282,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create Config Rule for encrypted EBS volumes
         self.ebs_encryption_rule = aws.cfg.Rule(
             f"ebs-encryption-rule-{self.environment_suffix}",
-            name=f"ebs-encryption-rule-{self.environment_suffix}",
             description="Check that EBS volumes are encrypted",
             source=aws.cfg.RuleSourceArgs(
                 owner="AWS",
@@ -305,7 +299,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create Config Rule for public S3 buckets
         self.s3_public_read_rule = aws.cfg.Rule(
             f"s3-public-read-rule-{self.environment_suffix}",
-            name=f"s3-public-read-rule-{self.environment_suffix}",
             description="Check that S3 buckets do not allow public read access",
             source=aws.cfg.RuleSourceArgs(
                 owner="AWS",
@@ -323,7 +316,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create CloudWatch Log Group for EventBridge
         self.log_group = aws.cloudwatch.LogGroup(
             f"eventbridge-logs-{self.environment_suffix}",
-            name=f"/aws/events/{self.environment_suffix}",
             retention_in_days=7,
             tags={
                 "Name": f"eventbridge-logs-{self.environment_suffix}",

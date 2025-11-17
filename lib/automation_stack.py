@@ -119,7 +119,6 @@ def handler(event, context):
         # Create Lambda function for secret rotation
         self.rotation_function = aws.lambda_.Function(
             f"secret-rotation-{self.environment_suffix}",
-            name=f"secret-rotation-{self.environment_suffix}",
             runtime="python3.11",
             handler="index.handler",
             role=args.lambda_role_arn,
@@ -144,7 +143,6 @@ def handler(event, context):
         # Create EventBridge custom event bus
         self.event_bus = aws.cloudwatch.EventBus(
             f"app-events-{self.environment_suffix}",
-            name=f"app-events-{self.environment_suffix}",
             tags={
                 "Name": f"app-events-{self.environment_suffix}",
                 "Environment": self.environment_suffix,
@@ -157,7 +155,6 @@ def handler(event, context):
         # Create EventBridge rule for scheduled rotation (every 30 days)
         self.rotation_rule = aws.cloudwatch.EventRule(
             f"rotation-schedule-{self.environment_suffix}",
-            name=f"rotation-schedule-{self.environment_suffix}",
             description="Trigger secret rotation every 30 days",
             schedule_expression="rate(30 days)",
             tags={

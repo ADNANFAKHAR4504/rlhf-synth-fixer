@@ -106,8 +106,11 @@ class TestAutomationStackResourceCreation(unittest.TestCase):
 
         # Verify Lambda function was created
         mock_lambda.assert_called_once()
+        # Verify the resource name (first positional argument)
+        call_args = mock_lambda.call_args[0]
+        self.assertIn('secret-rotation-test', call_args[0])
+        # Verify kwargs
         call_kwargs = mock_lambda.call_args[1]
-        self.assertEqual(call_kwargs['name'], 'secret-rotation-test')
         self.assertEqual(call_kwargs['runtime'], 'python3.11')
         self.assertEqual(call_kwargs['handler'], 'index.handler')
         self.assertEqual(call_kwargs['timeout'], 30)
@@ -164,8 +167,9 @@ class TestAutomationStackResourceCreation(unittest.TestCase):
 
         # Verify EventBus was created
         mock_event_bus.assert_called_once()
-        call_kwargs = mock_event_bus.call_args[1]
-        self.assertEqual(call_kwargs['name'], 'app-events-test')
+        # Verify the resource name (first positional argument)
+        call_args = mock_event_bus.call_args[0]
+        self.assertIn('app-events-test', call_args[0])
 
     @patch('lib.automation_stack.aws.cloudwatch.EventTarget')
     @patch('lib.automation_stack.aws.cloudwatch.EventRule')

@@ -719,7 +719,6 @@ class MonitoringStack(pulumi.ComponentResource):
         # Create CloudWatch Log Group for EventBridge
         self.log_group = aws.cloudwatch.LogGroup(
             f"eventbridge-logs-{self.environment_suffix}",
-            name=f"/aws/events/{self.environment_suffix}",
             retention_in_days=7,
             tags={
                 "Name": f"eventbridge-logs-{self.environment_suffix}",
