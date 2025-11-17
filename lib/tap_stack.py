@@ -11,7 +11,7 @@ from cdktf_cdktf_provider_aws.s3_bucket_versioning import S3BucketVersioningA, S
 from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration import (
     S3BucketServerSideEncryptionConfigurationA,
     S3BucketServerSideEncryptionConfigurationRuleA,
-    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault
+    S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA
 )
 from cdktf_cdktf_provider_aws.dynamodb_table import DynamodbTable
 
@@ -128,7 +128,7 @@ class TapStack(TerraformStack):
             f"assets-bucket-encryption-{environment_suffix}",
             bucket=assets_bucket.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
-                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefault(
+                apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
                     sse_algorithm="AES256"
                 )
             )]
