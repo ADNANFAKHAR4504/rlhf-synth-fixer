@@ -28,7 +28,7 @@ export class RdsComponent extends pulumi.ComponentResource {
     this.subnetGroup = new aws.rds.SubnetGroup(
       `db-subnet-group-${args.environmentSuffix}`,
       {
-        name: `db-subnet-group-${args.environmentSuffix}`,
+        name: `db-subnet-group-${args.environmentSuffix.toLowerCase()}`,
         subnetIds: args.privateSubnetIds,
         tags: {
           Name: `db-subnet-group-${args.environmentSuffix}`,
@@ -42,7 +42,7 @@ export class RdsComponent extends pulumi.ComponentResource {
     this.cluster = new aws.rds.Cluster(
       `aurora-cluster-${args.environmentSuffix}`,
       {
-        clusterIdentifier: `aurora-cluster-${args.environmentSuffix}`,
+        clusterIdentifier: `aurora-cluster-${args.environmentSuffix.toLowerCase()}`,
         engine: 'aurora-postgresql',
         engineMode: 'provisioned',
         engineVersion: '14.6',
@@ -71,7 +71,7 @@ export class RdsComponent extends pulumi.ComponentResource {
       const instance = new aws.rds.ClusterInstance(
         `aurora-instance-${i}-${args.environmentSuffix}`,
         {
-          identifier: `aurora-instance-${i}-${args.environmentSuffix}`,
+          identifier: `aurora-instance-${i}-${args.environmentSuffix.toLowerCase()}`,
           clusterIdentifier: this.cluster.id,
           instanceClass: args.instanceClass || 'db.t3.medium',
           engine: 'aurora-postgresql',
