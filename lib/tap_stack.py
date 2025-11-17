@@ -1009,6 +1009,17 @@ systemctl restart httpd
     def _create_cloudwatch_monitoring(self):
         """Create CloudWatch alarms for monitoring."""
         
+        # Create SNS topic for alerts first (needed for alarms)
+        self.alert_topic = aws.sns.Topic(
+            f"banking-portal-alerts-{self.environment_suffix}",
+            name=f"banking-portal-alerts-{self.environment_suffix}",
+            tags={
+                "Name": f"banking-portal-alerts-{self.environment_suffix}",
+                **self.tags
+            },
+            opts=ResourceOptions(parent=self)
+        )
+        
         # CPU Utilization Alarm - Scale Up
         self.cpu_high_alarm = aws.cloudwatch.MetricAlarm(
             f"banking-portal-cpu-high-{self.environment_suffix}",
@@ -1021,7 +1032,7 @@ systemctl restart httpd
             statistic="Average",
             threshold="70",
             alarm_description="This metric monitors ec2 cpu utilization",
-            alarm_actions=[self.scale_up_policy.arn],
+            alarm_actions=[self.scale_up_policy.arn, self.alert_topic.arn],
             dimensions={
                 "AutoScalingGroupName": self.auto_scaling_group.name
             },
@@ -1044,7 +1055,7 @@ systemctl restart httpd
             statistic="Average",
             threshold="30",
             alarm_description="This metric monitors ec2 cpu utilization for scale down",
-            alarm_actions=[self.scale_down_policy.arn],
+            alarm_actions=[self.scale_down_policy.arn, self.alert_topic.arn],
             dimensions={
                 "AutoScalingGroupName": self.auto_scaling_group.name
             },
@@ -1067,6 +1078,7 @@ systemctl restart httpd
             statistic="Average",
             threshold="80",
             alarm_description="This metric monitors RDS database connections",
+            alarm_actions=[self.alert_topic.arn],
             dimensions={
                 "DBInstanceIdentifier": self.rds_instance.id
             },
@@ -1077,30 +1089,21 @@ systemctl restart httpd
             opts=ResourceOptions(parent=self)
         )
 
-        # Store alarms for SNS alerting
-        self.alarms = [self.cpu_high_alarm, self.cpu_low_alarm, self.db_connections_alarm]
-
     def _create_sns_alerting(self):
         """Create SNS topics for alerting."""
         
-        # Create SNS topic for alerts
-        self.alert_topic = aws.sns.Topic(
-            f"banking-portal-alerts-{self.environment_suffix}",
-            name=f"banking-portal-alerts-{self.environment_suffix}",
-            tags={
-                "Name": f"banking-portal-alerts-{self.environment_suffix}",
-                **self.tags
-            },
-            opts=ResourceOptions(parent=self)
-        )
-
-        # Add SNS topic to all alarms
-        for alarm in self.alarms:
-            # Update alarm to include SNS topic
-            alarm.alarm_actions = alarm.alarm_actions + [self.alert_topic.arn]
-
+        # SNS topic is already created in _create_cloudwatch_monitoring
+        # This method can be used for additional SNS configuration like subscriptions
+        
         # Note: In production, you would add email subscriptions
-        # aws.sns.TopicSubscription(...)
+        # aws.sns.TopicSubscription(
+        #     f"banking-portal-email-subscription-{self.environment_suffix}",
+        #     topic_arn=self.alert_topic.arn,
+        #     protocol="email",
+        #     endpoint="admin@yourbank.com",
+        #     opts=ResourceOptions(parent=self)
+        # )
+        pass
 
     def _create_aws_config(self):
         """Enable AWS Config for compliance monitoring."""
