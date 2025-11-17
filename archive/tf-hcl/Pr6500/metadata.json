@@ -29,5 +29,11 @@
     "Amazon Route 53",
     "AWS Secrets Manager",
     "Amazon RDS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "devang-devops",
+  "dockerS3Location": ""
 }
