@@ -84,11 +84,11 @@ stack = TapStack(
 )
 
 # Export stack outputs
-pulumi.export('api_endpoint', stack.api_endpoint)
-pulumi.export('s3_bucket_name', stack.s3_bucket_name)
-pulumi.export('dynamodb_table_arn', stack.dynamodb_table_arn)
-pulumi.export('sqs_queue_url', stack.sqs_queue_url)
-pulumi.export('dlq_url', stack.dlq_url)
+pulumi.export('api_endpoint', stack.api_url)
+pulumi.export('s3_bucket_name', stack.s3_bucket.id)
+pulumi.export('dynamodb_table_arn', stack.dynamodb_table.arn)
+pulumi.export('sqs_queue_url', stack.sqs_queue.url)
+pulumi.export('dlq_url', stack.dlq.url)
 pulumi.export('environment_suffix', environment_suffix)
 ```
 

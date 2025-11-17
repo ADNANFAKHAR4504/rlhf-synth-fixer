@@ -71,9 +71,6 @@ class TapStack(pulumi.ComponentResource):
         # Create EventBridge rules
         self._create_eventbridge_rules()
 
-        # Export stack outputs
-        self._export_outputs()
-
         self.register_outputs({
             'api_endpoint': self.api_url,
             's3_bucket_name': self.s3_bucket.id,
@@ -775,10 +772,3 @@ class TapStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
-    def _export_outputs(self):
-        """Export stack outputs."""
-        pulumi.export("api_endpoint", self.api_url)
-        pulumi.export("s3_bucket_name", self.s3_bucket.id)
-        pulumi.export("dynamodb_table_arn", self.dynamodb_table.arn)
-        pulumi.export("sqs_queue_url", self.sqs_queue.url)
-        pulumi.export("dlq_url", self.dlq.url)
