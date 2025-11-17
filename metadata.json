@@ -1,0 +1,30 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T14:14:54+05:30",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "f7o52n",
+  "aws_services": [
+    "EKS",
+    "EC2",
+    "VPC",
+    "EBS",
+    "IAM",
+    "ELB",
+    "Auto Scaling"
+  ],
+  "region": "us-east-2",
+  "training_quality": 8,
+  "coverage": {
+    "lines": 100,
+    "branches": 100,
+    "statements": 100,
+    "functions": 100
+  }
+}
