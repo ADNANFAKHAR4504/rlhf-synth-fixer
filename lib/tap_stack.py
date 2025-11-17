@@ -524,7 +524,7 @@ class TapStack(TerraformStack):
             request_validator_id=None
         )
 
-        ApiGatewayIntegration(
+        ingest_integration = ApiGatewayIntegration(
             self,
             "IngestIntegration",
             rest_api_id=api.id,
@@ -555,7 +555,7 @@ class TapStack(TerraformStack):
             authorization="AWS_IAM"
         )
 
-        ApiGatewayIntegration(
+        process_integration = ApiGatewayIntegration(
             self,
             "ProcessIntegration",
             rest_api_id=api.id,
@@ -586,7 +586,7 @@ class TapStack(TerraformStack):
             authorization="AWS_IAM"
         )
 
-        ApiGatewayIntegration(
+        query_integration = ApiGatewayIntegration(
             self,
             "QueryIntegration",
             rest_api_id=api.id,
@@ -614,8 +614,11 @@ class TapStack(TerraformStack):
             rest_api_id=api.id,
             depends_on=[
                 ingest_method,
+                ingest_integration,
                 process_method,
-                query_method
+                process_integration,
+                query_method,
+                query_integration
             ]
         )
 
