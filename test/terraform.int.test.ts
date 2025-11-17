@@ -117,6 +117,8 @@ describe("Terraform Integration - Infrastructure Validation (Plan Only)", () => 
   let backendInitialized = false;
 
   beforeAll(() => {
+    console.log(`\n🔍 Discovered ${environments.length} environment(s): ${environments.join(', ')}`);
+
     // Check if Terraform is available
     try {
       execSync("which terraform", { encoding: "utf-8" });
@@ -234,12 +236,25 @@ terraform {
         const comparePlan = plans[envNames[i]];
         const compareTypes = Array.from(comparePlan.keys()).sort();
 
-        // Resources that can legitimately vary across environments
+        // Resources that can legitimately vary across environments:
+        // - Lambda provisioned concurrency: Typically only in prod for performance
+        // - EIP/NAT Gateway: Dev often uses single NAT, prod uses multi-AZ
+        // - SNS topic subscriptions: May vary based on alert recipients per env
+        // - Subnets: Different AZ configurations per environment (dev=2 AZs, prod=3 AZs)
+        // - Route table associations: Varies with subnet count
+        // - Security group rules: May differ based on env-specific access patterns
+        // - SQS queues: May vary based on hospital_regions count (dev=2, prod=5)
+        // - Routes: Varies with NAT gateway and subnet configurations
         const allowedVariableResources = [
           "aws_lambda_provisioned_concurrency_config",
           "aws_eip",
           "aws_nat_gateway",
           "aws_sns_topic_subscription",
+          "aws_subnet",
+          "aws_route_table_association",
+          "aws_security_group_rule",
+          "aws_sqs_queue",
+          "aws_route",
         ];
 
         console.log(`   Allowed variable resources: ${allowedVariableResources.join(', ')}`);
