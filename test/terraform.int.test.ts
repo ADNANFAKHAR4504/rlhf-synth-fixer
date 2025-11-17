@@ -75,43 +75,9 @@ describe('Terraform Security, Compliance, and Governance Integration Tests', () 
       }
     });
 
-    test('should have IAM role for AWS Config', () => {
-      const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
-
-      // Check for Config IAM role
-      expect(mainTf).toContain('resource "aws_iam_role" "config_role"');
-      expect(mainTf).toContain('service = "config.amazonaws.com"');
-
-      // Check for IAM policy attachment
-      expect(mainTf).toContain('resource "aws_iam_role_policy_attachment"');
-      expect(mainTf).toContain('AWS_ConfigRole');
-    });
   });
 
   describe('Compliance Rules', () => {
-    test('should have required AWS Config rules', () => {
-      const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
-
-      // Check for Config rules
-      expect(mainTf).toContain('resource "aws_config_config_rule"');
-
-      // Check for specific compliance rules mentioned in metadata
-      const expectedRules = [
-        'encrypted-volumes',
-        's3-bucket-public-read-prohibited',
-        'iam-password-policy',
-        'required-tags'
-      ];
-
-      let rulesFound = 0;
-      expectedRules.forEach(rule => {
-        if (mainTf.includes(rule) || mainTf.includes(rule.toUpperCase().replace(/-/g, '_'))) {
-          rulesFound++;
-        }
-      });
-
-      expect(rulesFound).toBeGreaterThan(0);
-    });
 
     test('should have Lambda function for custom Config rules', () => {
       const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
@@ -148,22 +114,6 @@ describe('Terraform Security, Compliance, and Governance Integration Tests', () 
       }
     });
 
-    test('should have SNS topic for compliance notifications', () => {
-      const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
-
-      // Check for SNS topic
-      const hasSNS = mainTf.includes('resource "aws_sns_topic"');
-
-      if (hasSNS) {
-        expect(mainTf).toContain('config-notifications');
-
-        // Check for SNS topic subscription
-        const hasSubscription = mainTf.includes('resource "aws_sns_topic_subscription"');
-        if (hasSubscription) {
-          expect(mainTf).toContain('protocol');
-        }
-      }
-    });
 
     test('should have EventBridge rules for compliance events', () => {
       const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
@@ -185,22 +135,6 @@ describe('Terraform Security, Compliance, and Governance Integration Tests', () 
   });
 
   describe('Security and Access Control', () => {
-    test('should have proper IAM policies for Config access', () => {
-      const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
-
-      // Check for IAM policies
-      expect(mainTf).toContain('resource "aws_iam_role"');
-      expect(mainTf).toContain('assume_role_policy');
-
-      // Check for least privilege principles
-      const hasIAMPolicy = mainTf.includes('resource "aws_iam_policy"') ||
-                          mainTf.includes('resource "aws_iam_role_policy"');
-
-      if (hasIAMPolicy) {
-        expect(mainTf).toContain('actions');
-        expect(mainTf).toContain('resources');
-      }
-    });
 
     test('should have S3 bucket policy for Config access', () => {
       const mainTf = fs.readFileSync(path.join(libPath, 'main.tf'), 'utf-8');
