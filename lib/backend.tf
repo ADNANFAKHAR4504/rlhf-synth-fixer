@@ -8,8 +8,9 @@ terraform {
     }
   }
 
-  # Using local backend for testing
-  backend "local" {
-    path = "terraform.tfstate"
+  # S3 backend configuration
+  # The actual values will be provided via -backend-config during init
+  backend "s3" {
+    # bucket, key, region, and encrypt will be configured during init
   }
 }
