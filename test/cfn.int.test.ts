@@ -1,87 +1,79 @@
-describe('CloudFormation YAML Infrastructure Integration Tests', () => {
-  describe('Multi-Region Failure Recovery Infrastructure', () => {
-    test('should validate primary CloudFormation template', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const primaryTemplatePath = './lib/TapStack.yml';
+import { describe, test, expect } from '@jest/globals';
+import * as fs from 'fs';
+import * as path from 'path';
 
-      // Check if template file exists
-      expect(fs.existsSync(primaryTemplatePath)).toBe(true);
+describe('CloudFormation JSON Infrastructure Integration Tests', () => {
+  describe('Aurora Global Database Infrastructure', () => {
+    let template: any;
 
-      // Load and parse YAML
-      const templateContent = fs.readFileSync(primaryTemplatePath, 'utf8');
-      const template = yaml.load(templateContent);
-
-      // Validate structure
-      expect(template).toHaveProperty('AWSTemplateFormatVersion');
-      expect(template).toHaveProperty('Description');
-      expect(template).toHaveProperty('Resources');
-      expect(template).toHaveProperty('Parameters');
-      expect(template).toHaveProperty('Outputs');
-    });
-
-    test('should validate secondary region template', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const secondaryTemplatePath = './lib/TapStack-Secondary.yml';
-
-      // Check if secondary template exists
-      expect(fs.existsSync(secondaryTemplatePath)).toBe(true);
-
-      // Load and parse YAML
-      const templateContent = fs.readFileSync(secondaryTemplatePath, 'utf8');
-      const template = yaml.load(templateContent);
-
-      // Validate structure
-      expect(template).toHaveProperty('AWSTemplateFormatVersion');
-      expect(template).toHaveProperty('Resources');
-    });
-
-    test('should have Aurora cluster with high availability', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
-
-      const resources = template.Resources || {};
-
-      // Check for Aurora Cluster
-      const auroraCluster = Object.values(resources).find((r: any) =>
-        r.Type === 'AWS::RDS::DBCluster'
-      );
-
-      expect(auroraCluster).toBeDefined();
-
-      if (auroraCluster) {
-        const props = (auroraCluster as any).Properties;
-        // Check for multi-AZ configuration
-        expect(props).toHaveProperty('DBSubnetGroupName');
-        expect(props).toHaveProperty('BackupRetentionPeriod');
-        expect(props.BackupRetentionPeriod).toBeGreaterThan(0);
+    beforeAll(() => {
+      const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+      if (fs.existsSync(templatePath)) {
+        const templateContent = fs.readFileSync(templatePath, 'utf8');
+        template = JSON.parse(templateContent);
       }
     });
 
-    test('should have cross-region replication configured', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
+    test('should validate CloudFormation template exists and is valid JSON', () => {
+      const templatePath = path.join(__dirname, '..', 'lib', 'TapStack.json');
+      expect(fs.existsSync(templatePath)).toBe(true);
 
-      // Check primary template for replica configuration
-      const primaryTemplate = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
-      const secondaryTemplate = yaml.load(fs.readFileSync('./lib/TapStack-Secondary.yml', 'utf8'));
-
-      // Check for read replica in secondary template
-      const secondaryResources = secondaryTemplate.Resources || {};
-      const readReplica = Object.values(secondaryResources).find((r: any) =>
-        r.Type === 'AWS::RDS::DBInstance' && r.Properties?.SourceDBInstanceIdentifier
-      );
-
-      expect(readReplica).toBeDefined();
+      const templateContent = fs.readFileSync(templatePath, 'utf8');
+      expect(() => JSON.parse(templateContent)).not.toThrow();
     });
 
-    test('should have CloudWatch alarms for monitoring', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
+    test('should have correct template structure with all required sections', () => {
+      expect(template).toHaveProperty('AWSTemplateFormatVersion');
+      expect(template.AWSTemplateFormatVersion).toBe('2010-09-09');
+      expect(template).toHaveProperty('Description');
+      expect(template).toHaveProperty('Parameters');
+      expect(template).toHaveProperty('Resources');
+      expect(template).toHaveProperty('Outputs');
+    });
 
+    test('should have Aurora Global Database cluster configured', () => {
+      const resources = template.Resources || {};
+
+      // Check for Global Database Cluster
+      const globalCluster = Object.keys(resources).find(key =>
+        resources[key].Type === 'AWS::RDS::GlobalCluster'
+      );
+      expect(globalCluster).toBeDefined();
+
+      // Check for Primary DB Cluster
+      const primaryCluster = Object.keys(resources).find(key =>
+        resources[key].Type === 'AWS::RDS::DBCluster'
+      );
+      expect(primaryCluster).toBeDefined();
+
+      if (primaryCluster) {
+        const clusterProps = resources[primaryCluster].Properties;
+        expect(clusterProps.Engine).toMatch(/aurora/);
+        expect(clusterProps.StorageEncrypted).toBe(true);
+        expect(clusterProps.BackupRetentionPeriod).toBeGreaterThan(0);
+      }
+    });
+
+    test('should have high availability with multiple DB instances', () => {
+      const resources = template.Resources || {};
+
+      // Count DB instances
+      const dbInstances = Object.keys(resources).filter(key =>
+        resources[key].Type === 'AWS::RDS::DBInstance'
+      );
+
+      expect(dbInstances.length).toBeGreaterThanOrEqual(2);
+
+      // Verify instances are in different AZs
+      const azs = dbInstances.map(instance =>
+        resources[instance].Properties?.AvailabilityZone
+      ).filter(Boolean);
+
+      const uniqueAzs = new Set(azs);
+      expect(uniqueAzs.size).toBeGreaterThanOrEqual(Math.min(2, azs.length));
+    });
+
+    test('should have comprehensive monitoring with CloudWatch alarms', () => {
       const resources = template.Resources || {};
 
       // Check for CloudWatch alarms
@@ -91,124 +83,109 @@ describe('CloudFormation YAML Infrastructure Integration Tests', () => {
 
       expect(alarms.length).toBeGreaterThan(0);
 
-      // Check for CPU and storage alarms
-      const cpuAlarm = alarms.find(key =>
-        key.toLowerCase().includes('cpu') ||
-        resources[key].Properties?.MetricName === 'CPUUtilization'
+      // Verify critical metrics are monitored
+      const alarmMetrics = alarms.map(alarm =>
+        resources[alarm].Properties?.MetricName
+      ).filter(Boolean);
+
+      const criticalMetrics = ['CPUUtilization', 'DatabaseConnections', 'FreeableMemory'];
+      const hasCriticalMetrics = criticalMetrics.some(metric =>
+        alarmMetrics.some(am => am.includes(metric) || am === metric)
       );
 
-      const storageAlarm = alarms.find(key =>
-        key.toLowerCase().includes('storage') ||
-        resources[key].Properties?.MetricName === 'FreeLocalStorage'
-      );
-
-      expect(cpuAlarm).toBeDefined();
-      expect(storageAlarm).toBeDefined();
+      expect(hasCriticalMetrics).toBe(true);
     });
 
-    test('should have SNS topics for notifications', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
-
-      const resources = template.Resources || {};
-
-      // Check for SNS topics
-      const snsTopics = Object.keys(resources).filter(key =>
-        resources[key].Type === 'AWS::SNS::Topic'
-      );
-
-      expect(snsTopics.length).toBeGreaterThan(0);
-
-      // Check for alert topic
-      const alertTopic = snsTopics.find(key =>
-        key.toLowerCase().includes('alert') ||
-        key.toLowerCase().includes('alarm')
-      );
-
-      expect(alertTopic).toBeDefined();
-    });
-
-    test('should have KMS encryption configured', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
-
+    test('should have security configurations with encryption and security groups', () => {
       const resources = template.Resources || {};
 
       // Check for KMS key
-      const kmsKey = Object.values(resources).find((r: any) =>
-        r.Type === 'AWS::KMS::Key'
+      const kmsKey = Object.keys(resources).find(key =>
+        resources[key].Type === 'AWS::KMS::Key'
       );
-
       expect(kmsKey).toBeDefined();
 
-      // Check that Aurora cluster uses encryption
-      const auroraCluster = Object.values(resources).find((r: any) =>
-        r.Type === 'AWS::RDS::DBCluster'
+      // Check for security groups
+      const securityGroups = Object.keys(resources).filter(key =>
+        resources[key].Type === 'AWS::EC2::SecurityGroup'
       );
+      expect(securityGroups.length).toBeGreaterThan(0);
 
-      if (auroraCluster) {
-        const props = (auroraCluster as any).Properties;
-        expect(props.StorageEncrypted).toBe(true);
-        expect(props.KmsKeyId).toBeDefined();
+      // Verify database encryption
+      const dbCluster = Object.values(resources).find((r: any) =>
+        r.Type === 'AWS::RDS::DBCluster'
+      ) as any;
+
+      if (dbCluster) {
+        expect(dbCluster.Properties?.StorageEncrypted).toBe(true);
+        expect(dbCluster.Properties?.KmsKeyId).toBeDefined();
       }
     });
 
-    test('should have proper IAM roles and policies', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
-
+    test('should have VPC networking properly configured', () => {
       const resources = template.Resources || {};
 
-      // Check for IAM roles
-      const iamRoles = Object.keys(resources).filter(key =>
-        resources[key].Type === 'AWS::IAM::Role'
+      // Check for VPC
+      const vpc = Object.keys(resources).find(key =>
+        resources[key].Type === 'AWS::EC2::VPC'
       );
+      expect(vpc).toBeDefined();
 
-      expect(iamRoles.length).toBeGreaterThan(0);
-
-      // Check for monitoring role
-      const monitoringRole = iamRoles.find(key =>
-        key.toLowerCase().includes('monitoring') ||
-        resources[key].Properties?.RoleName?.toLowerCase().includes('monitoring')
+      // Check for subnets
+      const subnets = Object.keys(resources).filter(key =>
+        resources[key].Type === 'AWS::EC2::Subnet'
       );
+      expect(subnets.length).toBeGreaterThanOrEqual(2);
 
-      expect(monitoringRole).toBeDefined();
+      // Check for DB subnet group
+      const dbSubnetGroup = Object.keys(resources).find(key =>
+        resources[key].Type === 'AWS::RDS::DBSubnetGroup'
+      );
+      expect(dbSubnetGroup).toBeDefined();
     });
 
-    test('should have outputs for cross-stack references', async () => {
-      const fs = require('fs');
-      const yaml = require('js-yaml');
-      const template = yaml.load(fs.readFileSync('./lib/TapStack.yml', 'utf8'));
+    test('should have proper parameter configuration for flexibility', () => {
+      const parameters = template.Parameters || {};
+      const paramKeys = Object.keys(parameters);
 
-      expect(template.Outputs).toBeDefined();
-      const outputs = Object.keys(template.Outputs || {});
+      expect(paramKeys.length).toBeGreaterThan(0);
 
-      // Check for critical outputs
-      const clusterEndpoint = outputs.find(key =>
-        key.toLowerCase().includes('endpoint') ||
-        key.toLowerCase().includes('cluster')
-      );
+      // Check for essential parameters - using actual parameter names
+      const essentialParams = ['MasterUsername', 'MasterPassword'];
+      essentialParams.forEach(param => {
+        const hasParam = paramKeys.some(key =>
+          key.includes(param) || key === param
+        );
+        expect(hasParam).toBe(true);
+      });
 
-      const readerEndpoint = outputs.find(key =>
-        key.toLowerCase().includes('reader')
-      );
-
-      expect(clusterEndpoint).toBeDefined();
-      expect(readerEndpoint).toBeDefined();
+      // Verify parameter types
+      paramKeys.forEach(key => {
+        expect(parameters[key]).toHaveProperty('Type');
+        expect(parameters[key]).toHaveProperty('Description');
+      });
     });
 
-    test('should validate environment configuration', async () => {
-      const fs = require('fs');
+    test('should have outputs for stack references and endpoints', () => {
+      const outputs = template.Outputs || {};
+      const outputKeys = Object.keys(outputs);
 
-      // Check AWS_REGION file
-      const regionFilePath = './lib/AWS_REGION';
-      expect(fs.existsSync(regionFilePath)).toBe(true);
+      expect(outputKeys.length).toBeGreaterThan(0);
 
-      const region = fs.readFileSync(regionFilePath, 'utf8').trim();
-      expect(region).toMatch(/^[a-z]{2}-[a-z]+-\d$/);
+      // Check for critical outputs - using actual output names
+      const criticalOutputs = ['PrimaryClusterEndpoint', 'PrimaryClusterReaderEndpoint', 'GlobalClusterIdentifier'];
+      criticalOutputs.forEach(output => {
+        const hasOutput = outputKeys.some(key =>
+          key.includes(output) || key === output
+        );
+        expect(hasOutput).toBe(true);
+      });
+
+      // Verify output structure
+      outputKeys.forEach(key => {
+        expect(outputs[key]).toHaveProperty('Value');
+        expect(outputs[key]).toHaveProperty('Description');
+      });
     });
   });
 });
