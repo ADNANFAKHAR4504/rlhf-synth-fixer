@@ -137,7 +137,234 @@ TASK_ID=$(json_val "$TASK_JSON" "task_id")
 PLATFORM=$(json_val "$TASK_JSON" "platform" | tr '[:upper:]' '[:lower:]')
 LANGUAGE=$(json_val "$TASK_JSON" "language" | tr '[:upper:]' '[:lower:]')
 DIFFICULTY=$(json_val "$TASK_JSON" "difficulty" | tr '[:upper:]' '[:lower:]')
-SUBTASK=$(json_val "$TASK_JSON" "subtask")
+SUBTASK_RAW=$(json_val "$TASK_JSON" "subtask")
+
+# Load reference file for validation and normalization
+REFERENCE_FILE=".claude/docs/references/iac-subtasks-subject-labels.json"
+
+# Function to get subtask from subject label (reverse lookup)
+get_subtask_from_label() {
+    local label="$1"
+    local ref_file="$2"
+    
+    if [ ! -f "$ref_file" ]; then
+        echo ""
+        return
+    fi
+    
+    # Use awk to parse JSON and find matching subject label
+    awk -v search_label="$label" '
+    BEGIN {
+        in_subtask = 0
+        current_subtask = ""
+        found = 0
+    }
+    /"subtask"/ {
+        # Extract subtask value
+        match($0, /"subtask"[[:space:]]*:[[:space:]]*"([^"]+)"/, arr)
+        if (arr[1]) {
+            current_subtask = arr[1]
+        }
+    }
+    /"subject_labels"/ {
+        in_subtask = 1
+    }
+    /\[/ && in_subtask {
+        # Start of array
+    }
+    /\]/ && in_subtask {
+        in_subtask = 0
+    }
+    in_subtask && /"[^"]+"/ {
+        # Extract subject label
+        match($0, /"([^"]+)"/, arr)
+        if (arr[1] == search_label) {
+            print current_subtask
+            found = 1
+            exit
+        }
+    }
+    END {
+        if (!found) exit 1
+    }
+    ' "$ref_file" 2>/dev/null || echo ""
+}
+
+# Function to get subject labels for a subtask
+get_subject_labels_for_subtask() {
+    local subtask="$1"
+    local ref_file="$2"
+    
+    if [ ! -f "$ref_file" ]; then
+        echo "[]"
+        return
+    fi
+    
+    # Find the line number of the matching subtask
+    SUBTASK_LINE=$(grep -n "\"subtask\"[[:space:]]*:[[:space:]]*\"$subtask\"" "$ref_file" | head -1 | cut -d: -f1)
+    
+    if [ -z "$SUBTASK_LINE" ]; then
+        echo "[]"
+        return
+    fi
+    
+    # Extract lines from subtask to the closing brace of that entry
+    # Then find subject_labels array within that block
+    BLOCK_START=$SUBTASK_LINE
+    BLOCK_END=$(sed -n "${SUBTASK_LINE},\$p" "$ref_file" | grep -n "^    }," | head -1 | cut -d: -f1)
+    if [ -n "$BLOCK_END" ]; then
+        BLOCK_END=$((SUBTASK_LINE + BLOCK_END - 1))
+    else
+        # No closing brace found, use a reasonable window
+        BLOCK_END=$((SUBTASK_LINE + 10))
+    fi
+    
+    # Extract the subject_labels array from this block
+    # Use a Python-like approach: find the array and extract it properly
+    ARRAY_RAW=$(sed -n "${BLOCK_START},${BLOCK_END}p" "$ref_file" | awk '
+    BEGIN {
+        collecting = 0
+        bracket_depth = 0
+        result = ""
+    }
+    {
+        # Look for subject_labels line
+        if (!collecting && match($0, /"subject_labels"[[:space:]]*:[[:space:]]*/)) {
+            collecting = 1
+            # Get part after colon
+            after_colon = substr($0, RSTART + RLENGTH)
+            
+            # Find opening bracket
+            if (match(after_colon, /\[/)) {
+                bracket_start = RSTART
+                bracket_depth = 1
+                # Start from the bracket
+                result = substr(after_colon, bracket_start)
+                
+                # Check if closes on same line
+                rest = substr(after_colon, bracket_start + 1)
+                for (i = 1; i <= length(rest); i++) {
+                    c = substr(rest, i, 1)
+                    if (c == "[") bracket_depth++
+                    if (c == "]") {
+                        bracket_depth--
+                        if (bracket_depth == 0) {
+                            result = substr(after_colon, bracket_start, i + 1)
+                            print result
+                            exit
+                        }
+                    }
+                }
+            }
+        }
+        
+        # Continue collecting if we're in the array
+        if (collecting && bracket_depth > 0) {
+            # Check each character in this line
+            line_added = 0
+            for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c == "[") bracket_depth++
+                if (c == "]") {
+                    bracket_depth--
+                    if (bracket_depth == 0) {
+                        # Include up to closing bracket
+                        result = result substr($0, 1, i)
+                        print result
+                        exit
+                    }
+                }
+            }
+            # If bracket didn't close, add entire line
+            if (bracket_depth > 0) {
+                result = result $0
+            }
+        }
+    }
+    END {
+        if (result != "" && bracket_depth == 0) {
+            print result
+        }
+    }
+    ' 2>/dev/null | head -1)
+    
+    if [ -z "$ARRAY_RAW" ] || [ "$ARRAY_RAW" = "" ]; then
+        echo "[]"
+        return
+    fi
+    
+    # Clean up: remove leading whitespace from array, compress internal whitespace
+    # But preserve the JSON structure (quotes, commas, brackets)
+    CLEANED=$(echo "$ARRAY_RAW" | sed 's/^[[:space:]]*//' | tr '\n' ' ' | sed 's/[[:space:]]\+/ /g')
+    # Normalize brackets and commas
+    CLEANED=$(echo "$CLEANED" | sed 's/[[:space:]]*\[[[:space:]]*/[/')
+    CLEANED=$(echo "$CLEANED" | sed 's/[[:space:]]*\][[:space:]]*/]/')
+    CLEANED=$(echo "$CLEANED" | sed 's/[[:space:]]*,[[:space:]]*/, /g')
+    CLEANED=$(echo "$CLEANED" | sed 's/[[:space:]]*$//')
+    echo "${CLEANED:-[]}"
+}
+
+# Function to check if a value is a valid subtask
+is_valid_subtask() {
+    local subtask="$1"
+    local ref_file="$2"
+    
+    if [ ! -f "$ref_file" ]; then
+        return 1
+    fi
+    
+    # Check if subtask exists in reference file
+    grep -q "\"subtask\"[[:space:]]*:[[:space:]]*\"$subtask\"" "$ref_file" 2>/dev/null
+}
+
+# Normalize subtask: check if it's valid, if not try to map from subject label
+SUBTASK="$SUBTASK_RAW"
+if [ -n "$SUBTASK" ]; then
+    if ! is_valid_subtask "$SUBTASK" "$REFERENCE_FILE"; then
+        # Try to find if it's actually a subject label
+        MAPPED_SUBTASK=$(get_subtask_from_label "$SUBTASK" "$REFERENCE_FILE")
+        if [ -n "$MAPPED_SUBTASK" ]; then
+            log_info "Normalized subtask: '$SUBTASK' -> '$MAPPED_SUBTASK'"
+            SUBTASK="$MAPPED_SUBTASK"
+        else
+            log_error "Invalid subtask: '$SUBTASK'. Valid subtasks are defined in $REFERENCE_FILE"
+            # Don't exit - allow it but warn
+        fi
+    fi
+fi
+
+# If subtask is still empty or invalid, try common mappings
+if [ -z "$SUBTASK" ] || [ "$SUBTASK" = "" ]; then
+    # Try to infer from common patterns (fallback)
+    case "$SUBTASK_RAW" in
+        *"Environment"*|*"Migration"*|*"Setup"*)
+            SUBTASK="Provisioning of Infrastructure Environments"
+            ;;
+        *"Application"*|*"Deployment"*|*"Serverless"*)
+            SUBTASK="Application Deployment"
+            ;;
+        *"CI"*"CD"*|*"Pipeline"*)
+            SUBTASK="CI/CD Pipeline Integration"
+            ;;
+        *"Failure"*|*"Recovery"*|*"Availability"*)
+            SUBTASK="Failure Recovery and High Availability"
+            ;;
+        *"Security"*|*"Compliance"*|*"Governance"*)
+            SUBTASK="Security, Compliance, and Governance"
+            ;;
+        *"Optimization"*|*"Diagnosis"*|*"Edits"*)
+            SUBTASK="IaC Program Optimization"
+            ;;
+        *"QA"*|*"Analysis"*|*"Monitoring"*|*"Management"*)
+            SUBTASK="Infrastructure QA and Management"
+            ;;
+        *)
+            # Default fallback
+            SUBTASK="Provisioning of Infrastructure Environments"
+            log_info "Using default subtask: $SUBTASK"
+            ;;
+    esac
+fi
 
 # Normalize platform to match CLI tool format (must be lowercase abbreviated form)
 case "$PLATFORM" in
@@ -225,6 +452,63 @@ fi
 
 # Trim whitespace
 SUBJECT_LABELS=$(echo "$SUBJECT_LABELS" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+
+# Normalize and validate subject_labels against reference file
+# If subject_labels is empty or invalid, derive from subtask
+if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" = "[]" ] || [ "$SUBJECT_LABELS" = "null" ]; then
+    # Empty - derive from subtask using reference file
+    if [ -n "$SUBTASK" ] && is_valid_subtask "$SUBTASK" "$REFERENCE_FILE"; then
+        DERIVED_LABELS=$(get_subject_labels_for_subtask "$SUBTASK" "$REFERENCE_FILE")
+        if [ -n "$DERIVED_LABELS" ] && [ "$DERIVED_LABELS" != "[]" ]; then
+            SUBJECT_LABELS="$DERIVED_LABELS"
+            log_info "Derived subject_labels from subtask '$SUBTASK': $SUBJECT_LABELS"
+        fi
+    fi
+else
+    # Validate that subject_labels match the subtask
+    # Extract labels from the array string for validation
+    LABELS_LIST=$(echo "$SUBJECT_LABELS" | sed 's/\[//;s/\]//;s/"//g' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$')
+    
+    # Check if any label matches the subtask's expected labels
+    if [ -n "$SUBTASK" ] && is_valid_subtask "$SUBTASK" "$REFERENCE_FILE"; then
+        EXPECTED_LABELS=$(get_subject_labels_for_subtask "$SUBTASK" "$REFERENCE_FILE")
+        EXPECTED_LIST=$(echo "$EXPECTED_LABELS" | sed 's/\[//;s/\]//;s/"//g' | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' | grep -v '^$')
+        
+        # Check if all provided labels are valid for this subtask
+        INVALID_FOUND=false
+        while IFS= read -r label; do
+            if [ -n "$label" ]; then
+                # Check if this label belongs to the subtask
+                LABEL_SUBTASK=$(get_subtask_from_label "$label" "$REFERENCE_FILE")
+                if [ "$LABEL_SUBTASK" != "$SUBTASK" ]; then
+                    INVALID_FOUND=true
+                    log_error "Subject label '$label' does not belong to subtask '$SUBTASK'"
+                    if [ -n "$LABEL_SUBTASK" ]; then
+                        log_error "  Label '$label' belongs to subtask: '$LABEL_SUBTASK'"
+                    fi
+                fi
+            fi
+        done <<< "$LABELS_LIST"
+        
+        # If invalid labels found, replace with correct ones from reference
+        if [ "$INVALID_FOUND" = true ]; then
+            log_info "Replacing invalid subject_labels with correct ones from reference file"
+            SUBJECT_LABELS=$(get_subject_labels_for_subtask "$SUBTASK" "$REFERENCE_FILE")
+            if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" = "[]" ]; then
+                SUBJECT_LABELS='[]'
+            fi
+        fi
+    fi
+fi
+
+# Final validation: ensure subject_labels is a valid JSON array
+if [ -z "$SUBJECT_LABELS" ] || [ "$SUBJECT_LABELS" = "null" ]; then
+    SUBJECT_LABELS='[]'
+elif ! echo "$SUBJECT_LABELS" | grep -qE '^\s*\[.*\]\s*$'; then
+    # Not a valid array format - try to fix it
+    log_info "Fixing subject_labels format: $SUBJECT_LABELS"
+    SUBJECT_LABELS='[]'
+fi
 
 # Extract fields for PROMPT.md (needed early for region extraction)
 BACKGROUND=$(json_val "$TASK_JSON" "background")
