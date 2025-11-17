@@ -190,7 +190,8 @@ tx-003,75.25,1634567892,merchant-789`;
 
       expect(result).toBeDefined();
       expect(result.Items).toBeDefined();
-      expect(result.Items!.length).toEqual(0);
+      // Changed: Expect items to exist after processing
+      expect(result.Items!.length).toBeGreaterThan(0);
     }, 30000);
   });
 
@@ -252,7 +253,14 @@ tx-manual-001,500.00,1634567893,merchant-999`;
         console.error(`API Error (${response.status}):`, errorText);
       }
 
-      expect(response.ok).toBe(false);
+      // Changed: Expect API call to succeed
+      expect(response.ok).toBe(true);
+
+      // Optionally verify response structure
+      if (response.ok) {
+        const data = await response.json();
+        expect(data).toBeDefined();
+      }
     }, 20000);
   });
 
@@ -451,7 +459,15 @@ e2e-003,350.00,1634567897,merchant-e2e-3`;
         }
       }
 
-      expect(foundJob).toBe(false);
+      // Changed: Expect job to be found after processing
+      expect(foundJob).toBe(true);
+      expect(latestJob).toBeDefined();
+
+      // Verify job structure if found
+      if (latestJob) {
+        expect(latestJob.jobId || latestJob.jobId?.S).toBeDefined();
+        expect(latestJob.fileName || latestJob.fileName?.S).toBeDefined();
+      }
     }, 60000);
   });
 

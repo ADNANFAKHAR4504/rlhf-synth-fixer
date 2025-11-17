@@ -1,5 +1,5 @@
 import * as cdk from 'aws-cdk-lib';
-import { Template, Match } from 'aws-cdk-lib/assertions';
+import { Match, Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
 const environmentSuffix = 'test';
@@ -124,7 +124,7 @@ describe('TapStack Unit Tests', () => {
           { AttributeName: 'fileName', KeyType: 'RANGE' },
         ],
         PointInTimeRecoverySpecification: {
-          PointInTimeRecoveryEnabled: false,
+          PointInTimeRecoveryEnabled: true,
         },
       });
     });
@@ -343,6 +343,7 @@ describe('TapStack Unit Tests', () => {
     test('should create state machine with correct properties', () => {
       template.hasResourceProperties('AWS::StepFunctions::StateMachine', {
         StateMachineName: `etl-state-machine-${environmentSuffix}`,
+        StateMachineType: 'EXPRESS',
         TracingConfiguration: {
           Enabled: true,
         },
@@ -391,6 +392,30 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
+    test('should have CORS configuration', () => {
+      // Verify CORS preflight options are configured
+      template.hasResourceProperties('AWS::ApiGateway::RestApi', {
+        Name: `etl-api-${environmentSuffix}`,
+      });
+
+      // Check for OPTIONS method (CORS preflight)
+      template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'OPTIONS',
+      });
+
+      // Verify CORS headers in method responses
+      const methods = template.findResources('AWS::ApiGateway::Method');
+      const methodValues = Object.values(methods);
+      const hasCorsHeaders = methodValues.some((method: any) => {
+        const responseParams = method.Properties?.MethodResponses?.[0]?.ResponseParameters;
+        return responseParams && (
+          responseParams['method.response.header.Access-Control-Allow-Origin'] !== undefined ||
+          responseParams['method.response.header.Access-Control-Allow-Methods'] !== undefined
+        );
+      });
+      expect(hasCorsHeaders).toBe(true);
+    });
+
     test('should have deployment with proper stage', () => {
       template.hasResourceProperties('AWS::ApiGateway::Stage', {
         StageName: 'prod',
@@ -414,15 +439,25 @@ describe('TapStack Unit Tests', () => {
       });
     });
 
-    test('should have GET and POST methods', () => {
+    test('should have GET and POST methods with method responses', () => {
       // GET method for status
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'GET',
+        MethodResponses: Match.arrayWith([
+          Match.objectLike({
+            StatusCode: '200',
+          }),
+        ]),
       });
 
       // POST method for trigger
       template.hasResourceProperties('AWS::ApiGateway::Method', {
         HttpMethod: 'POST',
+        MethodResponses: Match.arrayWith([
+          Match.objectLike({
+            StatusCode: '200',
+          }),
+        ]),
       });
     });
   });

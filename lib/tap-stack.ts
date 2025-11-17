@@ -71,7 +71,7 @@ export class TapStack extends cdk.Stack {
       sortKey: { name: 'fileName', type: dynamodb.AttributeType.STRING },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
       removalPolicy: cdk.RemovalPolicy.DESTROY,
-      pointInTimeRecovery: false,
+      pointInTimeRecovery: true, // Change from false to true
     });
 
     // Global Secondary Index on timestamp
@@ -266,6 +266,7 @@ export class TapStack extends cdk.Stack {
     const stateMachine = new sfn.StateMachine(this, 'ETLStateMachine', {
       stateMachineName: `etl-state-machine-${environmentSuffix}`,
       definition,
+      stateMachineType: sfn.StateMachineType.EXPRESS, // Add this line
       timeout: cdk.Duration.minutes(30),
       tracingEnabled: true,
     });
@@ -315,6 +316,17 @@ export class TapStack extends cdk.Stack {
     const api = new apigateway.RestApi(this, 'ETLApi', {
       restApiName: `etl-api-${environmentSuffix}`,
       description: 'API for ETL pipeline status and control',
+      defaultCorsPreflightOptions: {
+        allowOrigins: apigateway.Cors.ALL_ORIGINS,
+        allowMethods: apigateway.Cors.ALL_METHODS,
+        allowHeaders: [
+          'Content-Type',
+          'X-Amz-Date',
+          'Authorization',
+          'X-Api-Key',
+          'X-Amz-Security-Token',
+        ],
+      },
       deployOptions: {
         stageName: 'prod',
         tracingEnabled: true,
@@ -328,11 +340,15 @@ export class TapStack extends cdk.Stack {
     // GET /status/{jobId} - Query processing status
     const statusResource = api.root.addResource('status');
     const jobResource = statusResource.addResource('{jobId}');
-    jobResource.addMethod('GET', apiIntegration);
+    jobResource.addMethod('GET', apiIntegration, {
+      methodResponses: [{ statusCode: '200' }],
+    });
 
     // POST /trigger - Manually trigger workflow
     const triggerResource = api.root.addResource('trigger');
-    triggerResource.addMethod('POST', apiIntegration);
+    triggerResource.addMethod('POST', apiIntegration, {
+      methodResponses: [{ statusCode: '200' }],
+    });
 
     // EventBridge scheduled rule for daily quality checks
     const qualityCheckRule = new events.Rule(this, 'QualityCheckRule', {
