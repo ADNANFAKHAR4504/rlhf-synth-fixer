@@ -4,7 +4,7 @@ Pulumi infrastructure library for secure AWS foundation.
 This package contains modular components for:
 - Networking: VPC, subnets, NAT instances
 - Security: KMS, Parameter Store, IAM
-- Monitoring: VPC Flow Logs, AWS Config, CloudWatch
+- Monitoring: VPC Flow Logs, CloudWatch
 - Automation: Lambda functions, EventBridge
 """
 

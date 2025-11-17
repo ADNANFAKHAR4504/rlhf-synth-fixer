@@ -197,7 +197,6 @@ def handler(event, context):
 
         self.eventbridge_log_role = aws.iam.Role(
             f"eventbridge-log-role-{self.environment_suffix}",
-            name=f"eventbridge-log-role-{self.environment_suffix}",
             assume_role_policy=eventbridge_log_assume_role.json,
             tags={
                 "Name": f"eventbridge-log-role-{self.environment_suffix}",

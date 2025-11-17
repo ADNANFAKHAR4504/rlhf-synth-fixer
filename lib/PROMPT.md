@@ -6,7 +6,7 @@ We need to build a production-grade AWS foundation for a financial services star
 
 The startup needs a secure environment with proper network isolation, automated secret rotation for their trading platform API keys, centralized logging, and compliance monitoring. They're specifically asking for private subnets only, no public-facing infrastructure, and everything needs to be auditable for their regulatory requirements.
 
-This is an expert-level task because we're bringing together VPC networking, Systems Manager Parameter Store with KMS encryption, Lambda-based automation, EventBridge orchestration, AWS Config compliance rules, and comprehensive logging - all with proper tagging and stack dependency management.
+This is an expert-level task because we're bringing together VPC networking, Systems Manager Parameter Store with KMS encryption, Lambda-based automation, EventBridge orchestration, and comprehensive logging - all with proper tagging and stack dependency management.
 
 ## What we need to build
 
@@ -31,18 +31,12 @@ Create a secure AWS foundation using **Pulumi with Python** for a financial serv
    - Dedicated S3 bucket for VPC Flow Logs storage
    - 90-day retention lifecycle policy on Flow Logs bucket
 
-4. **Compliance Monitoring**
-   - AWS Config enabled with recording to S3
-   - Custom Config Rules checking for unencrypted EBS volumes
-   - Custom Config Rules checking for public S3 buckets
-   - Config delivery channel for compliance reports
-
-5. **Event-Driven Architecture**
+4. **Event-Driven Architecture**
    - EventBridge custom event bus for application events
    - EventBridge rules forwarding events to CloudWatch Logs
    - Proper IAM permissions for event delivery
 
-6. **Resource Organization**
+5. **Resource Organization**
    - Consistent tagging schema: Environment, Owner, CostCenter on all resources
    - Use environmentSuffix variable in all resource names
    - Naming convention: resource-type-environment-suffix
@@ -69,7 +63,6 @@ Create a secure AWS foundation using **Pulumi with Python** for a financial serv
 - Lambda functions with execution roles
 - EventBridge custom event bus and rules
 - S3 buckets with lifecycle policies and encryption
-- AWS Config with recorder and delivery channel
 - CloudWatch Log Groups for centralized logging
 - IAM roles and policies following least privilege
 
@@ -79,17 +72,15 @@ Create a secure AWS foundation using **Pulumi with Python** for a financial serv
 - Use NAT instances instead of NAT Gateways for cost optimization
 - Parameter Store rotation must occur every 30 days via EventBridge
 - VPC Flow Logs must capture all traffic types
-- Config rules must validate EBS encryption and S3 bucket public access
 - All secrets stored in Parameter Store, not Secrets Manager
 - Tagging must include Environment, Owner, CostCenter on every resource
 - Stack must support explicit dependencies for multi-stack deployments
 
 ## Success Criteria
 
-- **Functionality**: All 10 requirements fully implemented and operational
+- **Functionality**: All core requirements fully implemented and operational
 - **Network Isolation**: Private subnets with NAT instances providing controlled outbound access
 - **Secret Rotation**: Lambda functions triggered every 30 days to rotate API keys in Parameter Store
-- **Compliance**: AWS Config running with custom rules detecting unencrypted EBS and public S3 buckets
 - **Logging**: VPC Flow Logs capturing all traffic with 90-day retention
 - **Event Processing**: EventBridge custom bus forwarding application events to CloudWatch Logs
 - **Resource Naming**: All resources include environmentSuffix for environment isolation
@@ -102,7 +93,7 @@ Create a secure AWS foundation using **Pulumi with Python** for a financial serv
 - Complete Pulumi Python implementation in lib/ directory
 - Networking module: VPC, subnets, NAT instances, route tables, security groups
 - Security module: KMS keys, Parameter Store parameters, IAM roles
-- Monitoring module: VPC Flow Logs, AWS Config, CloudWatch Log Groups
+- Monitoring module: VPC Flow Logs, CloudWatch Log Groups
 - Automation module: Lambda functions for secret rotation
 - EventBridge configuration: custom event bus and rules
 - Updated tap_stack.py orchestrating all components

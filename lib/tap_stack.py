@@ -48,7 +48,7 @@ class TapStack(pulumi.ComponentResource):
     This component orchestrates the instantiation of:
     - NetworkingStack: VPC, subnets, NAT instances, route tables
     - SecurityStack: KMS keys, Parameter Store, IAM roles
-    - MonitoringStack: VPC Flow Logs, AWS Config, CloudWatch Logs
+    - MonitoringStack: VPC Flow Logs, CloudWatch Logs
     - AutomationStack: Lambda functions, EventBridge rules
 
     Args:
@@ -125,7 +125,6 @@ class TapStack(pulumi.ComponentResource):
 
             # Monitoring outputs
             "flow_logs_bucket_name": self.monitoring.flow_logs_bucket_name,
-            "config_bucket_name": self.monitoring.config_bucket_name,
             "log_group_name": self.monitoring.log_group_name,
 
             # Automation outputs

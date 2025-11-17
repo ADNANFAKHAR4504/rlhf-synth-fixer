@@ -17,7 +17,7 @@ The infrastructure is organized into 5 modular Pulumi ComponentResources:
 - **tap_stack.py**: Main orchestrator (corrected with path imports)
 - **networking_stack.py**: VPC, subnets, NAT instances, routing (corrected Route API)
 - **security_stack.py**: KMS, Parameter Store, IAM roles
-- **monitoring_stack.py**: Flow Logs, AWS Config, CloudWatch (corrected depends_on)
+- **monitoring_stack.py**: Flow Logs, CloudWatch (corrected depends_on, removed AWS Config)
 - **automation_stack.py**: Lambda rotation, EventBridge
 
 ## Key Corrections
@@ -55,22 +55,16 @@ aws.ec2.Route(
 
 ### 3. Resource Dependencies Fix (monitoring_stack.py)
 
-**Changed from**:
-```python
-aws.cfg.DeliveryChannel(
-    ...,
-    depends_on_=[self.config_recorder],
-    opts=ResourceOptions(parent=self.config_recorder)
-)
-```
+**Changed**: Fixed depends_on syntax to use ResourceOptions pattern correctly
 
-**Changed to**:
-```python
-aws.cfg.DeliveryChannel(
-    ...,
-    opts=ResourceOptions(parent=self.config_recorder, depends_on=[self.config_recorder])
-)
-```
+### 4. AWS Config Removal (monitoring_stack.py, automation_stack.py)
+
+**Removed**: All AWS Config components due to account-level limits:
+- AWS Config Recorder (1 per account/region limit exceeded)
+- Config Rules for EBS encryption and S3 public access
+- Config S3 bucket and IAM roles
+
+**Fixed**: IAM role naming conflict by removing hard-coded `name` parameter in EventBridge role
 
 ## All Requirements Implemented
 
@@ -79,11 +73,10 @@ aws.cfg.DeliveryChannel(
 3. **Secrets Management**: Parameter Store with KMS encryption
 4. **Secret Rotation**: Lambda functions triggered every 30 days
 5. **Network Visibility**: VPC Flow Logs with 90-day S3 retention
-6. **Compliance**: AWS Config with EBS/S3 rules
-7. **Event Bus**: EventBridge forwarding to CloudWatch
-8. **Tagging**: Environment, Owner, CostCenter on all resources
-9. **Dependencies**: Proper Pulumi parent/child relationships
-10. **Exports**: Stack outputs for cross-stack references
+6. **Event Bus**: EventBridge forwarding to CloudWatch
+7. **Tagging**: Environment, Owner, CostCenter on all resources
+8. **Dependencies**: Proper Pulumi parent/child relationships
+9. **Exports**: Stack outputs for cross-stack references
 
 ## Code Quality
 
