@@ -70,10 +70,6 @@ resource "aws_dynamodb_table" "session_state" {
   replica {
     region_name = var.secondary_region
     kms_key_arn = var.secondary_kms_key_arn
-
-    point_in_time_recovery {
-      enabled = true
-    }
   }
 
   tags = {
@@ -142,9 +138,6 @@ resource "aws_dynamodb_table" "app_state" {
     region_name = var.secondary_region
     kms_key_arn = var.secondary_kms_key_arn
 
-    point_in_time_recovery {
-      enabled = true
-    }
   }
 
   tags = {
