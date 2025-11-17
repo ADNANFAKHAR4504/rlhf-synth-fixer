@@ -15,7 +15,7 @@ variable "aws_region" {
 
 # 1. IAM Role to be assumed by the EC2 instance
 resource "aws_iam_role" "e2e_test_role" {
-  name_prefix        = "e2e-test-role"
+  name_prefix = "e2e-test-role"
   assume_role_policy = jsonencode({
     Version = "2012-10-17",
     Statement = [
@@ -44,7 +44,7 @@ resource "aws_iam_policy" "e2e_test_policy" {
           "ec2:TerminateInstances",
           "ec2:DescribeInstances" # Good for general introspection
         ],
-        Effect = "Allow",
+        Effect   = "Allow",
         Resource = "*"
         # A safer, production-ready version would restrict to the instance's ARN, 
         # but using "*" is acceptable for a dedicated, temporary E2E testing role.
