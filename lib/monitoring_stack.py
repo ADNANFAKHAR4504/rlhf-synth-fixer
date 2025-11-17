@@ -54,21 +54,7 @@ class MonitoringStack(pulumi.ComponentResource):
         self.flow_logs_bucket = aws.s3.Bucket(
             f"vpc-flow-logs-{self.environment_suffix}",
             bucket=f"vpc-flow-logs-{self.environment_suffix}",
-            acl="private",
             force_destroy=True,
-            lifecycle_rules=[
-                aws.s3.BucketLifecycleRuleArgs(
-                    enabled=True,
-                    expiration=aws.s3.BucketLifecycleRuleExpirationArgs(days=90)
-                )
-            ],
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(  # pylint: disable=line-too-long
-                        sse_algorithm="AES256"
-                    )
-                )
-            ),
             tags={
                 "Name": f"vpc-flow-logs-{self.environment_suffix}",
                 "Environment": self.environment_suffix,
@@ -76,6 +62,42 @@ class MonitoringStack(pulumi.ComponentResource):
                 "CostCenter": "monitoring"
             },
             opts=ResourceOptions(parent=self)
+        )
+
+        # Configure bucket ACL using separate resource
+        aws.s3.BucketAclV2(
+            f"flow-logs-bucket-acl-{self.environment_suffix}",
+            bucket=self.flow_logs_bucket.id,
+            acl="private",
+            opts=ResourceOptions(parent=self.flow_logs_bucket)
+        )
+
+        # Configure lifecycle rules using separate resource
+        aws.s3.BucketLifecycleConfigurationV2(
+            f"flow-logs-bucket-lifecycle-{self.environment_suffix}",
+            bucket=self.flow_logs_bucket.id,
+            rules=[
+                aws.s3.BucketLifecycleConfigurationV2RuleArgs(
+                    id="expire-old-logs",
+                    status="Enabled",
+                    expiration=aws.s3.BucketLifecycleConfigurationV2RuleExpirationArgs(days=90)
+                )
+            ],
+            opts=ResourceOptions(parent=self.flow_logs_bucket)
+        )
+
+        # Configure server-side encryption using separate resource
+        aws.s3.BucketServerSideEncryptionConfigurationV2(
+            f"flow-logs-bucket-encryption-{self.environment_suffix}",
+            bucket=self.flow_logs_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ],
+            opts=ResourceOptions(parent=self.flow_logs_bucket)
         )
 
         # Block public access for Flow Logs bucket
@@ -140,15 +162,7 @@ class MonitoringStack(pulumi.ComponentResource):
         self.config_bucket = aws.s3.Bucket(
             f"aws-config-{self.environment_suffix}",
             bucket=f"aws-config-{self.environment_suffix}",
-            acl="private",
             force_destroy=True,
-            server_side_encryption_configuration=aws.s3.BucketServerSideEncryptionConfigurationArgs(
-                rule=aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
-                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(  # pylint: disable=line-too-long
-                        sse_algorithm="AES256"
-                    )
-                )
-            ),
             tags={
                 "Name": f"aws-config-{self.environment_suffix}",
                 "Environment": self.environment_suffix,
@@ -156,6 +170,28 @@ class MonitoringStack(pulumi.ComponentResource):
                 "CostCenter": "compliance"
             },
             opts=ResourceOptions(parent=self)
+        )
+
+        # Configure bucket ACL using separate resource
+        aws.s3.BucketAclV2(
+            f"config-bucket-acl-{self.environment_suffix}",
+            bucket=self.config_bucket.id,
+            acl="private",
+            opts=ResourceOptions(parent=self.config_bucket)
+        )
+
+        # Configure server-side encryption using separate resource
+        aws.s3.BucketServerSideEncryptionConfigurationV2(
+            f"config-bucket-encryption-{self.environment_suffix}",
+            bucket=self.config_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ],
+            opts=ResourceOptions(parent=self.config_bucket)
         )
 
         # Block public access for Config bucket

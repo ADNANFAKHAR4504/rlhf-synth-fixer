@@ -70,6 +70,19 @@ class NetworkingStack(pulumi.ComponentResource):
             opts=ResourceOptions(parent=self)
         )
 
+        # Create Internet Gateway
+        self.internet_gateway = aws.ec2.InternetGateway(
+            f"igw-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            tags={
+                "Name": f"igw-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+                "Owner": "infrastructure-team",
+                "CostCenter": "platform"
+            },
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
         # Get availability zones - use explicit list for reliability
         # Different regions have different AZ counts, so we map explicitly
         az_map = {
@@ -85,6 +98,61 @@ class NetworkingStack(pulumi.ComponentResource):
 
         # Get AZs for the specified region, default to us-east-2
         available_azs = az_map.get(args.region, ["us-east-2a", "us-east-2b", "us-east-2c"])
+
+        # Create public subnets for NAT instances
+        self.public_subnets: List[aws.ec2.Subnet] = []
+        public_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+
+        for i, cidr in enumerate(public_subnet_cidrs):
+            az_index = i % len(available_azs)
+
+            public_subnet = aws.ec2.Subnet(
+                f"public-subnet-{i+1}-{self.environment_suffix}",
+                vpc_id=self.vpc.id,
+                cidr_block=cidr,
+                availability_zone=available_azs[az_index],
+                map_public_ip_on_launch=True,
+                tags={
+                    "Name": f"public-subnet-{i+1}-{self.environment_suffix}",
+                    "Environment": self.environment_suffix,
+                    "Owner": "infrastructure-team",
+                    "CostCenter": "platform",
+                    "Type": "public"
+                },
+                opts=ResourceOptions(parent=self.vpc)
+            )
+            self.public_subnets.append(public_subnet)
+
+        # Create public route table
+        self.public_route_table = aws.ec2.RouteTable(
+            f"public-rt-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            tags={
+                "Name": f"public-rt-{self.environment_suffix}",
+                "Environment": self.environment_suffix,
+                "Owner": "infrastructure-team",
+                "CostCenter": "platform"
+            },
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        # Create route to internet gateway
+        aws.ec2.Route(
+            f"public-route-{self.environment_suffix}",
+            route_table_id=self.public_route_table.id,
+            destination_cidr_block="0.0.0.0/0",
+            gateway_id=self.internet_gateway.id,
+            opts=ResourceOptions(parent=self.public_route_table, depends_on=[self.internet_gateway])
+        )
+
+        # Associate public subnets with public route table
+        for i, subnet in enumerate(self.public_subnets):
+            aws.ec2.RouteTableAssociation(
+                f"public-rt-assoc-{i+1}-{self.environment_suffix}",
+                subnet_id=subnet.id,
+                route_table_id=self.public_route_table.id,
+                opts=ResourceOptions(parent=self.public_route_table)
+            )
 
         # Create private subnets
         self.private_subnets: List[aws.ec2.Subnet] = []
@@ -156,8 +224,11 @@ class NetworkingStack(pulumi.ComponentResource):
         self.nat_eips: List[aws.ec2.Eip] = []
         self.route_tables: List[aws.ec2.RouteTable] = []
 
-        for i, subnet in enumerate(self.private_subnets):
-            # Create Elastic IP for NAT instance
+        for i, private_subnet in enumerate(self.private_subnets):
+            # Get corresponding public subnet for NAT instance placement
+            public_subnet = self.public_subnets[i % len(self.public_subnets)]
+
+            # Create Elastic IP for NAT instance (requires IGW to be attached)
             eip = aws.ec2.Eip(
                 f"nat-eip-{i+1}-{self.environment_suffix}",
                 domain="vpc",
@@ -167,16 +238,16 @@ class NetworkingStack(pulumi.ComponentResource):
                     "Owner": "infrastructure-team",
                     "CostCenter": "platform"
                 },
-                opts=ResourceOptions(parent=self.vpc)
+                opts=ResourceOptions(parent=self.internet_gateway, depends_on=[self.internet_gateway])
             )
             self.nat_eips.append(eip)
 
-            # Create NAT instance
+            # Create NAT instance in public subnet
             nat_instance = aws.ec2.Instance(
                 f"nat-instance-{i+1}-{self.environment_suffix}",
                 instance_type="t3.micro",
                 ami=ami.id,
-                subnet_id=subnet.id,
+                subnet_id=public_subnet.id,
                 vpc_security_group_ids=[self.nat_security_group.id],
                 source_dest_check=False,
                 user_data="""#!/bin/bash
@@ -191,16 +262,16 @@ service iptables save
                     "Owner": "infrastructure-team",
                     "CostCenter": "platform"
                 },
-                opts=ResourceOptions(parent=subnet)
+                opts=ResourceOptions(parent=public_subnet)
             )
             self.nat_instances.append(nat_instance)
 
-            # Associate Elastic IP with NAT instance
+            # Associate Elastic IP with NAT instance (requires IGW)
             aws.ec2.EipAssociation(
                 f"nat-eip-assoc-{i+1}-{self.environment_suffix}",
                 instance_id=nat_instance.id,
                 allocation_id=eip.id,
-                opts=ResourceOptions(parent=nat_instance)
+                opts=ResourceOptions(parent=nat_instance, depends_on=[self.internet_gateway, nat_instance, eip])
             )
 
             # Create route table for private subnet

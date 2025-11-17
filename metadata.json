@@ -6,7 +6,9 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T02:29:44+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Web Application Deployment"],
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
   "po_id": "1u8k2i",
   "aws_services": [
     "VPC",
@@ -21,5 +23,6 @@
     "IAM"
   ],
   "region": "us-east-2",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendra-s-aws"
 }
