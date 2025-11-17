@@ -507,8 +507,26 @@ resource "aws_iam_policy" "security_admin" {
         ]
         Resource = "*"
         Condition = {
-          StringNotLike = {
-            "aws:RequestedRegion" = "us-east-1"
+          DateLessThan = {
+            "aws:CurrentTime" = "2024-01-01T14:00:00Z"  # Before 9 AM EST
+          }
+        }
+      },
+      {
+        Sid    = "DenySensitiveOperationsAfterBusinessHours"
+        Effect = "Deny"
+        Action = [
+          "iam:DeleteRole",
+          "iam:DeleteRolePolicy",
+          "iam:DeletePolicy",
+          "iam:DeleteUser",
+          "kms:ScheduleKeyDeletion",
+          "kms:DisableKey"
+        ]
+        Resource = "*"
+        Condition = {
+          DateGreaterThan = {
+            "aws:CurrentTime" = "2024-01-01T23:00:00Z"  # After 6 PM EST
           }
         }
       }
@@ -563,8 +581,24 @@ resource "aws_iam_policy" "devops" {
         ]
         Resource = "*"
         Condition = {
-          StringNotLike = {
-            "aws:RequestedRegion" = "us-east-1"
+          DateLessThan = {
+            "aws:CurrentTime" = "2024-01-01T14:00:00Z"  # Before 9 AM EST
+          }
+        }
+      },
+      {
+        Sid    = "DenySensitiveOperationsAfterBusinessHours"
+        Effect = "Deny"
+        Action = [
+          "rds:DeleteDBInstance",
+          "rds:DeleteDBCluster",
+          "ec2:TerminateInstances",
+          "s3:DeleteBucket"
+        ]
+        Resource = "*"
+        Condition = {
+          DateGreaterThan = {
+            "aws:CurrentTime" = "2024-01-01T23:00:00Z"  # After 6 PM EST
           }
         }
       }
