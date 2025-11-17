@@ -70,6 +70,18 @@ variable "sns_email" {
   type        = string
 }
 
+variable "sns_topic_arn" {
+  description = "SNS Topic ARN for notifications"
+  type        = string
+  default     = ""
+}
+
+variable "db_secret_arn" {
+  description = "ARN of the Secrets Manager secret for database credentials"
+  type        = string
+  default     = ""
+}
+
 variable "environment" {
   description = "Environment name"
   type        = string

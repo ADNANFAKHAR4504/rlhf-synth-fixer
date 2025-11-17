@@ -57,3 +57,9 @@ variable "cost_center" {
   description = "Cost center tag"
   type        = string
 }
+
+variable "sns_topic_arn" {
+  description = "SNS Topic ARN for notifications"
+  type        = string
+  default     = ""
+}

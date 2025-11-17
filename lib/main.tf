@@ -6,6 +6,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.1"
+    }
   }
 }
 
@@ -76,6 +80,57 @@ resource "aws_kms_alias" "secondary" {
   target_key_id = aws_kms_key.secondary.key_id
 }
 
+# Secrets Manager for RDS credentials
+module "secrets_manager" {
+  source = "./modules/secrets"
+
+  environment_suffix = var.environment_suffix
+  environment        = var.environment
+  cost_center        = var.cost_center
+
+  db_master_username = var.db_master_username
+  database_name      = var.database_name
+  enable_rotation    = true
+}
+
+# SNS Topic for notifications
+resource "aws_sns_topic" "alerts" {
+  provider = aws.primary
+  name     = "dr-alerts-${var.environment_suffix}"
+
+  tags = {
+    Name        = "sns-dr-alerts-${var.environment_suffix}"
+    Environment = var.environment
+    CostCenter  = var.cost_center
+  }
+}
+
+resource "aws_sns_topic_subscription" "email" {
+  provider  = aws.primary
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.sns_email
+}
+
+# Secondary region SNS Topic
+resource "aws_sns_topic" "alerts_secondary" {
+  provider = aws.secondary
+  name     = "dr-alerts-${var.environment_suffix}"
+
+  tags = {
+    Name        = "sns-dr-alerts-${var.environment_suffix}"
+    Environment = var.environment
+    CostCenter  = var.cost_center
+  }
+}
+
+resource "aws_sns_topic_subscription" "email_secondary" {
+  provider  = aws.secondary
+  topic_arn = aws_sns_topic.alerts_secondary.arn
+  protocol  = "email"
+  endpoint  = var.sns_email
+}
+
 # RDS Aurora Global Cluster
 resource "aws_rds_global_cluster" "main" {
   provider                  = aws.primary
@@ -106,12 +161,14 @@ module "primary_region" {
   global_cluster_identifier = aws_rds_global_cluster.main.id
   database_name             = var.database_name
   db_master_username        = var.db_master_username
-  db_master_password        = var.db_master_password
+  db_master_password        = module.secrets_manager.db_password
   db_instance_class         = var.db_instance_class
 
   # Lambda configuration
   lambda_runtime = var.lambda_runtime
   sns_email      = var.sns_email
+  sns_topic_arn  = aws_sns_topic.alerts.arn
+  db_secret_arn  = module.secrets_manager.secret_arn
 
   environment = var.environment
   cost_center = var.cost_center
@@ -137,12 +194,14 @@ module "secondary_region" {
   global_cluster_identifier = aws_rds_global_cluster.main.id
   database_name             = var.database_name
   db_master_username        = var.db_master_username
-  db_master_password        = var.db_master_password
+  db_master_password        = module.secrets_manager.db_password
   db_instance_class         = var.db_instance_class
 
   # Lambda configuration
   lambda_runtime = var.lambda_runtime
   sns_email      = var.sns_email
+  sns_topic_arn  = aws_sns_topic.alerts_secondary.arn
+  db_secret_arn  = module.secrets_manager.secret_arn
 
   environment = var.environment
   cost_center = var.cost_center
@@ -186,6 +245,26 @@ module "route53_failover" {
 
   health_check_interval = var.health_check_interval
   health_check_path     = var.health_check_path
+
+  environment = var.environment
+  cost_center = var.cost_center
+}
+
+# DynamoDB Global Tables for session state
+module "dynamodb_global" {
+  source = "./modules/dynamodb_global"
+
+  providers = {
+    aws.primary   = aws.primary
+    aws.secondary = aws.secondary
+  }
+
+  environment_suffix = var.environment_suffix
+  secondary_region   = var.secondary_region
+
+  primary_kms_key_arn   = aws_kms_key.primary.arn
+  secondary_kms_key_arn = aws_kms_key.secondary.arn
+  sns_topic_arn         = aws_sns_topic.alerts.arn
 
   environment = var.environment
   cost_center = var.cost_center

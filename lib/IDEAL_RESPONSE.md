@@ -11,12 +11,14 @@ The solution implements:
 - **S3 Cross-Region Replication**: With proper IAM roles and lifecycle policies
 - **Route 53 Health Checks**: Automated DNS failover with health monitoring
 - **Lambda Failover Automation**: Complete automation for region promotion
-- **AWS Secrets Manager**: Secure database credential management
-- **VPC Peering**: Secure cross-region communication
-- **Comprehensive Monitoring**: CloudWatch dashboards, alarms, and SNS notifications
+- **AWS Secrets Manager**: Secure database credential management with automatic rotation
+- **VPC Endpoints**: Cost optimization and improved security for AWS service access
+- **Comprehensive Monitoring**: Enhanced multi-region CloudWatch dashboards, alarms, and SNS notifications
 - **AWS Backup**: Centralized backup management with 30-day retention
 - **CloudTrail**: Complete audit logging for compliance
-- **RDS Proxy**: Connection pooling and failover abstraction
+- **RDS Proxy**: Advanced connection pooling and failover abstraction
+- **Scoped IAM Policies**: Least privilege access with resource-specific permissions
+- **SNS Integration**: Fully integrated notification system with Lambda environment variables
 
 ## Complete File Structure
 
@@ -534,6 +536,96 @@ resource "aws_security_group" "alb" {
   tags = {
     Name = "alb-sg-${var.dr_role}-${var.environment_suffix}"
   }
+}
+```
+
+## Additional Security & Cost Optimizations
+
+### VPC Endpoints Implementation
+```hcl
+# modules/vpc_endpoints/main.tf
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = var.vpc_id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+}
+
+resource "aws_vpc_endpoint" "secrets_manager" {
+  vpc_id              = var.vpc_id
+  service_name        = "com.amazonaws.${var.region}.secretsmanager"
+  vpc_endpoint_type   = "Interface"
+  private_dns_enabled = true
+}
+```
+Benefits:
+- Reduced data transfer costs
+- Improved security (traffic doesn't leave AWS network)
+- Lower latency for AWS service calls
+
+### Scoped IAM Policies
+```hcl
+# Improved Lambda IAM policy with resource-specific permissions
+{
+  Effect = "Allow"
+  Action = ["rds:DescribeDBClusters"]
+  Resource = ["arn:aws:rds:${var.region}:*:cluster:aurora-${var.dr_role}-*"]
+}
+
+{
+  Effect = "Allow"
+  Action = ["sns:Publish"]
+  Resource = ["arn:aws:sns:${var.region}:*:dr-alerts-${var.environment_suffix}"]
+}
+```
+
+### Enhanced Multi-Region CloudWatch Dashboard
+```hcl
+widgets = [
+  {
+    type = "metric"
+    properties = {
+      metrics = [
+        ["AWS/RDS", "CPUUtilization", {
+          stat = "Average",
+          label = "Primary (us-east-1)",
+          region = "us-east-1"
+        }],
+        ["...", {
+          stat = "Average",
+          label = "Secondary (us-west-2)",
+          region = "us-west-2"
+        }]
+      ]
+      title = "RDS CPU Utilization - Multi-Region"
+    }
+  }
+]
+```
+
+### DynamoDB Global Tables with TTL
+```hcl
+resource "aws_dynamodb_table" "session_state" {
+  ttl {
+    enabled        = true
+    attribute_name = "ttl"
+  }
+
+  global_secondary_index {
+    name            = "user-sessions-index"
+    hash_key        = "user_id"
+    projection_type = "ALL"
+  }
+}
+```
+
+### RDS Proxy with Connection Pooling
+```hcl
+resource "aws_db_proxy" "main" {
+  max_connections_percent      = 100
+  max_idle_connections_percent = 50
+  connection_borrow_timeout    = 120
+  idle_client_timeout          = 1800
+  require_tls                  = true
 }
 ```
 

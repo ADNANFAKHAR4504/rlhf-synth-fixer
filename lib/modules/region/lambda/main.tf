@@ -34,7 +34,9 @@ resource "aws_iam_role_policy" "lambda" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          "arn:aws:logs:${var.region}:*:log-group:/aws/lambda/*"
+        ]
       },
       {
         Effect = "Allow"
@@ -43,31 +45,52 @@ resource "aws_iam_role_policy" "lambda" {
           "ec2:DescribeNetworkInterfaces",
           "ec2:DeleteNetworkInterface"
         ]
-        Resource = "*"
+        Resource = "*"  # Network interfaces require * due to dynamic creation
       },
       {
         Effect = "Allow"
         Action = [
           "rds:DescribeDBClusters",
-          "rds:DescribeDBInstances",
-          "rds:FailoverGlobalCluster"
+          "rds:DescribeDBInstances"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:rds:${var.region}:*:cluster:aurora-${var.dr_role}-${var.environment_suffix}*",
+          "arn:aws:rds:${var.region}:*:db:aurora-${var.dr_role}-*-${var.environment_suffix}"
+        ]
       },
       {
         Effect = "Allow"
         Action = [
-          "cloudwatch:PutMetricData",
+          "rds:FailoverGlobalCluster"
+        ]
+        Resource = [
+          "arn:aws:rds:*:*:global-cluster:aurora-global-${var.environment_suffix}"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricData"
+        ]
+        Resource = "*"  # CloudWatch metrics don't support resource-level permissions
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "cloudwatch:GetMetricData"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:cloudwatch:${var.region}:*:metric/*"
+        ]
       },
       {
         Effect = "Allow"
         Action = [
           "sns:Publish"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:sns:${var.region}:*:dr-alerts-${var.environment_suffix}"
+        ]
       },
       {
         Effect = "Allow"
@@ -75,7 +98,9 @@ resource "aws_iam_role_policy" "lambda" {
           "route53:GetHealthCheckStatus",
           "route53:UpdateHealthCheck"
         ]
-        Resource = "*"
+        Resource = [
+          "arn:aws:route53:::healthcheck/*"
+        ]
       }
     ]
   })
@@ -117,6 +142,7 @@ resource "aws_lambda_function" "health_monitor" {
       RDS_ENDPOINT   = var.rds_endpoint
       IS_PRIMARY     = var.is_primary ? "true" : "false"
       ENVIRONMENT    = var.environment
+      SNS_TOPIC_ARN  = var.sns_topic_arn
     }
   }
 
@@ -163,6 +189,7 @@ resource "aws_lambda_function" "failover_trigger" {
       RDS_CLUSTER_ID = var.rds_cluster_id
       IS_PRIMARY     = var.is_primary ? "true" : "false"
       ENVIRONMENT    = var.environment
+      SNS_TOPIC_ARN  = var.sns_topic_arn
     }
   }
 

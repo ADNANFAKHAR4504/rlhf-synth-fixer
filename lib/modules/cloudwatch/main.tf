@@ -115,45 +115,232 @@ resource "aws_cloudwatch_dashboard" "dr_monitoring" {
 
   dashboard_body = jsonencode({
     widgets = [
+      # Multi-region RDS Replication Lag
       {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/RDS", "AuroraGlobalDBReplicationLag", { stat = "Average", label = "Replication Lag" }]
+            ["AWS/RDS", "AuroraGlobalDBReplicationLag", {
+              stat = "Average",
+              label = "Primary → Secondary Lag",
+              region = "us-east-1"
+            }],
+            ["...", {
+              stat = "Maximum",
+              label = "Max Lag",
+              region = "us-east-1"
+            }]
           ]
           period = 60
           stat   = "Average"
           region = "us-east-1"
-          title  = "RDS Replication Lag"
+          title  = "Global Database Replication Lag"
           yAxis = {
             left = {
               min = 0
+              label = "Milliseconds"
             }
+          }
+          annotations = {
+            horizontal = [{
+              value = var.replication_lag_threshold * 1000
+              label = "Threshold"
+              fill = "above"
+            }]
           }
         }
       },
+      # Multi-region RDS CPU Utilization
       {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/RDS", "CPUUtilization", { stat = "Average", label = "Primary CPU" }]
+            ["AWS/RDS", "CPUUtilization", {
+              stat = "Average",
+              label = "Primary (us-east-1)",
+              region = "us-east-1",
+              dimensions = {
+                DBClusterIdentifier = var.primary_cluster_id
+              }
+            }],
+            ["...", {
+              stat = "Average",
+              label = "Secondary (us-west-2)",
+              region = "us-west-2",
+              dimensions = {
+                DBClusterIdentifier = var.secondary_cluster_id
+              }
+            }]
           ]
           period = 300
           stat   = "Average"
           region = "us-east-1"
-          title  = "RDS CPU Utilization"
+          title  = "RDS CPU Utilization - Multi-Region"
+          yAxis = {
+            left = {
+              min = 0
+              max = 100
+              label = "Percent"
+            }
+          }
         }
       },
+      # Multi-region Database Connections
       {
         type = "metric"
         properties = {
           metrics = [
-            ["AWS/RDS", "DatabaseConnections", { stat = "Sum", label = "Connections" }]
+            ["AWS/RDS", "DatabaseConnections", {
+              stat = "Sum",
+              label = "Primary Connections",
+              region = "us-east-1",
+              dimensions = {
+                DBClusterIdentifier = var.primary_cluster_id
+              }
+            }],
+            ["...", {
+              stat = "Sum",
+              label = "Secondary Connections",
+              region = "us-west-2",
+              dimensions = {
+                DBClusterIdentifier = var.secondary_cluster_id
+              }
+            }]
           ]
           period = 300
           stat   = "Sum"
           region = "us-east-1"
-          title  = "Database Connections"
+          title  = "Database Connections - Multi-Region"
+        }
+      },
+      # Health Check Status
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/Route53", "HealthCheckStatus", {
+              stat = "Minimum",
+              label = "Primary Health",
+              region = "us-east-1"
+            }],
+            ["...", {
+              stat = "Minimum",
+              label = "Secondary Health",
+              region = "us-west-2"
+            }]
+          ]
+          period = 60
+          stat   = "Minimum"
+          region = "us-east-1"
+          title  = "Route53 Health Check Status"
+          yAxis = {
+            left = {
+              min = 0
+              max = 1
+            }
+          }
+        }
+      },
+      # Lambda Invocations
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/Lambda", "Invocations", {
+              stat = "Sum",
+              label = "Primary Health Monitor",
+              region = "us-east-1"
+            }],
+            ["...", {
+              stat = "Sum",
+              label = "Secondary Health Monitor",
+              region = "us-west-2"
+            }]
+          ]
+          period = 300
+          stat   = "Sum"
+          region = "us-east-1"
+          title  = "Lambda Health Monitor Invocations"
+        }
+      },
+      # RDS Proxy Connections (if enabled)
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/RDS", "DatabaseConnectionsCurrent", {
+              stat = "Average",
+              label = "Primary Proxy",
+              region = "us-east-1"
+            }],
+            ["...", {
+              stat = "Average",
+              label = "Secondary Proxy",
+              region = "us-west-2"
+            }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = "us-east-1"
+          title  = "RDS Proxy Connection Pool"
+        }
+      },
+      # Network Traffic
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/EC2", "NetworkIn", {
+              stat = "Sum",
+              label = "Primary Network In",
+              region = "us-east-1"
+            }],
+            ["...", {
+              stat = "Sum",
+              label = "Secondary Network In",
+              region = "us-west-2"
+            }]
+          ]
+          period = 300
+          stat   = "Sum"
+          region = "us-east-1"
+          title  = "Network Traffic - Multi-Region"
+          yAxis = {
+            left = {
+              label = "Bytes"
+            }
+          }
+        }
+      },
+      # S3 Replication Metrics
+      {
+        type = "metric"
+        properties = {
+          metrics = [
+            ["AWS/S3", "ReplicationLatency", {
+              stat = "Average",
+              label = "Replication Latency",
+              region = "us-east-1"
+            }],
+            [".", "PendingReplicationBytes", {
+              stat = "Average",
+              label = "Pending Bytes",
+              region = "us-east-1",
+              yAxis = "right"
+            }]
+          ]
+          period = 300
+          stat   = "Average"
+          region = "us-east-1"
+          title  = "S3 Cross-Region Replication"
+          yAxis = {
+            left = {
+              label = "Milliseconds"
+            }
+            right = {
+              label = "Bytes"
+            }
+          }
         }
       }
     ]

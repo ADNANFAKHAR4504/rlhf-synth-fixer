@@ -384,6 +384,46 @@ resource "aws_lb_listener" "main" {
   }
 }
 
+# VPC Endpoints Module
+module "vpc_endpoints" {
+  source = "../vpc_endpoints"
+
+  vpc_id      = aws_vpc.main.id
+  vpc_cidr    = var.vpc_cidr
+  region      = var.region
+  dr_role     = var.dr_role
+  environment_suffix = var.environment_suffix
+
+  private_subnet_ids       = aws_subnet.private[*].id
+  private_route_table_ids  = aws_route_table.private[*].id
+  database_route_table_ids = [aws_route_table.database.id]
+
+  environment = var.environment
+  cost_center = var.cost_center
+}
+
+# RDS Proxy Module
+module "rds_proxy" {
+  source = "../rds_proxy"
+
+  dr_role            = var.dr_role
+  region             = var.region
+  environment_suffix = var.environment_suffix
+
+  vpc_id                     = aws_vpc.main.id
+  subnet_ids                 = aws_subnet.database[*].id
+  allowed_security_group_ids = [aws_security_group.lambda.id]
+
+  rds_cluster_id = aws_rds_cluster.main.id
+  secret_arn     = var.db_secret_arn
+  kms_key_arn    = var.kms_key_arn
+
+  environment = var.environment
+  cost_center = var.cost_center
+
+  depends_on = [aws_rds_cluster.main]
+}
+
 # Lambda Module
 module "lambda" {
   source = "./lambda"
@@ -401,6 +441,7 @@ module "lambda" {
 
   lambda_runtime = var.lambda_runtime
   is_primary     = var.is_primary
+  sns_topic_arn  = var.sns_topic_arn
 
   environment = var.environment
   cost_center = var.cost_center
