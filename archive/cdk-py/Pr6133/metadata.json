@@ -19,5 +19,11 @@
     "Contributor Insights",
     "CloudWatch Logs",
     "IAM"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
 }
