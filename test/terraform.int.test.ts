@@ -242,19 +242,28 @@ terraform {
         // - SNS topic subscriptions: May vary based on alert recipients per env
         // - Subnets: Different AZ configurations per environment (dev=2 AZs, prod=3 AZs)
         // - Route table associations: Varies with subnet count
+        // - Route tables: Varies with AZ count and subnet configurations
         // - Security group rules: May differ based on env-specific access patterns
         // - SQS queues: May vary based on hospital_regions count (dev=2, prod=5)
+        // - SQS queue policies: One per SQS queue (varies with hospital_regions)
         // - Routes: Varies with NAT gateway and subnet configurations
+        // - Network ACLs: May vary with subnet and AZ count
+        // - VPC endpoints: May vary based on environment requirements
         const allowedVariableResources = [
           "aws_lambda_provisioned_concurrency_config",
           "aws_eip",
           "aws_nat_gateway",
           "aws_sns_topic_subscription",
           "aws_subnet",
+          "aws_route_table",
           "aws_route_table_association",
           "aws_security_group_rule",
           "aws_sqs_queue",
+          "aws_sqs_queue_policy",
           "aws_route",
+          "aws_network_acl",
+          "aws_network_acl_rule",
+          "aws_vpc_endpoint",
         ];
 
         console.log(`   Allowed variable resources: ${allowedVariableResources.join(', ')}`);
