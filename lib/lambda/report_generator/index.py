@@ -14,8 +14,8 @@ import csv
 from io import StringIO
 
 # Initialize AWS clients
-dynamodb = boto3.resource('dynamodb')
-s3 = boto3.client('s3')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+s3 = boto3.client('s3', region_name='us-east-1')
 
 # Get environment variables
 TABLE_NAME = os.environ['TABLE_NAME']

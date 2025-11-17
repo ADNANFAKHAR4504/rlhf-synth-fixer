@@ -11,7 +11,7 @@ from typing import Dict, Any
 from decimal import Decimal
 
 # Initialize DynamoDB client
-dynamodb = boto3.resource('dynamodb')
+dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 
 # Get environment variables
 TABLE_NAME = os.environ['TABLE_NAME']

@@ -10,7 +10,7 @@ import boto3
 from typing import Dict, Any
 
 # Initialize SQS client
-sqs = boto3.client('sqs')
+sqs = boto3.client('sqs', region_name='us-east-1')
 
 # Get environment variables
 QUEUE_URL = os.environ['QUEUE_URL']
