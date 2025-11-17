@@ -13,7 +13,6 @@ Metadata:
         Parameters:
           - DatabaseName
           - MasterUsername
-          - MasterPassword
       - Label:
           default: 'Network Configuration'
         Parameters:
@@ -41,15 +40,6 @@ Parameters:
     Description: 'Master username for Aurora cluster'
     AllowedPattern: '^[a-zA-Z][a-zA-Z0-9]*$'
     ConstraintDescription: 'Must begin with a letter and contain only alphanumeric characters'
-
-  MasterPassword:
-    Type: String
-    NoEcho: true
-    Description: 'Master password for Aurora cluster (min 8 characters)'
-    MinLength: 8
-    MaxLength: 41
-    AllowedPattern: '^[a-zA-Z0-9]*$'
-    ConstraintDescription: 'Must be 8-41 alphanumeric characters'
 
   VpcId:
     Type: AWS::EC2::VPC::Id
@@ -157,7 +147,7 @@ Resources:
     Properties:
       GlobalClusterIdentifier: !Sub 'aurora-global-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql
-      EngineVersion: '5.7.mysql_aurora.2.11.2'
+      EngineVersion: '8.0.mysql_aurora.3.02.0'
       DeletionProtection: false
       StorageEncrypted: true
 
@@ -169,10 +159,10 @@ Resources:
     Properties:
       DBClusterIdentifier: !Sub 'aurora-primary-cluster-${EnvironmentSuffix}'
       Engine: aurora-mysql
-      EngineVersion: '5.7.mysql_aurora.2.11.2'
+      EngineVersion: '8.0.mysql_aurora.3.02.0'
       GlobalClusterIdentifier: !Ref GlobalDatabaseCluster
       MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Ref MasterPassword
+      ManageMasterUserPassword: true
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
