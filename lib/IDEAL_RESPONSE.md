@@ -51,7 +51,7 @@ variable "cluster_name_prefix" {
 variable "cluster_version" {
   description = "Desired Kubernetes control plane version."
   type        = string
-  default     = "1.28"
+  default     = "1.29"
 }
 
 variable "cluster_log_retention_days" {

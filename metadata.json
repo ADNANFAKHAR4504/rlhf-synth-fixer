@@ -26,5 +26,5 @@
     "Amazon Simple Notification Service (SNS)"
   ],
   "training_quality": 9,
-  "background": "Provisioned a production EKS 1.28 environment with private networking, IRSA, autoscaler support, and compliance tagging for a fintech payments workload."
+  "background": "Provisioned a production EKS 1.29 environment with private networking, IRSA, autoscaler support, and compliance tagging for a fintech payments workload."
 }
