@@ -103,7 +103,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_files" {
 
 # S3 Bucket for PDF Reports
 resource "aws_s3_bucket" "reports" {
-  bucket = "compliance-reports-${var.environment_suffix}"
+  bucket = "compliance-reports-069919905910-${var.environment_suffix}"
 
   tags = {
     Environment = var.environment
@@ -199,7 +199,7 @@ resource "aws_iam_role" "config" {
 
 resource "aws_iam_role_policy_attachment" "config" {
   role       = aws_iam_role.config.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/ConfigRole"
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWS_ConfigRole"
 }
 
 # S3 Bucket for Config
@@ -211,6 +211,40 @@ resource "aws_s3_bucket" "config" {
     Purpose     = "ComplianceScanning"
     CostCenter  = var.cost_center
   }
+}
+
+# S3 Bucket Policy for Config
+resource "aws_s3_bucket_policy" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AWSConfigBucketPermissionsCheck"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:GetBucketAcl"
+        Resource = aws_s3_bucket.config.arn
+      },
+      {
+        Sid    = "AWSConfigBucketDelivery"
+        Effect = "Allow"
+        Principal = {
+          Service = "config.amazonaws.com"
+        }
+        Action   = "s3:PutObject"
+        Resource = "${aws_s3_bucket.config.arn}/*"
+        Condition = {
+          StringEquals = {
+            "s3:x-amz-acl" = "bucket-owner-full-control"
+          }
+        }
+      }
+    ]
+  })
 }
 
 # Config Recorder
@@ -228,7 +262,7 @@ resource "aws_config_delivery_channel" "main" {
   name           = "compliance-delivery-${var.environment_suffix}"
   s3_bucket_name = aws_s3_bucket.config.bucket
 
-  depends_on = [aws_config_configuration_recorder.main]
+  depends_on = [aws_config_configuration_recorder.main, aws_s3_bucket_policy.config]
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
@@ -246,6 +280,10 @@ resource "aws_config_config_rule" "ec2_instance_type" {
     owner             = "AWS"
     source_identifier = "DESIRED_INSTANCE_TYPE"
   }
+
+  input_parameters = jsonencode({
+    instanceType = "t3.micro"
+  })
 
   depends_on = [aws_config_configuration_recorder.main]
 
@@ -278,7 +316,7 @@ resource "aws_config_config_rule" "rds_backup_retention" {
 
   source {
     owner             = "AWS"
-    source_identifier = "DB_BACKUP_ENABLED"
+    source_identifier = "RDS_STORAGE_ENCRYPTED"
   }
 
   depends_on = [aws_config_configuration_recorder.main]
@@ -299,7 +337,7 @@ resource "aws_lambda_function" "compliance_scanner" {
   source_code_hash = filebase64sha256("lambda_function.zip")
   runtime          = "python3.11"
   timeout          = 900
-  memory_size      = 3072
+  memory_size      = 3008
 
   environment {
     variables = {
