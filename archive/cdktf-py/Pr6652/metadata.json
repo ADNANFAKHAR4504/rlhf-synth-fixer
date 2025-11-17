@@ -6,7 +6,9 @@
   "team": "synth-2",
   "startedAt": "2025-11-17T13:14:38+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
-  "subject_labels": ["Provisioning of Infrastructure Environments"],
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
   "po_id": "z45hp3",
   "aws_services": [
     "ACM",
@@ -28,5 +30,6 @@
     "lines": 100,
     "branches": 100
   },
-  "completedAt": "2025-11-17T08:35:26+0530"
+  "completedAt": "2025-11-17T08:35:26+0530",
+  "dockerS3Location": ""
 }
