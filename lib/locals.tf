@@ -1,0 +1,72 @@
+# Requirement 5: Centralized tags with locals block
+locals {
+  common_tags = {
+    Environment   = var.environment
+    Project       = var.project_name
+    ManagedBy     = "Terraform"
+    Team          = var.team_name
+    CostCenter    = var.cost_center
+    Compliance    = var.compliance_level
+    LastUpdated   = timestamp()
+    EnvironmentID = var.environment_suffix
+  }
+
+  # Region configuration map
+  regions = {
+    east = {
+      name               = "us-east-1"
+      provider_alias     = null
+      availability_zones = ["us-east-1a", "us-east-1b", "us-east-1c"]
+    }
+    west = {
+      name               = "us-west-2"
+      provider_alias     = "west"
+      availability_zones = ["us-west-2a", "us-west-2b", "us-west-2c"]
+    }
+  }
+
+  # EC2 instance configurations map for for_each
+  ec2_instances = {
+    web-primary = {
+      instance_type      = var.web_instance_type
+      ami                = var.web_ami_id
+      user_data_template = "web"
+      security_groups    = ["web"]
+      subnet_type        = "public"
+    }
+    app-primary = {
+      instance_type      = var.app_instance_type
+      ami                = var.app_ami_id
+      user_data_template = "app"
+      security_groups    = ["app"]
+      subnet_type        = "private"
+    }
+    worker-primary = {
+      instance_type      = var.worker_instance_type
+      ami                = var.worker_ami_id
+      user_data_template = "worker"
+      security_groups    = ["app"]
+      subnet_type        = "private"
+    }
+  }
+
+  # RDS configurations map for for_each
+  rds_clusters = {
+    primary-mysql = {
+      engine         = "aurora-mysql"
+      engine_version = "8.0.mysql_aurora.3.05.2"
+      instance_class = var.mysql_instance_class
+      instance_count = var.mysql_instance_count
+      database_name  = var.mysql_database_name
+      region_key     = "east"
+    }
+    secondary-postgres = {
+      engine         = "aurora-postgresql"
+      engine_version = "15.4"
+      instance_class = var.postgres_instance_class
+      instance_count = var.postgres_instance_count
+      database_name  = var.postgres_database_name
+      region_key     = "west"
+    }
+  }
+}
