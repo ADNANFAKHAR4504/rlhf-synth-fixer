@@ -20,5 +20,11 @@
     "EC2 Key Pair",
     "SSM Parameter",
     "CloudFormation"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "bharathb-eng",
+  "dockerS3Location": ""
 }
