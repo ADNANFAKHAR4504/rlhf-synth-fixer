@@ -49,8 +49,13 @@ from cdktf_cdktf_provider_aws.route_table_association import RouteTableAssociati
 from cdktf_cdktf_provider_aws.data_aws_availability_zones import DataAwsAvailabilityZones
 from cdktf_cdktf_provider_aws.data_aws_ami import DataAwsAmi, DataAwsAmiFilter
 from cdktf_cdktf_provider_aws.data_aws_caller_identity import DataAwsCallerIdentity
+from cdktf_cdktf_provider_aws.kms_key import KmsKey
+from cdktf_cdktf_provider_aws.kms_alias import KmsAlias
 import json
 import base64
+import tempfile
+import zipfile
+import hashlib
 
 
 class TapStack(TerraformStack):
@@ -327,6 +332,43 @@ class TapStack(TerraformStack):
 
         # ====== AURORA GLOBAL DATABASE ======
 
+        # KMS keys for Aurora encryption in both regions
+        primary_kms_key = KmsKey(
+            self,
+            "primary_kms_key",
+            description=f"KMS key for Aurora primary cluster {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={**common_tags, "Name": f"kms-aurora-primary-{environment_suffix}", "DR-Role": "primary"},
+            provider=primary_provider
+        )
+
+        KmsAlias(
+            self,
+            "primary_kms_alias",
+            name=f"alias/aurora-primary-{environment_suffix}",
+            target_key_id=primary_kms_key.key_id,
+            provider=primary_provider
+        )
+
+        secondary_kms_key = KmsKey(
+            self,
+            "secondary_kms_key",
+            description=f"KMS key for Aurora secondary cluster {environment_suffix}",
+            deletion_window_in_days=7,
+            enable_key_rotation=True,
+            tags={**common_tags, "Name": f"kms-aurora-secondary-{environment_suffix}", "DR-Role": "secondary"},
+            provider=secondary_provider
+        )
+
+        KmsAlias(
+            self,
+            "secondary_kms_alias",
+            name=f"alias/aurora-secondary-{environment_suffix}",
+            target_key_id=secondary_kms_key.key_id,
+            provider=secondary_provider
+        )
+
         # Global cluster
         global_cluster = RdsGlobalCluster(
             self,
@@ -393,6 +435,7 @@ class TapStack(TerraformStack):
             preferred_maintenance_window="mon:04:00-mon:05:00",
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
             storage_encrypted=True,
+            kms_key_id=primary_kms_key.arn,
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-primary-{environment_suffix}", "DR-Role": "primary"},
             lifecycle={
@@ -466,6 +509,7 @@ class TapStack(TerraformStack):
             preferred_maintenance_window="mon:04:00-mon:05:00",
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
             storage_encrypted=True,
+            kms_key_id=secondary_kms_key.arn,
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-secondary-{environment_suffix}", "DR-Role": "secondary"},
             provider=secondary_provider,
@@ -845,7 +889,7 @@ class TapStack(TerraformStack):
             provider=primary_provider
         )
 
-        S3BucketVersioningA(
+        primary_s3_versioning = S3BucketVersioningA(
             self,
             "primary_s3_versioning",
             bucket=primary_s3_bucket.id,
@@ -864,7 +908,7 @@ class TapStack(TerraformStack):
             provider=secondary_provider
         )
 
-        S3BucketVersioningA(
+        secondary_s3_versioning = S3BucketVersioningA(
             self,
             "secondary_s3_versioning",
             bucket=secondary_s3_bucket.id,
@@ -956,7 +1000,8 @@ class TapStack(TerraformStack):
                     delete_marker_replication={"status": "Enabled"}
                 )
             ],
-            provider=primary_provider
+            provider=primary_provider,
+            depends_on=[primary_s3_versioning, secondary_s3_versioning]
         )
 
         # Secondary to Primary replication
@@ -992,7 +1037,8 @@ class TapStack(TerraformStack):
                     delete_marker_replication={"status": "Enabled"}
                 )
             ],
-            provider=secondary_provider
+            provider=secondary_provider,
+            depends_on=[primary_s3_versioning, secondary_s3_versioning]
         )
 
         # ====== COMPUTE INFRASTRUCTURE (ALB + ASG) ======
@@ -1356,10 +1402,11 @@ echo "OK" > /var/www/html/health
         # ====== ROUTE 53 AND HEALTH CHECKS ======
 
         # Route 53 Hosted Zone
+        # Use a test domain format that won't conflict with reserved domains
         hosted_zone = Route53Zone(
             self,
             "hosted_zone",
-            name=f"dr-{environment_suffix}.example.com",
+            name=f"dr-{environment_suffix}.testing.internal",
             tags={**common_tags, "Name": f"r53-zone-{environment_suffix}"},
             provider=primary_provider
         )
@@ -1383,7 +1430,7 @@ echo "OK" > /var/www/html/health
             self,
             "primary_dns_record",
             zone_id=hosted_zone.zone_id,
-            name=f"app.dr-{environment_suffix}.example.com",
+            name=f"app.dr-{environment_suffix}.testing.internal",
             type="A",
             alias={
                 "name": primary_alb.dns_name,
@@ -1403,7 +1450,7 @@ echo "OK" > /var/www/html/health
             self,
             "secondary_dns_record",
             zone_id=hosted_zone.zone_id,
-            name=f"app.dr-{environment_suffix}.example.com",
+            name=f"app.dr-{environment_suffix}.testing.internal",
             type="A",
             alias={
                 "name": secondary_alb.dns_name,
@@ -1509,6 +1556,16 @@ def lambda_handler(event, context):
 """
 
         # Primary Lambda function
+        # Create temporary ZIP file for primary Lambda
+        primary_zip_path = tempfile.mktemp(suffix='.zip')
+        with zipfile.ZipFile(primary_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.writestr('index.py', lambda_code)
+
+        # Read ZIP file and compute hash
+        with open(primary_zip_path, 'rb') as f:
+            primary_zip_data = f.read()
+            primary_code_hash = hashlib.sha256(primary_zip_data).hexdigest()
+
         primary_lambda = LambdaFunction(
             self,
             "primary_lambda_healthcheck",
@@ -1516,8 +1573,8 @@ def lambda_handler(event, context):
             runtime="python3.11",
             handler="index.lambda_handler",
             role=primary_lambda_role.arn,
-            filename="lambda_function.zip",
-            source_code_hash=base64.b64encode(lambda_code.encode()).decode(),
+            filename=primary_zip_path,
+            source_code_hash=base64.b64encode(primary_code_hash.encode()).decode(),
             timeout=60,
             environment=LambdaFunctionEnvironment(
                 variables={
@@ -1560,6 +1617,16 @@ def lambda_handler(event, context):
         )
 
         # Secondary Lambda function
+        # Create temporary ZIP file for secondary Lambda
+        secondary_zip_path = tempfile.mktemp(suffix='.zip')
+        with zipfile.ZipFile(secondary_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.writestr('index.py', lambda_code)
+
+        # Read ZIP file and compute hash
+        with open(secondary_zip_path, 'rb') as f:
+            secondary_zip_data = f.read()
+            secondary_code_hash = hashlib.sha256(secondary_zip_data).hexdigest()
+
         secondary_lambda = LambdaFunction(
             self,
             "secondary_lambda_healthcheck",
@@ -1567,8 +1634,8 @@ def lambda_handler(event, context):
             runtime="python3.11",
             handler="index.lambda_handler",
             role=secondary_lambda_role.arn,
-            filename="lambda_function.zip",
-            source_code_hash=base64.b64encode(lambda_code.encode()).decode(),
+            filename=secondary_zip_path,
+            source_code_hash=base64.b64encode(secondary_code_hash.encode()).decode(),
             timeout=60,
             environment=LambdaFunctionEnvironment(
                 variables={
@@ -1619,8 +1686,14 @@ def lambda_handler(event, context):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["DR/HealthCheck", "DatabaseHealth", {"region": primary_region, "dimensions": {"DRRole": "primary"}}],
-                            [".", ".", {"region": secondary_region, "dimensions": {"DRRole": "secondary"}}]
+                            [
+                                "DR/HealthCheck", "DatabaseHealth",
+                                {"region": primary_region, "dimensions": {"DRRole": "primary"}}
+                            ],
+                            [
+                                ".", ".",
+                                {"region": secondary_region, "dimensions": {"DRRole": "secondary"}}
+                            ]
                         ],
                         "period": 60,
                         "stat": "Average",
@@ -1632,7 +1705,10 @@ def lambda_handler(event, context):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/RDS", "AuroraGlobalDBReplicationLag", {"DBClusterIdentifier": f"aurora-secondary-{environment_suffix}"}]
+                            [
+                                "AWS/RDS", "AuroraGlobalDBReplicationLag",
+                                {"DBClusterIdentifier": f"aurora-secondary-{environment_suffix}"}
+                            ]
                         ],
                         "period": 60,
                         "stat": "Average",
@@ -1719,7 +1795,7 @@ def lambda_handler(event, context):
         TerraformOutput(
             self,
             "route53_dns",
-            value=f"app.dr-{environment_suffix}.example.com",
+            value=f"app.dr-{environment_suffix}.testing.internal",
             description="Route53 DNS Name"
         )
 
