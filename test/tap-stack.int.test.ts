@@ -56,7 +56,7 @@ describe('Payment Stack Integration Tests', () => {
   const s3Client = new S3Client({ region });
 
   beforeAll(() => {
-    const outputsPath = path.join(process.cwd(), 'outputs.json');
+    const outputsPath = path.join(process.cwd(), 'cfn-outputs', 'flat-outputs.json');
 
     if (!fs.existsSync(outputsPath)) {
       throw new Error(
