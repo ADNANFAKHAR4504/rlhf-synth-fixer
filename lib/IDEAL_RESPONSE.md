@@ -18,7 +18,7 @@ This solution implements all MANDATORY requirements plus security best practices
 
 ## File: lib/tap_stack.py
 
-```python
+```py
 """
 tap_stack.py
 
@@ -60,6 +60,7 @@ class TapStackArgs:
 
     def __init__(
         self,
+        *,
         environment_suffix: Optional[str] = None,
         tags: Optional[dict] = None,
         github_owner: Optional[str] = None,
@@ -288,7 +289,10 @@ class TapStack(pulumi.ComponentResource):
             role=role.id,
             policy=Output.all(
                 self.artifact_bucket.arn,
-                self.codebuild_project.arn if hasattr(self, 'codebuild_project') else Output.from_input(f'arn:aws:codebuild:{self.region}:{self.account_id}:project/pulumi-build-{self.env_suffix}')
+                (self.codebuild_project.arn if hasattr(self, 'codebuild_project')
+                 else Output.from_input(
+                     f'arn:aws:codebuild:{self.region}:{self.account_id}:'
+                     f'project/pulumi-build-{self.env_suffix}'))
             ).apply(lambda args: json.dumps({
                 'Version': '2012-10-17',
                 'Statement': [
@@ -312,7 +316,10 @@ class TapStack(pulumi.ComponentResource):
                             'codebuild:BatchGetBuilds',
                             'codebuild:StartBuild'
                         ],
-                        'Resource': [args[1]] if len(args) > 1 and args[1] else [f'arn:aws:codebuild:{self.region}:{self.account_id}:project/pulumi-build-{self.env_suffix}']
+                        'Resource': ([args[1]] if len(args) > 1 and args[1]
+                                     else [f'arn:aws:codebuild:{self.region}:'
+                                           f'{self.account_id}:project/'
+                                           f'pulumi-build-{self.env_suffix}'])
                     }
                 ]
             })),
@@ -356,8 +363,10 @@ class TapStack(pulumi.ComponentResource):
                             'logs:PutLogEvents'
                         ],
                         'Resource': [
-                            f'arn:aws:logs:{self.region}:{self.account_id}:log-group:/aws/codebuild/pulumi-build-{self.env_suffix}',
-                            f'arn:aws:logs:{self.region}:{self.account_id}:log-group:/aws/codebuild/pulumi-build-{self.env_suffix}:*'
+                            f'arn:aws:logs:{self.region}:{self.account_id}:'
+                            f'log-group:/aws/codebuild/pulumi-build-{self.env_suffix}',
+                            f'arn:aws:logs:{self.region}:{self.account_id}:'
+                            f'log-group:/aws/codebuild/pulumi-build-{self.env_suffix}:*'
                         ]
                     },
                     {
@@ -517,14 +526,15 @@ class TapStack(pulumi.ComponentResource):
             f'pulumi-pipeline-{self.env_suffix}',
             name=f'pulumi-pipeline-{self.env_suffix}',
             role_arn=self.pipeline_role.arn,
-            artifact_store={
+            artifact_stores=[{
                 'location': self.artifact_bucket.bucket,
                 'type': 'S3',
                 'encryption_key': {
                     'id': self.kms_key.arn,
                     'type': 'KMS'
-                }
-            },
+                },
+                'region': self.region
+            }],
             stages=[
                 {
                     'name': 'Source',
@@ -600,10 +610,12 @@ class TapStack(pulumi.ComponentResource):
         )
 
         return rule
+
 ```
+
 ## File: tap.py
 
-```python
+```py
 #!/usr/bin/env python3
 """
 Pulumi application entry point for CI/CD Pipeline Infrastructure.
@@ -701,18 +713,19 @@ pulumi.export('connection_info', {
 
 ## File: lib/__init__.py
 
-```python
+```py
 """CI/CD Pipeline infrastructure package for Pulumi deployments."""
 
 from .tap_stack import TapStack, TapStackArgs
 
 __all__ = ['TapStack', 'TapStackArgs']
+
 ```
 
 ## File: Pulumi.yaml
 
 ```yaml
-name: pulumi-cicd-pipeline
+name: TapStack
 runtime:
   name: python
   options:
@@ -721,92 +734,6 @@ description: CI/CD Pipeline Infrastructure for Automated Pulumi Deployments
 main: tap.py
 config:
   aws:region: us-east-1
-```
-
-## File: requirements.txt
-
-```
-pulumi>=3.0.0,<4.0.0
-pulumi-aws>=6.0.0,<7.0.0
-```
-
-## Deployment Instructions
-
-### Prerequisites
-
-1. AWS credentials configured with appropriate permissions
-2. Python 3.8+ installed
-3. Pulumi CLI installed
-4. GitHub OAuth token stored in AWS Secrets Manager (optional, for GitHub integration)
-
-### Installation
-
-```bash
-# Create and activate virtual environment
-python3 -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Configuration
-
-```bash
-# Initialize Pulumi stack
-pulumi stack init dev
-
-# Set required configuration
-pulumi config set aws:region us-east-1
-pulumi config set github_owner your-github-org
-pulumi config set github_repo your-repo-name
-pulumi config set github_branch main
-pulumi config set notification_email devops@your-company.com
-
-# Set Pulumi access token as secret
-pulumi config set --secret pulumi_access_token your-pulumi-token
-```
-
-### Deployment
-
-```bash
-# Preview changes
-pulumi preview
-
-# Deploy the infrastructure
-pulumi up
-
-# View outputs
-pulumi stack output
-```
-
-### Post-Deployment Setup
-
-1. **Confirm SNS Subscription**: Check your email for the SNS subscription confirmation and click the confirmation link
-
-2. **Configure GitHub Token**: Store your GitHub OAuth token in AWS Secrets Manager:
-```bash
-aws secretsmanager create-secret \
-  --name github-token \
-  --secret-string '{"token":"your-github-oauth-token"}' \
-  --region us-east-1
-```
-
-3. **Test the Pipeline**: Push a commit to your repository's main branch to trigger the pipeline
-
-4. **Monitor Execution**:
-   - Pipeline: https://console.aws.amazon.com/codesuite/codepipeline/pipelines
-   - CodeBuild: https://console.aws.amazon.com/codesuite/codebuild
-   - CloudWatch Logs: https://console.aws.amazon.com/cloudwatch/home#logsV2:log-groups
-
-### Cleanup
-
-```bash
-# Destroy all resources
-pulumi destroy
-
-# Remove the stack
-pulumi stack rm dev
 ```
 
 ## Architecture Summary
@@ -842,75 +769,3 @@ The implementation creates a complete CI/CD pipeline infrastructure:
    - BUILD_GENERAL1_SMALL compute for CodeBuild
    - Lifecycle rules to expire old artifacts
    - Pay-per-use pricing model
-
-Total resources created: ~20 AWS resources
-
-Pipeline trigger: Automatic on push to main branch
-
-Notification recipients: Configured email address
-
-All resources are destroyable (no Retain policies).
-
-## Security Best Practices Implemented
-
-1. **Encryption at Rest**: All S3 buckets and SNS topics use KMS customer-managed keys
-2. **Encryption in Transit**: HTTPS for all API calls, SSL/TLS for GitHub integration
-3. **Least Privilege IAM**: Specific actions and resources only, no wildcards
-4. **Secret Management**: SecureString parameters with KMS encryption
-5. **Network Security**: S3 public access blocked, VPC endpoints can be added
-6. **Audit Trail**: CloudWatch Logs with retention, notification events
-7. **Access Control**: IAM roles with explicit trust policies
-8. **Versioning**: Enabled on all buckets for disaster recovery
-
-## Compliance Features
-
-- **SOC 2**: Encryption, access controls, audit logging
-- **PCI DSS**: Encryption at rest/transit, least privilege, logging
-- **HIPAA**: Encryption with customer-managed keys, audit trails
-- **ISO 27001**: Access management, change control, monitoring
-
-## Troubleshooting
-
-### Pipeline fails at Source stage
-- Verify GitHub OAuth token is correct in Secrets Manager
-- Check repository and branch names in configuration
-- Ensure GitHub app has access to the repository
-
-### CodeBuild fails at install phase
-- Check CodeBuild logs in CloudWatch
-- Verify network connectivity (NAT gateway if in VPC)
-- Ensure standard:5.0 image is available in your region
-
-### Pulumi commands fail
-- Verify PULUMI_ACCESS_TOKEN parameter exists and is correct
-- Check IAM role has ssm:GetParameter permission
-- Ensure Pulumi state bucket is accessible
-
-### No notifications received
-- Confirm SNS subscription via email
-- Check notification rule event types
-- Verify SNS topic policy allows CodeStar Notifications
-
-## Additional Enhancements (Optional)
-
-The following optional features can be added:
-
-1. **Lambda for Custom Approval Logic**:
-```python
-approval_lambda = aws.lambda_.Function(...)
-# Integrate with Deploy stage for custom validation
-```
-
-2. **EventBridge for Advanced Monitoring**:
-```python
-event_rule = aws.cloudwatch.EventRule(...)
-# Track all pipeline state changes
-```
-
-3. **CodeCommit as Alternative Source**:
-```python
-codecommit_repo = aws.codecommit.Repository(...)
-# Use AWS-native Git hosting
-```
-
-These enhancements improve operational capabilities but are not required for core functionality.

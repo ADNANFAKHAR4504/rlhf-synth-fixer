@@ -1,4 +1,4 @@
-name: pulumi-cicd-pipeline
+name: TapStack
 runtime:
   name: python
   options:
