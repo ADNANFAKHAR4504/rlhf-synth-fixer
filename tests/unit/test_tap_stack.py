@@ -139,7 +139,7 @@ class TestTapStack(unittest.TestCase):
             with patch('pulumi.Config') as mock_config_cls:
                 mock_config = MagicMock()
                 mock_config.require.side_effect = lambda k: {
-                    'ami_id': 'ami-12345678',
+                    'ami_id': 'ami-0c55b159cbfafe1d0',
                     'owner': 'test-owner',
                     'cost_center': 'test-cc',
                     'project': 'test-project'
@@ -315,7 +315,7 @@ class TestTapStack(unittest.TestCase):
             alb_security_group_id=pulumi.Output.from_input("sg-alb-12345"),
             ec2_security_group_id=pulumi.Output.from_input("sg-ec2-12345"),
             instance_profile_arn=pulumi.Output.from_input("arn:aws:iam::123456789012:instance-profile/test-profile"),
-            ami_id="ami-12345678",
+            ami_id="ami-0c55b159cbfafe1d0",
             instance_type="t3.medium",
             min_size=1,
             max_size=5,
