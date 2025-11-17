@@ -18,7 +18,8 @@
                     },
                     "Parameters": [
                         "DatabaseName",
-                        "MasterUsername"
+                        "MasterUsername",
+                        "MasterPassword"
                     ]
                 }
             ]
@@ -45,9 +46,45 @@
             "Description": "Master username for Aurora cluster",
             "AllowedPattern": "^[a-zA-Z][a-zA-Z0-9]*$",
             "ConstraintDescription": "Must begin with a letter and contain only alphanumeric characters"
+        },
+        "MasterPassword": {
+            "Type": "String",
+            "NoEcho": true,
+            "Default": "TempPass123456",
+            "Description": "Master password for Aurora cluster (min 8 characters)",
+            "MinLength": 8,
+            "MaxLength": 41,
+            "AllowedPattern": "^[a-zA-Z0-9]*$",
+            "ConstraintDescription": "Must be 8-41 alphanumeric characters"
         }
     },
     "Resources": {
+        "AuroraDatabaseSecret": {
+            "Type": "AWS::SecretsManager::Secret",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "aurora-db-secret-${EnvironmentSuffix}"
+                },
+                "Description": "Master credentials for Aurora database cluster",
+                "SecretString": {
+                    "Fn::Sub": "{\n  \"username\": \"${MasterUsername}\",\n  \"password\": \"${MasterPassword}\"\n}\n"
+                },
+                "Tags": [
+                    {
+                        "Key": "Name",
+                        "Value": {
+                            "Fn::Sub": "aurora-db-secret-${EnvironmentSuffix}"
+                        }
+                    },
+                    {
+                        "Key": "Environment",
+                        "Value": {
+                            "Ref": "EnvironmentSuffix"
+                        }
+                    }
+                ]
+            }
+        },
         "VPC": {
             "Type": "AWS::EC2::VPC",
             "Properties": {
@@ -590,9 +627,11 @@
                     "Ref": "GlobalDatabaseCluster"
                 },
                 "MasterUsername": {
-                    "Ref": "MasterUsername"
+                    "Fn::Sub": "{{resolve:secretsmanager:${AuroraDatabaseSecret}:SecretString:username}}"
                 },
-                "ManageMasterUserPassword": true,
+                "MasterUserPassword": {
+                    "Fn::Sub": "{{resolve:secretsmanager:${AuroraDatabaseSecret}:SecretString:password}}"
+                },
                 "DatabaseName": {
                     "Ref": "DatabaseName"
                 },
