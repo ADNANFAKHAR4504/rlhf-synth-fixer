@@ -48,6 +48,23 @@ Parameters:
     ConstraintDescription: 'Must be 8-41 alphanumeric characters'
 
 Resources:
+  # Secrets Manager Secret for Aurora Database Credentials
+  AuroraDatabaseSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub 'aurora-db-secret-${EnvironmentSuffix}'
+      Description: 'Master credentials for Aurora database cluster'
+      SecretString: !Sub |
+        {
+          "username": "${MasterUsername}",
+          "password": "${MasterPassword}"
+        }
+      Tags:
+        - Key: Name
+          Value: !Sub 'aurora-db-secret-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
   # VPC Resources
   VPC:
     Type: AWS::EC2::VPC
@@ -331,8 +348,8 @@ Resources:
       Engine: aurora-mysql
       EngineVersion: '8.0.mysql_aurora.3.04.0'
       GlobalClusterIdentifier: !Ref GlobalDatabaseCluster
-      MasterUsername: !Ref MasterUsername
-      MasterUserPassword: !Ref MasterPassword
+      MasterUsername: !Sub '{{resolve:secretsmanager:${AuroraDatabaseSecret}:SecretString:username}}'
+      MasterUserPassword: !Sub '{{resolve:secretsmanager:${AuroraDatabaseSecret}:SecretString:password}}'
       DatabaseName: !Ref DatabaseName
       DBSubnetGroupName: !Ref DBSubnetGroup
       VpcSecurityGroupIds:
