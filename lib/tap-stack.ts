@@ -4,8 +4,8 @@
  * Multi-region disaster recovery infrastructure for trading platform
  * Implements automated failover between us-east-1 (primary) and us-east-2 (standby)
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
 
 export interface TapStackArgs {
@@ -872,11 +872,11 @@ exports.handler = async (event) => {
       { parent: this, provider: primaryProvider }
     );
 
-    // EventBridge rule to trigger Lambda every 30 seconds
+    // EventBridge rule to trigger Lambda every 1 minute
     const monitorRule = new aws.cloudwatch.EventRule(
       `monitor-rule-${environmentSuffix}`,
       {
-        scheduleExpression: 'rate(30 seconds)',
+        scheduleExpression: 'rate(1 minute)',
         tags: { ...tags, Environment: environmentSuffix },
       },
       { parent: this, provider: primaryProvider }
@@ -1239,7 +1239,7 @@ echo "Starting standby trading application..." > /var/log/user-data.log
     const hostedZone = new aws.route53.Zone(
       `zone-${environmentSuffix}`,
       {
-        name: `trading-${environmentSuffix}.example.com`,
+        name: `trading-platform-${environmentSuffix}.internal`,
         tags: { ...tags, Environment: environmentSuffix },
       },
       { parent: this }
@@ -1250,7 +1250,7 @@ echo "Starting standby trading application..." > /var/log/user-data.log
       `record-primary-${environmentSuffix}`,
       {
         zoneId: hostedZone.zoneId,
-        name: `api.trading-${environmentSuffix}.example.com`,
+        name: `api.trading-platform-${environmentSuffix}.internal`,
         type: 'A',
         setIdentifier: 'primary',
         failoverRoutingPolicies: [{ type: 'PRIMARY' }],
@@ -1270,7 +1270,7 @@ echo "Starting standby trading application..." > /var/log/user-data.log
       `record-secondary-${environmentSuffix}`,
       {
         zoneId: hostedZone.zoneId,
-        name: `api.trading-${environmentSuffix}.example.com`,
+        name: `api.trading-platform-${environmentSuffix}.internal`,
         type: 'A',
         setIdentifier: 'secondary',
         failoverRoutingPolicies: [{ type: 'SECONDARY' }],
