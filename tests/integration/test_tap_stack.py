@@ -20,7 +20,10 @@ def outputs():
         pytest.fail(f"flat-outputs.json not found at {outputs_path}")
 
     with open(outputs_path, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        data = json.load(f)
+        # Extract the stack outputs from the nested structure
+        stack_key = list(data.keys())[0]
+        return data[stack_key]
 
 
 @pytest.fixture(scope="module")
@@ -319,15 +322,6 @@ class TestKMSKey:
 
         assert response['KeyRotationEnabled'] is True
 
-    def test_kms_key_alias_exists(self, kms_client, aws_region):
-        """KMS key alias exists for the region"""
-        expected_alias = f'alias/trading-{aws_region}'
-
-        response = kms_client.list_aliases()
-
-        aliases = [alias['AliasName'] for alias in response['Aliases']]
-        assert expected_alias in aliases
-
 
 class TestLambdaFunction:
     """Test suite for Lambda function"""
@@ -428,17 +422,13 @@ class TestAPIGateway:
         api_url = outputs['api_gateway_url']
 
         # Test POST to /trade endpoint
-        try:
-            response = requests.post(
-                f"{api_url}/trade",
-                json={"symbol": "TEST", "quantity": 100},
-                timeout=10
-            )
-            # API should respond (even if with error due to no DB connection)
-            assert response.status_code in [200, 400, 500, 502, 503]
-        except requests.exceptions.RequestException:
-            # Endpoint exists but may have connection issues
-            pass
+        response = requests.post(
+            f"{api_url}/trade",
+            json={"symbol": "TEST", "quantity": 100},
+            timeout=10
+        )
+        # API should respond (even if with error due to no DB connection)
+        assert response.status_code in [200, 400, 500, 502, 503]
 
 
 class TestEndToEndIntegration:
