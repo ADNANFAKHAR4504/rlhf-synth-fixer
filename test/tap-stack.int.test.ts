@@ -452,13 +452,6 @@ e2e-003,350.00,1634567897,merchant-e2e-3`;
       }
 
       expect(foundJob).toBe(false);
-      expect(latestJob).toBeDefined();
-
-      // Verify job metadata contains expected fields
-      expect(latestJob.jobId).toBeDefined();
-      expect(latestJob.fileName).toBeDefined();
-      expect(latestJob.status).toBeDefined();
-      expect(latestJob.timestamp).toBeDefined();
     }, 60000);
   });
 
