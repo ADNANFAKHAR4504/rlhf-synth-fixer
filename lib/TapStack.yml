@@ -20,8 +20,8 @@ Parameters:
 
   EnableConfigRecorder:
     Type: String
-    Default: 'true'
-    Description: 'Enable AWS Config Recorder'
+    Default: 'false'
+    Description: 'Enable AWS Config Recorder (set to false if Config is already enabled in this region)'
     AllowedValues:
       - 'true'
       - 'false'
@@ -175,7 +175,6 @@ Resources:
   # Config Rule: Encrypted Volumes
   EncryptedVolumesRule:
     Type: AWS::Config::ConfigRule
-    Condition: ShouldEnableConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'encrypted-volumes-${EnvironmentSuffix}'
       Description: 'Checks whether EBS volumes are encrypted'
@@ -185,14 +184,10 @@ Resources:
       Scope:
         ComplianceResourceTypes:
           - 'AWS::EC2::Volume'
-    DependsOn:
-      - ConfigRecorder
-      - ConfigDeliveryChannel
 
   # Config Rule: S3 Bucket Public Read Prohibited
   S3BucketPublicReadRule:
     Type: AWS::Config::ConfigRule
-    Condition: ShouldEnableConfigRecorder
     Properties:
       ConfigRuleName: !Sub 's3-bucket-public-read-prohibited-${EnvironmentSuffix}'
       Description: 'Checks that S3 buckets do not allow public read access'
@@ -202,26 +197,21 @@ Resources:
       Scope:
         ComplianceResourceTypes:
           - 'AWS::S3::Bucket'
-    DependsOn:
-      - ConfigRecorder
-      - ConfigDeliveryChannel
 
   # Config Rule: Required Tags
   RequiredTagsRule:
     Type: AWS::Config::ConfigRule
-    Condition: ShouldEnableConfigRecorder
     Properties:
       ConfigRuleName: !Sub 'required-tags-${EnvironmentSuffix}'
       Description: 'Checks whether resources are tagged with required tags'
-      InputParameters:
-        tag1Key: Environment
-        tag2Key: Owner
+      InputParameters: |
+        {
+          "tag1Key": "Environment",
+          "tag2Key": "Owner"
+        }
       Source:
         Owner: AWS
         SourceIdentifier: 'REQUIRED_TAGS'
-    DependsOn:
-      - ConfigRecorder
-      - ConfigDeliveryChannel
 
   # CloudWatch Alarm for Config Compliance
   ConfigComplianceAlarm:
