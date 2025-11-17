@@ -11,7 +11,6 @@ pulumi = "*"
 pulumi-aws = "*"
 boto3 = "*"
 moto = {extras = ["sqs", "sns", "lambda", "dynamodb", "cloudwatch"], version = "*"}
-attrs = "*"
 aws-lambda-powertools = "*"
 aws-xray-sdk = "*"
 aws-cdk-lib = "*"
@@ -23,6 +22,7 @@ cdktf-cdktf-provider-aws = "*"
 pulumi-kubernetes = "*"
 pulumi-tls = "*"
 aws-cdk-lambda-layer-kubectl-v29 = "*"
+attrs = "*"
 
 [dev-packages]
 boto3 = "*"
@@ -30,15 +30,15 @@ moto = {extras = ["server"], version = "*"}
 pytest-testdox = "*"
 pytest-env = "*"
 pylint = "*"
-pytest = "*"
 requests = "*"
 cfn-lint = "*"
 cfn-flip = "*"
 black = "*"
 pillow = "*"
 psycopg2-binary = "*"
-pytest-cov = "*"
 yamllint = "*"
+pytest = "*"
+pytest-cov = "*"
 
 [requires]
 python_version = "3.12"
