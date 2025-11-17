@@ -1,6 +1,6 @@
 # Serverless File Processing Pipeline Implementation - IDEAL RESPONSE
 
-This implementation provides a complete serverless file processing pipeline using Pulumi with TypeScript. The system processes market data files uploaded to S3 through three Lambda functions with ordered processing via SQS FIFO queues, status tracking in DynamoDB, and a REST API for querying processing status.
+This implementation provides a complete serverless file processing pipeline using Pulumi with TypeScript. The system processes market data files uploaded to S3 through three Lambda functions with ordered processing via SQS FIFO queues, status tracking in DynamoDB, and a REST API for querying processing status
 
 ## Architecture Overview
 
