@@ -506,6 +506,7 @@ class TapStack(TerraformStack):
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             master_username="admin",
+            master_password="ChangeMe123!",
             db_subnet_group_name=secondary_db_subnet_group.name,
             vpc_security_group_ids=[secondary_db_sg.id],
             backup_retention_period=7,
@@ -520,7 +521,7 @@ class TapStack(TerraformStack):
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-secondary-{environment_suffix}", "DR-Role": "secondary"},
             lifecycle={
-                "ignore_changes": ["kms_key_id", "global_cluster_identifier"]
+                "ignore_changes": ["master_password", "kms_key_id", "global_cluster_identifier"]
             },
             provider=secondary_provider,
             depends_on=[primary_cluster]
