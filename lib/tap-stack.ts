@@ -233,7 +233,7 @@ export class TapStack extends cdk.Stack {
     );
 
     const ebsCsiSa = this.cluster.addServiceAccount('EBSCSIServiceAccount', {
-      name: `ebs-csi-controller-sa-${environmentSuffix}`,
+      name: 'ebs-csi-controller-sa',
       namespace: 'kube-system',
     });
 
@@ -305,12 +305,16 @@ export class TapStack extends cdk.Stack {
     });
 
     // 🔹 Add-ons
-    new eks.CfnAddon(this, 'EBSCSIDriverAddon', {
+    const ebsCsiAddon = new eks.CfnAddon(this, 'EBSCSIDriverAddon', {
       addonName: 'aws-ebs-csi-driver',
       clusterName: this.cluster.clusterName,
       serviceAccountRoleArn: ebsCsiSa.role.roleArn,
       resolveConflicts: 'OVERWRITE',
     });
+
+    // Ensure addon waits for service account and OIDC provider to be ready
+    ebsCsiAddon.node.addDependency(ebsCsiSa);
+    ebsCsiAddon.node.addDependency(this.cluster);
 
     new eks.KubernetesManifest(this, 'GP3StorageClass', {
       cluster: this.cluster,
