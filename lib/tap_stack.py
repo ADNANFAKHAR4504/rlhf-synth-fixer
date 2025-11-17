@@ -209,7 +209,10 @@ class TapStack(TerraformStack):
                         "Action": [
                             "sqs:SendMessage"
                         ],
-                        "Resource": ingestion_queue.arn
+                        "Resource": [
+                            ingestion_queue.arn,
+                            dlq.arn
+                        ]
                     },
                     {
                         "Effect": "Allow",
@@ -315,6 +318,13 @@ class TapStack(TerraformStack):
                             "sqs:GetQueueAttributes"
                         ],
                         "Resource": ingestion_queue.arn
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:SendMessage"
+                        ],
+                        "Resource": dlq.arn
                     },
                     {
                         "Effect": "Allow",
@@ -428,6 +438,13 @@ class TapStack(TerraformStack):
                             processed_data_table.arn,
                             raw_sensor_table.arn
                         ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "sqs:SendMessage"
+                        ],
+                        "Resource": dlq.arn
                     },
                     {
                         "Effect": "Allow",
