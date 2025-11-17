@@ -1,0 +1,41 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "2m6t7h",
+  "team": "synth",
+  "startedAt": "2025-11-17T12:50:15+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Tag all resources with migration phase and cutover timestamp",
+    "Implement conditional resource creation based on migration phase variables",
+    "Use remote state data sources to reference existing infrastructure during migration",
+    "Implement state file locking with DynamoDB to prevent concurrent modifications",
+    "Use lifecycle rules to prevent accidental destruction of critical resources during migration",
+    "Use workspace-based environment separation for staging the migration",
+    "All data must be encrypted in transit and at rest using customer-managed KMS keys"
+  ],
+  "aws_services": [
+    "VPC",
+    "Subnet",
+    "InternetGateway",
+    "RouteTable",
+    "SecurityGroup",
+    "TransitGateway",
+    "Aurora",
+    "RDS",
+    "SecretsManager",
+    "ECS",
+    "Fargate",
+    "ALB",
+    "S3",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Route53",
+    "DynamoDB"
+  ],
+  "training_quality": 9
+}
