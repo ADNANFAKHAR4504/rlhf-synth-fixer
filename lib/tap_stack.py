@@ -442,7 +442,7 @@ class TapStack(TerraformStack):
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-primary-{environment_suffix}", "DR-Role": "primary"},
             lifecycle={
-                "ignore_changes": ["master_password", "kms_key_id"]
+                "ignore_changes": ["master_password", "kms_key_id", "global_cluster_identifier"]
             },
             provider=primary_provider
         )
@@ -519,7 +519,7 @@ class TapStack(TerraformStack):
             global_cluster_identifier=global_cluster.id,
             tags={**common_tags, "Name": f"aurora-secondary-{environment_suffix}", "DR-Role": "secondary"},
             lifecycle={
-                "ignore_changes": ["kms_key_id"]
+                "ignore_changes": ["kms_key_id", "global_cluster_identifier"]
             },
             provider=secondary_provider,
             depends_on=[primary_cluster]
@@ -1695,14 +1695,8 @@ def lambda_handler(event, context):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            [
-                                "DR/HealthCheck", "DatabaseHealth",
-                                {"region": primary_region, "dimensions": {"DRRole": "primary"}}
-                            ],
-                            [
-                                ".", ".",
-                                {"region": secondary_region, "dimensions": {"DRRole": "secondary"}}
-                            ]
+                            ["DR/HealthCheck", "DatabaseHealth", "DRRole", "primary"],
+                            [".", ".", ".", "secondary"]
                         ],
                         "period": 60,
                         "stat": "Average",
@@ -1714,10 +1708,7 @@ def lambda_handler(event, context):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            [
-                                "AWS/RDS", "AuroraGlobalDBReplicationLag",
-                                {"DBClusterIdentifier": f"aurora-secondary-{environment_suffix}"}
-                            ]
+                            ["AWS/RDS", "AuroraGlobalDBReplicationLag", "DBClusterIdentifier", f"aurora-secondary-{environment_suffix}"]
                         ],
                         "period": 60,
                         "stat": "Average",
@@ -1729,8 +1720,8 @@ def lambda_handler(event, context):
                     "type": "metric",
                     "properties": {
                         "metrics": [
-                            ["AWS/ApplicationELB", "TargetResponseTime", {"LoadBalancer": primary_alb.arn_suffix}],
-                            [".", ".", {"LoadBalancer": secondary_alb.arn_suffix}]
+                            ["AWS/ApplicationELB", "TargetResponseTime", "LoadBalancer", primary_alb.arn_suffix],
+                            [".", ".", ".", secondary_alb.arn_suffix]
                         ],
                         "period": 60,
                         "stat": "Average",
