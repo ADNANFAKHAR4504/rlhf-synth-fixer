@@ -3,8 +3,8 @@
  *
  * AWS Database Migration Service for PostgreSQL to Aurora migration
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import * as random from '@pulumi/random';
 
 export interface DmsStackArgs {
@@ -83,12 +83,13 @@ export class DmsStack extends pulumi.ComponentResource {
     );
 
     // Random password for database
+    // Note: AWS DMS does not support these special characters: ; + % :
     const dbPassword = new random.RandomPassword(
       `dms-db-password-${args.environmentSuffix}`,
       {
         length: 32,
         special: true,
-        overrideSpecial: '!#$%&*()-_=+[]{}<>:?',
+        overrideSpecial: '!#$&*()-_=[]{}<>?',
       },
       { parent: this }
     );

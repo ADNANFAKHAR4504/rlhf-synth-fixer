@@ -465,5 +465,31 @@ describe('TapStack Structure', () => {
 
       expect(monitoring).toBeDefined();
     });
+
+    it('handles DMS task ARN with empty string fallback', async () => {
+      const monitoring = new MonitoringStack('test-monitoring-arn-empty', {
+        environmentSuffix: 'test',
+        dmsReplicationTaskArn: pulumi.output(''),
+        ecsClusterName: pulumi.output('payment-cluster-test'),
+        ecsServiceName: pulumi.output('payment-service-test'),
+        rdsClusterId: pulumi.output('payment-cluster-test'),
+        tags: {},
+      });
+
+      expect(monitoring).toBeDefined();
+    });
+
+    it('creates monitoring with tags', async () => {
+      const monitoring = new MonitoringStack('test-monitoring-with-tags', {
+        environmentSuffix: 'test',
+        dmsReplicationTaskArn: pulumi.output('arn:aws:dms::123:task/test'),
+        ecsClusterName: pulumi.output('payment-cluster-test'),
+        ecsServiceName: pulumi.output('payment-service-test'),
+        rdsClusterId: pulumi.output('payment-cluster-test'),
+        tags: { Environment: 'test', Project: 'payment' },
+      });
+
+      expect(monitoring).toBeDefined();
+    });
   });
 });
