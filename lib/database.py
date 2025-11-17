@@ -47,16 +47,16 @@ class DatabaseStack:
 
         # DB Subnet Group
         self.subnet_group = aws.rds.SubnetGroup(
-            f"db-subnet-group-{pulumi.get_stack()}",
+            f"db-subnet-group-{pulumi.get_stack().lower()}",
             subnet_ids=private_subnet_ids,
-            tags={**tags, "Name": f"db-subnet-group-{pulumi.get_stack()}"},
+            tags={**tags, "Name": f"db-subnet-group-{pulumi.get_stack().lower()}"},
             opts=opts
         )
 
         # RDS Instance
         self.db_instance = aws.rds.Instance(
             f"db-{pulumi.get_stack()}",
-            identifier=f"financial-db-{pulumi.get_stack()}",
+            identifier=f"financial-db-{pulumi.get_stack().lower()}",
             engine="mysql",
             engine_version="8.0",
             instance_class=instance_class,
@@ -72,6 +72,6 @@ class DatabaseStack:
             backup_retention_period=7,
             multi_az=False,
             publicly_accessible=False,
-            tags={**tags, "Name": f"db-{pulumi.get_stack()}"},
+            tags={**tags, "Name": f"db-{pulumi.get_stack().lower()}"},
             opts=ResourceOptions(parent=self.subnet_group)
         )
