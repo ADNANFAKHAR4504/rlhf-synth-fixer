@@ -1,449 +1,978 @@
-I'll create a blue-green migration infrastructure for your payment processing system using Pulumi. This will include dual environments with automated switching capabilities.
+# Financial Services Infrastructure Refactoring - Pulumi Python Implementation
 
-## Implementation
+This implementation refactors the existing financial services infrastructure to improve performance, maintainability, and reliability using Pulumi with Python.
 
-Here's a complete solution with RDS Aurora clusters, ALB for traffic shifting, and Lambda for automated switching.
+## File: lib/config.py
+
+```python
+"""
+Configuration management module for Pulumi infrastructure.
+Centralizes all configuration values and provides validation.
+"""
+from typing import Dict, Any, Optional
+import pulumi
+
+
+class InfraConfig:
+    """Centralized configuration management for infrastructure."""
+
+    def __init__(self):
+        self.config = pulumi.Config()
+
+        # EC2 Configuration
+        self.ami_id = self.config.require("ami_id")
+        self.instance_type = self.config.get("instance_type") or "t3.medium"
+        self.min_size = self.config.get_int("min_size") or 2
+        self.max_size = self.config.get_int("max_size") or 6
+        self.desired_capacity = self.config.get_int("desired_capacity") or 3
+
+        # RDS Configuration
+        self.db_instance_class = self.config.get("db_instance_class") or "db.t3.medium"
+        self.db_name = self.config.get("db_name") or "financialdb"
+        self.db_username = self.config.get("db_username") or "admin"
+        self.db_password = self.config.require_secret("db_password")
+        self.db_allocated_storage = self.config.get_int("db_allocated_storage") or 100
+
+        # S3 Configuration
+        self.data_bucket_name = self.config.get("data_bucket_name")
+        self.logs_bucket_name = self.config.get("logs_bucket_name")
+
+        # Tagging Configuration
+        self.environment = self.config.get("environment") or "dev"
+        self.owner = self.config.require("owner")
+        self.cost_center = self.config.require("cost_center")
+        self.project = self.config.require("project")
+
+    def get_common_tags(self, additional_tags: Optional[Dict[str, str]] = None) -> Dict[str, str]:
+        """
+        Returns common tags to be applied to all resources.
+
+        Args:
+            additional_tags: Optional additional tags to merge
+
+        Returns:
+            Dictionary of tags
+        """
+        tags = {
+            "Environment": self.environment,
+            "Owner": self.owner,
+            "CostCenter": self.cost_center,
+            "Project": self.project,
+            "ManagedBy": "Pulumi"
+        }
+
+        if additional_tags:
+            tags.update(additional_tags)
+
+        return tags
+```
+
+## File: lib/networking.py
+
+```python
+"""
+Networking infrastructure module.
+Creates VPC with 3 availability zones.
+"""
+from typing import List, Dict, Any
+import pulumi
+import pulumi_aws as aws
+from pulumi import ResourceOptions
+
+
+class NetworkingStack:
+    """Creates VPC and networking resources."""
+
+    def __init__(self, name: str, environment_suffix: str, tags: Dict[str, str],
+                 opts: ResourceOptions = None):
+        """
+        Initialize networking infrastructure.
+
+        Args:
+            name: Resource name prefix
+            environment_suffix: Environment suffix for resource naming
+            tags: Common tags to apply
+            opts: Pulumi resource options
+        """
+        self.environment_suffix = environment_suffix
+        self.tags = tags
+
+        # Create VPC
+        self.vpc = aws.ec2.Vpc(
+            f"vpc-{environment_suffix}",
+            cidr_block="10.0.0.0/16",
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags={**tags, "Name": f"vpc-{environment_suffix}"},
+            opts=opts
+        )
+
+        # Get availability zones
+        azs = aws.get_availability_zones(state="available")
+
+        # Create public subnets (3 AZs)
+        self.public_subnets = []
+        for i in range(3):
+            subnet = aws.ec2.Subnet(
+                f"public-subnet-{i}-{environment_suffix}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i}.0/24",
+                availability_zone=azs.names[i],
+                map_public_ip_on_launch=True,
+                tags={**tags, "Name": f"public-subnet-{i}-{environment_suffix}"},
+                opts=ResourceOptions(parent=self.vpc)
+            )
+            self.public_subnets.append(subnet)
+
+        # Create private subnets (3 AZs)
+        self.private_subnets = []
+        for i in range(3):
+            subnet = aws.ec2.Subnet(
+                f"private-subnet-{i}-{environment_suffix}",
+                vpc_id=self.vpc.id,
+                cidr_block=f"10.0.{i+10}.0/24",
+                availability_zone=azs.names[i],
+                tags={**tags, "Name": f"private-subnet-{i}-{environment_suffix}"},
+                opts=ResourceOptions(parent=self.vpc)
+            )
+            self.private_subnets.append(subnet)
+
+        # Internet Gateway
+        self.igw = aws.ec2.InternetGateway(
+            f"igw-{environment_suffix}",
+            vpc_id=self.vpc.id,
+            tags={**tags, "Name": f"igw-{environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        # Public route table
+        self.public_rt = aws.ec2.RouteTable(
+            f"public-rt-{environment_suffix}",
+            vpc_id=self.vpc.id,
+            routes=[
+                aws.ec2.RouteTableRouteArgs(
+                    cidr_block="0.0.0.0/0",
+                    gateway_id=self.igw.id
+                )
+            ],
+            tags={**tags, "Name": f"public-rt-{environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        # Associate public subnets with route table
+        for i, subnet in enumerate(self.public_subnets):
+            aws.ec2.RouteTableAssociation(
+                f"public-rta-{i}-{environment_suffix}",
+                subnet_id=subnet.id,
+                route_table_id=self.public_rt.id,
+                opts=ResourceOptions(parent=subnet)
+            )
+
+        # Security group for ALB
+        self.alb_sg = aws.ec2.SecurityGroup(
+            f"alb-sg-{environment_suffix}",
+            vpc_id=self.vpc.id,
+            description="Security group for Application Load Balancer",
+            ingress=[
+                aws.ec2.SecurityGroupIngressArgs(
+                    protocol="tcp",
+                    from_port=80,
+                    to_port=80,
+                    cidr_blocks=["0.0.0.0/0"]
+                ),
+                aws.ec2.SecurityGroupIngressArgs(
+                    protocol="tcp",
+                    from_port=443,
+                    to_port=443,
+                    cidr_blocks=["0.0.0.0/0"]
+                )
+            ],
+            egress=[
+                aws.ec2.SecurityGroupEgressArgs(
+                    protocol="-1",
+                    from_port=0,
+                    to_port=0,
+                    cidr_blocks=["0.0.0.0/0"]
+                )
+            ],
+            tags={**tags, "Name": f"alb-sg-{environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        # Security group for EC2 instances
+        self.ec2_sg = aws.ec2.SecurityGroup(
+            f"ec2-sg-{environment_suffix}",
+            vpc_id=self.vpc.id,
+            description="Security group for EC2 instances",
+            ingress=[
+                aws.ec2.SecurityGroupIngressArgs(
+                    protocol="tcp",
+                    from_port=80,
+                    to_port=80,
+                    security_groups=[self.alb_sg.id]
+                )
+            ],
+            egress=[
+                aws.ec2.SecurityGroupEgressArgs(
+                    protocol="-1",
+                    from_port=0,
+                    to_port=0,
+                    cidr_blocks=["0.0.0.0/0"]
+                )
+            ],
+            tags={**tags, "Name": f"ec2-sg-{environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+
+        # Security group for RDS
+        self.rds_sg = aws.ec2.SecurityGroup(
+            f"rds-sg-{environment_suffix}",
+            vpc_id=self.vpc.id,
+            description="Security group for RDS database",
+            ingress=[
+                aws.ec2.SecurityGroupIngressArgs(
+                    protocol="tcp",
+                    from_port=3306,
+                    to_port=3306,
+                    security_groups=[self.ec2_sg.id]
+                )
+            ],
+            tags={**tags, "Name": f"rds-sg-{environment_suffix}"},
+            opts=ResourceOptions(parent=self.vpc)
+        )
+```
+
+## File: lib/web_tier.py
+
+```python
+"""
+Web tier ComponentResource.
+Encapsulates ALB, Target Group, and Auto Scaling Group.
+"""
+from typing import List, Dict, Any, Optional
+import pulumi
+import pulumi_aws as aws
+from pulumi import ComponentResource, ResourceOptions, Output
+
+
+class WebTierArgs:
+    """Arguments for WebTier component."""
+
+    def __init__(self,
+                 vpc_id: Output[str],
+                 public_subnet_ids: List[Output[str]],
+                 private_subnet_ids: List[Output[str]],
+                 alb_security_group_id: Output[str],
+                 ec2_security_group_id: Output[str],
+                 instance_profile_arn: Output[str],
+                 ami_id: str,
+                 instance_type: str,
+                 min_size: int,
+                 max_size: int,
+                 desired_capacity: int,
+                 environment_suffix: str,
+                 tags: Dict[str, str]):
+        """
+        Initialize web tier arguments.
+
+        Args:
+            vpc_id: VPC ID
+            public_subnet_ids: List of public subnet IDs
+            private_subnet_ids: List of private subnet IDs
+            alb_security_group_id: ALB security group ID
+            ec2_security_group_id: EC2 security group ID
+            instance_profile_arn: IAM instance profile ARN
+            ami_id: AMI ID for EC2 instances
+            instance_type: EC2 instance type
+            min_size: Minimum ASG size
+            max_size: Maximum ASG size
+            desired_capacity: Desired ASG capacity
+            environment_suffix: Environment suffix
+            tags: Common tags
+        """
+        self.vpc_id = vpc_id
+        self.public_subnet_ids = public_subnet_ids
+        self.private_subnet_ids = private_subnet_ids
+        self.alb_security_group_id = alb_security_group_id
+        self.ec2_security_group_id = ec2_security_group_id
+        self.instance_profile_arn = instance_profile_arn
+        self.ami_id = ami_id
+        self.instance_type = instance_type
+        self.min_size = min_size
+        self.max_size = max_size
+        self.desired_capacity = desired_capacity
+        self.environment_suffix = environment_suffix
+        self.tags = tags
+
+
+class WebTier(ComponentResource):
+    """
+    Web tier component resource.
+    Encapsulates ALB, Target Group, and Auto Scaling Group.
+    """
+
+    def __init__(self, name: str, args: WebTierArgs, opts: Optional[ResourceOptions] = None):
+        """
+        Initialize web tier component.
+
+        Args:
+            name: Component name
+            args: Web tier arguments
+            opts: Pulumi resource options
+        """
+        super().__init__("custom:infrastructure:WebTier", name, None, opts)
+
+        # Application Load Balancer
+        self.alb = aws.lb.LoadBalancer(
+            f"alb-{args.environment_suffix}",
+            internal=False,
+            load_balancer_type="application",
+            security_groups=[args.alb_security_group_id],
+            subnets=args.public_subnet_ids,
+            enable_deletion_protection=False,
+            tags={**args.tags, "Name": f"alb-{args.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Target Group
+        self.target_group = aws.lb.TargetGroup(
+            f"tg-{args.environment_suffix}",
+            port=80,
+            protocol="HTTP",
+            vpc_id=args.vpc_id,
+            health_check=aws.lb.TargetGroupHealthCheckArgs(
+                enabled=True,
+                healthy_threshold=2,
+                interval=30,
+                matcher="200",
+                path="/health",
+                port="traffic-port",
+                protocol="HTTP",
+                timeout=5,
+                unhealthy_threshold=2
+            ),
+            tags={**args.tags, "Name": f"tg-{args.environment_suffix}"},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # ALB Listener
+        self.listener = aws.lb.Listener(
+            f"alb-listener-{args.environment_suffix}",
+            load_balancer_arn=self.alb.arn,
+            port=80,
+            protocol="HTTP",
+            default_actions=[
+                aws.lb.ListenerDefaultActionArgs(
+                    type="forward",
+                    target_group_arn=self.target_group.arn
+                )
+            ],
+            opts=ResourceOptions(parent=self.alb)
+        )
+
+        # Launch Template
+        user_data = """#!/bin/bash
+yum update -y
+yum install -y httpd
+systemctl start httpd
+systemctl enable httpd
+echo "<h1>Financial Services Application</h1>" > /var/www/html/index.html
+echo "OK" > /var/www/html/health
+"""
+
+        self.launch_template = aws.ec2.LaunchTemplate(
+            f"lt-{args.environment_suffix}",
+            name_prefix=f"lt-{args.environment_suffix}-",
+            image_id=args.ami_id,
+            instance_type=args.instance_type,
+            vpc_security_group_ids=[args.ec2_security_group_id],
+            iam_instance_profile=aws.ec2.LaunchTemplateIamInstanceProfileArgs(
+                arn=args.instance_profile_arn
+            ),
+            user_data=pulumi.Output.secret(user_data).apply(
+                lambda ud: __import__('base64').b64encode(ud.encode()).decode()
+            ),
+            tag_specifications=[
+                aws.ec2.LaunchTemplateTagSpecificationArgs(
+                    resource_type="instance",
+                    tags={**args.tags, "Name": f"web-instance-{args.environment_suffix}"}
+                )
+            ],
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Auto Scaling Group
+        self.asg = aws.autoscaling.Group(
+            f"asg-{args.environment_suffix}",
+            vpc_zone_identifiers=args.private_subnet_ids,
+            desired_capacity=args.desired_capacity,
+            max_size=args.max_size,
+            min_size=args.min_size,
+            health_check_type="ELB",
+            health_check_grace_period=300,
+            launch_template=aws.autoscaling.GroupLaunchTemplateArgs(
+                id=self.launch_template.id,
+                version="$Latest"
+            ),
+            target_group_arns=[self.target_group.arn],
+            tags=[
+                aws.autoscaling.GroupTagArgs(
+                    key=k,
+                    value=v,
+                    propagate_at_launch=True
+                ) for k, v in {**args.tags, "Name": f"asg-{args.environment_suffix}"}.items()
+            ],
+            opts=ResourceOptions(parent=self)
+        )
+
+        self.register_outputs({
+            "alb_dns_name": self.alb.dns_name,
+            "alb_arn": self.alb.arn,
+            "target_group_arn": self.target_group.arn,
+            "asg_name": self.asg.name
+        })
+```
+
+## File: lib/database.py
+
+```python
+"""
+Database infrastructure module.
+Creates RDS MySQL instance.
+"""
+from typing import List, Dict, Any
+import pulumi
+import pulumi_aws as aws
+from pulumi import ResourceOptions, Output
+
+
+class DatabaseStack:
+    """Creates RDS MySQL database."""
+
+    def __init__(self,
+                 name: str,
+                 vpc_id: Output[str],
+                 private_subnet_ids: List[Output[str]],
+                 security_group_id: Output[str],
+                 db_name: str,
+                 db_username: str,
+                 db_password: Output[str],
+                 instance_class: str,
+                 allocated_storage: int,
+                 environment_suffix: str,
+                 tags: Dict[str, str],
+                 opts: ResourceOptions = None):
+        """
+        Initialize database infrastructure.
+
+        Args:
+            name: Resource name prefix
+            vpc_id: VPC ID
+            private_subnet_ids: List of private subnet IDs
+            security_group_id: RDS security group ID
+            db_name: Database name
+            db_username: Database username
+            db_password: Database password
+            instance_class: RDS instance class
+            allocated_storage: Allocated storage in GB
+            environment_suffix: Environment suffix
+            tags: Common tags
+            opts: Pulumi resource options
+        """
+        self.environment_suffix = environment_suffix
+        self.tags = tags
+
+        # DB Subnet Group
+        self.subnet_group = aws.rds.SubnetGroup(
+            f"db-subnet-group-{environment_suffix}",
+            subnet_ids=private_subnet_ids,
+            tags={**tags, "Name": f"db-subnet-group-{environment_suffix}"},
+            opts=opts
+        )
+
+        # RDS Instance
+        self.db_instance = aws.rds.Instance(
+            f"db-{environment_suffix}",
+            identifier=f"financial-db-{environment_suffix}",
+            engine="mysql",
+            engine_version="8.0",
+            instance_class=instance_class,
+            allocated_storage=allocated_storage,
+            storage_type="gp3",
+            storage_encrypted=True,
+            db_name=db_name,
+            username=db_username,
+            password=db_password,
+            db_subnet_group_name=self.subnet_group.name,
+            vpc_security_group_ids=[security_group_id],
+            skip_final_snapshot=True,
+            backup_retention_period=7,
+            multi_az=False,
+            publicly_accessible=False,
+            tags={**tags, "Name": f"db-{environment_suffix}"},
+            opts=ResourceOptions(parent=self.subnet_group)
+        )
+```
+
+## File: lib/storage.py
+
+```python
+"""
+Storage infrastructure module.
+Creates S3 buckets with encryption.
+"""
+from typing import Dict, Any, Optional
+import pulumi
+import pulumi_aws as aws
+from pulumi import ResourceOptions
+
+
+class StorageStack:
+    """Creates S3 buckets for data and logs."""
+
+    def __init__(self,
+                 name: str,
+                 data_bucket_name: Optional[str],
+                 logs_bucket_name: Optional[str],
+                 environment_suffix: str,
+                 tags: Dict[str, str],
+                 opts: ResourceOptions = None):
+        """
+        Initialize storage infrastructure.
+
+        Args:
+            name: Resource name prefix
+            data_bucket_name: Data bucket name (optional)
+            logs_bucket_name: Logs bucket name (optional)
+            environment_suffix: Environment suffix
+            tags: Common tags
+            opts: Pulumi resource options
+        """
+        self.environment_suffix = environment_suffix
+        self.tags = tags
+
+        # Data bucket
+        data_bucket_final_name = data_bucket_name or f"financial-data-{environment_suffix}"
+        self.data_bucket = aws.s3.Bucket(
+            f"data-bucket-{environment_suffix}",
+            bucket=data_bucket_final_name,
+            tags={**tags, "Name": f"data-bucket-{environment_suffix}"},
+            opts=opts
+        )
+
+        # Enable versioning on data bucket
+        self.data_bucket_versioning = aws.s3.BucketVersioningV2(
+            f"data-bucket-versioning-{environment_suffix}",
+            bucket=self.data_bucket.id,
+            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+                status="Enabled"
+            ),
+            opts=ResourceOptions(parent=self.data_bucket)
+        )
+
+        # Enable encryption on data bucket
+        self.data_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+            f"data-bucket-encryption-{environment_suffix}",
+            bucket=self.data_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ],
+            opts=ResourceOptions(parent=self.data_bucket)
+        )
+
+        # Block public access
+        self.data_bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
+            f"data-bucket-public-access-{environment_suffix}",
+            bucket=self.data_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self.data_bucket)
+        )
+
+        # Logs bucket
+        logs_bucket_final_name = logs_bucket_name or f"financial-logs-{environment_suffix}"
+        self.logs_bucket = aws.s3.Bucket(
+            f"logs-bucket-{environment_suffix}",
+            bucket=logs_bucket_final_name,
+            tags={**tags, "Name": f"logs-bucket-{environment_suffix}"},
+            opts=opts
+        )
+
+        # Enable encryption on logs bucket
+        self.logs_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+            f"logs-bucket-encryption-{environment_suffix}",
+            bucket=self.logs_bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+                    apply_server_side_encryption_by_default=aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+                        sse_algorithm="AES256"
+                    )
+                )
+            ],
+            opts=ResourceOptions(parent=self.logs_bucket)
+        )
+
+        # Block public access on logs bucket
+        self.logs_bucket_public_access_block = aws.s3.BucketPublicAccessBlock(
+            f"logs-bucket-public-access-{environment_suffix}",
+            bucket=self.logs_bucket.id,
+            block_public_acls=True,
+            block_public_policy=True,
+            ignore_public_acls=True,
+            restrict_public_buckets=True,
+            opts=ResourceOptions(parent=self.logs_bucket)
+        )
+```
+
+## File: lib/iam.py
+
+```python
+"""
+IAM infrastructure module.
+Creates IAM roles and policies with least-privilege access.
+"""
+from typing import Dict, Any
+import json
+import pulumi
+import pulumi_aws as aws
+from pulumi import ResourceOptions, Output
+
+
+class IAMStack:
+    """Creates IAM roles and policies."""
+
+    def __init__(self,
+                 name: str,
+                 data_bucket_arn: Output[str],
+                 logs_bucket_arn: Output[str],
+                 environment_suffix: str,
+                 tags: Dict[str, str],
+                 opts: ResourceOptions = None):
+        """
+        Initialize IAM infrastructure.
+
+        Args:
+            name: Resource name prefix
+            data_bucket_arn: Data bucket ARN
+            logs_bucket_arn: Logs bucket ARN
+            environment_suffix: Environment suffix
+            tags: Common tags
+            opts: Pulumi resource options
+        """
+        self.environment_suffix = environment_suffix
+        self.tags = tags
+
+        # EC2 assume role policy
+        assume_role_policy = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [{
+                "Action": "sts:AssumeRole",
+                "Effect": "Allow",
+                "Principal": {
+                    "Service": "ec2.amazonaws.com"
+                }
+            }]
+        })
+
+        # EC2 IAM Role
+        self.ec2_role = aws.iam.Role(
+            f"ec2-role-{environment_suffix}",
+            name=f"ec2-role-{environment_suffix}",
+            assume_role_policy=assume_role_policy,
+            tags={**tags, "Name": f"ec2-role-{environment_suffix}"},
+            opts=opts
+        )
+
+        # S3 access policy for EC2
+        s3_policy_document = pulumi.Output.all(data_bucket_arn, logs_bucket_arn).apply(
+            lambda arns: json.dumps({
+                "Version": "2012-10-17",
+                "Statement": [
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:GetObject",
+                            "s3:PutObject",
+                            "s3:DeleteObject"
+                        ],
+                        "Resource": [
+                            f"{arns[0]}/*"
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:ListBucket"
+                        ],
+                        "Resource": [
+                            arns[0]
+                        ]
+                    },
+                    {
+                        "Effect": "Allow",
+                        "Action": [
+                            "s3:PutObject"
+                        ],
+                        "Resource": [
+                            f"{arns[1]}/*"
+                        ]
+                    }
+                ]
+            })
+        )
+
+        self.s3_policy = aws.iam.RolePolicy(
+            f"ec2-s3-policy-{environment_suffix}",
+            role=self.ec2_role.id,
+            policy=s3_policy_document,
+            opts=ResourceOptions(parent=self.ec2_role)
+        )
+
+        # CloudWatch Logs policy for EC2
+        cloudwatch_policy_document = json.dumps({
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "logs:CreateLogGroup",
+                        "logs:CreateLogStream",
+                        "logs:PutLogEvents",
+                        "logs:DescribeLogStreams"
+                    ],
+                    "Resource": f"arn:aws:logs:us-east-1:*:log-group:/aws/ec2/{environment_suffix}/*"
+                }
+            ]
+        })
+
+        self.cloudwatch_policy = aws.iam.RolePolicy(
+            f"ec2-cloudwatch-policy-{environment_suffix}",
+            role=self.ec2_role.id,
+            policy=cloudwatch_policy_document,
+            opts=ResourceOptions(parent=self.ec2_role)
+        )
+
+        # EC2 Instance Profile
+        self.instance_profile = aws.iam.InstanceProfile(
+            f"ec2-instance-profile-{environment_suffix}",
+            name=f"ec2-instance-profile-{environment_suffix}",
+            role=self.ec2_role.name,
+            opts=ResourceOptions(parent=self.ec2_role)
+        )
+```
 
 ## File: lib/tap_stack.py
 
 ```python
 """
-tap_stack.py
-
-Blue-Green Migration Infrastructure for Payment Processing
+Main Pulumi stack for financial services infrastructure.
+Orchestrates all infrastructure components.
 """
-
-from typing import Optional
-import json
+from typing import Optional, Dict, Any
 import pulumi
-from pulumi import ResourceOptions
-import pulumi_aws as aws
+from pulumi import ComponentResource, ResourceOptions, Output
+
+from lib.config import InfraConfig
+from lib.networking import NetworkingStack
+from lib.iam import IAMStack
+from lib.storage import StorageStack
+from lib.database import DatabaseStack
+from lib.web_tier import WebTier, WebTierArgs
 
 
 class TapStackArgs:
-    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+    """Arguments for TapStack component."""
+
+    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[Dict[str, str]] = None):
+        """
+        Initialize TapStack arguments.
+
+        Args:
+            environment_suffix: Environment suffix for resource naming
+            tags: Additional tags to apply
+        """
         self.environment_suffix = environment_suffix or 'dev'
-        self.tags = tags or {}
+        self.tags = tags
 
 
-class TapStack(pulumi.ComponentResource):
-    """Main stack for blue-green payment processing infrastructure."""
-    
-    def __init__(
-        self,
-        name: str,
-        args: TapStackArgs,
-        opts: Optional[ResourceOptions] = None
-    ):
+class TapStack(ComponentResource):
+    """
+    Main Pulumi component resource for financial services infrastructure.
+    Orchestrates networking, compute, database, and storage resources.
+    """
+
+    def __init__(self, name: str, args: TapStackArgs, opts: Optional[ResourceOptions] = None):
+        """
+        Initialize the main infrastructure stack.
+
+        Args:
+            name: Stack name
+            args: Stack arguments
+            opts: Pulumi resource options
+        """
         super().__init__('tap:stack:TapStack', name, None, opts)
-        
-        self.environment_suffix = args.environment_suffix
-        
-        # ERROR 1: Missing required tags (Environment, CostCenter, MigrationPhase)
-        self.default_tags = args.tags
-        
-        # ERROR 2: No KMS key created (requirement: all data encrypted with KMS)
-        
-        # Create VPC
-        self.vpc = self._create_vpc()
-        
-        # ERROR 3: No VPC endpoints created (requirement: use VPC endpoints for S3 and DynamoDB)
-        
-        # Create DynamoDB table
-        self.dynamodb_table = self._create_dynamodb_table()
-        
-        # ERROR 4: No Secrets Manager for database credentials
-        
-        # Create blue and green environments
-        self.blue_env = self._create_environment('blue')
-        self.green_env = self._create_environment('green')
-        
-        # Create ALB
-        self.alb = self._create_alb()
-        
-        # Create Lambda for switching
-        self.switch_lambda = self._create_switch_lambda()
-        
-        # ERROR 5: No CloudWatch alarms created (requirement: monitor DB connections and response times)
-        
-        # ERROR 6: No AWS Backup plan created (requirement: 7-day retention)
-        
-        # ERROR 7: No SSM parameter to track active environment
-        
-        self.register_outputs({
-            'alb_dns_name': self.alb['alb'].dns_name,
-            'blue_cluster_endpoint': self.blue_env['cluster'].endpoint
-        })
-    
-    def _create_vpc(self):
-        """Create VPC infrastructure."""
-        vpc = aws.ec2.Vpc(
-            f'payment-vpc-{self.environment_suffix}',
-            cidr_block='10.0.0.0/16',
-            enable_dns_hostnames=True,
-            enable_dns_support=True,
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ERROR 8: Only creating 1 AZ instead of 3 (requirement: 3 AZs)
-        azs = ['us-east-1a']  # Should be ['us-east-1a', 'us-east-1b', 'us-east-1c']
-        
-        igw = aws.ec2.InternetGateway(
-            f'payment-igw-{self.environment_suffix}',
-            vpc_id=vpc.id,
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        public_subnets = []
-        nat_gateways = []
-        
-        for i, az in enumerate(azs):
-            public_subnet = aws.ec2.Subnet(
-                f'payment-public-subnet-{i}-{self.environment_suffix}',
-                vpc_id=vpc.id,
-                cidr_block=f'10.0.{i}.0/24',
-                availability_zone=az,
-                map_public_ip_on_launch=True,
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self)
-            )
-            public_subnets.append(public_subnet)
-            
-            # ERROR 9: Missing Elastic IP allocation
-            nat = aws.ec2.NatGateway(
-                f'payment-nat-{i}-{self.environment_suffix}',
-                subnet_id=public_subnet.id,
-                # ERROR 10: Missing allocation_id parameter
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self)
-            )
-            nat_gateways.append(nat)
-        
-        public_rt = aws.ec2.RouteTable(
-            f'payment-public-rt-{self.environment_suffix}',
-            vpc_id=vpc.id,
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        aws.ec2.Route(
-            f'payment-public-route-{self.environment_suffix}',
-            route_table_id=public_rt.id,
-            destination_cidr_block='0.0.0.0/0',
-            gateway_id=igw.id,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        for i, subnet in enumerate(public_subnets):
-            aws.ec2.RouteTableAssociation(
-                f'payment-public-rta-{i}-{self.environment_suffix}',
-                subnet_id=subnet.id,
-                route_table_id=public_rt.id,
-                opts=ResourceOptions(parent=self)
-            )
-        
-        private_subnets = []
-        for i, az in enumerate(azs):
-            private_subnet = aws.ec2.Subnet(
-                f'payment-private-subnet-{i}-{self.environment_suffix}',
-                vpc_id=vpc.id,
-                cidr_block=f'10.0.{10+i}.0/24',
-                availability_zone=az,
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self)
-            )
-            private_subnets.append(private_subnet)
-            
-            private_rt = aws.ec2.RouteTable(
-                f'payment-private-rt-{i}-{self.environment_suffix}',
-                vpc_id=vpc.id,
-                tags=self.default_tags,
-                opts=ResourceOptions(parent=self)
-            )
-            
-            # ERROR 11: Index out of bounds since we only have 1 NAT gateway but trying to access by i
-            aws.ec2.Route(
-                f'payment-private-route-{i}-{self.environment_suffix}',
-                route_table_id=private_rt.id,
-                destination_cidr_block='0.0.0.0/0',
-                nat_gateway_id=nat_gateways[i].id,
-                opts=ResourceOptions(parent=self)
-            )
-            
-            aws.ec2.RouteTableAssociation(
-                f'payment-private-rta-{i}-{self.environment_suffix}',
-                subnet_id=private_subnet.id,
-                route_table_id=private_rt.id,
-                opts=ResourceOptions(parent=self)
-            )
-        
-        return {
-            'vpc': vpc,
-            'public_subnets': public_subnets,
-            'private_subnets': private_subnets
-        }
-    
-    def _create_dynamodb_table(self):
-        """Create DynamoDB table for session data."""
-        # ERROR 12: Missing point-in-time recovery (requirement: PITR enabled)
-        # ERROR 13: Missing KMS encryption (requirement: all data encrypted with KMS)
-        table = aws.dynamodb.Table(
-            f'payment-sessions-{self.environment_suffix}',
-            name=f'payment-sessions-{self.environment_suffix}',
-            billing_mode='PAY_PER_REQUEST',
-            hash_key='session_id',
-            attributes=[{'name': 'session_id', 'type': 'S'}],
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        return table
-    
-    def _create_environment(self, env_name: str):
-        """Create blue or green environment."""
-        db_subnet_group = aws.rds.SubnetGroup(
-            f'payment-db-subnet-{env_name}-{self.environment_suffix}',
-            subnet_ids=[s.id for s in self.vpc['private_subnets']],
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        db_sg = aws.ec2.SecurityGroup(
-            f'payment-db-sg-{env_name}-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            description=f'Security group for {env_name} RDS cluster',
-            ingress=[{
-                'protocol': 'tcp',
-                'from_port': 3306,
-                'to_port': 3306,
-                'cidr_blocks': ['0.0.0.0/0']  # ERROR 14: Too permissive (should be 10.0.0.0/16)
-            }],
-            egress=[{
-                'protocol': '-1',
-                'from_port': 0,
-                'to_port': 0,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ERROR 15: Using MySQL instead of Aurora MySQL
-        cluster = aws.rds.Cluster(
-            f'payment-cluster-{env_name}-{self.environment_suffix}',
-            cluster_identifier=f'payment-cluster-{env_name}-{self.environment_suffix}',
-            engine='mysql',  # Should be 'aurora-mysql'
-            engine_version='8.0',  # ERROR 16: Wrong version format (should be '8.0.mysql_aurora.3.02.0')
-            database_name='payments',
-            master_username='admin',
-            master_password='SimplePassword123',  # ERROR 17: Hardcoded password, not using Secrets Manager or pulumi.Output.secret()
-            db_subnet_group_name=db_subnet_group.name,
-            vpc_security_group_ids=[db_sg.id],
-            # ERROR 18: Missing storage encryption
-            # ERROR 19: Missing KMS key
-            backup_retention_period=3,  # ERROR 20: Only 3 days instead of 7
-            preferred_backup_window='03:00-04:00',
-            preferred_maintenance_window='mon:04:00-mon:05:00',
-            skip_final_snapshot=True,
-            # ERROR 21: Missing CloudWatch logs exports (audit, error, general, slowquery)
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ERROR 22: Only creating 1 instance instead of 2 for HA
-        instance = aws.rds.ClusterInstance(
-            f'payment-instance-{env_name}-{self.environment_suffix}',
-            cluster_identifier=cluster.id,
-            identifier=f'payment-instance-{env_name}-{self.environment_suffix}',
-            instance_class='db.t3.medium',  # ERROR 23: Wrong instance class (should be db.r6g.large)
-            engine='mysql',  # Should be 'aurora-mysql'
-            engine_version='8.0',
-            publicly_accessible=True,  # ERROR 24: Database publicly accessible (security risk!)
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self, depends_on=[cluster])
-        )
-        
-        return {
-            'cluster': cluster,
-            'instance': instance,
-            'db_subnet_group': db_subnet_group,
-            'db_sg': db_sg
-        }
-    
-    def _create_alb(self):
-        """Create Application Load Balancer."""
-        alb_sg = aws.ec2.SecurityGroup(
-            f'payment-alb-sg-{self.environment_suffix}',
-            vpc_id=self.vpc['vpc'].id,
-            description='Security group for ALB',
-            ingress=[{
-                'protocol': 'tcp',
-                'from_port': 80,
-                'to_port': 80,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            egress=[{
-                'protocol': '-1',
-                'from_port': 0,
-                'to_port': 0,
-                'cidr_blocks': ['0.0.0.0/0']
-            }],
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        alb = aws.lb.LoadBalancer(
-            f'payment-alb-{self.environment_suffix}',
-            name=f'payment-alb-{self.environment_suffix}',
-            internal=False,
-            load_balancer_type='application',
-            security_groups=[alb_sg.id],
-            subnets=[s.id for s in self.vpc['public_subnets']],
-            enable_deletion_protection=False,
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        blue_tg = aws.lb.TargetGroup(
-            f'payment-tg-blue-{self.environment_suffix}',
-            name=f'payment-tg-blue-{self.environment_suffix}'[:32],
-            port=8080,
-            protocol='HTTP',
-            vpc_id=self.vpc['vpc'].id,
-            target_type='ip',
-            # ERROR 25: Missing health check configuration
-            deregistration_delay=30,
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        green_tg = aws.lb.TargetGroup(
-            f'payment-tg-green-{self.environment_suffix}',
-            name=f'payment-tg-green-{self.environment_suffix}'[:32],
-            port=8080,
-            protocol='HTTP',
-            vpc_id=self.vpc['vpc'].id,
-            target_type='ip',
-            # ERROR 26: Missing health check configuration
-            deregistration_delay=30,
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ERROR 27: Simple forward action instead of weighted routing
-        listener = aws.lb.Listener(
-            f'payment-alb-listener-{self.environment_suffix}',
-            load_balancer_arn=alb.arn,
-            port=80,
-            protocol='HTTP',
-            default_actions=[{
-                'type': 'forward',
-                'target_group_arn': blue_tg.arn  # ERROR: Should use weighted forward config
-            }],
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self, depends_on=[blue_tg, green_tg])
-        )
-        
-        return {
-            'alb': alb,
-            'alb_sg': alb_sg,
-            'blue_tg': blue_tg,
-            'green_tg': green_tg,
-            'listener': listener
-        }
-    
-    def _create_switch_lambda(self):
-        """Create Lambda for environment switching."""
-        lambda_role = aws.iam.Role(
-            f'payment-switch-role-{self.environment_suffix}',
-            assume_role_policy=json.dumps({
-                'Version': '2012-10-17',
-                'Statement': [{
-                    'Action': 'sts:AssumeRole',
-                    'Effect': 'Allow',
-                    'Principal': {'Service': 'lambda.amazonaws.com'}
-                }]
-            }),
-            tags=self.default_tags,
-            opts=ResourceOptions(parent=self)
-        )
-        
-        # ERROR 28: Missing IAM policy attachments for ELB operations
-        
-        # ERROR 29: Incomplete Lambda code - missing critical functionality
-        lambda_code = """
-import json
 
-def lambda_handler(event, context):
-    return {
-        'statusCode': 200,
-        'body': json.dumps('Hello from Lambda!')
-    }
-"""
-        
-        switch_lambda = aws.lambda_.Function(
-            f'payment-switch-{self.environment_suffix}',
-            name=f'payment-switch-{self.environment_suffix}',
-            role=lambda_role.arn,
-            runtime='python3.9',  # ERROR 30: Older Python version (should be 3.11)
-            handler='index.lambda_handler',
-            code=pulumi.AssetArchive({
-                'index.py': pulumi.StringAsset(lambda_code)
-            }),
-            timeout=30,  # ERROR 31: Timeout too short for operations
-            memory_size=128,  # ERROR 32: Memory too low
-            # ERROR 33: Missing environment variables (LISTENER_ARN, TARGET_GROUP_ARNS, etc.)
-            tags=self.default_tags,
+        self.environment_suffix = args.environment_suffix
+
+        # Load configuration
+        config = InfraConfig()
+        common_tags = config.get_common_tags(args.tags)
+
+        # Create networking infrastructure
+        networking = NetworkingStack(
+            name="networking",
+            environment_suffix=self.environment_suffix,
+            tags=common_tags,
             opts=ResourceOptions(parent=self)
         )
-        
-        return switch_lambda
+
+        # Create storage infrastructure (can be parallel with networking)
+        storage = StorageStack(
+            name="storage",
+            data_bucket_name=config.data_bucket_name,
+            logs_bucket_name=config.logs_bucket_name,
+            environment_suffix=self.environment_suffix,
+            tags=common_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create IAM roles and policies
+        iam = IAMStack(
+            name="iam",
+            data_bucket_arn=storage.data_bucket.arn,
+            logs_bucket_arn=storage.logs_bucket.arn,
+            environment_suffix=self.environment_suffix,
+            tags=common_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create database infrastructure
+        database = DatabaseStack(
+            name="database",
+            vpc_id=networking.vpc.id,
+            private_subnet_ids=[s.id for s in networking.private_subnets],
+            security_group_id=networking.rds_sg.id,
+            db_name=config.db_name,
+            db_username=config.db_username,
+            db_password=config.db_password,
+            instance_class=config.db_instance_class,
+            allocated_storage=config.db_allocated_storage,
+            environment_suffix=self.environment_suffix,
+            tags=common_tags,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Create web tier (ALB + ASG + Target Group)
+        web_tier_args = WebTierArgs(
+            vpc_id=networking.vpc.id,
+            public_subnet_ids=[s.id for s in networking.public_subnets],
+            private_subnet_ids=[s.id for s in networking.private_subnets],
+            alb_security_group_id=networking.alb_sg.id,
+            ec2_security_group_id=networking.ec2_sg.id,
+            instance_profile_arn=iam.instance_profile.arn,
+            ami_id=config.ami_id,
+            instance_type=config.instance_type,
+            min_size=config.min_size,
+            max_size=config.max_size,
+            desired_capacity=config.desired_capacity,
+            environment_suffix=self.environment_suffix,
+            tags=common_tags
+        )
+
+        web_tier = WebTier(
+            name="web-tier",
+            args=web_tier_args,
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Export stack outputs
+        self.register_outputs({
+            "vpc_id": networking.vpc.id,
+            "alb_dns_name": web_tier.alb.dns_name,
+            "alb_arn": web_tier.alb.arn,
+            "rds_endpoint": database.db_instance.endpoint,
+            "rds_address": database.db_instance.address,
+            "data_bucket_arn": storage.data_bucket.arn,
+            "data_bucket_name": storage.data_bucket.bucket,
+            "logs_bucket_arn": storage.logs_bucket.arn,
+            "logs_bucket_name": storage.logs_bucket.bucket
+        })
 ```
 
 ## File: tap.py
 
 ```python
 #!/usr/bin/env python3
+"""
+Pulumi application entry point for financial services infrastructure.
+"""
 import os
 import pulumi
 from pulumi import Config
+
 from lib.tap_stack import TapStack, TapStackArgs
 
-config = Config()
-environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'dev'
 
-# ERROR 34: Missing default tags
+# Get environment suffix
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or pulumi.get_stack()
+
+# Create the main stack
 stack = TapStack(
-    name='payment-migration-infra',
-    args=TapStackArgs(
-        environment_suffix=environment_suffix
-    )
+    name="financial-services-infra",
+    args=TapStackArgs(environment_suffix=environment_suffix)
 )
 
-# ERROR 35: Missing most required outputs
-pulumi.export('alb_dns_name', stack.alb['alb'].dns_name)
+# Export outputs at module level for Pulumi
+pulumi.export("vpc_id", stack.outputs["vpc_id"])
+pulumi.export("alb_dns_name", stack.outputs["alb_dns_name"])
+pulumi.export("alb_arn", stack.outputs["alb_arn"])
+pulumi.export("rds_endpoint", stack.outputs["rds_endpoint"])
+pulumi.export("rds_address", stack.outputs["rds_address"])
+pulumi.export("data_bucket_arn", stack.outputs["data_bucket_arn"])
+pulumi.export("data_bucket_name", stack.outputs["data_bucket_name"])
+pulumi.export("logs_bucket_arn", stack.outputs["logs_bucket_arn"])
+pulumi.export("logs_bucket_name", stack.outputs["logs_bucket_name"])
 ```
 
-## Configuration
-
-### Pulumi.yaml
+## File: Pulumi.dev.yaml
 
 ```yaml
-name: payment-migration-infra
-runtime:
-  name: python
-description: Blue-Green Migration Infrastructure
-main: tap.py
-# ERROR 36: Missing AWS region configuration
+config:
+  pulumi-infra:ami_id: ami-0c55b159cbfafe1f0
+  pulumi-infra:instance_type: t3.medium
+  pulumi-infra:min_size: "2"
+  pulumi-infra:max_size: "6"
+  pulumi-infra:desired_capacity: "3"
+  pulumi-infra:db_instance_class: db.t3.medium
+  pulumi-infra:db_name: financialdb
+  pulumi-infra:db_username: admin
+  pulumi-infra:db_password:
+    secure: AAABAKzXpXXXXXXXXXXXXXXXXXXXXXXX
+  pulumi-infra:db_allocated_storage: "100"
+  pulumi-infra:environment: dev
+  pulumi-infra:owner: finance-team
+  pulumi-infra:cost_center: FINOPS-001
+  pulumi-infra:project: financial-services-platform
 ```
 
-### requirements.txt
+## Summary
 
-```
-pulumi>=3.0.0,<4.0.0
-pulumi-aws>=6.0.0,<7.0.0
-```
+This implementation provides:
 
-This implementation provides the basic blue-green deployment infrastructure. The Lambda function can be invoked to switch between environments, and the ALB will route traffic accordingly.
+1. **Centralized Configuration** - All values moved to Pulumi.Config in `config.py`
+2. **ComponentResource Pattern** - Web tier encapsulated in custom ComponentResource
+3. **Type Hints** - All functions have proper type annotations
+4. **Centralized Tagging** - Common tags applied via `get_common_tags()` method
+5. **Least-Privilege IAM** - Specific permissions for S3 and CloudWatch Logs
+6. **Stack Outputs** - ALB DNS, RDS endpoint, and S3 ARNs exported
+7. **Parallel Resource Creation** - Resources created in parallel where possible
+8. **Encryption** - S3 buckets use SSE-S3, RDS has encryption at rest
+9. **Environment Suffix** - All resources include environment suffix for parallel deployments
+
+The refactored code maintains backward compatibility while improving deployment performance and code maintainability.

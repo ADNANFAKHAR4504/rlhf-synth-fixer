@@ -35,3 +35,14 @@ stack = TapStack(
     name="pulumi-infra",
     args=TapStackArgs(environment_suffix=environment_suffix),
 )
+
+# Export outputs at module level
+pulumi.export("vpc_id", stack.vpc_id)
+pulumi.export("alb_dns_name", stack.alb_dns_name)
+pulumi.export("alb_arn", stack.alb_arn)
+pulumi.export("rds_endpoint", stack.rds_endpoint)
+pulumi.export("rds_address", stack.rds_address)
+pulumi.export("data_bucket_arn", stack.data_bucket_arn)
+pulumi.export("data_bucket_name", stack.data_bucket_name)
+pulumi.export("logs_bucket_arn", stack.logs_bucket_arn)
+pulumi.export("logs_bucket_name", stack.logs_bucket_name)

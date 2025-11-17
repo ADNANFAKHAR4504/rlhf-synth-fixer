@@ -1,31 +1,14 @@
 {
-  "task_id": "101912456",
-  "po_id": "101912456",
   "platform": "pulumi",
   "language": "py",
   "complexity": "hard",
   "team": "synth",
   "turn_type": "single",
-  "startedAt": "2025-11-14T00:55:26Z",
-  "subtask": "Failure Recovery and High Availability",
-  "subject_labels": [
-    "aws",
-    "infrastructure",
-    "environment-migration"
-  ],
-  "aws_services": [
-    "VPC",
-    "EC2",
-    "RDS",
-    "DynamoDB",
-    "ELB",
-    "Lambda",
-    "IAM",
-    "KMS",
-    "Secrets Manager",
-    "CloudWatch",
-    "AWS Backup",
-    "SSM"
-  ],
-  "training_quality": 10
+  "startedAt": "2025-11-17T05:19:42+00:00",
+  "subtask": "Infrastructure as Code",
+  "subject_labels": ["aws", "infrastructure", "iac-program-optimization-&-fixes"],
+  "po_id": "101912424",
+  "aws_services": ["VPC", "EC2", "ALB", "Auto Scaling", "RDS", "S3", "IAM", "CloudWatch"],
+  "training_quality": 9,
+  "iteration": 1
 }
