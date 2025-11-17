@@ -5,14 +5,14 @@
  */
 import * as pulumi from '@pulumi/pulumi';
 import { ResourceOptions } from '@pulumi/pulumi';
-import { NetworkingStack } from './networking';
-import { IamRolesStack } from './iam';
 import { DatabaseStack } from './database';
-import { EcsStack } from './ecs';
-import { LoadBalancerStack } from './load-balancer';
 import { DmsStack } from './dms';
+import { EcsStack } from './ecs';
+import { IamRolesStack } from './iam';
 import { LambdaStack } from './lambda-stack';
+import { LoadBalancerStack } from './load-balancer';
 import { MonitoringStack } from './monitoring';
+import { NetworkingStack } from './networking';
 
 /**
  * TapStackArgs defines the input arguments for the TapStack Pulumi component.
@@ -37,6 +37,9 @@ export class TapStack extends pulumi.ComponentResource {
   public readonly rdsClusterEndpoint: pulumi.Output<string>;
   public readonly dmsTaskArn: pulumi.Output<string>;
   public readonly vpcId: pulumi.Output<string>;
+  public readonly albSecurityGroupId: pulumi.Output<string>;
+  public readonly clusterId: pulumi.Output<string>;
+  public readonly albName: pulumi.Output<string>;
 
   constructor(name: string, args: TapStackArgs, opts?: ResourceOptions) {
     super('tap:stack:TapStack', name, args, opts);
@@ -167,12 +170,18 @@ export class TapStack extends pulumi.ComponentResource {
     this.rdsClusterEndpoint = database.clusterEndpoint;
     this.dmsTaskArn = dms.replicationTaskArn;
     this.vpcId = networking.vpc.id;
+    this.albSecurityGroupId = loadBalancer.securityGroupId;
+    this.clusterId = database.clusterId;
+    this.albName = loadBalancer.albName;
 
     this.registerOutputs({
       albDnsName: this.albDnsName,
       rdsClusterEndpoint: this.rdsClusterEndpoint,
       dmsTaskArn: this.dmsTaskArn,
       vpcId: this.vpcId,
+      albSecurityGroupId: this.albSecurityGroupId,
+      clusterId: this.clusterId,
+      albName: this.albName,
     });
   }
 }

@@ -3,8 +3,8 @@
  *
  * Application Load Balancer for ECS service
  */
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface LoadBalancerStackArgs {
   environmentSuffix: string;
@@ -18,6 +18,8 @@ export interface LoadBalancerStackArgs {
 export class LoadBalancerStack extends pulumi.ComponentResource {
   public readonly albDnsName: pulumi.Output<string>;
   public readonly listenerArn: pulumi.Output<string>;
+  public readonly securityGroupId: pulumi.Output<string>;
+  public readonly albName: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -99,6 +101,8 @@ export class LoadBalancerStack extends pulumi.ComponentResource {
     );
 
     this.albDnsName = alb.dnsName;
+    this.securityGroupId = albSecurityGroup.id;
+    this.albName = alb.name;
 
     // Listener
     const listener = new aws.lb.Listener(
@@ -123,6 +127,8 @@ export class LoadBalancerStack extends pulumi.ComponentResource {
     this.registerOutputs({
       albDnsName: this.albDnsName,
       listenerArn: this.listenerArn,
+      securityGroupId: this.securityGroupId,
+      albName: this.albName,
     });
   }
 }
