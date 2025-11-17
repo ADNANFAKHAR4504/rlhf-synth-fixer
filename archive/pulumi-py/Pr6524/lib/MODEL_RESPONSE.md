@@ -1,814 +1,449 @@
-# Infrastructure Compliance Validation System - Implementation
-
-This implementation provides a comprehensive infrastructure compliance validation system using AWS CloudFormation with YAML. The solution uses AWS Config for continuous compliance monitoring, Lambda for custom validation logic, SNS for notifications, and S3 for data storage.
-
-## Architecture Overview
-
-The system consists of:
-- **AWS Config**: Continuous configuration recording and compliance evaluation
-- **Config Rules**: Both AWS managed and custom rules for compliance checks
-- **Lambda Functions**: Custom compliance validation logic
-- **SNS Topics**: Real-time notifications for compliance violations
-- **S3 Bucket**: Secure storage for Config snapshots and compliance data
-- **KMS Key**: Encryption for data at rest
-- **CloudWatch**: Centralized logging and monitoring
-- **IAM Roles**: Least-privilege access control
+I'll create a blue-green migration infrastructure for your payment processing system using Pulumi. This will include dual environments with automated switching capabilities.
 
 ## Implementation
 
-### File: lib/TapStack.yml
+Here's a complete solution with RDS Aurora clusters, ALB for traffic shifting, and Lambda for automated switching.
+
+## File: lib/tap_stack.py
+
+```python
+"""
+tap_stack.py
+
+Blue-Green Migration Infrastructure for Payment Processing
+"""
+
+from typing import Optional
+import json
+import pulumi
+from pulumi import ResourceOptions
+import pulumi_aws as aws
+
+
+class TapStackArgs:
+    def __init__(self, environment_suffix: Optional[str] = None, tags: Optional[dict] = None):
+        self.environment_suffix = environment_suffix or 'dev'
+        self.tags = tags or {}
+
+
+class TapStack(pulumi.ComponentResource):
+    """Main stack for blue-green payment processing infrastructure."""
+    
+    def __init__(
+        self,
+        name: str,
+        args: TapStackArgs,
+        opts: Optional[ResourceOptions] = None
+    ):
+        super().__init__('tap:stack:TapStack', name, None, opts)
+        
+        self.environment_suffix = args.environment_suffix
+        
+        # ERROR 1: Missing required tags (Environment, CostCenter, MigrationPhase)
+        self.default_tags = args.tags
+        
+        # ERROR 2: No KMS key created (requirement: all data encrypted with KMS)
+        
+        # Create VPC
+        self.vpc = self._create_vpc()
+        
+        # ERROR 3: No VPC endpoints created (requirement: use VPC endpoints for S3 and DynamoDB)
+        
+        # Create DynamoDB table
+        self.dynamodb_table = self._create_dynamodb_table()
+        
+        # ERROR 4: No Secrets Manager for database credentials
+        
+        # Create blue and green environments
+        self.blue_env = self._create_environment('blue')
+        self.green_env = self._create_environment('green')
+        
+        # Create ALB
+        self.alb = self._create_alb()
+        
+        # Create Lambda for switching
+        self.switch_lambda = self._create_switch_lambda()
+        
+        # ERROR 5: No CloudWatch alarms created (requirement: monitor DB connections and response times)
+        
+        # ERROR 6: No AWS Backup plan created (requirement: 7-day retention)
+        
+        # ERROR 7: No SSM parameter to track active environment
+        
+        self.register_outputs({
+            'alb_dns_name': self.alb['alb'].dns_name,
+            'blue_cluster_endpoint': self.blue_env['cluster'].endpoint
+        })
+    
+    def _create_vpc(self):
+        """Create VPC infrastructure."""
+        vpc = aws.ec2.Vpc(
+            f'payment-vpc-{self.environment_suffix}',
+            cidr_block='10.0.0.0/16',
+            enable_dns_hostnames=True,
+            enable_dns_support=True,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ERROR 8: Only creating 1 AZ instead of 3 (requirement: 3 AZs)
+        azs = ['us-east-1a']  # Should be ['us-east-1a', 'us-east-1b', 'us-east-1c']
+        
+        igw = aws.ec2.InternetGateway(
+            f'payment-igw-{self.environment_suffix}',
+            vpc_id=vpc.id,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        public_subnets = []
+        nat_gateways = []
+        
+        for i, az in enumerate(azs):
+            public_subnet = aws.ec2.Subnet(
+                f'payment-public-subnet-{i}-{self.environment_suffix}',
+                vpc_id=vpc.id,
+                cidr_block=f'10.0.{i}.0/24',
+                availability_zone=az,
+                map_public_ip_on_launch=True,
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self)
+            )
+            public_subnets.append(public_subnet)
+            
+            # ERROR 9: Missing Elastic IP allocation
+            nat = aws.ec2.NatGateway(
+                f'payment-nat-{i}-{self.environment_suffix}',
+                subnet_id=public_subnet.id,
+                # ERROR 10: Missing allocation_id parameter
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self)
+            )
+            nat_gateways.append(nat)
+        
+        public_rt = aws.ec2.RouteTable(
+            f'payment-public-rt-{self.environment_suffix}',
+            vpc_id=vpc.id,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        aws.ec2.Route(
+            f'payment-public-route-{self.environment_suffix}',
+            route_table_id=public_rt.id,
+            destination_cidr_block='0.0.0.0/0',
+            gateway_id=igw.id,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        for i, subnet in enumerate(public_subnets):
+            aws.ec2.RouteTableAssociation(
+                f'payment-public-rta-{i}-{self.environment_suffix}',
+                subnet_id=subnet.id,
+                route_table_id=public_rt.id,
+                opts=ResourceOptions(parent=self)
+            )
+        
+        private_subnets = []
+        for i, az in enumerate(azs):
+            private_subnet = aws.ec2.Subnet(
+                f'payment-private-subnet-{i}-{self.environment_suffix}',
+                vpc_id=vpc.id,
+                cidr_block=f'10.0.{10+i}.0/24',
+                availability_zone=az,
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self)
+            )
+            private_subnets.append(private_subnet)
+            
+            private_rt = aws.ec2.RouteTable(
+                f'payment-private-rt-{i}-{self.environment_suffix}',
+                vpc_id=vpc.id,
+                tags=self.default_tags,
+                opts=ResourceOptions(parent=self)
+            )
+            
+            # ERROR 11: Index out of bounds since we only have 1 NAT gateway but trying to access by i
+            aws.ec2.Route(
+                f'payment-private-route-{i}-{self.environment_suffix}',
+                route_table_id=private_rt.id,
+                destination_cidr_block='0.0.0.0/0',
+                nat_gateway_id=nat_gateways[i].id,
+                opts=ResourceOptions(parent=self)
+            )
+            
+            aws.ec2.RouteTableAssociation(
+                f'payment-private-rta-{i}-{self.environment_suffix}',
+                subnet_id=private_subnet.id,
+                route_table_id=private_rt.id,
+                opts=ResourceOptions(parent=self)
+            )
+        
+        return {
+            'vpc': vpc,
+            'public_subnets': public_subnets,
+            'private_subnets': private_subnets
+        }
+    
+    def _create_dynamodb_table(self):
+        """Create DynamoDB table for session data."""
+        # ERROR 12: Missing point-in-time recovery (requirement: PITR enabled)
+        # ERROR 13: Missing KMS encryption (requirement: all data encrypted with KMS)
+        table = aws.dynamodb.Table(
+            f'payment-sessions-{self.environment_suffix}',
+            name=f'payment-sessions-{self.environment_suffix}',
+            billing_mode='PAY_PER_REQUEST',
+            hash_key='session_id',
+            attributes=[{'name': 'session_id', 'type': 'S'}],
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        return table
+    
+    def _create_environment(self, env_name: str):
+        """Create blue or green environment."""
+        db_subnet_group = aws.rds.SubnetGroup(
+            f'payment-db-subnet-{env_name}-{self.environment_suffix}',
+            subnet_ids=[s.id for s in self.vpc['private_subnets']],
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        db_sg = aws.ec2.SecurityGroup(
+            f'payment-db-sg-{env_name}-{self.environment_suffix}',
+            vpc_id=self.vpc['vpc'].id,
+            description=f'Security group for {env_name} RDS cluster',
+            ingress=[{
+                'protocol': 'tcp',
+                'from_port': 3306,
+                'to_port': 3306,
+                'cidr_blocks': ['0.0.0.0/0']  # ERROR 14: Too permissive (should be 10.0.0.0/16)
+            }],
+            egress=[{
+                'protocol': '-1',
+                'from_port': 0,
+                'to_port': 0,
+                'cidr_blocks': ['0.0.0.0/0']
+            }],
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ERROR 15: Using MySQL instead of Aurora MySQL
+        cluster = aws.rds.Cluster(
+            f'payment-cluster-{env_name}-{self.environment_suffix}',
+            cluster_identifier=f'payment-cluster-{env_name}-{self.environment_suffix}',
+            engine='mysql',  # Should be 'aurora-mysql'
+            engine_version='8.0',  # ERROR 16: Wrong version format (should be '8.0.mysql_aurora.3.02.0')
+            database_name='payments',
+            master_username='admin',
+            master_password='SimplePassword123',  # ERROR 17: Hardcoded password, not using Secrets Manager or pulumi.Output.secret()
+            db_subnet_group_name=db_subnet_group.name,
+            vpc_security_group_ids=[db_sg.id],
+            # ERROR 18: Missing storage encryption
+            # ERROR 19: Missing KMS key
+            backup_retention_period=3,  # ERROR 20: Only 3 days instead of 7
+            preferred_backup_window='03:00-04:00',
+            preferred_maintenance_window='mon:04:00-mon:05:00',
+            skip_final_snapshot=True,
+            # ERROR 21: Missing CloudWatch logs exports (audit, error, general, slowquery)
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ERROR 22: Only creating 1 instance instead of 2 for HA
+        instance = aws.rds.ClusterInstance(
+            f'payment-instance-{env_name}-{self.environment_suffix}',
+            cluster_identifier=cluster.id,
+            identifier=f'payment-instance-{env_name}-{self.environment_suffix}',
+            instance_class='db.t3.medium',  # ERROR 23: Wrong instance class (should be db.r6g.large)
+            engine='mysql',  # Should be 'aurora-mysql'
+            engine_version='8.0',
+            publicly_accessible=True,  # ERROR 24: Database publicly accessible (security risk!)
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self, depends_on=[cluster])
+        )
+        
+        return {
+            'cluster': cluster,
+            'instance': instance,
+            'db_subnet_group': db_subnet_group,
+            'db_sg': db_sg
+        }
+    
+    def _create_alb(self):
+        """Create Application Load Balancer."""
+        alb_sg = aws.ec2.SecurityGroup(
+            f'payment-alb-sg-{self.environment_suffix}',
+            vpc_id=self.vpc['vpc'].id,
+            description='Security group for ALB',
+            ingress=[{
+                'protocol': 'tcp',
+                'from_port': 80,
+                'to_port': 80,
+                'cidr_blocks': ['0.0.0.0/0']
+            }],
+            egress=[{
+                'protocol': '-1',
+                'from_port': 0,
+                'to_port': 0,
+                'cidr_blocks': ['0.0.0.0/0']
+            }],
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        alb = aws.lb.LoadBalancer(
+            f'payment-alb-{self.environment_suffix}',
+            name=f'payment-alb-{self.environment_suffix}',
+            internal=False,
+            load_balancer_type='application',
+            security_groups=[alb_sg.id],
+            subnets=[s.id for s in self.vpc['public_subnets']],
+            enable_deletion_protection=False,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        blue_tg = aws.lb.TargetGroup(
+            f'payment-tg-blue-{self.environment_suffix}',
+            name=f'payment-tg-blue-{self.environment_suffix}'[:32],
+            port=8080,
+            protocol='HTTP',
+            vpc_id=self.vpc['vpc'].id,
+            target_type='ip',
+            # ERROR 25: Missing health check configuration
+            deregistration_delay=30,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        green_tg = aws.lb.TargetGroup(
+            f'payment-tg-green-{self.environment_suffix}',
+            name=f'payment-tg-green-{self.environment_suffix}'[:32],
+            port=8080,
+            protocol='HTTP',
+            vpc_id=self.vpc['vpc'].id,
+            target_type='ip',
+            # ERROR 26: Missing health check configuration
+            deregistration_delay=30,
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ERROR 27: Simple forward action instead of weighted routing
+        listener = aws.lb.Listener(
+            f'payment-alb-listener-{self.environment_suffix}',
+            load_balancer_arn=alb.arn,
+            port=80,
+            protocol='HTTP',
+            default_actions=[{
+                'type': 'forward',
+                'target_group_arn': blue_tg.arn  # ERROR: Should use weighted forward config
+            }],
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self, depends_on=[blue_tg, green_tg])
+        )
+        
+        return {
+            'alb': alb,
+            'alb_sg': alb_sg,
+            'blue_tg': blue_tg,
+            'green_tg': green_tg,
+            'listener': listener
+        }
+    
+    def _create_switch_lambda(self):
+        """Create Lambda for environment switching."""
+        lambda_role = aws.iam.Role(
+            f'payment-switch-role-{self.environment_suffix}',
+            assume_role_policy=json.dumps({
+                'Version': '2012-10-17',
+                'Statement': [{
+                    'Action': 'sts:AssumeRole',
+                    'Effect': 'Allow',
+                    'Principal': {'Service': 'lambda.amazonaws.com'}
+                }]
+            }),
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        # ERROR 28: Missing IAM policy attachments for ELB operations
+        
+        # ERROR 29: Incomplete Lambda code - missing critical functionality
+        lambda_code = """
+import json
+
+def lambda_handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': json.dumps('Hello from Lambda!')
+    }
+"""
+        
+        switch_lambda = aws.lambda_.Function(
+            f'payment-switch-{self.environment_suffix}',
+            name=f'payment-switch-{self.environment_suffix}',
+            role=lambda_role.arn,
+            runtime='python3.9',  # ERROR 30: Older Python version (should be 3.11)
+            handler='index.lambda_handler',
+            code=pulumi.AssetArchive({
+                'index.py': pulumi.StringAsset(lambda_code)
+            }),
+            timeout=30,  # ERROR 31: Timeout too short for operations
+            memory_size=128,  # ERROR 32: Memory too low
+            # ERROR 33: Missing environment variables (LISTENER_ARN, TARGET_GROUP_ARNS, etc.)
+            tags=self.default_tags,
+            opts=ResourceOptions(parent=self)
+        )
+        
+        return switch_lambda
+```
+
+## File: tap.py
+
+```python
+#!/usr/bin/env python3
+import os
+import pulumi
+from pulumi import Config
+from lib.tap_stack import TapStack, TapStackArgs
+
+config = Config()
+environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'dev'
+
+# ERROR 34: Missing default tags
+stack = TapStack(
+    name='payment-migration-infra',
+    args=TapStackArgs(
+        environment_suffix=environment_suffix
+    )
+)
+
+# ERROR 35: Missing most required outputs
+pulumi.export('alb_dns_name', stack.alb['alb'].dns_name)
+```
+
+## Configuration
+
+### Pulumi.yaml
 
 ```yaml
-AWSTemplateFormatVersion: '2010-09-09'
-Description: Infrastructure Compliance Validation System
-
-Parameters:
-  EnvironmentSuffix:
-    Type: String
-    Description: Unique suffix for resource naming to ensure uniqueness across deployments
-    Default: dev
-    AllowedPattern: ^[a-z0-9-]+$
-    ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
-
-  NotificationEmail:
-    Type: String
-    Description: Email address for compliance notifications
-    Default: compliance-team@example.com
-    AllowedPattern: ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$
-
-  ConfigRecordingFrequency:
-    Type: String
-    Description: Frequency for Config recording
-    Default: CONTINUOUS
-    AllowedValues:
-      - CONTINUOUS
-      - DAILY
-
-Resources:
-  # KMS Key for encryption
-  ComplianceKmsKey:
-    Type: AWS::KMS::Key
-    Properties:
-      Description: !Sub KMS key for compliance validation system encryption ${EnvironmentSuffix}
-      EnableKeyRotation: true
-      KeyPolicy:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: Enable IAM User Permissions
-            Effect: Allow
-            Principal:
-              AWS: !Sub arn:aws:iam::${AWS::AccountId}:root
-            Action: kms:*
-            Resource: '*'
-          - Sid: Allow Config to use the key
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action:
-              - kms:Decrypt
-              - kms:GenerateDataKey
-            Resource: '*'
-          - Sid: Allow CloudWatch Logs
-            Effect: Allow
-            Principal:
-              Service: !Sub logs.${AWS::Region}.amazonaws.com
-            Action:
-              - kms:Encrypt
-              - kms:Decrypt
-              - kms:ReEncrypt*
-              - kms:GenerateDataKey*
-              - kms:CreateGrant
-              - kms:DescribeKey
-            Resource: '*'
-            Condition:
-              ArnLike:
-                kms:EncryptionContext:aws:logs:arn: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
-
-  ComplianceKmsKeyAlias:
-    Type: AWS::KMS::Alias
-    Properties:
-      AliasName: !Sub alias/compliance-validation-${EnvironmentSuffix}
-      TargetKeyId: !Ref ComplianceKmsKey
-
-  # S3 Bucket for Config data storage
-  ConfigBucket:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub config-compliance-data-${EnvironmentSuffix}-${AWS::AccountId}
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: aws:kms
-              KMSMasterKeyID: !GetAtt ComplianceKmsKey.Arn
-            BucketKeyEnabled: true
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      VersioningConfiguration:
-        Status: Enabled
-      LifecycleConfiguration:
-        Rules:
-          - Id: DeleteOldConfigData
-            Status: Enabled
-            ExpirationInDays: 90
-            NoncurrentVersionExpirationInDays: 30
-      Tags:
-        - Key: Name
-          Value: !Sub config-bucket-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-        - Key: Purpose
-          Value: ComplianceValidation
-
-  ConfigBucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Properties:
-      Bucket: !Ref ConfigBucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AWSConfigBucketPermissionsCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:GetBucketAcl
-            Resource: !GetAtt ConfigBucket.Arn
-          - Sid: AWSConfigBucketExistenceCheck
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:ListBucket
-            Resource: !GetAtt ConfigBucket.Arn
-          - Sid: AWSConfigBucketPutObject
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: s3:PutObject
-            Resource: !Sub ${ConfigBucket.Arn}/*
-            Condition:
-              StringEquals:
-                s3:x-amz-acl: bucket-owner-full-control
-          - Sid: DenyUnencryptedObjectUploads
-            Effect: Deny
-            Principal: '*'
-            Action: s3:PutObject
-            Resource: !Sub ${ConfigBucket.Arn}/*
-            Condition:
-              StringNotEquals:
-                s3:x-amz-server-side-encryption: aws:kms
-
-  # SNS Topic for compliance notifications
-  ComplianceNotificationTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      TopicName: !Sub compliance-notifications-${EnvironmentSuffix}
-      DisplayName: Compliance Validation Notifications
-      KmsMasterKeyId: !Ref ComplianceKmsKey
-      Subscription:
-        - Endpoint: !Ref NotificationEmail
-          Protocol: email
-      Tags:
-        - Key: Name
-          Value: !Sub compliance-topic-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  ComplianceNotificationTopicPolicy:
-    Type: AWS::SNS::TopicPolicy
-    Properties:
-      Topics:
-        - !Ref ComplianceNotificationTopic
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowConfigToPublish
-            Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: SNS:Publish
-            Resource: !Ref ComplianceNotificationTopic
-
-  # IAM Role for AWS Config
-  ConfigRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub config-service-role-${EnvironmentSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: config.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/ConfigRole
-      Policies:
-        - PolicyName: ConfigS3Access
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - s3:GetBucketVersioning
-                  - s3:PutObject
-                  - s3:GetObject
-                Resource:
-                  - !GetAtt ConfigBucket.Arn
-                  - !Sub ${ConfigBucket.Arn}/*
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
-                Resource: !GetAtt ComplianceKmsKey.Arn
-      Tags:
-        - Key: Name
-          Value: !Sub config-role-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # AWS Config Recorder
-  ConfigRecorder:
-    Type: AWS::Config::ConfigurationRecorder
-    Properties:
-      Name: !Sub compliance-config-recorder-${EnvironmentSuffix}
-      RoleArn: !GetAtt ConfigRole.Arn
-      RecordingGroup:
-        AllSupported: true
-        IncludeGlobalResourceTypes: true
-        ResourceTypes: []
-
-  # Config Delivery Channel
-  ConfigDeliveryChannel:
-    Type: AWS::Config::DeliveryChannel
-    Properties:
-      Name: !Sub compliance-delivery-channel-${EnvironmentSuffix}
-      S3BucketName: !Ref ConfigBucket
-      SnsTopicARN: !Ref ComplianceNotificationTopic
-      ConfigSnapshotDeliveryProperties:
-        DeliveryFrequency: TwentyFour_Hours
-
-  # CloudWatch Log Group for Lambda functions
-  ComplianceLambdaLogGroup:
-    Type: AWS::Logs::LogGroup
-    Properties:
-      LogGroupName: !Sub /aws/lambda/compliance-validator-${EnvironmentSuffix}
-      RetentionInDays: 14
-      KmsKeyId: !GetAtt ComplianceKmsKey.Arn
-
-  # IAM Role for Lambda functions
-  ComplianceLambdaRole:
-    Type: AWS::IAM::Role
-    Properties:
-      RoleName: !Sub compliance-lambda-role-${EnvironmentSuffix}
-      AssumeRolePolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Effect: Allow
-            Principal:
-              Service: lambda.amazonaws.com
-            Action: sts:AssumeRole
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/service-role/AWSConfigRulesExecutionRole
-      Policies:
-        - PolicyName: LambdaLogging
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - logs:CreateLogStream
-                  - logs:PutLogEvents
-                Resource: !GetAtt ComplianceLambdaLogGroup.Arn
-              - Effect: Allow
-                Action:
-                  - kms:Decrypt
-                  - kms:GenerateDataKey
-                Resource: !GetAtt ComplianceKmsKey.Arn
-        - PolicyName: ConfigCompliance
-          PolicyDocument:
-            Version: '2012-10-17'
-            Statement:
-              - Effect: Allow
-                Action:
-                  - config:PutEvaluations
-                  - config:GetResourceConfigHistory
-                Resource: '*'
-              - Effect: Allow
-                Action:
-                  - ec2:Describe*
-                  - s3:GetBucketEncryption
-                  - s3:GetBucketPublicAccessBlock
-                  - s3:GetBucketVersioning
-                  - rds:Describe*
-                  - kms:DescribeKey
-                  - cloudwatch:PutMetricData
-                Resource: '*'
-      Tags:
-        - Key: Name
-          Value: !Sub compliance-lambda-role-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Lambda function for custom compliance validation
-  CustomComplianceValidatorFunction:
-    Type: AWS::Lambda::Function
-    Properties:
-      FunctionName: !Sub compliance-validator-${EnvironmentSuffix}
-      Runtime: python3.11
-      Handler: index.lambda_handler
-      Role: !GetAtt ComplianceLambdaRole.Arn
-      Timeout: 300
-      MemorySize: 512
-      Environment:
-        Variables:
-          ENVIRONMENT_SUFFIX: !Ref EnvironmentSuffix
-          SNS_TOPIC_ARN: !Ref ComplianceNotificationTopic
-      Code:
-        ZipFile: |
-          import json
-          import boto3
-          from datetime import datetime
-
-          config = boto3.client('config')
-          ec2 = boto3.client('ec2')
-          s3 = boto3.client('s3')
-
-          def lambda_handler(event, context):
-              """
-              Custom compliance validator for AWS resources.
-              Evaluates resource configurations and returns compliance status.
-              """
-              print(f"Received event: {json.dumps(event)}")
-
-              # Extract parameters from event
-              invoking_event = json.loads(event['invokingEvent'])
-              rule_parameters = json.loads(event.get('ruleParameters', '{}'))
-              configuration_item = invoking_event.get('configurationItem', {})
-
-              # Resource details
-              resource_type = configuration_item.get('resourceType')
-              resource_id = configuration_item.get('resourceId')
-
-              print(f"Evaluating {resource_type}: {resource_id}")
-
-              # Initialize compliance status
-              compliance_type = 'COMPLIANT'
-              annotation = 'Resource is compliant'
-
-              try:
-                  # Evaluate based on resource type
-                  if resource_type == 'AWS::S3::Bucket':
-                      compliance_type, annotation = evaluate_s3_bucket(resource_id, configuration_item)
-                  elif resource_type == 'AWS::EC2::SecurityGroup':
-                      compliance_type, annotation = evaluate_security_group(resource_id, configuration_item)
-                  elif resource_type == 'AWS::EC2::Instance':
-                      compliance_type, annotation = evaluate_ec2_instance(resource_id, configuration_item)
-                  else:
-                      compliance_type = 'NOT_APPLICABLE'
-                      annotation = f'No custom validation for {resource_type}'
-
-              except Exception as e:
-                  print(f"Error evaluating resource: {str(e)}")
-                  compliance_type = 'NON_COMPLIANT'
-                  annotation = f'Error during evaluation: {str(e)}'
-
-              # Submit evaluation result
-              evaluation = {
-                  'ComplianceResourceType': resource_type,
-                  'ComplianceResourceId': resource_id,
-                  'ComplianceType': compliance_type,
-                  'Annotation': annotation,
-                  'OrderingTimestamp': datetime.now()
-              }
-
-              response = config.put_evaluations(
-                  Evaluations=[evaluation],
-                  ResultToken=event['resultToken']
-              )
-
-              print(f"Evaluation result: {compliance_type} - {annotation}")
-              return response
-
-          def evaluate_s3_bucket(bucket_name, config_item):
-              """Evaluate S3 bucket compliance"""
-              try:
-                  # Check encryption
-                  try:
-                      s3.get_bucket_encryption(Bucket=bucket_name)
-                  except s3.exceptions.ServerSideEncryptionConfigurationNotFoundError:
-                      return 'NON_COMPLIANT', 'S3 bucket does not have encryption enabled'
-
-                  # Check public access block
-                  try:
-                      public_access = s3.get_public_access_block(Bucket=bucket_name)
-                      block_config = public_access['PublicAccessBlockConfiguration']
-                      if not all([
-                          block_config.get('BlockPublicAcls'),
-                          block_config.get('BlockPublicPolicy'),
-                          block_config.get('IgnorePublicAcls'),
-                          block_config.get('RestrictPublicBuckets')
-                      ]):
-                          return 'NON_COMPLIANT', 'S3 bucket does not have all public access blocks enabled'
-                  except:
-                      return 'NON_COMPLIANT', 'S3 bucket does not have public access block configured'
-
-                  # Check versioning
-                  try:
-                      versioning = s3.get_bucket_versioning(Bucket=bucket_name)
-                      if versioning.get('Status') != 'Enabled':
-                          return 'NON_COMPLIANT', 'S3 bucket does not have versioning enabled'
-                  except:
-                      return 'NON_COMPLIANT', 'Could not verify S3 bucket versioning'
-
-                  return 'COMPLIANT', 'S3 bucket meets all compliance requirements'
-              except Exception as e:
-                  return 'NON_COMPLIANT', f'Error evaluating S3 bucket: {str(e)}'
-
-          def evaluate_security_group(sg_id, config_item):
-              """Evaluate Security Group compliance"""
-              try:
-                  configuration = config_item.get('configuration', {})
-                  ip_permissions = configuration.get('ipPermissions', [])
-
-                  # Check for unrestricted inbound rules
-                  for rule in ip_permissions:
-                      for ip_range in rule.get('ipv4Ranges', []):
-                          if ip_range.get('cidrIp') == '0.0.0.0/0':
-                              from_port = rule.get('fromPort', 0)
-                              to_port = rule.get('toPort', 65535)
-                              # Allow only specific ports to be open to internet
-                              if from_port not in [80, 443]:
-                                  return 'NON_COMPLIANT', f'Security group has unrestricted access on port {from_port}'
-
-                  return 'COMPLIANT', 'Security group has appropriate restrictions'
-              except Exception as e:
-                  return 'NON_COMPLIANT', f'Error evaluating security group: {str(e)}'
-
-          def evaluate_ec2_instance(instance_id, config_item):
-              """Evaluate EC2 instance compliance"""
-              try:
-                  configuration = config_item.get('configuration', {})
-
-                  # Check if instance has required tags
-                  tags = configuration.get('tags', [])
-                  required_tags = ['Environment', 'Owner', 'CostCenter']
-                  existing_tag_keys = [tag.get('key') for tag in tags]
-
-                  missing_tags = [tag for tag in required_tags if tag not in existing_tag_keys]
-                  if missing_tags:
-                      return 'NON_COMPLIANT', f'EC2 instance missing required tags: {", ".join(missing_tags)}'
-
-                  # Check if monitoring is enabled
-                  monitoring = configuration.get('monitoring', {}).get('state')
-                  if monitoring != 'enabled':
-                      return 'NON_COMPLIANT', 'EC2 instance does not have detailed monitoring enabled'
-
-                  return 'COMPLIANT', 'EC2 instance meets all compliance requirements'
-              except Exception as e:
-                  return 'NON_COMPLIANT', f'Error evaluating EC2 instance: {str(e)}'
-      Tags:
-        - Key: Name
-          Value: !Sub compliance-validator-${EnvironmentSuffix}
-        - Key: Environment
-          Value: !Ref EnvironmentSuffix
-
-  # Permission for Config to invoke Lambda
-  ComplianceLambdaPermission:
-    Type: AWS::Lambda::Permission
-    Properties:
-      FunctionName: !Ref CustomComplianceValidatorFunction
-      Action: lambda:InvokeFunction
-      Principal: config.amazonaws.com
-      SourceAccount: !Ref AWS::AccountId
-
-  # AWS Managed Config Rule - S3 Bucket Encryption
-  S3BucketEncryptionRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: !Sub s3-bucket-encryption-${EnvironmentSuffix}
-      Description: Checks that S3 buckets have encryption enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::S3::Bucket
-
-  # AWS Managed Config Rule - S3 Bucket Public Access
-  S3BucketPublicAccessRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: !Sub s3-bucket-public-access-${EnvironmentSuffix}
-      Description: Checks that S3 buckets do not allow public access
-      Source:
-        Owner: AWS
-        SourceIdentifier: S3_BUCKET_PUBLIC_READ_PROHIBITED
-
-  # AWS Managed Config Rule - RDS Encryption
-  RDSEncryptionRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: !Sub rds-encryption-enabled-${EnvironmentSuffix}
-      Description: Checks that RDS instances have encryption enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: RDS_STORAGE_ENCRYPTED
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::RDS::DBInstance
-
-  # AWS Managed Config Rule - EBS Encryption
-  EBSEncryptionRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: !Sub ec2-ebs-encryption-${EnvironmentSuffix}
-      Description: Checks that EBS volumes are encrypted
-      Source:
-        Owner: AWS
-        SourceIdentifier: ENCRYPTED_VOLUMES
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::EC2::Volume
-
-  # AWS Managed Config Rule - Required Tags
-  RequiredTagsRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: !Sub required-tags-${EnvironmentSuffix}
-      Description: Checks that resources have required tags
-      InputParameters:
-        tag1Key: Environment
-        tag2Key: Owner
-        tag3Key: CostCenter
-      Source:
-        Owner: AWS
-        SourceIdentifier: REQUIRED_TAGS
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::EC2::Instance
-          - AWS::S3::Bucket
-          - AWS::RDS::DBInstance
-
-  # AWS Managed Config Rule - VPC Flow Logs
-  VPCFlowLogsRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn: ConfigRecorder
-    Properties:
-      ConfigRuleName: !Sub vpc-flow-logs-enabled-${EnvironmentSuffix}
-      Description: Checks that VPC Flow Logs are enabled
-      Source:
-        Owner: AWS
-        SourceIdentifier: VPC_FLOW_LOGS_ENABLED
-
-  # Custom Config Rule using Lambda
-  CustomComplianceRule:
-    Type: AWS::Config::ConfigRule
-    DependsOn:
-      - ConfigRecorder
-      - ComplianceLambdaPermission
-    Properties:
-      ConfigRuleName: !Sub custom-compliance-validation-${EnvironmentSuffix}
-      Description: Custom compliance validation for resources
-      Source:
-        Owner: CUSTOM_LAMBDA
-        SourceIdentifier: !GetAtt CustomComplianceValidatorFunction.Arn
-        SourceDetails:
-          - EventSource: aws.config
-            MessageType: ConfigurationItemChangeNotification
-          - EventSource: aws.config
-            MessageType: OversizedConfigurationItemChangeNotification
-      Scope:
-        ComplianceResourceTypes:
-          - AWS::S3::Bucket
-          - AWS::EC2::SecurityGroup
-          - AWS::EC2::Instance
-
-  # CloudWatch Alarm for non-compliant resources
-  NonCompliantResourcesAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub compliance-violations-${EnvironmentSuffix}
-      AlarmDescription: Alert when non-compliant resources are detected
-      MetricName: NonCompliantResources
-      Namespace: AWS/Config
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref ComplianceNotificationTopic
-
-  # CloudWatch Alarm for Config Recorder
-  ConfigRecorderFailureAlarm:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmName: !Sub config-recorder-failure-${EnvironmentSuffix}
-      AlarmDescription: Alert when Config Recorder fails
-      MetricName: ConfigurationRecorderError
-      Namespace: AWS/Config
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
-      AlarmActions:
-        - !Ref ComplianceNotificationTopic
-
-Outputs:
-  ConfigBucketName:
-    Description: S3 bucket for Config data storage
-    Value: !Ref ConfigBucket
-    Export:
-      Name: !Sub ${AWS::StackName}-ConfigBucket
-
-  ComplianceNotificationTopicArn:
-    Description: SNS topic ARN for compliance notifications
-    Value: !Ref ComplianceNotificationTopic
-    Export:
-      Name: !Sub ${AWS::StackName}-NotificationTopic
-
-  CustomComplianceFunctionArn:
-    Description: Lambda function ARN for custom compliance validation
-    Value: !GetAtt CustomComplianceValidatorFunction.Arn
-    Export:
-      Name: !Sub ${AWS::StackName}-ComplianceFunction
-
-  ConfigRecorderName:
-    Description: AWS Config Recorder name
-    Value: !Ref ConfigRecorder
-    Export:
-      Name: !Sub ${AWS::StackName}-ConfigRecorder
-
-  KmsKeyId:
-    Description: KMS Key ID for encryption
-    Value: !Ref ComplianceKmsKey
-    Export:
-      Name: !Sub ${AWS::StackName}-KmsKey
-
-  ComplianceRuleNames:
-    Description: List of Config Rule names
-    Value: !Sub |
-      - ${S3BucketEncryptionRule}
-      - ${S3BucketPublicAccessRule}
-      - ${RDSEncryptionRule}
-      - ${EBSEncryptionRule}
-      - ${RequiredTagsRule}
-      - ${VPCFlowLogsRule}
-      - ${CustomComplianceRule}
+name: payment-migration-infra
+runtime:
+  name: python
+description: Blue-Green Migration Infrastructure
+main: tap.py
+# ERROR 36: Missing AWS region configuration
 ```
 
-## Key Features
+### requirements.txt
 
-### 1. AWS Config Setup
-- **Configuration Recorder**: Continuously records resource configurations
-- **Delivery Channel**: Stores snapshots in S3 and sends notifications via SNS
-- **Recording Scope**: All supported resource types including global resources
-
-### 2. Managed Config Rules
-- **S3 Bucket Encryption**: Ensures all S3 buckets have encryption enabled
-- **S3 Public Access**: Prevents public access to S3 buckets
-- **RDS Encryption**: Ensures RDS instances are encrypted
-- **EBS Encryption**: Ensures EBS volumes are encrypted
-- **Required Tags**: Validates presence of Environment, Owner, and CostCenter tags
-- **VPC Flow Logs**: Ensures VPC Flow Logs are enabled
-
-### 3. Custom Compliance Validation
-- **Lambda Function**: Implements custom compliance logic
-- **S3 Bucket Validation**: Checks encryption, public access blocks, and versioning
-- **Security Group Validation**: Ensures no unrestricted access except for HTTP/HTTPS
-- **EC2 Instance Validation**: Validates required tags and monitoring configuration
-
-### 4. Security Features
-- **KMS Encryption**: All data encrypted at rest using customer-managed KMS key
-- **Key Rotation**: Automatic key rotation enabled
-- **IAM Least Privilege**: Minimal permissions for all roles
-- **S3 Public Access Block**: All four settings enabled on Config bucket
-- **Versioning**: S3 bucket versioning enabled for audit trail
-
-### 5. Monitoring and Alerting
-- **SNS Notifications**: Real-time alerts for compliance violations
-- **CloudWatch Logs**: Centralized logging for Lambda functions (14-day retention)
-- **CloudWatch Alarms**: Alerts for non-compliant resources and Config failures
-- **Email Subscriptions**: Email notifications to compliance team
-
-### 6. Cost Optimization
-- **Lifecycle Policies**: Automatic deletion of old Config data after 90 days
-- **Version Cleanup**: Non-current versions deleted after 30 days
-- **Serverless Architecture**: Lambda and Config are pay-per-use
-- **Log Retention**: Short retention period (14 days) to reduce costs
-
-### 7. Operational Excellence
-- **Resource Tagging**: All resources properly tagged
-- **Parameter-driven**: Environment suffix for multi-environment support
-- **Outputs**: Exports for cross-stack references
-- **Documentation**: Clear descriptions for all resources
-
-## Deployment Instructions
-
-1. **Prerequisites**:
-   - AWS CLI configured with appropriate credentials
-   - Permissions to create Config, Lambda, S3, SNS, KMS, and IAM resources
-
-2. **Deploy the stack**:
-   ```bash
-   aws cloudformation create-stack \
-     --stack-name compliance-validation \
-     --template-body file://lib/TapStack.yml \
-     --parameters \
-       ParameterKey=EnvironmentSuffix,ParameterValue=prod \
-       ParameterKey=NotificationEmail,ParameterValue=your-email@example.com \
-     --capabilities CAPABILITY_NAMED_IAM \
-     --region us-east-1
-   ```
-
-3. **Confirm SNS subscription**:
-   - Check email for SNS subscription confirmation
-   - Click the confirmation link
-
-4. **Enable Config Recorder**:
-   ```bash
-   aws configservice start-configuration-recorder \
-     --configuration-recorder-name compliance-config-recorder-prod \
-     --region us-east-1
-   ```
-
-5. **Verify deployment**:
-   ```bash
-   aws cloudformation describe-stacks \
-     --stack-name compliance-validation \
-     --region us-east-1
-   ```
-
-## Testing the System
-
-1. **Test S3 compliance**:
-   ```bash
-   # Create non-compliant bucket (no encryption)
-   aws s3 mb s3://test-non-compliant-bucket
-
-   # Wait for Config to detect and evaluate (2-5 minutes)
-   # Check compliance status
-   aws configservice get-compliance-details-by-resource \
-     --resource-type AWS::S3::Bucket \
-     --resource-id test-non-compliant-bucket
-   ```
-
-2. **Test custom validation**:
-   - Create resources that violate custom rules
-   - Monitor Lambda logs in CloudWatch
-   - Verify compliance evaluations in Config dashboard
-
-3. **Test notifications**:
-   - Verify SNS email notifications are received
-   - Check notification content includes resource details
-
-## Extending with New Rules
-
-To add new custom compliance checks:
-
-1. Update the Lambda function code to handle new resource types
-2. Add evaluation logic for the new resource type
-3. Update the Config Rule scope to include the new resource type
-4. Deploy the updated stack
-
-Example:
-```python
-elif resource_type == 'AWS::Lambda::Function':
-    compliance_type, annotation = evaluate_lambda_function(resource_id, configuration_item)
+```
+pulumi>=3.0.0,<4.0.0
+pulumi-aws>=6.0.0,<7.0.0
 ```
 
-## Cleanup
-
-To remove all resources:
-```bash
-# Stop Config recorder first
-aws configservice stop-configuration-recorder \
-  --configuration-recorder-name compliance-config-recorder-prod
-
-# Delete the stack
-aws cloudformation delete-stack \
-  --stack-name compliance-validation
-
-# Empty and delete the S3 bucket
-aws s3 rm s3://config-compliance-data-prod-ACCOUNT_ID --recursive
-```
-
-## AWS Services Used
-
-- AWS Config
-- AWS Lambda
-- Amazon S3
-- Amazon SNS
-- AWS KMS
-- Amazon CloudWatch
-- AWS IAM
+This implementation provides the basic blue-green deployment infrastructure. The Lambda function can be invoked to switch between environments, and the ALB will route traffic accordingly.
