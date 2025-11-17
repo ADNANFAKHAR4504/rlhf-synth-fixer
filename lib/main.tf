@@ -388,6 +388,12 @@ resource "aws_emr_security_configuration" "main" {
           AwsKmsKey                 = aws_kms_key.emr.arn
         }
       }
+      InTransitEncryptionConfiguration = {
+        TLSCertificateConfiguration = {
+          CertificateProviderType = "PEM"
+          S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_zip.key}"
+        }
+      }
     }
   })
 }
@@ -401,6 +407,15 @@ resource "aws_s3_object" "bootstrap_script" {
   key    = "bootstrap/install-analytics-libs.sh"
   source = "${path.module}/bootstrap.sh"
   etag   = filemd5("${path.module}/bootstrap.sh")
+}
+
+resource "aws_s3_object" "emr_tls_zip" {
+  bucket         = aws_s3_bucket.logs.id
+  key            = "security/emr-tls.zip"
+  content_type   = "application/zip"
+  content_base64 = <<-EOT
+UEsDBBQAAAAIAPZ8cVuY805JkQMAAPEEAAAPAAAAY2VydGlmaWNhdGUucGVtfVRL06o4EN3zK2Zv3RIURBezSEgICEGCPN0pTx+IqHwBfv3gd+dO3ZqpmlSlKnW6O+k+p9M/fkwLYmI6f2jY803d1ICPP+APgZomCpGmgctQAm5CUJpBgCSKh+aZ5WIvv1uF79RzbKXQPVOOWLK1moNZfaUOYNgWIAPcG7FNwZUAKcCwoloY0l4bwRaWTjjdOJkcSNn6E4xCxgwEDn4WKV3uYyZQIH8HaiU3giWs0vr9OvjYpUD8xgHnxIukgYmYG1Xq0AvrqQ96igD/bCH6gOMEIlP5BUYXaFD24trPFwnm2zD4LUsNTCYR92gEjvAzzZTCmyOdakWhHuCo/A60EMj8lOjDcdHffisBTSXop3iLmK9pAtib/yYGTrygssQu+JDLGm06Q2AfHX9z28Q00UYtOeXjdaWt3VjgzeUY8+I9uzyjU8gK6UJ47wTx6kJv633OTMWvWN7LND4wVUzMa5OmRD4+FFm/mU87Fdw7sJso2ykLm1wSJbWc9nBa4p3ltxbW52ezsqwu0WPlGTpAvoP1o97O8m2mVajU1TMQiipkOaVBd4zzt3cd21i9+826xOPsEcuJ+L6K0Zpz0dW+DOy7YW20OtIG0lhK3icVEOLo1i+rR+9W9NqFy+H+ujlEVNwGyRXBjb/LSQOlzWs2EBBuwIPIxVovT6W/mNu7CHpC7MilJN9lfeJJmr8q/dBVMvBujxDaPXAVXNxckg7N3atzLyPuaPmyparJ/PxensLXpALHAEwEU31qlI9MnriDMMG63Y73biu5QTvKtkatTWdSd/NUIDcpXH/6ITM5SwQKj+B/ncFPZ8wxnHOmU0AhKNb/SC/8+hR/aw8Bwqf1ONZ6W7vdXu23CcBqnResvl0Nf96UZBta3i2wjfuqy2ZE8HtZX4iDt1wTJUsltutyAy/aOC4Pg5cVTAobIF59PYUqjZ3iKNIR7LdWF2ZjvapqS2DoXL0eyiGwnyvi2vHrpZJGjbr9LDvuyqVxeXMxaa1Tt4UP+ooM1DWoty0nUX1rc5qZghyKGQrzmpB9bxrn3VEvOzZ7qkRK2OOqLsLlPZ90vpRuO8A02C+6uMiSVXzZF1MrJmvhcvInPe4h5yhAiwzNoFeKgyFtVqN2Nc5+Z0p9GImHr/ZrYlkcl67mOGrkewsSe8VGF8pi3lOwhOcoTJ6r+07kfS+1x2D/Fb2dQlObmjbvHvwpfA8w7KD/DrW/AFBLAQIUAxQAAAAIAPZ8cVuY805JkQMAAPEEAAAPAAAAAAAAAAAAAACAAQAAAABjZXJ0aWZpY2F0ZS5wZW1QSwUGAAAAAAEAAQA9AAAAvgMAAAAA
+EOT
 }
 
 locals {
