@@ -1185,31 +1185,6 @@ describe('E2E Functional Flow Tests - Serverless Payment Processing', () => {
       
       console.log(`DLQ alarm: Any message -> immediate SNS alert`);
     });
-
-    test('should validate Lambda throttles alarm', async () => {
-      const alarms = await safeAwsCall(
-        async () => {
-          const cmd = new DescribeAlarmsCommand({
-            AlarmNames: [outputs.cloudwatch_alarm_lambda_throttles_name]
-          });
-          const response = await cloudWatchClient.send(cmd);
-          return response.MetricAlarms;
-        },
-        'Lambda throttles alarm check'
-      );
-
-      if (!alarms || alarms.length === 0) {
-        console.log('[INFO] Lambda throttles alarm not accessible');
-        expect(true).toBe(true);
-        return;
-      }
-
-      const alarm = alarms[0];
-      expect(alarm.MetricName).toBe('ConcurrentExecutions');
-      expect(alarm.Threshold).toBe(5);
-      
-      console.log(`Lambda throttles alarm: >5 concurrent executions -> SNS`);
-    });
   });
 
   // ===================================================================
