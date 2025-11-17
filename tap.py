@@ -53,3 +53,14 @@ stack = TapStack(
     args=TapStackArgs(environment_suffix=environment_suffix),
     opts=ResourceOptions(provider=provider)
 )
+
+# Export stack outputs to make them accessible via pulumi stack output
+pulumi.export("alb_dns_name", stack.alb_dns_name)
+pulumi.export("primary_api_endpoint", stack.primary_api_endpoint)
+pulumi.export("secondary_api_endpoint", stack.secondary_api_endpoint)
+pulumi.export("dashboard_url", stack.dashboard_url)
+pulumi.export("global_table_name", stack.global_table_name)
+pulumi.export("primary_bucket", stack.primary_bucket)
+pulumi.export("secondary_bucket", stack.secondary_bucket)
+pulumi.export("primary_queue_url", stack.primary_queue_url)
+pulumi.export("secondary_queue_url", stack.secondary_queue_url)

@@ -154,22 +154,33 @@ class TapStack(pulumi.ComponentResource):
             primary_provider
         )
 
+        # Store outputs as instance attributes for external access
+        self.alb_dns_name = alb_result["dns_name"]
+        self.primary_api_endpoint = primary_api.invoke_url
+        self.secondary_api_endpoint = secondary_api.invoke_url
+        self.dashboard_url = pulumi.Output.concat(
+            "https://console.aws.amazon.com/cloudwatch/home?region=",
+            primary_region,
+            "#dashboards:name=",
+            dashboard.dashboard_name
+        )
+        self.global_table_name = global_table.name
+        self.primary_bucket = primary_bucket.id
+        self.secondary_bucket = secondary_bucket.id
+        self.primary_queue_url = primary_queue.url
+        self.secondary_queue_url = secondary_queue.url
+
         # Export outputs
         self.register_outputs({
-            "alb_dns_name": alb_result["dns_name"],
-            "primary_api_endpoint": primary_api.invoke_url,
-            "secondary_api_endpoint": secondary_api.invoke_url,
-            "dashboard_url": pulumi.Output.concat(
-                "https://console.aws.amazon.com/cloudwatch/home?region=",
-                primary_region,
-                "#dashboards:name=",
-                dashboard.dashboard_name
-            ),
-            "global_table_name": global_table.name,
-            "primary_bucket": primary_bucket.id,
-            "secondary_bucket": secondary_bucket.id,
-            "primary_queue_url": primary_queue.url,
-            "secondary_queue_url": secondary_queue.url
+            "alb_dns_name": self.alb_dns_name,
+            "primary_api_endpoint": self.primary_api_endpoint,
+            "secondary_api_endpoint": self.secondary_api_endpoint,
+            "dashboard_url": self.dashboard_url,
+            "global_table_name": self.global_table_name,
+            "primary_bucket": self.primary_bucket,
+            "secondary_bucket": self.secondary_bucket,
+            "primary_queue_url": self.primary_queue_url,
+            "secondary_queue_url": self.secondary_queue_url
         })
 
     def _create_vpc(self, region: str, provider: aws.Provider) -> aws.ec2.Vpc:
