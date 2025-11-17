@@ -43,23 +43,23 @@ class StorageStack:
         )
 
         # Enable versioning on data bucket
-        self.data_bucket_versioning = aws.s3.BucketVersioningV2(
+        self.data_bucket_versioning = aws.s3.BucketVersioning(
             f"data-bucket-versioning-{environment_suffix}",
             bucket=self.data_bucket.id,
-            versioning_configuration=aws.s3.BucketVersioningV2VersioningConfigurationArgs(
+            versioning_configuration=aws.s3.BucketVersioningVersioningConfigurationArgs(
                 status="Enabled"
             ),
             opts=ResourceOptions(parent=self.data_bucket)
         )
 
         # Enable encryption on data bucket
-        default_encryption_config = aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        default_encryption_config = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="AES256"
         )
-        encryption_rule = aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+        encryption_rule = aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
             apply_server_side_encryption_by_default=default_encryption_config
         )
-        self.data_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        self.data_bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f"data-bucket-encryption-{environment_suffix}",
             bucket=self.data_bucket.id,
             rules=[encryption_rule],
@@ -87,13 +87,13 @@ class StorageStack:
         )
 
         # Enable encryption on logs bucket
-        logs_default_encryption_config = aws.s3.BucketServerSideEncryptionConfigurationV2RuleApplyServerSideEncryptionByDefaultArgs(
+        logs_default_encryption_config = aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
             sse_algorithm="AES256"
         )
-        logs_encryption_rule = aws.s3.BucketServerSideEncryptionConfigurationV2RuleArgs(
+        logs_encryption_rule = aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
             apply_server_side_encryption_by_default=logs_default_encryption_config
         )
-        self.logs_bucket_encryption = aws.s3.BucketServerSideEncryptionConfigurationV2(
+        self.logs_bucket_encryption = aws.s3.BucketServerSideEncryptionConfiguration(
             f"logs-bucket-encryption-{environment_suffix}",
             bucket=self.logs_bucket.id,
             rules=[logs_encryption_rule],
