@@ -1,0 +1,29 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "z4k0u2",
+  "team": "synth-2",
+  "startedAt": "2025-11-17T03:40:00.000Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments",
+    "Environment Migration"
+  ],
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "Aurora",
+    "ECS",
+    "Fargate",
+    "ALB",
+    "DMS",
+    "Lambda",
+    "CloudWatch",
+    "IAM",
+    "SecurityGroups",
+    "NAT"
+  ],
+  "training_quality": 9
+}
