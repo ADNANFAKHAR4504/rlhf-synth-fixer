@@ -1791,7 +1791,7 @@ Resources:
       TreatMissingData: notBreaching
 
   # ======================
-  # CloudWatch Dashboard with Corrected Metrics Format
+  # CloudWatch Dashboard with Fixed Metric Format
   # ======================
   PipelineDashboard:
     Type: AWS::CloudWatch::Dashboard
@@ -1805,7 +1805,7 @@ Resources:
               "properties": {
                 "title": "Kinesis Incoming Records",
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingRecords", { "dimensions": { "StreamName": "${MarketDataStream}" } }]
+                  ["AWS/Kinesis", "IncomingRecords", "StreamName", "${MarketDataStream}"]
                 ],
                 "period": 60,
                 "stat": "Sum",
@@ -1818,7 +1818,7 @@ Resources:
               "properties": {
                 "title": "Kinesis Incoming Bytes",
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingBytes", { "dimensions": { "StreamName": "${MarketDataStream}" } }]
+                  ["AWS/Kinesis", "IncomingBytes", "StreamName", "${MarketDataStream}"]
                 ],
                 "period": 60,
                 "stat": "Sum",
@@ -1831,7 +1831,7 @@ Resources:
               "properties": {
                 "title": "Validation Lambda Avg Duration",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", { "dimensions": { "FunctionName": "${DataValidationFunction}" } }]
+                  ["AWS/Lambda", "Duration", "FunctionName", "${DataValidationFunction}"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -1844,7 +1844,7 @@ Resources:
               "properties": {
                 "title": "Validation Lambda Max Duration",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", { "dimensions": { "FunctionName": "${DataValidationFunction}" } }]
+                  ["AWS/Lambda", "Duration", "FunctionName", "${DataValidationFunction}"]
                 ],
                 "period": 300,
                 "stat": "Maximum",
@@ -1857,7 +1857,7 @@ Resources:
               "properties": {
                 "title": "Kinesis Consumer Avg Duration",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", { "dimensions": { "FunctionName": "${KinesisConsumerFunction}" } }]
+                  ["AWS/Lambda", "Duration", "FunctionName", "${KinesisConsumerFunction}"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -1870,7 +1870,7 @@ Resources:
               "properties": {
                 "title": "Kinesis Consumer Max Duration",
                 "metrics": [
-                  ["AWS/Lambda", "Duration", { "dimensions": { "FunctionName": "${KinesisConsumerFunction}" } }]
+                  ["AWS/Lambda", "Duration", "FunctionName", "${KinesisConsumerFunction}"]
                 ],
                 "period": 300,
                 "stat": "Maximum",
@@ -1883,8 +1883,8 @@ Resources:
               "properties": {
                 "title": "Lambda Errors",
                 "metrics": [
-                  ["AWS/Lambda", "Errors", { "dimensions": { "FunctionName": "${DataValidationFunction}" } }],
-                  [".", ".", { "dimensions": { "FunctionName": "${KinesisConsumerFunction}" } }]
+                  ["AWS/Lambda", "Errors", "FunctionName", "${DataValidationFunction}"],
+                  [".", ".", "FunctionName", "${KinesisConsumerFunction}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -1898,7 +1898,7 @@ Resources:
               "properties": {
                 "title": "Validation Failures",
                 "metrics": [
-                  ["FinancialPipeline", "ValidationFailures", { "dimensions": { "Environment": "${Environment}" } }]
+                  ["FinancialPipeline", "ValidationFailures", "Environment", "${Environment}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -1912,7 +1912,7 @@ Resources:
               "properties": {
                 "title": "Dead Letter Queue",
                 "metrics": [
-                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", { "dimensions": { "QueueName": "${ValidationDeadLetterQueue.QueueName}" } }]
+                  ["AWS/SQS", "ApproximateNumberOfMessagesVisible", "QueueName", "${ValidationDeadLetterQueue.QueueName}"]
                 ],
                 "period": 300,
                 "stat": "Maximum",
@@ -1926,7 +1926,7 @@ Resources:
               "properties": {
                 "title": "Raw Data Bucket Size",
                 "metrics": [
-                  ["AWS/S3", "BucketSizeBytes", { "dimensions": { "BucketName": "${RawDataBucket}", "StorageType": "StandardStorage" } }]
+                  ["AWS/S3", "BucketSizeBytes", "BucketName", "${RawDataBucket}", "StorageType", "StandardStorage"]
                 ],
                 "period": 86400,
                 "stat": "Average",
@@ -1939,7 +1939,7 @@ Resources:
               "properties": {
                 "title": "Processed Data Bucket Size",
                 "metrics": [
-                  ["AWS/S3", "BucketSizeBytes", { "dimensions": { "BucketName": "${ProcessedDataBucket}", "StorageType": "StandardStorage" } }]
+                  ["AWS/S3", "BucketSizeBytes", "BucketName", "${ProcessedDataBucket}", "StorageType", "StandardStorage"]
                 ],
                 "period": 86400,
                 "stat": "Average",
@@ -1952,7 +1952,7 @@ Resources:
               "properties": {
                 "title": "Archived Data Bucket Size",
                 "metrics": [
-                  ["AWS/S3", "BucketSizeBytes", { "dimensions": { "BucketName": "${ArchivedDataBucket}", "StorageType": "StandardStorage" } }]
+                  ["AWS/S3", "BucketSizeBytes", "BucketName", "${ArchivedDataBucket}", "StorageType", "StandardStorage"]
                 ],
                 "period": 86400,
                 "stat": "Average",
@@ -1965,7 +1965,7 @@ Resources:
               "properties": {
                 "title": "Processing Job Table Read",
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", { "dimensions": { "TableName": "${ProcessingJobTable}" } }]
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${ProcessingJobTable}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -1978,7 +1978,7 @@ Resources:
               "properties": {
                 "title": "Processing Job Table Write",
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", { "dimensions": { "TableName": "${ProcessingJobTable}" } }]
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${ProcessingJobTable}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -1991,7 +1991,7 @@ Resources:
               "properties": {
                 "title": "Data Lineage Table Read",
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", { "dimensions": { "TableName": "${DataLineageTable}" } }]
+                  ["AWS/DynamoDB", "ConsumedReadCapacityUnits", "TableName", "${DataLineageTable}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -2004,7 +2004,7 @@ Resources:
               "properties": {
                 "title": "Data Lineage Table Write",
                 "metrics": [
-                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", { "dimensions": { "TableName": "${DataLineageTable}" } }]
+                  ["AWS/DynamoDB", "ConsumedWriteCapacityUnits", "TableName", "${DataLineageTable}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -2017,7 +2017,7 @@ Resources:
               "properties": {
                 "title": "Glue Completed Tasks",
                 "metrics": [
-                  ["AWS/Glue", "glue.driver.aggregate.numCompletedTasks", { "dimensions": { "JobName": "${JsonToParquetJob}", "JobRunId": "ALL" } }]
+                  ["AWS/Glue", "glue.driver.aggregate.numCompletedTasks", "JobName", "${JsonToParquetJob}", "JobRunId", "ALL"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -2030,7 +2030,7 @@ Resources:
               "properties": {
                 "title": "Glue Failed Tasks",
                 "metrics": [
-                  ["AWS/Glue", "glue.driver.aggregate.numFailedTasks", { "dimensions": { "JobName": "${JsonToParquetJob}", "JobRunId": "ALL" } }]
+                  ["AWS/Glue", "glue.driver.aggregate.numFailedTasks", "JobName", "${JsonToParquetJob}", "JobRunId", "ALL"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -2043,7 +2043,7 @@ Resources:
               "properties": {
                 "title": "Glue Job Elapsed Time",
                 "metrics": [
-                  ["AWS/Glue", "glue.driver.aggregate.elapsedTime", { "dimensions": { "JobName": "${JsonToParquetJob}", "JobRunId": "ALL" } }]
+                  ["AWS/Glue", "glue.driver.aggregate.elapsedTime", "JobName", "${JsonToParquetJob}", "JobRunId", "ALL"]
                 ],
                 "period": 300,
                 "stat": "Average",
@@ -2056,7 +2056,7 @@ Resources:
               "properties": {
                 "title": "Validated Records",
                 "metrics": [
-                  ["FinancialPipeline", "ValidatedRecords", { "dimensions": { "Environment": "${Environment}" } }]
+                  ["FinancialPipeline", "ValidatedRecords", "Environment", "${Environment}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -2069,7 +2069,7 @@ Resources:
               "properties": {
                 "title": "Kinesis Records Processed",
                 "metrics": [
-                  ["FinancialPipeline", "KinesisRecordsProcessed", { "dimensions": { "Environment": "${Environment}" } }]
+                  ["FinancialPipeline", "KinesisRecordsProcessed", "Environment", "${Environment}"]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -2082,7 +2082,7 @@ Resources:
               "properties": {
                 "title": "Pipeline Health Score",
                 "metrics": [
-                  ["FinancialPipeline", "KinesisProcessingSuccess", { "dimensions": { "Environment": "${Environment}" } }]
+                  ["FinancialPipeline", "KinesisProcessingSuccess", "Environment", "${Environment}"]
                 ],
                 "period": 300,
                 "stat": "Average",
