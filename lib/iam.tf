@@ -1,7 +1,5 @@
 # IAM configuration for the EKS cluster, managed node groups, and IRSA integrations
 
-data "aws_caller_identity" "current" {}
-
 locals {
   use_existing_db_secret = var.existing_database_secret_arn != ""
 }
