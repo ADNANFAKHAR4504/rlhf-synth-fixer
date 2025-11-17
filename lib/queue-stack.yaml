@@ -1,0 +1,85 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Queue Infrastructure for Payment Processing'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Description: Unique suffix for resource naming
+
+Resources:
+  TransactionDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'payment-transaction-dlq-${EnvironmentSuffix}'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-transaction-dlq-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  TransactionQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'payment-transaction-queue-${EnvironmentSuffix}'
+      VisibilityTimeout: 300
+      MessageRetentionPeriod: 345600
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TransactionDLQ.Arn
+        maxReceiveCount: 3
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-transaction-queue-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+        - Key: Project
+          Value: payment-processing-dr
+        - Key: CostCenter
+          Value: engineering
+
+  NotificationDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'payment-notification-dlq-${EnvironmentSuffix}'
+      MessageRetentionPeriod: 1209600
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-notification-dlq-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NotificationQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub 'payment-notification-queue-${EnvironmentSuffix}'
+      VisibilityTimeout: 60
+      MessageRetentionPeriod: 345600
+      ReceiveMessageWaitTimeSeconds: 20
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NotificationDLQ.Arn
+        maxReceiveCount: 5
+      KmsMasterKeyId: alias/aws/sqs
+      Tags:
+        - Key: Name
+          Value: !Sub 'payment-notification-queue-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  TransactionQueueUrl:
+    Description: Transaction Queue URL
+    Value: !Ref TransactionQueue
+
+  TransactionQueueArn:
+    Description: Transaction Queue ARN
+    Value: !GetAtt TransactionQueue.Arn
+
+  NotificationQueueUrl:
+    Description: Notification Queue URL
+    Value: !Ref NotificationQueue
+
+  NotificationQueueArn:
+    Description: Notification Queue ARN
+    Value: !GetAtt NotificationQueue.Arn
