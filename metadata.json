@@ -1,0 +1,35 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912287",
+  "team": "3",
+  "startedAt": "2025-11-17T09:47:17.917Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "LogGroup",
+    "MetricFilter",
+    "Dashboard",
+    "Alarm",
+    "CompositeAlarm",
+    "Topic",
+    "Subscription",
+    "Rule",
+    "Function",
+    "Permission",
+    "Role",
+    "Policy",
+    "QueryDefinition",
+    "MetricStream",
+    "Bucket",
+    "BucketPolicy",
+    "DeliveryStream",
+    "Canary",
+    "InsightRule",
+    "FlowLog"
+  ]
+}
