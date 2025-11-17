@@ -925,8 +925,6 @@ Resources:
             Ebs:
               VolumeSize: 30
               VolumeType: gp3
-              Encrypted: true
-              KmsKeyId: !Ref EBSKMSKey
               DeleteOnTermination: true
         Monitoring:
           Enabled: true
