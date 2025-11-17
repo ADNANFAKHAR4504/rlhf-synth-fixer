@@ -62,10 +62,12 @@ class TestPaymentMigrationStack:
         synth_dict = json.loads(synth) if isinstance(synth, str) else synth
         backend = synth_dict.get("terraform", {}).get("backend", {})
         assert "s3" in backend
+        # The bucket name should come from environment variable or default
         assert backend["s3"]["bucket"] == "iac-rlhf-tf-states"
         assert backend["s3"]["encrypt"] is True
         assert backend["s3"]["use_lockfile"] is True
-        assert "payment-migration" in backend["s3"]["key"]
+        # Key format should be {state_bucket_key}/{stack_name}.tfstate
+        assert ".tfstate" in backend["s3"]["key"]
 
     def test_outputs_defined(self, stack):
         """Test all required outputs are defined."""

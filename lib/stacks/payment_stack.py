@@ -1,13 +1,17 @@
-from cdktf import TerraformStack, TerraformOutput, S3Backend
+import os
+
+from cdktf import S3Backend, TerraformOutput, TerraformStack
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from constructs import Construct
-from .networking import NetworkingModule
-from .database import DatabaseModule
+
 from .compute import ComputeModule
-from .storage import StorageModule
-from .security import SecurityModule
-from .monitoring import MonitoringModule
+from .database import DatabaseModule
 from .dns import DnsModule
+from .monitoring import MonitoringModule
+from .networking import NetworkingModule
+from .security import SecurityModule
+from .storage import StorageModule
+
 
 class PaymentMigrationStack(TerraformStack):
     def __init__(self, scope: Construct, id: str, environment_suffix: str, migration_phase: str):
@@ -16,16 +20,22 @@ class PaymentMigrationStack(TerraformStack):
         self.environment_suffix = environment_suffix
         self.migration_phase = migration_phase
 
-        # Configure S3 backend for state
-        S3Backend(self,
-            bucket="iac-rlhf-tf-states",  # Using shared state bucket
-            key=f"payment-migration/{environment_suffix}/{migration_phase}/terraform.tfstate",
-            region="us-east-1",
-            encrypt=True
-        )
-        
-        # Add S3 state locking using escape hatch (dynamodb_table is deprecated)
-        self.add_override("terraform.backend.s3.use_lockfile", True)
+        # Configure S3 backend for state using environment variables
+        use_s3_backend = os.getenv("USE_S3_BACKEND", "true").lower() == "true"
+        if use_s3_backend:
+            state_bucket = os.getenv("STATE_BUCKET", os.getenv("TERRAFORM_STATE_BUCKET", "iac-rlhf-tf-states"))
+            state_bucket_region = os.getenv("STATE_BUCKET_REGION", os.getenv("TERRAFORM_STATE_BUCKET_REGION", "us-east-1"))
+            state_bucket_key = os.getenv("STATE_BUCKET_KEY", os.getenv("TERRAFORM_STATE_BUCKET_KEY", environment_suffix))
+            
+            S3Backend(self,
+                bucket=state_bucket,
+                key=f"{state_bucket_key}/{id}.tfstate",
+                region=state_bucket_region,
+                encrypt=True
+            )
+            
+            # Add S3 state locking using escape hatch (dynamodb_table is deprecated)
+            self.add_override("terraform.backend.s3.use_lockfile", True)
 
         # Primary region provider
         self.primary_provider = AwsProvider(self, "aws-primary",
