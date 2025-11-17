@@ -20,6 +20,7 @@ from typing import Dict, List, Tuple, Any, Optional, TypedDict
 
 import boto3
 from botocore.exceptions import ClientError, BotoCoreError
+from tabulate import tabulate
 
 
 def _lazy_import(module: str, pip_name: Optional[str] = None):
@@ -108,8 +109,19 @@ class ContainerResourceAnalyzer:
         self.rightsizing_plans = []
         self.utilization_data = defaultdict(list)
 
+        # Track analysis metadata
+        self.analysis_metadata = {
+            "clusters_analyzed": [],
+            "clusters_excluded": [],
+            "services_excluded": {"dev": 0, "too_new": 0},
+            "analysis_start_time": None,
+            "analysis_end_time": None,
+            "finding_type_counts": defaultdict(int),
+        }
+
     def analyze(self):
         """Main analysis method orchestrating all checks"""
+        self.analysis_metadata["analysis_start_time"] = datetime.utcnow()
         logger.info("Starting container resource analysis...")
 
         # Analyze ECS clusters and services
@@ -117,6 +129,9 @@ class ContainerResourceAnalyzer:
 
         # Analyze EKS clusters and nodes
         self._analyze_eks_clusters()
+
+        # Finalize metadata
+        self.analysis_metadata["analysis_end_time"] = datetime.utcnow()
 
         # Generate outputs
         self._generate_outputs()
@@ -132,6 +147,15 @@ class ContainerResourceAnalyzer:
             ):
                 return True
         return False
+
+    def _add_finding(self, finding: Dict[str, Any], finding_list: str = "ecs"):
+        """Add a finding and track its type in metadata"""
+        finding_type = finding.get("finding_type", "unknown")
+        if finding_list == "ecs":
+            self.ecs_findings.append(finding)
+        else:
+            self.eks_findings.append(finding)
+        self.analysis_metadata["finding_type_counts"][finding_type] += 1
 
     def _analyze_ecs_clusters(self):
         """Analyze all ECS clusters and services"""
@@ -150,7 +174,15 @@ class ContainerResourceAnalyzer:
                 tags = cluster_details.get("tags", [])
                 if self._should_exclude_cluster(tags):
                     logger.info(f"Skipping excluded cluster: {cluster_name}")
+                    self.analysis_metadata["clusters_excluded"].append(
+                        {"name": cluster_name, "type": "ECS", "reason": "ExcludeFromAnalysis tag"}
+                    )
                     continue
+
+                # Track analyzed cluster
+                self.analysis_metadata["clusters_analyzed"].append(
+                    {"name": cluster_name, "type": "ECS"}
+                )
 
                 # Analyze services in cluster
                 self._analyze_ecs_services(cluster_name, cluster_details)
@@ -183,6 +215,7 @@ class ContainerResourceAnalyzer:
 
                     # Skip dev services (exclusion rule)
                     if service_name.startswith("dev-"):
+                        self.analysis_metadata["services_excluded"]["dev"] += 1
                         continue
 
                     # Check service age
@@ -191,6 +224,7 @@ class ContainerResourceAnalyzer:
                         created_at
                         and (datetime.now(created_at.tzinfo) - created_at).days < 14
                     ):
+                        self.analysis_metadata["services_excluded"]["too_new"] += 1
                         continue
 
                     self.summary["total_ecs_services"] += 1
@@ -282,7 +316,7 @@ class ContainerResourceAnalyzer:
                         "finding_type": "over_provisioning",
                     }
 
-                    self.ecs_findings.append(finding)
+                    self._add_finding(finding, "ecs")
                     self.summary["services_requiring_attention"] += 1
                     self.summary["total_monthly_savings"] += monthly_savings
 
@@ -328,14 +362,15 @@ class ContainerResourceAnalyzer:
 
                     # High coefficient of variation indicates variable traffic
                     if cv > 0.3:
-                        self.ecs_findings.append(
+                        self._add_finding(
                             {
                                 "cluster_name": cluster_name,
                                 "service_name": service_name,
                                 "finding_type": "missing_auto_scaling",
                                 "traffic_variability": f"{cv:.2%}",
                                 "recommendation": "Enable auto-scaling for variable workload",
-                            }
+                            },
+                            "ecs",
                         )
                         self.summary["services_requiring_attention"] += 1
 
@@ -369,7 +404,7 @@ class ContainerResourceAnalyzer:
                 )  # Assuming 8 small tasks per instance
                 monthly_savings = (fargate_cost - ec2_cost) * HOURS_PER_MONTH
 
-                self.ecs_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "service_name": service_name,
@@ -379,7 +414,8 @@ class ContainerResourceAnalyzer:
                         "current_cpu": cpu,
                         "current_memory": memory,
                         "monthly_savings": monthly_savings,
-                    }
+                    },
+                    "ecs",
                 )
                 self.summary["services_requiring_attention"] += 1
                 self.summary["total_monthly_savings"] += monthly_savings
@@ -406,14 +442,15 @@ class ContainerResourceAnalyzer:
             )
 
             if not has_multi_az:
-                self.ecs_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "service_name": service_name,
                         "finding_type": "singleton_ha_risk",
                         "desired_count": desired_count,
                         "recommendation": "Increase desired count to 2+ and enable multi-AZ placement",
-                    }
+                    },
+                    "ecs",
                 )
                 self.summary["services_requiring_attention"] += 1
 
@@ -439,7 +476,7 @@ class ContainerResourceAnalyzer:
                     for container in task_def_details.get("containerDefinitions", [])
                 ]
 
-                self.ecs_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "service_name": service_name,
@@ -450,7 +487,8 @@ class ContainerResourceAnalyzer:
                         ).days,
                         "images": container_images,
                         "recommendation": "Update container images to latest versions",
-                    }
+                    },
+                    "ecs",
                 )
                 self.summary["services_requiring_attention"] += 1
 
@@ -465,14 +503,15 @@ class ContainerResourceAnalyzer:
         load_balancers = service.get("loadBalancers", [])
 
         if load_balancers and not service.get("healthCheckGracePeriodSeconds"):
-            self.ecs_findings.append(
+            self._add_finding(
                 {
                     "cluster_name": cluster_name,
                     "service_name": service_name,
                     "finding_type": "missing_health_checks",
                     "has_load_balancer": True,
                     "recommendation": "Configure health check grace period for load balancer integration",
-                }
+                },
+                "ecs",
             )
             self.summary["services_requiring_attention"] += 1
 
@@ -487,14 +526,15 @@ class ContainerResourceAnalyzer:
         revision = int(task_definition.split(":")[-1])
 
         if revision > 50:
-            self.ecs_findings.append(
+            self._add_finding(
                 {
                     "cluster_name": cluster_name,
                     "service_name": service_name,
                     "finding_type": "excessive_task_revisions",
                     "revision_count": revision,
                     "recommendation": "Review deployment process to reduce configuration churn",
-                }
+                },
+                "ecs",
             )
             self.summary["services_requiring_attention"] += 1
 
@@ -521,14 +561,15 @@ class ContainerResourceAnalyzer:
                     containers_without_logging.append(container["name"])
 
             if containers_without_logging:
-                self.ecs_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "service_name": service_name,
                         "finding_type": "missing_logging",
                         "containers": containers_without_logging,
                         "recommendation": "Configure CloudWatch Logs or Fluent Bit for all containers",
-                    }
+                    },
+                    "ecs",
                 )
                 self.summary["services_requiring_attention"] += 1
 
@@ -548,13 +589,14 @@ class ContainerResourceAnalyzer:
             keyword in service_name.lower() for keyword in ["api", "service", "backend"]
         ):
             if not service_registries:
-                self.ecs_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "service_name": service_name,
                         "finding_type": "missing_service_discovery",
                         "recommendation": "Enable ECS Service Discovery for inter-service communication",
-                    }
+                    },
+                    "ecs",
                 )
                 self.summary["services_requiring_attention"] += 1
 
@@ -581,7 +623,7 @@ class ContainerResourceAnalyzer:
                 unused_cpu = 100 - cpu_utilization
                 unused_memory = 100 - memory_utilization
 
-                self.ecs_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "finding_type": "cluster_overprovisioning",
@@ -590,7 +632,8 @@ class ContainerResourceAnalyzer:
                         "unused_cpu_percent": unused_cpu,
                         "unused_memory_percent": unused_memory,
                         "recommendation": "Reduce cluster capacity or consolidate workloads",
-                    }
+                    },
+                    "ecs",
                 )
                 self.summary["services_requiring_attention"] += 1
 
@@ -609,7 +652,15 @@ class ContainerResourceAnalyzer:
                     [{"Key": k, "Value": v} for k, v in tags.items()]
                 ):
                     logger.info(f"Skipping excluded EKS cluster: {cluster_name}")
+                    self.analysis_metadata["clusters_excluded"].append(
+                        {"name": cluster_name, "type": "EKS", "reason": "ExcludeFromAnalysis tag"}
+                    )
                     continue
+
+                # Track analyzed cluster
+                self.analysis_metadata["clusters_analyzed"].append(
+                    {"name": cluster_name, "type": "EKS"}
+                )
 
                 # Analyze node groups
                 self._analyze_eks_node_groups(cluster_name)
@@ -659,7 +710,7 @@ class ContainerResourceAnalyzer:
                             spot_savings += savings_per_instance * desired_size
 
                     if spot_savings > 0:
-                        self.eks_findings.append(
+                        self._add_finding(
                             {
                                 "cluster_name": cluster_name,
                                 "node_group": node_group_name,
@@ -669,7 +720,8 @@ class ContainerResourceAnalyzer:
                                 "recommended_capacity_type": "SPOT",
                                 "spot_savings_potential": spot_savings,
                                 "recommendation": "Enable spot instances for cost savings",
-                            }
+                            },
+                            "eks",
                         )
                         self.summary["total_monthly_savings"] += spot_savings
                         self.summary["services_requiring_attention"] += 1
@@ -749,7 +801,7 @@ class ContainerResourceAnalyzer:
 
             # Check if underutilized
             if avg_cpu < 30 and avg_memory < 40:
-                self.eks_findings.append(
+                self._add_finding(
                     {
                         "cluster_name": cluster_name,
                         "node_id": instance_id,
@@ -758,7 +810,8 @@ class ContainerResourceAnalyzer:
                         "current_utilization": {"cpu": avg_cpu, "memory": avg_memory},
                         "recommended_changes": "Consolidate workloads or use smaller instance type",
                         "recommendation": f"Node utilization is low (CPU: {avg_cpu:.1f}%, Memory: {avg_memory:.1f}%)",
-                    }
+                    },
+                    "eks",
                 )
                 self.summary["services_requiring_attention"] += 1
 
@@ -779,14 +832,15 @@ class ContainerResourceAnalyzer:
         pods_without_limits = int(max(violations)) if violations else 0
 
         if pods_without_limits:
-            self.eks_findings.append(
+            self._add_finding(
                 {
                     "cluster_name": cluster_name,
                     "node_id": instance_id,
                     "finding_type": "missing_resource_limits",
                     "pods_without_limits": pods_without_limits,
                     "recommendation": "Set CPU and memory limits for all pods",
-                }
+                },
+                "eks",
             )
             self.summary["services_requiring_attention"] += 1
         elif not violations:
@@ -883,72 +937,177 @@ class ContainerResourceAnalyzer:
         self._create_utilization_chart()
 
     def _print_recommendations(self):
-        """Print top optimization recommendations to console"""
+        """Print comprehensive optimization recommendations to console"""
         print("\n" + "=" * 80)
         print("CONTAINER RESOURCE OPTIMIZATION ANALYSIS RESULTS")
         print("=" * 80 + "\n")
 
-        print(f"Total ECS Services Analyzed: {self.summary['total_ecs_services']}")
-        print(f"Total EKS Nodes Analyzed: {self.summary['total_eks_nodes']}")
-        print(
-            f"Services Requiring Attention: {self.summary['services_requiring_attention']}"
-        )
-        print(
-            f"Total Potential Monthly Savings: ${self.summary['total_monthly_savings']:,.2f}"
-        )
+        # Analysis metadata
+        start_time = self.analysis_metadata.get("analysis_start_time")
+        end_time = self.analysis_metadata.get("analysis_end_time")
+        if start_time and end_time:
+            duration = (end_time - start_time).total_seconds()
+            print(f"Analysis Duration: {duration:.1f} seconds")
+            print(f"Analysis Period: Last 14 days")
+            print(f"Region: {self.region}\n")
 
-        print("\n" + "-" * 40)
-        print("TOP ECS OPTIMIZATION RECOMMENDATIONS")
-        print("-" * 40)
+        # Cluster Summary
+        print("-" * 80)
+        print("CLUSTER ANALYSIS SUMMARY")
+        print("-" * 80)
 
-        # Sort ECS findings by savings
-        ecs_with_savings = [f for f in self.ecs_findings if "monthly_savings" in f]
-        ecs_with_savings.sort(key=lambda x: x.get("monthly_savings", 0), reverse=True)
+        analyzed_clusters = self.analysis_metadata.get("clusters_analyzed", [])
+        excluded_clusters = self.analysis_metadata.get("clusters_excluded", [])
 
-        for i, finding in enumerate(ecs_with_savings[:5], 1):
-            print(f"\n{i}. {finding['service_name']} ({finding['cluster_name']})")
-            print(f"   Issue: {finding['finding_type'].replace('_', ' ').title()}")
-            if "current_cpu" in finding:
-                print(
-                    f"   Current: {finding['current_cpu']} CPU, {finding['current_memory']} MB memory"
-                )
-            if "recommended_cpu" in finding:
-                print(
-                    f"   Recommended: {finding['recommended_cpu']} CPU, {finding.get('recommended_memory', 'N/A')} MB memory"
-                )
-            print(f"   Monthly Savings: ${finding.get('monthly_savings', 0):,.2f}")
+        ecs_clusters = [c for c in analyzed_clusters if c["type"] == "ECS"]
+        eks_clusters = [c for c in analyzed_clusters if c["type"] == "EKS"]
 
-        print("\n" + "-" * 40)
-        print("TOP EKS OPTIMIZATION RECOMMENDATIONS")
-        print("-" * 40)
+        print(f"\nClusters Analyzed:")
+        print(f"  ECS Clusters: {len(ecs_clusters)}")
+        for cluster in ecs_clusters:
+            print(f"    - {cluster['name']}")
+        print(f"  EKS Clusters: {len(eks_clusters)}")
+        for cluster in eks_clusters:
+            print(f"    - {cluster['name']}")
 
-        # Sort EKS findings by savings
-        eks_with_savings = [
-            f for f in self.eks_findings if "spot_savings_potential" in f
+        if excluded_clusters:
+            print(f"\nClusters Excluded: {len(excluded_clusters)}")
+            for cluster in excluded_clusters:
+                print(f"    - {cluster['name']} ({cluster['type']}): {cluster['reason']}")
+
+        services_excluded = self.analysis_metadata.get("services_excluded", {})
+        if services_excluded.get("dev") or services_excluded.get("too_new"):
+            print(f"\nServices Excluded:")
+            if services_excluded.get("dev"):
+                print(f"    - Dev services (dev- prefix): {services_excluded['dev']}")
+            if services_excluded.get("too_new"):
+                print(f"    - New services (< 14 days old): {services_excluded['too_new']}")
+
+        # Summary Statistics
+        print("\n" + "-" * 80)
+        print("SUMMARY STATISTICS")
+        print("-" * 80 + "\n")
+
+        summary_table = [
+            ["Metric", "Value"],
+            ["Total ECS Services Analyzed", self.summary['total_ecs_services']],
+            ["Total EKS Nodes Analyzed", self.summary['total_eks_nodes']],
+            ["Total Issues Found", self.summary['services_requiring_attention']],
+            ["Total Potential Monthly Savings", f"${self.summary['total_monthly_savings']:,.2f}"],
         ]
-        eks_with_savings.sort(
-            key=lambda x: x.get("spot_savings_potential", 0), reverse=True
-        )
+        print(tabulate(summary_table, headers="firstrow", tablefmt="grid"))
 
-        for i, finding in enumerate(eks_with_savings[:5], 1):
-            print(
-                f"\n{i}. {finding.get('node_group', finding.get('node_id', 'N/A'))} ({finding['cluster_name']})"
-            )
-            print(f"   Issue: {finding['finding_type'].replace('_', ' ').title()}")
-            print(f"   {finding.get('recommendation', '')}")
+        # Finding Type Breakdown
+        finding_counts = self.analysis_metadata.get("finding_type_counts", {})
+        if finding_counts:
+            print("\nFindings by Type:")
+            finding_table = [["Finding Type", "Count"]]
+            for finding_type, count in sorted(finding_counts.items(), key=lambda x: x[1], reverse=True):
+                finding_table.append([finding_type.replace('_', ' ').title(), count])
+            print(tabulate(finding_table, headers="firstrow", tablefmt="grid"))
+
+        # Detailed ECS Findings
+        print("\n" + "-" * 80)
+        print("DETAILED ECS FINDINGS")
+        print("-" * 80)
+
+        if not self.ecs_findings:
+            print("\nNo ECS issues found. All services are well-configured!")
+        else:
+            # Group findings by type
+            ecs_by_type = defaultdict(list)
+            for finding in self.ecs_findings:
+                ecs_by_type[finding["finding_type"]].append(finding)
+
+            for finding_type, findings in sorted(ecs_by_type.items()):
+                print(f"\n{finding_type.replace('_', ' ').title()} ({len(findings)} found):")
+                for finding in findings[:10]:  # Show up to 10 per type
+                    service_name = finding.get("service_name", finding.get("cluster_name", "N/A"))
+                    cluster_name = finding.get("cluster_name", "N/A")
+                    print(f"  - {service_name} ({cluster_name})")
+                    if "recommendation" in finding:
+                        print(f"    Recommendation: {finding['recommendation']}")
+                    if "monthly_savings" in finding:
+                        print(f"    Savings: ${finding['monthly_savings']:,.2f}/month")
+                    if "current_cpu" in finding and "recommended_cpu" in finding:
+                        print(f"    Current: {finding['current_cpu']} CPU, {finding['current_memory']} MB")
+                        print(f"    Recommended: {finding['recommended_cpu']} CPU, {finding['recommended_memory']} MB")
+                if len(findings) > 10:
+                    print(f"  ... and {len(findings) - 10} more")
+
+        # Detailed EKS Findings
+        print("\n" + "-" * 80)
+        print("DETAILED EKS FINDINGS")
+        print("-" * 80)
+
+        if not self.eks_findings:
+            print("\nNo EKS issues found. All nodes are well-configured!")
+        else:
+            # Group findings by type
+            eks_by_type = defaultdict(list)
+            for finding in self.eks_findings:
+                eks_by_type[finding["finding_type"]].append(finding)
+
+            for finding_type, findings in sorted(eks_by_type.items()):
+                print(f"\n{finding_type.replace('_', ' ').title()} ({len(findings)} found):")
+                for finding in findings[:10]:  # Show up to 10 per type
+                    node_name = finding.get("node_group", finding.get("node_id", "N/A"))
+                    cluster_name = finding.get("cluster_name", "N/A")
+                    print(f"  - {node_name} ({cluster_name})")
+                    if "recommendation" in finding:
+                        print(f"    Recommendation: {finding['recommendation']}")
+                    if "spot_savings_potential" in finding:
+                        print(f"    Savings: ${finding['spot_savings_potential']:,.2f}/month")
+                    if "current_utilization" in finding:
+                        util = finding["current_utilization"]
+                        print(f"    CPU: {util['cpu']:.1f}%, Memory: {util['memory']:.1f}%")
+                if len(findings) > 10:
+                    print(f"  ... and {len(findings) - 10} more")
+
+        # Top Savings Opportunities
+        print("\n" + "-" * 80)
+        print("TOP 10 COST SAVINGS OPPORTUNITIES")
+        print("-" * 80 + "\n")
+
+        all_savings = []
+        for finding in self.ecs_findings:
+            if "monthly_savings" in finding:
+                all_savings.append(("ECS", finding))
+        for finding in self.eks_findings:
             if "spot_savings_potential" in finding:
-                print(
-                    f"   Potential Savings: ${finding['spot_savings_potential']:,.2f}/month"
-                )
+                all_savings.append(("EKS", finding))
 
-        print("\n" + "=" * 80 + "\n")
+        all_savings.sort(key=lambda x: x[1].get("monthly_savings", x[1].get("spot_savings_potential", 0)), reverse=True)
+
+        if not all_savings:
+            print("No cost optimization opportunities with quantified savings found.")
+        else:
+            savings_table = [["#", "Type", "Resource", "Cluster", "Issue", "Monthly Savings"]]
+            for i, (service_type, finding) in enumerate(all_savings[:10], 1):
+                savings = finding.get("monthly_savings", finding.get("spot_savings_potential", 0))
+                name = finding.get("service_name", finding.get("node_group", finding.get("node_id", "N/A")))
+                cluster = finding.get("cluster_name", "N/A")
+                issue = finding["finding_type"].replace("_", " ").title()
+                savings_table.append([i, service_type, name, cluster, issue, f"${savings:,.2f}"])
+            print(tabulate(savings_table, headers="firstrow", tablefmt="grid"))
+
+        print("=" * 80 + "\n")
 
     def _save_json_output(self):
         """Save findings to JSON file"""
         output = {
+            "metadata": {
+                "analysis_start_time": self.analysis_metadata.get("analysis_start_time"),
+                "analysis_end_time": self.analysis_metadata.get("analysis_end_time"),
+                "region": self.region,
+                "clusters_analyzed": self.analysis_metadata.get("clusters_analyzed", []),
+                "clusters_excluded": self.analysis_metadata.get("clusters_excluded", []),
+                "services_excluded": self.analysis_metadata.get("services_excluded", {}),
+                "finding_type_counts": dict(self.analysis_metadata.get("finding_type_counts", {})),
+            },
+            "summary": self.summary,
             "ecs_findings": self.ecs_findings,
             "eks_findings": self.eks_findings,
-            "summary": self.summary,
         }
 
         with open("container_optimization.json", "w") as f:
@@ -973,11 +1132,17 @@ class ContainerResourceAnalyzer:
 
         # Generate rightsizing plans from ECS findings
         for finding in self.ecs_findings:
-            if finding.get("finding_type") == "over_provisioning":
+            finding_type = finding.get("finding_type")
+            base_plan = {
+                "Type": "ECS",
+                "Cluster": finding.get("cluster_name", ""),
+                "Service": finding.get("service_name", ""),
+                "NodeGroup": "",
+            }
+
+            if finding_type == "over_provisioning":
                 plan = {
-                    "Type": "ECS",
-                    "Cluster": finding["cluster_name"],
-                    "Service": finding["service_name"],
+                    **base_plan,
                     "Action": "Resize Task Definition",
                     "Current_Config": f"{finding['current_cpu']} CPU, {finding['current_memory']} MB",
                     "Recommended_Config": f"{finding['recommended_cpu']} CPU, {finding['recommended_memory']} MB",
@@ -985,11 +1150,9 @@ class ContainerResourceAnalyzer:
                     "Implementation_Steps": "Update task definition, deploy new revision",
                 }
                 plans.append(plan)
-            elif finding.get("finding_type") == "missing_auto_scaling":
+            elif finding_type == "missing_auto_scaling":
                 plan = {
-                    "Type": "ECS",
-                    "Cluster": finding["cluster_name"],
-                    "Service": finding["service_name"],
+                    **base_plan,
                     "Action": "Enable Auto Scaling",
                     "Current_Config": "No auto-scaling",
                     "Recommended_Config": "Target tracking scaling policy",
@@ -997,19 +1160,127 @@ class ContainerResourceAnalyzer:
                     "Implementation_Steps": "Configure Application Auto Scaling with target tracking",
                 }
                 plans.append(plan)
+            elif finding_type == "inefficient_task_placement":
+                plan = {
+                    **base_plan,
+                    "Action": "Migrate to EC2",
+                    "Current_Config": f"FARGATE: {finding.get('current_cpu', 'N/A')} CPU, {finding.get('current_memory', 'N/A')} MB",
+                    "Recommended_Config": "EC2 launch type",
+                    "Monthly_Savings": f"${finding.get('monthly_savings', 0):.2f}",
+                    "Implementation_Steps": "Create EC2 capacity provider, update service launch type",
+                }
+                plans.append(plan)
+            elif finding_type == "singleton_ha_risk":
+                plan = {
+                    **base_plan,
+                    "Action": "Increase Desired Count",
+                    "Current_Config": f"Desired count: {finding.get('desired_count', 1)}",
+                    "Recommended_Config": "Desired count: 2+ with multi-AZ placement",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Increase desired count to 2+"),
+                }
+                plans.append(plan)
+            elif finding_type == "old_container_images":
+                plan = {
+                    **base_plan,
+                    "Action": "Update Container Images",
+                    "Current_Config": f"Image age: {finding.get('age_days', 0)} days",
+                    "Recommended_Config": "Update to latest version",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Update container images"),
+                }
+                plans.append(plan)
+            elif finding_type == "missing_health_checks":
+                plan = {
+                    **base_plan,
+                    "Action": "Configure Health Checks",
+                    "Current_Config": "No health check grace period",
+                    "Recommended_Config": "Set appropriate grace period (e.g., 60s)",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Configure health check grace period"),
+                }
+                plans.append(plan)
+            elif finding_type == "excessive_task_revisions":
+                plan = {
+                    **base_plan,
+                    "Action": "Review Deployment Process",
+                    "Current_Config": f"Revision count: {finding.get('revision_count', 0)}",
+                    "Recommended_Config": "Reduce configuration churn",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Review deployment process"),
+                }
+                plans.append(plan)
+            elif finding_type == "missing_logging":
+                plan = {
+                    **base_plan,
+                    "Action": "Configure Logging",
+                    "Current_Config": f"Missing logging in: {', '.join(finding.get('containers', []))}",
+                    "Recommended_Config": "CloudWatch Logs or Fluent Bit",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Configure logging"),
+                }
+                plans.append(plan)
+            elif finding_type == "missing_service_discovery":
+                plan = {
+                    **base_plan,
+                    "Action": "Enable Service Discovery",
+                    "Current_Config": "No service registry",
+                    "Recommended_Config": "ECS Service Discovery",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Enable ECS Service Discovery"),
+                }
+                plans.append(plan)
+            elif finding_type == "cluster_overprovisioning":
+                plan = {
+                    **base_plan,
+                    "Service": "",  # Cluster-level issue
+                    "Action": "Reduce Cluster Capacity",
+                    "Current_Config": f"CPU: {finding.get('cpu_utilization', 0):.1f}%, Memory: {finding.get('memory_utilization', 0):.1f}%",
+                    "Recommended_Config": "Consolidate workloads or reduce capacity",
+                    "Monthly_Savings": "Variable",
+                    "Implementation_Steps": finding.get("recommendation", "Reduce cluster capacity"),
+                }
+                plans.append(plan)
 
         # Generate rightsizing plans from EKS findings
         for finding in self.eks_findings:
-            if finding.get("finding_type") == "spot_instance_opportunity":
+            finding_type = finding.get("finding_type")
+            base_plan = {
+                "Type": "EKS",
+                "Cluster": finding.get("cluster_name", ""),
+                "Service": "",
+                "NodeGroup": finding.get("node_group", finding.get("node_id", "")),
+            }
+
+            if finding_type == "spot_instance_opportunity":
                 plan = {
-                    "Type": "EKS",
-                    "Cluster": finding["cluster_name"],
-                    "NodeGroup": finding["node_group"],
+                    **base_plan,
                     "Action": "Enable Spot Instances",
                     "Current_Config": "ON_DEMAND",
                     "Recommended_Config": "SPOT with ON_DEMAND fallback",
                     "Monthly_Savings": f"${finding['spot_savings_potential']:.2f}",
                     "Implementation_Steps": "Update node group to use spot instances",
+                }
+                plans.append(plan)
+            elif finding_type == "underutilized_node":
+                util = finding.get("current_utilization", {})
+                plan = {
+                    **base_plan,
+                    "Action": "Consolidate Workloads",
+                    "Current_Config": f"CPU: {util.get('cpu', 0):.1f}%, Memory: {util.get('memory', 0):.1f}%",
+                    "Recommended_Config": finding.get("recommended_changes", "Consolidate or downsize"),
+                    "Monthly_Savings": "Variable",
+                    "Implementation_Steps": finding.get("recommendation", "Consolidate workloads"),
+                }
+                plans.append(plan)
+            elif finding_type == "missing_resource_limits":
+                plan = {
+                    **base_plan,
+                    "Action": "Set Pod Resource Limits",
+                    "Current_Config": f"{finding.get('pods_without_limits', 0)} pods without limits",
+                    "Recommended_Config": "CPU and memory limits for all pods",
+                    "Monthly_Savings": "N/A",
+                    "Implementation_Steps": finding.get("recommendation", "Set resource limits"),
                 }
                 plans.append(plan)
 

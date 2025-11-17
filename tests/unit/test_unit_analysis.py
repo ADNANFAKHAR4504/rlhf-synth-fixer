@@ -1205,6 +1205,139 @@ class TestContainerResourceAnalyzer:
                 assert os.path.exists("rightsizing_plan.csv")
                 assert os.path.exists("resource_utilization_trends.png")
 
+    def test_csv_includes_all_ecs_finding_types(self, tmp_path, monkeypatch):
+        """Test that CSV includes all ECS finding types"""
+        monkeypatch.chdir(tmp_path)
+        
+        analyzer = ContainerResourceAnalyzer()
+        # Add one of each ECS finding type
+        analyzer.ecs_findings = [
+            {"finding_type": "over_provisioning", "cluster_name": "test-cluster", "service_name": "test-service", "current_cpu": 4096, "current_memory": 8192, "recommended_cpu": 2048, "recommended_memory": 4096, "monthly_savings": 100.0},
+            {"finding_type": "missing_auto_scaling", "cluster_name": "test-cluster", "service_name": "test-service2"},
+            {"finding_type": "inefficient_task_placement", "cluster_name": "test-cluster", "service_name": "test-service3", "current_cpu": 256, "current_memory": 512, "monthly_savings": 50.0},
+            {"finding_type": "singleton_ha_risk", "cluster_name": "test-cluster", "service_name": "test-service4", "desired_count": 1, "recommendation": "Increase desired count to 2+"},
+            {"finding_type": "old_container_images", "cluster_name": "test-cluster", "service_name": "test-service5", "age_days": 120, "recommendation": "Update container images"},
+            {"finding_type": "missing_health_checks", "cluster_name": "test-cluster", "service_name": "test-service6", "recommendation": "Configure health checks"},
+            {"finding_type": "excessive_task_revisions", "cluster_name": "test-cluster", "service_name": "test-service7", "revision_count": 75, "recommendation": "Review deployment process"},
+            {"finding_type": "missing_logging", "cluster_name": "test-cluster", "service_name": "test-service8", "containers": ["app", "sidecar"], "recommendation": "Configure logging"},
+            {"finding_type": "missing_service_discovery", "cluster_name": "test-cluster", "service_name": "test-service9", "recommendation": "Enable service discovery"},
+            {"finding_type": "cluster_overprovisioning", "cluster_name": "test-cluster", "cpu_utilization": 45.0, "memory_utilization": 50.0, "recommendation": "Reduce cluster capacity"},
+        ]
+        
+        analyzer._save_csv_output()
+        
+        # Verify all finding types are in CSV
+        with open(tmp_path / "rightsizing_plan.csv", "r") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            assert len(rows) == 10
+            
+            actions = {row["Action"] for row in rows}
+            assert "Resize Task Definition" in actions
+            assert "Enable Auto Scaling" in actions
+            assert "Migrate to EC2" in actions
+            assert "Increase Desired Count" in actions
+            assert "Update Container Images" in actions
+            assert "Configure Health Checks" in actions
+            assert "Review Deployment Process" in actions
+            assert "Configure Logging" in actions
+            assert "Enable Service Discovery" in actions
+            assert "Reduce Cluster Capacity" in actions
+
+    def test_csv_includes_all_eks_finding_types(self, tmp_path, monkeypatch):
+        """Test that CSV includes all EKS finding types"""
+        monkeypatch.chdir(tmp_path)
+        
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.eks_findings = [
+            {"finding_type": "spot_instance_opportunity", "cluster_name": "test-eks", "node_group": "test-group", "spot_savings_potential": 200.0},
+            {"finding_type": "underutilized_node", "cluster_name": "test-eks", "node_id": "i-1234567890", "current_utilization": {"cpu": 25.0, "memory": 35.0}, "recommended_changes": "Consolidate workloads", "recommendation": "Node underutilized"},
+            {"finding_type": "missing_resource_limits", "cluster_name": "test-eks", "node_id": "i-0987654321", "pods_without_limits": 5, "recommendation": "Set resource limits"},
+        ]
+        
+        analyzer._save_csv_output()
+        
+        # Verify all EKS finding types are in CSV
+        with open(tmp_path / "rightsizing_plan.csv", "r") as f:
+            reader = csv.DictReader(f)
+            rows = list(reader)
+            assert len(rows) == 3
+            
+            actions = {row["Action"] for row in rows}
+            assert "Enable Spot Instances" in actions
+            assert "Consolidate Workloads" in actions
+            assert "Set Pod Resource Limits" in actions
+
+    def test_metadata_tracking(self):
+        """Test that analysis metadata is properly tracked"""
+        analyzer = ContainerResourceAnalyzer()
+        
+        # Verify initial state
+        assert analyzer.analysis_metadata["clusters_analyzed"] == []
+        assert analyzer.analysis_metadata["clusters_excluded"] == []
+        assert analyzer.analysis_metadata["services_excluded"]["dev"] == 0
+        assert analyzer.analysis_metadata["services_excluded"]["too_new"] == 0
+        
+        # Add a finding and verify tracking
+        finding = {"finding_type": "over_provisioning", "cluster_name": "test", "service_name": "test-service"}
+        analyzer._add_finding(finding, "ecs")
+        
+        assert len(analyzer.ecs_findings) == 1
+        assert analyzer.analysis_metadata["finding_type_counts"]["over_provisioning"] == 1
+
+    def test_json_output_includes_metadata(self, tmp_path, monkeypatch):
+        """Test that JSON output includes metadata"""
+        monkeypatch.chdir(tmp_path)
+        
+        analyzer = ContainerResourceAnalyzer()
+        analyzer.analysis_metadata["clusters_analyzed"] = [{"name": "test-cluster", "type": "ECS"}]
+        analyzer.analysis_metadata["clusters_excluded"] = [{"name": "excluded-cluster", "type": "ECS", "reason": "ExcludeFromAnalysis tag"}]
+        analyzer.analysis_metadata["services_excluded"] = {"dev": 2, "too_new": 3}
+        analyzer.analysis_metadata["finding_type_counts"] = {"over_provisioning": 1}
+        
+        analyzer._save_json_output()
+        
+        with open(tmp_path / "container_optimization.json", "r") as f:
+            output = json.load(f)
+            
+            assert "metadata" in output
+            assert output["metadata"]["clusters_analyzed"] == [{"name": "test-cluster", "type": "ECS"}]
+            assert len(output["metadata"]["clusters_excluded"]) == 1
+            assert output["metadata"]["services_excluded"]["dev"] == 2
+            assert output["metadata"]["finding_type_counts"]["over_provisioning"] == 1
+
+    def test_error_handling_in_ecs_analysis(self):
+        """Test error handling in ECS cluster analysis"""
+        analyzer = ContainerResourceAnalyzer()
+        
+        # Mock ecs_client to raise an error
+        analyzer.ecs_client = MagicMock()
+        analyzer.ecs_client.list_clusters.side_effect = ClientError(
+            {"Error": {"Code": "AccessDenied"}}, "ListClusters"
+        )
+        
+        # Should handle error gracefully without raising
+        analyzer._analyze_ecs_clusters()
+        
+        # No findings should be created due to error
+        assert len(analyzer.ecs_findings) == 0
+
+    def test_error_handling_in_eks_analysis(self):
+        """Test error handling in EKS cluster analysis"""
+        analyzer = ContainerResourceAnalyzer()
+        
+        # Mock eks_client to raise an error
+        analyzer.eks_client = MagicMock()
+        analyzer.eks_client.list_clusters.side_effect = ClientError(
+            {"Error": {"Code": "AccessDenied"}}, "ListClusters"
+        )
+        
+        # Should handle error gracefully without raising
+        analyzer._analyze_eks_clusters()
+        
+        # No findings should be created due to error
+        assert len(analyzer.eks_findings) == 0
+
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
