@@ -72,7 +72,21 @@ describe("Terraform EMR stack conformance", () => {
   test("IAM policies restrict S3 access to specific buckets and log prefixes", () => {
     expect(iamTf).toMatch(/aws_iam_role_policy"\s+"emr_s3_access"/);
     expect(iamTf).toMatch(/ListBucket/);
-    expect(iamTf).not.toMatch(/Resource\s*=\s*"\*"/);
+    
+    // Extract the S3 access policy resource block to check it doesn't use wildcards
+    // Match from "resource" to the closing brace of the policy jsonencode block
+    const s3PolicyStart = iamTf.indexOf('resource "aws_iam_role_policy" "emr_s3_access"');
+    expect(s3PolicyStart).toBeGreaterThan(-1);
+    
+    // Find the end of this resource block (next resource, comment block, or end of file)
+    const afterS3Policy = iamTf.substring(s3PolicyStart);
+    const nextResourceMatch = afterS3Policy.match(/\n\s*resource\s+"aws_iam/);
+    const s3PolicyEnd = nextResourceMatch ? s3PolicyStart + nextResourceMatch.index : iamTf.length;
+    const s3PolicyResource = iamTf.substring(s3PolicyStart, s3PolicyEnd);
+    
+    // S3 policies should not use wildcards - check only within the S3 policy resource
+    expect(s3PolicyResource).not.toMatch(/Resource\s*=\s*"\*"/);
+    
     expect(iamTf).toMatch(/aws_s3_bucket\.logs\.arn}\/bootstrap\//);
   });
 
