@@ -22,10 +22,11 @@
     "Systems Manager"
   ],
   "training_quality": 10,
- "author": "mayanksethi-turing",
-    "coverage": {
+  "author": "mayanksethi-turing",
+  "coverage": {
     "lines": 100,
     "branches": 100
   },
-  "completedAt": "2025-11-17T10:41:01+00:00"
+  "completedAt": "2025-11-17T10:41:01+00:00",
+  "dockerS3Location": ""
 }
