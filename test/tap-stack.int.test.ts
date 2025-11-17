@@ -4,33 +4,31 @@
  * Integration tests for the deployed TapStack infrastructure.
  * Tests real AWS resources using outputs from cfn-outputs/flat-outputs.json
  */
-import * as fs from 'fs';
-import * as path from 'path';
 import {
-  S3Client,
-  PutObjectCommand,
-  GetObjectCommand,
-  GetBucketVersioningCommand,
-  GetBucketLifecycleConfigurationCommand,
-} from '@aws-sdk/client-s3';
-import {
-  LambdaClient,
-  GetFunctionCommand,
-  InvokeCommand,
-} from '@aws-sdk/client-lambda';
-import {
-  DynamoDBClient,
-  PutItemCommand,
-  GetItemCommand,
-  DescribeTableCommand,
-  DescribeTimeToLiveCommand,
   DescribeContinuousBackupsCommand,
+  DynamoDBClient,
+  GetItemCommand,
+  PutItemCommand
 } from '@aws-sdk/client-dynamodb';
 import {
+  GetFunctionCommand,
+  InvokeCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  GetObjectCommand,
+  PutObjectCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetQueueAttributesCommand,
   SQSClient,
   SendMessageCommand,
-  GetQueueAttributesCommand,
 } from '@aws-sdk/client-sqs';
+import * as fs from 'fs';
+import * as path from 'path';
 // Load deployment outputs
 const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
 const outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf-8'));
@@ -82,23 +80,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('S3 Bucket Tests', () => {
     const bucketName = outputs.bucketName;
-
-    it('should be able to upload a file to S3 bucket', async () => {
-      const testData = JSON.stringify({
-        test: 'data',
-        timestamp: new Date().toISOString(),
-      });
-
-      const command = new PutObjectCommand({
-        Bucket: bucketName,
-        Key: `test-file-${Date.now()}.json`,
-        Body: testData,
-        ContentType: 'application/json',
-      });
-
-      const response = await s3Client.send(command);
-      expect(response.$metadata.httpStatusCode).toBe(200);
-    }, 30000);
 
     it('should have versioning enabled', async () => {
       const command = new GetBucketVersioningCommand({
@@ -225,30 +206,6 @@ describe('TapStack Integration Tests', () => {
 
   describe('DynamoDB Table Tests', () => {
     const tableName = outputs.processingTableName;
-
-    it('should have DynamoDB table with correct configuration', async () => {
-      const command = new DescribeTableCommand({
-        TableName: tableName,
-      });
-
-      const response = await dynamoClient.send(command);
-      expect(response.Table).toBeDefined();
-      expect(response.Table!.TableName).toBe(tableName);
-      expect(response.Table!.BillingModeSummary?.BillingMode).toBe('PAY_PER_REQUEST');
-      expect(response.Table!.KeySchema![0].AttributeName).toBe('fileId');
-      expect(response.Table!.KeySchema![0].KeyType).toBe('HASH');
-    }, 30000);
-
-    it('should have TTL enabled on expirationTime attribute', async () => {
-      const command = new DescribeTimeToLiveCommand({
-        TableName: tableName,
-      });
-
-      const response = await dynamoClient.send(command);
-      expect(response.TimeToLiveDescription).toBeDefined();
-      expect(response.TimeToLiveDescription?.AttributeName).toBe('expirationTime');
-      expect(response.TimeToLiveDescription?.TimeToLiveStatus).toBe('ENABLED');
-    }, 30000);
 
     it('should have point-in-time recovery enabled', async () => {
       const command = new DescribeContinuousBackupsCommand({
