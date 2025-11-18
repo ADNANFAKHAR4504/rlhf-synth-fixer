@@ -13,15 +13,16 @@ fi
 
 PLATFORM=$(jq -r '.platform // "unknown"' metadata.json)
 LANGUAGE=$(jq -r '.language // "unknown"' metadata.json)
+TEAM=$(jq -r '.team // "unknown"' metadata.json)
 
-echo "Project: platform=$PLATFORM, language=$LANGUAGE"
+echo "Project: platform=$PLATFORM, language=$LANGUAGE, team=$TEAM"
 
 # Set default environment variables if not provided
 export ENVIRONMENT_SUFFIX=${ENVIRONMENT_SUFFIX:-dev}
 export REPOSITORY=${REPOSITORY:-$(basename "$(pwd)")}
 export COMMIT_AUTHOR=${COMMIT_AUTHOR:-$(git config user.name 2>/dev/null || echo "unknown")}
 export PR_NUMBER=${PR_NUMBER:-"unknown"}
-export TEAM=${TEAM:-"unknown"}
+export TEAM=${TEAM}
 export AWS_REGION=${AWS_REGION:-us-east-1}
 export TERRAFORM_STATE_BUCKET=${TERRAFORM_STATE_BUCKET:-}
 export TERRAFORM_STATE_BUCKET_REGION=${TERRAFORM_STATE_BUCKET_REGION:-us-east-1}
@@ -31,7 +32,7 @@ export PULUMI_CONFIG_PASSPHRASE=${PULUMI_CONFIG_PASSPHRASE:-}
 
 # Export Terraform variables for tagging
 export TF_VAR_pr_number=${PR_NUMBER:-"unknown"}
-export TF_VAR_team=${TEAM:-"unknown"}
+export TF_VAR_team=${TEAM}
 
 # Ensure non-interactive Terraform by providing defaults if not set by CI secrets
 export TF_VAR_db_username=${TF_VAR_db_username:-temp_admin}

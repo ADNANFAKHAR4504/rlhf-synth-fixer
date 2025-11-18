@@ -1,0 +1,43 @@
+{
+  "platform": "cfn",
+  "language": "yaml",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "350209",
+  "team": "3",
+  "startedAt": "2025-11-17T13:42:07.595Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "S3 Bucket",
+    "CloudFormation",
+    "Lambda",
+    "EventBridge",
+    "CloudWatch LogGroup",
+    "VPC",
+    "KMS",
+    "Kinesis Stream",
+    "DynamoDB Table",
+    "VPC Subnet",
+    "VPC RouteTable",
+    "IAM Role",
+    "SQS Queue",
+    "Glue Database",
+    "Glue Crawler",
+    "Glue Job",
+    "Glue Trigger",
+    "SNS Topic",
+    "CloudWatch Alarm",
+    "CloudWatch Dashboard",
+    "Custom Resource"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
+}

@@ -1,0 +1,33 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "101912243",
+  "team": "4",
+  "startedAt": "2025-11-09T06:57:27.3NZ",
+  "subtask": "IaC Program Optimization",
+  "subject_labels": [
+    "Serverless Infrastructure (Functions as Code)"
+  ],
+  "aws_services": [
+    "API Gateway",
+    "RDS Aurora PostgreSQL",
+    "Lambda",
+    "SQS",
+    "Step Functions",
+    "EventBridge",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "EC2 VPC",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "santhosh-swe",
+  "dockerS3Location": ""
+}

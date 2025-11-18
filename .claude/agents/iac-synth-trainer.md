@@ -31,6 +31,15 @@ Before using this agent, familiarize yourself with these related documents:
 - **[PR Fix Checkpoints](.claude/docs/references/pr-fix-checkpoints.md)** - Detailed checkpoint documentation
 - **[Lessons Learnt](.claude/lessons_learnt.md)** - Common failure patterns and fixes
 
+## Enhanced Fixing Capabilities (NEW)
+
+This agent now includes enhanced error analysis and smart fixing capabilities:
+
+- **Enhanced Error Analysis** (`.claude/scripts/analyze-errors.sh`): Pattern matching, semantic analysis, and error classification
+- **Fix Templates** (`.claude/scripts/fix-templates.sh`): Reusable fix functions from lessons_learnt.md
+- **Fix Prioritization** (`.claude/scripts/prioritize-fixes.sh`): Prioritizes fixes by impact and batches related fixes
+- **Incremental Validation** (`.claude/scripts/validate-fixes.sh`): Validates each fix before proceeding
+
 **Note**: This document references these files throughout. Ensure they exist before starting work.
 
 ## Critical Success Principle
@@ -443,39 +452,80 @@ if [ -n "$RUN_ID" ]; then
   echo "Fetching detailed logs from GitHub Actions run $RUN_ID..."
   gh run view $RUN_ID --log > /tmp/pr-${PR_NUMBER}-logs.txt 2>/dev/null || true
   
-  # Extract key errors
-  echo "Key errors found:"
-  grep -i "error\|failed\|failure" /tmp/pr-${PR_NUMBER}-logs.txt | grep -v "grep" | head -30
+  # Use enhanced error analysis script
+  echo "🔍 Running enhanced error analysis..."
+  bash .claude/scripts/analyze-errors.sh $PR_NUMBER /tmp/pr-${PR_NUMBER}-logs.txt
+  
+  # Load analysis results
+  if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+    ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+    echo "✅ Error analysis complete"
+    
+    # Display summary
+    echo ""
+    echo "Error Summary:"
+    echo "$ERROR_SUMMARY" | jq -r '
+      "Total Errors: \(.total_errors)\n",
+      "By Fix Type:",
+      (.by_fix_type[] | "  - \(.fix_type): \(.count)"),
+      "\nCritical Errors: \(.critical_errors | length)",
+      "High Priority: \(.high_priority_errors | length)"
+    '
+  else
+    echo "⚠️ Enhanced analysis not available, using basic grep"
+    grep -i "error\|failed\|failure" /tmp/pr-${PR_NUMBER}-logs.txt | grep -v "grep" | head -30
+  fi
 fi
 ```
 
-**Document Root Cause** (use concise template):
+**Document Root Cause** (use enhanced analysis):
 
 ```bash
-# Concise root cause analysis template
-ROOT_CAUSE="
+# Enhanced root cause analysis using error analysis results
+if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+  
+  # Build comprehensive root cause analysis
+  ROOT_CAUSE="
+Root Cause Analysis for PR #${PR_NUMBER}:
+
+## Failure Category: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "Critical" elif .high_priority_errors | length > 0 then "High" else "Medium" end')
+Failure Type: ${FAILURE_REASON}
+
+## Issues Identified
+
+$(echo "$ERROR_SUMMARY" | jq -r '.recommended_fixes[] | 
+"### Issue: \(.fix_type)
+- **Location**: \(.location)
+- **Problem**: \(.likely_cause)
+- **Evidence**: Error analysis matched known pattern
+- **Root Cause**: Common pattern from lessons_learnt.md
+- **Impact**: Blocks deployment/pipeline stage
+"')
+
+## Summary
+- Total issues: $(echo "$ERROR_SUMMARY" | jq -r '.total_errors')
+- Critical: $(echo "$ERROR_SUMMARY" | jq -r '.critical_errors | length')
+- High Priority: $(echo "$ERROR_SUMMARY" | jq -r '.high_priority_errors | length')
+- Primary causes: $(echo "$ERROR_SUMMARY" | jq -r '.by_fix_type[] | .fix_type' | head -3 | tr '\n' ', ' | sed 's/,$//')
+- Fix complexity: $(echo "$ERROR_SUMMARY" | jq -r 'if .critical_errors | length > 0 then "Complex" elif .high_priority_errors | length > 2 then "Moderate" else "Simple" end')
+"
+else
+  # Fallback to basic template if enhanced analysis not available
+  ROOT_CAUSE="
 Root Cause Analysis for PR #${PR_NUMBER}:
 
 ## Failure Category: <Critical/High/Medium/Low>
 Failure Type: ${FAILURE_REASON}
 
 ## Issues Identified
-
-### Issue 1: [Category]
-- **Location**: [file:line] - [specific resource/function]
-- **Problem**: [exact issue]
-- **Evidence**: [GitHub error message or code snippet]
-- **Root Cause**: [WHY it happened - model misunderstanding/missing requirement/etc.]
-- **Impact**: [What broke and why]
-
-### Issue 2: [Next issue...]
-[Same format]
+[Manual analysis required - enhanced error analysis not available]
 
 ## Summary
-- Total issues: X Critical, Y High, Z Medium, W Low
-- Primary causes: [2-3 key areas]
-- Fix complexity: [Simple/Moderate/Complex]
+- Analysis: Basic (enhanced analysis unavailable)
+- Fix complexity: Unknown
 "
+fi
 
 echo "📝 Root Cause Analysis:"
 echo "$ROOT_CAUSE"
@@ -515,23 +565,53 @@ Failure Type: Deploy
 
 #### 2.0.2 Fix Plan Development
 
-Create a **step-by-step plan** to fix the issues:
+Create a **step-by-step plan** to fix the issues using prioritized fixes:
 
 ```bash
-FIX_PLAN="
+# Generate fix plan from error analysis
+if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+  CLASSIFIED_ERRORS=$(cat /tmp/pr-${PR_NUMBER}-classified-errors.json)
+  
+  # Prioritize fixes
+  PRIORITIZED=$(bash .claude/scripts/prioritize-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE")
+  
+  # Build fix plan from prioritized fixes
+  FIX_PLAN="
 Fix Plan for PR #${PR_NUMBER}:
 
-Step 1: [Specific action - e.g., 'Add environmentSuffix to S3 bucket name in lib/storage-stack.ts line 45']
-  - File: [exact file path]
-  - Change: [exact change to make]
-  - Validation: [how to verify this step worked]
+$(echo "$PRIORITIZED" | jq -r '.[] | 
+"Step \(.priority): Fix \(.category) (\(.count) occurrences)
+  - Priority: \(.priority) (\(if .priority == 1 then "Critical" elif .priority == 2 then "High" elif .priority == 3 then "Medium" else "Low" end))
+  - Files: \(.files | join(", "))
+  - Method: \(if .can_batch then "Batch apply" else "Sequential apply" end)
+  - Template: \(.category)
+  - Validation: \(.category) fix validation
+"')
 
-Step 2: [Next specific action]
-  - File: [exact file path]
-  - Change: [exact change]
-  - Validation: [verification method]
+Local Validation Sequence:
+1. Validate fixes incrementally (validate-fixes.sh)
+2. Run lint: npm run lint
+3. Run build: npm run build
+4. Run synth: npm run synth (if applicable)
+5. Run unit tests: npm run test:unit
+6. Deploy: npm run deploy
+7. Run integration tests: npm run test:integration
 
-Step 3: [Continue...]
+Expected Outcome:
+- All fixes validated successfully
+- All linters pass
+- Build succeeds
+- All tests pass with 100% coverage
+- Deployment successful
+- All GitHub pipeline stages will pass
+"
+else
+  # Fallback to basic plan if enhanced analysis not available
+  FIX_PLAN="
+Fix Plan for PR #${PR_NUMBER}:
+
+[Manual fix plan required - enhanced error analysis not available]
 
 Local Validation Sequence:
 1. Run lint: npm run lint
@@ -540,14 +620,8 @@ Local Validation Sequence:
 4. Run unit tests: npm run test:unit
 5. Deploy: npm run deploy
 6. Run integration tests: npm run test:integration
-
-Expected Outcome:
-- All linters pass
-- Build succeeds
-- All tests pass with 100% coverage
-- Deployment successful
-- All GitHub pipeline stages will pass
 "
+fi
 
 echo "📋 Fix Plan:"
 echo "$FIX_PLAN"
@@ -989,9 +1063,25 @@ echo "Proceeding to apply targeted fixes..."
 
 **Note**: Baseline validation (Phase 2.4.5) has established current state. Fixes will address identified issues.
 
+**NEW**: Use enhanced error analysis and prioritized fixes for smarter fixing.
+
 ```bash
 # Update progress
 bash .claude/scripts/pr-manager.sh update-status $PR_NUMBER in_progress "Applying targeted fixes"
+
+# Load error analysis if available
+if [ -f "/tmp/pr-${PR_NUMBER}-error-summary.json" ]; then
+  ERROR_SUMMARY=$(cat /tmp/pr-${PR_NUMBER}-error-summary.json)
+  CLASSIFIED_ERRORS=$(cat /tmp/pr-${PR_NUMBER}-classified-errors.json)
+  
+  # Prioritize and batch fixes
+  echo "📊 Prioritizing fixes..."
+  PRIORITIZED_FIXES=$(bash .claude/scripts/prioritize-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE")
+  
+  echo "✅ Fix prioritization complete"
+else
+  echo "⚠️ Enhanced error analysis not available, using traditional fix methods"
+fi
 ```
 
 ---
@@ -1454,27 +1544,39 @@ if [ $PRE_VALIDATE_STATUS -ne 0 ] || [ "$VALIDATION_FIXES_NEEDED" = true ]; then
   echo ""
   echo "🔧 Fixing validation errors before deployment..."
   
-  # Apply automated fixes
+  # Apply automated fixes using fix templates
+  source .claude/scripts/fix-templates.sh
+  
   # 1. Retain policies
   if echo "${VALIDATION_ISSUES[@]}" | grep -q "Retain policies" || grep -qi "retain\|RETAIN" /tmp/pre-validate-output.txt 2>/dev/null; then
     echo "  → Fixing Retain policies..."
-    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' {} \;
-    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) -exec sed -i.bak 's/removalPolicy.*=.*RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' {} \;
-    find lib/ -type f -exec sed -i.bak 's/deletionProtection.*true/deletionProtection: false/g' {} \;
-    find lib/ -type f -exec sed -i.bak 's/deletion_protection.*True/deletion_protection=False/g' {} \;
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) | while read file; do
+      fix_retain_policies "$file" "$PLATFORM" "$LANGUAGE"
+    done
   fi
   
   # 2. Deprecated Synthetics runtime
   if echo "${VALIDATION_ISSUES[@]}" | grep -q "Deprecated Synthetics"; then
     echo "  → Fixing deprecated Synthetics runtime..."
-    find lib/ -type f -exec sed -i.bak 's/SYNTHETICS_NODEJS_PUPPETEER_[0-5]\./SYNTHETICS_NODEJS_PUPPETEER_7_0/g' {} \;
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) | while read file; do
+      fix_deprecated_synthetics "$file"
+    done
   fi
   
   # 3. AWS Config IAM policy
   if echo "${VALIDATION_ISSUES[@]}" | grep -q "AWS Config IAM"; then
     echo "  → Fixing AWS Config IAM policy..."
-    find lib/ -type f -exec sed -i.bak 's/service-role\/ConfigRole/service-role\/AWS_ConfigRole/g' {} \;
-    find lib/ -type f -exec sed -i.bak 's/AWS_ConfigRole[^"]/service-role\/AWS_ConfigRole/g' {} \;
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) | while read file; do
+      fix_config_iam "$file"
+    done
+  fi
+  
+  # 4. DeletionProtection
+  if echo "${VALIDATION_ISSUES[@]}" | grep -q "DeletionProtection"; then
+    echo "  → Fixing DeletionProtection..."
+    find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) | while read file; do
+      fix_deletion_protection "$file"
+    done
   fi
   
   # Note: environmentSuffix and GuardDuty fixes require manual code changes
@@ -1566,10 +1668,10 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
     echo "Checking for Retain policies..."
     if grep -r "RemovalPolicy.*RETAIN\|RETAIN" lib/; then
       echo "❌ Found Retain policies - changing to DESTROY"
-      # Use Edit tool to replace RETAIN with DESTROY
-      find lib/ -type f -name "*.ts" -o -name "*.py" | while read file; do
-        sed -i.bak 's/RemovalPolicy\.RETAIN/RemovalPolicy.DESTROY/g' "$file"
-        sed -i.bak 's/removalPolicy.*=.*RETAIN/removalPolicy: RemovalPolicy.DESTROY/g' "$file"
+      # Use fix templates
+      source .claude/scripts/fix-templates.sh
+      find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) | while read file; do
+        fix_retain_policies "$file" "$PLATFORM" "$LANGUAGE"
       done
     fi
 
@@ -1577,9 +1679,9 @@ if echo "$FAILED_STAGES" | grep -qi "deploy"; then
     echo "Checking for DeletionProtection..."
     if grep -ri "deletionProtection.*true\|deletion_protection.*True" lib/; then
       echo "❌ Found DeletionProtection enabled - disabling"
-      find lib/ -type f | while read file; do
-        sed -i.bak 's/deletionProtection.*true/deletionProtection: false/g' "$file"
-        sed -i.bak 's/deletion_protection.*True/deletion_protection=False/g' "$file"
+      source .claude/scripts/fix-templates.sh
+      find lib/ -type f \( -name "*.ts" -o -name "*.py" -o -name "*.js" \) | while read file; do
+        fix_deletion_protection "$file"
       done
     fi
 
@@ -1931,10 +2033,18 @@ fi
 
 **CRITICAL**: Before pushing, validate EVERYTHING locally.
 
+**NEW**: Use incremental fix validation to verify each fix before proceeding.
+
 ```bash
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "Running complete local validation"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+
+# Validate fixes if error analysis was performed
+if [ -f "/tmp/pr-${PR_NUMBER}-classified-errors.json" ]; then
+  echo "🔍 Validating applied fixes..."
+  bash .claude/scripts/validate-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE" || true
+fi
 
 VALIDATION_PASSED=true
 
@@ -3070,3 +3180,40 @@ After each session:
 3. Optimize common fix procedures
 4. Update documentation
 5. Track metrics for improvement
+
+## Enhanced Fixing Features
+
+### Error Analysis Improvements
+- **Pattern Matching**: Matches errors against known patterns from lessons_learnt.md
+- **Semantic Analysis**: Extracts resource types, error types, and locations
+- **Context Extraction**: Captures 5 lines before/after each error for better understanding
+- **Classification**: Categorizes errors by fix type and priority
+
+### Smart Fixing Improvements
+- **Fix Templates**: Reusable fix functions extracted from lessons_learnt.md
+- **Prioritization**: Fixes applied in priority order (Critical → High → Medium → Low)
+- **Batching**: Related fixes (e.g., all environmentSuffix fixes) applied together
+- **Incremental Validation**: Each fix validated before proceeding to next
+
+### Benefits
+- **Faster Fixes**: Batch processing reduces iteration time
+- **Higher Success Rate**: Pattern matching catches common issues automatically
+- **Better Validation**: Incremental validation catches issues early
+- **Reduced Manual Work**: Templates handle repetitive fixes automatically
+
+### Usage Example
+
+```bash
+# Enhanced error analysis
+bash .claude/scripts/analyze-errors.sh $PR_NUMBER /tmp/pr-${PR_NUMBER}-logs.txt
+
+# Prioritize fixes
+PRIORITIZED=$(bash .claude/scripts/prioritize-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE")
+
+# Apply fixes using templates
+source .claude/scripts/fix-templates.sh
+apply_fix_template "missing_environment_suffix" "lib/storage-stack.ts" "$PLATFORM" "$LANGUAGE"
+
+# Validate fixes
+bash .claude/scripts/validate-fixes.sh /tmp/pr-${PR_NUMBER}-classified-errors.json "$PLATFORM" "$LANGUAGE"
+```

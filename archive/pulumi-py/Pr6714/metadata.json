@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "author": "mayanksethi-turing",
+  "startedAt": "2025-11-17T00:00:00-00:00",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "po_id": "9i3yr5",
+  "aws_services": [
+    "API Gateway",
+    "CloudWatch",
+    "DynamoDB",
+    "EventBridge",
+    "IAM",
+    "KMS",
+    "Lambda",
+    "S3",
+    "SNS",
+    "SQS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
