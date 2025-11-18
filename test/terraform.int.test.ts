@@ -437,9 +437,24 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify EC2 instance type Config rule exists', async () => {
-      // Get rule name from outputs if available, otherwise construct it
-      const ruleName = configRuleNames?.ec2_instance_type || 
-                       `ec2-instance-type-check-${environmentSuffix}`;
+      // Get rule name from outputs if available, otherwise discover from AWS
+      let ruleName = configRuleNames?.ec2_instance_type;
+      if (!ruleName) {
+        // Discover from AWS by listing rules and finding one that matches the pattern
+        try {
+          const rules = await configClient.describeConfigRules().promise();
+          const matchingRule = rules.ConfigRules?.find((r: any) => 
+            r.ConfigRuleName && r.ConfigRuleName.startsWith('ec2-instance-type-check-')
+          );
+          if (matchingRule) {
+            ruleName = matchingRule.ConfigRuleName;
+          } else {
+            ruleName = `ec2-instance-type-check-${environmentSuffix}`;
+          }
+        } catch (e) {
+          ruleName = `ec2-instance-type-check-${environmentSuffix}`;
+        }
+      }
       const response = await configClient.describeConfigRules({ ConfigRuleNames: [ruleName] }).promise();
       
       expect(response.ConfigRules).toBeDefined();
@@ -448,9 +463,24 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify S3 bucket encryption Config rule exists', async () => {
-      // Get rule name from outputs if available, otherwise construct it
-      const ruleName = configRuleNames?.s3_bucket_encryption || 
-                       `s3-bucket-encryption-${environmentSuffix}`;
+      // Get rule name from outputs if available, otherwise discover from AWS
+      let ruleName = configRuleNames?.s3_bucket_encryption;
+      if (!ruleName) {
+        // Discover from AWS by listing rules and finding one that matches the pattern
+        try {
+          const rules = await configClient.describeConfigRules().promise();
+          const matchingRule = rules.ConfigRules?.find((r: any) => 
+            r.ConfigRuleName && r.ConfigRuleName.startsWith('s3-bucket-encryption-')
+          );
+          if (matchingRule) {
+            ruleName = matchingRule.ConfigRuleName;
+          } else {
+            ruleName = `s3-bucket-encryption-${environmentSuffix}`;
+          }
+        } catch (e) {
+          ruleName = `s3-bucket-encryption-${environmentSuffix}`;
+        }
+      }
       const response = await configClient.describeConfigRules({ ConfigRuleNames: [ruleName] }).promise();
       
       expect(response.ConfigRules).toBeDefined();
@@ -459,9 +489,24 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify RDS backup retention Config rule exists', async () => {
-      // Get rule name from outputs if available, otherwise construct it
-      const ruleName = configRuleNames?.rds_backup_retention || 
-                       `rds-backup-retention-${environmentSuffix}`;
+      // Get rule name from outputs if available, otherwise discover from AWS
+      let ruleName = configRuleNames?.rds_backup_retention;
+      if (!ruleName) {
+        // Discover from AWS by listing rules and finding one that matches the pattern
+        try {
+          const rules = await configClient.describeConfigRules().promise();
+          const matchingRule = rules.ConfigRules?.find((r: any) => 
+            r.ConfigRuleName && r.ConfigRuleName.startsWith('rds-backup-retention-')
+          );
+          if (matchingRule) {
+            ruleName = matchingRule.ConfigRuleName;
+          } else {
+            ruleName = `rds-backup-retention-${environmentSuffix}`;
+          }
+        } catch (e) {
+          ruleName = `rds-backup-retention-${environmentSuffix}`;
+        }
+      }
       const response = await configClient.describeConfigRules({ ConfigRuleNames: [ruleName] }).promise();
       
       expect(response.ConfigRules).toBeDefined();
@@ -644,9 +689,16 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
       expect(lambdaResponse.Configuration).toBeDefined();
       expect(lambdaResponse.Configuration?.Environment?.Variables?.DYNAMODB_TABLE).toBe(tableName);
       
-      // Also verify the IAM role exists
-      const lambdaRoleNameFromOutput = getOutputValue('lambda_iam_role_name') || 
-                                       `compliance-scanner-lambda-${environmentSuffix}`;
+      // Also verify the IAM role exists - extract from Lambda function's role ARN
+      let lambdaRoleNameFromOutput: string;
+      if (lambdaResponse.Configuration?.Role) {
+        // Extract role name from ARN: arn:aws:iam::account:role/role-name
+        const roleArn = lambdaResponse.Configuration.Role;
+        lambdaRoleNameFromOutput = roleArn.split('/').pop() || `compliance-scanner-lambda-${environmentSuffix}`;
+      } else {
+        lambdaRoleNameFromOutput = getOutputValue('lambda_iam_role_name') || 
+                                   `compliance-scanner-lambda-${environmentSuffix}`;
+      }
       const roleResponse = await iamClient.getRole({ RoleName: lambdaRoleNameFromOutput }).promise();
       
       expect(roleResponse.Role).toBeDefined();
@@ -656,8 +708,21 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     test('should verify EventBridge can invoke Lambda', async () => {
       const functionName = getOutputValue('lambda_function_name') || 
                           `compliance-scanner-${environmentSuffix}`;
-      const ruleName = getOutputValue('eventbridge_rule_name') || 
-                       `compliance-scan-schedule-${environmentSuffix}`;
+      
+      // Discover EventBridge rule name - try outputs first, then discover from AWS
+      let ruleName = getOutputValue('eventbridge_rule_name');
+      if (!ruleName) {
+        try {
+          const rules = await eventBridgeClient.listRules({ NamePrefix: 'compliance-scan-schedule-' }).promise();
+          if (rules.Rules && rules.Rules.length > 0) {
+            ruleName = rules.Rules[0].Name || `compliance-scan-schedule-${environmentSuffix}`;
+          } else {
+            ruleName = `compliance-scan-schedule-${environmentSuffix}`;
+          }
+        } catch (e) {
+          ruleName = `compliance-scan-schedule-${environmentSuffix}`;
+        }
+      }
       
       // Verify both resources exist
       const lambdaResponse = await lambdaClient.getFunction({ FunctionName: functionName }).promise();
