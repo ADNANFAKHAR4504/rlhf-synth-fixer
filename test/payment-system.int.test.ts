@@ -6,6 +6,8 @@ jest.mock('aws-sdk', () => {
     promise: jest.fn().mockResolvedValue(data)
   });
 
+  const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'test';
+
   return {
     CloudFormation: jest.fn().mockImplementation(() => ({
       validateTemplate: jest.fn().mockReturnValue(mockPromise({ Capabilities: ['CAPABILITY_IAM'] })),
@@ -69,13 +71,11 @@ jest.mock('aws-sdk', () => {
     })),
     Lambda: jest.fn().mockImplementation(() => ({
       getFunctionConfiguration: jest.fn().mockReturnValue(mockPromise({
-        Configuration: {
-          FunctionName: 'payment-processor-test',
-          Runtime: 'python3.11',
-          Timeout: 60,
-          VpcConfig: {
-            SubnetIds: ['subnet-1', 'subnet-2']
-          }
+        FunctionName: `payment-processor-${ENVIRONMENT_SUFFIX}`,
+        Runtime: 'python3.11',
+        Timeout: 60,
+        VpcConfig: {
+          SubnetIds: ['subnet-1', 'subnet-2']
         }
       }))
     })),
@@ -83,7 +83,7 @@ jest.mock('aws-sdk', () => {
       getRestApis: jest.fn().mockReturnValue(mockPromise({
         items: [{
           id: 'api-123',
-          name: 'payment-api-test',
+          name: `payment-api-${ENVIRONMENT_SUFFIX}`,
           description: 'Payment Processing API',
           createdDate: new Date()
         }]
@@ -120,21 +120,21 @@ jest.mock('aws-sdk', () => {
     SQS: jest.fn().mockImplementation(() => ({
       listQueues: jest.fn().mockReturnValue(mockPromise({
         QueueUrls: [
-          'https://sqs.us-east-1.amazonaws.com/123456789012/payment-transaction-queue-test',
-          'https://sqs.us-east-1.amazonaws.com/123456789012/payment-transaction-dlq-test'
+          `https://sqs.us-east-1.amazonaws.com/123456789012/payment-transaction-queue-${ENVIRONMENT_SUFFIX}`,
+          `https://sqs.us-east-1.amazonaws.com/123456789012/payment-transaction-dlq-${ENVIRONMENT_SUFFIX}`
         ]
       })),
       getQueueAttributes: jest.fn().mockReturnValue(mockPromise({
         Attributes: {
-          QueueArn: 'arn:aws:sqs:us-east-1:123456789012:payment-transaction-queue-test',
-          RedrivePolicy: JSON.stringify({ deadLetterTargetArn: 'arn:aws:sqs:us-east-1:123456789012:payment-transaction-dlq-test', maxReceiveCount: 3 })
+          QueueArn: `arn:aws:sqs:us-east-1:123456789012:payment-transaction-queue-${ENVIRONMENT_SUFFIX}`,
+          RedrivePolicy: JSON.stringify({ deadLetterTargetArn: `arn:aws:sqs:us-east-1:123456789012:payment-transaction-dlq-${ENVIRONMENT_SUFFIX}`, maxReceiveCount: 3 })
         }
       }))
     })),
     SNS: jest.fn().mockImplementation(() => ({
       listTopics: jest.fn().mockReturnValue(mockPromise({
         Topics: [{
-          TopicArn: 'arn:aws:sns:us-east-1:123456789012:payment-alerts-test'
+          TopicArn: `arn:aws:sns:us-east-1:123456789012:payment-alerts-${ENVIRONMENT_SUFFIX}`
         }]
       })),
       getTopicAttributes: jest.fn().mockReturnValue(mockPromise({
@@ -146,8 +146,8 @@ jest.mock('aws-sdk', () => {
     CloudWatch: jest.fn().mockImplementation(() => ({
       describeAlarms: jest.fn().mockReturnValue(mockPromise({
         MetricAlarms: [
-          { AlarmName: 'payment-queue-depth-high-test', StateValue: 'OK' },
-          { AlarmName: 'payment-lambda-errors-test', StateValue: 'OK' }
+          { AlarmName: `payment-queue-depth-high-${ENVIRONMENT_SUFFIX}`, StateValue: 'OK' },
+          { AlarmName: `payment-lambda-errors-${ENVIRONMENT_SUFFIX}`, StateValue: 'OK' }
         ]
       }))
     })),
@@ -305,10 +305,10 @@ describe('Payment Processing System - Integration Tests', () => {
         FunctionName: `payment-processor-${ENVIRONMENT_SUFFIX}`
       }).promise();
 
-      expect(result.Configuration).toBeDefined();
-      expect(result.Configuration!.Runtime).toBe('python3.11');
-      expect(result.Configuration!.Timeout).toBe(60);
-      expect(result.Configuration!.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
+      expect(result).toBeDefined();
+      expect(result.Runtime).toBe('python3.11');
+      expect(result.Timeout).toBe(60);
+      expect(result.VpcConfig!.SubnetIds!.length).toBeGreaterThan(0);
     });
 
     test('should verify API Gateway configuration', async () => {
