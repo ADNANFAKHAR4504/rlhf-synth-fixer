@@ -13,7 +13,7 @@ module "ec2_east" {
   vpc_id     = aws_vpc.east.id
   subnet_ids = each.value.subnet_type == "public" ? local.east_public_subnet_ids : local.east_private_subnet_ids
 
-  ami_id               = each.value.ami
+  ami_id               = each.value.ami_east
   instance_type        = each.value.instance_type
   iam_instance_profile = aws_iam_instance_profile.ec2[each.key].name
   user_data = templatefile("${path.module}/user_data/${each.value.user_data_template}.sh", {
@@ -50,7 +50,7 @@ module "ec2_west" {
   vpc_id     = aws_vpc.west.id
   subnet_ids = each.value.subnet_type == "public" ? local.west_public_subnet_ids : local.west_private_subnet_ids
 
-  ami_id               = each.value.ami
+  ami_id               = each.value.ami_west
   instance_type        = each.value.instance_type
   iam_instance_profile = aws_iam_instance_profile.ec2[each.key].name
   user_data = templatefile("${path.module}/user_data/${each.value.user_data_template}.sh", {
@@ -80,6 +80,11 @@ module "ec2_west" {
 module "rds_east" {
   for_each = { for k, v in local.rds_clusters : k => v if v.region_key == "east" }
   source   = "./modules/rds"
+
+  depends_on = [
+    module.ec2_east,
+    module.ec2_west
+  ]
 
   environment        = var.environment
   environment_suffix = var.environment_suffix
@@ -118,6 +123,11 @@ module "rds_east" {
 module "rds_west" {
   for_each = { for k, v in local.rds_clusters : k => v if v.region_key == "west" }
   source   = "./modules/rds"
+
+  depends_on = [
+    module.ec2_east,
+    module.ec2_west
+  ]
 
   environment        = var.environment
   environment_suffix = var.environment_suffix

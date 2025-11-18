@@ -124,7 +124,7 @@ resource "aws_launch_template" "instance" {
 
 # Auto Scaling Group
 resource "aws_autoscaling_group" "instance" {
-  name = "${var.environment}-${var.region_name}-${var.tier_name}-asg-${var.environment_suffix}"
+  name_prefix = "${var.environment}-${var.region_name}-${var.tier_name}-asg-${var.environment_suffix}-"
 
   vpc_zone_identifier       = var.subnet_ids
   target_group_arns         = var.target_group_arns

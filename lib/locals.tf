@@ -25,28 +25,32 @@ locals {
     }
   }
 
-  # Single AMI ID for all instances (dynamically lookup latest Amazon Linux 2)
-  instance_ami_id = data.aws_ami.amazon_linux_2.id
+  # AMI IDs for each region (dynamically lookup latest Amazon Linux 2 per region)
+  instance_ami_id_east = data.aws_ami.amazon_linux_2_east.id
+  instance_ami_id_west = data.aws_ami.amazon_linux_2_west.id
 
   # EC2 instance configurations map for for_each
   ec2_instances = {
     web-primary = {
       instance_type      = var.web_instance_type
-      ami                = local.instance_ami_id
+      ami_east           = local.instance_ami_id_east
+      ami_west           = local.instance_ami_id_west
       user_data_template = "web"
       security_groups    = ["web"]
       subnet_type        = "public"
     }
     app-primary = {
       instance_type      = var.app_instance_type
-      ami                = local.instance_ami_id
+      ami_east           = local.instance_ami_id_east
+      ami_west           = local.instance_ami_id_west
       user_data_template = "app"
       security_groups    = ["app"]
       subnet_type        = "private"
     }
     worker-primary = {
       instance_type      = var.worker_instance_type
-      ami                = local.instance_ami_id
+      ami_east           = local.instance_ami_id_east
+      ami_west           = local.instance_ami_id_west
       user_data_template = "worker"
       security_groups    = ["app"]
       subnet_type        = "private"
