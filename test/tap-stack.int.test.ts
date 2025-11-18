@@ -555,7 +555,6 @@ describe('TapStack End-to-End Integration Tests', () => {
 
   describe('Cross-Region Replication', () => {
     test('should verify cross-region replication rule exists when conditions met', async () => {
-      // This test is conditional based on stack deployment parameters
       // If CreateSecondaryResources condition is true, rule should exist
       const listRulesCommand = new ListRulesCommand({
         EventBusName: mainEventBusName
