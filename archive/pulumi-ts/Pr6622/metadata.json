@@ -29,5 +29,6 @@
     "lines": 100,
     "branches": 100
   },
-  "completedAt": "2025-11-17T04:45:00+05:30"
+  "completedAt": "2025-11-17T04:45:00+05:30",
+  "dockerS3Location": ""
 }
