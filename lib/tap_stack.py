@@ -567,15 +567,15 @@ class TapStack(pulumi.ComponentResource):
                     'actions': [{
                         'name': 'SourceAction',
                         'category': 'Source',
-                        'owner': 'ThirdParty',
-                        'provider': 'GitHub',
-                        'version': '2',
+                        'owner': 'AWS',                               
+                        'provider': 'CodeStarSourceConnection',       
+                        'version': '1',                               
                         'output_artifacts': ['source_output'],
                         'configuration': {
-                            'ConnectionArn': 'arn:aws:codestar-connections:region:account:connection/connection-id',  # Replace with actual CodeStar Connection ARN
+                            'ConnectionArn': self.github_connection_arn,  
                             'FullRepositoryId': f'{self.github_owner}/{self.github_repo}',
-                            'BranchName': self.github_branch
-                        }
+                            'BranchName': self.github_branch,
+                        },
                     }]
                 },
                 {
@@ -609,7 +609,11 @@ class TapStack(pulumi.ComponentResource):
                 }
             ],
             tags={**self.default_tags, 'Name': f'pulumi-pipeline-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, depends_on=[self.pipeline_role, self.codebuild_project, self.sns_topic])
+
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.pipeline_role, self.codebuild_project, self.sns_topic]
+            )
         )
 
         return pipeline
