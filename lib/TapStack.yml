@@ -62,6 +62,43 @@ Resources:
         - Key: Owner
           Value: 'Infrastructure Team'
 
+  # S3 Bucket Policy for Config Service
+  ConfigBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref ConfigBucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AWSConfigBucketPermissionsCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:GetBucketAcl'
+            Resource: !GetAtt ConfigBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketExistenceCheck
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:ListBucket'
+            Resource: !GetAtt ConfigBucket.Arn
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AWSConfigBucketWrite
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 's3:PutObject'
+            Resource: !Sub '${ConfigBucket.Arn}/*'
+            Condition:
+              StringEquals:
+                's3:x-amz-acl': 'bucket-owner-full-control'
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+
   # KMS Key for Config Encryption
   ConfigKMSKey:
     Type: AWS::KMS::Key
@@ -84,6 +121,14 @@ Resources:
               - 'kms:Decrypt'
               - 'kms:GenerateDataKey'
             Resource: '*'
+          - Sid: Allow SNS to use the key
+            Effect: Allow
+            Principal:
+              Service: sns.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:GenerateDataKey'
+            Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -91,6 +136,13 @@ Resources:
           Value: 'AWS Config'
         - Key: Owner
           Value: 'Infrastructure Team'
+
+  # KMS Key Alias
+  ConfigKMSKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/config-${EnvironmentSuffix}'
+      TargetKeyId: !Ref ConfigKMSKey
 
   # SNS Topic for Config Notifications
   ConfigTopic:
@@ -106,6 +158,31 @@ Resources:
           Value: 'AWS Config'
         - Key: Owner
           Value: 'Infrastructure Team'
+
+  # SNS Topic Policy
+  ConfigTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref ConfigTopic
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowConfigPublish
+            Effect: Allow
+            Principal:
+              Service: config.amazonaws.com
+            Action: 'SNS:Publish'
+            Resource: !Ref ConfigTopic
+            Condition:
+              StringEquals:
+                'AWS:SourceAccount': !Ref 'AWS::AccountId'
+          - Sid: AllowEventBridgePublish
+            Effect: Allow
+            Principal:
+              Service: events.amazonaws.com
+            Action: 'SNS:Publish'
+            Resource: !Ref ConfigTopic
 
   # IAM Role for AWS Config
   ConfigRole:
@@ -213,20 +290,113 @@ Resources:
         Owner: AWS
         SourceIdentifier: 'REQUIRED_TAGS'
 
-  # CloudWatch Alarm for Config Compliance
-  ConfigComplianceAlarm:
-    Type: AWS::CloudWatch::Alarm
+  # Config Rule: RDS Storage Encrypted
+  RDSStorageEncryptedRule:
+    Type: AWS::Config::ConfigRule
     Properties:
-      AlarmName: !Sub 'config-compliance-violations-${EnvironmentSuffix}'
-      AlarmDescription: 'Alert when Config rules detect compliance violations'
-      MetricName: ComplianceViolations
-      Namespace: AWS/Config
-      Statistic: Sum
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 1
-      ComparisonOperator: GreaterThanOrEqualToThreshold
-      TreatMissingData: notBreaching
+      ConfigRuleName: !Sub 'rds-storage-encrypted-${EnvironmentSuffix}'
+      Description: 'Checks whether RDS DB instances have storage encryption enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: 'RDS_STORAGE_ENCRYPTED'
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::RDS::DBInstance'
+
+  # Config Rule: IAM Password Policy
+  IAMPasswordPolicyRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub 'iam-password-policy-${EnvironmentSuffix}'
+      Description: 'Checks whether IAM password policy meets requirements'
+      Source:
+        Owner: AWS
+        SourceIdentifier: 'IAM_PASSWORD_POLICY'
+
+  # Config Rule: SSH Restricted
+  SSHRestrictedRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub 'ssh-restricted-${EnvironmentSuffix}'
+      Description: 'Checks whether security groups disallow unrestricted SSH'
+      Source:
+        Owner: AWS
+        SourceIdentifier: 'INCOMING_SSH_DISABLED'
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::EC2::SecurityGroup'
+
+  # Config Rule: S3 Bucket Public Write Prohibited
+  S3BucketPublicWriteRule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub 's3-bucket-public-write-prohibited-${EnvironmentSuffix}'
+      Description: 'Checks that S3 buckets do not allow public write access'
+      Source:
+        Owner: AWS
+        SourceIdentifier: 'S3_BUCKET_PUBLIC_WRITE_PROHIBITED'
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::S3::Bucket'
+
+  # Config Rule: S3 Bucket Server Side Encryption
+  S3BucketSSERule:
+    Type: AWS::Config::ConfigRule
+    Properties:
+      ConfigRuleName: !Sub 's3-bucket-sse-enabled-${EnvironmentSuffix}'
+      Description: 'Checks that S3 buckets have server-side encryption enabled'
+      Source:
+        Owner: AWS
+        SourceIdentifier: 'S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED'
+      Scope:
+        ComplianceResourceTypes:
+          - 'AWS::S3::Bucket'
+
+  # EventBridge Rule for Config Compliance Changes
+  ConfigComplianceEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'config-compliance-changes-${EnvironmentSuffix}'
+      Description: 'Trigger notifications when Config rules detect non-compliance'
+      EventPattern:
+        source:
+          - 'aws.config'
+        detail-type:
+          - 'Config Rules Compliance Change'
+        detail:
+          newEvaluationResult:
+            complianceType:
+              - 'NON_COMPLIANT'
+      State: ENABLED
+      Targets:
+        - Arn: !Ref ConfigTopic
+          Id: ConfigComplianceSNS
+          InputTransformer:
+            InputPathsMap:
+              awsRegion: '$.detail.awsRegion'
+              awsAccountId: '$.detail.awsAccountId'
+              configRuleName: '$.detail.configRuleName'
+              resourceType: '$.detail.resourceType'
+              resourceId: '$.detail.resourceId'
+              complianceType: '$.detail.newEvaluationResult.complianceType'
+            InputTemplate: |
+              {
+                "Message": "AWS Config Compliance Violation Detected",
+                "Account": "<awsAccountId>",
+                "Region": "<awsRegion>",
+                "Rule": "<configRuleName>",
+                "ResourceType": "<resourceType>",
+                "ResourceId": "<resourceId>",
+                "ComplianceStatus": "<complianceType>"
+              }
+
+  # CloudWatch Log Group for Config
+  ConfigLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/config/${EnvironmentSuffix}'
+      RetentionInDays: 30
+      KmsKeyId: !GetAtt ConfigKMSKey.Arn
 
 Outputs:
   ConfigBucketName:
