@@ -93,7 +93,10 @@ resource "aws_iam_role_policy" "compliance_lambda_policy" {
           "logs:CreateLogStream",
           "logs:PutLogEvents"
         ]
-        Resource = "arn:aws:logs:*:*:*"
+        Resource = [
+          aws_cloudwatch_log_group.compliance_scanner.arn,
+          "${aws_cloudwatch_log_group.compliance_scanner.arn}:*"
+        ]
       },
       {
         Effect = "Allow"
@@ -291,6 +294,16 @@ resource "aws_s3_bucket_public_access_block" "config" {
   block_public_policy     = true
   ignore_public_acls      = true
   restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "config" {
+  bucket = aws_s3_bucket.config.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
 
 # S3 Bucket Policy for Config

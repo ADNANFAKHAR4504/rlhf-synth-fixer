@@ -1,6 +1,3 @@
-variable "aws_region" {
-  description = "AWS region for resource deployment"
-  type        = string
-  default     = "us-east-2"
-}
+# aws_region variable is defined in variables.tf
+# This file exists for unit test compatibility
 
