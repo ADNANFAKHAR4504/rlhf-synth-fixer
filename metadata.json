@@ -11,7 +11,18 @@
     "Serverless Infrastructure (Functions as Code)"
   ],
   "aws_services": [
-    "Lambda"
+    "Lambda",
+    "API Gateway",
+    "DynamoDB",
+    "Step Functions",
+    "SNS",
+    "EventBridge",
+    "KMS",
+    "CloudWatch Logs",
+    "X-Ray",
+    "SSM Parameter Store",
+    "IAM",
+    "WAF"
   ],
   "training_quality": 10,
   "coverage": {
