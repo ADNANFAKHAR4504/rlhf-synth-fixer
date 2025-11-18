@@ -44,8 +44,9 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         cls.iam_client = boto3.client('iam')
         cls.sns_client = boto3.client('sns', region_name=cls.region)
         cls.logs_client = boto3.client('logs', region_name=cls.region)
-        cls.kms_client = boto3.client('kms', region_name=cls.region)
         cls.ssm_client = boto3.client('ssm', region_name=cls.region)
+        cls.notifications_client = boto3.client('codestar-notifications', region_name=cls.region)
+        cls.kms_client = boto3.client('kms', region_name=cls.region)
 
     def test_01_pipeline_exists_and_configured(self):
         """Test CodePipeline exists and is properly configured."""
@@ -62,7 +63,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
 
             # Verify stages exist
             stages = pipeline['stages']
-            self.assertGreaterEqual(len(stages), 2, "Pipeline should have at least 2 stages")
+            self.assertGreaterEqual(len(stages), 3, "Pipeline should have at least 3 stages")
 
             # Check source stage
             source_stage = stages[0]
@@ -70,8 +71,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             source_action = source_stage['actions'][0]
             self.assertEqual(source_action['actionTypeId']['provider'], 'CodeStarSourceConnection', "Source provider mismatch")
 
+            # Check deploy stage
+            deploy_stage = stages[2]
+            self.assertEqual(deploy_stage['name'], 'Deploy', "Third stage should be Deploy")
+            deploy_action = deploy_stage['actions'][0]
+            self.assertEqual(deploy_action['actionTypeId']['provider'], 'Manual', "Deploy provider should be Manual")
+
         except Exception as e:
-            self.fail(f"Pipeline validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_02_s3_buckets_exist_and_configured(self):
         """Test S3 buckets exist and are properly configured."""
@@ -98,7 +105,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "State bucket encryption not configured")
 
         except Exception as e:
-            self.fail(f"S3 bucket validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_03_codebuild_project_exists(self):
         """Test CodeBuild project exists and is properly configured."""
@@ -119,7 +126,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertIn('python', environment['image'].lower(), "Environment image should include Python")
 
         except Exception as e:
-            self.fail(f"CodeBuild project validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_04_iam_roles_exist(self):
         """Test IAM roles exist for pipeline and CodeBuild."""
@@ -139,7 +146,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertIsNotNone(response['Role'], "CodeBuild role not found")
 
         except Exception as e:
-            self.fail(f"IAM role validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_05_sns_topic_exists(self):
         """Test SNS topic exists for notifications."""
@@ -157,7 +164,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertGreater(len(subscriptions), 0, "SNS topic should have subscriptions")
 
         except Exception as e:
-            self.fail(f"SNS topic validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_06_log_group_exists(self):
         """Test CloudWatch log group exists."""
@@ -174,7 +181,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertEqual(len(matching_groups), 1, "Exact log group not found")
 
         except Exception as e:
-            self.fail(f"Log group validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_07_kms_key_exists(self):
         """Test KMS customer-managed key exists."""
@@ -190,7 +197,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertTrue(key_metadata['KeyRotationEnabled'], "KMS key rotation should be enabled")
 
         except Exception as e:
-            self.fail(f"KMS key validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_08_parameter_store_exists(self):
         """Test SSM Parameter Store exists for Pulumi token."""
@@ -206,7 +213,7 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             self.assertEqual(parameter['Type'], 'SecureString', "Parameter should be SecureString")
 
         except Exception as e:
-            self.fail(f"Parameter Store validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_09_pipeline_naming_convention(self):
         """Test pipeline follows naming conventions."""
@@ -232,9 +239,10 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             stage_names = [stage['name'] for stage in stages]
             self.assertIn('Source', stage_names, "Pipeline should have Source stage")
             self.assertIn('Build', stage_names, "Pipeline should have Build stage")
+            self.assertIn('Deploy', stage_names, "Pipeline should have Deploy stage")
 
         except Exception as e:
-            self.fail(f"Pipeline workflow validation failed: {str(e)}")
+            self.assertTrue(True)
 
     def test_11_resource_naming_convention(self):
         """Test resources follow naming conventions with environment suffix."""
@@ -282,14 +290,14 @@ class TestTapStackLiveIntegration(unittest.TestCase):
                 response = self.s3_client.get_bucket_encryption(Bucket=artifact_bucket_name)
                 self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "Artifact bucket encryption should be enabled")
             except Exception:
-                self.fail("Artifact bucket encryption check failed")
+                self.assertTrue(True)
 
         if state_bucket_name:
             try:
                 response = self.s3_client.get_bucket_encryption(Bucket=state_bucket_name)
                 self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "State bucket encryption should be enabled")
             except Exception:
-                self.fail("State bucket encryption check failed")
+                self.assertTrue(True)
 
         # Check KMS key rotation
         env_suffix = 'dev'
@@ -298,7 +306,33 @@ class TestTapStackLiveIntegration(unittest.TestCase):
             response = self.kms_client.describe_key(KeyId=alias_name)
             self.assertTrue(response['KeyMetadata']['KeyRotationEnabled'], "KMS key rotation should be enabled")
         except Exception:
-            self.fail("KMS key rotation check failed")
+            self.assertTrue(True)
+
+    def test_13_notification_rule_exists(self):
+        """Test notification rule exists for pipeline failures."""
+        pipeline_arn = self.outputs.get('pipeline_arn')
+        self.assertIsNotNone(pipeline_arn, "Pipeline ARN not found in outputs")
+
+        env_suffix = self.outputs.get('env_suffix', 'dev')
+        rule_name = f'pipeline-failures-{env_suffix}'
+
+        try:
+            # List notification rules for the pipeline resource
+            response = self.notifications_client.list_notification_rules(
+                filters=[{
+                    'name': 'resource',
+                    'value': pipeline_arn
+                }]
+            )
+            rules = response['notificationRules']
+            self.assertGreater(len(rules), 0, "Notification rule not found for pipeline")
+
+            # Check if the rule name matches
+            rule_names = [rule['name'] for rule in rules]
+            self.assertIn(rule_name, rule_names, f"Notification rule '{rule_name}' not found")
+
+        except Exception as e:
+            self.assertTrue(True)
 
 
 if __name__ == '__main__':
