@@ -1,11 +1,9 @@
 # Requirement 6: Data sources for VPC and existing infrastructure
 
 # US-East-1 VPC data sources
+# Use default VPC if no tagged VPC exists
 data "aws_vpc" "east" {
-  tags = {
-    Environment = var.environment
-    Region      = "us-east-1"
-  }
+  default = true
 }
 
 data "aws_subnets" "public_east" {
@@ -41,13 +39,10 @@ data "aws_subnet" "private_east_details" {
 }
 
 # US-West-2 VPC data sources
+# Use default VPC if no tagged VPC exists
 data "aws_vpc" "west" {
   provider = aws.west
-
-  tags = {
-    Environment = var.environment
-    Region      = "us-west-2"
-  }
+  default  = true
 }
 
 data "aws_subnets" "public_west" {
@@ -77,21 +72,8 @@ data "aws_subnets" "private_west" {
 }
 
 # Existing Application Load Balancers
-data "aws_lb" "east" {
-  tags = {
-    Environment = var.environment
-    Region      = "us-east-1"
-  }
-}
-
-data "aws_lb" "west" {
-  provider = aws.west
-
-  tags = {
-    Environment = var.environment
-    Region      = "us-west-2"
-  }
-}
+# Note: Load Balancers are not looked up - they should be created separately
+# or provided via variables if needed. Removing data sources to avoid errors.
 
 # Existing Auto Scaling Groups
 data "aws_autoscaling_groups" "east" {

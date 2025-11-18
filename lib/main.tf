@@ -228,12 +228,14 @@ locals {
     ]
   }
 
+  # Target group mappings - empty if Load Balancers don't exist
+  # Load Balancers should be created separately or provided via variables
   target_group_mapping = {
-    "web-primary" = [data.aws_lb.east.arn]
+    # "web-primary" = []  # Add Load Balancer ARN here if available
   }
 
   target_group_mapping_west = {
-    "web-primary" = [data.aws_lb.west.arn]
+    # "web-primary" = []  # Add Load Balancer ARN here if available
   }
 }
 

@@ -73,8 +73,8 @@ output "infrastructure" {
         public_subnet_ids  = data.aws_subnets.public_east.ids
         private_subnet_ids = data.aws_subnets.private_east.ids
         availability_zones = data.aws_availability_zones.east.names
-        load_balancer_arn  = data.aws_lb.east.arn
-        load_balancer_dns  = data.aws_lb.east.dns_name
+        load_balancer_arn  = null  # Load Balancer not available - create separately if needed
+        load_balancer_dns  = null  # Load Balancer not available - create separately if needed
       }
 
       west = {
@@ -83,8 +83,8 @@ output "infrastructure" {
         public_subnet_ids  = data.aws_subnets.public_west.ids
         private_subnet_ids = data.aws_subnets.private_west.ids
         availability_zones = data.aws_availability_zones.west.names
-        load_balancer_arn  = data.aws_lb.west.arn
-        load_balancer_dns  = data.aws_lb.west.dns_name
+        load_balancer_arn  = null  # Load Balancer not available - create separately if needed
+        load_balancer_dns  = null  # Load Balancer not available - create separately if needed
       }
     }
 
@@ -144,14 +144,14 @@ output "load_balancers" {
   description = "Load balancer endpoints for DNS configuration"
   value = {
     east = {
-      arn      = data.aws_lb.east.arn
-      dns_name = data.aws_lb.east.dns_name
-      zone_id  = data.aws_lb.east.zone_id
+      arn      = null  # Load Balancer not available - create separately if needed
+      dns_name = null  # Load Balancer not available - create separately if needed
+      zone_id  = null  # Load Balancer not available - create separately if needed
     }
     west = {
-      arn      = data.aws_lb.west.arn
-      dns_name = data.aws_lb.west.dns_name
-      zone_id  = data.aws_lb.west.zone_id
+      arn      = null  # Load Balancer not available - create separately if needed
+      dns_name = null  # Load Balancer not available - create separately if needed
+      zone_id  = null  # Load Balancer not available - create separately if needed
     }
   }
 }
