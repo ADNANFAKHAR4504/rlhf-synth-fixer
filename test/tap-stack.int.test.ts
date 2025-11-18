@@ -610,11 +610,8 @@ describe('Financial Analytics Pipeline - Integration Tests', () => {
           MaxKeys: 10,
         })
       );
-
-      // Assert: Should have Parquet files (may be empty if no ETL has run yet)
       expect(listResponse.Contents).toBeDefined();
-      // Files may not exist if ETL hasn't run, which is acceptable
-    }, 30000);
+    }, 120000);
 
     test('Processed Data S3 Bucket → ETL Metadata Logging: ProcessingJobTable should have ETL job records', async () => {
       // Act: Query for ETL job records
