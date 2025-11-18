@@ -2,7 +2,7 @@
   "platform": "cdktf",
   "language": "py",
   "complexity": "expert",
-  "team": "synth-2",
+  "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-17T05:39:59+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
