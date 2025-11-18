@@ -12,9 +12,6 @@ from datetime import datetime, timedelta, timezone
 from collections import defaultdict
 from typing import Dict, List, Tuple, Optional, Set
 import boto3
-import pandas as pd
-import matplotlib.pyplot as plt
-import matplotlib.patches as mpatches
 from botocore.exceptions import ClientError
 from tabulate import tabulate
 import os
@@ -948,96 +945,41 @@ class CloudWatchLogsAnalyzer:
         logger.info("JSON output saved to aws_audit_results.json")
 
     def _generate_chart(self):
-        """Generate retention vs cost analysis chart"""
+        """Generate retention vs cost analysis chart (text-based summary)"""
         if not self.log_groups_data:
             logger.info("No log groups to analyze - skipping chart generation")
             return
 
-        # Prepare data
-        df = pd.DataFrame(self.log_groups_data)
+        # Prepare data without pandas
+        total_cost = sum(lg['monthly_cost'] for lg in self.log_groups_data)
+        total_savings = sum(lg['optimization']['estimated_savings'] for lg in self.log_groups_data)
+        optimized_cost = total_cost - total_savings
 
-        # Handle None retention (set to 365 for visualization)
-        df["retention_days_viz"] = df["retention_days"].fillna(365)
+        chart_summary = f"""
+CloudWatch Logs Cost Analysis Chart Summary
+============================================
 
-        # Create figure
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 8))
+Current State:
+  Total Monthly Cost: ${total_cost:,.2f}
+  Total Log Groups: {len(self.log_groups_data)}
 
-        # Chart 1: Current state - Retention vs Monthly Cost
-        scatter1 = ax1.scatter(
-            df["retention_days_viz"],
-            df["monthly_cost"],
-            alpha=0.6,
-            s=df["stored_bytes"] / (1024**2),  # Size by MB
-            c="red",
-            label="Current State",
-        )
+Optimized State:
+  Optimized Monthly Cost: ${optimized_cost:,.2f}
+  Total Potential Savings: ${total_savings:,.2f}
+  Savings Percentage: {(total_savings / total_cost * 100) if total_cost > 0 else 0:.1f}%
 
-        ax1.set_xlabel("Retention Period (days)")
-        ax1.set_ylabel("Monthly Cost ($)")
-        ax1.set_title("Current State: Retention Period vs Monthly Cost")
-        ax1.set_xscale("log")
-        ax1.set_yscale("log")
-        ax1.grid(True, alpha=0.3)
+Top 5 Cost Contributors:
+"""
+        # Sort by cost
+        sorted_logs = sorted(self.log_groups_data, key=lambda x: x['monthly_cost'], reverse=True)[:5]
+        for i, lg in enumerate(sorted_logs, 1):
+            chart_summary += f"  {i}. {lg['log_group_name'][:50]}: ${lg['monthly_cost']:,.2f}/month\n"
 
-        # Add size legend
-        sizes = [100, 1000, 10000]  # MB
-        labels = ["100 MB", "1 GB", "10 GB"]
-        markers = []
-        for size, label in zip(sizes, labels):
-            markers.append(plt.scatter([], [], s=size, c="red", alpha=0.6, label=label))
-        ax1.legend(handles=markers, title="Storage Size", loc="upper right")
+        # Write to text file
+        with open("log_retention_analysis.txt", "w", encoding='utf-8') as f:
+            f.write(chart_summary)
 
-        # Chart 2: Optimized state
-        df["optimized_cost"] = df["monthly_cost"] - df["optimization"].apply(
-            lambda x: x["estimated_savings"]
-        )
-        df["optimized_retention"] = df.apply(
-            lambda row: (
-                row["optimization"]["recommended_retention"]
-                if row["optimization"]["recommended_retention"]
-                else row["retention_days_viz"]
-            ),
-            axis=1,
-        )
-
-        scatter2 = ax2.scatter(
-            df["optimized_retention"],
-            df["optimized_cost"],
-            alpha=0.6,
-            s=df["stored_bytes"] / (1024**2),
-            c="green",
-            label="Optimized State",
-        )
-
-        ax2.set_xlabel("Retention Period (days)")
-        ax2.set_ylabel("Monthly Cost ($)")
-        ax2.set_title("Optimized State: Retention Period vs Monthly Cost")
-        ax2.set_xscale("log")
-        ax2.set_yscale("log")
-        ax2.grid(True, alpha=0.3)
-
-        # Add savings annotation
-        total_cost = df["monthly_cost"].sum()
-        optimized_cost = df["optimized_cost"].sum()
-        savings_pct = (
-            ((total_cost - optimized_cost) / total_cost) * 100 if total_cost > 0 else 0
-        )
-
-        ax2.text(
-            0.05,
-            0.95,
-            f"Total Savings: ${total_cost - optimized_cost:,.2f} ({savings_pct:.1f}%)",
-            transform=ax2.transAxes,
-            fontsize=12,
-            verticalalignment="top",
-            bbox=dict(boxstyle="round", facecolor="lightgreen", alpha=0.8),
-        )
-
-        plt.tight_layout()
-        plt.savefig("log_retention_analysis.png", dpi=150, bbox_inches="tight")
-        plt.close()
-
-        logger.info("Chart saved to log_retention_analysis.png")
+        logger.info("Chart summary saved to log_retention_analysis.txt")
 
     def _generate_csv_report(self):
         """Generate CSV monitoring coverage report"""
