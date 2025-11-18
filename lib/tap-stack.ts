@@ -156,7 +156,7 @@ export class TapStack extends cdk.Stack {
       orderProcessorTask,
       ecsSecurityGroup,
       namespace,
-      false
+      true
     );
 
     const marketDataService = this.createService(

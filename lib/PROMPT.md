@@ -114,9 +114,6 @@ Create a multi-service ECS orchestration platform using AWS CDK with TypeScript 
 - VPC with 2 public subnets (one per availability zone)
 - No NAT Gateways (cost optimization - using public subnets for Fargate)
 - ALB in public subnets with internet-facing configuration
-- ECS services in public subnets with conditional public IP assignment:
-  - api-gateway: Public IP enabled (for ALB access)
-  - order-processor and market-data: Public IP disabled (inter-service only)
 - Security groups configured for:
   - ALB: Allow HTTP (port 80) from anywhere
   - ECS tasks: Allow port 8080 from ALB, allow all TCP for inter-service communication
@@ -159,7 +156,6 @@ Create a multi-service ECS orchestration platform using AWS CDK with TypeScript 
 - Reliability: Health check grace period allows containers to start properly
 - Security: All secrets managed through AWS Secrets Manager
 - Security: Task execution roles follow least-privilege principle
-- Security: Public IP assignment only where necessary (api-gateway only)
 - Monitoring: Container Insights provides cluster-level metrics
 - Monitoring: CloudWatch dashboards show real-time service health
 - Monitoring: X-Ray traces show complete request paths across services

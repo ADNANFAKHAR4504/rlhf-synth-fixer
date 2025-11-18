@@ -462,6 +462,29 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
       expect(marketDataService?.networkConfiguration?.awsvpcConfiguration?.assignPublicIp).toBe('ENABLED');
     });
 
+    test('order-processor service should have public IP assignment', async () => {
+      const clusterName = outputs.ClusterName;
+      const servicesResponse = await ecsClient.send(
+        new ListServicesCommand({
+          cluster: clusterName,
+        })
+      );
+
+      const describeResponse = await ecsClient.send(
+        new DescribeServicesCommand({
+          cluster: clusterName,
+          services: servicesResponse.serviceArns!,
+        })
+      );
+
+      const orderProcessorService = describeResponse.services!.find(
+        (s) => s.serviceName === `svc-order-processor-${environmentSuffix}`
+      );
+
+      expect(orderProcessorService).toBeDefined();
+      expect(orderProcessorService?.networkConfiguration?.awsvpcConfiguration?.assignPublicIp).toBe('ENABLED');
+    });
+
     test('services should have running tasks', async () => {
       const clusterName = outputs.ClusterName;
       const servicesResponse = await ecsClient.send(

@@ -35,7 +35,6 @@ The implementation successfully delivers all core requirements:
 - 80% capacity on Fargate Spot (4:1 weight ratio with base of 1 on FARGATE)
 - Log retention: 1 week for application logs, 3 days for X-Ray
 - Using public container images (no ECR storage costs)
-- Public IP assignment only for api-gateway service (others use private networking)
 
 ### Security
 - Least-privilege IAM roles scoped per service
@@ -91,9 +90,6 @@ The stack provides three key outputs:
 - VPC with 2 public subnets (one per availability zone)
 - No private subnets or NAT Gateways (cost optimization)
 - ALB in public subnets with internet-facing configuration
-- ECS services in public subnets with conditional public IP assignment:
-  - api-gateway: Public IP enabled (for ALB access)
-  - order-processor and market-data: Public IP disabled (inter-service only)
 
 ## Service Configuration
 
