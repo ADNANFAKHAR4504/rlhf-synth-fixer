@@ -26,5 +26,11 @@
     "Secrets Manager",
     "ELB",
     "KMS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mohammadn1-turing",
+  "dockerS3Location": ""
 }
