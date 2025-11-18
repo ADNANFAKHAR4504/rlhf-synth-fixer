@@ -28,7 +28,7 @@ export class DatabaseStack extends cdk.Stack {
         }),
         description: `Aurora MySQL parameter group for ${props.environmentSuffix}`,
         parameters: {
-          require_secure_transport: '1', // Enforce TLS 1.2+
+          require_secure_transport: 'ON', // Enforce TLS 1.2+
           tls_version: 'TLSv1.2,TLSv1.3', // Allow only TLS 1.2 and 1.3
         },
       }

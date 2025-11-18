@@ -36,9 +36,7 @@ export class SecurityStack extends cdk.Stack {
       new iam.PolicyStatement({
         sid: 'Allow CloudWatch Logs',
         effect: iam.Effect.ALLOW,
-        principals: [
-          new iam.ServicePrincipal(`logs.${region}.amazonaws.com`),
-        ],
+        principals: [new iam.ServicePrincipal(`logs.${region}.amazonaws.com`)],
         actions: [
           'kms:Encrypt',
           'kms:Decrypt',

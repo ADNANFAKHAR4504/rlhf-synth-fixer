@@ -108,5 +108,61 @@ export class TapStack extends cdk.Stack {
       }),
       description: 'Compliance summary report',
     });
+
+    // Expose all nested stack outputs
+    // Security Stack Outputs
+    new cdk.CfnOutput(this, 'KMSKeyId', {
+      value: securityStack.encryptionKey.keyId,
+      description: 'KMS Key ID for encryption',
+    });
+
+    new cdk.CfnOutput(this, 'KMSKeyArn', {
+      value: securityStack.encryptionKey.keyArn,
+      description: 'KMS Key ARN for encryption',
+    });
+
+    // Networking Stack Outputs
+    new cdk.CfnOutput(this, 'VpcId', {
+      value: networkingStack.vpc.vpcId,
+      description: 'VPC ID',
+    });
+
+    new cdk.CfnOutput(this, 'FlowLogsBucketName', {
+      value: networkingStack.flowLogsBucket.bucketName,
+      description: 'VPC Flow Logs S3 Bucket',
+    });
+
+    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
+      value: networkingStack.databaseSecurityGroup.securityGroupId,
+      description: 'Database Security Group ID',
+    });
+
+    // Storage Stack Outputs
+    new cdk.CfnOutput(this, 'ApplicationDataBucketName', {
+      value: storageStack.applicationDataBucket.bucketName,
+      description: 'Application Data S3 Bucket',
+    });
+
+    new cdk.CfnOutput(this, 'AuditLogsBucketName', {
+      value: storageStack.auditLogsBucket.bucketName,
+      description: 'Audit Logs S3 Bucket',
+    });
+
+    // Database Stack Outputs
+    new cdk.CfnOutput(this, 'ClusterEndpoint', {
+      value: databaseStack.cluster.clusterEndpoint.hostname,
+      description: 'Aurora cluster endpoint',
+    });
+
+    new cdk.CfnOutput(this, 'ClusterReadEndpoint', {
+      value: databaseStack.cluster.clusterReadEndpoint.hostname,
+      description: 'Aurora cluster read endpoint',
+    });
+
+    // Monitoring Stack Outputs
+    new cdk.CfnOutput(this, 'SecurityLogGroupName', {
+      value: monitoringStack.logGroup.logGroupName,
+      description: 'CloudWatch Log Group for security events',
+    });
   }
 }

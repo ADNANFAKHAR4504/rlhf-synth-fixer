@@ -162,5 +162,10 @@ export class NetworkingStack extends cdk.Stack {
       value: this.flowLogsBucket.bucketName,
       description: 'VPC Flow Logs S3 Bucket',
     });
+
+    new cdk.CfnOutput(this, 'DatabaseSecurityGroupId', {
+      value: this.databaseSecurityGroup.securityGroupId,
+      description: 'Database Security Group ID',
+    });
   }
 }
