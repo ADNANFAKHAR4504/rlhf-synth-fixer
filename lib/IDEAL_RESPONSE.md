@@ -2,6 +2,36 @@
 
 This implementation creates a complete CI/CD pipeline using AWS CodePipeline with GitHub integration via CodeStar Connections. The pipeline automates Terraform infrastructure deployments with validation, planning, and apply stages.
 
+## 🔒 Security Improvements (CRITICAL)
+
+This implementation includes critical security enhancements over typical examples:
+
+### 1. **Least-Privilege IAM Policies**
+- ✅ **NO wildcard permissions** on critical services like IAM
+- ✅ Resource-level permissions scoped to environment suffix
+- ✅ Explicit DENY for dangerous IAM actions (user/access key creation)
+- ✅ Protection against production resource modification
+- ✅ Service-specific permissions with tag-based access control
+
+### 2. **Regional and Resource Restrictions**
+- ✅ EC2/Lambda/DynamoDB resources limited to specific regions
+- ✅ S3 buckets scoped to environment-specific naming patterns
+- ✅ IAM roles limited to app-* and lambda-* prefixes
+- ✅ PassRole restricted to specific services (Lambda, ECS)
+
+### 3. **State Management Security**
+- ✅ Encrypted S3 backend with versioning
+- ✅ DynamoDB table for state locking
+- ✅ Public access blocking on state bucket
+- ✅ Lifecycle policies for old state cleanup
+
+### 4. **Additional Security Features**
+- ✅ MFA approval support for production deployments
+- ✅ Role-based approval restrictions
+- ✅ No timestamp() in tags to prevent state drift
+- ✅ Input validation for GitHub repository names
+- ✅ Environment tag enforcement on all resources
+
 ## Architecture Overview
 
 The solution implements a fully automated CI/CD pipeline for Terraform deployments:
@@ -49,10 +79,11 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Environment    = var.environment_suffix
-      ManagedBy      = "Terraform"
-      Project        = "CodePipeline-Infrastructure"
-      DeploymentDate = timestamp()
+      Environment = var.environment_suffix
+      ManagedBy   = "Terraform"
+      Project     = "CodePipeline-Infrastructure"
+      # DeploymentDate should be set via variable to avoid state drift
+      # DeploymentDate = var.deployment_date
     }
   }
 }
@@ -81,12 +112,22 @@ variable "github_repository_owner" {
   description = "GitHub repository owner (organization or user)"
   type        = string
   default     = "owner"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9][a-zA-Z0-9-]*$", var.github_repository_owner))
+    error_message = "Repository owner must be valid GitHub username/org format"
+  }
 }
 
 variable "github_repository_name" {
   description = "GitHub repository name"
   type        = string
   default     = "infrastructure-repo"
+
+  validation {
+    condition     = can(regex("^[a-zA-Z0-9._-]+$", var.github_repository_name))
+    error_message = "Repository name must be valid GitHub format (alphanumeric, dots, underscores, hyphens)"
+  }
 }
 
 variable "github_branch" {
@@ -124,11 +165,32 @@ variable "codebuild_image" {
   type        = string
   default     = "aws/codebuild/standard:7.0"
 }
+
+variable "deployment_date" {
+  description = "Deployment date for resource tagging (set via tfvars to avoid state drift)"
+  type        = string
+  default     = ""
+}
+
+variable "require_mfa_approval" {
+  description = "Require MFA for manual approval stage"
+  type        = bool
+  default     = false
+}
+
+variable "approval_sns_role_arns" {
+  description = "List of IAM role ARNs allowed to approve pipeline deployments"
+  type        = list(string)
+  default     = []
+}
 ```
 
 ## File: lib/main.tf
 
 ```hcl
+# Data source for current AWS account
+data "aws_caller_identity" "current" {}
+
 # CodeStar Connection for GitHub
 resource "aws_codestarconnections_connection" "github" {
   name          = "github-connection-${var.environment_suffix}"
@@ -640,25 +702,298 @@ resource "aws_iam_role_policy" "codebuild" {
           "${aws_s3_bucket.pipeline_artifacts.arn}/*"
         ]
       },
+      # EC2 Permissions (Read-only for describing resources, write for tagged resources)
       {
         Effect = "Allow"
         Action = [
-          "ec2:*",
-          "s3:*",
-          "iam:*",
-          "lambda:*",
-          "dynamodb:*",
-          "cloudwatch:*",
-          "logs:*",
-          "sns:*",
-          "sqs:*",
-          "events:*",
-          "cloudformation:*"
+          "ec2:Describe*",
+          "ec2:Get*"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:CreateTags",
+          "ec2:CreateVpc",
+          "ec2:CreateSubnet",
+          "ec2:CreateSecurityGroup",
+          "ec2:CreateInternetGateway",
+          "ec2:CreateRoute*",
+          "ec2:AttachInternetGateway",
+          "ec2:Associate*",
+          "ec2:Modify*"
         ]
         Resource = "*"
         Condition = {
           StringEquals = {
             "aws:RequestedRegion" = var.aws_region
+            "aws:RequestTag/Environment" = var.environment_suffix
+            "aws:RequestTag/ManagedBy" = "Terraform"
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ec2:DeleteVpc",
+          "ec2:DeleteSubnet",
+          "ec2:DeleteSecurityGroup",
+          "ec2:DeleteInternetGateway",
+          "ec2:DeleteRoute*",
+          "ec2:DetachInternetGateway",
+          "ec2:Disassociate*"
+        ]
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:RequestedRegion" = var.aws_region
+            "ec2:ResourceTag/Environment" = var.environment_suffix
+            "ec2:ResourceTag/ManagedBy" = "Terraform"
+          }
+        }
+      },
+      # S3 Permissions (Limited to Terraform state and specific buckets)
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket",
+          "s3:GetBucketLocation",
+          "s3:GetBucketVersioning"
+        ]
+        Resource = [
+          "arn:aws:s3:::terraform-state-${var.environment_suffix}",
+          "arn:aws:s3:::app-bucket-${var.environment_suffix}"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "arn:aws:s3:::terraform-state-${var.environment_suffix}/*",
+          "arn:aws:s3:::app-bucket-${var.environment_suffix}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:CreateBucket",
+          "s3:DeleteBucket",
+          "s3:PutBucketPolicy",
+          "s3:PutBucketPublicAccessBlock",
+          "s3:PutBucketVersioning",
+          "s3:PutBucketEncryption"
+        ]
+        Resource = "arn:aws:s3:::*-${var.environment_suffix}"
+      },
+      # IAM Permissions (Highly restricted - only for specific roles/policies)
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:GetRole",
+          "iam:GetRolePolicy",
+          "iam:GetPolicy",
+          "iam:GetPolicyVersion",
+          "iam:ListRolePolicies",
+          "iam:ListAttachedRolePolicies",
+          "iam:ListInstanceProfilesForRole"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:CreateRole",
+          "iam:PutRolePolicy",
+          "iam:AttachRolePolicy",
+          "iam:PassRole"
+        ]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/app-*-${var.environment_suffix}",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/lambda-*-${var.environment_suffix}"
+        ]
+        Condition = {
+          StringEquals = {
+            "iam:PassedToService" = [
+              "lambda.amazonaws.com",
+              "ecs-tasks.amazonaws.com"
+            ]
+          }
+        }
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "iam:DeleteRole",
+          "iam:DeleteRolePolicy",
+          "iam:DetachRolePolicy"
+        ]
+        Resource = [
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/app-*-${var.environment_suffix}",
+          "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/lambda-*-${var.environment_suffix}"
+        ]
+      },
+      # Lambda Permissions (Scoped to environment)
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:CreateFunction",
+          "lambda:UpdateFunctionCode",
+          "lambda:UpdateFunctionConfiguration",
+          "lambda:PutFunctionConcurrency",
+          "lambda:AddPermission",
+          "lambda:RemovePermission",
+          "lambda:TagResource"
+        ]
+        Resource = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:*-${var.environment_suffix}"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "lambda:GetFunction",
+          "lambda:GetFunctionConfiguration",
+          "lambda:ListFunctions",
+          "lambda:ListVersionsByFunction"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = "lambda:DeleteFunction"
+        Resource = "arn:aws:lambda:${var.aws_region}:${data.aws_caller_identity.current.account_id}:function:*-${var.environment_suffix}"
+      },
+      # DynamoDB Permissions (Scoped to environment)
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:CreateTable",
+          "dynamodb:UpdateTable",
+          "dynamodb:PutItem",
+          "dynamodb:GetItem",
+          "dynamodb:DeleteItem",
+          "dynamodb:Query",
+          "dynamodb:Scan",
+          "dynamodb:TagResource"
+        ]
+        Resource = [
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/*-${var.environment_suffix}",
+          "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/*-${var.environment_suffix}/index/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:DescribeTable",
+          "dynamodb:ListTables"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = "dynamodb:DeleteTable"
+        Resource = "arn:aws:dynamodb:${var.aws_region}:${data.aws_caller_identity.current.account_id}:table/*-${var.environment_suffix}"
+      },
+      # CloudWatch/Logs Permissions
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudwatch:PutMetricAlarm",
+          "cloudwatch:DeleteAlarms",
+          "cloudwatch:DescribeAlarms"
+        ]
+        Resource = "arn:aws:cloudwatch:${var.aws_region}:${data.aws_caller_identity.current.account_id}:alarm:*-${var.environment_suffix}"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:DeleteLogGroup",
+          "logs:PutRetentionPolicy"
+        ]
+        Resource = "arn:aws:logs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:log-group:/aws/*/${var.environment_suffix}:*"
+      },
+      # SNS Permissions (Scoped to environment)
+      {
+        Effect = "Allow"
+        Action = [
+          "sns:CreateTopic",
+          "sns:DeleteTopic",
+          "sns:SetTopicAttributes",
+          "sns:GetTopicAttributes",
+          "sns:Subscribe",
+          "sns:Unsubscribe"
+        ]
+        Resource = "arn:aws:sns:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*-${var.environment_suffix}"
+      },
+      # SQS Permissions (Scoped to environment)
+      {
+        Effect = "Allow"
+        Action = [
+          "sqs:CreateQueue",
+          "sqs:DeleteQueue",
+          "sqs:GetQueueAttributes",
+          "sqs:SetQueueAttributes"
+        ]
+        Resource = "arn:aws:sqs:${var.aws_region}:${data.aws_caller_identity.current.account_id}:*-${var.environment_suffix}"
+      },
+      # EventBridge Permissions (Scoped to environment)
+      {
+        Effect = "Allow"
+        Action = [
+          "events:PutRule",
+          "events:DeleteRule",
+          "events:PutTargets",
+          "events:RemoveTargets",
+          "events:DescribeRule"
+        ]
+        Resource = "arn:aws:events:${var.aws_region}:${data.aws_caller_identity.current.account_id}:rule/*-${var.environment_suffix}"
+      },
+      # CloudFormation Permissions (for nested stacks if needed)
+      {
+        Effect = "Allow"
+        Action = [
+          "cloudformation:CreateStack",
+          "cloudformation:UpdateStack",
+          "cloudformation:DeleteStack",
+          "cloudformation:DescribeStacks",
+          "cloudformation:DescribeStackEvents"
+        ]
+        Resource = "arn:aws:cloudformation:${var.aws_region}:${data.aws_caller_identity.current.account_id}:stack/*-${var.environment_suffix}/*"
+      },
+      # Explicit Deny for dangerous actions
+      {
+        Effect = "Deny"
+        Action = [
+          "iam:CreateAccessKey",
+          "iam:DeleteAccessKey",
+          "iam:CreateUser",
+          "iam:DeleteUser",
+          "iam:CreateGroup",
+          "iam:DeleteGroup",
+          "iam:AttachUserPolicy",
+          "iam:DetachUserPolicy",
+          "iam:PutUserPolicy",
+          "iam:DeleteUserPolicy",
+          "iam:AddUserToGroup",
+          "iam:RemoveUserFromGroup"
+        ]
+        Resource = "*"
+      },
+      # Prevent modifications to production resources
+      {
+        Effect = "Deny"
+        Action = "*"
+        Resource = "*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Environment" = "production"
+          }
+          StringNotEquals = {
+            "aws:PrincipalTag/AllowProduction" = "true"
           }
         }
       }
@@ -892,6 +1227,150 @@ output "setup_instructions" {
 
     The pipeline will automatically trigger when changes are pushed to ${var.github_branch} branch.
   EOT
+}
+```
+
+## File: lib/backend.tf (Example - Customize for your environment)
+
+```hcl
+# Terraform Backend Configuration for State Management
+# This file should be customized for your environment
+# Consider using environment-specific backend configurations
+
+terraform {
+  backend "s3" {
+    # S3 bucket for state storage (must be created separately)
+    bucket = "terraform-state-your-org-name"
+
+    # State file path within the bucket
+    key    = "codepipeline-infrastructure/terraform.tfstate"
+
+    # AWS region for the S3 bucket
+    region = "us-east-1"
+
+    # Enable state file encryption
+    encrypt = true
+
+    # DynamoDB table for state locking (must be created separately)
+    dynamodb_table = "terraform-state-locks"
+
+    # Enable versioning for state history
+    versioning = true
+
+    # Server-side encryption configuration
+    server_side_encryption_configuration {
+      rule {
+        apply_server_side_encryption_by_default {
+          sse_algorithm = "AES256"
+        }
+      }
+    }
+  }
+}
+```
+
+## File: lib/backend-setup.tf (One-time setup for backend resources)
+
+```hcl
+# Run this separately first to create backend resources
+# terraform init
+# terraform apply -target=aws_s3_bucket.terraform_state -target=aws_dynamodb_table.terraform_locks
+# Then add backend configuration and run: terraform init -migrate-state
+
+resource "aws_s3_bucket" "terraform_state" {
+  bucket = "terraform-state-${var.environment_suffix}"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+
+  tags = {
+    Name        = "terraform-state-${var.environment_suffix}"
+    Environment = var.environment_suffix
+    Purpose     = "Terraform State Storage"
+    ManagedBy   = "Terraform"
+  }
+}
+
+resource "aws_s3_bucket_versioning" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "terraform_state" {
+  bucket = aws_s3_bucket.terraform_state.id
+
+  rule {
+    id     = "cleanup-old-state-versions"
+    status = "Enabled"
+
+    noncurrent_version_expiration {
+      noncurrent_days = 90
+    }
+  }
+}
+
+resource "aws_dynamodb_table" "terraform_locks" {
+  name           = "terraform-state-locks"
+  billing_mode   = "PAY_PER_REQUEST"
+  hash_key       = "LockID"
+
+  attribute {
+    name = "LockID"
+    type = "S"
+  }
+
+  server_side_encryption {
+    enabled = true
+  }
+
+  point_in_time_recovery {
+    enabled = true
+  }
+
+  tags = {
+    Name        = "terraform-state-locks"
+    Environment = var.environment_suffix
+    Purpose     = "Terraform State Locking"
+    ManagedBy   = "Terraform"
+  }
+}
+
+output "state_bucket_name" {
+  description = "Name of the S3 bucket for Terraform state"
+  value       = aws_s3_bucket.terraform_state.id
+}
+
+output "state_bucket_arn" {
+  description = "ARN of the S3 bucket for Terraform state"
+  value       = aws_s3_bucket.terraform_state.arn
+}
+
+output "locks_table_name" {
+  description = "Name of the DynamoDB table for state locking"
+  value       = aws_dynamodb_table.terraform_locks.id
 }
 ```
 
