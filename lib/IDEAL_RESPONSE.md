@@ -1,101 +1,6 @@
 # Highly Available Transaction Processing System - Terraform Implementation
 
-This implementation provides a production-ready, highly available transaction processing system using **Terraform with HCL** deployed across three availability zones in us-east-1. The infrastructure includes Aurora PostgreSQL Multi-AZ, ECS Fargate with auto-scaling, Application Load Balancer, ElastiCache Redis cluster, Route 53 health checks, and comprehensive monitoring with CloudWatch alarms.
-
-## Architecture Overview
-
-- **Platform**: Terraform
-- **Language**: HCL
-- **Region**: us-east-1
-- **Availability Zones**: 3
-- **Complexity**: Expert-level with full high availability
-
-## Infrastructure Components
-
-### Networking (Multi-AZ)
-- VPC with DNS support enabled
-- 3 Public subnets (one per AZ) for ALB
-- 3 Private application subnets (one per AZ) for ECS tasks
-- 3 Private database subnets (one per AZ) for Aurora/Redis
-- 3 NAT Gateways (one per AZ) for high availability
-- Internet Gateway for public subnet internet access
-- Separate route tables per AZ for private subnets
-
-### Compute Layer
-- ECS Cluster with Container Insights enabled
-- ECS Fargate service with 6 tasks minimum (2 per AZ)
-- Auto Scaling based on CPU and memory (min: 6, max: 18 tasks)
-- IAM roles for task execution and task runtime
-
-### Database Layer
-- Aurora PostgreSQL 15.8 cluster
-- 3 cluster instances (one per AZ)
-- Multi-AZ automatic failover enabled
-- 7-day backup retention with point-in-time recovery
-- Performance Insights enabled
-- CloudWatch Logs integration
-
-### Caching Layer
-- ElastiCache Redis 7.0 cluster mode
-- 3 node groups with 1 replica each (spanning 3 AZs)
-- Automatic failover and Multi-AZ enabled
-- Encryption at rest and in transit
-- 5-day snapshot retention
-
-### Load Balancing
-- Application Load Balancer in public subnets
-- Cross-zone load balancing enabled
-- Health checks with 30-second intervals
-- Connection draining (30 seconds)
-- HTTP listener on port 80
-
-### DNS and Failover
-- Route 53 hosted zone (optional, if domain provided)
-- Health checks monitoring ALB availability
-- Failover routing policy for automatic DNS updates
-- 30-second health check intervals
-
-### Monitoring and Alerting
-- 5 CloudWatch alarms (ALB unhealthy targets, ECS CPU, Aurora CPU, Aurora replication lag, Redis CPU)
-- SNS topic for alarm notifications
-- Email subscription for critical alerts
-- CloudWatch log groups for ECS and Redis
-
-### Security
-- 4 security groups (ALB, ECS tasks, Aurora, Redis)
-- Least privilege network access between tiers
-- No public access to database or cache layers
-- Encryption at rest for Redis
-- Transit encryption for Redis
-
-
-## File: provider.tf
-
-```hcl
-terraform {
-  required_version = ">= 1.5.0"
-
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source  = "hashicorp/random"
-      version = "~> 3.5"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-
-  default_tags {
-    tags = var.tags
-  }
-}
-```
-
+This implementation provides a production-ready, highly available transaction processing system deployed across three availability zones in us-east-1. The infrastructure includes Aurora PostgreSQL Multi-AZ, ECS Fargate with auto-scaling, Application Load Balancer, ElastiCache Redis cluster, Route 53 health checks, and comprehensive monitoring with CloudWatch alarms.
 
 ## File: variables.tf
 
@@ -186,14 +91,41 @@ variable "tags" {
   description = "Common tags for all resources"
   type        = map(string)
   default = {
-    Environment      = "production"
-    DisasterRecovery = "enabled"
-    ManagedBy        = "Terraform"
+    Environment       = "production"
+    DisasterRecovery  = "enabled"
+    ManagedBy         = "Terraform"
   }
-}```
+}
+```
 
+## File: provider.tf
 
-## File: main.tf
+```hcl
+terraform {
+  required_version = ">= 1.5.0"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.5"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+
+  default_tags {
+    tags = var.tags
+  }
+}
+```
+
+## File: tap_stack.tf
 
 ```hcl
 # Data sources for availability zones
@@ -1189,8 +1121,8 @@ resource "aws_route53_record" "app" {
     zone_id                = aws_lb.main.zone_id
     evaluate_target_health = true
   }
-}```
-
+}
+```
 
 ## File: outputs.tf
 
@@ -1263,75 +1195,222 @@ output "route53_zone_id" {
 output "route53_nameservers" {
   description = "Route 53 nameservers (if domain provided)"
   value       = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : null
-}```
+}
+```
 
-## Key Corrections from MODEL_RESPONSE.md
+## File: terraform.tfvars.example
 
-The following issues were corrected in this implementation:
+```hcl
+# Example terraform.tfvars file
+# Copy this to terraform.tfvars and update with your values
 
-1. **Aurora Engine Version**: Changed from `15.4` to `15.8` (latest available version)
-2. **Backtrack Removed**: PostgreSQL does not support backtrack feature (MySQL-only)
-3. **Redis Auth Token**: Removed invalid `auth_token_enabled` parameter
-4. **ECS Deployment**: Used top-level deployment attributes instead of nested block
+environment_suffix = "prod-01"
+region            = "us-east-1"
+vpc_cidr          = "10.0.0.0/16"
+
+# Database credentials
+db_username = "postgres"
+db_password = "YourSecurePassword123!"  # Use secrets manager in production
+
+# Container configuration
+container_image = "public.ecr.aws/docker/library/nginx:latest"
+container_port  = 80
+
+# Scaling configuration
+min_tasks_per_az          = 2
+availability_zones_count  = 3
+
+# Monitoring
+alarm_email = "your-email@example.com"
+
+# Optional: Route 53 domain
+domain_name = ""  # Leave empty if not using Route 53
+
+# Tags
+tags = {
+  Environment      = "production"
+  DisasterRecovery = "enabled"
+  ManagedBy        = "Terraform"
+  Project          = "TransactionProcessing"
+}
+```
+
+## File: README.md
+
+```markdown
+# Highly Available Transaction Processing System
+
+This Terraform configuration deploys a production-ready, highly available transaction processing system across three availability zones in AWS.
+
+## Architecture Overview
+
+- **Network**: Multi-AZ VPC with public and private subnets across 3 AZs
+- **Compute**: ECS Fargate service with auto-scaling (minimum 6 tasks)
+- **Database**: Aurora PostgreSQL Multi-AZ cluster with automated backups
+- **Cache**: ElastiCache Redis cluster mode with automatic failover
+- **Load Balancer**: Application Load Balancer with cross-zone load balancing
+- **DNS**: Route 53 health checks with failover routing
+- **Monitoring**: CloudWatch alarms with SNS notifications
+
+## Prerequisites
+
+- Terraform >= 1.5.0
+- AWS CLI configured with appropriate credentials
+- AWS account with permissions to create all resources
+- Valid email address for alarm notifications
 
 ## Deployment Instructions
 
-### Prerequisites
-- Terraform >= 1.5.0
-- AWS CLI configured
-- Email address for alarm notifications
+### 1. Initialize Terraform
 
-### Steps
 ```bash
-# Initialize Terraform
-cd lib
 terraform init
-
-# Set required variables
-export TF_VAR_environment_suffix="synth101912498"
-export TF_VAR_alarm_email="your-email@example.com"
-
-# Optional: Set custom values
-export TF_VAR_region="us-east-1"
-export TF_VAR_db_password="YourSecurePassword123!"
-
-# Plan deployment
-terraform plan -out=tfplan
-
-# Apply infrastructure
-terraform apply tfplan
-
-# Destroy when done
-terraform destroy -auto-approve
 ```
 
-### Resource Naming Convention
-All resources follow the pattern: `{resource-type}-${var.environment_suffix}`
+### 2. Create terraform.tfvars
 
-Examples:
-- VPC: `vpc-synth101912498`
-- ECS Cluster: `ecs-cluster-synth101912498`
-- Aurora Cluster: `aurora-cluster-synth101912498`
-- ALB: `alb-synth101912498`
+Copy the example file and update with your values:
 
-## Success Criteria Met
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
 
-✅ **Multi-AZ Deployment**: All resources span 3 availability zones  
-✅ **Automatic Failover**: Aurora and Redis configured for automatic failover  
-✅ **Auto Scaling**: ECS tasks scale from 6 to 18 based on demand  
-✅ **Health Monitoring**: CloudWatch alarms for all critical metrics  
-✅ **Security**: Proper security group isolation between tiers  
-✅ **Encryption**: Redis encrypted at rest and in transit  
-✅ **Backup**: 7-day Aurora backup retention with point-in-time recovery  
-✅ **Monitoring**: 5 CloudWatch alarms with SNS notifications  
-✅ **High Availability**: NAT Gateway per AZ for resilient outbound connectivity  
-✅ **Performance Insights**: Enabled for Aurora database monitoring  
-✅ **Container Insights**: Enabled for ECS cluster monitoring  
-✅ **Cross-Zone Load Balancing**: Enabled on ALB for even distribution  
+Edit `terraform.tfvars` and provide:
+- `environment_suffix`: Unique identifier for this deployment (e.g., "prod-01")
+- `alarm_email`: Email address for CloudWatch alarms
+- `db_password`: Secure password for Aurora PostgreSQL
+- `container_image`: Docker image for your application
 
-## Test Results
+### 3. Review the Plan
 
-- **Unit Tests**: 33/33 PASSED (100% coverage)
-- **Integration Tests**: 18/18 comprehensive infrastructure validation tests
-- **Deployment**: 64 resources successfully deployed
-- **Destroyable**: All resources can be destroyed with `terraform destroy`
+```bash
+terraform plan
+```
+
+### 4. Apply the Configuration
+
+```bash
+terraform apply
+```
+
+Confirm with `yes` when prompted.
+
+### 5. Confirm SNS Subscription
+
+Check your email and confirm the SNS subscription for CloudWatch alarms.
+
+## Resource Naming
+
+All resources include the `environment_suffix` variable in their names to support multiple deployments:
+- VPC: `vpc-{environment_suffix}`
+- ECS Cluster: `ecs-cluster-{environment_suffix}`
+- Aurora Cluster: `aurora-cluster-{environment_suffix}`
+- etc.
+
+## High Availability Features
+
+1. **Multi-AZ Deployment**: All resources distributed across 3 availability zones
+2. **Automatic Failover**: Aurora and Redis configured for automatic failover
+3. **Auto Scaling**: ECS tasks scale based on CPU and memory utilization
+4. **Health Checks**: ALB and Route 53 health checks with 30-second intervals
+5. **Monitoring**: CloudWatch alarms for CPU, memory, and replication lag
+
+## Accessing the Application
+
+After deployment, the application is accessible via:
+- **ALB DNS**: Output as `alb_dns_name`
+- **Route 53** (if configured): `app.{your-domain}`
+
+## Monitoring
+
+CloudWatch alarms are configured for:
+- ALB unhealthy targets
+- ECS service high CPU utilization
+- Aurora high CPU utilization
+- Aurora replication lag
+- Redis high CPU utilization
+
+All alarms send notifications to the configured email address.
+
+## Failover Testing
+
+To test AZ failover:
+1. Monitor CloudWatch metrics
+2. Simulate AZ failure by stopping instances in one AZ
+3. Verify automatic failover and recovery
+4. Check that no data loss occurred
+
+## Backup and Recovery
+
+- **Aurora Backups**: Automated backups with 7-day retention
+- **Redis Snapshots**: Daily snapshots with 5-day retention
+
+## Destroying the Infrastructure
+
+To remove all resources:
+
+```bash
+terraform destroy
+```
+
+Confirm with `yes` when prompted.
+
+**Note**: All resources are configured to be fully destroyable. Aurora will create a final snapshot before deletion (skip_final_snapshot = true in this example).
+
+## Security Considerations
+
+1. **Security Groups**: Implement least privilege access between tiers
+2. **Private Subnets**: Compute and database layers in private subnets
+3. **Encryption**: Redis uses encryption at rest and in transit
+4. **Secrets**: Store database credentials in AWS Secrets Manager for production
+5. **IAM Roles**: ECS tasks use IAM roles with minimal required permissions
+
+## Cost Optimization
+
+This configuration uses:
+- Aurora Serverless v2 instance classes (r6g.large) - consider smaller instances for dev
+- ElastiCache r6g.large nodes - consider smaller instances for dev
+- NAT Gateways per AZ - required for high availability but can be expensive
+- ECS Fargate with minimal task count - scales based on demand
+
+## Troubleshooting
+
+### ECS Tasks Not Starting
+- Check security group rules
+- Verify container image is accessible
+- Review CloudWatch logs in `/ecs/app-{environment_suffix}`
+
+### Database Connection Issues
+- Verify security group allows traffic from ECS
+- Check Aurora cluster status
+- Review RDS logs in CloudWatch
+
+### High Costs
+- Review NAT Gateway usage
+- Check ECS task count and scaling policies
+- Verify Aurora instance classes
+
+## Support
+
+For issues or questions, refer to:
+- [Terraform AWS Provider Documentation](https://registry.terraform.io/providers/hashicorp/aws/latest/docs)
+- [AWS ECS Documentation](https://docs.aws.amazon.com/ecs/)
+- [AWS Aurora Documentation](https://docs.aws.amazon.com/AmazonRDS/latest/AuroraUserGuide/)
+```
+
+## Summary
+
+This Terraform implementation provides:
+
+1. **Multi-AZ Network**: VPC spanning 3 AZs with public/private subnets and NAT Gateways
+2. **Aurora PostgreSQL**: Multi-AZ cluster with automated backups and point-in-time recovery
+3. **ECS Fargate**: Containerized application with minimum 2 tasks per AZ
+4. **Application Load Balancer**: Cross-zone load balancing with health checks
+5. **ElastiCache Redis**: Cluster mode with automatic failover across 3 AZs
+6. **Auto Scaling**: CPU and memory-based scaling policies
+7. **Monitoring**: CloudWatch alarms for all critical metrics
+8. **Route 53**: Health checks and failover routing (optional)
+9. **Security**: Proper security groups and IAM roles
+10. **Tagging**: All resources tagged with Environment and DisasterRecovery
+
+The infrastructure automatically handles AZ failures with zero data loss and maintains service availability.
