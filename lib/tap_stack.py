@@ -429,7 +429,7 @@ class TapStack(TerraformStack):
             filename=self.transaction_validator_zip,
             source_code_hash=f"${{filebase64sha256(\"{self.transaction_validator_zip}\")}}",
             timeout=30,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             environment=lambda_environment,
             tracing_config={
                 "mode": "Active"
@@ -449,7 +449,7 @@ class TapStack(TerraformStack):
             filename=self.fraud_analyzer_zip,
             source_code_hash=f"${{filebase64sha256(\"{self.fraud_analyzer_zip}\")}}",
             timeout=60,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             environment=lambda_environment,
             tracing_config={
                 "mode": "Active"
@@ -469,7 +469,7 @@ class TapStack(TerraformStack):
             filename=self.notification_sender_zip,
             source_code_hash=f"${{filebase64sha256(\"{self.notification_sender_zip}\")}}",
             timeout=30,
-            reserved_concurrent_executions=50,
+            reserved_concurrent_executions=10,
             environment=lambda_environment,
             tracing_config={
                 "mode": "Active"
