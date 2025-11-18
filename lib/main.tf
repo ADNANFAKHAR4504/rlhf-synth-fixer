@@ -390,7 +390,8 @@ resource "aws_emr_security_configuration" "main" {
       }
       InTransitEncryptionConfiguration = {
         TLSCertificateConfiguration = {
-          CertificateProviderType = "EMR"
+          CertificateProviderType = "PEM"
+          S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_zip.key}"
         }
       }
     }
@@ -406,6 +407,14 @@ resource "aws_s3_object" "bootstrap_script" {
   key    = "bootstrap/install-analytics-libs.sh"
   source = "${path.module}/bootstrap.sh"
   etag   = filemd5("${path.module}/bootstrap.sh")
+}
+
+# Generate self-signed certificate for EMR in-transit encryption
+resource "aws_s3_object" "emr_tls_zip" {
+  bucket = aws_s3_bucket.logs.id
+  key    = "security/emr-tls.zip"
+  source = "${path.module}/security/emr-tls.zip"
+  etag   = filemd5("${path.module}/security/emr-tls.zip")
 }
 
 
@@ -520,6 +529,7 @@ resource "aws_emr_cluster" "main" {
     aws_s3_bucket.curated,
     aws_s3_bucket.raw,
     aws_s3_object.bootstrap_script,
+    aws_s3_object.emr_tls_zip,
     aws_iam_role_policy.emr_service_ec2_permissions,
     aws_iam_role_policy.emr_service_s3_permissions,
     aws_iam_role_policy_attachment.emr_service_role
