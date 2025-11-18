@@ -9,10 +9,7 @@
   "startedAt": "2025-11-17T13:21:00Z",
   "subtask": "IaC Program Optimization",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "refactoring",
-    "performance"
+    "IaC Optimization"
   ],
   "aws_services": [
     "EC2",
@@ -27,5 +24,7 @@
     "CloudWatch",
     "IAM"
   ],
-  "training_quality": 10
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
