@@ -31,7 +31,7 @@ from cdktf_cdktf_provider_aws.api_gateway_api_key import ApiGatewayApiKey
 from cdktf_cdktf_provider_aws.api_gateway_usage_plan_key import ApiGatewayUsagePlanKey
 from cdktf_cdktf_provider_aws.ssm_parameter import SsmParameter
 from cdktf_cdktf_provider_aws.sfn_state_machine import SfnStateMachine
-from cdktf_cdktf_provider_aws.wafv2_web_acl import Wafv2WebAcl, Wafv2WebAclRule, Wafv2WebAclRuleAction, Wafv2WebAclRuleStatement, Wafv2WebAclRuleStatementRateBasedStatement
+from cdktf_cdktf_provider_aws.wafv2_web_acl import Wafv2WebAcl
 from cdktf_cdktf_provider_aws.wafv2_web_acl_association import Wafv2WebAclAssociation
 import json
 
@@ -718,24 +718,24 @@ class TapStack(TerraformStack):
             scope="REGIONAL",
             default_action={"allow": {}},
             rule=[
-                Wafv2WebAclRule(
-                    name="RateLimitRule",
-                    priority=1,
-                    action=Wafv2WebAclRuleAction(
-                        block={}
-                    ),
-                    statement=Wafv2WebAclRuleStatement(
-                        rate_based_statement=Wafv2WebAclRuleStatementRateBasedStatement(
-                            limit=2000,
-                            aggregate_key_type="IP"
-                        )
-                    ),
-                    visibility_config={
+                {
+                    "name": "RateLimitRule",
+                    "priority": 1,
+                    "action": {
+                        "block": {}
+                    },
+                    "statement": {
+                        "rate_based_statement": {
+                            "limit": 2000,
+                            "aggregate_key_type": "IP"
+                        }
+                    },
+                    "visibility_config": {
                         "sampled_requests_enabled": True,
                         "cloud_watch_metrics_enabled": True,
                         "metric_name": "RateLimitRule"
                     }
-                )
+                }
             ],
             visibility_config={
                 "sampled_requests_enabled": True,
