@@ -2,11 +2,10 @@
  * Comprehensive Unit Tests for All Lib Stack Files
  * 100% Code Coverage with Mock Testing (No Live AWS/Kubernetes/Pulumi Calls)
  *
- * Tests all 13 stack files:
+ * Tests all 12 stack files (eks-node-groups-stack excluded - not used):
  * - tap-stack.ts
  * - vpc-stack.ts
  * - eks-cluster-stack.ts
- * - eks-node-groups-stack.ts
  * - eks-addons-stack.ts
  * - eks-load-balancer-controller-stack.ts
  * - eks-cluster-autoscaler-stack.ts
@@ -17,23 +16,23 @@
  * - eks-spot-interruption-stack.ts
  */
 
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as eks from '@pulumi/eks';
 import * as k8s from '@pulumi/kubernetes';
+import * as pulumi from '@pulumi/pulumi';
 
-import { TapStack, TapStackArgs } from '../lib/tap-stack';
-import { VpcStack, VpcStackArgs } from '../lib/vpc-stack';
-import { EksClusterStack, EksClusterStackArgs } from '../lib/eks-cluster-stack';
-import { EksNodeGroupsStack, EksNodeGroupsStackArgs } from '../lib/eks-node-groups-stack';
-import { EksAddonsStack, EksAddonsStackArgs } from '../lib/eks-addons-stack';
-import { LoadBalancerControllerStack } from '../lib/eks-load-balancer-controller-stack';
+import { EksClusterStack } from '../lib/eks-cluster-stack';
+import { TapStack } from '../lib/tap-stack';
+import { VpcStack } from '../lib/vpc-stack';
+// EksNodeGroupsStack import removed - component not used in current implementation
+import { EksAddonsStack } from '../lib/eks-addons-stack';
 import { ClusterAutoscalerStack } from '../lib/eks-cluster-autoscaler-stack';
-import { RbacNamespacesStack } from '../lib/eks-rbac-namespaces-stack';
-import { NetworkPoliciesStack } from '../lib/eks-network-policies-stack';
 import { CoreDnsOptimizationStack } from '../lib/eks-coredns-optimization-stack';
 import { IrsaDemoStack } from '../lib/eks-irsa-demo-stack';
+import { LoadBalancerControllerStack } from '../lib/eks-load-balancer-controller-stack';
+import { NetworkPoliciesStack } from '../lib/eks-network-policies-stack';
+import { RbacNamespacesStack } from '../lib/eks-rbac-namespaces-stack';
 import { SpotInterruptionStack } from '../lib/eks-spot-interruption-stack';
 
 jest.mock('@pulumi/pulumi');
@@ -310,7 +309,7 @@ describe("EksClusterStack", () => {
     );
   });
 
-  it("skips default node group", () => {
+  it("uses default node group", () => {
     new EksClusterStack('test', {
       environmentSuffix: 'dev',
       region: 'us-east-2',
@@ -321,7 +320,7 @@ describe("EksClusterStack", () => {
     });
     expect(eks.Cluster).toHaveBeenCalledWith(
       expect.any(String),
-      expect.objectContaining({ skipDefaultNodeGroup: true }),
+      expect.objectContaining({ skipDefaultNodeGroup: false }),
       expect.any(Object)
     );
   });
@@ -356,192 +355,8 @@ describe("EksClusterStack", () => {
   });
 });
 
-describe("EksNodeGroupsStack", () => {
-  const mockCluster = {
-    eksCluster: { name: createMockOutput('eks-cluster-dev') },
-    instanceRoles: [{ arn: createMockOutput('arn:aws:iam::123456789012:role/node-role') }],
-  } as any;
-  const mockPrivateSubnetIds = createMockOutput(['subnet-priv-1']);
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    (pulumi.output as any) = jest.fn((value: any) => createMockOutput(value));
-    (pulumi.all as any) = jest.fn((...args: any[]) => mockOutputAll(args.flat()));
-    (pulumi.ComponentResource as any) = jest.fn(function (this: any) {
-      this.registerOutputs = jest.fn();
-    });
-    (eks.createManagedNodeGroup as any) = jest.fn((name) => ({
-      nodeGroup: {
-        nodeGroupName: createMockOutput(name),
-      },
-    }));
-  });
-
-  it("creates successfully", () => {
-    const stack = new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(stack).toBeDefined();
-  });
-
-  it("creates spot node group", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-spot-ng-dev',
-      expect.objectContaining({
-        capacityType: 'SPOT',
-      })
-    );
-  });
-
-  it("creates on-demand node group", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-ondemand-ng-dev',
-      expect.objectContaining({
-        capacityType: 'ON_DEMAND',
-      })
-    );
-  });
-
-  it("spot node group uses multiple instance types", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-spot-ng-dev',
-      expect.objectContaining({
-        instanceTypes: ['t3.medium', 't3a.medium'],
-      })
-    );
-  });
-
-  it("on-demand node group uses single instance type", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-ondemand-ng-dev',
-      expect.objectContaining({
-        instanceTypes: ['t3.medium'],
-      })
-    );
-  });
-
-  it("spot node group has correct scaling config", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-spot-ng-dev',
-      expect.objectContaining({
-        scalingConfig: {
-          desiredSize: 2,
-          minSize: 1,
-          maxSize: 5,
-        },
-      })
-    );
-  });
-
-  it("on-demand node group has correct scaling config", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-ondemand-ng-dev',
-      expect.objectContaining({
-        scalingConfig: {
-          desiredSize: 1,
-          minSize: 1,
-          maxSize: 3,
-        },
-      })
-    );
-  });
-
-  it("spot node group has correct labels", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-spot-ng-dev',
-      expect.objectContaining({
-        labels: {
-          'node-type': 'spot',
-          workload: 'general',
-        },
-      })
-    );
-  });
-
-  it("on-demand node group has correct labels", () => {
-    new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(eks.createManagedNodeGroup).toHaveBeenCalledWith(
-      'eks-ondemand-ng-dev',
-      expect.objectContaining({
-        labels: {
-          'node-type': 'on-demand',
-          workload: 'critical',
-        },
-      })
-    );
-  });
-
-  it("exposes both node group names", () => {
-    const stack = new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect(stack.spotNodeGroup).toBeDefined();
-    expect(stack.onDemandNodeGroup).toBeDefined();
-  });
-
-  it("registers outputs", () => {
-    const stack = new EksNodeGroupsStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      privateSubnetIds: mockPrivateSubnetIds,
-      tags: {},
-    });
-    expect((stack as any).registerOutputs).toHaveBeenCalled();
-  });
-});
+// EksNodeGroupsStack tests removed - component not used in current implementation
+// The cluster now uses default node groups configured in EksClusterStack
 
 describe("EksAddonsStack", () => {
   const mockCluster = {
@@ -1147,17 +962,8 @@ describe("IrsaDemoStack", () => {
     expect(k8s.core.v1.ServiceAccount).toHaveBeenCalled();
   });
 
-  it("creates demo pod", () => {
-    new IrsaDemoStack('test', {
-      environmentSuffix: 'dev',
-      cluster: mockCluster,
-      oidcProviderArn: mockOidcProviderArn,
-      oidcProviderUrl: mockOidcProviderUrl,
-      region: 'us-east-2',
-      tags: {},
-    });
-    expect(k8s.core.v1.Pod).toHaveBeenCalled();
-  });
+  // Demo pod test removed - pod deployment is commented out for faster initial deployment
+  // The IRSA infrastructure (IAM role, policy, service account) is still fully tested above
 });
 
 describe("SpotInterruptionStack", () => {
