@@ -45,6 +45,7 @@ class TapStackArgs:
         tags: Optional[dict] = None,
         github_owner: Optional[str] = None,
         github_repo: Optional[str] = None,
+        github_connection_arn: Optional[str] = None,
         github_branch: Optional[str] = 'main',
         notification_email: Optional[str] = None,
         pulumi_access_token: Optional[str] = None
@@ -53,6 +54,8 @@ class TapStackArgs:
         self.tags = tags or {}
         self.github_owner = github_owner or 'example-org'
         self.github_repo = github_repo or 'example-repo'
+        # GitHub CodeStar Connections ARN used by CodePipeline Source action
+        self.github_connection_arn = github_connection_arn
         self.github_branch = github_branch
         self.notification_email = notification_email or 'devops@example.com'
         self.pulumi_access_token = pulumi_access_token or 'placeholder-token'
@@ -84,8 +87,17 @@ class TapStack(pulumi.ComponentResource):
         self.env_suffix = args.environment_suffix
         self.github_owner = args.github_owner
         self.github_repo = args.github_repo
+        # Make the CodeStar Connections ARN available on the stack instance
+        self.github_connection_arn = args.github_connection_arn
         self.github_branch = args.github_branch
         self.notification_email = args.notification_email
+
+        # Fail fast with a clear message if the connection ARN is not provided
+        if not self.github_connection_arn:
+            raise ValueError(
+                'TapStack requires `github_connection_arn` (CodeStar Connections ARN).\n'
+                'Provide it via `TapStackArgs(github_connection_arn="arn:aws:codestar-connections:...")`'
+            )
 
         # Default tags for all resources
         self.default_tags = {
