@@ -1,3 +1,21 @@
+# Data source to get AWS account ID for unique bucket naming
+data "aws_caller_identity" "current" {}
+
+# Generate a unique ID for bucket naming that includes timestamp
+# Using random_id for stability, combined with timestamp for uniqueness
+resource "random_id" "bucket_suffix" {
+  byte_length = 4
+  # No keepers - this creates a stable ID after first creation
+}
+
+locals {
+  # Create a timestamp-based string for bucket naming
+  # Format: YYYYMMDDHHmmss (14 chars) + random hex (8 chars) = 22 chars total
+  # The timestamp provides uniqueness, random_id provides additional entropy
+  timestamp_str    = formatdate("YYYYMMDDHHmmss", timestamp())
+  bucket_timestamp = "${substr(local.timestamp_str, 0, 14)}${substr(random_id.bucket_suffix.hex, 0, 8)}"
+}
+
 # IAM Role for Lambda execution
 resource "aws_iam_role" "compliance_lambda" {
   name = "compliance-scanner-lambda-${var.environment_suffix}"
@@ -82,12 +100,17 @@ resource "aws_iam_role_policy" "compliance_lambda_policy" {
 
 # S3 Bucket for Terraform State Files
 resource "aws_s3_bucket" "state_files" {
-  bucket = "compliance-state-files-${var.environment_suffix}"
+  bucket = "compliance-state-${local.bucket_timestamp}-${data.aws_caller_identity.current.account_id}-${var.environment_suffix}"
 
   tags = {
     Environment = var.environment
     Purpose     = "ComplianceScanning"
     CostCenter  = var.cost_center
+  }
+
+  lifecycle {
+    # Ignore bucket name changes after creation to prevent recreation
+    ignore_changes = [bucket]
   }
 }
 
@@ -103,12 +126,17 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "state_files" {
 
 # S3 Bucket for PDF Reports
 resource "aws_s3_bucket" "reports" {
-  bucket = "compliance-reports-069919905910-${var.environment_suffix}"
+  bucket = "compliance-reports-${local.bucket_timestamp}-${data.aws_caller_identity.current.account_id}-${var.environment_suffix}"
 
   tags = {
     Environment = var.environment
     Purpose     = "ComplianceReports"
     CostCenter  = var.cost_center
+  }
+
+  lifecycle {
+    # Ignore bucket name changes after creation to prevent recreation
+    ignore_changes = [bucket]
   }
 }
 
@@ -204,12 +232,17 @@ resource "aws_iam_role_policy_attachment" "config" {
 
 # S3 Bucket for Config
 resource "aws_s3_bucket" "config" {
-  bucket = "compliance-config-${var.environment_suffix}"
+  bucket = "compliance-config-${local.bucket_timestamp}-${data.aws_caller_identity.current.account_id}-${var.environment_suffix}"
 
   tags = {
     Environment = var.environment
     Purpose     = "ComplianceScanning"
     CostCenter  = var.cost_center
+  }
+
+  lifecycle {
+    # Ignore bucket name changes after creation to prevent recreation
+    ignore_changes = [bucket]
   }
 }
 

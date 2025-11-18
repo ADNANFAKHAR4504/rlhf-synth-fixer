@@ -17,6 +17,16 @@ output "reports_bucket_name" {
   value       = aws_s3_bucket.reports.id
 }
 
+output "config_bucket_name" {
+  description = "Name of the S3 bucket storing AWS Config data"
+  value       = aws_s3_bucket.config.id
+}
+
+output "state_files_bucket_name" {
+  description = "Name of the S3 bucket storing Terraform state files"
+  value       = aws_s3_bucket.state_files.id
+}
+
 output "dynamodb_table_name" {
   description = "Name of the DynamoDB table storing compliance results"
   value       = aws_dynamodb_table.compliance_results.name
