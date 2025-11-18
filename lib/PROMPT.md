@@ -89,13 +89,13 @@ Create a production-ready EKS cluster infrastructure using **Pulumi with TypeScr
 
 ## Success Criteria
 
-- **Functionality**: Complete EKS cluster with two managed node groups, autoscaling, load balancer controller, EBS CSI driver, and RBAC configured
+- **Functionality**: Complete EKS cluster with default node group, autoscaling, load balancer controller, EBS CSI driver, and RBAC configured
 - **Performance**: Cluster autoscaler responds to pod scheduling demands, node-local DNS cache reduces latency
-- **Reliability**: Pod disruption budgets maintain availability, spot interruption handling prevents service disruption
-- **Security**: Private endpoint access, namespace isolation via network policies, IRSA for pod-level permissions, pod security standards enforced
+- **Reliability**: Pod disruption budgets configured for autoscaler, spot interruption handler installed
+- **Security**: Private endpoint access, namespace isolation via network policies, IRSA infrastructure fully configured, pod security standards enforced
 - **Resource Naming**: All resources include environmentSuffix in their names
 - **Code Quality**: Well-structured TypeScript code with proper type definitions, comprehensive inline documentation, modular component design
-- **Operational**: Resources can be deployed and destroyed cleanly, proper tagging for cost tracking
+- **Operational**: Resources can be deployed and destroyed cleanly, proper tagging for cost tracking, fast deployment without scheduling delays
 
 ## What to deliver
 
