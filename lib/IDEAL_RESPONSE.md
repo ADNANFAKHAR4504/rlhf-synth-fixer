@@ -1198,43 +1198,6 @@ output "route53_nameservers" {
 }
 ```
 
-## File: terraform.tfvars.example
-
-```hcl
-# Example terraform.tfvars file
-# Copy this to terraform.tfvars and update with your values
-
-environment_suffix = "prod-01"
-region            = "us-east-1"
-vpc_cidr          = "10.0.0.0/16"
-
-# Database credentials
-db_username = "postgres"
-db_password = "YourSecurePassword123!"  # Use secrets manager in production
-
-# Container configuration
-container_image = "public.ecr.aws/docker/library/nginx:latest"
-container_port  = 80
-
-# Scaling configuration
-min_tasks_per_az          = 2
-availability_zones_count  = 3
-
-# Monitoring
-alarm_email = "your-email@example.com"
-
-# Optional: Route 53 domain
-domain_name = ""  # Leave empty if not using Route 53
-
-# Tags
-tags = {
-  Environment      = "production"
-  DisasterRecovery = "enabled"
-  ManagedBy        = "Terraform"
-  Project          = "TransactionProcessing"
-}
-```
-
 ## File: README.md
 
 ```markdown
@@ -1267,15 +1230,9 @@ This Terraform configuration deploys a production-ready, highly available transa
 terraform init
 ```
 
-### 2. Create terraform.tfvars
+### 2. Configure Variables
 
-Copy the example file and update with your values:
-
-```bash
-cp terraform.tfvars.example terraform.tfvars
-```
-
-Edit `terraform.tfvars` and provide:
+Set the required variables using environment variables or create a `terraform.tfvars` file with the following variables:
 - `environment_suffix`: Unique identifier for this deployment (e.g., "prod-01")
 - `alarm_email`: Email address for CloudWatch alarms
 - `db_password`: Secure password for Aurora PostgreSQL
