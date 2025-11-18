@@ -1,0 +1,41 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth-2",
+  "startedAt": "2025-11-12T17:53:01.000Z",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Resource names must follow pattern: {environment}-{service}-{resource-type}-{random-suffix}",
+    "VPC Flow Logs must be enabled and sent to S3 with lifecycle policies",
+    "Network traffic must flow through AWS Network Firewall with strict egress rules",
+    "All resources must be tagged with DataClassification, Environment, and Owner tags",
+    "Security groups must have descriptions for every rule and no 0.0.0.0/0 ingress",
+    "IAM roles must follow least-privilege principle with explicit deny statements",
+    "Secrets must be stored in AWS Secrets Manager with automatic rotation enabled",
+    "CloudWatch alarms must trigger on unauthorized API calls and security group changes",
+    "All data must be encrypted using AWS KMS with customer-managed keys (CMK)",
+    "S3 buckets must have versioning, encryption, and access logging enabled"
+  ],
+  "po_id": "3n6r1z",
+  "aws_services": [
+    "VPC",
+    "KMS",
+    "S3",
+    "Lambda",
+    "Secrets Manager",
+    "CloudWatch",
+    "AWS Config",
+    "IAM",
+    "SNS"
+  ],
+  "region": "us-east-1",
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

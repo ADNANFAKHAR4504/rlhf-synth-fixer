@@ -1,0 +1,654 @@
+# IDEAL_RESPONSE: Production-Ready Amazon EKS Cluster
+
+This document contains the corrected, production-ready CloudFormation template for deploying a secure Amazon EKS cluster with all requirements met.
+
+## Complete Implementation
+
+### File: lib/TapStack.yml
+
+```yaml
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Production-ready Amazon EKS cluster with enhanced security controls, IRSA, KMS encryption, CloudWatch Container Insights, and complete VPC infrastructure'
+
+Metadata:
+  AWS::CloudFormation::Interface:
+    ParameterGroups:
+      - Label:
+          default: 'Environment Configuration'
+        Parameters:
+          - EnvironmentSuffix
+      - Label:
+          default: 'EKS Configuration'
+        Parameters:
+          - KubernetesVersion
+          - NodeInstanceType
+          - MinNodes
+          - MaxNodes
+          - DesiredNodes
+    ParameterLabels:
+      EnvironmentSuffix:
+        default: 'Environment Suffix'
+      KubernetesVersion:
+        default: 'Kubernetes Version'
+      NodeInstanceType:
+        default: 'Node Instance Type'
+
+Parameters:
+  EnvironmentSuffix:
+    Type: String
+    Default: 'dev'
+    Description: 'Environment suffix for resource naming (e.g., dev, staging, prod)'
+    AllowedPattern: '^[a-zA-Z0-9]+$'
+    ConstraintDescription: 'Must contain only alphanumeric characters'
+
+  KubernetesVersion:
+    Type: String
+    Default: '1.28'
+    Description: 'Kubernetes version for EKS cluster (minimum 1.28)'
+    AllowedValues:
+      - '1.28'
+      - '1.29'
+      - '1.30'
+
+  NodeInstanceType:
+    Type: String
+    Default: 't4g.medium'
+    Description: 'Instance type for worker nodes (Graviton2 ARM64 only)'
+    AllowedValues:
+      - 't4g.micro'
+      - 't4g.small'
+      - 't4g.medium'
+      - 't4g.large'
+      - 't4g.xlarge'
+      - 't4g.2xlarge'
+      - 'c6g.medium'
+      - 'c6g.large'
+      - 'c6g.xlarge'
+      - 'm6g.medium'
+      - 'm6g.large'
+      - 'm6g.xlarge'
+
+  MinNodes:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 20
+    Description: 'Minimum number of worker nodes'
+
+  MaxNodes:
+    Type: Number
+    Default: 10
+    MinValue: 1
+    MaxValue: 100
+    Description: 'Maximum number of worker nodes'
+
+  DesiredNodes:
+    Type: Number
+    Default: 2
+    MinValue: 1
+    MaxValue: 100
+    Description: 'Desired number of worker nodes'
+
+Resources:
+  # KMS Key for EKS Secrets Encryption
+  EKSEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: !Sub 'KMS key for EKS cluster ${EnvironmentSuffix} secrets encryption'
+      EnableKeyRotation: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: 'Enable IAM User Permissions'
+            Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action: 'kms:*'
+            Resource: '*'
+          - Sid: 'Allow EKS to use the key'
+            Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action:
+              - 'kms:Decrypt'
+              - 'kms:DescribeKey'
+              - 'kms:CreateGrant'
+            Resource: '*'
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-encryption-key-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  EKSEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub 'alias/eks-${EnvironmentSuffix}'
+      TargetKeyId: !Ref EKSEncryptionKey
+
+  # EKS Cluster IAM Role
+  EKSClusterRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'eks-cluster-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: eks.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonEKSClusterPolicy'
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-cluster-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # VPC Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: '10.0.0.0/16'
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-vpc-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Internet Gateway
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-igw-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+
+  # Public Subnets (for NAT Gateway)
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.0.0/20'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-subnet-a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.16.0/20'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-subnet-b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.32.0/20'
+      AvailabilityZone: !Select [2, !GetAZs '']
+      MapPublicIpOnLaunch: true
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-subnet-c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Private Subnets (for EKS nodes)
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.128.0/20'
+      AvailabilityZone: !Select [0, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-subnet-a-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.144.0/20'
+      AvailabilityZone: !Select [1, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-subnet-b-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: '10.0.160.0/20'
+      AvailabilityZone: !Select [2, !GetAZs '']
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-subnet-c-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # NAT Gateway (single for cost optimization)
+  NatEip:
+    Type: AWS::EC2::EIP
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      Domain: vpc
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-nat-eip-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEip.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-nat-gateway-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Route Tables
+  PublicRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-public-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PublicRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+      RouteTableId: !Ref PublicRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      GatewayId: !Ref InternetGateway
+
+  PublicSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetA
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetB
+      RouteTableId: !Ref PublicRouteTable
+
+  PublicSubnetCAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PublicSubnetC
+      RouteTableId: !Ref PublicRouteTable
+
+  PrivateRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-private-rt-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  PrivateRoute:
+    Type: AWS::EC2::Route
+    Properties:
+      RouteTableId: !Ref PrivateRouteTable
+      DestinationCidrBlock: '0.0.0.0/0'
+      NatGatewayId: !Ref NatGateway
+
+  PrivateSubnetAAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetA
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetBAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetB
+      RouteTableId: !Ref PrivateRouteTable
+
+  PrivateSubnetCAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref PrivateSubnetC
+      RouteTableId: !Ref PrivateRouteTable
+
+  # EKS Cluster Security Group
+  EKSClusterSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupName: !Sub 'eks-cluster-sg-${EnvironmentSuffix}'
+      GroupDescription: 'Security group for EKS cluster control plane'
+      VpcId: !Ref VPC
+      SecurityGroupEgress:
+        - IpProtocol: '-1'
+          CidrIp: 0.0.0.0/0
+          Description: 'Allow all outbound traffic'
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-cluster-sg-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # EKS Cluster
+  EKSCluster:
+    Type: AWS::EKS::Cluster
+    Properties:
+      Name: !Sub 'eks-cluster-${EnvironmentSuffix}'
+      Version: !Ref KubernetesVersion
+      RoleArn: !GetAtt EKSClusterRole.Arn
+      ResourcesVpcConfig:
+        SubnetIds:
+          - !Ref PrivateSubnetA
+          - !Ref PrivateSubnetB
+          - !Ref PrivateSubnetC
+        SecurityGroupIds:
+          - !Ref EKSClusterSecurityGroup
+        EndpointPrivateAccess: true
+        EndpointPublicAccess: false
+      EncryptionConfig:
+        - Resources:
+            - secrets
+          Provider:
+            KeyArn: !GetAtt EKSEncryptionKey.Arn
+      Logging:
+        ClusterLogging:
+          EnabledTypes:
+            - Type: api
+            - Type: audit
+            - Type: authenticator
+            - Type: controllerManager
+            - Type: scheduler
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-cluster-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # OIDC Provider for IRSA
+  EKSOIDCProvider:
+    Type: AWS::IAM::OIDCProvider
+    DependsOn: EKSCluster
+    Properties:
+      Url: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
+      ClientIdList:
+        - sts.amazonaws.com
+      ThumbprintList:
+        - '9e99a48a9960b14926bb7f3b02e22da2b0ab7280'
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-oidc-provider-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Node Group IAM Role
+  EKSNodeRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'eks-node-role-${EnvironmentSuffix}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: 'sts:AssumeRole'
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy'
+        - 'arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy'
+        - 'arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly'
+        - 'arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy'
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-node-role-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # Node Group
+  EKSNodeGroup:
+    Type: AWS::EKS::Nodegroup
+    DependsOn: EKSOIDCProvider
+    Properties:
+      NodegroupName: !Sub 'eks-nodegroup-${EnvironmentSuffix}'
+      ClusterName: !Ref EKSCluster
+      NodeRole: !GetAtt EKSNodeRole.Arn
+      Subnets:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+        - !Ref PrivateSubnetC
+      AmiType: 'AL2_ARM_64'
+      InstanceTypes:
+        - !Ref NodeInstanceType
+      ScalingConfig:
+        MinSize: !Ref MinNodes
+        MaxSize: !Ref MaxNodes
+        DesiredSize: !Ref DesiredNodes
+      UpdateConfig:
+        MaxUnavailable: 1
+      Labels:
+        Environment: !Ref EnvironmentSuffix
+        NodeGroup: !Sub 'eks-nodegroup-${EnvironmentSuffix}'
+      Tags:
+        Name: !Sub 'eks-nodegroup-${EnvironmentSuffix}'
+        Environment: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for Container Insights
+  EKSContainerInsightsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance'
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-container-insights-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for Application Logs
+  EKSApplicationLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application'
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-application-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+  # CloudWatch Log Group for DataPlane Logs
+  EKSDataPlaneLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane'
+      RetentionInDays: 7
+      Tags:
+        - Key: Name
+          Value: !Sub 'eks-dataplane-logs-${EnvironmentSuffix}'
+        - Key: Environment
+          Value: !Ref EnvironmentSuffix
+
+Outputs:
+  ClusterName:
+    Description: 'Name of the EKS cluster'
+    Value: !Ref EKSCluster
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterName'
+
+  ClusterEndpoint:
+    Description: 'Endpoint URL for the EKS cluster API server'
+    Value: !GetAtt EKSCluster.Endpoint
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterEndpoint'
+
+  ClusterArn:
+    Description: 'ARN of the EKS cluster'
+    Value: !GetAtt EKSCluster.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterArn'
+
+  OIDCIssuerUrl:
+    Description: 'OIDC issuer URL for IAM Roles for Service Accounts (IRSA)'
+    Value: !GetAtt EKSCluster.OpenIdConnectIssuerUrl
+    Export:
+      Name: !Sub '${AWS::StackName}-OIDCIssuerUrl'
+
+  OIDCProviderArn:
+    Description: 'ARN of the OIDC provider for IRSA'
+    Value: !GetAtt EKSOIDCProvider.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-OIDCProviderArn'
+
+  NodeGroupArn:
+    Description: 'ARN of the EKS managed node group'
+    Value: !GetAtt EKSNodeGroup.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-NodeGroupArn'
+
+  NodeGroupName:
+    Description: 'Name of the EKS managed node group'
+    Value: !Ref EKSNodeGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-NodeGroupName'
+
+  KMSKeyId:
+    Description: 'ID of the KMS key used for secrets encryption'
+    Value: !Ref EKSEncryptionKey
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyId'
+
+  KMSKeyArn:
+    Description: 'ARN of the KMS key used for secrets encryption'
+    Value: !GetAtt EKSEncryptionKey.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSKeyArn'
+
+  ClusterSecurityGroupId:
+    Description: 'Security group ID for the EKS cluster'
+    Value: !Ref EKSClusterSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ClusterSecurityGroupId'
+
+  ContainerInsightsLogGroup:
+    Description: 'CloudWatch Log Group for Container Insights'
+    Value: !Ref EKSContainerInsightsLogGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-ContainerInsightsLogGroup'
+
+  EnvironmentSuffix:
+    Description: 'Environment suffix used for this deployment'
+    Value: !Ref EnvironmentSuffix
+    Export:
+      Name: !Sub '${AWS::StackName}-EnvironmentSuffix'
+
+  StackName:
+    Description: 'Name of this CloudFormation stack'
+    Value: !Ref AWS::StackName
+    Export:
+      Name: !Sub '${AWS::StackName}-StackName'
+```
+
+## Key Features Implemented
+
+### 1. KMS Encryption for Secrets
+- **KMS Key** with automatic key rotation enabled (`EnableKeyRotation: true`)
+- **Comprehensive Key Policy** allowing both root account and EKS service access
+- **KMS Alias** for easier key reference: `alias/eks-${EnvironmentSuffix}`
+- Envelope encryption configured for Kubernetes secrets
+
+### 2. EKS Cluster Configuration
+- **Private Endpoint Only**: `EndpointPublicAccess: false` and `EndpointPrivateAccess: true`
+- **Kubernetes Version**: 1.28+ with support for 1.28, 1.29, 1.30
+- **Comprehensive Logging**: All log types enabled (api, audit, authenticator, controllerManager, scheduler)
+- **Security Group**: Dedicated security group for cluster control plane
+- **Secrets Encryption**: Uses KMS key for envelope encryption
+
+### 3. OIDC Provider for IRSA
+- **AWS::IAM::OIDCProvider** resource created for IAM Roles for Service Accounts
+- Configured with correct client ID list (`sts.amazonaws.com`)
+- Valid thumbprint list for AWS EKS OIDC provider
+- Enables pod-level IAM permissions
+
+### 4. Managed Node Group with Graviton2
+- **ARM64 Architecture**: Uses `AL2_ARM_64` AMI type
+- **Graviton2 Instances**: Default `t4g.medium` with multiple t4g, c6g, m6g options
+- **Auto-Scaling**: Configurable min (2), max (10), and desired (2) nodes
+- **Private Subnets Only**: All nodes deployed in private subnets
+- **Update Strategy**: MaxUnavailable: 1 for rolling updates
+
+### 5. IAM Roles with Least Privilege
+- **EKS Cluster Role**:
+  - Explicit name with EnvironmentSuffix
+  - AmazonEKSClusterPolicy attached
+- **Node Group Role**:
+  - Explicit name with EnvironmentSuffix
+  - AmazonEKSWorkerNodePolicy
+  - AmazonEKS_CNI_Policy
+  - AmazonEC2ContainerRegistryReadOnly
+  - **CloudWatchAgentServerPolicy** for Container Insights
+
+### 6. CloudWatch Container Insights
+- **Three Log Groups** created:
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/performance` - Performance logs
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/application` - Application logs
+  - `/aws/containerinsights/eks-cluster-${EnvironmentSuffix}/dataplane` - DataPlane logs
+- **7-day retention** for cost optimization
+- Enables comprehensive monitoring and observability
+
+### 7. Resource Naming with EnvironmentSuffix
+All resources use EnvironmentSuffix for unique naming:
+- `eks-cluster-${EnvironmentSuffix}`
+- `eks-nodegroup-${EnvironmentSuffix}`
+- `eks-cluster-role-${EnvironmentSuffix}`
+- `eks-node-role-${EnvironmentSuffix}`
+- `eks-cluster-sg-${EnvironmentSuffix}`
+- `eks-encryption-key-${EnvironmentSuffix}`
+
+### 8. Comprehensive Outputs (13 total)
+All required outputs for downstream automation and IRSA configuration
+
+## All 9 Requirements Met
+
+1. **EKS Cluster with Kubernetes 1.28+ and private endpoint** ✓
+2. **KMS encryption for Kubernetes secrets** ✓
+3. **OIDC provider for IRSA** ✓
+4. **Managed node group with Graviton2 instances (t4g.medium default)** ✓
+5. **Auto-scaling (min 2, max 10)** ✓
+6. **CloudWatch Container Insights** ✓
+7. **Least-privilege IAM roles** ✓
+8. **Private subnets only** ✓
+9. **Required outputs (endpoint, OIDC issuer, node group ARN)** ✓

@@ -1,0 +1,44 @@
+{
+  "task_id": "h1w06e",
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "h1w06e",
+  "team": "synth-2",
+  "startedAt": "2025-11-13T00:00:00Z",
+  "subtask": "multi-region-payment-migration",
+  "aws_services": [
+    "VPC",
+    "RDS",
+    "DynamoDB",
+    "Lambda",
+    "API Gateway",
+    "S3",
+    "CloudWatch",
+    "IAM",
+    "KMS",
+    "VPC Peering"
+  ],
+  "subject_labels": [
+    "S3 versioning with AES-256 encryption",
+    "IAM least-privilege policies with explicit denies",
+    "Resource tagging: Environment, Region, MigrationBatch",
+    "RDS encryption with customer-managed KMS keys",
+    "Lambda reserved concurrent executions = 10",
+    "CloudWatch log retention = 30 days",
+    "DynamoDB point-in-time recovery enabled",
+    "API Gateway HTTP endpoints",
+    "VPC peering with route table configuration"
+  ],
+  "description": "Multi-region payment processing infrastructure migration from eu-central-2 to eu-west-1 using CDKTF with Python. Create complete VPC infrastructure in both regions with cross-region VPC peering, encrypted RDS PostgreSQL, DynamoDB with PITR, Lambda functions with reserved concurrency, API Gateway HTTP API, S3 with cross-region replication, and CloudWatch monitoring. All resources must use environment_suffix for naming.",
+  "region": "eu-central-2",
+  "target_region": "eu-west-1",
+  "author": "mayanksethi-turing",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}

@@ -2,8 +2,107 @@
 
 This document contains common patterns, failures, and solutions discovered during synthetic task generation. Reference this before starting tasks to avoid known pitfalls and reduce deployment attempts.
 
-**For comprehensive validation procedures, see `.claude/validation_and_testing_guide.md`**  
+**For comprehensive validation procedures, see `.claude/validation_and_testing_guide.md`**
 **For quick reference, see `.claude/quick_validation_checklist.md`**
+
+## Critical Process Issues (MUST READ FIRST)
+
+### 0.1. QA Trainer Completion Criteria (CRITICAL - FIXED)
+
+**Symptom**: Tasks 3z4jg7, 5b0vj4 marked as ERROR despite good infrastructure work due to incomplete QA phase
+
+**Root Cause**: iac-infra-qa-trainer reported "complete" without meeting mandatory requirements:
+- 0% test coverage (tests left as placeholders with `self.fail()`)
+- No deployment performed (skipped due to "time constraints")
+- Documentation created but validation phase incomplete
+
+**Impact**:
+- Training quality scores reduced by -6 points (-3 tests, -3 deployment)
+- Tasks scored 0/10 and 4/10 instead of potential 8-10/10
+- Excellent architectural work (e.g., 6 critical fixes in task 5b0vj4) wasted
+
+**Prevention**:
+The iac-infra-qa-trainer MUST verify ALL 5 mandatory requirements before reporting "complete":
+
+1. **Deployment**: cfn-outputs/flat-outputs.json exists (proof of deployment)
+2. **100% Test Coverage**: coverage-summary.json shows 100% for statements/functions/lines
+3. **All Tests Pass**: No failures, no skipped tests
+4. **Build Quality**: Lint and build commands pass
+5. **Documentation**: MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
+
+**Correct Behavior** (Task 6ki0y8):
+```
+✅ Identified 7 critical blockers in generated code
+✅ Recognized cannot deploy due to fundamental issues
+✅ Reported "BLOCKED" with specific reasons
+✅ Did NOT falsely claim "complete"
+```
+
+**Agent Prompt Fix Required**:
+Add to `.claude/commands/iac-infra-qa-trainer.md`:
+```markdown
+## MANDATORY COMPLETION REQUIREMENTS (NON-NEGOTIABLE)
+
+YOU MUST COMPLETE ALL 5 BEFORE REPORTING "COMPLETE":
+
+1. ✅ Deployment successful (cfn-outputs/flat-outputs.json exists)
+2. ✅ 100% test coverage (coverage-summary.json verified)
+3. ✅ All tests pass (0 failures, 0 skipped)
+4. ✅ Build quality passes (lint + build)
+5. ✅ Documentation complete
+
+IF ANY MISSING:
+- Report "BLOCKED" with specific missing items
+- DO NOT report "complete"
+- Time is NOT an excuse to skip requirements
+```
+
+**Applies to**: ALL tasks, validated before Phase 4 (code review)
+
+---
+
+### 0.2. Expert Multi-Region Task Complexity (CRITICAL)
+
+**Symptom**: Tasks 3z4jg7, 5b0vj4, 6ki0y8 all failed - all were expert-level multi-region DR tasks
+
+**Root Cause**: Code generation for complex multi-region architectures produces code with fundamental errors:
+- Empty arrays where resources needed (DB subnet groups)
+- Wrong service architecture (regular Aurora instead of Global Database)
+- API syntax errors (Route 53 failover)
+- Circular dependencies
+- Missing resource associations
+
+**Examples from Task 6ki0y8** (Pulumi TypeScript):
+- Aurora DB subnet groups created with empty subnet arrays → immediate deployment failure
+- Route 53 records reference CloudWatch alarms not yet created → circular dependency
+- ECS services missing security group associations → deployment fails
+
+**Impact**:
+- 7+ critical deployment blockers in generated code
+- Would require 5-8 hours to fix properly
+- Exceeds scope of QA validation (becomes reimplementation)
+
+**Prevention**:
+1. **Task Selection**: Prefer medium/hard complexity over expert for multi-region
+2. **Code Validation Gate**: Add between Phase 2 (generation) and Phase 3 (QA):
+   ```bash
+   # Verify code compiles/synthesizes
+   # Check for empty arrays in critical resources
+   # Validate basic AWS resource structure
+   # If fails: Skip QA, mark ERROR immediately
+   ```
+3. **Model Selection**: Use `sonnet` (not `haiku`) for expert multi-region tasks
+4. **Template Validation**: Ensure generated code matches platform conventions
+
+**Recommendation**: Until code generation quality improves, focus on:
+- Single-region tasks
+- 2-4 AWS services (not 8-10)
+- Hard complexity (not expert)
+- Specific architectures (not DR/failover patterns)
+
+**Applies to**: Task selection strategy, code generation validation
+
+---
 
 ## Critical Data Integrity Requirements (MUST READ FIRST)
 
@@ -669,6 +768,46 @@ grep -rni "RETAIN\|DeletionPolicy.*Retain\|deletion_protection.*true" lib/
 
 ---
 
-*Last Updated: 2025-11-06*
+## Deployment Success Checklist (Reference During Code Generation)
+
+**Before generating code, ensure PROMPT.md includes**:
+
+- [ ] environmentSuffix requirement for ALL named resources
+- [ ] Destroyability requirement (no Retain policies)
+- [ ] GuardDuty warning (if GuardDuty mentioned)
+- [ ] AWS Config IAM policy requirement (if Config mentioned)
+- [ ] Lambda Node.js 18+ SDK warning (if Lambda mentioned)
+- [ ] CloudWatch Synthetics runtime version (if Synthetics mentioned)
+- [ ] RDS destroyability settings (if RDS mentioned)
+- [ ] NAT Gateway cost warning (if NAT mentioned)
+
+**After code generation, verify**:
+
+- [ ] All resource names include environmentSuffix
+- [ ] No RemovalPolicy.RETAIN found
+- [ ] No deletionProtection: true found
+- [ ] No deprecated AWS service versions
+- [ ] No GuardDuty detector creation
+- [ ] AWS Config uses correct IAM policy
+- [ ] Lambda functions compatible with Node.js 18+
+- [ ] No hardcoded environment values
+
+**Before deployment attempt, run code analysis**:
+
+- [ ] Scan for missing environmentSuffix in resource names
+- [ ] Scan for Retain policies and DeletionProtection
+- [ ] Scan for deprecated AWS service versions
+- [ ] Scan for GuardDuty detector creation
+- [ ] Scan for AWS Config IAM policy issues
+- [ ] Fix all issues found before deployment
+
+**Expected Outcome**:
+- Deployment success rate: 70-80% (up from 30-40%)
+- Average iterations per PR: 1-2 (down from 3-5)
+- Common preventable failures eliminated
+
+---
+
+*Last Updated: 2025-01-XX*
 *This document is maintained by the task-coordinator and updated after each task completion.*
 
