@@ -4,8 +4,7 @@
   "projectId": "transaction-processing-pipeline",
   "sendCrashReports": "false",
   "terraformProviders": [
-    "aws@~> 6.0",
-    "archive@~> 2.0"
+    "aws@~> 6.0"
   ],
   "terraformModules": [],
   "context": {

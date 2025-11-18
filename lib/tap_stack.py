@@ -3,8 +3,8 @@
 from cdktf import TerraformStack, S3Backend, Fn
 from constructs import Construct
 from cdktf_cdktf_provider_aws.provider import AwsProvider
-from cdktf_cdktf_provider_archive.provider import ArchiveProvider
-from cdktf_cdktf_provider_archive.data_archive_file import DataArchiveFile
+import zipfile
+import os
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -54,8 +54,16 @@ class TapStack(TerraformStack):
             default_tags=[default_tags],
         )
         
-        # Configure Archive Provider for creating Lambda zip files
-        ArchiveProvider(self, "archive")
+        # Create Lambda placeholder zip file dynamically using Python
+        lambda_code = """def lambda_handler(event, context):
+    return {
+        'statusCode': 200,
+        'body': 'OK'
+    }
+"""
+        lambda_zip_path = f"lambda_placeholder_{environment_suffix}.zip"
+        with zipfile.ZipFile(lambda_zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.writestr('index.py', lambda_code)
 
         # Configure S3 Backend with native state locking
         S3Backend(
@@ -365,24 +373,6 @@ class TapStack(TerraformStack):
             tags={"Name": f"compliance-logs-{environment_suffix}"}
         )
 
-        # Create Lambda placeholder code archive dynamically
-        lambda_code = """def lambda_handler(event, context):
-    return {
-        'statusCode': 200,
-        'body': 'OK'
-    }
-"""
-        
-        lambda_archive = DataArchiveFile(
-            self,
-            "lambda_placeholder_archive",
-            type="zip",
-            output_path=f"lambda_placeholder_{environment_suffix}.zip",
-            source=[{
-                "content": lambda_code,
-                "filename": "index.py"
-            }]
-        )
 
         # Create Lambda functions with inline Python code
         validation_lambda = LambdaFunction(
@@ -392,8 +382,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=lambda_archive.output_path,
-            source_code_hash=lambda_archive.output_base64sha256,
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -421,8 +411,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=lambda_archive.output_path,
-            source_code_hash=lambda_archive.output_base64sha256,
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -450,8 +440,8 @@ class TapStack(TerraformStack):
             role=lambda_role.arn,
             runtime="python3.11",
             handler="index.lambda_handler",
-            filename=lambda_archive.output_path,
-            source_code_hash=lambda_archive.output_base64sha256,
+            filename=lambda_zip_path,
+            source_code_hash=Fn.filebase64sha256(lambda_zip_path),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
