@@ -21,6 +21,7 @@ from typing import Dict, Optional
 
 import pulumi
 import pulumi_aws as aws
+import pulumi_random as random
 from pulumi import Output, ResourceOptions
 
 
@@ -91,6 +92,17 @@ class TapStack(pulumi.ComponentResource):
         self.github_connection_arn = args.github_connection_arn
         self.github_branch = args.github_branch
         self.notification_email = args.notification_email
+
+        # Generate a random suffix to ensure unique resource names
+        self.random_suffix = random.RandomString(
+            f'random-suffix-{self.env_suffix}',
+            length=4,
+            lower=True,
+            upper=False,
+            numeric=True,
+            special=False,
+            opts=ResourceOptions(parent=self)
+        )
 
         # Default tags for all resources
         self.default_tags = {
@@ -176,7 +188,7 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_artifact_bucket(self) -> aws.s3.Bucket:
         """Create S3 bucket for pipeline artifacts with security best practices."""
-        bucket_name = f'pipeline-artifacts-{self.account_id}-{self.env_suffix}'
+        bucket_name = f'pipeline-artifacts-{self.account_id}-{self.env_suffix}-{self.random_suffix.result}'
         bucket = aws.s3.Bucket(
             f'pipeline-artifacts-{self.env_suffix}',
             bucket=bucket_name,
@@ -235,7 +247,7 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_state_bucket(self) -> aws.s3.Bucket:
         """Create S3 bucket for Pulumi state backend."""
-        bucket_name = f'pulumi-state-{self.account_id}-{self.env_suffix}'
+        bucket_name = f'pulumi-state-{self.account_id}-{self.env_suffix}-{self.random_suffix.result}'
         bucket = aws.s3.Bucket(
             f'pulumi-state-{self.env_suffix}',
             bucket=bucket_name,
@@ -437,7 +449,7 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_log_group(self) -> aws.cloudwatch.LogGroup:
         """Create CloudWatch log group with 14-day retention."""
-        log_group_name = f'/aws/codebuild/pulumi-build-{self.env_suffix}'
+        log_group_name = f'/aws/codebuild/pulumi-build-{self.env_suffix}-{self.random_suffix.result}'
         log_group = aws.cloudwatch.LogGroup(
             f'codebuild-logs-{self.env_suffix}',
             name=log_group_name,
@@ -495,8 +507,8 @@ class TapStack(pulumi.ComponentResource):
         }
 
         project = aws.codebuild.Project(
-            f'pulumi-build-{self.env_suffix}',
-            name=f'pulumi-build-{self.env_suffix}',
+            f'pulumi-build-{self.env_suffix}-{self.random_suffix.result}',
+            name=f'pulumi-build-{self.env_suffix}-{self.random_suffix.result}',
             description=f'CodeBuild project for Pulumi deployments - {self.env_suffix}',
             artifacts={'type': 'CODEPIPELINE'},
             environment={
@@ -545,18 +557,18 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_sns_topic(self):
         """Create SNS topic with email subscription for notifications."""
-        topic_name = f'pipeline-notifications-{self.env_suffix}'
+        topic_name = f'pipeline-notifications-{self.env_suffix}-{self.random_suffix.result}'
         topic = aws.sns.Topic(
-            f'pipeline-notifications-{self.env_suffix}',
+            f'pipeline-notifications-{self.env_suffix}-{self.random_suffix.result}',
             name=topic_name,
             kms_master_key_id=self.kms_key.id,
-            tags={**self.default_tags, 'Name': f'pipeline-notifications-{self.env_suffix}'},
+            tags={**self.default_tags, 'Name': f'pipeline-notifications-{self.env_suffix}-{self.random_suffix.result}'},
             opts=ResourceOptions(parent=self)
         )
 
         # Email subscription
         subscription = aws.sns.TopicSubscription(
-            f'pipeline-email-subscription-{self.env_suffix}',
+            f'pipeline-email-subscription-{self.env_suffix}-{self.random_suffix.result}',
             topic=topic.arn,
             protocol='email',
             endpoint=self.notification_email,
@@ -568,8 +580,8 @@ class TapStack(pulumi.ComponentResource):
     def _create_pipeline(self) -> aws.codepipeline.Pipeline:
         """Create CodePipeline with 3 stages: Source, Build, Deploy."""
         pipeline = aws.codepipeline.Pipeline(
-            f'pulumi-cicd-pipeline-{self.env_suffix}',
-            name=f'pulumi-cicd-pipeline-{self.env_suffix}',
+            f'pulumi-cicd-pipeline-{self.env_suffix}-{self.random_suffix.result}',
+            name=f'pulumi-cicd-pipeline-{self.env_suffix}-{self.random_suffix.result}',
             role_arn=self.pipeline_role.arn,
             artifact_stores=[{
                 'location': self.artifact_bucket.bucket,
