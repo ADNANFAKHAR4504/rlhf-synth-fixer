@@ -1,0 +1,36 @@
+{
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "turn_type": "single",
+  "team": "synth",
+  "startedAt": "2025-11-17T20:15:00-08:00",
+  "subtask": "Security, Compliance, and Governance",
+  "subject_labels": [
+    "Security Configuration as Code"
+  ],
+  "po_id": "6gk55q",
+  "aws_services": [
+    "KMS",
+    "RDS",
+    "Aurora",
+    "VPC",
+    "EC2",
+    "S3",
+    "IAM",
+    "AWS Config",
+    "CloudWatch",
+    "CloudWatch Logs",
+    "SNS",
+    "Systems Manager",
+    "Parameter Store"
+  ],
+  "region": "us-east-1",
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}

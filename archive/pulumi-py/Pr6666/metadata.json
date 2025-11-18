@@ -1,0 +1,33 @@
+{
+  "platform": "pulumi",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912083",
+  "team": "4",
+  "startedAt": "2025-11-17T10:42:59.949Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "S3",
+    "IAM",
+    "KMS",
+    "ELB",
+    "Auto Scaling",
+    "CloudFront",
+    "CloudWatch",
+    "SNS"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "jpoola-turing",
+  "dockerS3Location": ""
+}

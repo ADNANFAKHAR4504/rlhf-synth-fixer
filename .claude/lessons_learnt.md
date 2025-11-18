@@ -12,13 +12,11 @@ This document contains common patterns, failures, and solutions discovered durin
 **Symptom**: Tasks 3z4jg7, 5b0vj4 marked as ERROR despite good infrastructure work due to incomplete QA phase
 
 **Root Cause**: iac-infra-qa-trainer reported "complete" without meeting mandatory requirements:
-
 - 0% test coverage (tests left as placeholders with `self.fail()`)
 - No deployment performed (skipped due to "time constraints")
 - Documentation created but validation phase incomplete
 
 **Impact**:
-
 - Training quality scores reduced by -6 points (-3 tests, -3 deployment)
 - Tasks scored 0/10 and 4/10 instead of potential 8-10/10
 - Excellent architectural work (e.g., 6 critical fixes in task 5b0vj4) wasted
@@ -33,7 +31,6 @@ The iac-infra-qa-trainer MUST verify ALL 5 mandatory requirements before reporti
 5. **Documentation**: MODEL_FAILURES.md and IDEAL_RESPONSE.md complete
 
 **Correct Behavior** (Task 6ki0y8):
-
 ```
 ✅ Identified 7 critical blockers in generated code
 ✅ Recognized cannot deploy due to fundamental issues
@@ -43,7 +40,6 @@ The iac-infra-qa-trainer MUST verify ALL 5 mandatory requirements before reporti
 
 **Agent Prompt Fix Required**:
 Add to `.claude/commands/iac-infra-qa-trainer.md`:
-
 ```markdown
 ## MANDATORY COMPLETION REQUIREMENTS (NON-NEGOTIABLE)
 
@@ -56,7 +52,6 @@ YOU MUST COMPLETE ALL 5 BEFORE REPORTING "COMPLETE":
 5. ✅ Documentation complete
 
 IF ANY MISSING:
-
 - Report "BLOCKED" with specific missing items
 - DO NOT report "complete"
 - Time is NOT an excuse to skip requirements
@@ -71,7 +66,6 @@ IF ANY MISSING:
 **Symptom**: Tasks 3z4jg7, 5b0vj4, 6ki0y8 all failed - all were expert-level multi-region DR tasks
 
 **Root Cause**: Code generation for complex multi-region architectures produces code with fundamental errors:
-
 - Empty arrays where resources needed (DB subnet groups)
 - Wrong service architecture (regular Aurora instead of Global Database)
 - API syntax errors (Route 53 failover)
@@ -79,19 +73,16 @@ IF ANY MISSING:
 - Missing resource associations
 
 **Examples from Task 6ki0y8** (Pulumi TypeScript):
-
 - Aurora DB subnet groups created with empty subnet arrays → immediate deployment failure
 - Route 53 records reference CloudWatch alarms not yet created → circular dependency
 - ECS services missing security group associations → deployment fails
 
 **Impact**:
-
 - 7+ critical deployment blockers in generated code
 - Would require 5-8 hours to fix properly
 - Exceeds scope of QA validation (becomes reimplementation)
 
 **Prevention**:
-
 1. **Task Selection**: Prefer medium/hard complexity over expert for multi-region
 2. **Code Validation Gate**: Add between Phase 2 (generation) and Phase 3 (QA):
    ```bash
@@ -104,7 +95,6 @@ IF ANY MISSING:
 4. **Template Validation**: Ensure generated code matches platform conventions
 
 **Recommendation**: Until code generation quality improves, focus on:
-
 - Single-region tasks
 - 2-4 AWS services (not 8-10)
 - Hard complexity (not expert)

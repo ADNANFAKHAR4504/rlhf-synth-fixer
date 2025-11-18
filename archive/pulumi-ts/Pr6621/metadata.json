@@ -1,0 +1,32 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-16T22:47:02.780385Z",
+  "po_id": "3l1w3s",
+  "subtask": "Failure Recovery Automation",
+  "subject_labels": [
+    "Failure Recovery and High Availability",
+    "Failure Recovery Automation"
+  ],
+  "aws_services": [
+    "DynamoDB",
+    "Lambda",
+    "S3",
+    "API Gateway",
+    "Route53",
+    "CloudWatch",
+    "SNS",
+    "IAM",
+    "CloudWatch Logs"
+  ],
+  "training_quality": 10,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
