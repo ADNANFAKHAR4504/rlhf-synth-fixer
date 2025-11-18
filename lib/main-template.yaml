@@ -22,6 +22,11 @@ Parameters:
     Description: Primary AWS Region
     Default: ap-southeast-1
 
+  DRRegion:
+    Type: String
+    Description: Disaster Recovery AWS Region
+    Default: ap-southeast-2
+
   DBSecretArn:
     Type: String
     Description: ARN of existing Secrets Manager secret for database credentials
@@ -55,7 +60,7 @@ Resources:
         DBSecretArn: !Ref DBSecretArn
         DeploymentRegion: !Ref DeploymentRegion
         SourceRegion: !Ref PrimaryRegion
-        LambdaSecurityGroupId: !GetAtt ComputeStack.Outputs.LambdaSecurityGroupId
+        DRRegion: !Ref DRRegion
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -66,6 +71,7 @@ Resources:
 
   ComputeStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn: DatabaseStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/compute-stack.yaml'
       Parameters:
@@ -75,7 +81,7 @@ Resources:
         PublicSubnet2: !GetAtt NetworkStack.Outputs.PublicSubnet2
         PrivateSubnet1: !GetAtt NetworkStack.Outputs.PrivateSubnet1
         PrivateSubnet2: !GetAtt NetworkStack.Outputs.PrivateSubnet2
-        DBEndpoint: ''  # Will be set via environment variable update after database creation
+        DBEndpoint: !GetAtt DatabaseStack.Outputs.DBClusterEndpoint
         TransactionQueueUrl: !GetAtt QueueStack.Outputs.TransactionQueueUrl
       Tags:
         - Key: Environment

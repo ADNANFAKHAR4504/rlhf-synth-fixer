@@ -26,10 +26,6 @@ Parameters:
     Type: String
     Description: ARN of existing Secrets Manager secret
 
-  LambdaSecurityGroupId:
-    Type: String
-    Description: Lambda Security Group ID for database access
-    Default: ''
 
   DeploymentRegion:
     Type: String
@@ -44,10 +40,14 @@ Parameters:
     Description: Source region for read replica
     Default: ap-southeast-1
 
+  DRRegion:
+    Type: String
+    Description: Disaster Recovery region for S3 replication
+    Default: ap-southeast-2
+
 Conditions:
   IsPrimaryRegion: !Equals [!Ref DeploymentRegion, 'primary']
   IsDRRegion: !Equals [!Ref DeploymentRegion, 'dr']
-  HasLambdaSecurityGroup: !Not [!Equals [!Ref LambdaSecurityGroupId, '']]
 
 Resources:
   KMSKey:
@@ -109,18 +109,8 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          SourceSecurityGroupId: !If
-            - HasLambdaSecurityGroup
-            - !Ref LambdaSecurityGroupId
-            - !Ref AWS::NoValue
-          CidrIp: !If
-            - HasLambdaSecurityGroup
-            - !Ref AWS::NoValue
-            - 10.0.0.0/16
-          Description: !If
-            - HasLambdaSecurityGroup
-            - Allow MySQL access from Lambda Security Group
-            - Allow MySQL access from VPC
+          CidrIp: 10.0.0.0/16
+          Description: Allow MySQL access from VPC
       Tags:
         - Key: Name
           Value: !Sub 'payment-db-sg-${EnvironmentSuffix}'
@@ -277,6 +267,7 @@ Resources:
 
   SessionTable:
     Type: AWS::DynamoDB::GlobalTable
+    Condition: IsPrimaryRegion
     Properties:
       TableName: !Sub 'payment-sessions-${EnvironmentSuffix}'
       AttributeDefinitions:
@@ -307,7 +298,7 @@ Resources:
           Tags:
             - Key: Environment
               Value: !Ref EnvironmentSuffix
-        - Region: ap-southeast-2
+        - Region: !Ref DRRegion
           PointInTimeRecoverySpecification:
             PointInTimeRecoveryEnabled: true
           Tags:
@@ -340,7 +331,7 @@ Resources:
               Filter:
                 Prefix: ''
               Destination:
-                Bucket: !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}'
+                Bucket: !Sub 'arn:aws:s3:::payment-transaction-logs-${DRRegion}-${EnvironmentSuffix}'
                 ReplicationTime:
                   Status: Enabled
                   Time:
@@ -398,7 +389,7 @@ Resources:
                   - 's3:ReplicateObject'
                   - 's3:ReplicateDelete'
                   - 's3:ReplicateTags'
-                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}/*'
+                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-${DRRegion}-${EnvironmentSuffix}/*'
               - Effect: Allow
                 Action:
                   - 'kms:Decrypt'
@@ -408,10 +399,10 @@ Resources:
                 Action:
                   - 'kms:Decrypt'
                   - 'kms:GenerateDataKey'
-                Resource: !Sub 'arn:aws:kms:ap-southeast-2:${AWS::AccountId}:key/*'
+                Resource: !Sub 'arn:aws:kms:${DRRegion}:${AWS::AccountId}:key/*'
                 Condition:
                   StringLike:
-                    'kms:ViaService': 's3.ap-southeast-2.amazonaws.com'
+                    'kms:ViaService': !Sub 's3.${DRRegion}.amazonaws.com'
 
 Outputs:
   DBClusterEndpoint:

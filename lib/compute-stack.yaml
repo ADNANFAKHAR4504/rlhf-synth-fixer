@@ -352,22 +352,25 @@ Resources:
       Principal: elasticloadbalancing.amazonaws.com
       SourceArn: !Sub 'arn:aws:elasticloadbalancing:${AWS::Region}:${AWS::AccountId}:targetgroup/*/*'
 
-  # HTTP Listener - Redirects to HTTPS
+  # HTTP Listener - Redirects to HTTPS if certificate exists, otherwise forwards
   ALBListenerHTTP:
     Type: AWS::ElasticLoadBalancingV2::Listener
     Properties:
       LoadBalancerArn: !Ref ApplicationLoadBalancer
       Port: 80
       Protocol: HTTP
-      DefaultActions:
-        - Type: redirect
-          RedirectConfig:
-            Protocol: HTTPS
-            Port: '443'
-            Host: '#{host}'
-            Path: '/#{path}'
-            Query: '#{query}'
-            StatusCode: HTTP_301
+      DefaultActions: !If
+        - HasHostedZone
+        - - Type: redirect
+            RedirectConfig:
+              Protocol: HTTPS
+              Port: '443'
+              Host: '#{host}'
+              Path: '/#{path}'
+              Query: '#{query}'
+              StatusCode: HTTP_301
+        - - Type: forward
+            TargetGroupArn: !Ref ALBTargetGroup
 
   # HTTPS Listener
   ALBListenerHTTPS:
@@ -417,6 +420,27 @@ Resources:
       ApiId: !Ref PaymentAPI
       RouteKey: 'POST /transactions'
       Target: !Sub 'integrations/${PaymentAPIIntegration}'
+
+  HealthCheckRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref PaymentAPI
+      RouteKey: 'GET /health'
+      Target: !Sub 'integrations/${HealthCheckIntegration}'
+
+  HealthCheckIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref PaymentAPI
+      IntegrationType: MOCK
+      PayloadFormatVersion: '2.0'
+      RequestTemplates:
+        application/json: '{"statusCode": 200}'
+      TemplateSelectionExpression: '200'
+      IntegrationResponseOverrides:
+        200:
+          ResponseTemplates:
+            application/json: '{"status": "healthy", "timestamp": "$context.requestTime"}'
 
   PaymentAPIStage:
     Type: AWS::ApiGatewayV2::Stage
