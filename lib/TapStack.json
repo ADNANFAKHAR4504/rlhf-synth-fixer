@@ -490,9 +490,59 @@
                 }
             }
         },
+        "OpenSearchEncryptionPolicy": {
+            "Type": "AWS::OpenSearchServerless::SecurityPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-encryption-${EnvironmentSuffix}"
+                },
+                "Type": "encryption",
+                "Description": {
+                    "Fn::Sub": "Encryption policy for payment logs OpenSearch collection - ${EnvironmentSuffix}"
+                },
+                "Policy": {
+                    "Fn::Sub": "{\n  \"Rules\": [\n    {\n      \"ResourceType\": \"collection\",\n      \"Resource\": [\n        \"collection/payment-logs-${EnvironmentSuffix}\"\n      ]\n    }\n  ],\n  \"AWSOwnedKey\": true\n}\n"
+                }
+            }
+        },
+        "OpenSearchNetworkPolicy": {
+            "Type": "AWS::OpenSearchServerless::SecurityPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-network-${EnvironmentSuffix}"
+                },
+                "Type": "network",
+                "Description": {
+                    "Fn::Sub": "Network policy for payment logs OpenSearch collection - ${EnvironmentSuffix}"
+                },
+                "Policy": {
+                    "Fn::Sub": "[\n  {\n    \"Rules\": [\n      {\n        \"ResourceType\": \"collection\",\n        \"Resource\": [\n          \"collection/payment-logs-${EnvironmentSuffix}\"\n        ]\n      },\n      {\n        \"ResourceType\": \"dashboard\",\n        \"Resource\": [\n          \"collection/payment-logs-${EnvironmentSuffix}\"\n        ]\n      }\n    ],\n    \"AllowFromPublic\": true\n  }\n]\n"
+                }
+            }
+        },
+        "OpenSearchAccessPolicy": {
+            "Type": "AWS::OpenSearchServerless::AccessPolicy",
+            "Properties": {
+                "Name": {
+                    "Fn::Sub": "payment-logs-access-${EnvironmentSuffix}"
+                },
+                "Type": "data",
+                "Description": {
+                    "Fn::Sub": "Data access policy for payment logs OpenSearch collection - ${EnvironmentSuffix}"
+                },
+                "Policy": {
+                    "Fn::Sub": "[\n  {\n    \"Rules\": [\n      {\n        \"ResourceType\": \"collection\",\n        \"Resource\": [\n          \"collection/payment-logs-${EnvironmentSuffix}\"\n        ],\n        \"Permission\": [\n          \"aoss:*\"\n        ]\n      },\n      {\n        \"ResourceType\": \"index\",\n        \"Resource\": [\n          \"index/payment-logs-${EnvironmentSuffix}/*\"\n        ],\n        \"Permission\": [\n          \"aoss:*\"\n        ]\n      }\n    ],\n    \"Principal\": [\n      \"arn:aws:iam::${AWS::AccountId}:root\",\n      \"${KinesisFirehoseRole.Arn}\"\n    ]\n  }\n]\n"
+                }
+            }
+        },
         "OpenSearchDomain": {
             "Type": "AWS::OpenSearchServerless::Collection",
             "DeletionPolicy": "Delete",
+            "DependsOn": [
+                "OpenSearchEncryptionPolicy",
+                "OpenSearchNetworkPolicy",
+                "OpenSearchAccessPolicy"
+            ],
             "Properties": {
                 "Name": {
                     "Fn::Sub": "payment-logs-${EnvironmentSuffix}"
@@ -533,8 +583,6 @@
                         ]
                     },
                     "IndexName": "payment-logs",
-                    "IndexRotationPeriod": "OneDay",
-                    "TypeName": "_doc",
                     "RoleARN": {
                         "Fn::GetAtt": [
                             "KinesisFirehoseRole",

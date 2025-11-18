@@ -298,12 +298,102 @@ Resources:
         KeyId: !Ref LogEncryptionKey
 
   # ========================================
+  # OpenSearch Security Policies
+  # ========================================
+
+  OpenSearchEncryptionPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub 'payment-logs-encryption-${EnvironmentSuffix}'
+      Type: 'encryption'
+      Description: !Sub 'Encryption policy for payment logs OpenSearch collection - ${EnvironmentSuffix}'
+      Policy: !Sub |
+        {
+          "Rules": [
+            {
+              "ResourceType": "collection",
+              "Resource": [
+                "collection/payment-logs-${EnvironmentSuffix}"
+              ]
+            }
+          ],
+          "AWSOwnedKey": true
+        }
+
+  OpenSearchNetworkPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub 'payment-logs-network-${EnvironmentSuffix}'
+      Type: 'network'
+      Description: !Sub 'Network policy for payment logs OpenSearch collection - ${EnvironmentSuffix}'
+      Policy: !Sub |
+        [
+          {
+            "Rules": [
+              {
+                "ResourceType": "collection",
+                "Resource": [
+                  "collection/payment-logs-${EnvironmentSuffix}"
+                ]
+              },
+              {
+                "ResourceType": "dashboard",
+                "Resource": [
+                  "collection/payment-logs-${EnvironmentSuffix}"
+                ]
+              }
+            ],
+            "AllowFromPublic": true
+          }
+        ]
+
+  OpenSearchAccessPolicy:
+    Type: AWS::OpenSearchServerless::AccessPolicy
+    Properties:
+      Name: !Sub 'payment-logs-access-${EnvironmentSuffix}'
+      Type: 'data'
+      Description: !Sub 'Data access policy for payment logs OpenSearch collection - ${EnvironmentSuffix}'
+      Policy: !Sub |
+        [
+          {
+            "Rules": [
+              {
+                "ResourceType": "collection",
+                "Resource": [
+                  "collection/payment-logs-${EnvironmentSuffix}"
+                ],
+                "Permission": [
+                  "aoss:*"
+                ]
+              },
+              {
+                "ResourceType": "index",
+                "Resource": [
+                  "index/payment-logs-${EnvironmentSuffix}/*"
+                ],
+                "Permission": [
+                  "aoss:*"
+                ]
+              }
+            ],
+            "Principal": [
+              "arn:aws:iam::${AWS::AccountId}:root",
+              "${KinesisFirehoseRole.Arn}"
+            ]
+          }
+        ]
+
+  # ========================================
   # OpenSearch Domain
   # ========================================
 
   OpenSearchDomain:
     Type: AWS::OpenSearchServerless::Collection
     DeletionPolicy: Delete
+    DependsOn:
+      - OpenSearchEncryptionPolicy
+      - OpenSearchNetworkPolicy
+      - OpenSearchAccessPolicy
     Properties:
       Name: !Sub 'payment-logs-${EnvironmentSuffix}'
       Type: 'SEARCH'
@@ -326,8 +416,6 @@ Resources:
       AmazonOpenSearchServerlessDestinationConfiguration:
         CollectionEndpoint: !GetAtt OpenSearchDomain.CollectionEndpoint
         IndexName: 'payment-logs'
-        IndexRotationPeriod: 'OneDay'
-        TypeName: '_doc'
         RoleARN: !GetAtt KinesisFirehoseRole.Arn
         S3BackupMode: FailedDocumentsOnly
         S3Configuration:
