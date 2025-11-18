@@ -39,7 +39,7 @@ data "aws_iam_policy_document" "eks_cluster_trust" {
 }
 
 resource "aws_iam_role" "eks_cluster" {
-  name               = "${local.cluster_name}-cluster-role"
+  name               = local.eks_cluster_role_name
   assume_role_policy = data.aws_iam_policy_document.eks_cluster_trust.json
 
   tags = local.common_tags

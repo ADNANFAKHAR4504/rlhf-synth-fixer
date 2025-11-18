@@ -128,15 +128,23 @@ variable "node_group_deployment_suffix" {
   default     = ""
 }
 
+variable "resource_deployment_suffix" {
+  description = "Optional suffix to append to resource names (IAM roles, CloudWatch log groups) to avoid conflicts with existing resources from previous deployments. Leave empty to use existing resources if they exist."
+  type        = string
+  default     = ""
+}
+
 locals {
   cluster_name             = "${var.cluster_name_prefix}-${var.environment_suffix}"
   node_group_suffix        = var.node_group_deployment_suffix != "" ? "-${var.node_group_deployment_suffix}" : ""
+  resource_suffix          = var.resource_deployment_suffix != "" ? "-${var.resource_deployment_suffix}" : ""
   frontend_node_group_name = "${local.cluster_name}-frontend${local.node_group_suffix}"
   backend_node_group_name  = "${local.cluster_name}-backend${local.node_group_suffix}"
   frontend_launch_template = "${local.cluster_name}-frontend-lt"
   backend_launch_template  = "${local.cluster_name}-backend-lt"
   kms_alias_name           = "alias/${local.cluster_name}"
-  log_group_name           = "/aws/eks/${local.cluster_name}/cluster"
+  log_group_name           = "/aws/eks/${local.cluster_name}${local.resource_suffix}/cluster"
+  eks_cluster_role_name    = "${local.cluster_name}-cluster-role${local.resource_suffix}"
   namespace_name           = "${var.kubernetes_namespace}-${var.environment_suffix}"
   database_secret_name     = "${var.database_secret_name}-${var.environment_suffix}"
   sns_topic_name           = "${local.cluster_name}-autoscaler-alerts"
