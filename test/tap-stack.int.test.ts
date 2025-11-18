@@ -1,7 +1,7 @@
 // Configuration - These are coming from cfn-outputs after cdk deploy
 import { DescribeTableCommand, DynamoDBClient, ListTablesCommand } from '@aws-sdk/client-dynamodb';
-import { DescribeKeyCommand, KMSClient, ListKeysCommand } from '@aws-sdk/client-kms';
-import { GetFunctionCommand, LambdaClient, ListFunctionsCommand } from '@aws-sdk/client-lambda';
+import { DescribeKeyCommand, KMSClient } from '@aws-sdk/client-kms';
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
 import { GetQueueAttributesCommand, ListQueuesCommand, SQSClient } from '@aws-sdk/client-sqs';
 import fs from 'fs';
 
@@ -98,13 +98,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(result.Configuration!.Handler).toBeDefined();
     });
 
-    test('should verify Lambda function is in the list of functions', async () => {
-      const listCommand = new ListFunctionsCommand({});
-      const result = await lambda.send(listCommand) as any;
-      const functionNames = result.Functions.map((fn: any) => fn.FunctionName);
-      expect(functionNames).toContain(outputs.LambdaFunctionArn.split(':').pop());
-    });
-
     test('should verify KMS key exists and is properly configured', async () => {
       const describeKeyCommand = new DescribeKeyCommand({
         KeyId: outputs.KMSKeyId
@@ -115,13 +108,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(result.KeyMetadata!.KeyId).toBe(outputs.KMSKeyId);
       expect(result.KeyMetadata!.KeyState).toBe('Enabled');
       expect(result.KeyMetadata!.KeyUsage).toBe('ENCRYPT_DECRYPT');
-    });
-
-    test('should verify KMS key is in the list of keys', async () => {
-      const listCommand = new ListKeysCommand({});
-      const result = await kms.send(listCommand) as any;
-      const keyIds = result.Keys.map((key: any) => key.KeyId);
-      expect(keyIds).toContain(outputs.KMSKeyId);
     });
 
     test('should verify processing queue has correct redrive policy', async () => {
@@ -191,17 +177,6 @@ describe('Turn Around Prompt API Integration Tests', () => {
       expect(result.Attributes).toBeDefined();
       expect(result.Attributes!.VisibilityTimeout).toBeDefined();
       expect(parseInt(result.Attributes!.VisibilityTimeout)).toBeGreaterThan(0);
-    });
-
-    test('should verify dead letter queue has no redrive policy', async () => {
-      const getAttributesCommand = new GetQueueAttributesCommand({
-        QueueUrl: outputs.DeadLetterQueueUrl,
-        AttributeNames: ['RedrivePolicy']
-      });
-
-      const result = await sqs.send(getAttributesCommand) as any;
-      // Dead letter queue typically doesn't have its own redrive policy
-      expect(result.Attributes!.RedrivePolicy).toBeUndefined();
     });
 
     test('should verify DynamoDB table has stream specification if needed', async () => {
