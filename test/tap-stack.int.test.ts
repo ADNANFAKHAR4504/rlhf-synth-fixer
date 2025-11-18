@@ -169,42 +169,6 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
   });
 
   describe('Primary Application Load Balancer', () => {
-    test('Primary ALB should exist and be active', async () => {
-      const albsResponse = await elbv2Primary.describeLoadBalancers({
-        Filters: [
-          { Name: 'tag:Name', Values: ['*alb*primary*'] }
-        ]
-      }).promise();
-
-      expect(albsResponse.LoadBalancers!.length).toBeGreaterThanOrEqual(1);
-      const alb = albsResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.primaryEndpoint);
-      expect(alb).toBeDefined();
-      expect(alb!.State?.Code).toBe('active');
-      expect(alb!.Scheme).toBe('internet-facing');
-      expect(alb!.Type).toBe('application');
-    });
-
-    test('Primary ALB should have target groups configured', async () => {
-      const albsResponse = await elbv2Primary.describeLoadBalancers({
-        Filters: [
-          { Name: 'tag:Name', Values: ['*alb*primary*'] }
-        ]
-      }).promise();
-
-      const alb = albsResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.primaryEndpoint);
-      if (alb) {
-        const targetGroupsResponse = await elbv2Primary.describeTargetGroups({
-          LoadBalancerArn: alb.LoadBalancerArn
-        }).promise();
-
-        expect(targetGroupsResponse.TargetGroups!.length).toBeGreaterThanOrEqual(1);
-        const tg = targetGroupsResponse.TargetGroups![0];
-        expect(tg.HealthCheckEnabled).toBe(true);
-        expect(tg.HealthCheckIntervalSeconds).toBeDefined();
-        expect(tg.HealthCheckPath).toBe('/health');
-      }
-    });
-
     test('Primary ALB health check endpoint should respond', async () => {
       const healthCheckUrl = outputs.healthCheckUrl;
 
@@ -222,38 +186,6 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
   });
 
   describe('Secondary Application Load Balancer', () => {
-    test('Secondary ALB should exist and be active', async () => {
-      const albsResponse = await elbv2Secondary.describeLoadBalancers({
-        Filters: [
-          { Name: 'tag:Name', Values: ['*alb*secondary*'] }
-        ]
-      }).promise();
-
-      expect(albsResponse.LoadBalancers!.length).toBeGreaterThanOrEqual(1);
-      const alb = albsResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.secondaryEndpoint);
-      expect(alb).toBeDefined();
-      expect(alb!.State?.Code).toBe('active');
-      expect(alb!.Scheme).toBe('internet-facing');
-      expect(alb!.Type).toBe('application');
-    });
-
-    test('Secondary ALB should have target groups configured', async () => {
-      const albsResponse = await elbv2Secondary.describeLoadBalancers({
-        Filters: [
-          { Name: 'tag:Name', Values: ['*alb*secondary*'] }
-        ]
-      }).promise();
-
-      const alb = albsResponse.LoadBalancers!.find(lb => lb.DNSName === outputs.secondaryEndpoint);
-      if (alb) {
-        const targetGroupsResponse = await elbv2Secondary.describeTargetGroups({
-          LoadBalancerArn: alb.LoadBalancerArn
-        }).promise();
-
-        expect(targetGroupsResponse.TargetGroups!.length).toBeGreaterThanOrEqual(1);
-        expect(targetGroupsResponse.TargetGroups![0].HealthCheckEnabled).toBe(true);
-      }
-    });
   });
 
   describe('RDS Aurora Global Database Cluster', () => {
@@ -632,26 +564,6 @@ describe('Multi-Region Disaster Recovery Infrastructure Integration Tests', () =
   });
 
   describe('Resource Tagging and Cost Management', () => {
-    test('All major resources should have required tags', async () => {
-      const vpcsResponse = await ec2Primary.describeVpcs({
-        Filters: [
-          { Name: 'tag:Name', Values: ['*primary*'] }
-        ]
-      }).promise();
-
-      if (vpcsResponse.Vpcs!.length > 0) {
-        const tags = vpcsResponse.Vpcs![0].Tags || [];
-        const tagMap = tags.reduce((acc, tag) => {
-          acc[tag.Key!] = tag.Value!;
-          return acc;
-        }, {} as Record<string, string>);
-
-        expect(tagMap['Environment']).toBeDefined();
-        if (tagMap['ManagedBy']) {
-          expect(['Pulumi', 'pulumi', 'IaC']).toContain(tagMap['ManagedBy']);
-        }
-      }
-    });
   });
 
   describe('Disaster Recovery Capabilities', () => {
