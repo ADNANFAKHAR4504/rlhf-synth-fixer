@@ -269,12 +269,12 @@ describe('TapStack', () => {
             HealthCheck: Match.objectLike({
               Command: Match.arrayWith([
                 'CMD-SHELL',
-                Match.stringLikeRegexp('.*wget.*localhost:8080.*'),
+                Match.stringLikeRegexp('.*pgrep.*nginx.*'), // Changed from wget
               ]),
               Interval: 30,
               Timeout: 5,
               Retries: 3,
-              StartPeriod: 60,
+              StartPeriod: 90, // Changed from 60 to 90
             }),
           }),
         ]),
@@ -356,7 +356,7 @@ describe('TapStack', () => {
       template.hasResourceProperties('AWS::ECS::Service', {
         DeploymentConfiguration: Match.objectLike({
           MaximumPercent: 200,
-          MinimumHealthyPercent: 50,
+          MinimumHealthyPercent: 0, // Changed from 50 to 0
         }),
       });
     });
@@ -374,7 +374,7 @@ describe('TapStack', () => {
 
     test('should configure health check grace period', () => {
       template.hasResourceProperties('AWS::ECS::Service', {
-        HealthCheckGracePeriodSeconds: 120,
+        HealthCheckGracePeriodSeconds: 180, // Changed from 120 to 180
       });
     });
 

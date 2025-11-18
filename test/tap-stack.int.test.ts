@@ -371,14 +371,14 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
         expect(service.status).toBe('ACTIVE');
         expect(service.desiredCount).toBe(2);
         expect(service.deploymentConfiguration?.maximumPercent).toBe(200);
-        expect(service.deploymentConfiguration?.minimumHealthyPercent).toBe(50);
+        expect(service.deploymentConfiguration?.minimumHealthyPercent).toBe(0); // Changed from 50 to 0
         expect(
           service.deploymentConfiguration?.deploymentCircuitBreaker?.enable
         ).toBe(true);
         expect(
           service.deploymentConfiguration?.deploymentCircuitBreaker?.rollback
         ).toBe(true);
-        expect(service.healthCheckGracePeriodSeconds).toBe(120);
+        expect(service.healthCheckGracePeriodSeconds).toBe(180); // Changed from 120 to 180
       });
     });
 
@@ -587,11 +587,12 @@ describe('TapStack ECS Infrastructure - Integration Tests', () => {
       );
       expect(appContainer?.healthCheck).toBeDefined();
       expect(appContainer?.healthCheck?.command).toBeDefined();
-      expect(appContainer?.healthCheck?.command![1]).toContain('wget');
+      expect(appContainer?.healthCheck?.command![1]).toContain('pgrep'); // Changed from 'wget' to 'pgrep'
+      expect(appContainer?.healthCheck?.command![1]).toContain('nginx'); // Added check for nginx
       expect(appContainer?.healthCheck?.interval).toBe(30);
       expect(appContainer?.healthCheck?.timeout).toBe(5);
       expect(appContainer?.healthCheck?.retries).toBe(3);
-      expect(appContainer?.healthCheck?.startPeriod).toBe(60);
+      expect(appContainer?.healthCheck?.startPeriod).toBe(90); // Changed from 60 to 90
     });
   });
 
