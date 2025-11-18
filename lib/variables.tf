@@ -1,6 +1,7 @@
 variable "environmentSuffix" {
   description = "Environment suffix for resource naming to ensure uniqueness"
   type        = string
+  default     = "devtest"
 }
 
 variable "aws_region" {

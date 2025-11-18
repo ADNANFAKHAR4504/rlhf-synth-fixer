@@ -7,11 +7,7 @@
   "startedAt": "2025-11-18T08:05:32+00:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "serverless",
-    "etl",
-    "data-processing"
+    "Cloud Environment Setup"
   ],
   "po_id": "101912487",
   "aws_services": [
@@ -24,5 +20,7 @@
     "SNS"
   ],
   "region": "us-east-1",
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
