@@ -30,6 +30,7 @@ class RdsModule(Construct):
         master_username: str = "dbadmin",
         instance_class: str = "db.t3.medium",
         multi_az: bool = False,
+        version: str = "v2",
         **kwargs
     ):
         """
@@ -47,30 +48,32 @@ class RdsModule(Construct):
             master_username: Master username for the database
             instance_class: RDS instance class
             multi_az: Whether to enable Multi-AZ deployment
+            version: Version suffix for resource naming (default: v2)
         """
         super().__init__(scope, construct_id)
 
         self.environment_suffix = environment_suffix
         self.workspace = workspace
+        self.version = version
 
         # Create DB subnet group
         self.db_subnet_group = DbSubnetGroup(
             self,
-            f"db-subnet-group-v1-{environment_suffix}",
-            name=f"db-subnet-group-{environment_suffix}-v1",
+            f"db-subnet-group-{version}-{environment_suffix}",
+            name=f"db-subnet-group-{environment_suffix}-{version}",
             subnet_ids=subnet_ids,
             tags={
-                "Name": f"db-subnet-group-{environment_suffix}-v1",
+                "Name": f"db-subnet-group-{environment_suffix}-{version}",
                 "Workspace": workspace,
-                "Version": "v1"
+                "Version": version
             }
         )
 
         # Create security group for RDS
         self.db_security_group = SecurityGroup(
             self,
-            f"db-sg-v1-{environment_suffix}",
-            name=f"db-sg-{environment_suffix}-v1",
+            f"db-sg-{version}-{environment_suffix}",
+            name=f"db-sg-{environment_suffix}-{version}",
             description=f"Security group for RDS Aurora cluster - {workspace}",
             vpc_id=vpc_id,
             ingress=[
@@ -92,17 +95,17 @@ class RdsModule(Construct):
                 )
             ],
             tags={
-                "Name": f"db-sg-{environment_suffix}-v1",
+                "Name": f"db-sg-{environment_suffix}-{version}",
                 "Workspace": workspace,
-                "Version": "v1"
+                "Version": version
             }
         )
 
         # Create RDS Aurora cluster
         self.db_cluster = RdsCluster(
             self,
-            f"aurora-cluster-v1-{environment_suffix}",
-            cluster_identifier=f"aurora-cluster-{environment_suffix}-v1",
+            f"aurora-cluster-{version}-{environment_suffix}",
+            cluster_identifier=f"aurora-cluster-{environment_suffix}-{version}",
             engine="aurora-postgresql",
             engine_version="15",  # Updated to valid version for aurora-postgresql
             database_name=database_name,
@@ -118,9 +121,9 @@ class RdsModule(Construct):
             enabled_cloudwatch_logs_exports=["postgresql"],
             storage_encrypted=True,
             tags={
-                "Name": f"aurora-cluster-{environment_suffix}-v1",
+                "Name": f"aurora-cluster-{environment_suffix}-{version}",
                 "Workspace": workspace,
-                "Version": "v1"
+                "Version": version
             }
         )
 
@@ -131,18 +134,18 @@ class RdsModule(Construct):
         for i in range(instance_count):
             instance = RdsClusterInstance(
                 self,
-                f"aurora-instance-{i}-v1-{environment_suffix}",
-                identifier=f"aurora-instance-{i}-{environment_suffix}-v1",
+                f"aurora-instance-{i}-{version}-{environment_suffix}",
+                identifier=f"aurora-instance-{i}-{environment_suffix}-{version}",
                 cluster_identifier=self.db_cluster.id,
                 instance_class=instance_class,
                 engine=self.db_cluster.engine,
                 engine_version=self.db_cluster.engine_version,
                 publicly_accessible=False,
                 tags={
-                    "Name": f"aurora-instance-{i}-{environment_suffix}-v1",
+                    "Name": f"aurora-instance-{i}-{environment_suffix}-{version}",
                     "Workspace": workspace,
                     "Instance": str(i),
-                    "Version": "v1"
+                    "Version": version
                 }
             )
             self.db_instances.append(instance)

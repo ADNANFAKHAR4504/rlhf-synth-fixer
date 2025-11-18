@@ -23,6 +23,7 @@ class SecretsModule(Construct):
         construct_id: str,
         environment_suffix: str,
         workspace: str,
+        version: str = "v2",
         **kwargs
     ):
         """
@@ -33,23 +34,25 @@ class SecretsModule(Construct):
             construct_id: The scoped construct ID
             environment_suffix: Environment suffix for resource naming
             workspace: Workspace name (dev, staging, prod)
+            version: Version suffix for resource naming (default: v2)
         """
         super().__init__(scope, construct_id)
 
         self.environment_suffix = environment_suffix
         self.workspace = workspace
+        self.version = version
 
         # Create database credentials secret
         self.db_secret = SecretsmanagerSecret(
             self,
-            f"db-credentials-v1-{environment_suffix}",
-            name=f"{workspace}/database/credentials-{environment_suffix}-v1",
+            f"db-credentials-{version}-{environment_suffix}",
+            name=f"{workspace}/database/credentials-{environment_suffix}-{version}",
             description=f"Database credentials for {workspace} environment",
             recovery_window_in_days=0,  # Set to 0 for immediate deletion (destroyability)
             tags={
-                "Name": f"db-credentials-{environment_suffix}-v1",
+                "Name": f"db-credentials-{environment_suffix}-{version}",
                 "Workspace": workspace,
-                "Version": "v1"
+                "Version": version
             }
         )
 
@@ -66,7 +69,7 @@ class SecretsModule(Construct):
 
         self.db_secret_version = SecretsmanagerSecretVersion(
             self,
-            f"db-secret-version-v1-{environment_suffix}",
+            f"db-secret-version-{version}-{environment_suffix}",
             secret_id=self.db_secret.id,
             secret_string=json.dumps(db_credentials)
         )
@@ -74,14 +77,14 @@ class SecretsModule(Construct):
         # Create application config secret
         self.app_secret = SecretsmanagerSecret(
             self,
-            f"app-config-v1-{environment_suffix}",
-            name=f"{workspace}/application/config-{environment_suffix}-v1",
+            f"app-config-{version}-{environment_suffix}",
+            name=f"{workspace}/application/config-{environment_suffix}-{version}",
             description=f"Application configuration for {workspace} environment",
             recovery_window_in_days=0,
             tags={
-                "Name": f"app-config-{environment_suffix}-v1",
+                "Name": f"app-config-{environment_suffix}-{version}",
                 "Workspace": workspace,
-                "Version": "v1"
+                "Version": version
             }
         )
 
@@ -95,7 +98,7 @@ class SecretsModule(Construct):
 
         self.app_secret_version = SecretsmanagerSecretVersion(
             self,
-            f"app-secret-version-v1-{environment_suffix}",
+            f"app-secret-version-{version}-{environment_suffix}",
             secret_id=self.app_secret.id,
             secret_string=json.dumps(app_config)
         )

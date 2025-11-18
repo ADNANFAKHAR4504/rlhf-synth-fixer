@@ -30,6 +30,7 @@ class VpcModule(Construct):
         vpc_cidr: str,
         availability_zones: int = 2,
         enable_nat_gateway: bool = True,
+        version: str = "v2",
         **kwargs
     ):
         """
@@ -42,12 +43,14 @@ class VpcModule(Construct):
             vpc_cidr: CIDR block for the VPC
             availability_zones: Number of AZs to use (default: 2)
             enable_nat_gateway: Whether to create NAT gateways (default: True)
+            version: Version suffix for resource naming (default: v2)
         """
         super().__init__(scope, construct_id)
 
         self.environment_suffix = environment_suffix
         self.vpc_cidr = vpc_cidr
         self.az_count = availability_zones
+        self.version = version
 
         # Get available AZs
         self.azs = DataAwsAvailabilityZones(
@@ -59,25 +62,25 @@ class VpcModule(Construct):
         # Create VPC
         self.vpc = Vpc(
             self,
-            f"vpc-v1-{environment_suffix}",
+            f"vpc-{version}-{environment_suffix}",
             cidr_block=vpc_cidr,
             enable_dns_hostnames=True,
             enable_dns_support=True,
             tags={
-                "Name": f"vpc-v1-{environment_suffix}",
+                "Name": f"vpc-{version}-{environment_suffix}",
                 "Module": "vpc",
-                "Version": "v1"
+                "Version": version
             }
         )
 
         # Create Internet Gateway
         self.igw = InternetGateway(
             self,
-            f"igw-v1-{environment_suffix}",
+            f"igw-{version}-{environment_suffix}",
             vpc_id=self.vpc.id,
             tags={
-                "Name": f"igw-v1-{environment_suffix}",
-                "Version": "v1"
+                "Name": f"igw-{version}-{environment_suffix}",
+                "Version": version
             }
         )
 
@@ -97,15 +100,15 @@ class VpcModule(Construct):
             # Public subnet
             public_subnet = Subnet(
                 self,
-                f"public-subnet-v1-{i}-{environment_suffix}",
+                f"public-subnet-{version}-{i}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"{base_octets[0]}.{base_octets[1]}.{i * 16}.0/20",
                 availability_zone=Fn.element(self.azs.names, i),
                 map_public_ip_on_launch=True,
                 tags={
-                    "Name": f"public-subnet-v1-{i}-{environment_suffix}",
+                    "Name": f"public-subnet-{version}-{i}-{environment_suffix}",
                     "Type": "public",
-                    "Version": "v1"
+                    "Version": version
                 }
             )
             self.public_subnets.append(public_subnet)
@@ -113,14 +116,14 @@ class VpcModule(Construct):
             # Private subnet
             private_subnet = Subnet(
                 self,
-                f"private-subnet-v1-{i}-{environment_suffix}",
+                f"private-subnet-{version}-{i}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 cidr_block=f"{base_octets[0]}.{base_octets[1]}.{128 + i * 16}.0/20",
                 availability_zone=Fn.element(self.azs.names, i),
                 tags={
-                    "Name": f"private-subnet-v1-{i}-{environment_suffix}",
+                    "Name": f"private-subnet-{version}-{i}-{environment_suffix}",
                     "Type": "private",
-                    "Version": "v1"
+                    "Version": version
                 }
             )
             self.private_subnets.append(private_subnet)
@@ -129,23 +132,23 @@ class VpcModule(Construct):
             if enable_nat_gateway:
                 eip = Eip(
                     self,
-                    f"nat-eip-v1-{i}-{environment_suffix}",
+                    f"nat-eip-{version}-{i}-{environment_suffix}",
                     domain="vpc",
                     tags={
-                        "Name": f"nat-eip-v1-{i}-{environment_suffix}",
-                        "Version": "v1"
+                        "Name": f"nat-eip-{version}-{i}-{environment_suffix}",
+                        "Version": version
                     }
                 )
                 self.eips.append(eip)
 
                 nat_gw = NatGateway(
                     self,
-                    f"nat-gateway-v1-{i}-{environment_suffix}",
+                    f"nat-gateway-{version}-{i}-{environment_suffix}",
                     allocation_id=eip.id,
                     subnet_id=public_subnet.id,
                     tags={
-                        "Name": f"nat-gateway-v1-{i}-{environment_suffix}",
-                        "Version": "v1"
+                        "Name": f"nat-gateway-{version}-{i}-{environment_suffix}",
+                        "Version": version
                     }
                 )
                 self.nat_gateways.append(nat_gw)
@@ -154,7 +157,7 @@ class VpcModule(Construct):
         # Public route table (one for all public subnets)
         self.public_route_table = RouteTable(
             self,
-            f"public-rt-v1-{environment_suffix}",
+            f"public-rt-{version}-{environment_suffix}",
             vpc_id=self.vpc.id,
             route=[
                 RouteTableRoute(
@@ -163,8 +166,8 @@ class VpcModule(Construct):
                 )
             ],
             tags={
-                "Name": f"public-rt-v1-{environment_suffix}",
-                "Version": "v1"
+                "Name": f"public-rt-{version}-{environment_suffix}",
+                "Version": version
             }
         )
 
@@ -172,7 +175,7 @@ class VpcModule(Construct):
         for i, subnet in enumerate(self.public_subnets):
             RouteTableAssociation(
                 self,
-                f"public-rt-assoc-v1-{i}-{environment_suffix}",
+                f"public-rt-assoc-{version}-{i}-{environment_suffix}",
                 subnet_id=subnet.id,
                 route_table_id=self.public_route_table.id,
             )
@@ -191,12 +194,12 @@ class VpcModule(Construct):
 
             private_rt = RouteTable(
                 self,
-                f"private-rt-v1-{i}-{environment_suffix}",
+                f"private-rt-{version}-{i}-{environment_suffix}",
                 vpc_id=self.vpc.id,
                 route=routes,
                 tags={
-                    "Name": f"private-rt-v1-{i}-{environment_suffix}",
-                    "Version": "v1"
+                    "Name": f"private-rt-{version}-{i}-{environment_suffix}",
+                    "Version": version
                 }
             )
             self.private_route_tables.append(private_rt)
@@ -204,7 +207,7 @@ class VpcModule(Construct):
             # Associate private subnet with private route table
             RouteTableAssociation(
                 self,
-                f"private-rt-assoc-v1-{i}-{environment_suffix}",
+                f"private-rt-assoc-{version}-{i}-{environment_suffix}",
                 subnet_id=self.private_subnets[i].id,
                 route_table_id=private_rt.id,
             )

@@ -46,6 +46,9 @@ class TapStack(TerraformStack):
         state_bucket_region = kwargs.get('state_bucket_region', 'us-east-1')
         state_bucket = kwargs.get('state_bucket', 'iac-rlhf-tf-states')
         default_tags = kwargs.get('default_tags', {})
+        
+        # Version suffix for resource naming - increment when recreating infrastructure
+        version = kwargs.get('version', 'v2')  # Changed from v1 to v2 to avoid conflicts
 
         # Validate workspace
         if not EnvironmentConfig.validate_workspace(workspace):
@@ -75,15 +78,15 @@ class TapStack(TerraformStack):
             key=f"{workspace}/{construct_id}.tfstate",
             region=state_bucket_region,
             encrypt=True,
-            dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-v1"
+            dynamodb_table=f"terraform-state-lock-{workspace}-{environment_suffix}-{version}"
         )
 
         # Create DynamoDB table for state locking
         # This table is created first, then the S3 backend can be enabled
         state_lock_table = DynamodbTable(
             self,
-            f"state-lock-table-v1-{environment_suffix}",
-            name=f"terraform-state-lock-{workspace}-{environment_suffix}-v1",
+            f"state-lock-table-{version}-{environment_suffix}",
+            name=f"terraform-state-lock-{workspace}-{environment_suffix}-{version}",
             billing_mode="PAY_PER_REQUEST",
             hash_key="LockID",
             attribute=[{
@@ -92,30 +95,30 @@ class TapStack(TerraformStack):
             }],
             deletion_protection_enabled=False,  # CRITICAL: For destroyability
             tags={
-                "Name": f"terraform-state-lock-{workspace}-{environment_suffix}-v1",
+                "Name": f"terraform-state-lock-{workspace}-{environment_suffix}-{version}",
                 "Workspace": workspace,
                 "Purpose": "Terraform state locking",
-                "Version": "v1"
+                "Version": version
             }
         )
 
         # Create S3 bucket for static assets
         assets_bucket = S3Bucket(
             self,
-            f"assets-bucket-v1-{environment_suffix}",
-            bucket=f"app-assets-{workspace}-{environment_suffix}-v1",
+            f"assets-bucket-{version}-{environment_suffix}",
+            bucket=f"app-assets-{workspace}-{environment_suffix}-{version}",
             force_destroy=True,  # CRITICAL: For destroyability
             tags={
-                "Name": f"app-assets-{workspace}-{environment_suffix}-v1",
+                "Name": f"app-assets-{workspace}-{environment_suffix}-{version}",
                 "Workspace": workspace,
-                "Version": "v1"
+                "Version": version
             }
         )
 
         # Configure S3 bucket versioning using separate resource
         S3BucketVersioningA(
             self,
-            f"assets-bucket-versioning-v1-{environment_suffix}",
+            f"assets-bucket-versioning-{version}-{environment_suffix}",
             bucket=assets_bucket.id,
             versioning_configuration=S3BucketVersioningVersioningConfiguration(
                 status="Enabled"
@@ -125,7 +128,7 @@ class TapStack(TerraformStack):
         # Configure S3 bucket encryption using separate resource
         S3BucketServerSideEncryptionConfigurationA(
             self,
-            f"assets-bucket-encryption-v1-{environment_suffix}",
+            f"assets-bucket-encryption-{version}-{environment_suffix}",
             bucket=assets_bucket.id,
             rule=[S3BucketServerSideEncryptionConfigurationRuleA(
                 apply_server_side_encryption_by_default=S3BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultA(
@@ -141,7 +144,8 @@ class TapStack(TerraformStack):
             environment_suffix=environment_suffix,
             vpc_cidr=config['vpc_cidr'],
             availability_zones=config['availability_zones'],
-            enable_nat_gateway=True
+            enable_nat_gateway=True,
+            version=version
         )
 
         # Module 2: IAM Module
@@ -149,7 +153,8 @@ class TapStack(TerraformStack):
             self,
             f"iam-module-{environment_suffix}",
             environment_suffix=environment_suffix,
-            workspace=workspace
+            workspace=workspace,
+            version=version
         )
 
         # Module 3: Secrets Module
@@ -157,7 +162,8 @@ class TapStack(TerraformStack):
             self,
             f"secrets-module-{environment_suffix}",
             environment_suffix=environment_suffix,
-            workspace=workspace
+            workspace=workspace,
+            version=version
         )
 
         # Module 4: ECS Module
@@ -172,7 +178,8 @@ class TapStack(TerraformStack):
             execution_role_arn=iam_module.get_execution_role_arn(),
             task_role_arn=iam_module.get_task_role_arn(),
             container_count=config['ecs_container_count'],
-            enable_alb_deletion_protection=config['alb_deletion_protection']
+            enable_alb_deletion_protection=config['alb_deletion_protection'],
+            version=version
         )
 
         # Module 5: RDS Module
@@ -187,7 +194,8 @@ class TapStack(TerraformStack):
             database_name=f"appdb_{workspace}",
             master_username="dbadmin",
             instance_class=config['rds_instance_class'],
-            multi_az=config['rds_multi_az']
+            multi_az=config['rds_multi_az'],
+            version=version
         )
 
         # Outputs - Expose critical resource IDs and endpoints
