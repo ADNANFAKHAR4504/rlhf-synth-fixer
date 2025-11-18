@@ -1,0 +1,25 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "w6x8o0",
+  "team": "synth-2",
+  "startedAt": "2025-11-18T00:00:00-08:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Provisioning of Infrastructure Environments"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ELB",
+    "RDS",
+    "DMS",
+    "Route53",
+    "CloudWatch",
+    "IAM",
+    "SecretsManager"
+  ],
+  "training_quality": 9
+}
