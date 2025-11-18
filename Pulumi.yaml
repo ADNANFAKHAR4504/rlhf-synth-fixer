@@ -1,8 +1,6 @@
 name: TapStack
 runtime:
   name: python
-  options:
-    virtualenv: venv
 description: CI/CD Pipeline Infrastructure for Automated Pulumi Deployments
 main: tap.py
 config:
