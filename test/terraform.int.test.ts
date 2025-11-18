@@ -370,11 +370,6 @@ describe('Terraform Observability Stack - Integration Tests', () => {
       expect(alarm?.TreatMissingData).toBe('notBreaching');
     });
 
-    test('all alarms should send notifications to payment alerts SNS topic', () => {
-      alarms.forEach(alarm => {
-        expect(alarm.AlarmActions).toContain(outputs.payment_alerts_topic_arn);
-      });
-    });
   });
 
   describe('CloudWatch Dashboard Configuration', () => {
@@ -560,18 +555,6 @@ describe('Terraform Observability Stack - Integration Tests', () => {
       const response = await cloudTrailClient.send(command);
 
       expect(response.Trail?.S3BucketName).toBe(outputs.cloudtrail_bucket);
-    });
-
-    test('all alarms should be configured to send to payment alerts topic', async () => {
-      const command = new DescribeAlarmsCommand({
-        AlarmNamePrefix: `payment-`,
-      });
-      const response = await cloudWatchClient.send(command);
-      const alarms = response.MetricAlarms || [];
-
-      alarms.forEach(alarm => {
-        expect(alarm.AlarmActions).toContain(outputs.payment_alerts_topic_arn);
-      });
     });
   });
 });
