@@ -370,6 +370,68 @@ const key = event.Records[0].s3.object.key;
 
 ---
 
+### 9. AWS CodeCommit Service Deprecation
+
+**Symptom**: `CreateRepository request is not allowed because there is no existing repository in this AWS account` or deployment fails with CodeCommit access denied
+
+**Root Cause**: AWS deprecated CodeCommit for new accounts in 2024. Service is no longer available for accounts created after deprecation date.
+
+**Impact**:
+- Tasks explicitly requiring CodeCommit cannot be deployed
+- CI/CD pipeline tasks using CodeCommit as source will fail
+- Affects training quality and deployment success rate
+
+**Quick Fix**:
+- **For CI/CD Pipeline tasks**: Replace CodeCommit with GitHub integration using CodeStar Connections
+- **Alternative**: Use GitHub, GitLab, or Bitbucket as pipeline source
+- **Code Change Required**: Replace `aws_codecommit_repository` or `CodeCommit.Repository` with CodeStar Connection + GitHub
+- **Task Description Update**: When task explicitly requires CodeCommit, flag as ERROR and document service unavailability
+
+**Example (Terraform)**:
+```hcl
+# WRONG (deprecated service)
+resource "aws_codecommit_repository" "repo" {
+  repository_name = "infrastructure-code-${var.environment_suffix}"
+}
+
+# CORRECT (use GitHub with CodeStar Connection)
+resource "aws_codestarconnections_connection" "github" {
+  name          = "github-connection-${var.environment_suffix}"
+  provider_type = "GitHub"
+}
+
+resource "aws_codepipeline" "pipeline" {
+  # ... pipeline config
+  stage {
+    name = "Source"
+    action {
+      name             = "Source"
+      category         = "Source"
+      owner            = "AWS"
+      provider         = "CodeStarSourceConnection"
+      version          = "1"
+      output_artifacts = ["source_output"]
+      configuration = {
+        ConnectionArn    = aws_codestarconnections_connection.github.arn
+        FullRepositoryId = "owner/repository-name"
+        BranchName       = "main"
+      }
+    }
+  }
+}
+```
+
+**Applies to**: All platforms when tasks require CodeCommit (CDK, Terraform, CloudFormation, Pulumi)
+
+**Task Quality Impact**:
+- Tasks with CodeCommit requirement will be marked as ERROR
+- Training quality automatically insufficient (<8) due to deployment failure
+- Document in MODEL_FAILURES.md as service deprecation issue
+
+**Reference**: Task 101912493 - first identified CodeCommit deprecation blocker
+
+---
+
 ## Resource Naming Patterns
 
 ### Standard Format
