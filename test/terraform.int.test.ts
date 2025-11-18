@@ -32,9 +32,6 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
   let cloudWatchClient: any;
   let iamClient: any;
 
-  // Track if infrastructure is deployed
-  let infrastructureDeployed = false;
-
   beforeAll(async () => {
     // Discover region from environment, metadata, or Terraform outputs
     let discoveredRegion = process.env.AWS_REGION || process.env.AWS_DEFAULT_REGION;
@@ -81,24 +78,6 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     cloudWatchClient = new AWS.CloudWatch({ region });
     // IAM is global
     iamClient = new AWS.IAM({ region: 'us-east-1' });
-
-    // Check if infrastructure is deployed by trying to find at least one key resource
-    try {
-      const expectedTableName = getOutputValue('dynamodb_table_name') || 
-                                `compliance-results-${environmentSuffix}`;
-      await dynamoClient.describeTable({ TableName: expectedTableName }).promise();
-      infrastructureDeployed = true;
-    } catch (error: any) {
-      if (error.code === 'ResourceNotFoundException') {
-        infrastructureDeployed = false;
-        console.warn(`⚠️  Infrastructure not deployed for environment suffix: ${environmentSuffix}`);
-        console.warn(`   Expected resources with suffix "${environmentSuffix}" but they don't exist.`);
-        console.warn(`   Please deploy the stack first using: ./scripts/deploy.sh`);
-      } else {
-        // Other errors might indicate infrastructure exists but there's a different issue
-        infrastructureDeployed = true;
-      }
-    }
 
     // Load Terraform outputs dynamically
     const outputsPath = path.resolve(__dirname, '../lib');
@@ -207,10 +186,6 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify DynamoDB table exists', async () => {
-      if (!infrastructureDeployed) {
-        console.warn('⏭️  Skipping test: Infrastructure not deployed');
-        return;
-      }
       const response = await dynamoClient.describeTable({ TableName: tableName }).promise();
       
       expect(response.Table).toBeDefined();
@@ -323,34 +298,22 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify reports bucket exists', async () => {
-      if (!infrastructureDeployed || !reportsBucket) {
-        console.warn('⏭️  Skipping test: Infrastructure not deployed or bucket name not found');
-        return;
-      }
+      expect(reportsBucket).toBeTruthy();
       await expect(s3Client.headBucket({ Bucket: reportsBucket }).promise()).resolves.not.toThrow();
     });
 
     test('should verify config bucket exists', async () => {
-      if (!infrastructureDeployed || !configBucket) {
-        console.warn('⏭️  Skipping test: Infrastructure not deployed or bucket name not found');
-        return;
-      }
+      expect(configBucket).toBeTruthy();
       await expect(s3Client.headBucket({ Bucket: configBucket }).promise()).resolves.not.toThrow();
     });
 
     test('should verify state files bucket exists', async () => {
-      if (!infrastructureDeployed || !stateFilesBucket) {
-        console.warn('⏭️  Skipping test: Infrastructure not deployed or bucket name not found');
-        return;
-      }
+      expect(stateFilesBucket).toBeTruthy();
       await expect(s3Client.headBucket({ Bucket: stateFilesBucket }).promise()).resolves.not.toThrow();
     });
 
     test('should verify reports bucket has encryption enabled', async () => {
-      if (!infrastructureDeployed || !reportsBucket) {
-        console.warn('⏭️  Skipping test: Infrastructure not deployed or bucket name not found');
-        return;
-      }
+      expect(reportsBucket).toBeTruthy();
       const response = await s3Client.getBucketEncryption({ Bucket: reportsBucket }).promise();
       
       expect(response.ServerSideEncryptionConfiguration).toBeDefined();
@@ -399,6 +362,7 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
 
   describe('AWS Config', () => {
     let configRuleArns: { [key: string]: string } | null = null;
+    let configRuleNames: { [key: string]: string } | null = null;
     let recorderName: string;
 
     beforeAll(() => {
@@ -412,7 +376,18 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
           configRuleArns = null;
         }
       }
-      recorderName = `compliance-recorder-${environmentSuffix}`;
+      // Discover Config rule names dynamically
+      const configRuleNamesOutput = getOutputValue('config_rule_names');
+      if (configRuleNamesOutput) {
+        try {
+          configRuleNames = JSON.parse(configRuleNamesOutput);
+        } catch (e) {
+          configRuleNames = null;
+        }
+      }
+      // Discover recorder name from Terraform outputs
+      recorderName = getOutputValue('config_recorder_name') || 
+                     `compliance-recorder-${environmentSuffix}`;
     });
 
     test('should discover Config rule ARNs', () => {
@@ -447,7 +422,9 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify EC2 instance type Config rule exists', async () => {
-      const ruleName = `ec2-instance-type-check-${environmentSuffix}`;
+      // Get rule name from outputs if available, otherwise construct it
+      const ruleName = configRuleNames?.ec2_instance_type || 
+                       `ec2-instance-type-check-${environmentSuffix}`;
       const response = await configClient.describeConfigRules({ ConfigRuleNames: [ruleName] }).promise();
       
       expect(response.ConfigRules).toBeDefined();
@@ -456,7 +433,9 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify S3 bucket encryption Config rule exists', async () => {
-      const ruleName = `s3-bucket-encryption-${environmentSuffix}`;
+      // Get rule name from outputs if available, otherwise construct it
+      const ruleName = configRuleNames?.s3_bucket_encryption || 
+                       `s3-bucket-encryption-${environmentSuffix}`;
       const response = await configClient.describeConfigRules({ ConfigRuleNames: [ruleName] }).promise();
       
       expect(response.ConfigRules).toBeDefined();
@@ -465,7 +444,9 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     });
 
     test('should verify RDS backup retention Config rule exists', async () => {
-      const ruleName = `rds-backup-retention-${environmentSuffix}`;
+      // Get rule name from outputs if available, otherwise construct it
+      const ruleName = configRuleNames?.rds_backup_retention || 
+                       `rds-backup-retention-${environmentSuffix}`;
       const response = await configClient.describeConfigRules({ ConfigRuleNames: [ruleName] }).promise();
       
       expect(response.ConfigRules).toBeDefined();
@@ -478,7 +459,9 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     let ruleName: string;
 
     beforeAll(() => {
-      ruleName = `compliance-scan-schedule-${environmentSuffix}`;
+      // Discover rule name from Terraform outputs
+      ruleName = getOutputValue('eventbridge_rule_name') || 
+                 `compliance-scan-schedule-${environmentSuffix}`;
     });
 
     test('should discover EventBridge rule name', () => {
@@ -504,7 +487,9 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     let dashboardName: string;
 
     beforeAll(() => {
-      dashboardName = `compliance-monitoring-${environmentSuffix}`;
+      // Discover dashboard name from Terraform outputs
+      dashboardName = getOutputValue('cloudwatch_dashboard_name') || 
+                      `compliance-monitoring-${environmentSuffix}`;
     });
 
     test('should discover CloudWatch dashboard name', () => {
@@ -527,8 +512,11 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
     let configRoleName: string;
 
     beforeAll(() => {
-      lambdaRoleName = `compliance-scanner-lambda-${environmentSuffix}`;
-      configRoleName = `compliance-config-${environmentSuffix}`;
+      // Discover IAM role names from Terraform outputs
+      lambdaRoleName = getOutputValue('lambda_iam_role_name') || 
+                       `compliance-scanner-lambda-${environmentSuffix}`;
+      configRoleName = getOutputValue('config_iam_role_name') || 
+                       `compliance-config-${environmentSuffix}`;
     });
 
     test('should discover IAM role names', () => {
@@ -585,17 +573,19 @@ describe('Compliance Scanner Infrastructure Integration Tests', () => {
       expect(lambdaResponse.Configuration?.Environment?.Variables?.DYNAMODB_TABLE).toBe(tableName);
       
       // Also verify the IAM role exists
-      const lambdaRoleName = `compliance-scanner-lambda-${environmentSuffix}`;
-      const roleResponse = await iamClient.getRole({ RoleName: lambdaRoleName }).promise();
+      const lambdaRoleNameFromOutput = getOutputValue('lambda_iam_role_name') || 
+                                       `compliance-scanner-lambda-${environmentSuffix}`;
+      const roleResponse = await iamClient.getRole({ RoleName: lambdaRoleNameFromOutput }).promise();
       
       expect(roleResponse.Role).toBeDefined();
-      expect(roleResponse.Role?.RoleName).toBe(lambdaRoleName);
+      expect(roleResponse.Role?.RoleName).toBe(lambdaRoleNameFromOutput);
     });
 
     test('should verify EventBridge can invoke Lambda', async () => {
       const functionName = getOutputValue('lambda_function_name') || 
                           `compliance-scanner-${environmentSuffix}`;
-      const ruleName = `compliance-scan-schedule-${environmentSuffix}`;
+      const ruleName = getOutputValue('eventbridge_rule_name') || 
+                       `compliance-scan-schedule-${environmentSuffix}`;
       
       // Verify both resources exist
       const lambdaResponse = await lambdaClient.getFunction({ FunctionName: functionName }).promise();
