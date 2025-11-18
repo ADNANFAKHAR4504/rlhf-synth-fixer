@@ -198,7 +198,7 @@ Resources:
 
   LambdaVPCEndpoint:
     Type: AWS::EC2::VPCEndpoint
-  Properties:
+    Properties:
       VpcId: !Ref VPC
       ServiceName: !Sub 'com.amazonaws.${AWS::Region}.lambda'
       VpcEndpointType: Interface
@@ -214,11 +214,11 @@ Resources:
   # Security Groups
   # ============================================================================
 
-LambdaSecurityGroup:
-  Type: AWS::EC2::SecurityGroup
-  Properties:
-    GroupDescription: Security group for Lambda function
-    VpcId: !Ref VPC
+  LambdaSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for Lambda function
+      VpcId: !Ref VPC
       GroupName: !Sub 'lambda-sg-${EnvironmentSuffix}'
       Tags:
         - Key: Name
@@ -234,14 +234,14 @@ LambdaSecurityGroup:
         - Key: Name
           Value: !Sub 'lambda-endpoint-sg-${EnvironmentSuffix}'
 
-LambdaSecurityGroupEgress:
-  Type: AWS::EC2::SecurityGroupEgress
-  Properties:
-    GroupId: !Ref LambdaSecurityGroup
+  LambdaSecurityGroupEgress:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-    DestinationSecurityGroupId: !Ref LambdaVPCEndpointSecurityGroup
+      DestinationSecurityGroupId: !Ref LambdaVPCEndpointSecurityGroup
       Description: Allow HTTPS to Lambda VPC endpoint
 
   LambdaVPCEndpointSecurityGroupIngress:
@@ -716,4 +716,6 @@ Outputs:
     Value: !Ref VPCFlowLog
     Export:
       Name: !Sub '${AWS::StackName}-VPC-FlowLog-ID'
+
+
 ```

@@ -299,15 +299,71 @@ fi
 
 ---
 
+### 8. Security Group Egress Rule Violation
+
+**Impact Level**: Critical (Security Violation)
+
+**MODEL_RESPONSE Issue**:
+An attempt was made to add a security group egress rule allowing `0.0.0.0/0` to enable Lambda access to S3 and DynamoDB Gateway endpoints:
+
+```yaml
+LambdaSecurityGroupEgressToVPCEndpoints:
+  Type: AWS::EC2::SecurityGroupEgress
+  Properties:
+    GroupId: !Ref LambdaSecurityGroup
+    IpProtocol: tcp
+    FromPort: 443
+    ToPort: 443
+    CidrIp: 0.0.0.0/0  # ❌ VIOLATION
+    Description: Allow HTTPS to AWS services via Gateway endpoints (S3, DynamoDB)
+```
+
+**Requirement Violation**:
+- PROMPT.md explicitly states: "No security group egress rules allowing 0.0.0.0/0 destinations"
+- Violates PCI DSS compliance requirements for network isolation
+- Contradicts the "complete isolation" and "no internet exposure" security posture
+
+**IDEAL_RESPONSE Fix**:
+Remove the `LambdaSecurityGroupEgressToVPCEndpoints` resource entirely. Gateway VPC endpoints (S3, DynamoDB) work at the route table level and do not require security group rules. Only interface endpoints (Lambda) require security group configuration:
+
+```yaml
+LambdaSecurityGroupEgress:
+  Type: AWS::EC2::SecurityGroupEgress
+  Properties:
+    GroupId: !Ref LambdaSecurityGroup
+    IpProtocol: tcp
+    FromPort: 443
+    ToPort: 443
+    DestinationSecurityGroupId: !Ref LambdaVPCEndpointSecurityGroup
+    Description: Allow HTTPS to Lambda VPC endpoint
+# No additional egress rule needed - Gateway endpoints work via route tables
+```
+
+**Root Cause**: Misunderstanding of how Gateway VPC endpoints work. Gateway endpoints (S3, DynamoDB) route traffic through route table associations and do not require security group rules. Only interface endpoints (Lambda) require security group configuration because they use ENIs (Elastic Network Interfaces) that are subject to security group rules.
+
+**AWS Documentation Reference**:
+- [Gateway VPC Endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-access.html#vpc-endpoints-gateway)
+- [Interface VPC Endpoints](https://docs.aws.amazon.com/vpc/latest/privatelink/vpc-endpoints-access.html#vpc-endpoints-interfaces)
+
+**Cost/Security/Performance Impact**:
+- **Cost**: No cost impact
+- **Security**: Critical - Allowing `0.0.0.0/0` violates network isolation requirements and PCI DSS compliance
+- **Performance**: No performance impact
+
+**Training Value**: High - This demonstrates the importance of understanding the difference between Gateway and Interface VPC endpoints, and the security implications of overly permissive security group rules.
+
+---
+
 ## Summary
 
-- **Total failures**: 7 (1 Critical, 4 Medium, 2 Low)
+- **Total failures**: 8 (2 Critical, 4 Medium, 2 Low)
 - **Primary knowledge gaps**:
   1. CloudFormation resource dependency resolution for security groups (Critical)
-  2. AWS service version management and deprecation schedules (Medium)
-  3. Project naming conventions and file structure (Medium)
-  4. Test coverage requirements (Medium)
-  5. Pipeline integration requirements (Low)
+  2. Gateway vs Interface VPC endpoint security group requirements (Critical)
+  3. AWS service version management and deprecation schedules (Medium)
+  4. Project naming conventions and file structure (Medium)
+  5. Test coverage requirements (Medium)
+  6. Pipeline integration requirements (Low)
 
 **Training value**: This task provides excellent training data because:
 1. The template was 99% correct - demonstrates strong understanding of AWS services
@@ -319,7 +375,9 @@ fi
 **Training Quality Score Justification**: 9/10
 - Complex infrastructure with 10+ services correctly configured
 - Security best practices properly implemented (KMS, VPC isolation, IAM policies)
-- Compliance requirements met (PCI-DSS)
-- One critical but teachable failure with clear resolution path
-- Excellent example of CloudFormation circular dependency anti-pattern
-- Good examples of version management and test coverage requirements
+- Compliance requirements met (PCI-DSS) after fixes
+- Two critical but teachable failures with clear resolution paths:
+  - CloudFormation circular dependency anti-pattern
+  - Gateway vs Interface VPC endpoint security requirements
+- Excellent examples of version management and test coverage requirements
+- Demonstrates importance of understanding AWS networking fundamentals
