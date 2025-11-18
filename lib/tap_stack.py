@@ -1,9 +1,6 @@
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput, Fn, Token
 from cdktf_cdktf_provider_aws.provider import AwsProvider
-import hashlib
-import base64
-import zipfile
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -31,6 +28,8 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
+from cdktf_cdktf_provider_archive.provider import ArchiveProvider
+from cdktf_cdktf_provider_archive.data_archive_file import DataArchiveFile
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
@@ -42,6 +41,20 @@ from cdktf_cdktf_provider_aws.api_gateway_stage import ApiGatewayStage
 from cdktf_cdktf_provider_aws.lambda_permission import LambdaPermission
 from cdktf_cdktf_provider_aws.route53_zone import Route53Zone
 from cdktf_cdktf_provider_aws.route53_record import Route53Record
+from cdktf_cdktf_provider_aws.secretsmanager_secret import SecretsmanagerSecret
+from cdktf_cdktf_provider_aws.secretsmanager_secret_version import SecretsmanagerSecretVersion
+from cdktf_cdktf_provider_aws.iam_policy import IamPolicy
+from cdktf_cdktf_provider_aws.cloudwatch_metric_alarm import CloudwatchMetricAlarm
+from cdktf_cdktf_provider_aws.vpc_endpoint import VpcEndpoint
+from cdktf_cdktf_provider_aws.wafv2_web_acl import (
+    Wafv2WebAcl,
+    Wafv2WebAclRule,
+    Wafv2WebAclRuleStatement,
+    Wafv2WebAclRuleStatementManagedRuleGroupStatement,
+    Wafv2WebAclVisibilityConfig,
+    Wafv2WebAclDefaultAction
+)
+from cdktf_cdktf_provider_aws.wafv2_web_acl_association import Wafv2WebAclAssociation
 import json
 import os
 
@@ -92,14 +105,21 @@ class TradingPlatformStack(TerraformStack):
             region=self.region
         )
 
+        # Archive Provider (for creating Lambda ZIP files)
+        ArchiveProvider(self, "archive")
+
         # Create all infrastructure components
         self.create_kms_key()
         self.create_vpc_network()
+        self.create_vpc_endpoints()
         self.create_security_groups()
         self.create_s3_bucket()
+        self.create_db_secret()
         self.create_rds_cluster()
         self.create_lambda_functions()
         self.create_api_gateway()
+        self.create_waf()
+        self.create_cloudwatch_alarms()
         self.create_route53_records()
 
         # Outputs
@@ -332,6 +352,49 @@ class TradingPlatformStack(TerraformStack):
             ]
         )
 
+    def create_db_secret(self):
+        """Create AWS Secrets Manager secret for database credentials"""
+        # Generate a secure password using Terraform's random provider would be ideal,
+        # but for CDKTF we'll create a secret that can be rotated
+        db_credentials = {
+            "username": "admin",
+            "password": Fn.sensitive("${random_password.db_password.result}"),
+            "engine": "mysql",
+            "host": "",  # Will be updated after RDS creation
+            "port": 3306,
+            "dbname": "trading"
+        }
+
+        self.db_secret = SecretsmanagerSecret(
+            self,
+            f"db-secret-{self.environment_suffix}",
+            name=f"trading-db-credentials-{self.environment_suffix}",
+            description=f"Database credentials for trading platform {self.environment_suffix}",
+            kms_key_id=self.kms_key.arn,
+            recovery_window_in_days=7,
+            tags={
+                "Name": f"trading-db-secret-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # Store initial credentials in the secret
+        # In production, use a secure password generation method or import from parameter store
+        initial_credentials = {
+            "username": "admin",
+            "password": "TempPassword123!ChangeMe",  # This should be rotated immediately after creation
+            "engine": "mysql",
+            "port": 3306,
+            "dbname": "trading"
+        }
+
+        self.db_secret_version = SecretsmanagerSecretVersion(
+            self,
+            f"db-secret-version-{self.environment_suffix}",
+            secret_id=self.db_secret.id,
+            secret_string=json.dumps(initial_credentials)
+        )
+
     def create_rds_cluster(self):
         """Create RDS Aurora MySQL cluster with read replicas"""
         # DB Subnet Group
@@ -344,20 +407,29 @@ class TradingPlatformStack(TerraformStack):
             }
         )
 
-        # RDS Aurora Cluster
+        # RDS Aurora Cluster - using AWS Secrets Manager for credentials
+        # Extract password from secret using Terraform jsondecode function
+        db_password = Fn.jsondecode(
+            self.db_secret_version.secret_string
+        )
+
         self.rds_cluster = RdsCluster(self, f"rds-cluster-{self.environment_suffix}",
             cluster_identifier=f"trading-cluster-{self.environment_suffix}",
             engine="aurora-mysql",
             engine_version="8.0.mysql_aurora.3.04.0",
             database_name="trading",
             master_username="admin",
-            master_password="TradingPassword123!",  # Should use AWS Secrets Manager in production
+            master_password=Fn.lookup(db_password, "password", ""),
+            manage_master_user_password=False,
             db_subnet_group_name=db_subnet_group.name,
             vpc_security_group_ids=[self.rds_sg.id],
             skip_final_snapshot=True,
             storage_encrypted=True,
             kms_key_id=self.kms_key.arn,
             enabled_cloudwatch_logs_exports=["audit", "error", "general", "slowquery"],
+            backup_retention_period=7,  # 7 days backup retention
+            preferred_backup_window="03:00-04:00",  # 3-4 AM UTC backup window
+            preferred_maintenance_window="mon:04:00-mon:05:00",  # Monday 4-5 AM UTC
             tags={
                 "Name": f"trading-cluster-{self.environment_suffix}",
                 "Environment": self.environment_suffix
@@ -439,15 +511,71 @@ class TradingPlatformStack(TerraformStack):
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         )
 
-        # Create Lambda ZIP file at synthesis time
-        lambda_zip_path = self._create_lambda_zip()
-        lambda_source_hash = self._calculate_file_hash(lambda_zip_path)
+        # Policy to allow Lambda to read from Secrets Manager
+        secrets_policy = {
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "secretsmanager:GetSecretValue",
+                        "secretsmanager:DescribeSecret"
+                    ],
+                    "Resource": self.db_secret.arn
+                },
+                {
+                    "Effect": "Allow",
+                    "Action": [
+                        "kms:Decrypt"
+                    ],
+                    "Resource": self.kms_key.arn
+                }
+            ]
+        }
+
+        secrets_iam_policy = IamPolicy(
+            self,
+            f"lambda-secrets-policy-{self.environment_suffix}",
+            name=f"trading-lambda-secrets-{self.environment_suffix}",
+            policy=json.dumps(secrets_policy),
+            tags={
+                "Name": f"trading-lambda-secrets-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        IamRolePolicyAttachment(
+            self,
+            f"lambda-secrets-attachment-{self.environment_suffix}",
+            role=self.lambda_role.name,
+            policy_arn=secrets_iam_policy.arn
+        )
+
+        # Create ZIP file from Lambda source code with file existence validation
+        lambda_source_path = os.path.join(
+            os.path.dirname(os.path.dirname(__file__)),
+            "lib", "lambda", "index.py"
+        )
+
+        # Validate that the Lambda source file exists
+        if not os.path.exists(lambda_source_path):
+            raise FileNotFoundError(
+                f"Lambda source file not found at {lambda_source_path}. "
+                "Please ensure the file exists before deploying."
+            )
+
+        lambda_archive = DataArchiveFile(self, f"lambda-archive-{self.environment_suffix}",
+            type="zip",
+            source_file="${path.module}/../../../lib/lambda/index.py",
+            output_path="${path.module}/../../../lib/lambda/lambda_function.zip"
+        )
 
         # Lambda Function
+        # Note: Lambda code is automatically zipped from ./lib/lambda/index.py
         self.lambda_function = LambdaFunction(self, f"lambda-function-{self.environment_suffix}",
             function_name=f"trading-processor-{self.environment_suffix}",
-            filename=lambda_zip_path,
-            source_code_hash=lambda_source_hash,
+            filename=lambda_archive.output_path,
+            source_code_hash=lambda_archive.output_base64_sha256,
             handler="index.handler",
             runtime="python3.11",
             role=self.lambda_role.arn,
@@ -457,6 +585,7 @@ class TradingPlatformStack(TerraformStack):
                 "variables": {
                     "DB_ENDPOINT": self.rds_cluster.endpoint,
                     "DB_NAME": "trading",
+                    "DB_SECRET_ARN": self.db_secret.arn,
                     "REGION": self.region,
                     "ENVIRONMENT": self.environment_suffix
                 }
@@ -471,26 +600,6 @@ class TradingPlatformStack(TerraformStack):
                 "Environment": self.environment_suffix
             }
         )
-
-    def _create_lambda_zip(self):
-        """Create Lambda deployment package at synthesis time"""
-        lambda_dir = os.path.join(os.path.dirname(__file__), "lambda")
-        source_file = os.path.join(lambda_dir, "index.py")
-        zip_file = os.path.join(lambda_dir, "lambda_function.zip")
-
-        # Create ZIP file using Python zipfile
-        with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
-            zipf.write(source_file, "index.py")
-
-        return zip_file
-
-    def _calculate_file_hash(self, file_path):
-        """Calculate base64-encoded SHA256 hash of file"""
-        sha256_hash = hashlib.sha256()
-        with open(file_path, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        return base64.b64encode(sha256_hash.digest()).decode('utf-8')
 
     def create_api_gateway(self):
         """Create API Gateway with Lambda integration"""
@@ -558,6 +667,303 @@ class TradingPlatformStack(TerraformStack):
             }
         )
 
+    def create_vpc_endpoints(self):
+        """Create VPC endpoints for AWS services to optimize costs and security"""
+        # Security group for VPC endpoints
+        self.vpc_endpoint_sg = SecurityGroup(
+            self,
+            f"vpc-endpoint-sg-{self.environment_suffix}",
+            name=f"trading-vpc-endpoint-sg-{self.environment_suffix}",
+            description="Security group for VPC endpoints",
+            vpc_id=self.vpc.id,
+            ingress=[
+                SecurityGroupIngress(
+                    from_port=443,
+                    to_port=443,
+                    protocol="tcp",
+                    cidr_blocks=[self.region_config.vpc_cidr],
+                    description="HTTPS from VPC"
+                )
+            ],
+            egress=[
+                SecurityGroupEgress(
+                    from_port=0,
+                    to_port=0,
+                    protocol="-1",
+                    cidr_blocks=["0.0.0.0/0"],
+                    description="Allow all outbound"
+                )
+            ],
+            tags={
+                "Name": f"trading-vpc-endpoint-sg-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # S3 Gateway Endpoint (no additional cost)
+        self.s3_endpoint = VpcEndpoint(
+            self,
+            f"s3-endpoint-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{self.region}.s3",
+            vpc_endpoint_type="Gateway",
+            route_table_ids=[],  # Will be associated with route tables
+            tags={
+                "Name": f"trading-s3-endpoint-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # Interface Endpoints for other services
+        # Secrets Manager Endpoint
+        self.secretsmanager_endpoint = VpcEndpoint(
+            self,
+            f"secretsmanager-endpoint-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{self.region}.secretsmanager",
+            vpc_endpoint_type="Interface",
+            subnet_ids=[subnet.id for subnet in self.private_subnets],
+            security_group_ids=[self.vpc_endpoint_sg.id],
+            private_dns_enabled=True,
+            tags={
+                "Name": f"trading-secretsmanager-endpoint-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # KMS Endpoint
+        self.kms_endpoint = VpcEndpoint(
+            self,
+            f"kms-endpoint-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{self.region}.kms",
+            vpc_endpoint_type="Interface",
+            subnet_ids=[subnet.id for subnet in self.private_subnets],
+            security_group_ids=[self.vpc_endpoint_sg.id],
+            private_dns_enabled=True,
+            tags={
+                "Name": f"trading-kms-endpoint-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # RDS Endpoint
+        self.rds_endpoint = VpcEndpoint(
+            self,
+            f"rds-endpoint-{self.environment_suffix}",
+            vpc_id=self.vpc.id,
+            service_name=f"com.amazonaws.{self.region}.rds",
+            vpc_endpoint_type="Interface",
+            subnet_ids=[subnet.id for subnet in self.private_subnets],
+            security_group_ids=[self.vpc_endpoint_sg.id],
+            private_dns_enabled=True,
+            tags={
+                "Name": f"trading-rds-endpoint-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+    def create_cloudwatch_alarms(self):
+        """Create CloudWatch alarms for RDS and Lambda monitoring"""
+        # RDS CPU Utilization Alarm
+        CloudwatchMetricAlarm(
+            self,
+            f"rds-cpu-alarm-{self.environment_suffix}",
+            alarm_name=f"trading-rds-high-cpu-{self.environment_suffix}",
+            alarm_description="Alert when RDS CPU utilization is too high",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="CPUUtilization",
+            namespace="AWS/RDS",
+            period=300,
+            statistic="Average",
+            threshold=80.0,
+            treat_missing_data="notBreaching",
+            dimensions={
+                "DBClusterIdentifier": self.rds_cluster.cluster_identifier
+            },
+            tags={
+                "Name": f"trading-rds-cpu-alarm-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # RDS DatabaseConnections Alarm
+        CloudwatchMetricAlarm(
+            self,
+            f"rds-connections-alarm-{self.environment_suffix}",
+            alarm_name=f"trading-rds-high-connections-{self.environment_suffix}",
+            alarm_description="Alert when RDS connections are too high",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="DatabaseConnections",
+            namespace="AWS/RDS",
+            period=300,
+            statistic="Average",
+            threshold=100.0,
+            treat_missing_data="notBreaching",
+            dimensions={
+                "DBClusterIdentifier": self.rds_cluster.cluster_identifier
+            },
+            tags={
+                "Name": f"trading-rds-connections-alarm-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # Lambda Errors Alarm
+        CloudwatchMetricAlarm(
+            self,
+            f"lambda-errors-alarm-{self.environment_suffix}",
+            alarm_name=f"trading-lambda-errors-{self.environment_suffix}",
+            alarm_description="Alert when Lambda function has too many errors",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Errors",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=10.0,
+            treat_missing_data="notBreaching",
+            dimensions={
+                "FunctionName": self.lambda_function.function_name
+            },
+            tags={
+                "Name": f"trading-lambda-errors-alarm-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # Lambda Duration Alarm
+        CloudwatchMetricAlarm(
+            self,
+            f"lambda-duration-alarm-{self.environment_suffix}",
+            alarm_name=f"trading-lambda-duration-{self.environment_suffix}",
+            alarm_description="Alert when Lambda execution duration is too long",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=2,
+            metric_name="Duration",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Average",
+            threshold=25000.0,  # 25 seconds (timeout is 30)
+            treat_missing_data="notBreaching",
+            dimensions={
+                "FunctionName": self.lambda_function.function_name
+            },
+            tags={
+                "Name": f"trading-lambda-duration-alarm-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # Lambda Throttles Alarm
+        CloudwatchMetricAlarm(
+            self,
+            f"lambda-throttles-alarm-{self.environment_suffix}",
+            alarm_name=f"trading-lambda-throttles-{self.environment_suffix}",
+            alarm_description="Alert when Lambda function is being throttled",
+            comparison_operator="GreaterThanThreshold",
+            evaluation_periods=1,
+            metric_name="Throttles",
+            namespace="AWS/Lambda",
+            period=300,
+            statistic="Sum",
+            threshold=5.0,
+            treat_missing_data="notBreaching",
+            dimensions={
+                "FunctionName": self.lambda_function.function_name
+            },
+            tags={
+                "Name": f"trading-lambda-throttles-alarm-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+    def create_waf(self):
+        """Create WAF Web ACL for API Gateway protection"""
+        # Create WAF Web ACL
+        self.waf_acl = Wafv2WebAcl(
+            self,
+            f"waf-acl-{self.environment_suffix}",
+            name=f"trading-api-waf-{self.environment_suffix}",
+            description=f"WAF for Trading API Gateway {self.environment_suffix}",
+            scope="REGIONAL",
+            default_action=Wafv2WebAclDefaultAction(
+                allow={}
+            ),
+            rule=[
+                # AWS Managed Rules - Core Rule Set
+                Wafv2WebAclRule(
+                    name="AWSManagedRulesCommonRuleSet",
+                    priority=1,
+                    override_action={"none": {}},
+                    statement=Wafv2WebAclRuleStatement(
+                        managed_rule_group_statement=Wafv2WebAclRuleStatementManagedRuleGroupStatement(
+                            vendor_name="AWS",
+                            name="AWSManagedRulesCommonRuleSet"
+                        )
+                    ),
+                    visibility_config=Wafv2WebAclVisibilityConfig(
+                        cloudwatch_metrics_enabled=True,
+                        metric_name="AWSManagedRulesCommonRuleSetMetric",
+                        sampled_requests_enabled=True
+                    )
+                ),
+                # AWS Managed Rules - Known Bad Inputs
+                Wafv2WebAclRule(
+                    name="AWSManagedRulesKnownBadInputsRuleSet",
+                    priority=2,
+                    override_action={"none": {}},
+                    statement=Wafv2WebAclRuleStatement(
+                        managed_rule_group_statement=Wafv2WebAclRuleStatementManagedRuleGroupStatement(
+                            vendor_name="AWS",
+                            name="AWSManagedRulesKnownBadInputsRuleSet"
+                        )
+                    ),
+                    visibility_config=Wafv2WebAclVisibilityConfig(
+                        cloudwatch_metrics_enabled=True,
+                        metric_name="AWSManagedRulesKnownBadInputsRuleSetMetric",
+                        sampled_requests_enabled=True
+                    )
+                ),
+                # AWS Managed Rules - SQL Injection
+                Wafv2WebAclRule(
+                    name="AWSManagedRulesSQLiRuleSet",
+                    priority=3,
+                    override_action={"none": {}},
+                    statement=Wafv2WebAclRuleStatement(
+                        managed_rule_group_statement=Wafv2WebAclRuleStatementManagedRuleGroupStatement(
+                            vendor_name="AWS",
+                            name="AWSManagedRulesSQLiRuleSet"
+                        )
+                    ),
+                    visibility_config=Wafv2WebAclVisibilityConfig(
+                        cloudwatch_metrics_enabled=True,
+                        metric_name="AWSManagedRulesSQLiRuleSetMetric",
+                        sampled_requests_enabled=True
+                    )
+                )
+            ],
+            visibility_config=Wafv2WebAclVisibilityConfig(
+                cloudwatch_metrics_enabled=True,
+                metric_name=f"trading-api-waf-{self.environment_suffix}",
+                sampled_requests_enabled=True
+            ),
+            tags={
+                "Name": f"trading-api-waf-{self.environment_suffix}",
+                "Environment": self.environment_suffix
+            }
+        )
+
+        # Associate WAF with API Gateway Stage
+        Wafv2WebAclAssociation(
+            self,
+            f"waf-association-{self.environment_suffix}",
+            resource_arn=self.api_stage.arn,
+            web_acl_arn=self.waf_acl.arn
+        )
+
     def create_route53_records(self):
         """Create Route 53 hosted zone (placeholder for custom domains)"""
         # Note: In production, you would create Route53 records for custom domains
@@ -598,4 +1004,9 @@ class TradingPlatformStack(TerraformStack):
         TerraformOutput(self, "kms_key_id",
             value=self.kms_key.key_id,
             description="KMS key ID"
+        )
+
+        TerraformOutput(self, "db_secret_arn",
+            value=self.db_secret.arn,
+            description="Database credentials secret ARN"
         )
