@@ -7,10 +7,9 @@
   "startedAt": "2025-11-17T05:39:59+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "networking",
-    "security",
-    "multi-account",
-    "vpc-peering"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "po_id": "z0x1o2",
   "aws_services": [

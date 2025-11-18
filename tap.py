@@ -5,5 +5,5 @@ from lib.tap_stack import TapStack
 
 app = App()
 environment_suffix = os.environ.get("ENVIRONMENT_SUFFIX", "dev")
-TapStack(app, "tap", environment_suffix=environment_suffix)
+TapStack(app, f"TapStack{environment_suffix}", environment_suffix=environment_suffix)
 app.synth()

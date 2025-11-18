@@ -22,17 +22,17 @@ class TestStackStructure:
         stack = TapStack(
             app,
             "TestTapStackWithProps",
-            environment_suffix="prod",
-            state_bucket="custom-state-bucket",
-            state_bucket_region="us-west-2",
-            aws_region="us-west-2",
+            environment_suffix="prod"
         )
 
         # Verify that TapStack instantiates without errors via props
         assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        assert hasattr(stack, 'networking')
+        assert hasattr(stack, 'security')
+        assert hasattr(stack, 'monitoring')
+        assert hasattr(stack, 'dns')
+        assert stack.environment_suffix == "prod"
+        assert stack.region == "us-east-1"
 
     def test_tap_stack_uses_default_values_when_no_props_provided(self):
         """TapStack uses default values when no props provided."""
@@ -41,9 +41,12 @@ class TestStackStructure:
 
         # Verify that TapStack instantiates without errors when no props provided
         assert stack is not None
-        assert hasattr(stack, 'bucket')
-        assert hasattr(stack, 'bucket_versioning')
-        assert hasattr(stack, 'bucket_encryption')
+        assert hasattr(stack, 'networking')
+        assert hasattr(stack, 'security')
+        assert hasattr(stack, 'monitoring')
+        assert hasattr(stack, 'dns')
+        assert stack.environment_suffix == "dev"  # Default value
+        assert stack.region == "us-east-1"
 
 
 # add more test suites and cases as needed

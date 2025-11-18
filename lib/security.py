@@ -71,7 +71,7 @@ class SecurityModule(Construct):
         sg = SecurityGroup(
             self,
             f"sg-{vpc_name}-{self.environment_suffix}",
-            name=f"sg-{vpc_name}-{self.environment_suffix}",
+            name=f"{vpc_name}-security-group-{self.environment_suffix}",
             description=description,
             vpc_id=vpc_id,
             ingress=[
@@ -103,7 +103,7 @@ class SecurityModule(Construct):
                 )
             ],
             tags={
-                "Name": f"sg-{vpc_name}-{self.environment_suffix}",
+                "Name": f"{vpc_name}-security-group-{self.environment_suffix}",
                 **self.common_tags
             }
         )
