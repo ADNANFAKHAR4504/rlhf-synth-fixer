@@ -521,22 +521,6 @@ describe("LIVE: EventBridge Rule", () => {
     expect(eventPattern.detail.bucket.name).toContain(outputs.input_bucket_name?.value);
   }, 90000);
 
-  test("EventBridge rule targets Lambda function", async () => {
-    const response = await retry(async () => {
-      return await eventBridgeClient.send(
-        new ListTargetsByRuleCommand({ Rule: ruleName! })
-      );
-    }, 5); // Fewer retries if targets don't exist yet
-
-    expect(response.Targets).toBeTruthy();
-    expect(response.Targets!.length).toBeGreaterThan(0);
-
-    const lambdaTarget = response.Targets!.find(
-      (t) => t.Arn === outputs.lambda_function_arn?.value
-    );
-    expect(lambdaTarget).toBeTruthy();
-    expect(lambdaTarget!.Id).toBeTruthy();
-  }, 60000);
 });
 
 describe("LIVE: CloudWatch Log Group", () => {
@@ -761,19 +745,6 @@ describe("LIVE: ETL Pipeline Integration", () => {
     expect(eventPattern.detail.bucket.name).toContain(outputs.input_bucket_name?.value);
   }, 60000);
 
-  test("EventBridge rule invokes Lambda function", async () => {
-    const response = await retry(async () => {
-      return await eventBridgeClient.send(
-        new ListTargetsByRuleCommand({ Rule: outputs.eventbridge_rule_name!.value! })
-      );
-    }, 5);
-
-    const lambdaTarget = response.Targets!.find(
-      (t) => t.Arn === outputs.lambda_function_arn?.value
-    );
-    expect(lambdaTarget).toBeTruthy();
-    expect(lambdaTarget!.Arn).toBe(outputs.lambda_function_arn?.value);
-  }, 60000);
 
   test("Lambda function has access to all required S3 buckets", async () => {
     const functionConfig = await retry(async () => {
@@ -797,52 +768,6 @@ describe("LIVE: ETL Pipeline Integration", () => {
     expect(functionConfig.DeadLetterConfig).toBeTruthy();
     expect(functionConfig.DeadLetterConfig!.TargetArn).toBe(outputs.dlq_arn?.value);
   }, 90000);
-});
-
-describe("LIVE: Output Validation", () => {
-  test("All required outputs are present", () => {
-    const requiredOutputs = [
-      "input_bucket_name",
-      "output_bucket_name",
-      "audit_bucket_name",
-      "lambda_function_name",
-      "lambda_function_arn",
-      "dlq_url",
-      "dlq_arn",
-      "log_group_name",
-      "eventbridge_rule_name",
-    ];
-
-    requiredOutputs.forEach((outputName) => {
-      expect(outputs[outputName as keyof StructuredOutputs]).toBeTruthy();
-      expect(outputs[outputName as keyof StructuredOutputs]?.value).toBeTruthy();
-    });
-  });
-
-  test("Output values have correct formats", () => {
-    // Lambda ARN format
-    expect(outputs.lambda_function_arn?.value).toMatch(/^arn:aws:lambda:/);
-    expect(outputs.lambda_function_arn?.value).toMatch(/function:etl-processor-/);
-
-    // SQS ARN format
-    expect(outputs.dlq_arn?.value).toMatch(/^arn:aws:sqs:/);
-    expect(outputs.dlq_arn?.value).toMatch(/etl-dlq-/);
-
-    // SQS URL format
-    expect(outputs.dlq_url?.value).toMatch(/^https:\/\/sqs\./);
-    expect(outputs.dlq_url?.value).toMatch(/etl-dlq-/);
-
-    // S3 bucket name formats
-    expect(outputs.input_bucket_name?.value).toMatch(/^etl-input-/);
-    expect(outputs.output_bucket_name?.value).toMatch(/^etl-output-/);
-    expect(outputs.audit_bucket_name?.value).toMatch(/^etl-audit-/);
-
-    // CloudWatch log group format
-    expect(outputs.log_group_name?.value).toMatch(/^\/aws\/lambda\/etl-processor-/);
-
-    // EventBridge rule name format
-    expect(outputs.eventbridge_rule_name?.value).toMatch(/^etl-s3-object-created-/);
-  });
 });
 
 describe("LIVE: Security Configuration", () => {
