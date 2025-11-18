@@ -1,8 +1,0 @@
-config:
-  payment-processing:environmentSuffix: staging-m71vs8
-  payment-processing:environment: staging
-  payment-processing:region: us-east-2
-  payment-processing:rdsInstanceClass: db.t3.medium
-  payment-processing:rdsBackupRetentionDays: "3"
-  payment-processing:lambdaMemorySize: "512"
-  payment-processing:lambdaTimeout: "30"

@@ -1,8 +1,0 @@
-config:
-  payment-processing:environmentSuffix: prod-m71vs8
-  payment-processing:environment: prod
-  payment-processing:region: us-east-1
-  payment-processing:rdsInstanceClass: db.r5.large
-  payment-processing:rdsBackupRetentionDays: "7"
-  payment-processing:lambdaMemorySize: "512"
-  payment-processing:lambdaTimeout: "30"

@@ -1,9 +1,0 @@
-config:
-  payment-processing:environmentSuffix: synthm71vs8
-  payment-processing:environment: dev
-  payment-processing:region: us-east-1
-  payment-processing:rdsInstanceClass: db.t3.medium
-  payment-processing:rdsBackupRetentionDays: "3"
-  payment-processing:lambdaMemorySize: "512"
-  payment-processing:lambdaTimeout: "30"
-encryptionsalt: v1:Bx8ieG6WCmk=:v1:cwDbb89M/6Aa0Les:pw/THmgrNzv/ui1HbY7CXh35dwo5/g==

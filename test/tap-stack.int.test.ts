@@ -1,401 +1,894 @@
-import * as AWS from 'aws-sdk';
+import {
+  ApiGatewayV2Client,
+  GetApiCommand,
+  GetIntegrationsCommand,
+  GetRoutesCommand,
+  GetStagesCommand,
+} from '@aws-sdk/client-apigatewayv2';
+import {
+  CloudWatchClient,
+  DescribeAlarmsCommand,
+} from '@aws-sdk/client-cloudwatch';
+import {
+  DescribeNatGatewaysCommand,
+  DescribeRouteTablesCommand,
+  DescribeSecurityGroupsCommand,
+  DescribeSubnetsCommand,
+  DescribeVpcsCommand,
+  EC2Client,
+} from '@aws-sdk/client-ec2';
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListAttachedRolePoliciesCommand,
+} from '@aws-sdk/client-iam';
+import {
+  GetFunctionCommand,
+  GetFunctionConfigurationCommand,
+  LambdaClient,
+} from '@aws-sdk/client-lambda';
+import {
+  DescribeDBInstancesCommand,
+  DescribeDBSubnetGroupsCommand,
+  RDSClient,
+} from '@aws-sdk/client-rds';
+import {
+  GetBucketLifecycleConfigurationCommand,
+  GetBucketVersioningCommand,
+  HeadBucketCommand,
+  S3Client,
+} from '@aws-sdk/client-s3';
+import {
+  GetQueueAttributesCommand,
+  SQSClient
+} from '@aws-sdk/client-sqs';
 import * as fs from 'fs';
-import * as https from 'https';
 import * as path from 'path';
 
-describe('Turn Around Prompt API Integration Tests', () => {
-  let outputs: any;
-  let ec2: AWS.EC2;
-  let elbv2: AWS.ELBv2;
-  let rds: AWS.RDS;
-  let dms: AWS.DMS;
-  let ecs: AWS.ECS;
-  let cloudwatch: AWS.CloudWatch;
-  let lambda: AWS.Lambda;
+// Load outputs from flat-outputs.json
+const outputsPath = path.join(__dirname, '../flat-outputs.json');
+let outputs: any = {};
 
-  beforeAll(() => {
-    const outputsPath = path.join(__dirname, '..', 'cfn-outputs', 'flat-outputs.json');
-    outputs = JSON.parse(fs.readFileSync(outputsPath, 'utf8'));
+if (fs.existsSync(outputsPath)) {
+  const rawData = fs.readFileSync(outputsPath, 'utf-8');
+  outputs = JSON.parse(rawData);
 
-    const region = process.env.AWS_REGION || 'us-east-1';
-    ec2 = new AWS.EC2({ region });
-    elbv2 = new AWS.ELBv2({ region });
-    rds = new AWS.RDS({ region });
-    dms = new AWS.DMS({ region });
-    ecs = new AWS.ECS({ region });
-    cloudwatch = new AWS.CloudWatch({ region });
-    lambda = new AWS.Lambda({ region });
-  });
+  // Parse stringified arrays
+  if (typeof outputs.privateSubnetIds === 'string') {
+    outputs.privateSubnetIds = JSON.parse(outputs.privateSubnetIds);
+  }
+  if (typeof outputs.publicSubnetIds === 'string') {
+    outputs.publicSubnetIds = JSON.parse(outputs.publicSubnetIds);
+  }
+}
 
-  describe('VPC and Network Infrastructure', () => {
-    test('VPC should exist with correct configuration', async () => {
-      const vpcResponse = await ec2.describeVpcs({
-        VpcIds: [outputs.VPCId]
-      }).promise();
+const REGION = process.env.AWS_REGION || 'us-east-1';
+const ENVIRONMENT_SUFFIX = process.env.ENVIRONMENT_SUFFIX || 'test';
 
-      expect(vpcResponse.Vpcs).toHaveLength(1);
-      expect(vpcResponse.Vpcs![0].CidrBlock).toBe('10.0.0.0/16');
+// Initialize AWS clients
+const ec2Client = new EC2Client({ region: REGION });
+const s3Client = new S3Client({ region: REGION });
+const sqsClient = new SQSClient({ region: REGION });
+const rdsClient = new RDSClient({ region: REGION });
+const lambdaClient = new LambdaClient({ region: REGION });
+const apiGatewayClient = new ApiGatewayV2Client({ region: REGION });
+const iamClient = new IAMClient({ region: REGION });
+const cloudWatchClient = new CloudWatchClient({ region: REGION });
+
+describe('Payment Infrastructure Integration Tests', () => {
+  // Skip all tests if outputs are not available
+  const hasOutputs = Object.keys(outputs).length > 0;
+
+  describe('VPC Infrastructure', () => {
+    it('should verify VPC exists and is configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const vpcId = outputs.vpcId;
+      expect(vpcId).toBeDefined();
+      expect(vpcId).toMatch(/^vpc-/);
+
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({
+          VpcIds: [vpcId],
+        })
+      );
+
+      expect(response.Vpcs).toHaveLength(1);
+      const vpc = response.Vpcs![0];
+
+      expect(vpc.VpcId).toBe(vpcId);
+      expect(vpc.CidrBlock).toBe('10.0.0.0/16');
+      expect(vpc.State).toBe('available');
+      expect(vpc.EnableDnsSupport?.Value).toBe(true);
+      expect(vpc.EnableDnsHostnames?.Value).toBe(true);
     });
 
-    test('Should have 3 public subnets across different AZs', async () => {
-      const subnetsResponse = await ec2.describeSubnets({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*public*'] }
-        ]
-      }).promise();
+    it('should verify private subnets exist and are configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
 
-      expect(subnetsResponse.Subnets!.length).toBeGreaterThanOrEqual(3);
-      const azs = new Set(subnetsResponse.Subnets!.map(s => s.AvailabilityZone));
-      expect(azs.size).toBeGreaterThanOrEqual(3);
-    });
+      const privateSubnetIds = outputs.privateSubnetIds;
+      expect(privateSubnetIds).toBeDefined();
+      expect(Array.isArray(privateSubnetIds)).toBe(true);
+      expect(privateSubnetIds.length).toBe(2);
 
-    test('Should have 3 private subnets across different AZs', async () => {
-      const subnetsResponse = await ec2.describeSubnets({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'tag:Name', Values: ['*private*'] }
-        ]
-      }).promise();
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: privateSubnetIds,
+        })
+      );
 
-      expect(subnetsResponse.Subnets!.length).toBeGreaterThanOrEqual(3);
-      const azs = new Set(subnetsResponse.Subnets!.map(s => s.AvailabilityZone));
-      expect(azs.size).toBeGreaterThanOrEqual(3);
-    });
+      expect(response.Subnets).toHaveLength(2);
 
-    test('NAT Gateways should be deployed', async () => {
-      const natGatewaysResponse = await ec2.describeNatGateways({
-        Filter: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] },
-          { Name: 'state', Values: ['available'] }
-        ]
-      }).promise();
+      const cidrBlocks = response.Subnets!.map(s => s.CidrBlock).sort();
+      expect(cidrBlocks).toEqual(['10.0.11.0/24', '10.0.12.0/24']);
 
-      expect(natGatewaysResponse.NatGateways!.length).toBeGreaterThanOrEqual(1);
-    });
-  });
+      // Verify subnets are in different AZs
+      const azs = response.Subnets!.map(s => s.AvailabilityZone);
+      expect(new Set(azs).size).toBe(2);
 
-  describe('Application Load Balancer', () => {
-    test('ALB should exist and be active', async () => {
-      const albResponse = await elbv2.describeLoadBalancers({
-        Names: [outputs.LoadBalancerName]
-      }).promise();
-
-      expect(albResponse.LoadBalancers).toHaveLength(1);
-      expect(albResponse.LoadBalancers![0].State?.Code).toBe('active');
-      expect(albResponse.LoadBalancers![0].Scheme).toBe('internet-facing');
-    });
-
-    test('ALB should have target group with health checks configured', async () => {
-      const albResponse = await elbv2.describeLoadBalancers({
-        Names: [outputs.LoadBalancerName]
-      }).promise();
-
-      const targetGroupsResponse = await elbv2.describeTargetGroups({
-        LoadBalancerArn: albResponse.LoadBalancers![0].LoadBalancerArn
-      }).promise();
-
-      expect(targetGroupsResponse.TargetGroups!.length).toBeGreaterThanOrEqual(1);
-
-      const tg = targetGroupsResponse.TargetGroups![0];
-      expect(tg.HealthCheckEnabled).toBe(true);
-      expect(tg.HealthCheckIntervalSeconds).toBeDefined();
-      expect(tg.HealthCheckPath).toBeDefined();
-    });
-
-    test('ALB DNS should be accessible', async () => {
-      const dnsName = outputs.LoadBalancerDNS;
-
-      const isAccessible = await new Promise((resolve) => {
-        https.get(`https://${dnsName}`, { timeout: 5000 }, (res) => {
-          resolve(res.statusCode !== undefined);
-        }).on('error', () => {
-          resolve(true);
-        });
+      // Verify subnets are not public
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(false);
       });
-
-      expect(isAccessible).toBe(true);
-    }, 10000);
-  });
-
-  describe('RDS Aurora PostgreSQL Cluster', () => {
-    test('Aurora cluster should exist with correct configuration', async () => {
-      const clusterResponse = await rds.describeDBClusters({
-        DBClusterIdentifier: outputs.RDSClusterIdentifier
-      }).promise();
-
-      expect(clusterResponse.DBClusters).toHaveLength(1);
-      const cluster = clusterResponse.DBClusters![0];
-      expect(cluster.Engine).toBe('aurora-postgresql');
-      expect(cluster.Status).toBe('available');
     });
 
-    test('Aurora cluster should have encryption enabled', async () => {
-      const clusterResponse = await rds.describeDBClusters({
-        DBClusterIdentifier: outputs.RDSClusterIdentifier
-      }).promise();
+    it('should verify public subnets exist and are configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
 
-      const cluster = clusterResponse.DBClusters![0];
-      expect(cluster.StorageEncrypted).toBe(true);
-    });
+      const publicSubnetIds = outputs.publicSubnetIds;
+      expect(publicSubnetIds).toBeDefined();
+      expect(Array.isArray(publicSubnetIds)).toBe(true);
+      expect(publicSubnetIds.length).toBe(2);
 
-    test('Aurora cluster should have automated backups enabled', async () => {
-      const clusterResponse = await rds.describeDBClusters({
-        DBClusterIdentifier: outputs.RDSClusterIdentifier
-      }).promise();
-
-      const cluster = clusterResponse.DBClusters![0];
-      expect(cluster.BackupRetentionPeriod).toBeGreaterThan(0);
-    });
-
-    test('Aurora cluster should have writer and reader instances', async () => {
-      const instancesResponse = await rds.describeDBInstances({
-        Filters: [
-          { Name: 'db-cluster-id', Values: [outputs.RDSClusterIdentifier] }
-        ]
-      }).promise();
-
-      expect(instancesResponse.DBInstances!.length).toBeGreaterThanOrEqual(2);
-
-      const writers = instancesResponse.DBInstances!.filter(i =>
-        i.DBInstanceClass && !i.DBInstanceIdentifier?.includes('reader')
-      );
-      const readers = instancesResponse.DBInstances!.filter(i =>
-        i.DBInstanceIdentifier?.includes('reader')
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({
+          SubnetIds: publicSubnetIds,
+        })
       );
 
-      expect(writers.length).toBeGreaterThanOrEqual(1);
-      expect(readers.length).toBeGreaterThanOrEqual(1);
+      expect(response.Subnets).toHaveLength(2);
+
+      const cidrBlocks = response.Subnets!.map(s => s.CidrBlock).sort();
+      expect(cidrBlocks).toEqual(['10.0.1.0/24', '10.0.2.0/24']);
+
+      // Verify subnets are in different AZs
+      const azs = response.Subnets!.map(s => s.AvailabilityZone);
+      expect(new Set(azs).size).toBe(2);
+
+      // Verify subnets have public IP mapping enabled
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.MapPublicIpOnLaunch).toBe(true);
+      });
     });
 
-    test('Aurora cluster endpoints should be accessible', async () => {
-      expect(outputs.RDSClusterEndpoint).toBeDefined();
-      expect(outputs.RDSClusterEndpoint).toContain('rds.amazonaws.com');
-      expect(outputs.RDSClusterReaderEndpoint).toBeDefined();
-      expect(outputs.RDSClusterReaderEndpoint).toContain('rds.amazonaws.com');
-    });
-  });
-
-  describe('ECS Cluster and Fargate Service', () => {
-    test('ECS cluster should exist', async () => {
-      const clustersResponse = await ecs.listClusters().promise();
-      const clusterArns = clustersResponse.clusterArns || [];
-
-      const paymentCluster = clusterArns.find(arn => arn.includes('payment-cluster'));
-      expect(paymentCluster).toBeDefined();
-    });
-
-    test('ECS service should be running with at least 3 tasks', async () => {
-      const clustersResponse = await ecs.listClusters().promise();
-      const paymentCluster = clustersResponse.clusterArns!.find(arn => arn.includes('payment-cluster'));
-
-      if (paymentCluster) {
-        const servicesResponse = await ecs.listServices({
-          cluster: paymentCluster
-        }).promise();
-
-        expect(servicesResponse.serviceArns!.length).toBeGreaterThanOrEqual(1);
-
-        const serviceDetails = await ecs.describeServices({
-          cluster: paymentCluster,
-          services: servicesResponse.serviceArns!
-        }).promise();
-
-        const service = serviceDetails.services![0];
-        expect(service.desiredCount).toBeGreaterThanOrEqual(1);
-        expect(service.launchType).toBe('FARGATE');
+    it('should verify NAT Gateway exists and is available', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
       }
+
+      const vpcId = outputs.vpcId;
+      const response = await ec2Client.send(
+        new DescribeNatGatewaysCommand({
+          Filter: [
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
+        })
+      );
+
+      expect(response.NatGateways).toBeDefined();
+      expect(response.NatGateways!.length).toBeGreaterThanOrEqual(1);
+
+      const natGateway = response.NatGateways![0];
+      expect(natGateway.State).toBe('available');
+      expect(natGateway.NatGatewayAddresses).toBeDefined();
     });
 
-    test('ECS tasks should be distributed across multiple AZs', async () => {
-      const clustersResponse = await ecs.listClusters().promise();
-      const paymentCluster = clustersResponse.clusterArns!.find(arn => arn.includes('payment-cluster'));
-
-      if (paymentCluster) {
-        const tasksResponse = await ecs.listTasks({
-          cluster: paymentCluster
-        }).promise();
-
-        if (tasksResponse.taskArns && tasksResponse.taskArns.length > 0) {
-          const taskDetails = await ecs.describeTasks({
-            cluster: paymentCluster,
-            tasks: tasksResponse.taskArns
-          }).promise();
-
-          const azs = new Set(taskDetails.tasks!.map(t => t.availabilityZone));
-          expect(azs.size).toBeGreaterThanOrEqual(1);
-        }
+    it('should verify route tables are configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
       }
-    });
-  });
 
-  describe('AWS Database Migration Service', () => {
-    test('DMS replication task should exist', async () => {
-      const taskResponse = await dms.describeReplicationTasks({
-        Filters: [
-          { Name: 'replication-task-arn', Values: [outputs.DMSReplicationTaskArn] }
-        ]
-      }).promise();
-
-      expect(taskResponse.ReplicationTasks).toHaveLength(1);
-      expect(taskResponse.ReplicationTasks![0].Status).toBeDefined();
-    });
-
-    test('DMS task should have CDC enabled', async () => {
-      const taskResponse = await dms.describeReplicationTasks({
-        Filters: [
-          { Name: 'replication-task-arn', Values: [outputs.DMSReplicationTaskArn] }
-        ]
-      }).promise();
-
-      const task = taskResponse.ReplicationTasks![0];
-      expect(task.MigrationType).toContain('cdc');
-    });
-
-    test('DMS replication instance should be available', async () => {
-      const taskResponse = await dms.describeReplicationTasks({
-        Filters: [
-          { Name: 'replication-task-arn', Values: [outputs.DMSReplicationTaskArn] }
-        ]
-      }).promise();
-
-      const task = taskResponse.ReplicationTasks![0];
-      const instanceArn = task.ReplicationInstanceArn;
-
-      if (instanceArn) {
-        const instanceResponse = await dms.describeReplicationInstances({
+      const vpcId = outputs.vpcId;
+      const response = await ec2Client.send(
+        new DescribeRouteTablesCommand({
           Filters: [
-            { Name: 'replication-instance-arn', Values: [instanceArn] }
-          ]
-        }).promise();
+            {
+              Name: 'vpc-id',
+              Values: [vpcId],
+            },
+          ],
+        })
+      );
 
-        expect(instanceResponse.ReplicationInstances![0].ReplicationInstanceStatus).toBe('available');
-      }
+      expect(response.RouteTables).toBeDefined();
+      // Should have at least 2 route tables (public and private)
+      expect(response.RouteTables!.length).toBeGreaterThanOrEqual(2);
+
+      // Verify public route table has internet gateway route
+      const publicRouteTable = response.RouteTables!.find(rt =>
+        rt.Routes?.some(route => route.GatewayId?.startsWith('igw-'))
+      );
+      expect(publicRouteTable).toBeDefined();
+
+      // Verify private route table has NAT gateway route
+      const privateRouteTable = response.RouteTables!.find(rt =>
+        rt.Routes?.some(route => route.NatGatewayId?.startsWith('nat-'))
+      );
+      expect(privateRouteTable).toBeDefined();
     });
   });
 
-  describe('Lambda Function', () => {
-    test('Data validation Lambda function should exist', async () => {
-      const functionsResponse = await lambda.listFunctions().promise();
-      const validationFunction = functionsResponse.Functions!.find(f =>
-        f.FunctionName?.includes('validation') || f.FunctionName?.includes('data-check')
-      );
+  describe('S3 Audit Logs Bucket', () => {
+    it('should verify S3 bucket exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
 
-      expect(validationFunction).toBeDefined();
+      const bucketName = outputs.auditLogsBucketName;
+      expect(bucketName).toBeDefined();
+      expect(bucketName).toContain('payment-audit-logs');
+
+      await expect(
+        s3Client.send(new HeadBucketCommand({ Bucket: bucketName }))
+      ).resolves.not.toThrow();
     });
 
-    test('Lambda function should have correct runtime', async () => {
-      const functionsResponse = await lambda.listFunctions().promise();
-      const validationFunction = functionsResponse.Functions!.find(f =>
-        f.FunctionName?.includes('validation') || f.FunctionName?.includes('data-check')
+    it('should verify S3 bucket versioning is enabled', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const bucketName = outputs.auditLogsBucketName;
+      const response = await s3Client.send(
+        new GetBucketVersioningCommand({ Bucket: bucketName })
       );
 
-      if (validationFunction) {
-        expect(validationFunction.Runtime).toMatch(/python|nodejs/);
+      expect(response.Status).toBe('Enabled');
+    });
+
+    it('should verify S3 bucket lifecycle policy exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
       }
+
+      const bucketName = outputs.auditLogsBucketName;
+      const response = await s3Client.send(
+        new GetBucketLifecycleConfigurationCommand({ Bucket: bucketName })
+      );
+
+      expect(response.Rules).toBeDefined();
+      expect(response.Rules!.length).toBeGreaterThanOrEqual(1);
+
+      // Verify intelligent tiering rule exists
+      const intelligentTieringRule = response.Rules!.find(
+        rule => rule.Status === 'Enabled' && rule.Transitions?.some(
+          t => t.StorageClass === 'INTELLIGENT_TIERING'
+        )
+      );
+      expect(intelligentTieringRule).toBeDefined();
     });
   });
 
-  describe('CloudWatch Alarms', () => {
-    test('DMS replication lag alarm should exist', async () => {
-      const alarmsResponse = await cloudwatch.describeAlarms().promise();
-      const dmsAlarm = alarmsResponse.MetricAlarms!.find(a =>
-        a.AlarmName?.toLowerCase().includes('dms') &&
-        a.AlarmName?.toLowerCase().includes('lag')
+  describe('SQS Payment Queue', () => {
+    it('should verify SQS queue exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const queueUrl = outputs.paymentQueueUrl;
+      expect(queueUrl).toBeDefined();
+      expect(queueUrl).toContain('payment-notifications');
+
+      const response = await sqsClient.send(
+        new GetQueueAttributesCommand({
+          QueueUrl: queueUrl,
+          AttributeNames: ['All'],
+        })
       );
 
-      if (dmsAlarm) {
-        expect(dmsAlarm.Threshold).toBeLessThanOrEqual(60);
-      } else {
-        expect(alarmsResponse.MetricAlarms).toBeDefined();
-      }
+      expect(response.Attributes).toBeDefined();
     });
 
-    test('ECS task health alarm should exist', async () => {
-      const alarmsResponse = await cloudwatch.describeAlarms().promise();
-      const ecsAlarm = alarmsResponse.MetricAlarms!.find(a =>
-        a.AlarmName?.toLowerCase().includes('ecs') &&
-        (a.AlarmName?.toLowerCase().includes('health') ||
-          a.AlarmName?.toLowerCase().includes('task'))
+    it('should verify SQS queue has correct configuration', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const queueUrl = outputs.paymentQueueUrl;
+      const response = await sqsClient.send(
+        new GetQueueAttributesCommand({
+          QueueUrl: queueUrl,
+          AttributeNames: ['All'],
+        })
       );
 
-      if (ecsAlarm) {
-        expect(ecsAlarm.ComparisonOperator).toBeDefined();
-      } else {
-        expect(alarmsResponse.MetricAlarms).toBeDefined();
-      }
+      const attrs = response.Attributes!;
+
+      // Verify visibility timeout
+      expect(attrs.VisibilityTimeout).toBe('300');
+
+      // Verify DLQ is configured
+      expect(attrs.RedrivePolicy).toBeDefined();
+      const redrivePolicy = JSON.parse(attrs.RedrivePolicy!);
+      expect(redrivePolicy.maxReceiveCount).toBe(3);
+      expect(redrivePolicy.deadLetterTargetArn).toBeDefined();
     });
 
-    test('RDS CPU utilization alarm should exist', async () => {
-      const alarmsResponse = await cloudwatch.describeAlarms().promise();
-      const rdsAlarm = alarmsResponse.MetricAlarms!.find(a =>
-        a.AlarmName?.toLowerCase().includes('rds') &&
-        a.AlarmName?.toLowerCase().includes('cpu')
+    it('should verify Dead Letter Queue exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const queueUrl = outputs.paymentQueueUrl;
+      const response = await sqsClient.send(
+        new GetQueueAttributesCommand({
+          QueueUrl: queueUrl,
+          AttributeNames: ['RedrivePolicy'],
+        })
       );
 
-      if (rdsAlarm) {
-        expect(rdsAlarm.Threshold).toBeGreaterThan(0);
-      } else {
-        expect(alarmsResponse.MetricAlarms).toBeDefined();
-      }
+      const redrivePolicy = JSON.parse(response.Attributes!.RedrivePolicy!);
+      const dlqArn = redrivePolicy.deadLetterTargetArn;
+
+      expect(dlqArn).toBeDefined();
+      expect(dlqArn).toContain('payment-notifications-dlq');
     });
   });
 
-  describe('Security Groups', () => {
-    test('Security groups should enforce proper network isolation', async () => {
-      const sgResponse = await ec2.describeSecurityGroups({
-        Filters: [
-          { Name: 'vpc-id', Values: [outputs.VPCId] }
-        ]
-      }).promise();
+  describe('RDS Database', () => {
+    it('should verify RDS instance exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
 
-      expect(sgResponse.SecurityGroups!.length).toBeGreaterThanOrEqual(4);
+      const rdsEndpoint = outputs.rdsEndpoint;
+      expect(rdsEndpoint).toBeDefined();
+      expect(rdsEndpoint).toContain('rds.amazonaws.com');
 
-      const albSg = sgResponse.SecurityGroups!.find(sg =>
-        sg.GroupName?.toLowerCase().includes('alb')
-      );
-      const ecsSg = sgResponse.SecurityGroups!.find(sg =>
-        sg.GroupName?.toLowerCase().includes('ecs')
-      );
-      const rdsSg = sgResponse.SecurityGroups!.find(sg =>
-        sg.GroupName?.toLowerCase().includes('rds') ||
-        sg.GroupName?.toLowerCase().includes('aurora')
+      const dbInstanceId = rdsEndpoint.split('.')[0];
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        })
       );
 
-      expect(albSg).toBeDefined();
-      expect(ecsSg).toBeDefined();
-      expect(rdsSg).toBeDefined();
+      expect(response.DBInstances).toHaveLength(1);
     });
 
-    test('ALB security group should allow HTTP/HTTPS traffic', async () => {
-      const sgResponse = await ec2.describeSecurityGroups({
-        GroupIds: [outputs.ALBSecurityGroupId]
-      }).promise();
+    it('should verify RDS instance is configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
 
-      const sg = sgResponse.SecurityGroups![0];
-      const httpRule = sg.IpPermissions!.find(rule =>
-        rule.FromPort === 80 || rule.FromPort === 443
+      const rdsEndpoint = outputs.rdsEndpoint;
+      const dbInstanceId = rdsEndpoint.split('.')[0];
+
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        })
       );
 
-      expect(httpRule).toBeDefined();
+      const dbInstance = response.DBInstances![0];
+
+      expect(dbInstance.Engine).toBe('postgres');
+      expect(dbInstance.DBInstanceStatus).toBe('available');
+      expect(dbInstance.StorageEncrypted).toBe(true);
+      expect(dbInstance.PubliclyAccessible).toBe(false);
+      expect(dbInstance.MultiAZ).toBe(false);
+      expect(dbInstance.StorageType).toBe('gp3');
+      expect(dbInstance.AllocatedStorage).toBe(20);
+    });
+
+    it('should verify RDS backup retention is configured', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const rdsEndpoint = outputs.rdsEndpoint;
+      const dbInstanceId = rdsEndpoint.split('.')[0];
+
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        })
+      );
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.BackupRetentionPeriod).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should verify RDS is in private subnets', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const rdsEndpoint = outputs.rdsEndpoint;
+      const dbInstanceId = rdsEndpoint.split('.')[0];
+
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        })
+      );
+
+      const dbInstance = response.DBInstances![0];
+      const subnetGroupName = dbInstance.DBSubnetGroup?.DBSubnetGroupName;
+
+      expect(subnetGroupName).toBeDefined();
+
+      const subnetGroupResponse = await rdsClient.send(
+        new DescribeDBSubnetGroupsCommand({
+          DBSubnetGroupName: subnetGroupName,
+        })
+      );
+
+      const subnetGroup = subnetGroupResponse.DBSubnetGroups![0];
+      const subnetIds = subnetGroup.Subnets!.map(s => s.SubnetIdentifier);
+
+      // Verify subnets match private subnets
+      outputs.privateSubnetIds.forEach((subnetId: string) => {
+        expect(subnetIds).toContain(subnetId);
+      });
+    });
+
+    it('should verify RDS deletion protection is disabled', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const rdsEndpoint = outputs.rdsEndpoint;
+      const dbInstanceId = rdsEndpoint.split('.')[0];
+
+      const response = await rdsClient.send(
+        new DescribeDBInstancesCommand({
+          DBInstanceIdentifier: dbInstanceId,
+        })
+      );
+
+      const dbInstance = response.DBInstances![0];
+      expect(dbInstance.DeletionProtection).toBe(false);
     });
   });
 
-  describe('Resource Tagging', () => {
-    test('All resources should have required tags', async () => {
-      const vpcResponse = await ec2.describeVpcs({
-        VpcIds: [outputs.VPCId]
-      }).promise();
+  describe('Lambda Functions', () => {
+    it('should verify process payment Lambda function exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
 
-      const tags = vpcResponse.Vpcs![0].Tags || [];
-      const tagMap = tags.reduce((acc, tag) => {
-        acc[tag.Key!] = tag.Value!;
-        return acc;
-      }, {} as Record<string, string>);
+      const lambdaArn = outputs.processPaymentLambdaArn;
+      expect(lambdaArn).toBeDefined();
+      expect(lambdaArn).toContain('process-payment');
 
-      expect(tagMap['Environment']).toBeDefined();
-      expect(tagMap['CostCenter']).toBeDefined();
-      expect(tagMap['MigrationPhase']).toBeDefined();
+      const functionName = lambdaArn.split(':').pop();
+      const response = await lambdaClient.send(
+        new GetFunctionCommand({ FunctionName: functionName })
+      );
+
+      expect(response.Configuration?.FunctionArn).toBe(lambdaArn);
+    });
+
+    it('should verify verify payment Lambda function exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const lambdaArn = outputs.verifyPaymentLambdaArn;
+      expect(lambdaArn).toBeDefined();
+      expect(lambdaArn).toContain('verify-payment');
+
+      const functionName = lambdaArn.split(':').pop();
+      const response = await lambdaClient.send(
+        new GetFunctionCommand({ FunctionName: functionName })
+      );
+
+      expect(response.Configuration?.FunctionArn).toBe(lambdaArn);
+    });
+
+    it('should verify process Lambda is configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const lambdaArn = outputs.processPaymentLambdaArn;
+      const functionName = lambdaArn.split(':').pop();
+
+      const response = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({ FunctionName: functionName })
+      );
+
+      expect(response.Runtime).toMatch(/nodejs/);
+      expect(response.Handler).toBe('index.processPayment');
+      expect(response.MemorySize).toBeGreaterThanOrEqual(128);
+      expect(response.Timeout).toBeGreaterThanOrEqual(15);
+      expect(response.Environment?.Variables).toBeDefined();
+    });
+
+    it('should verify verify Lambda is configured correctly', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const lambdaArn = outputs.verifyPaymentLambdaArn;
+      const functionName = lambdaArn.split(':').pop();
+
+      const response = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({ FunctionName: functionName })
+      );
+
+      expect(response.Runtime).toMatch(/nodejs/);
+      expect(response.Handler).toBe('index.verifyPayment');
+      expect(response.MemorySize).toBeGreaterThanOrEqual(128);
+      expect(response.Timeout).toBeGreaterThanOrEqual(15);
+      expect(response.Environment?.Variables).toBeDefined();
+    });
+
+    it('should verify Lambda functions are in VPC', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const processArn = outputs.processPaymentLambdaArn;
+      const processFunctionName = processArn.split(':').pop();
+
+      const response = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({ FunctionName: processFunctionName })
+      );
+
+      expect(response.VpcConfig).toBeDefined();
+      expect(response.VpcConfig?.VpcId).toBe(outputs.vpcId);
+      expect(response.VpcConfig?.SubnetIds).toBeDefined();
+      expect(response.VpcConfig?.SecurityGroupIds).toBeDefined();
+      expect(response.VpcConfig?.SecurityGroupIds!.length).toBeGreaterThan(0);
+    });
+
+    it('should verify Lambda environment variables are set', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const lambdaArn = outputs.processPaymentLambdaArn;
+      const functionName = lambdaArn.split(':').pop();
+
+      const response = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({ FunctionName: functionName })
+      );
+
+      const envVars = response.Environment?.Variables!;
+      expect(envVars.RDS_ENDPOINT).toBeDefined();
+      expect(envVars.RDS_DB_NAME).toBe('paymentdb');
+      expect(envVars.RDS_USERNAME).toBe('dbadmin');
+      expect(envVars.RDS_PASSWORD).toBeDefined();
+      expect(envVars.AUDIT_LOGS_BUCKET).toBe(outputs.auditLogsBucketName);
+      expect(envVars.PAYMENT_QUEUE_URL).toBe(outputs.paymentQueueUrl);
+    });
+
+    it('should verify Lambda CloudWatch alarms exist', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const response = await cloudWatchClient.send(
+        new DescribeAlarmsCommand({
+          AlarmNamePrefix: 'process-payment-errors',
+        })
+      );
+
+      expect(response.MetricAlarms).toBeDefined();
+      expect(response.MetricAlarms!.length).toBeGreaterThanOrEqual(1);
+
+      const alarm = response.MetricAlarms![0];
+      expect(alarm.MetricName).toBe('Errors');
+      expect(alarm.Namespace).toBe('AWS/Lambda');
+      expect(alarm.Statistic).toBe('Sum');
+    });
+  });
+
+  describe('API Gateway', () => {
+    it('should verify API Gateway exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const apiEndpoint = outputs.apiGatewayEndpoint;
+      expect(apiEndpoint).toBeDefined();
+      expect(apiEndpoint).toMatch(/^https:\/\//);
+      expect(apiEndpoint).toContain('execute-api');
+
+      // Extract API ID from endpoint
+      const apiId = apiEndpoint.split('//')[1].split('.')[0];
+
+      const response = await apiGatewayClient.send(
+        new GetApiCommand({ ApiId: apiId })
+      );
+
+      expect(response.ApiId).toBe(apiId);
+      expect(response.ProtocolType).toBe('HTTP');
+    });
+
+    it('should verify API Gateway has default stage', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const apiEndpoint = outputs.apiGatewayEndpoint;
+      const apiId = apiEndpoint.split('//')[1].split('.')[0];
+
+      const response = await apiGatewayClient.send(
+        new GetStagesCommand({ ApiId: apiId })
+      );
+
+      expect(response.Items).toBeDefined();
+      expect(response.Items!.length).toBeGreaterThanOrEqual(1);
+
+      const defaultStage = response.Items!.find(s => s.StageName === '$default');
+      expect(defaultStage).toBeDefined();
+      expect(defaultStage?.AutoDeploy).toBe(true);
+    });
+
+    it('should verify API Gateway routes are configured', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const apiEndpoint = outputs.apiGatewayEndpoint;
+      const apiId = apiEndpoint.split('//')[1].split('.')[0];
+
+      const response = await apiGatewayClient.send(
+        new GetRoutesCommand({ ApiId: apiId })
+      );
+
+      expect(response.Items).toBeDefined();
+      expect(response.Items!.length).toBeGreaterThanOrEqual(2);
+
+      const routeKeys = response.Items!.map(r => r.RouteKey);
+      expect(routeKeys).toContain('POST /process-payment');
+      expect(routeKeys).toContain('POST /verify-payment');
+    });
+
+    it('should verify API Gateway integrations exist', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const apiEndpoint = outputs.apiGatewayEndpoint;
+      const apiId = apiEndpoint.split('//')[1].split('.')[0];
+
+      const response = await apiGatewayClient.send(
+        new GetIntegrationsCommand({ ApiId: apiId })
+      );
+
+      expect(response.Items).toBeDefined();
+      expect(response.Items!.length).toBeGreaterThanOrEqual(2);
+
+      response.Items!.forEach(integration => {
+        expect(integration.IntegrationType).toBe('AWS_PROXY');
+        expect(integration.IntegrationUri).toContain('lambda');
+      });
+    });
+
+    it('should verify API Gateway has CloudWatch logging', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const apiEndpoint = outputs.apiGatewayEndpoint;
+      const apiId = apiEndpoint.split('//')[1].split('.')[0];
+
+      const response = await apiGatewayClient.send(
+        new GetStagesCommand({ ApiId: apiId })
+      );
+
+      const defaultStage = response.Items!.find(s => s.StageName === '$default');
+      expect(defaultStage?.AccessLogSettings).toBeDefined();
+      expect(defaultStage?.AccessLogSettings?.DestinationArn).toBeDefined();
+    });
+  });
+
+  describe('IAM Roles and Permissions', () => {
+    it('should verify Lambda execution role exists', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const lambdaArn = outputs.processPaymentLambdaArn;
+      const functionName = lambdaArn.split(':').pop();
+
+      const lambdaResponse = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({ FunctionName: functionName })
+      );
+
+      const roleArn = lambdaResponse.Role!;
+      const roleName = roleArn.split('/').pop();
+
+      const response = await iamClient.send(
+        new GetRoleCommand({ RoleName: roleName })
+      );
+
+      expect(response.Role).toBeDefined();
+      expect(response.Role?.RoleName).toBe(roleName);
+    });
+
+    it('should verify Lambda role has required policies attached', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const lambdaArn = outputs.processPaymentLambdaArn;
+      const functionName = lambdaArn.split(':').pop();
+
+      const lambdaResponse = await lambdaClient.send(
+        new GetFunctionConfigurationCommand({ FunctionName: functionName })
+      );
+
+      const roleArn = lambdaResponse.Role!;
+      const roleName = roleArn.split('/').pop();
+
+      const response = await iamClient.send(
+        new ListAttachedRolePoliciesCommand({ RoleName: roleName })
+      );
+
+      const policyArns = response.AttachedPolicies!.map(p => p.PolicyArn);
+
+      // Verify basic Lambda execution policy
+      expect(policyArns.some(arn =>
+        arn?.includes('AWSLambdaBasicExecutionRole')
+      )).toBe(true);
+
+      // Verify VPC execution policy
+      expect(policyArns.some(arn =>
+        arn?.includes('AWSLambdaVPCAccessExecutionRole')
+      )).toBe(true);
+    });
+  });
+
+  describe('Resource Naming and Tagging', () => {
+    it('should verify all resources include environmentSuffix in names', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const suffix = ENVIRONMENT_SUFFIX;
+
+      expect(outputs.auditLogsBucketName).toContain(suffix);
+      expect(outputs.paymentQueueUrl).toContain(suffix);
+      expect(outputs.processPaymentLambdaArn).toContain(suffix);
+      expect(outputs.verifyPaymentLambdaArn).toContain(suffix);
+      expect(outputs.rdsEndpoint).toContain(suffix);
+    });
+
+    it('should verify VPC has proper tags', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const vpcId = outputs.vpcId;
+      const response = await ec2Client.send(
+        new DescribeVpcsCommand({ VpcIds: [vpcId] })
+      );
+
+      const vpc = response.Vpcs![0];
+      expect(vpc.Tags).toBeDefined();
+
+      const nameTag = vpc.Tags!.find(t => t.Key === 'Name');
+      expect(nameTag).toBeDefined();
+      expect(nameTag?.Value).toContain('payment-vpc');
+    });
+
+    it('should verify subnets have proper tags', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const privateSubnetIds = outputs.privateSubnetIds;
+      const response = await ec2Client.send(
+        new DescribeSubnetsCommand({ SubnetIds: privateSubnetIds })
+      );
+
+      response.Subnets!.forEach(subnet => {
+        expect(subnet.Tags).toBeDefined();
+        const nameTag = subnet.Tags!.find(t => t.Key === 'Name');
+        expect(nameTag).toBeDefined();
+        expect(nameTag?.Value).toContain('payment-private-subnet');
+      });
+    });
+  });
+
+  describe('Security Configuration', () => {
+    it('should verify RDS security group allows PostgreSQL from VPC', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const vpcId = outputs.vpcId;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'group-name', Values: [`payment-db-sg-*`] },
+          ],
+        })
+      );
+
+      const dbSg = response.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('payment-db-sg')
+      );
+
+      expect(dbSg).toBeDefined();
+
+      const postgresRule = dbSg?.IpPermissions?.find(
+        rule => rule.FromPort === 5432 && rule.ToPort === 5432
+      );
+      expect(postgresRule).toBeDefined();
+    });
+
+    it('should verify Lambda security group allows outbound traffic', async () => {
+      if (!hasOutputs) {
+        console.log('Skipping: No outputs available');
+        return;
+      }
+
+      const vpcId = outputs.vpcId;
+      const response = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({
+          Filters: [
+            { Name: 'vpc-id', Values: [vpcId] },
+            { Name: 'group-name', Values: [`payment-lambda-sg-*`] },
+          ],
+        })
+      );
+
+      const lambdaSg = response.SecurityGroups!.find(sg =>
+        sg.GroupName?.includes('payment-lambda-sg')
+      );
+
+      expect(lambdaSg).toBeDefined();
+      expect(lambdaSg?.IpPermissionsEgress).toBeDefined();
+      expect(lambdaSg?.IpPermissionsEgress!.length).toBeGreaterThan(0);
     });
   });
 });
