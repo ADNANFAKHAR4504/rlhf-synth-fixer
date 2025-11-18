@@ -169,7 +169,7 @@ class TapStack(pulumi.ComponentResource):
             f'pipeline-kms-alias-{self.env_suffix}',
             name=f'alias/pipeline-{self.env_suffix}',
             target_key_id=key.id,
-            opts=ResourceOptions(parent=self, import_=f'alias/pipeline-{self.env_suffix}')
+            opts=ResourceOptions(parent=self)
         )
 
         return key
@@ -181,7 +181,7 @@ class TapStack(pulumi.ComponentResource):
             f'pipeline-artifacts-{self.env_suffix}',
             bucket=bucket_name,
             tags={**self.default_tags, 'Name': f'pipeline-artifacts-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, import_=bucket_name)
+            opts=ResourceOptions(parent=self)
         )
 
         # Versioning
@@ -240,7 +240,7 @@ class TapStack(pulumi.ComponentResource):
             f'pulumi-state-{self.env_suffix}',
             bucket=bucket_name,
             tags={**self.default_tags, 'Name': f'pulumi-state-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, import_=bucket_name)
+            opts=ResourceOptions(parent=self)
         )
 
         # Versioning
@@ -313,7 +313,7 @@ class TapStack(pulumi.ComponentResource):
                 }]
             }),
             tags={**self.default_tags, 'Name': f'pipeline-role-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, import_=role_name)
+            opts=ResourceOptions(parent=self)
         )
 
         # Least-privilege policy - specific actions and resources only
@@ -376,7 +376,7 @@ class TapStack(pulumi.ComponentResource):
                 }]
             }),
             tags={**self.default_tags, 'Name': f'codebuild-role-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, import_=role_name)
+            opts=ResourceOptions(parent=self)
         )
 
         # Least-privilege policy
@@ -443,7 +443,7 @@ class TapStack(pulumi.ComponentResource):
             name=log_group_name,
             retention_in_days=14,
             tags={**self.default_tags, 'Name': f'codebuild-logs-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, import_=log_group_name)
+            opts=ResourceOptions(parent=self)
         )
 
         return log_group
@@ -551,7 +551,7 @@ class TapStack(pulumi.ComponentResource):
             name=topic_name,
             kms_master_key_id=self.kms_key.id,
             tags={**self.default_tags, 'Name': f'pipeline-notifications-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, import_=topic_name)
+            opts=ResourceOptions(parent=self)
         )
 
         # Email subscription
