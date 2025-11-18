@@ -32,5 +32,12 @@
     "CloudWatch Alarm",
     "CloudWatch Dashboard",
     "Custom Resource"
-  ]
+  ],
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mikiaszerihun",
+  "dockerS3Location": ""
 }
