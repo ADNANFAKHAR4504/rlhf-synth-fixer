@@ -169,18 +169,19 @@ class TapStack(pulumi.ComponentResource):
             f'pipeline-kms-alias-{self.env_suffix}',
             name=f'alias/pipeline-{self.env_suffix}',
             target_key_id=key.id,
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=f'alias/pipeline-{self.env_suffix}')
         )
 
         return key
 
     def _create_artifact_bucket(self) -> aws.s3.Bucket:
         """Create S3 bucket for pipeline artifacts with security best practices."""
+        bucket_name = f'pipeline-artifacts-{self.account_id}-{self.env_suffix}'
         bucket = aws.s3.Bucket(
             f'pipeline-artifacts-{self.env_suffix}',
-            bucket=f'pipeline-artifacts-{self.account_id}-{self.env_suffix}',
+            bucket=bucket_name,
             tags={**self.default_tags, 'Name': f'pipeline-artifacts-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=bucket_name)
         )
 
         # Versioning
@@ -234,11 +235,12 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_state_bucket(self) -> aws.s3.Bucket:
         """Create S3 bucket for Pulumi state backend."""
+        bucket_name = f'pulumi-state-{self.account_id}-{self.env_suffix}'
         bucket = aws.s3.Bucket(
             f'pulumi-state-{self.env_suffix}',
-            bucket=f'pulumi-state-{self.account_id}-{self.env_suffix}',
+            bucket=bucket_name,
             tags={**self.default_tags, 'Name': f'pulumi-state-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=bucket_name)
         )
 
         # Versioning
@@ -289,6 +291,7 @@ class TapStack(pulumi.ComponentResource):
             value=pulumi.Output.secret(token_value),
             description=f'Pulumi access token for CI/CD pipeline - {self.env_suffix}',
             key_id=self.kms_key.id,
+            overwrite=True,
             tags={**self.default_tags, 'Name': f'pulumi-token-{self.env_suffix}'},
             opts=ResourceOptions(parent=self)
         )
@@ -297,9 +300,10 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_pipeline_role(self) -> aws.iam.Role:
         """Create IAM role for CodePipeline with least-privilege permissions."""
+        role_name = f'pipeline-role-{self.env_suffix}'
         role = aws.iam.Role(
             f'pipeline-role-{self.env_suffix}',
-            name=f'pipeline-role-{self.env_suffix}',
+            name=role_name,
             assume_role_policy=json.dumps({
                 'Version': '2012-10-17',
                 'Statement': [{
@@ -309,7 +313,7 @@ class TapStack(pulumi.ComponentResource):
                 }]
             }),
             tags={**self.default_tags, 'Name': f'pipeline-role-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=role_name)
         )
 
         # Least-privilege policy - specific actions and resources only
@@ -359,9 +363,10 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_codebuild_role(self) -> aws.iam.Role:
         """Create IAM role for CodeBuild with least-privilege permissions."""
+        role_name = f'codebuild-role-{self.env_suffix}'
         role = aws.iam.Role(
             f'codebuild-role-{self.env_suffix}',
-            name=f'codebuild-role-{self.env_suffix}',
+            name=role_name,
             assume_role_policy=json.dumps({
                 'Version': '2012-10-17',
                 'Statement': [{
@@ -371,7 +376,7 @@ class TapStack(pulumi.ComponentResource):
                 }]
             }),
             tags={**self.default_tags, 'Name': f'codebuild-role-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=role_name)
         )
 
         # Least-privilege policy
@@ -432,12 +437,13 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_log_group(self) -> aws.cloudwatch.LogGroup:
         """Create CloudWatch log group with 14-day retention."""
+        log_group_name = f'/aws/codebuild/pulumi-build-{self.env_suffix}'
         log_group = aws.cloudwatch.LogGroup(
             f'codebuild-logs-{self.env_suffix}',
-            name=f'/aws/codebuild/pulumi-build-{self.env_suffix}',
+            name=log_group_name,
             retention_in_days=14,
             tags={**self.default_tags, 'Name': f'codebuild-logs-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=log_group_name)
         )
 
         return log_group
@@ -539,12 +545,13 @@ class TapStack(pulumi.ComponentResource):
 
     def _create_sns_topic(self):
         """Create SNS topic with email subscription for notifications."""
+        topic_name = f'pipeline-notifications-{self.env_suffix}'
         topic = aws.sns.Topic(
             f'pipeline-notifications-{self.env_suffix}',
-            name=f'pipeline-notifications-{self.env_suffix}',
+            name=topic_name,
             kms_master_key_id=self.kms_key.id,
             tags={**self.default_tags, 'Name': f'pipeline-notifications-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self)
+            opts=ResourceOptions(parent=self, import_=topic_name)
         )
 
         # Email subscription
