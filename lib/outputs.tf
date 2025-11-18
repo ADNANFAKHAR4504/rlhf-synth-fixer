@@ -93,19 +93,31 @@ output "infrastructure" {
         enabled        = true
         dynamodb_table = var.enable_state_locking ? aws_dynamodb_table.terraform_locks[0].name : null
         table_arn      = var.enable_state_locking ? aws_dynamodb_table.terraform_locks[0].arn : null
-      } : { enabled = false }
+      } : {
+        enabled        = false
+        dynamodb_table = null
+        table_arn      = null
+      }
 
       ssm_secrets = var.enable_ssm_secrets ? {
         enabled         = true
         parameter_paths = [for k, v in aws_ssm_parameter.db_passwords : v.name]
-      } : { enabled = false }
+      } : {
+        enabled         = false
+        parameter_paths = []
+      }
 
       cloudfront = var.enable_cloudfront ? {
         enabled             = true
         distribution_id     = var.enable_cloudfront ? aws_cloudfront_distribution.static_assets[0].id : null
         distribution_domain = var.enable_cloudfront ? aws_cloudfront_distribution.static_assets[0].domain_name : null
         s3_bucket           = var.enable_cloudfront ? aws_s3_bucket.static_assets[0].id : null
-      } : { enabled = false }
+      } : {
+        enabled             = false
+        distribution_id     = null
+        distribution_domain = null
+        s3_bucket           = null
+      }
     }
   }
 }
