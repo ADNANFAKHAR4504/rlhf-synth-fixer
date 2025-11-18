@@ -7,8 +7,10 @@ environment variables or Pulumi config.
 """
 
 import os
+
 import pulumi
 from pulumi import Config
+
 from lib.tap_stack import TapStack, TapStackArgs
 
 # Read configuration
@@ -19,6 +21,8 @@ environment_suffix = os.getenv('ENVIRONMENT_SUFFIX') or config.get('env') or 'de
 github_owner = config.get('github_owner') or 'example-org'
 github_repo = config.get('github_repo') or 'example-repo'
 github_branch = config.get('github_branch') or 'main'
+# CodeStar Connections ARN: prefer Pulumi config, fallback to env var
+github_connection_arn = config.get('github_connection_arn') or os.getenv('GITHUB_CONNECTION_ARN')
 
 # Notification email
 notification_email = config.get('notification_email') or 'devops@example.com'
@@ -43,6 +47,7 @@ stack = TapStack(
         tags=default_tags,
         github_owner=github_owner,
         github_repo=github_repo,
+        github_connection_arn=github_connection_arn,
         github_branch=github_branch,
         notification_email=notification_email,
         pulumi_access_token=pulumi_token
