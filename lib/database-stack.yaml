@@ -26,6 +26,11 @@ Parameters:
     Type: String
     Description: ARN of existing Secrets Manager secret
 
+  LambdaSecurityGroupId:
+    Type: String
+    Description: Lambda Security Group ID for database access
+    Default: ''
+
   DeploymentRegion:
     Type: String
     Description: Primary or DR region
@@ -42,6 +47,7 @@ Parameters:
 Conditions:
   IsPrimaryRegion: !Equals [!Ref DeploymentRegion, 'primary']
   IsDRRegion: !Equals [!Ref DeploymentRegion, 'dr']
+  HasLambdaSecurityGroup: !Not [!Equals [!Ref LambdaSecurityGroupId, '']]
 
 Resources:
   KMSKey:
@@ -103,8 +109,18 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 10.0.0.0/16
-          Description: Allow MySQL access from VPC
+          SourceSecurityGroupId: !If
+            - HasLambdaSecurityGroup
+            - !Ref LambdaSecurityGroupId
+            - !Ref AWS::NoValue
+          CidrIp: !If
+            - HasLambdaSecurityGroup
+            - !Ref AWS::NoValue
+            - 10.0.0.0/16
+          Description: !If
+            - HasLambdaSecurityGroup
+            - Allow MySQL access from Lambda Security Group
+            - Allow MySQL access from VPC
       Tags:
         - Key: Name
           Value: !Sub 'payment-db-sg-${EnvironmentSuffix}'
@@ -234,6 +250,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'payment-replica-instance-1-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref ReadReplicaCluster
       Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
       DBInstanceClass: db.t4g.medium
       PubliclyAccessible: false
       Tags:
@@ -249,6 +266,7 @@ Resources:
       DBInstanceIdentifier: !Sub 'payment-replica-instance-2-${EnvironmentSuffix}'
       DBClusterIdentifier: !Ref ReadReplicaCluster
       Engine: aurora-mysql
+      EngineVersion: 8.0.mysql_aurora.3.04.0
       DBInstanceClass: db.t4g.medium
       PubliclyAccessible: false
       Tags:
@@ -312,6 +330,25 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
+      ReplicationConfiguration:
+        Role: !GetAtt ReplicationRole.Arn
+        Rules:
+          - Id: ReplicateToSecondaryRegion
+            Status: Enabled
+            Priority: 1
+            Filter:
+              Prefix: ''
+            Destination:
+              Bucket: !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}'
+              ReplicationTime:
+                Status: Enabled
+                Time:
+                  Minutes: 15
+              Metrics:
+                Status: Enabled
+                EventThreshold:
+                  Minutes: 15
+              StorageClass: STANDARD_IA
       LifecycleConfiguration:
         Rules:
           - Id: TransitionToIA

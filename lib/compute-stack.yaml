@@ -84,7 +84,12 @@ Resources:
                   - 'logs:CreateLogGroup'
                   - 'logs:CreateLogStream'
                   - 'logs:PutLogEvents'
-                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/payment-*:*'
+              - Effect: Allow
+                Action:
+                  - 'xray:PutTraceSegments'
+                  - 'xray:PutTelemetryRecords'
+                Resource: '*'
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
@@ -119,6 +124,8 @@ Resources:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
+      TracingConfig:
+        Mode: Active
       Environment:
         Variables:
           DB_ENDPOINT: !Ref DBEndpoint
@@ -187,6 +194,8 @@ Resources:
         SubnetIds:
           - !Ref PrivateSubnet1
           - !Ref PrivateSubnet2
+      TracingConfig:
+        Mode: Active
       Environment:
         Variables:
           TRANSACTION_QUEUE_URL: !Ref TransactionQueueUrl
@@ -446,3 +455,9 @@ Outputs:
   TransactionProcessorArn:
     Description: Transaction Processor Lambda ARN
     Value: !GetAtt TransactionProcessorFunction.Arn
+
+  LambdaSecurityGroupId:
+    Description: Lambda Security Group ID for database access
+    Value: !Ref LambdaSecurityGroup
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaSecurityGroupId'
