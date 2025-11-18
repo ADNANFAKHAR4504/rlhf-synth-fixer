@@ -275,6 +275,7 @@ describe('TapStack Unit Tests', () => {
       const mockIamRoles = {
         migrationOrchestratorRole: {
           arn: pulumi.output('arn:aws:iam::123456789012:role/test'),
+          id: pulumi.output('test-role-id'),
         },
         legacyAccountRole: {
           arn: pulumi.output('arn:aws:iam::123456789012:role/legacy'),
@@ -325,6 +326,7 @@ describe('TapStack Unit Tests', () => {
       const mockIamRoles = {
         migrationOrchestratorRole: {
           arn: pulumi.output('arn:aws:iam::123456789012:role/test'),
+          id: pulumi.output('test-role-id'),
         },
         legacyAccountRole: {
           arn: pulumi.output('arn:aws:iam::123456789012:role/legacy'),
@@ -374,6 +376,7 @@ describe('TapStack Unit Tests', () => {
       const mockIamRoles = {
         migrationOrchestratorRole: {
           arn: pulumi.output('arn:aws:iam::123456789012:role/test'),
+          id: pulumi.output('test-role-id'),
         },
         legacyAccountRole: {
           arn: pulumi.output('arn:aws:iam::123456789012:role/legacy'),

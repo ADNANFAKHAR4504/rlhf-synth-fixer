@@ -678,10 +678,7 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'logs:PutResourcePolicy',
               'logs:DescribeResourcePolicies',
             ],
-            Resource: [
-              `arn:aws:logs:*:*:log-group:/aws/stepfunctions/migration-orchestrator-${config.environmentSuffix}:*`,
-              `arn:aws:logs:*:*:log-group:*`,
-            ],
+            Resource: '*',
           },
           {
             Effect: 'Allow',
@@ -703,6 +700,11 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'states:StartExecution',
               'states:StopExecution',
               'states:DescribeExecution',
+              'states:CreateStateMachine',
+              'states:UpdateStateMachine',
+              'states:DeleteStateMachine',
+              'states:DescribeStateMachine',
+              'states:ListExecutions',
             ],
             Resource: '*',
           },
@@ -1130,7 +1132,7 @@ export function createStepFunctions(
   iamRoles: IamRoles,
   parameterStore: ParameterStoreResources
 ): StepFunctionsResources {
-  // CloudWatch Log Group for Step Functions
+  // CloudWatch Log Group for Step Functions - must be created first
   const logGroup = new aws.cloudwatch.LogGroup(
     `migration-orchestrator-logs-${config.environmentSuffix}`,
     {
@@ -1141,6 +1143,40 @@ export function createStepFunctions(
         Environment: config.environmentSuffix,
         MigrationComponent: 'step-functions',
       },
+    }
+  );
+
+  // Add an inline policy to the role specifically for CloudWatch Logs
+  const stepFunctionsLoggingPolicy = new aws.iam.RolePolicy(
+    `migration-orchestrator-logging-policy-${config.environmentSuffix}`,
+    {
+      role: iamRoles.migrationOrchestratorRole.id,
+      policy: pulumi.all([logGroup.arn]).apply(([logGroupArn]) =>
+        JSON.stringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: [
+                'logs:CreateLogStream',
+                'logs:PutLogEvents',
+                'logs:CreateLogDelivery',
+                'logs:GetLogDelivery',
+                'logs:UpdateLogDelivery',
+                'logs:DeleteLogDelivery',
+                'logs:ListLogDeliveries',
+                'logs:PutResourcePolicy',
+                'logs:DescribeResourcePolicies',
+                'logs:DescribeLogGroups',
+              ],
+              Resource: [logGroupArn, `${logGroupArn}:*`, 'arn:aws:logs:*:*:*'],
+            },
+          ],
+        })
+      ),
+    },
+    {
+      dependsOn: [logGroup],
     }
   );
 
@@ -1513,7 +1549,7 @@ export function createStepFunctions(
       roleArn: iamRoles.migrationOrchestratorRole.arn,
       definition: stateMachineDefinition,
       loggingConfiguration: {
-        logDestination: pulumi.interpolate`${logGroup.arn}:*`,
+        logDestination: logGroup.arn,
         includeExecutionData: true,
         level: 'ALL',
       },
@@ -1524,7 +1560,7 @@ export function createStepFunctions(
       },
     },
     {
-      dependsOn: [logGroup, logResourcePolicy],
+      dependsOn: [logGroup, logResourcePolicy, stepFunctionsLoggingPolicy],
     }
   );
 

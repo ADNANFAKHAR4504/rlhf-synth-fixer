@@ -87,10 +87,7 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'logs:PutResourcePolicy',
               'logs:DescribeResourcePolicies',
             ],
-            Resource: [
-              `arn:aws:logs:*:*:log-group:/aws/stepfunctions/migration-orchestrator-${config.environmentSuffix}:*`,
-              'arn:aws:logs:*:*:log-group:*',
-            ],
+            Resource: '*',
           },
           {
             Effect: 'Allow',
@@ -112,6 +109,11 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'states:StartExecution',
               'states:StopExecution',
               'states:DescribeExecution',
+              'states:CreateStateMachine',
+              'states:UpdateStateMachine',
+              'states:DeleteStateMachine',
+              'states:DescribeStateMachine',
+              'states:ListExecutions',
             ],
             Resource: '*',
           },
