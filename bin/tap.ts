@@ -5,8 +5,10 @@ import { PaymentInfrastructure } from '../lib/infrastructure';
 
 const config = new pulumi.Config();
 // Use environment variables or defaults if config values aren't set
-const environmentSuffix = config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
-const environment = config.get('environment') || process.env.ENVIRONMENT || 'dev';
+const environmentSuffix =
+  config.get('environmentSuffix') || process.env.ENVIRONMENT_SUFFIX || 'dev';
+const environment =
+  config.get('environment') || process.env.ENVIRONMENT || 'dev';
 const region = config.get('region') || process.env.AWS_REGION || 'us-east-1';
 
 // Create the payment processing infrastructure
