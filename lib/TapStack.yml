@@ -9,6 +9,16 @@ Parameters:
     AllowedPattern: ^[a-z0-9-]+$
     ConstraintDescription: Must contain only lowercase letters, numbers, and hyphens
 
+Mappings:
+  PrefixListMapping:
+    us-east-1:
+      S3: pl-63a5400a
+      DynamoDB: pl-02cd2c6b
+    us-west-2:
+      S3: pl-3b927c52
+      DynamoDB: pl-0fa89adc
+    # Add more regions as needed
+
 Resources:
   # ============================================================================
   # KMS Keys - Two separate keys for S3 and CloudWatch Logs
@@ -237,15 +247,25 @@ Resources:
       DestinationSecurityGroupId: !Ref LambdaVPCEndpointSecurityGroup
       Description: Allow HTTPS to Lambda VPC endpoint
 
-  LambdaSecurityGroupEgressToGatewayEndpoints:
+  LambdaSecurityGroupEgressToS3:
     Type: AWS::EC2::SecurityGroupEgress
     Properties:
       GroupId: !Ref LambdaSecurityGroup
       IpProtocol: tcp
       FromPort: 443
       ToPort: 443
-      CidrIp: 10.0.0.0/16
-      Description: Allow HTTPS to Gateway VPC endpoints (S3, DynamoDB) via VPC routing
+      DestinationPrefixListId: !FindInMap [PrefixListMapping, !Ref 'AWS::Region', S3]
+      Description: Allow HTTPS to S3 via Gateway VPC endpoint
+
+  LambdaSecurityGroupEgressToDynamoDB:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref LambdaSecurityGroup
+      IpProtocol: tcp
+      FromPort: 443
+      ToPort: 443
+      DestinationPrefixListId: !FindInMap [PrefixListMapping, !Ref 'AWS::Region', DynamoDB]
+      Description: Allow HTTPS to DynamoDB via Gateway VPC endpoint
 
   LambdaVPCEndpointSecurityGroupIngress:
     Type: AWS::EC2::SecurityGroupIngress
