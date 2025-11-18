@@ -5,7 +5,7 @@
   "turn_type": "single",
   "po_id": "2m6t7h",
   "team": "synth",
-  "author": "raaj1021",
+  "author": "mayanksethi-turing",
   "startedAt": "2025-11-17T12:50:15+05:30",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
@@ -38,5 +38,10 @@
     "Route53",
     "DynamoDB"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
