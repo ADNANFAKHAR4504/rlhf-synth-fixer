@@ -527,15 +527,16 @@ resource "aws_emr_cluster" "main" {
     Name = "${local.bucket_prefix}-emr-cluster"
   })
 
-  depends_on = concat([
+  depends_on = [
     aws_s3_bucket.logs,
     aws_s3_bucket.curated,
     aws_s3_bucket.raw,
     aws_s3_object.bootstrap_script,
     aws_iam_role_policy.emr_service_ec2_permissions,
     aws_iam_role_policy.emr_service_s3_permissions,
-    aws_iam_role_policy_attachment.emr_service_role
-  ], var.enable_in_transit_encryption ? [aws_s3_object.emr_tls_zip[0]] : [])
+    aws_iam_role_policy_attachment.emr_service_role,
+    aws_emr_security_configuration.main
+  ]
 }
 
 resource "aws_emr_instance_group" "task" {
