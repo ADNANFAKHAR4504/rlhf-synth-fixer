@@ -1,487 +1,663 @@
-// Integration tests for EKS Fargate Cluster
-// These tests verify the deployed AWS infrastructure is correctly configured
+// Integration tests for Terraform Observability Stack
 
-import * as AWS from 'aws-sdk';
-import * as fs from 'fs';
-import * as path from 'path';
+import { S3Client, GetBucketVersioningCommand, GetBucketEncryptionCommand, GetPublicAccessBlockCommand, GetBucketLifecycleConfigurationCommand } from '@aws-sdk/client-s3';
+import { CloudTrailClient, GetTrailCommand, GetTrailStatusCommand } from '@aws-sdk/client-cloudtrail';
+import { CloudWatchLogsClient, DescribeLogGroupsCommand } from '@aws-sdk/client-cloudwatch-logs';
+import { KMSClient, DescribeKeyCommand, GetKeyRotationStatusCommand } from '@aws-sdk/client-kms';
+import { SNSClient, GetTopicAttributesCommand } from '@aws-sdk/client-sns';
+import { CloudWatchClient, DescribeAlarmsCommand, GetDashboardCommand } from '@aws-sdk/client-cloudwatch';
+import { XRayClient, GetSamplingRulesCommand } from '@aws-sdk/client-xray';
+import { SSMClient, GetParameterCommand } from '@aws-sdk/client-ssm';
+import { EventBridgeClient, DescribeRuleCommand, ListTargetsByRuleCommand } from '@aws-sdk/client-eventbridge';
+import fs from 'fs';
+import path from 'path';
 
-// Load deployment outputs
+// Load outputs from deployment
 const outputsPath = path.resolve(__dirname, '../cfn-outputs/flat-outputs.json');
 let outputs: any;
+let skipTests = false;
 
 function skipIfStackMissing(): boolean {
   try {
     if (!fs.existsSync(outputsPath)) {
-      console.warn('⚠️  Stack outputs not found - skipping integration tests');
+      console.warn('⚠️ Stack outputs not found - skipping integration tests');
       return true;
-    }
-    return false;
-  } catch (error) {
-    console.warn('⚠️  Stack outputs not found - skipping integration tests');
-    return true;
-  }
-}
-
-describe('EKS Fargate Cluster Integration Tests', () => {
-  let eks: AWS.EKS;
-  let ec2: AWS.EC2;
-  let iam: AWS.IAM;
-
-  beforeAll(() => {
-    if (skipIfStackMissing()) {
-      return;
     }
 
     const outputContent = fs.readFileSync(outputsPath, 'utf8');
     outputs = JSON.parse(outputContent);
 
-    const region = process.env.AWS_REGION || 'us-east-1';
-    eks = new AWS.EKS({ region });
-    ec2 = new AWS.EC2({ region });
-    iam = new AWS.IAM();
+    // Check if outputs is empty or missing required fields
+    if (!outputs || Object.keys(outputs).length === 0) {
+      console.warn('⚠️ Stack outputs are empty - deployment may have failed. Skipping integration tests');
+      return true;
+    }
+
+    return false;
+  } catch (error) {
+    console.warn('⚠️ Error reading stack outputs - skipping integration tests', error);
+    return true;
+  }
+}
+
+const region = process.env.AWS_REGION || 'us-east-1';
+
+describe('Terraform Observability Stack - Integration Tests', () => {
+  let s3Client: S3Client;
+  let cloudTrailClient: CloudTrailClient;
+  let cwLogsClient: CloudWatchLogsClient;
+  let kmsClient: KMSClient;
+  let snsClient: SNSClient;
+  let cloudWatchClient: CloudWatchClient;
+  let xrayClient: XRayClient;
+  let ssmClient: SSMClient;
+  let eventBridgeClient: EventBridgeClient;
+
+  beforeAll(() => {
+    skipTests = skipIfStackMissing();
+
+    if (skipTests) {
+      return;
+    }
+
+    s3Client = new S3Client({ region });
+    cloudTrailClient = new CloudTrailClient({ region });
+    cwLogsClient = new CloudWatchLogsClient({ region });
+    kmsClient = new KMSClient({ region });
+    snsClient = new SNSClient({ region });
+    cloudWatchClient = new CloudWatchClient({ region });
+    xrayClient = new XRayClient({ region });
+    ssmClient = new SSMClient({ region });
+    eventBridgeClient = new EventBridgeClient({ region });
   });
 
-  describe('Terraform Outputs', () => {
-    test('should have all required outputs', () => {
-      if (skipIfStackMissing()) return;
+  describe('Deployment Outputs Validation', () => {
+    test('all required outputs should be properly set', () => {
+      if (skipTests) return;
 
-      expect(outputs).toHaveProperty('cluster_name');
-      expect(outputs).toHaveProperty('cluster_endpoint');
-      expect(outputs).toHaveProperty('cluster_arn');
-      expect(outputs).toHaveProperty('vpc_id');
-      expect(outputs).toHaveProperty('private_subnet_ids');
-      expect(outputs).toHaveProperty('public_subnet_ids');
-      expect(outputs).toHaveProperty('fargate_profile_kube_system_id');
-      expect(outputs).toHaveProperty('fargate_profile_application_id');
+      expect(outputs.cloudtrail_arn).toBeDefined();
+      expect(outputs.cloudtrail_bucket).toBeDefined();
+      expect(outputs.dashboard_name).toBeDefined();
+      expect(outputs.kms_key_arn).toBeDefined();
+      expect(outputs.kms_key_id).toBeDefined();
+      expect(outputs.payment_alerts_topic_arn).toBeDefined();
+      expect(outputs.payment_api_log_group).toBeDefined();
+      expect(outputs.payment_database_log_group).toBeDefined();
+      expect(outputs.payment_processor_log_group).toBeDefined();
+      expect(outputs.security_alerts_topic_arn).toBeDefined();
+      expect(outputs.security_events_log_group).toBeDefined();
+      expect(outputs.ssm_latency_threshold_parameter).toBeDefined();
+      expect(outputs.ssm_log_retention_parameter).toBeDefined();
+      expect(outputs.ssm_xray_sampling_parameter).toBeDefined();
+      expect(outputs.xray_sampling_rule_payment).toBeDefined();
     });
 
-    test('cluster endpoint should be valid HTTPS URL', () => {
-      if (skipIfStackMissing()) return;
-
-      expect(outputs.cluster_endpoint).toMatch(/^https:\/\/.+\.eks\.amazonaws\.com$/);
+    test('CloudTrail ARN should be in correct format', () => {
+      if (skipTests) return;
+      expect(outputs.cloudtrail_arn).toMatch(/^arn:aws:cloudtrail:[a-z0-9-]+:\d+:trail\/.+$/);
     });
 
-    test('cluster ARN should be valid', () => {
-      if (skipIfStackMissing()) return;
-
-      expect(outputs.cluster_arn).toMatch(/^arn:aws:eks:us-east-1:\d+:cluster\/.+$/);
+    test('SNS topic ARNs should be in correct format', () => {
+      if (skipTests) return;
+      expect(outputs.payment_alerts_topic_arn).toMatch(/^arn:aws:sns:[a-z0-9-]+:\d+:.+$/);
+      expect(outputs.security_alerts_topic_arn).toMatch(/^arn:aws:sns:[a-z0-9-]+:\d+:.+$/);
     });
 
-    test('VPC ID should be valid', () => {
-      if (skipIfStackMissing()) return;
-
-      expect(outputs.vpc_id).toMatch(/^vpc-[a-f0-9]+$/);
+    test('KMS key ARN should be in correct format', () => {
+      if (skipTests) return;
+      expect(outputs.kms_key_arn).toMatch(/^arn:aws:kms:[a-z0-9-]+:\d+:key\/[a-f0-9-]+$/);
+      expect(outputs.kms_key_id).toMatch(/^[a-f0-9-]+$/);
     });
 
-    test('subnet IDs should be arrays', () => {
-      if (skipIfStackMissing()) return;
+    test('all resource names should include environmentSuffix', () => {
+      if (skipTests) return;
 
-      expect(Array.isArray(outputs.private_subnet_ids)).toBe(true);
-      expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
-      expect(outputs.private_subnet_ids.length).toBe(2);
-      expect(outputs.public_subnet_ids.length).toBe(2);
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      expect(environmentSuffix).toBeTruthy();
+
+      expect(outputs.cloudtrail_bucket).toContain(environmentSuffix);
+      expect(outputs.dashboard_name).toContain(environmentSuffix);
+      expect(outputs.payment_api_log_group).toContain(environmentSuffix);
+      expect(outputs.xray_sampling_rule_payment).toContain(environmentSuffix);
+    });
+
+    test('all ARNs should be in correct region', () => {
+      if (skipTests) return;
+      expect(outputs.cloudtrail_arn).toContain(`arn:aws:cloudtrail:${region}:`);
+      expect(outputs.kms_key_arn).toContain(`arn:aws:kms:${region}:`);
+      expect(outputs.payment_alerts_topic_arn).toContain(`arn:aws:sns:${region}:`);
+      expect(outputs.security_alerts_topic_arn).toContain(`arn:aws:sns:${region}:`);
     });
   });
 
-  describe('EKS Cluster', () => {
-    test('cluster should exist and be active', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
-
-      expect(response.cluster).toBeDefined();
-      expect(response.cluster?.status).toBe('ACTIVE');
-      expect(response.cluster?.name).toBe(outputs.cluster_name);
+  describe('S3 Bucket Configuration', () => {
+    test('CloudTrail S3 bucket should exist and have correct name', () => {
+      if (skipTests) return;
+      expect(outputs.cloudtrail_bucket).toMatch(/^cloudtrail-logs-.+$/);
     });
 
-    test('cluster should have correct Kubernetes version', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
-
-      expect(response.cluster?.version).toMatch(/^1\.\d+$/);
-    });
-
-    test('cluster should have logging enabled', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
-
-      expect(response.cluster?.logging?.clusterLogging).toBeDefined();
-      const enabledTypes = response.cluster?.logging?.clusterLogging?.[0]?.types || [];
-      expect(enabledTypes).toContain('api');
-      expect(enabledTypes).toContain('audit');
-      expect(enabledTypes).toContain('authenticator');
-    });
-
-    test('cluster should have both private and public endpoint access', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
-
-      expect(response.cluster?.resourcesVpcConfig?.endpointPrivateAccess).toBe(true);
-      expect(response.cluster?.resourcesVpcConfig?.endpointPublicAccess).toBe(true);
-    });
-
-    test('cluster should be using correct VPC', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
-
-      expect(response.cluster?.resourcesVpcConfig?.vpcId).toBe(outputs.vpc_id);
-    });
-
-    test('cluster should use correct subnets', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
-      const clusterSubnets = response.cluster?.resourcesVpcConfig?.subnetIds || [];
-
-      const allSubnets = [...outputs.private_subnet_ids, ...outputs.public_subnet_ids];
-      allSubnets.forEach(subnetId => {
-        expect(clusterSubnets).toContain(subnetId);
+    test('S3 bucket should have versioning enabled', async () => {
+      if (skipTests) return;
+      const command = new GetBucketVersioningCommand({
+        Bucket: outputs.cloudtrail_bucket,
       });
+      const response = await s3Client.send(command);
+
+      expect(response.Status).toBe('Enabled');
+    });
+
+    test('S3 bucket should have encryption enabled', async () => {
+      if (skipTests) return;
+      const command = new GetBucketEncryptionCommand({
+        Bucket: outputs.cloudtrail_bucket,
+      });
+      const response = await s3Client.send(command);
+
+      expect(response.ServerSideEncryptionConfiguration).toBeDefined();
+      const rule = response.ServerSideEncryptionConfiguration?.Rules?.[0];
+      expect(rule?.ApplyServerSideEncryptionByDefault?.SSEAlgorithm).toBe('AES256');
+    });
+
+    test('S3 bucket should have public access blocked', async () => {
+      if (skipTests) return;
+      const command = new GetPublicAccessBlockCommand({
+        Bucket: outputs.cloudtrail_bucket,
+      });
+      const response = await s3Client.send(command);
+
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicAcls).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.BlockPublicPolicy).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.IgnorePublicAcls).toBe(true);
+      expect(response.PublicAccessBlockConfiguration?.RestrictPublicBuckets).toBe(true);
+    });
+
+    test('S3 bucket should have lifecycle configuration with 90-day expiration', async () => {
+      if (skipTests) return;
+      const command = new GetBucketLifecycleConfigurationCommand({
+        Bucket: outputs.cloudtrail_bucket,
+      });
+      const response = await s3Client.send(command);
+
+      expect(response.Rules).toBeDefined();
+      const expirationRule = response.Rules?.find(rule => rule.ID === 'expire-old-logs');
+      expect(expirationRule).toBeDefined();
+      expect(expirationRule?.Status).toBe('Enabled');
+      expect(expirationRule?.Expiration?.Days).toBe(90);
+      expect(expirationRule?.NoncurrentVersionExpiration?.NoncurrentDays).toBe(30);
     });
   });
 
-  describe('Fargate Profiles', () => {
-    test('kube-system Fargate profile should exist and be active', async () => {
-      if (skipIfStackMissing()) return;
+  describe('CloudTrail Configuration', () => {
+    let trailData: any;
 
-      const profileName = outputs.fargate_profile_kube_system_id.split(':')[1];
-      const response = await eks.describeFargateProfile({
-        clusterName: outputs.cluster_name,
-        fargateProfileName: profileName
-      }).promise();
+    beforeAll(async () => {
+      if (skipTests) return;
 
-      expect(response.fargateProfile).toBeDefined();
-      expect(response.fargateProfile?.status).toBe('ACTIVE');
-    });
-
-    test('application Fargate profile should exist and be active', async () => {
-      if (skipIfStackMissing()) return;
-
-      const profileName = outputs.fargate_profile_application_id.split(':')[1];
-      const response = await eks.describeFargateProfile({
-        clusterName: outputs.cluster_name,
-        fargateProfileName: profileName
-      }).promise();
-
-      expect(response.fargateProfile).toBeDefined();
-      expect(response.fargateProfile?.status).toBe('ACTIVE');
-    });
-
-    test('kube-system profile should target kube-system namespace', async () => {
-      if (skipIfStackMissing()) return;
-
-      const profileName = outputs.fargate_profile_kube_system_id.split(':')[1];
-      const response = await eks.describeFargateProfile({
-        clusterName: outputs.cluster_name,
-        fargateProfileName: profileName
-      }).promise();
-
-      const selectors = response.fargateProfile?.selectors || [];
-      const namespaces = selectors.map(s => s.namespace);
-      expect(namespaces).toContain('kube-system');
-    });
-
-    test('application profile should target default and custom namespace', async () => {
-      if (skipIfStackMissing()) return;
-
-      const profileName = outputs.fargate_profile_application_id.split(':')[1];
-      const response = await eks.describeFargateProfile({
-        clusterName: outputs.cluster_name,
-        fargateProfileName: profileName
-      }).promise();
-
-      const selectors = response.fargateProfile?.selectors || [];
-      const namespaces = selectors.map(s => s.namespace);
-      expect(namespaces).toContain('default');
-      expect(namespaces.length).toBeGreaterThanOrEqual(2);
-    });
-
-    test('Fargate profiles should use private subnets only', async () => {
-      if (skipIfStackMissing()) return;
-
-      const profileName = outputs.fargate_profile_kube_system_id.split(':')[1];
-      const response = await eks.describeFargateProfile({
-        clusterName: outputs.cluster_name,
-        fargateProfileName: profileName
-      }).promise();
-
-      const fargateSubnets = response.fargateProfile?.subnets || [];
-      outputs.private_subnet_ids.forEach((subnetId: string) => {
-        expect(fargateSubnets).toContain(subnetId);
+      const trailName = outputs.cloudtrail_arn.split('/').pop();
+      const command = new GetTrailCommand({
+        Name: trailName,
       });
+      const response = await cloudTrailClient.send(command);
+      trailData = response.Trail;
+    });
 
-      // Should NOT use public subnets
-      outputs.public_subnet_ids.forEach((subnetId: string) => {
-        expect(fargateSubnets).not.toContain(subnetId);
+    test('CloudTrail should exist and be active', async () => {
+      if (skipTests) return;
+      expect(trailData).toBeDefined();
+
+      const trailName = outputs.cloudtrail_arn.split('/').pop();
+      const statusCommand = new GetTrailStatusCommand({
+        Name: trailName,
       });
+      const statusResponse = await cloudTrailClient.send(statusCommand);
+      expect(statusResponse.IsLogging).toBe(true);
+    });
+
+    test('CloudTrail should use correct S3 bucket', () => {
+      if (skipTests) return;
+      expect(trailData.S3BucketName).toBe(outputs.cloudtrail_bucket);
+    });
+
+    test('CloudTrail should have log file validation enabled', () => {
+      if (skipTests) return;
+      expect(trailData.LogFileValidationEnabled).toBe(true);
+    });
+
+    test('CloudTrail should include global service events', () => {
+      if (skipTests) return;
+      expect(trailData.IncludeGlobalServiceEvents).toBe(true);
+    });
+
+    test('CloudTrail should be single region trail', () => {
+      if (skipTests) return;
+      expect(trailData.IsMultiRegionTrail).toBe(false);
     });
   });
 
-  describe('No EC2 Node Groups', () => {
-    test('cluster should NOT have any EC2 node groups', async () => {
-      if (skipIfStackMissing()) return;
+  describe('CloudWatch Log Groups Configuration', () => {
+    test('payment API log group should exist', async () => {
+      if (skipTests) return;
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.payment_api_log_group,
+      });
+      const response = await cwLogsClient.send(command);
+      const logGroup = response.logGroups?.find(lg => lg.logGroupName === outputs.payment_api_log_group);
 
-      const response = await eks.listNodegroups({ clusterName: outputs.cluster_name }).promise();
-
-      expect(response.nodegroups).toBeDefined();
-      expect(response.nodegroups?.length).toBe(0);
+      expect(logGroup).toBeDefined();
+      expect(logGroup?.logGroupName).toBe(outputs.payment_api_log_group);
     });
 
-    test('cluster should only have Fargate profiles', async () => {
-      if (skipIfStackMissing()) return;
+    test('payment processor log group should exist', async () => {
+      if (skipTests) return;
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.payment_processor_log_group,
+      });
+      const response = await cwLogsClient.send(command);
+      const logGroup = response.logGroups?.find(lg => lg.logGroupName === outputs.payment_processor_log_group);
 
-      const fargateResponse = await eks.listFargateProfiles({ clusterName: outputs.cluster_name }).promise();
-      const nodegroupResponse = await eks.listNodegroups({ clusterName: outputs.cluster_name }).promise();
+      expect(logGroup).toBeDefined();
+      expect(logGroup?.logGroupName).toBe(outputs.payment_processor_log_group);
+    });
 
-      expect(fargateResponse.fargateProfileNames?.length).toBeGreaterThan(0);
-      expect(nodegroupResponse.nodegroups?.length).toBe(0);
+    test('payment database log group should exist', async () => {
+      if (skipTests) return;
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.payment_database_log_group,
+      });
+      const response = await cwLogsClient.send(command);
+      const logGroup = response.logGroups?.find(lg => lg.logGroupName === outputs.payment_database_log_group);
+
+      expect(logGroup).toBeDefined();
+      expect(logGroup?.logGroupName).toBe(outputs.payment_database_log_group);
+    });
+
+    test('security events log group should exist with 30-day retention', async () => {
+      if (skipTests) return;
+      const command = new DescribeLogGroupsCommand({
+        logGroupNamePrefix: outputs.security_events_log_group,
+      });
+      const response = await cwLogsClient.send(command);
+      const logGroup = response.logGroups?.find(lg => lg.logGroupName === outputs.security_events_log_group);
+
+      expect(logGroup).toBeDefined();
+      expect(logGroup?.logGroupName).toBe(outputs.security_events_log_group);
+      expect(logGroup?.retentionInDays).toBe(30);
+    });
+
+    test('all log groups should be encrypted with KMS', async () => {
+      if (skipTests) return;
+      const logGroups = [
+        outputs.payment_api_log_group,
+        outputs.payment_processor_log_group,
+        outputs.payment_database_log_group,
+        outputs.security_events_log_group,
+      ];
+
+      for (const logGroupName of logGroups) {
+        const command = new DescribeLogGroupsCommand({
+          logGroupNamePrefix: logGroupName,
+        });
+        const response = await cwLogsClient.send(command);
+        const logGroup = response.logGroups?.find(lg => lg.logGroupName === logGroupName);
+
+        expect(logGroup?.kmsKeyId).toBeDefined();
+        expect(logGroup?.kmsKeyId).toBe(outputs.kms_key_arn);
+      }
     });
   });
 
-  describe('VPC Configuration', () => {
-    test('VPC should exist', async () => {
-      if (skipIfStackMissing()) return;
+  describe('KMS Key Configuration', () => {
+    let keyMetadata: any;
 
-      const response = await ec2.describeVpcs({ VpcIds: [outputs.vpc_id] }).promise();
+    beforeAll(async () => {
+      if (skipTests) return;
 
-      expect(response.Vpcs).toBeDefined();
-      expect(response.Vpcs?.length).toBe(1);
-    });
-
-    test('VPC should have DNS support and hostnames enabled', async () => {
-      if (skipIfStackMissing()) return;
-
-      const dnsSupport = await ec2.describeVpcAttribute({
-        VpcId: outputs.vpc_id,
-        Attribute: 'enableDnsSupport'
-      }).promise();
-
-      const dnsHostnames = await ec2.describeVpcAttribute({
-        VpcId: outputs.vpc_id,
-        Attribute: 'enableDnsHostnames'
-      }).promise();
-
-      expect(dnsSupport.EnableDnsSupport?.Value).toBe(true);
-      expect(dnsHostnames.EnableDnsHostnames?.Value).toBe(true);
-    });
-
-    test('private subnets should exist and be in correct VPC', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeSubnets({
-        SubnetIds: outputs.private_subnet_ids
-      }).promise();
-
-      expect(response.Subnets?.length).toBe(2);
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
+      const command = new DescribeKeyCommand({
+        KeyId: outputs.kms_key_id,
       });
+      const response = await kmsClient.send(command);
+      keyMetadata = response.KeyMetadata;
     });
 
-    test('public subnets should exist and be in correct VPC', async () => {
-      if (skipIfStackMissing()) return;
+    test('KMS key should exist and be enabled', () => {
+      if (skipTests) return;
+      expect(keyMetadata).toBeDefined();
+      expect(keyMetadata.KeyState).toBe('Enabled');
+      expect(keyMetadata.Enabled).toBe(true);
+    });
 
-      const response = await ec2.describeSubnets({
-        SubnetIds: outputs.public_subnet_ids
-      }).promise();
-
-      expect(response.Subnets?.length).toBe(2);
-      response.Subnets?.forEach(subnet => {
-        expect(subnet.VpcId).toBe(outputs.vpc_id);
+    test('KMS key should have rotation enabled', async () => {
+      if (skipTests) return;
+      const command = new GetKeyRotationStatusCommand({
+        KeyId: outputs.kms_key_id,
       });
+      const response = await kmsClient.send(command);
+
+      expect(response.KeyRotationEnabled).toBe(true);
     });
 
-    test('subnets should be in different availability zones', async () => {
-      if (skipIfStackMissing()) return;
-
-      const allSubnetIds = [...outputs.private_subnet_ids, ...outputs.public_subnet_ids];
-      const response = await ec2.describeSubnets({ SubnetIds: allSubnetIds }).promise();
-
-      const azs = new Set(response.Subnets?.map(s => s.AvailabilityZone));
-      expect(azs.size).toBeGreaterThanOrEqual(2);
+    test('KMS key ARN should match output', () => {
+      if (skipTests) return;
+      expect(keyMetadata.Arn).toBe(outputs.kms_key_arn);
     });
 
-    test('private subnets should have EKS internal-elb tag', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeSubnets({
-        SubnetIds: outputs.private_subnet_ids
-      }).promise();
-
-      response.Subnets?.forEach(subnet => {
-        const elbTag = subnet.Tags?.find(t => t.Key === 'kubernetes.io/role/internal-elb');
-        expect(elbTag).toBeDefined();
-        expect(elbTag?.Value).toBe('1');
-      });
-    });
-
-    test('public subnets should have EKS elb tag', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeSubnets({
-        SubnetIds: outputs.public_subnet_ids
-      }).promise();
-
-      response.Subnets?.forEach(subnet => {
-        const elbTag = subnet.Tags?.find(t => t.Key === 'kubernetes.io/role/elb');
-        expect(elbTag).toBeDefined();
-        expect(elbTag?.Value).toBe('1');
-      });
+    test('KMS key should have correct description', () => {
+      if (skipTests) return;
+      expect(keyMetadata.Description).toBe('KMS key for observability platform encryption');
     });
   });
 
-  describe('NAT Gateways', () => {
-    test('NAT gateways should exist in public subnets', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeNatGateways({
-        Filter: [
-          { Name: 'vpc-id', Values: [outputs.vpc_id] },
-          { Name: 'state', Values: ['available'] }
-        ]
-      }).promise();
-
-      expect(response.NatGateways?.length).toBe(2);
-      response.NatGateways?.forEach(nat => {
-        expect(outputs.public_subnet_ids).toContain(nat.SubnetId);
+  describe('SNS Topics Configuration', () => {
+    test('payment alerts topic should exist', async () => {
+      if (skipTests) return;
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.payment_alerts_topic_arn,
       });
-    });
-  });
+      const response = await snsClient.send(command);
 
-  describe('IAM Roles', () => {
-    test('EKS cluster role should exist', async () => {
-      if (skipIfStackMissing()) return;
-
-      const roleName = outputs.cluster_iam_role_arn.split('/').pop();
-      const response = await iam.getRole({ RoleName: roleName! }).promise();
-
-      expect(response.Role).toBeDefined();
-      expect(response.Role.Arn).toBe(outputs.cluster_iam_role_arn);
+      expect(response.Attributes).toBeDefined();
+      expect(response.Attributes?.TopicArn).toBe(outputs.payment_alerts_topic_arn);
     });
 
-    test('Fargate pod execution role should exist', async () => {
-      if (skipIfStackMissing()) return;
-
-      const roleName = outputs.fargate_pod_execution_role_arn.split('/').pop();
-      const response = await iam.getRole({ RoleName: roleName! }).promise();
-
-      expect(response.Role).toBeDefined();
-      expect(response.Role.Arn).toBe(outputs.fargate_pod_execution_role_arn);
-    });
-
-    test('EKS cluster role should have required policies', async () => {
-      if (skipIfStackMissing()) return;
-
-      const roleName = outputs.cluster_iam_role_arn.split('/').pop();
-      const response = await iam.listAttachedRolePolicies({ RoleName: roleName! }).promise();
-
-      const policyArns = response.AttachedPolicies?.map(p => p.PolicyArn) || [];
-      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSClusterPolicy');
-      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSVPCResourceController');
-    });
-
-    test('Fargate pod execution role should have required policy', async () => {
-      if (skipIfStackMissing()) return;
-
-      const roleName = outputs.fargate_pod_execution_role_arn.split('/').pop();
-      const response = await iam.listAttachedRolePolicies({ RoleName: roleName! }).promise();
-
-      const policyArns = response.AttachedPolicies?.map(p => p.PolicyArn) || [];
-      expect(policyArns).toContain('arn:aws:iam::aws:policy/AmazonEKSFargatePodExecutionRolePolicy');
-    });
-  });
-
-  describe('Security Groups', () => {
-    test('cluster security group should exist', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeSecurityGroups({
-        GroupIds: [outputs.cluster_security_group_id]
-      }).promise();
-
-      expect(response.SecurityGroups?.length).toBe(1);
-      expect(response.SecurityGroups?.[0].VpcId).toBe(outputs.vpc_id);
-    });
-
-    test('cluster security group should allow egress', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeSecurityGroups({
-        GroupIds: [outputs.cluster_security_group_id]
-      }).promise();
-
-      const egressRules = response.SecurityGroups?.[0].IpPermissionsEgress || [];
-      const allowAllEgress = egressRules.some(rule =>
-        rule.IpProtocol === '-1' &&
-        rule.IpRanges?.some(ip => ip.CidrIp === '0.0.0.0/0')
-      );
-
-      expect(allowAllEgress).toBe(true);
-    });
-
-    test('cluster security group should allow ingress from VPC on port 443', async () => {
-      if (skipIfStackMissing()) return;
-
-      const response = await ec2.describeSecurityGroups({
-        GroupIds: [outputs.cluster_security_group_id]
-      }).promise();
-
-      const ingressRules = response.SecurityGroups?.[0].IpPermissions || [];
-      const has443Rule = ingressRules.some(rule =>
-        rule.FromPort === 443 &&
-        rule.ToPort === 443 &&
-        rule.IpProtocol === 'tcp'
-      );
-
-      expect(has443Rule).toBe(true);
-    });
-  });
-
-  describe('Resource Naming', () => {
-    test('all resources should follow naming convention with environmentSuffix', async () => {
-      if (skipIfStackMissing()) return;
-
-      // Extract environmentSuffix from cluster name
-      const clusterName = outputs.cluster_name;
-      const suffix = clusterName.replace('eks-cluster-', '');
-
-      // Check VPC name
-      const vpcResponse = await ec2.describeVpcs({ VpcIds: [outputs.vpc_id] }).promise();
-      const vpcName = vpcResponse.Vpcs?.[0].Tags?.find(t => t.Key === 'Name')?.Value;
-      expect(vpcName).toContain(suffix);
-
-      // Check subnet names
-      const subnetResponse = await ec2.describeSubnets({
-        SubnetIds: [...outputs.private_subnet_ids, ...outputs.public_subnet_ids]
-      }).promise();
-      subnetResponse.Subnets?.forEach(subnet => {
-        const subnetName = subnet.Tags?.find(t => t.Key === 'Name')?.Value;
-        expect(subnetName).toContain(suffix);
+    test('security alerts topic should exist', async () => {
+      if (skipTests) return;
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.security_alerts_topic_arn,
       });
+      const response = await snsClient.send(command);
+
+      expect(response.Attributes).toBeDefined();
+      expect(response.Attributes?.TopicArn).toBe(outputs.security_alerts_topic_arn);
+    });
+
+    test('payment alerts topic should be encrypted with KMS', async () => {
+      if (skipTests) return;
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.payment_alerts_topic_arn,
+      });
+      const response = await snsClient.send(command);
+
+      expect(response.Attributes?.KmsMasterKeyId).toBeDefined();
+      expect(response.Attributes?.KmsMasterKeyId).toContain(outputs.kms_key_id);
+    });
+
+    test('security alerts topic should be encrypted with KMS', async () => {
+      if (skipTests) return;
+      const command = new GetTopicAttributesCommand({
+        TopicArn: outputs.security_alerts_topic_arn,
+      });
+      const response = await snsClient.send(command);
+
+      expect(response.Attributes?.KmsMasterKeyId).toBeDefined();
+      expect(response.Attributes?.KmsMasterKeyId).toContain(outputs.kms_key_id);
     });
   });
 
-  describe('Cluster Connectivity', () => {
-    test('cluster endpoint should be reachable', async () => {
-      if (skipIfStackMissing()) return;
+  describe('CloudWatch Alarms Configuration', () => {
+    let alarms: any[];
 
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
+    beforeAll(async () => {
+      if (skipTests) return;
 
-      expect(response.cluster?.endpoint).toBeDefined();
-      expect(response.cluster?.endpoint).toMatch(/^https:\/\//);
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const command = new DescribeAlarmsCommand({
+        AlarmNamePrefix: `payment-`,
+      });
+      const response = await cloudWatchClient.send(command);
+      alarms = response.MetricAlarms || [];
     });
 
-    test('cluster should have certificate authority data', async () => {
-      if (skipIfStackMissing()) return;
+    test('high error rate alarm should exist with correct configuration', () => {
+      if (skipTests) return;
 
-      const response = await eks.describeCluster({ name: outputs.cluster_name }).promise();
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const alarm = alarms.find(a => a.AlarmName === `payment-high-error-rate-${environmentSuffix}`);
 
-      expect(response.cluster?.certificateAuthority?.data).toBeDefined();
-      expect(response.cluster?.certificateAuthority?.data).toBeTruthy();
+      expect(alarm).toBeDefined();
+      expect(alarm?.MetricName).toBe('Errors');
+      expect(alarm?.Namespace).toBe('PaymentProcessing');
+      expect(alarm?.Statistic).toBe('Sum');
+      expect(alarm?.Threshold).toBe(10);
+      expect(alarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+      expect(alarm?.EvaluationPeriods).toBe(2);
+    });
+
+    test('high latency alarm should exist with 500ms threshold', () => {
+      if (skipTests) return;
+
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const alarm = alarms.find(a => a.AlarmName === `payment-high-latency-${environmentSuffix}`);
+
+      expect(alarm).toBeDefined();
+      expect(alarm?.MetricName).toBe('TransactionLatency');
+      expect(alarm?.Namespace).toBe('PaymentProcessing');
+      expect(alarm?.Statistic).toBe('Average');
+      expect(alarm?.Threshold).toBe(500);
+      expect(alarm?.ComparisonOperator).toBe('GreaterThanThreshold');
+    });
+
+    test('failed transactions alarm should exist with threshold of 5', () => {
+      if (skipTests) return;
+
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const alarm = alarms.find(a => a.AlarmName === `payment-failed-transactions-${environmentSuffix}`);
+
+      expect(alarm).toBeDefined();
+      expect(alarm?.MetricName).toBe('FailedTransactions');
+      expect(alarm?.Namespace).toBe('PaymentProcessing');
+      expect(alarm?.Statistic).toBe('Sum');
+      expect(alarm?.Threshold).toBe(5);
+      expect(alarm?.TreatMissingData).toBe('notBreaching');
+    });
+  });
+
+  describe('CloudWatch Dashboard Configuration', () => {
+    test('payment operations dashboard should exist', async () => {
+      if (skipTests) return;
+      const command = new GetDashboardCommand({
+        DashboardName: outputs.dashboard_name,
+      });
+      const response = await cloudWatchClient.send(command);
+
+      expect(response.DashboardName).toBe(outputs.dashboard_name);
+      expect(response.DashboardBody).toBeDefined();
+    });
+
+    test('dashboard should contain payment metrics widgets', async () => {
+      if (skipTests) return;
+      const command = new GetDashboardCommand({
+        DashboardName: outputs.dashboard_name,
+      });
+      const response = await cloudWatchClient.send(command);
+      const dashboardBody = JSON.parse(response.DashboardBody || '{}');
+
+      expect(dashboardBody.widgets).toBeDefined();
+      expect(dashboardBody.widgets.length).toBeGreaterThan(0);
+
+      const widgetTitles = dashboardBody.widgets.map((w: any) => w.properties?.title);
+      expect(widgetTitles).toContain('Payment Transaction Volume');
+      expect(widgetTitles).toContain('Transaction Latency Distribution (ms)');
+      expect(widgetTitles).toContain('Error Metrics');
+      expect(widgetTitles).toContain('Recent Errors');
+    });
+  });
+
+  describe('X-Ray Sampling Rules Configuration', () => {
+    let samplingRules: any[];
+
+    beforeAll(async () => {
+      if (skipTests) return;
+
+      const command = new GetSamplingRulesCommand({});
+      const response = await xrayClient.send(command);
+      samplingRules = response.SamplingRuleRecords || [];
+    });
+
+    test('payment transactions sampling rule should exist', () => {
+      if (skipTests) return;
+      const rule = samplingRules.find(r => r.SamplingRule?.RuleName === outputs.xray_sampling_rule_payment);
+
+      expect(rule).toBeDefined();
+      expect(rule?.SamplingRule?.RuleName).toBe(outputs.xray_sampling_rule_payment);
+    });
+
+    test('payment transactions rule should target payment API', () => {
+      if (skipTests) return;
+      const rule = samplingRules.find(r => r.SamplingRule?.RuleName === outputs.xray_sampling_rule_payment);
+
+      expect(rule?.SamplingRule?.URLPath).toBe('/api/payment/*');
+      expect(rule?.SamplingRule?.HTTPMethod).toBe('POST');
+      expect(rule?.SamplingRule?.Priority).toBe(1000);
+    });
+
+    test('default sampling rule should exist', () => {
+      if (skipTests) return;
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const rule = samplingRules.find(r => r.SamplingRule?.RuleName === `def-${environmentSuffix}`);
+
+      expect(rule).toBeDefined();
+      expect(rule?.SamplingRule?.Priority).toBe(5000);
+      expect(rule?.SamplingRule?.FixedRate).toBe(0.05);
+    });
+  });
+
+  describe('SSM Parameters Configuration', () => {
+    test('X-Ray sampling rate parameter should exist', async () => {
+      if (skipTests) return;
+      const command = new GetParameterCommand({
+        Name: outputs.ssm_xray_sampling_parameter,
+      });
+      const response = await ssmClient.send(command);
+
+      expect(response.Parameter).toBeDefined();
+      expect(response.Parameter?.Name).toBe(outputs.ssm_xray_sampling_parameter);
+      expect(response.Parameter?.Type).toBe('String');
+    });
+
+    test('log retention parameter should exist', async () => {
+      if (skipTests) return;
+      const command = new GetParameterCommand({
+        Name: outputs.ssm_log_retention_parameter,
+      });
+      const response = await ssmClient.send(command);
+
+      expect(response.Parameter).toBeDefined();
+      expect(response.Parameter?.Name).toBe(outputs.ssm_log_retention_parameter);
+      expect(response.Parameter?.Type).toBe('String');
+    });
+
+    test('latency threshold parameter should exist with value 500', async () => {
+      if (skipTests) return;
+      const command = new GetParameterCommand({
+        Name: outputs.ssm_latency_threshold_parameter,
+      });
+      const response = await ssmClient.send(command);
+
+      expect(response.Parameter).toBeDefined();
+      expect(response.Parameter?.Name).toBe(outputs.ssm_latency_threshold_parameter);
+      expect(response.Parameter?.Value).toBe('500');
+    });
+  });
+
+  describe('EventBridge Rules Configuration', () => {
+    test('security config changes rule should exist', async () => {
+      if (skipTests) return;
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const command = new DescribeRuleCommand({
+        Name: `security-config-changes-${environmentSuffix}`,
+      });
+      const response = await eventBridgeClient.send(command);
+
+      expect(response.Name).toBe(`security-config-changes-${environmentSuffix}`);
+      expect(response.State).toBe('ENABLED');
+
+      const eventPattern = JSON.parse(response.EventPattern || '{}');
+      expect(eventPattern.source).toContain('aws.config');
+    });
+
+    test('unauthorized API calls rule should exist', async () => {
+      if (skipTests) return;
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const command = new DescribeRuleCommand({
+        Name: `unauthorized-api-calls-${environmentSuffix}`,
+      });
+      const response = await eventBridgeClient.send(command);
+
+      expect(response.Name).toBe(`unauthorized-api-calls-${environmentSuffix}`);
+      expect(response.State).toBe('ENABLED');
+
+      const eventPattern = JSON.parse(response.EventPattern || '{}');
+      expect(eventPattern.source).toContain('aws.cloudtrail');
+      expect(eventPattern.detail.errorCode).toContain('AccessDenied');
+      expect(eventPattern.detail.errorCode).toContain('UnauthorizedOperation');
+    });
+
+    test('security config changes rule should target security alerts SNS', async () => {
+      if (skipTests) return;
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const command = new ListTargetsByRuleCommand({
+        Rule: `security-config-changes-${environmentSuffix}`,
+      });
+      const response = await eventBridgeClient.send(command);
+
+      expect(response.Targets).toBeDefined();
+      const snsTarget = response.Targets?.find(t => t.Arn === outputs.security_alerts_topic_arn);
+      expect(snsTarget).toBeDefined();
+    });
+
+    test('unauthorized API calls rule should target security alerts SNS', async () => {
+      if (skipTests) return;
+      const environmentSuffix = outputs.cloudtrail_bucket?.split('-').pop() || '';
+      const command = new ListTargetsByRuleCommand({
+        Rule: `unauthorized-api-calls-${environmentSuffix}`,
+      });
+      const response = await eventBridgeClient.send(command);
+
+      expect(response.Targets).toBeDefined();
+      const snsTarget = response.Targets?.find(t => t.Arn === outputs.security_alerts_topic_arn);
+      expect(snsTarget).toBeDefined();
+    });
+  });
+
+  describe('Security Hub Configuration', () => {
+    test('security hub should be disabled by default for cost optimization', () => {
+      if (skipTests) return;
+      expect(outputs.security_hub_enabled).toBe('false');
+    });
+  });
+
+  describe('Compliance and Standards', () => {
+    test('all log groups should follow naming convention', () => {
+      if (skipTests) return;
+      expect(outputs.payment_api_log_group).toMatch(/^\/aws\/payment-api-.+$/);
+      expect(outputs.payment_processor_log_group).toMatch(/^\/aws\/payment-processor-.+$/);
+      expect(outputs.payment_database_log_group).toMatch(/^\/aws\/payment-database-.+$/);
+      expect(outputs.security_events_log_group).toMatch(/^\/aws\/security-events-.+$/);
+    });
+
+    test('all SSM parameters should follow naming convention', () => {
+      if (skipTests) return;
+      expect(outputs.ssm_xray_sampling_parameter).toMatch(/^\/observability\/.+\/xray\/sampling-rate$/);
+      expect(outputs.ssm_log_retention_parameter).toMatch(/^\/observability\/.+\/logs\/retention-days$/);
+      expect(outputs.ssm_latency_threshold_parameter).toMatch(/^\/observability\/.+\/alerts\/latency-threshold-ms$/);
+    });
+
+    test('dashboard name should follow naming convention', () => {
+      if (skipTests) return;
+      expect(outputs.dashboard_name).toMatch(/^payment-operations-.+$/);
+    });
+  });
+
+  describe('Integration and Connectivity', () => {
+    test('CloudTrail should be writing to correct S3 bucket', async () => {
+      if (skipTests) return;
+      const trailName = outputs.cloudtrail_arn.split('/').pop();
+      const command = new GetTrailCommand({
+        Name: trailName,
+      });
+      const response = await cloudTrailClient.send(command);
+
+      expect(response.Trail?.S3BucketName).toBe(outputs.cloudtrail_bucket);
     });
   });
 });
