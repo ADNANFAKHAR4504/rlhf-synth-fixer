@@ -64,8 +64,9 @@ describe("EKS Cluster Integration Tests", () => {
     }
     
     // Extract environment suffix from cluster name (e.g., "payment-eks-dev" -> "dev")
-    const match = clusterName.match(/-([a-z0-9-]+)$/);
-    environmentSuffix = match ? match[1] : "unknown";
+    // Split by hyphen and take the last segment to get just the suffix
+    const parts = clusterName.split("-");
+    environmentSuffix = parts.length > 0 ? parts[parts.length - 1] : "unknown";
   });
 
   describe("EKS Cluster Deployment", () => {

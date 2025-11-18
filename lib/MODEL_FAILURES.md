@@ -173,8 +173,9 @@ describe("EKS Cluster Integration Tests", () => {
     }
     
     // Extract environment suffix from cluster name (e.g., "payment-eks-dev" -> "dev")
-    const match = clusterName.match(/-([a-z0-9-]+)$/);
-    environmentSuffix = match ? match[1] : "unknown";
+    // Split by hyphen and take the last segment to get just the suffix
+    const parts = clusterName.split("-");
+    environmentSuffix = parts.length > 0 ? parts[parts.length - 1] : "unknown";
   });
 
   test("cluster_name includes environment suffix", () => {
@@ -186,6 +187,8 @@ describe("EKS Cluster Integration Tests", () => {
   });
 });
 ```
+
+**Note**: Initial fix used regex `/-([a-z0-9-]+)$/` which incorrectly captured "eks-dev" instead of "dev" from "payment-eks-dev". The final fix uses string splitting to extract only the last segment, ensuring correct suffix extraction regardless of cluster name structure.
 
 **Root Cause**:
 The model assumed fixed resource naming patterns instead of discovering them dynamically from deployment outputs. This violates the principle of making tests work with any deployment configuration.
