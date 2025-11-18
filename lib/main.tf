@@ -390,7 +390,7 @@ resource "aws_emr_security_configuration" "main" {
       }
       InTransitEncryptionConfiguration = {
         TLSCertificateConfiguration = {
-          CertificateProviderType = "AwsManaged"
+          CertificateProviderType = "EMR"
         }
       }
     }
