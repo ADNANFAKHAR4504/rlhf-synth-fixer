@@ -3,7 +3,7 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth-2",
+  "team": "synth",
   "startedAt": "2025-11-17T00:00:00+00:00",
   "subtask": "Application Deployment",
   "subject_labels": [
@@ -20,7 +20,7 @@
     "Elastic Load Balancing"
   ],
   "region": "us-east-1",
-  "training_quality": 8,
+  "training_quality": 9,
   "coverage": {
     "lines": 100,
     "branches": 100
