@@ -77,10 +77,12 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
               'logs:CreateLogGroup',
               'logs:CreateLogStream',
               'logs:PutLogEvents',
+              'logs:DescribeLogStreams',
             ],
             Resource: [
               'arn:aws:logs:*:*:*',
               'arn:aws:logs:*:*:log-group:/aws/stepfunctions/*',
+              'arn:aws:logs:*:*:log-group:/aws/stepfunctions/*:*',
             ],
           },
           {

@@ -178,7 +178,12 @@ describe('TapStack Unit Tests', () => {
       expect(tgw.tgw).toBeDefined();
       expect(tgw.ramShare).toBeDefined();
       expect(tgw.ramPrincipalAssociations).toBeDefined();
+      expect(tgw.ramPrincipalAssociations).toEqual([]);
     });
+    
+    // Note: Multi-account mode cannot be unit tested because it attempts to create
+    // real AWS PrincipalAssociation resources with dependsOn, which fails in test environment.
+    // The multi-account code path (line 95 in transit-gateway.ts) is tested in integration/E2E tests.
   });
 
   describe('Step Functions Module', () => {
