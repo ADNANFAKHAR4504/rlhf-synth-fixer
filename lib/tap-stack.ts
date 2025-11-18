@@ -32,7 +32,7 @@ export default class TapStack extends pulumi.ComponentResource {
     const marketDataBucket = new aws.s3.Bucket(
       `market-data-${this.environmentSuffix}`,
       {
-        bucket: `market-data-${this.environmentSuffix}`,
+        bucket: `market-data-${this.environmentSuffix.toLowerCase()}`,
         tags: commonTags,
         versioning: {
           enabled: true,
