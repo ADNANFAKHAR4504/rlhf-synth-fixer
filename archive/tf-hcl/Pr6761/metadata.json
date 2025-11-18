@@ -27,5 +27,10 @@
   "region": "us-east-1",
   "startedAt": "2025-11-18T08:27:00Z",
   "subtask": "CI/CD Pipeline Integration",
-  "training_quality": 9
+  "training_quality": 9,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
