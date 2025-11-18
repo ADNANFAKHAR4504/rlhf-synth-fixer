@@ -1,0 +1,33 @@
+{
+  "task_id": "7oy3e1",
+  "platform": "cdk",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-18T00:24:03+05:30",
+  "po_id": "7oy3e1",
+  "subtask": "Application Deployment",
+  "subject_labels": [
+    "Web Application Deployment"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "ECS",
+    "RDS",
+    "S3",
+    "CloudFront",
+    "Lambda",
+    "CloudWatch",
+    "KMS",
+    "ALB"
+  ],
+  "training_quality": 9,
+  "author": "mayanksethi-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
