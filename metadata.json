@@ -2,15 +2,14 @@
   "task_id": "e0l6u1",
   "platform": "pulumi",
   "language": "ts",
-  "team": "synth-2",
+  "team": "synth",
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "e0l6u1",
   "startedAt": "2025-11-18T21:36:00-05:00",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Networking",
-    "Security Configuration"
+    "Cloud Environment Setup"
   ],
   "aws_services": [
     "VPC",
@@ -19,5 +18,6 @@
     "CloudWatch",
     "IAM"
   ],
-  "training_quality": 9
+  "author": "mayanksethi-turing",
+  "training_quality": 10
 }
