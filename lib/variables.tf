@@ -201,3 +201,9 @@ variable "emr_kms_key_deletion_window_days" {
     error_message = "KMS key deletion window must be between 7 and 30 days."
   }
 }
+
+variable "enable_in_transit_encryption" {
+  description = "Enable TLS in-transit encryption for EMR cluster (requires valid TLS certificate)"
+  type        = bool
+  default     = false
+}

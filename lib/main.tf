@@ -376,8 +376,8 @@ resource "aws_emr_security_configuration" "main" {
   name = "${local.bucket_prefix}-security-config"
 
   configuration = jsonencode({
-    EncryptionConfiguration = {
-      EnableInTransitEncryption = true
+    EncryptionConfiguration = merge({
+      EnableInTransitEncryption = var.enable_in_transit_encryption
       EnableAtRestEncryption    = true
       AtRestEncryptionConfiguration = {
         S3EncryptionConfiguration = {
@@ -388,13 +388,14 @@ resource "aws_emr_security_configuration" "main" {
           AwsKmsKey                 = aws_kms_key.emr.arn
         }
       }
+      }, var.enable_in_transit_encryption ? {
       InTransitEncryptionConfiguration = {
         TLSCertificateConfiguration = {
           CertificateProviderType = "PEM"
-          S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_zip.key}"
+          S3Object                = "s3://${aws_s3_bucket.logs.bucket}/${aws_s3_object.emr_tls_zip[0].key}"
         }
       }
-    }
+    } : {})
   })
 }
 
@@ -409,8 +410,9 @@ resource "aws_s3_object" "bootstrap_script" {
   etag   = filemd5("${path.module}/bootstrap.sh")
 }
 
-# Upload TLS certificate bundle for EMR in-transit encryption
+# Upload TLS certificate bundle for EMR in-transit encryption (only if enabled)
 resource "aws_s3_object" "emr_tls_zip" {
+  count        = var.enable_in_transit_encryption ? 1 : 0
   bucket       = aws_s3_bucket.logs.id
   key          = "security/emr-tls.zip"
   source       = "${path.module}/security/emr-tls.zip"
@@ -525,16 +527,15 @@ resource "aws_emr_cluster" "main" {
     Name = "${local.bucket_prefix}-emr-cluster"
   })
 
-  depends_on = [
+  depends_on = concat([
     aws_s3_bucket.logs,
     aws_s3_bucket.curated,
     aws_s3_bucket.raw,
     aws_s3_object.bootstrap_script,
-    aws_s3_object.emr_tls_zip,
     aws_iam_role_policy.emr_service_ec2_permissions,
     aws_iam_role_policy.emr_service_s3_permissions,
     aws_iam_role_policy_attachment.emr_service_role
-  ]
+  ], var.enable_in_transit_encryption ? [aws_s3_object.emr_tls_zip[0]] : [])
 }
 
 resource "aws_emr_instance_group" "task" {
