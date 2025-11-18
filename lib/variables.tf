@@ -5,6 +5,7 @@
 variable "environment" {
   description = "Environment name (dev, staging, prod)"
   type        = string
+  default     = "dev"
   validation {
     condition     = can(regex("^(dev|staging|prod)$", var.environment))
     error_message = "Environment must be dev, staging, or prod."
@@ -14,6 +15,7 @@ variable "environment" {
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to avoid conflicts"
   type        = string
+  default     = "devtest"
 }
 
 variable "project_name" {
@@ -121,6 +123,7 @@ variable "db_password" {
   description = "Database master password"
   type        = string
   sensitive   = true
+  default     = "TempPassword123!"
 }
 
 variable "db_multi_az" {
