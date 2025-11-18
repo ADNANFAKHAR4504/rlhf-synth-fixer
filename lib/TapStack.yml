@@ -7,16 +7,6 @@ Parameters:
     Description: Suffix for resource naming to ensure uniqueness
     Default: dev
 
-  StagingAccountId:
-    Type: String
-    Description: AWS Account ID for staging environment
-    Default: ''
-
-  ProductionAccountId:
-    Type: String
-    Description: AWS Account ID for production environment
-    Default: ''
-
   SourceRepositoryName:
     Type: String
     Description: CodeCommit repository name for source code
@@ -33,10 +23,6 @@ Parameters:
     Default: 30
     MinValue: 1
     MaxValue: 365
-
-Conditions:
-  HasStagingAccount: !Not [!Equals [!Ref StagingAccountId, '']]
-  HasProductionAccount: !Not [!Equals [!Ref ProductionAccountId, '']]
 
 Resources:
   # KMS Key for artifact encryption
