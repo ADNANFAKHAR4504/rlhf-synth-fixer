@@ -11,6 +11,24 @@
   "subject_labels": [
     "Cloud Environment Setup"
   ],
-  "aws_services": ["VPC", "EC2", "RDS", "ALB", "CloudFront", "S3", "Auto Scaling", "KMS", "IAM", "CloudWatch", "SNS", "Route53"],
-  "training_quality": 9
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "RDS",
+    "ALB",
+    "CloudFront",
+    "S3",
+    "Auto Scaling",
+    "KMS",
+    "IAM",
+    "CloudWatch",
+    "SNS",
+    "Route53"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
 }
