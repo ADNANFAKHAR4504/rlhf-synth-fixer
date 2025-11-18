@@ -92,13 +92,6 @@ class TapStack(pulumi.ComponentResource):
         self.github_branch = args.github_branch
         self.notification_email = args.notification_email
 
-        # Fail fast with a clear message if the connection ARN is not provided
-        if not self.github_connection_arn:
-            raise ValueError(
-                'TapStack requires `github_connection_arn` (CodeStar Connections ARN).\n'
-                'Provide it via `TapStackArgs(github_connection_arn="arn:aws:codestar-connections:...")`'
-            )
-
         # Default tags for all resources
         self.default_tags = {
             'Environment': self.env_suffix,
@@ -137,16 +130,22 @@ class TapStack(pulumi.ComponentResource):
         # Step 7: Create SNS topic with subscription
         self.sns_topic, self.sns_subscription = self._create_sns_topic()
 
-        # Step 8: Create CodePipeline
-        self.pipeline = self._create_pipeline()
+        # Conditionally create pipeline resources if GitHub connection ARN is provided
+        if self.github_connection_arn:
+            # Step 8: Create CodePipeline
+            self.pipeline = self._create_pipeline()
 
-        # Step 9: Create notification rule
-        self.notification_rule = self._create_notification_rule()
+            # Step 9: Create notification rule
+            self.notification_rule = self._create_notification_rule()
+        else:
+            # Set to None if not created
+            self.pipeline = None
+            self.notification_rule = None
 
         # Register outputs
         self.register_outputs({
-            'pipeline_name': self.pipeline.name,
-            'pipeline_arn': self.pipeline.arn,
+            'pipeline_name': self.pipeline.name if self.pipeline else None,
+            'pipeline_arn': self.pipeline.arn if self.pipeline else None,
             'artifact_bucket_name': self.artifact_bucket.id,
             'state_bucket_name': self.state_bucket.id,
             'codebuild_project_name': self.codebuild_project.name,
@@ -459,7 +458,7 @@ class TapStack(pulumi.ComponentResource):
                         'echo "Installing Python dependencies..."',
                         'pipenv install --deploy',
                         'echo "Installing Pulumi CLI..."',
-                        'curl -fsSL https://get.pulumi.com | sh',
+                        'curl -fsSL https://get.pulumi.com | sh -s -- --version 3.206.0',
                         'export PATH=$PATH:$HOME/.pulumi/bin',
                         'pipenv run pulumi version'
                     ]
@@ -517,7 +516,7 @@ class TapStack(pulumi.ComponentResource):
                     {
                         'name': 'PULUMI_BACKEND_URL',
                         'type': 'PLAINTEXT',
-                        'value': self.state_bucket.bucket.apply(lambda b: f's3://{b}')
+                        'value': self.state_bucket.bucket.apply(lambda b: f's3://{b}?region={self.region}')
                     }
                 ]
             },
