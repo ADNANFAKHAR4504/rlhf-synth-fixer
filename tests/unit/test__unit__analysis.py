@@ -317,10 +317,9 @@ class TestCloudWatchLogsAnalyzer:
         assert 'summary' in call_args['CloudWatchLogs']
 
     @patch('analyse.boto3.client')
-    @patch('analyse.plt.savefig')
-    @patch('analyse.plt.close')
-    def test_generate_chart(self, mock_close, mock_savefig, mock_boto_client):
-        """Test _generate_chart creates matplotlib visualization"""
+    @patch('builtins.open', create=True)
+    def test_generate_chart(self, mock_file, mock_boto_client):
+        """Test _generate_chart creates text-based summary"""
         analyzer = CloudWatchLogsAnalyzer()
 
         # Add sample data
@@ -334,9 +333,8 @@ class TestCloudWatchLogsAnalyzer:
 
         analyzer._generate_chart()
 
-        # Verify chart was saved
-        mock_savefig.assert_called_with('log_retention_analysis.png', dpi=150, bbox_inches='tight')
-        mock_close.assert_called()
+        # Verify text file was created
+        mock_file.assert_called_with('log_retention_analysis.txt', 'w', encoding='utf-8')
 
     @patch('analyse.boto3.client')
     @patch('builtins.open', create=True)
@@ -345,13 +343,33 @@ class TestCloudWatchLogsAnalyzer:
         """Test _generate_csv_report creates CSV file"""
         analyzer = CloudWatchLogsAnalyzer()
 
-        # Add sample data
-        analyzer.log_groups_data = [{
-            'log_group_name': '/aws/lambda/test-function',
-            'retention_days': 30,
-            'monthly_cost': 0.03,
-            'issues': [{'type': 'test_issue'}]
-        }]
+        # Add sample data with different resource types to cover all branches
+        analyzer.log_groups_data = [
+            {
+                'log_group_name': '/aws/lambda/test-function',
+                'retention_days': 30,
+                'monthly_cost': 0.03,
+                'issues': [{'type': 'test_issue'}]
+            },
+            {
+                'log_group_name': '/aws/ecs/my-service',
+                'retention_days': 60,
+                'monthly_cost': 0.05,
+                'issues': []
+            },
+            {
+                'log_group_name': '/aws/eks/my-cluster',
+                'retention_days': 90,
+                'monthly_cost': 0.08,
+                'issues': []
+            },
+            {
+                'log_group_name': 'vpc-flow-logs/my-vpc',
+                'retention_days': None,
+                'monthly_cost': 0.10,
+                'issues': []
+            }
+        ]
 
         analyzer._generate_csv_report()
 

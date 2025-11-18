@@ -49,11 +49,11 @@ class CloudWatchLogsAnalyzer:
 
         # Collect all log groups
         log_groups = self._get_all_log_groups()
-        logger.info("Found %d total log groups", len(log_groups))
+        logger.info(f"Found {len(log_groups)} total log groups")
 
         # Filter log groups based on exclusion criteria
         filtered_log_groups = self._filter_log_groups(log_groups)
-        logger.info("Analyzing %d log groups after filtering", len(filtered_log_groups))
+        logger.info(f"Analyzing {len(filtered_log_groups)} log groups after filtering")
 
         # Analyze each log group
         for lg in filtered_log_groups:
@@ -182,7 +182,7 @@ class CloudWatchLogsAnalyzer:
             issues.append(
                 {
                     "type": "excessive_debug_retention",
-                    "description": "Debug logs retained for %d days (>30 days)" % retention,
+                    "description": f"Debug logs retained for {retention} days (>30 days)",
                     "recommendation": "Reduce debug log retention to 30 days",
                     "severity": "Medium",
                     "potential_savings": self._calculate_retention_savings(

@@ -1133,6 +1133,7 @@ class CloudWatchLogsAnalyzer:
 if __name__ == "__main__":
     analyzer = CloudWatchLogsAnalyzer()
     analyzer.run()
+
 ```
 
 ## Features Implemented
