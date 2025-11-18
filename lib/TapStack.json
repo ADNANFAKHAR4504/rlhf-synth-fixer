@@ -12,6 +12,11 @@
             ],
             "Description": "Environment name"
         },
+        "EnvironmentSuffix": {
+            "Type": "String",
+            "Default": "production",
+            "Description": "Short suffix to append to resource names to keep them unique (e.g. dev, staging, prod)"
+        },
         "OwnerEmail": {
             "Type": "String",
             "Default": "admin@example.com",
@@ -1046,7 +1051,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "ecommerce-logging-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "ecommerce-logging-${EnvironmentSuffix}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1170,7 +1175,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "ecommerce-app-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "ecommerce-app-${EnvironmentSuffix}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1259,7 +1264,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "ecommerce-trail-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "ecommerce-trail-${EnvironmentSuffix}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [
@@ -1392,7 +1397,7 @@
             "UpdateReplacePolicy": "Delete",
             "Properties": {
                 "BucketName": {
-                    "Fn::Sub": "ecommerce-config-${AWS::AccountId}-${Environment}"
+                    "Fn::Sub": "ecommerce-config-${EnvironmentSuffix}-${Environment}"
                 },
                 "BucketEncryption": {
                     "ServerSideEncryptionConfiguration": [

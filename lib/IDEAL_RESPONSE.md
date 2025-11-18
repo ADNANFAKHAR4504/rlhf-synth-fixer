@@ -1,4 +1,4 @@
-```yaml
+```yml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Secure and Compliant E-Commerce Cloud Environment'
 
@@ -11,6 +11,11 @@ Parameters:
       - staging
       - production
     Description: Environment name
+
+  EnvironmentSuffix:
+    Type: String
+    Default: production
+    Description: Short suffix to append to resource names to keep them unique (e.g. dev, staging, prod)
 
   OwnerEmail:
     Type: String
@@ -555,7 +560,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'ecommerce-logging-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'ecommerce-logging-${EnvironmentSuffix}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -616,7 +621,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'ecommerce-app-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'ecommerce-app-${EnvironmentSuffix}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -663,7 +668,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'ecommerce-trail-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'ecommerce-trail-${EnvironmentSuffix}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
@@ -734,7 +739,7 @@ Resources:
     DeletionPolicy: Delete
     UpdateReplacePolicy: Delete
     Properties:
-      BucketName: !Sub 'ecommerce-config-${AWS::AccountId}-${Environment}'
+      BucketName: !Sub 'ecommerce-config-${EnvironmentSuffix}-${Environment}'
       BucketEncryption:
         ServerSideEncryptionConfiguration:
           - ServerSideEncryptionByDefault:
