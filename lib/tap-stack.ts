@@ -607,10 +607,12 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         databaseName: 'payments',
         masterUsername: dbSecretVersion.secretString.apply(s => {
+          if (!s) throw new Error('Database secret string is undefined');
           const secret = JSON.parse(s) as { username: string; password: string };
           return secret.username;
         }),
         masterPassword: dbSecretVersion.secretString.apply(s => {
+          if (!s) throw new Error('Database secret string is undefined');
           const secret = JSON.parse(s) as { username: string; password: string };
           return secret.password;
         }),
@@ -654,10 +656,12 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         databaseName: 'payments',
         masterUsername: dbSecretVersion.secretString.apply(s => {
+          if (!s) throw new Error('Database secret string is undefined');
           const secret = JSON.parse(s) as { username: string; password: string };
           return secret.username;
         }),
         masterPassword: dbSecretVersion.secretString.apply(s => {
+          if (!s) throw new Error('Database secret string is undefined');
           const secret = JSON.parse(s) as { username: string; password: string };
           return secret.password;
         }),
