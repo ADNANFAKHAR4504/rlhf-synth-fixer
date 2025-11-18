@@ -360,16 +360,16 @@ class TapStack(TerraformStack):
             tags={"Name": f"compliance-logs-{environment_suffix}"}
         )
 
-        # Create Lambda functions with container images
-        # Note: Image URIs should be provided via environment variables or parameters
-        # For now, using placeholder URIs that will be updated after ECR push
+        # Create Lambda functions with inline Python code
         validation_lambda = LambdaFunction(
             self,
             "validation_lambda",
             function_name=f"transaction-validation-{environment_suffix}",
             role=lambda_role.arn,
-            package_type="Image",
-            image_uri=f"{validation_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            filename="lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -395,8 +395,10 @@ class TapStack(TerraformStack):
             "fraud_lambda",
             function_name=f"fraud-detection-{environment_suffix}",
             role=lambda_role.arn,
-            package_type="Image",
-            image_uri=f"{fraud_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            filename="lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
@@ -422,8 +424,10 @@ class TapStack(TerraformStack):
             "compliance_lambda",
             function_name=f"compliance-checking-{environment_suffix}",
             role=lambda_role.arn,
-            package_type="Image",
-            image_uri=f"{compliance_ecr.repository_url}:latest",
+            runtime="python3.11",
+            handler="index.lambda_handler",
+            filename="lambda_placeholder.zip",
+            source_code_hash=Fn.filebase64sha256("lambda_placeholder.zip"),
             memory_size=3072,  # 3GB
             timeout=60,
             reserved_concurrent_executions=100,
