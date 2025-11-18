@@ -1,6 +1,7 @@
 variable "environment_suffix" {
   description = "Unique suffix for resource naming to enable multiple deployments"
   type        = string
+  default     = "dev"
   validation {
     condition     = length(var.environment_suffix) > 0 && length(var.environment_suffix) <= 20
     error_message = "Environment suffix must be between 1 and 20 characters"
@@ -68,6 +69,7 @@ variable "min_tasks_per_az" {
 variable "alarm_email" {
   description = "Email address for CloudWatch alarm notifications"
   type        = string
+  default     = "noreply@example.com"
   validation {
     condition     = can(regex("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$", var.alarm_email))
     error_message = "Must provide a valid email address"
