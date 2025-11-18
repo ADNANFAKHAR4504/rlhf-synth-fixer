@@ -640,4 +640,3 @@ describe("Multi-Environment ECS Infrastructure - Coverage Summary", () => {
     expect(mainContent).toMatch(/var\.environment_suffix/);
   });
 });
-
