@@ -409,12 +409,13 @@ resource "aws_s3_object" "bootstrap_script" {
   etag   = filemd5("${path.module}/bootstrap.sh")
 }
 
-# Generate self-signed certificate for EMR in-transit encryption
+# Upload TLS certificate bundle for EMR in-transit encryption
 resource "aws_s3_object" "emr_tls_zip" {
-  bucket = aws_s3_bucket.logs.id
-  key    = "security/emr-tls.zip"
-  source = "${path.module}/security/emr-tls.zip"
-  etag   = filemd5("${path.module}/security/emr-tls.zip")
+  bucket       = aws_s3_bucket.logs.id
+  key          = "security/emr-tls.zip"
+  source       = "${path.module}/security/emr-tls.zip"
+  content_type = "application/zip"
+  etag         = filemd5("${path.module}/security/emr-tls.zip")
 }
 
 
