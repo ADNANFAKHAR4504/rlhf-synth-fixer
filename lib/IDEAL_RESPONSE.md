@@ -1,6 +1,6 @@
 # Multi-Region Disaster Recovery Payment Processing System
 
-I'll create a comprehensive CloudFormation solution implementing multi-region disaster recovery for your payment processing system. This solution provides business continuity with RTO < 1 hour and RPO < 5 minutes across ap-southeast-1 (primary) and ap-southeast-2 (DR).
+I'll create a comprehensive CloudFormation solution implementing multi-region disaster recovery for your payment processing system. This solution provides business continuity with RTO < 1 hour and RPO < 5 minutes across ap-southeast-1 (primary) and ap-southeast-2 (DR)
 
 ## Complete Implementation
 
