@@ -269,6 +269,30 @@ resource "aws_iam_role_policy" "emr_ec2_tagging" {
   })
 }
 
+# KMS permissions for EMR local disk encryption
+resource "aws_iam_role_policy" "emr_ec2_kms" {
+  name = "${local.bucket_prefix}-emr-ec2-kms"
+  role = aws_iam_role.emr_ec2_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:GenerateDataKeyWithoutPlaintext",
+          "kms:DescribeKey"
+        ]
+        Resource = [
+          aws_kms_key.emr.arn
+        ]
+      }
+    ]
+  })
+}
+
 resource "aws_iam_instance_profile" "emr_ec2_instance_profile" {
   name = "${local.bucket_prefix}-emr-ec2-profile"
   role = aws_iam_role.emr_ec2_role.name
