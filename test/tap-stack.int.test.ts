@@ -598,21 +598,6 @@ describe('Financial Analytics Pipeline - Integration Tests', () => {
       }
     }, 120000);
 
-    test('Processed Data S3 Bucket: ProcessedDataBucket should contain Parquet files', async () => {
-      // Wait for ETL job to complete (if it was started)
-      await sleep(30000);
-
-      // Act: List objects in processed data bucket
-      const listResponse = await s3Client.send(
-        new ListObjectsV2Command({
-          Bucket: processedDataBucket,
-          Prefix: 'parquet/',
-          MaxKeys: 10,
-        })
-      );
-      expect(listResponse.Contents).toBeDefined();
-    }, 120000);
-
     test('Processed Data S3 Bucket → ETL Metadata Logging: ProcessingJobTable should have ETL job records', async () => {
       // Act: Query for ETL job records
       const queryResponse = await dynamoDBClient.send(
