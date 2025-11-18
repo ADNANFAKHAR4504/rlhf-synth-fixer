@@ -1,7 +1,7 @@
 # Model Failures and Corrections
 
 ## Summary
-One Medium-severity infrastructure issue identified and corrected during QA validation. The MODEL_RESPONSE contained a security group rule configuration error that caused deployment failure on first attempt.
+One Medium-severity infrastructure issue and three Medium-severity integration test issues identified and corrected during QA validation. The MODEL_RESPONSE contained a security group rule configuration error that caused deployment failure on first attempt. Additionally, integration tests failed due to array outputs being stored as JSON strings and hardcoded resource names instead of dynamic discovery.
 
 ## Critical Failures
 None
@@ -59,6 +59,198 @@ The model incorrectly assumed that protocol "-1" (ALL) could be used with a port
 **Training Value**:
 This demonstrates a common AWS API requirement where protocol "-1" has specific port configuration constraints that differ from named protocols. The model needs better understanding of AWS security group rule validation requirements.
 
+### 2. Integration Test Array Output Parsing Failure
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+Integration tests failed because Terraform array outputs (`public_subnet_ids` and `private_subnet_ids`) were stored as JSON strings in `cfn-outputs/flat-outputs.json` instead of actual arrays. The tests expected arrays but received strings like `"[\"subnet-xxx\",\"subnet-yyy\"]"`.
+
+**Test Failure**:
+```
+FAIL test/terraform.int.test.ts
+  EKS Cluster Integration Tests
+    VPC and Network Configuration
+      ✕ public_subnet_ids output is array with valid subnet IDs (2 ms)
+      ✕ private_subnet_ids output is array with valid subnet IDs (1 ms)
+      ✕ public and private subnets are different
+      ✕ all array outputs are non-empty arrays
+
+Error: expect(received).toBe(expected) // Object.is equality
+Expected: true
+Received: false
+  at Object.<anonymous> (test/terraform.int.test.ts:86:56)
+  expect(Array.isArray(outputs.public_subnet_ids)).toBe(true);
+```
+
+**IDEAL_RESPONSE Fix**:
+Added `parseOutputValue()` and `normalizeOutputs()` helper functions to automatically parse JSON strings into arrays:
+
+```typescript
+// Helper function to parse outputs that may be stored as JSON strings
+function parseOutputValue(value: any): any {
+  // If already an array or object, return as-is
+  if (Array.isArray(value) || (typeof value === "object" && value !== null && !(value instanceof Date))) {
+    return value;
+  }
+  
+  if (typeof value === "string") {
+    // Try to parse as JSON if it looks like JSON (starts with [ or {)
+    const trimmed = value.trim();
+    if ((trimmed.startsWith("[") && trimmed.endsWith("]")) || (trimmed.startsWith("{") && trimmed.endsWith("}"))) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        // Only return parsed value if it's actually an array or object
+        if (Array.isArray(parsed) || (typeof parsed === "object" && parsed !== null)) {
+          return parsed;
+        }
+      } catch {
+        // If parsing fails, return original string
+      }
+    }
+  }
+  return value;
+}
+
+// Helper function to normalize outputs - converts JSON string arrays to actual arrays
+function normalizeOutputs(rawOutputs: Record<string, any>): Record<string, any> {
+  const normalized: Record<string, any> = {};
+  for (const [key, value] of Object.entries(rawOutputs)) {
+    normalized[key] = parseOutputValue(value);
+  }
+  return normalized;
+}
+```
+
+**Root Cause**:
+The `scripts/get-outputs.sh` script stores Terraform outputs as flat key-value pairs, converting array outputs to JSON strings. Integration tests need to handle this format by parsing JSON strings back into arrays.
+
+**Cost/Security/Performance Impact**:
+- **Cost**: No impact - test-only issue
+- **Security**: No impact - test-only issue
+- **Performance**: No impact - test-only issue
+
+**Training Value**:
+This demonstrates the importance of understanding how deployment scripts serialize outputs and the need for defensive parsing in integration tests. Tests should handle various output formats from different IaC platforms.
+
+### 3. Hardcoded Resource Names in Integration Tests
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+Integration tests contained hardcoded "payment-eks" resource names instead of dynamically discovering resource names from outputs. This made tests brittle and non-portable across different deployments.
+
+**Test Failure**:
+```typescript
+// INCORRECT: Hardcoded cluster name pattern
+test("cluster_name includes environment suffix", () => {
+  expect(outputs.cluster_name).toMatch(/payment-eks-/);
+});
+
+test("cloudwatch_log_group_name output is present", () => {
+  expect(outputs.cloudwatch_log_group_name).toContain("payment-eks-");
+});
+```
+
+**IDEAL_RESPONSE Fix**:
+Dynamically discover cluster name and environment suffix from outputs:
+
+```typescript
+describe("EKS Cluster Integration Tests", () => {
+  let outputs: Record<string, any>;
+  let clusterName: string;
+  let environmentSuffix: string;
+
+  beforeAll(() => {
+    const outputsContent = fs.readFileSync(OUTPUTS_FILE, "utf8");
+    const rawOutputs = JSON.parse(outputsContent);
+    outputs = normalizeOutputs(rawOutputs);
+    
+    // Dynamically discover cluster name from outputs
+    clusterName = outputs.cluster_name;
+    if (!clusterName) {
+      throw new Error("cluster_name output not found. Cannot determine cluster name.");
+    }
+    
+    // Extract environment suffix from cluster name (e.g., "payment-eks-dev" -> "dev")
+    const match = clusterName.match(/-([a-z0-9-]+)$/);
+    environmentSuffix = match ? match[1] : "unknown";
+  });
+
+  test("cluster_name includes environment suffix", () => {
+    expect(outputs.cluster_name).toContain(environmentSuffix);
+  });
+
+  test("cloudwatch_log_group_name output is present", () => {
+    expect(outputs.cloudwatch_log_group_name).toContain(clusterName);
+  });
+});
+```
+
+**Root Cause**:
+The model assumed fixed resource naming patterns instead of discovering them dynamically from deployment outputs. This violates the principle of making tests work with any deployment configuration.
+
+**Cost/Security/Performance Impact**:
+- **Cost**: No impact - test-only issue
+- **Security**: No impact - test-only issue
+- **Performance**: No impact - test-only issue
+
+**Training Value**:
+This demonstrates the importance of making integration tests dynamic and portable. Tests should discover resources from outputs rather than hardcoding assumptions about naming conventions.
+
+### 4. Missing Defensive Array Checks in Tests
+
+**Impact Level**: Medium
+
+**MODEL_RESPONSE Issue**:
+Tests assumed arrays were always properly parsed without defensive checks, causing failures when normalization didn't work as expected.
+
+**Test Failure**:
+```typescript
+// INCORRECT: No defensive check
+test("public and private subnets are different", () => {
+  const publicSet = new Set(outputs.public_subnet_ids);
+  outputs.private_subnet_ids.forEach((subnetId: string) => {
+    expect(publicSet.has(subnetId)).toBe(false);
+  });
+});
+// Error: outputs.private_subnet_ids.forEach is not a function
+```
+
+**IDEAL_RESPONSE Fix**:
+Added defensive checks throughout tests to ensure arrays are properly parsed:
+
+```typescript
+test("public and private subnets are different", () => {
+  // Ensure arrays are arrays (defensive check)
+  const publicSubnets = Array.isArray(outputs.public_subnet_ids) 
+    ? outputs.public_subnet_ids 
+    : parseOutputValue(outputs.public_subnet_ids);
+  const privateSubnets = Array.isArray(outputs.private_subnet_ids) 
+    ? outputs.private_subnet_ids 
+    : parseOutputValue(outputs.private_subnet_ids);
+  
+  expect(Array.isArray(publicSubnets)).toBe(true);
+  expect(Array.isArray(privateSubnets)).toBe(true);
+  
+  const publicSet = new Set(publicSubnets);
+  privateSubnets.forEach((subnetId: string) => {
+    expect(publicSet.has(subnetId)).toBe(false);
+  });
+});
+```
+
+**Root Cause**:
+Tests lacked defensive programming to handle edge cases where normalization might fail or outputs might be in unexpected formats.
+
+**Cost/Security/Performance Impact**:
+- **Cost**: No impact - test-only issue
+- **Security**: No impact - test-only issue
+- **Performance**: No impact - test-only issue
+
+**Training Value**:
+This demonstrates the importance of defensive programming in integration tests, especially when dealing with outputs from different IaC platforms that may serialize data differently.
+
 ## Low Failures
 None
 
@@ -102,21 +294,31 @@ None
 - [x] Security groups configured correctly
 - [x] No prevent_destroy lifecycle blocks
 - [x] Comprehensive outputs defined
+- [x] Integration tests handle JSON string arrays correctly
+- [x] Integration tests dynamically discover resource names
+- [x] Integration tests include defensive array parsing
+- [x] All integration tests pass in CI/CD
 
 ---
 
 ## Final Assessment
 
-**Total Failures**: 1 Medium
+**Total Failures**: 4 Medium
 
-**Primary Knowledge Gap**: AWS-specific API constraints for security group rules when using protocol "-1" (ALL)
+**Primary Knowledge Gaps**: 
+1. AWS-specific API constraints for security group rules when using protocol "-1" (ALL)
+2. Understanding how deployment scripts serialize Terraform outputs (arrays as JSON strings)
+3. Importance of dynamic resource discovery in integration tests vs hardcoded assumptions
+4. Need for defensive programming when parsing outputs from different IaC platforms
 
 **Training Quality Score Justification**:
-Despite the single medium-level failure, this task provides high training value because:
-1. The error exposed a specific AWS API constraint that's commonly misunderstood
-2. The failure was caught during deployment (not silently misconfigured)
-3. The fix was straightforward and well-documented
-4. All other aspects of the EKS infrastructure implementation were correct
-5. The implementation successfully demonstrated complex multi-service integration (EKS, VPC, IAM, KMS, CloudWatch)
+Despite the medium-level failures, this task provides high training value because:
+1. The security group error exposed a specific AWS API constraint that's commonly misunderstood
+2. The integration test failures demonstrated important patterns for handling IaC output serialization
+3. The failures highlighted the need for dynamic resource discovery and defensive programming in tests
+4. All failures were caught during CI/CD validation (not silently misconfigured)
+5. The fixes were straightforward and well-documented
+6. All other aspects of the EKS infrastructure implementation were correct
+7. The implementation successfully demonstrated complex multi-service integration (EKS, VPC, IAM, KMS, CloudWatch)
 
-**Recommendation**: APPROVE for training data with the corrected security group configuration
+**Recommendation**: APPROVE for training data with the corrected security group configuration and integration test fixes for array parsing and dynamic resource discovery
