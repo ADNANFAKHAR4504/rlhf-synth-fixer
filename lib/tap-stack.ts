@@ -606,12 +606,14 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         engineVersion: '14.6',
         databaseName: 'payments',
-        masterUsername: dbSecretVersion.secretString.apply(s =>
-          JSON.parse(s).username
-        ),
-        masterPassword: dbSecretVersion.secretString.apply(s =>
-          JSON.parse(s).password
-        ),
+        masterUsername: dbSecretVersion.secretString.apply(s => {
+          const secret = JSON.parse(s) as { username: string; password: string };
+          return secret.username;
+        }),
+        masterPassword: dbSecretVersion.secretString.apply(s => {
+          const secret = JSON.parse(s) as { username: string; password: string };
+          return secret.password;
+        }),
         dbSubnetGroupName: blueDbSubnetGroup.name,
         vpcSecurityGroupIds: [blueDbSg.id],
         kmsKeyId: kmsKey.arn,
@@ -651,12 +653,14 @@ export class TapStack extends pulumi.ComponentResource {
         engineMode: 'provisioned',
         engineVersion: '14.6',
         databaseName: 'payments',
-        masterUsername: dbSecretVersion.secretString.apply(s =>
-          JSON.parse(s).username
-        ),
-        masterPassword: dbSecretVersion.secretString.apply(s =>
-          JSON.parse(s).password
-        ),
+        masterUsername: dbSecretVersion.secretString.apply(s => {
+          const secret = JSON.parse(s) as { username: string; password: string };
+          return secret.username;
+        }),
+        masterPassword: dbSecretVersion.secretString.apply(s => {
+          const secret = JSON.parse(s) as { username: string; password: string };
+          return secret.password;
+        }),
         dbSubnetGroupName: greenDbSubnetGroup.name,
         vpcSecurityGroupIds: [greenDbSg.id],
         kmsKeyId: kmsKey.arn,
