@@ -12,15 +12,30 @@ if (!fs.existsSync(outputsPath)) {
   );
 }
 
-const outputs = JSON.parse(fs.readFileSync(outputsPath, "utf8")) as Record<string, string>;
+const rawOutputs = JSON.parse(fs.readFileSync(outputsPath, "utf8"));
+
+// Handle both flat and nested output structures
+// Terraform outputs can be: { "key": "value" } or { "key": { "value": "value" } }
+const outputs: Record<string, string> = {};
+for (const [key, value] of Object.entries(rawOutputs)) {
+  if (typeof value === "string") {
+    outputs[key] = value;
+  } else if (value && typeof value === "object" && "value" in value) {
+    outputs[key] = String((value as { value: unknown }).value);
+  } else if (value && typeof value === "object" && "Value" in value) {
+    outputs[key] = String((value as { Value: unknown }).Value);
+  } else {
+    outputs[key] = String(value);
+  }
+}
 
 const pickOutput = (...keys: string[]): string => {
   for (const key of keys) {
-    if (outputs[key]) {
-      return outputs[key];
+    if (outputs[key] && typeof outputs[key] === "string" && outputs[key].trim() !== "") {
+      return outputs[key].trim();
     }
   }
-  throw new Error(`Missing required output. Tried keys: ${keys.join(", ")}`);
+  throw new Error(`Missing required output. Tried keys: ${keys.join(", ")}. Available keys: ${Object.keys(outputs).join(", ")}`);
 };
 
 const clusterId = pickOutput("emr_cluster_id", "EmrClusterId");
@@ -80,14 +95,27 @@ describe("EMR trading analytics stack end-to-end", () => {
   jest.setTimeout(600_000); // allow up to 10 minutes for Spark step execution
 
   test("cluster is configured for secure, compliant big data processing", async () => {
-    const describe = await emrClient.send(
-      new DescribeClusterCommand({
-        ClusterId: clusterId,
-      })
-    );
+    // Validate cluster ID format
+    expect(clusterId).toBeTruthy();
+    expect(typeof clusterId).toBe("string");
+    expect(clusterId.trim()).not.toBe("");
+    expect(clusterId).toMatch(/^j-[A-Z0-9]+$/);
+
+    let describe;
+    try {
+      describe = await emrClient.send(
+        new DescribeClusterCommand({
+          ClusterId: clusterId.trim(),
+        })
+      );
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to describe EMR cluster ${clusterId}: ${errorMessage}`);
+    }
 
     const cluster = describe.Cluster;
     expect(cluster).toBeTruthy();
+    expect(cluster?.Id).toBe(clusterId.trim());
     expect(cluster?.ReleaseLabel).toMatch(/^emr-6\.9\./);
     expect(cluster?.TerminationProtected).toBe(true);
     expect(cluster?.StepConcurrencyLevel).toBeGreaterThanOrEqual(1);
@@ -97,26 +125,42 @@ describe("EMR trading analytics stack end-to-end", () => {
   });
 
   test("end-to-end testing: trading analytics workflow processes daily trades", async () => {
+    // Validate bucket names
+    expect(rawBucket).toBeTruthy();
+    expect(typeof rawBucket).toBe("string");
+    expect(rawBucket.trim()).not.toBe("");
+    expect(curatedBucket).toBeTruthy();
+    expect(typeof curatedBucket).toBe("string");
+    expect(curatedBucket.trim()).not.toBe("");
+    expect(logsBucket).toBeTruthy();
+    expect(typeof logsBucket).toBe("string");
+    expect(logsBucket.trim()).not.toBe("");
+
     const testId = `itest-${Date.now()}`;
     const rawKey = `integration-tests/${testId}/input/trades.csv`;
     const scriptKey = `integration-tests/${testId}/spark_job.py`;
     const outputPrefix = `integration-tests/${testId}/output`;
 
+    // Use trimmed bucket names
+    const rawBucketName = rawBucket.trim();
+    const curatedBucketName = curatedBucket.trim();
+    const logsBucketName = logsBucket.trim();
+
     const cleanup = async () => {
       await Promise.allSettled([
-        s3Client.send(new DeleteObjectCommand({ Bucket: rawBucket, Key: rawKey })),
-        s3Client.send(new DeleteObjectCommand({ Bucket: logsBucket, Key: scriptKey })),
+        s3Client.send(new DeleteObjectCommand({ Bucket: rawBucketName, Key: rawKey })),
+        s3Client.send(new DeleteObjectCommand({ Bucket: logsBucketName, Key: scriptKey })),
         (async () => {
           const listed = await s3Client.send(
             new ListObjectsV2Command({
-              Bucket: curatedBucket,
+              Bucket: curatedBucketName,
               Prefix: `${outputPrefix}/`,
             })
           );
           if (listed.Contents && listed.Contents.length > 0) {
             await s3Client.send(
               new DeleteObjectsCommand({
-                Bucket: curatedBucket,
+                Bucket: curatedBucketName,
                 Delete: {
                   Objects: listed.Contents.map((object) => ({ Key: object.Key! })),
                 },
@@ -139,17 +183,17 @@ describe("EMR trading analytics stack end-to-end", () => {
 from pyspark.sql import SparkSession
 
 spark = SparkSession.builder.appName("integration-test-trading-dataset").getOrCreate()
-df = spark.read.option("header", "true").csv("s3://${rawBucket}/${rawKey}")
+df = spark.read.option("header", "true").csv("s3://${rawBucketName}/${rawKey}")
 df = df.selectExpr("symbol", "cast(price as double) as price", "cast(quantity as int) as quantity")
 summary = df.groupBy("symbol").agg({"price": "avg", "quantity": "sum"}).withColumnRenamed("avg(price)", "avg_price").withColumnRenamed("sum(quantity)", "total_quantity")
-summary.coalesce(1).write.mode("overwrite").option("header", "true").csv("s3://${curatedBucket}/${outputPrefix}")
+summary.coalesce(1).write.mode("overwrite").option("header", "true").csv("s3://${curatedBucketName}/${outputPrefix}")
 spark.stop()
 `.trim();
 
     try {
       await s3Client.send(
         new PutObjectCommand({
-          Bucket: rawBucket,
+          Bucket: rawBucketName,
           Key: rawKey,
           Body: sampleCsv,
         })
@@ -157,7 +201,7 @@ spark.stop()
 
       await s3Client.send(
         new PutObjectCommand({
-          Bucket: logsBucket,
+          Bucket: logsBucketName,
           Key: scriptKey,
           Body: sparkScript,
         })
@@ -176,7 +220,7 @@ spark.stop()
                   "spark-submit",
                   "--deploy-mode",
                   "cluster",
-                  `s3://${logsBucket}/${scriptKey}`,
+                  `s3://${logsBucketName}/${scriptKey}`,
                 ],
               },
             },
@@ -207,7 +251,7 @@ spark.stop()
 
       const outputListing = await s3Client.send(
         new ListObjectsV2Command({
-          Bucket: curatedBucket,
+          Bucket: curatedBucketName,
           Prefix: `${outputPrefix}/`,
         })
       );
@@ -220,7 +264,7 @@ spark.stop()
 
       const csvGet = await s3Client.send(
         new GetObjectCommand({
-          Bucket: curatedBucket,
+          Bucket: curatedBucketName,
           Key: csvObject!.Key!,
         })
       );
