@@ -1,0 +1,29 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "hard",
+  "turn_type": "single",
+  "po_id": "6592",
+  "team": "5",
+  "startedAt": "2025-11-15T10:55:28.087Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "background": "Serverless payment processing orchestration system handling 2,000 daily transactions with automatic retry logic, failure notifications, and complete lifecycle visibility for fintech startup operations",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "Step Functions",
+    "Lambda",
+    "DynamoDB",
+    "SNS",
+    "CloudWatch",
+    "IAM",
+    "KMS"
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "rajeshkumar-cloud",
+  "dockerS3Location": ""
+}

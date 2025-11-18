@@ -1,0 +1,35 @@
+{
+  "task_id": "101912509",
+  "po_id": "101912509",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T13:21:00Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Cloud Environment Setup"
+  ],
+  "aws_services": [
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "VPC",
+    "ALB",
+    "S3",
+    "DynamoDB",
+    "SSM",
+    "CloudFront",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing",
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
+}
