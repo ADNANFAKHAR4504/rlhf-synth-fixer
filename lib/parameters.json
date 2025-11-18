@@ -1,0 +1,26 @@
+[
+  {
+    "ParameterKey": "EnvironmentSuffix",
+    "ParameterValue": "dev"
+  },
+  {
+    "ParameterKey": "StagingAccountId",
+    "ParameterValue": "123456789012"
+  },
+  {
+    "ParameterKey": "ProductionAccountId",
+    "ParameterValue": "123456789013"
+  },
+  {
+    "ParameterKey": "SourceRepositoryName",
+    "ParameterValue": "my-application"
+  },
+  {
+    "ParameterKey": "SourceBranchName",
+    "ParameterValue": "main"
+  },
+  {
+    "ParameterKey": "ArtifactRetentionDays",
+    "ParameterValue": "30"
+  }
+]
