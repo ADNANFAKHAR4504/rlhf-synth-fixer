@@ -105,11 +105,11 @@ describe('Terraform Security Foundation - Unit Tests', () => {
     const kmsContent = fs.readFileSync(path.join(libPath, 'kms.tf'), 'utf-8');
 
     it('should configure multi-region KMS key', () => {
-      expect(kmsContent).toContain('multi_region = true');
+      expect(kmsContent).toMatch(/multi_region\s*=\s*true/);
     });
 
     it('should enable automatic key rotation', () => {
-      expect(kmsContent).toContain('enable_key_rotation = true');
+      expect(kmsContent).toMatch(/enable_key_rotation\s*=\s*true/);
     });
 
     it('should have 7-day deletion window', () => {
