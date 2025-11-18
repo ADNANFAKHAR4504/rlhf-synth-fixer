@@ -15,16 +15,6 @@
                 },
                 {
                     "Label": {
-                        "default": "Account Configuration"
-                    },
-                    "Parameters": [
-                        "DevAccountId",
-                        "StagingAccountId",
-                        "ProdAccountId"
-                    ]
-                },
-                {
-                    "Label": {
                         "default": "Notification Configuration"
                     },
                     "Parameters": [
@@ -99,14 +89,6 @@
                     "Ref": "Environment"
                 },
                 "prod"
-            ]
-        },
-        "IsStaging": {
-            "Fn::Equals": [
-                {
-                    "Ref": "Environment"
-                },
-                "staging"
             ]
         }
     },

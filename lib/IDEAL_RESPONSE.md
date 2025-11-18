@@ -51,6 +51,7 @@ This CloudFormation template creates an optimized payment processing infrastruct
 **8. Documentation**
 - Comprehensive Metadata section with OptimizationRationale
 - Documents reasoning for DynamoDB, Lambda, dependency chains, monitoring, and resilience
+- Metadata explicitly records ownership with `Author: iamarpit-turing` and `Reviewer: adnan-turing` for auditability
 - Inline comments throughout template explaining each requirement
 
 **9. DeletionPolicy Configuration**

@@ -82,7 +82,6 @@ Parameters:
 # Requirement 18: Conditions for multi-environment support
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'prod']
-  IsStaging: !Equals [!Ref Environment, 'staging']
 
 Resources:
   # Requirement 2: DynamoDB table with on-demand billing and PITR
