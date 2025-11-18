@@ -368,6 +368,9 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
+    cd lib
+    pipenv install
+    pulumi login "$PULUMI_BACKEND_URL"
     pipenv run pulumi-create-stack
     
     # Clear any existing locks before deployment
@@ -383,9 +386,11 @@ elif [ "$PLATFORM" = "pulumi" ]; then
       echo "🔄 Retrying deployment after lock cancellation..."
       pipenv run pulumi-deploy || {
         echo "❌ Deployment failed after retry"
+        cd ..
         exit 1
       }
     fi
+    cd ..
   fi
 
 else
