@@ -34,6 +34,24 @@
         "LatestAmiId": {
             "Type": "AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>",
             "Default": "/aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2"
+        },
+        "CreateConfigDeliveryChannel": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether to create the AWS Config DeliveryChannel. Set to 'false' if one exists in the account/region."
+        },
+        "CreateConfigRecorder": {
+            "Type": "String",
+            "Default": "false",
+            "AllowedValues": [
+                "true",
+                "false"
+            ],
+            "Description": "Whether to create the AWS Config ConfigurationRecorder. Set to 'false' if one exists in the account/region."
         }
     },
     "Mappings": {
@@ -104,6 +122,34 @@
             "sa-east-1": {
                 "AccountId": "507241528517"
             }
+        }
+    },
+    "Conditions": {
+        "CreateConfigDeliveryChannelCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateConfigDeliveryChannel"
+                },
+                "true"
+            ]
+        },
+        "CreateConfigRecorderCondition": {
+            "Fn::Equals": [
+                {
+                    "Ref": "CreateConfigRecorder"
+                },
+                "true"
+            ]
+        },
+        "CreateConfigDeliveryChannelAndRecorderCondition": {
+            "Fn::And": [
+                {
+                    "Condition": "CreateConfigDeliveryChannelCondition"
+                },
+                {
+                    "Condition": "CreateConfigRecorderCondition"
+                }
+            ]
         }
     },
     "Metadata": {
@@ -1498,6 +1544,7 @@
         },
         "ConfigRecorderRole": {
             "Type": "AWS::IAM::Role",
+            "Condition": "CreateConfigRecorderCondition",
             "Properties": {
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
@@ -1539,6 +1586,7 @@
             "DependsOn": [
                 "ConfigBucketPolicy"
             ],
+            "Condition": "CreateConfigRecorderCondition",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "ECommerce-Recorder-${Environment}"
@@ -1557,6 +1605,7 @@
         },
         "ConfigDeliveryChannel": {
             "Type": "AWS::Config::DeliveryChannel",
+            "Condition": "CreateConfigDeliveryChannelAndRecorderCondition",
             "Properties": {
                 "Name": {
                     "Fn::Sub": "ECommerce-DeliveryChannel-${Environment}"
@@ -2608,6 +2657,7 @@
         },
         "ConfigRecorderName": {
             "Description": "AWS Config Recorder Name",
+            "Condition": "CreateConfigRecorderCondition",
             "Value": {
                 "Ref": "ConfigRecorder"
             },

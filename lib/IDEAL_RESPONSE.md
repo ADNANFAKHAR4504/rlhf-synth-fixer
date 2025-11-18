@@ -35,6 +35,22 @@ Parameters:
     Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
     Default: /aws/service/ami-amazon-linux-latest/amzn2-ami-hvm-x86_64-gp2
 
+  CreateConfigDeliveryChannel:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether to create the AWS Config DeliveryChannel. Set to 'false' if one exists in the account/region.
+
+  CreateConfigRecorder:
+    Type: String
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+    Description: Whether to create the AWS Config ConfigurationRecorder. Set to 'false' if one exists in the account/region.
+
 Mappings:
   # AWS ELB Account IDs by region - needed for ALB access logging
   RegionToELBAccountId:
@@ -82,6 +98,11 @@ Mappings:
       AccountId: "076674570225"
     sa-east-1:
       AccountId: "507241528517"
+
+Conditions:
+  CreateConfigDeliveryChannelCondition: !Equals [ !Ref CreateConfigDeliveryChannel, 'true' ]
+  CreateConfigRecorderCondition: !Equals [ !Ref CreateConfigRecorder, 'true' ]
+  CreateConfigDeliveryChannelAndRecorderCondition: !And [ !Condition CreateConfigDeliveryChannelCondition, !Condition CreateConfigRecorderCondition ]
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -790,6 +811,7 @@ Resources:
 
   ConfigRecorderRole:
     Type: AWS::IAM::Role
+    Condition: CreateConfigRecorderCondition
     Properties:
       AssumeRolePolicyDocument:
         Version: '2012-10-17'
@@ -812,6 +834,7 @@ Resources:
     Type: AWS::Config::ConfigurationRecorder
     DependsOn:
       - ConfigBucketPolicy
+    Condition: CreateConfigRecorderCondition
     Properties:
       Name: !Sub 'ECommerce-Recorder-${Environment}'
       RoleARN: !GetAtt ConfigRecorderRole.Arn
@@ -821,6 +844,8 @@ Resources:
 
   ConfigDeliveryChannel:
     Type: AWS::Config::DeliveryChannel
+    # Only create delivery channel if both delivery channel creation is requested and recorder creation is enabled
+    Condition: CreateConfigDeliveryChannelAndRecorderCondition
     Properties:
       Name: !Sub 'ECommerce-DeliveryChannel-${Environment}'
       S3BucketName: !Ref ConfigBucket
@@ -1566,6 +1591,7 @@ Outputs:
 
   ConfigRecorderName:
     Description: AWS Config Recorder Name
+    Condition: CreateConfigRecorderCondition
     Value: !Ref ConfigRecorder
     Export:
       Name: !Sub 'ECommerce-Config-${Environment}'

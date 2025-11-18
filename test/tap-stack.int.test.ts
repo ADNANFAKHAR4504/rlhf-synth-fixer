@@ -1,12 +1,12 @@
+import { GetFunctionCommand, LambdaClient } from '@aws-sdk/client-lambda';
+import { HeadBucketCommand, S3Client } from '@aws-sdk/client-s3';
+import axios from 'axios';
+import dns from 'dns/promises';
 import fs from 'fs';
 import path from 'path';
-import dns from 'dns/promises';
-import axios from 'axios';
-import { S3Client, HeadBucketCommand } from '@aws-sdk/client-s3';
-import { LambdaClient, GetFunctionCommand } from '@aws-sdk/client-lambda';
 
 import { CloudTrailClient, DescribeTrailsCommand } from '@aws-sdk/client-cloudtrail';
-import { WAFV2Client, GetWebACLCommand } from '@aws-sdk/client-wafv2';
+import { GetWebACLCommand, WAFV2Client } from '@aws-sdk/client-wafv2';
 
 jest.setTimeout(120000);
 
@@ -35,7 +35,6 @@ describe('TapStack Integration Tests (E2E)', () => {
       'VPCId',
       'CloudTrailName',
       'LambdaFunctionArn',
-      'ConfigRecorderName',
       'S3ApplicationBucketName',
       'WebACLArn'
     ];
@@ -45,6 +44,11 @@ describe('TapStack Integration Tests (E2E)', () => {
       const val = String(flat[k] || '');
       expect(val.length).toBeGreaterThan(0);
     });
+
+    if (Object.prototype.hasOwnProperty.call(flat, 'ConfigRecorderName')) {
+      const val = String(flat['ConfigRecorderName'] || '');
+      expect(val.length).toBeGreaterThan(0);
+    }
   });
 
   test('ALB DNS resolves to an IP address', async () => {
@@ -61,10 +65,10 @@ describe('TapStack Integration Tests (E2E)', () => {
 
     const url = `http://${alb}`;
 
-  const resp = await axios.get(url, { timeout: 20000 });
+    const resp = await axios.get(url, { timeout: 20000 });
 
-  expect(resp.status).toBe(200);
-  const html = String(resp.data || '');
+    expect(resp.status).toBe(200);
+    const html = String(resp.data || '');
 
     // Root page should include links to health and db-test endpoints
     expect(/href=['"]?\/health['"]?/i.test(html) || /href=['"]?\/db-test['"]?/i.test(html)).toBe(true);
@@ -185,4 +189,5 @@ describe('TapStack Integration Tests (E2E)', () => {
   });
 });
 
-export {};
+export { };
+
