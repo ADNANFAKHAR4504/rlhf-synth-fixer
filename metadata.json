@@ -1,0 +1,43 @@
+{
+  "platform": "pulumi",
+  "language": "ts",
+  "complexity": "expert",
+  "team": "synth-2",
+  "turn_type": "single",
+  "po_id": "y2r2f5",
+  "startedAt": "2025-11-18T11:01:53Z",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Use AWS Systems Manager Parameter Store for non-sensitive configuration",
+    "Implement AWS Secrets Manager rotation for database credentials every 30 days",
+    "Configure S3 bucket policies to enforce SSL/TLS for all requests",
+    "Configure VPC endpoints for S3 and DynamoDB to avoid internet routing",
+    "Use AWS Transit Gateway for network isolation between environments",
+    "Implement AWS Config rules to monitor compliance with security policies",
+    "Implement CloudWatch Logs retention of 90 days for audit compliance",
+    "Use AWS WAF with rate limiting rules on the ALB",
+    "Deploy Aurora PostgreSQL with encryption at rest using customer-managed KMS keys",
+    "Deploy in at least 3 availability zones for high availability"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2 Transit Gateway",
+    "RDS Aurora PostgreSQL",
+    "ECS Fargate",
+    "Application Load Balancer",
+    "S3",
+    "DynamoDB",
+    "Lambda",
+    "CloudWatch",
+    "SNS",
+    "Route 53",
+    "KMS",
+    "IAM",
+    "Systems Manager Parameter Store",
+    "Secrets Manager",
+    "AWS Config",
+    "WAF"
+  ],
+  "training_quality": 8,
+  "region": "us-east-1"
+}
