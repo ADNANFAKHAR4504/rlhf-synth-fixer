@@ -32,7 +32,26 @@ Parameters:
     Type: Number
     Default: 30
     Description: 'CloudWatch Logs retention period in days'
-    AllowedValues: [1, 3, 5, 7, 14, 30, 60, 90, 120, 150, 180, 365, 400, 545, 731, 1827, 3653]
+    AllowedValues:
+      [
+        1,
+        3,
+        5,
+        7,
+        14,
+        30,
+        60,
+        90,
+        120,
+        150,
+        180,
+        365,
+        400,
+        545,
+        731,
+        1827,
+        3653,
+      ]
 
   KinesisShardCount:
     Type: Number
@@ -843,8 +862,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}, {"FunctionName": "${MetricsProcessorFunction}"}],
-                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}, {"FunctionName": "${MetricsProcessorFunction}"}]
+                  ["AWS/Lambda", "Invocations", {"stat": "Sum", "label": "Lambda Invocations"}, {"Name": "FunctionName", "Value": "${MetricsProcessorFunction}"}],
+                  [".", "Errors", {"stat": "Sum", "label": "Lambda Errors"}, {"Name": "FunctionName", "Value": "${MetricsProcessorFunction}"}]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -856,8 +875,8 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/Kinesis", "IncomingRecords", {"stat": "Sum"}, {"StreamName": "${LogStream}"}],
-                  [".", "IncomingBytes", {"stat": "Sum", "yAxis": "right"}, {"StreamName": "${LogStream}"}]
+                  ["AWS/Kinesis", "IncomingRecords", {"stat": "Sum"}, {"Name": "StreamName", "Value": "${LogStream}"}],
+                  [".", "IncomingBytes", {"stat": "Sum", "yAxis": "right"}, {"Name": "StreamName", "Value": "${LogStream}"}]
                 ],
                 "period": 300,
                 "stat": "Sum",
@@ -869,7 +888,7 @@ Resources:
               "type": "metric",
               "properties": {
                 "metrics": [
-                  ["AWS/AOSS", "5xx", {"stat": "Maximum", "label": "5xx Errors"}, {"CollectionName": "${OpenSearchDomain}"}]
+                  ["AWS/AOSS", "5xx", {"stat": "Maximum", "label": "5xx Errors"}, {"Name": "CollectionName", "Value": "${OpenSearchDomain}"}]
                 ],
                 "period": 60,
                 "stat": "Maximum",
