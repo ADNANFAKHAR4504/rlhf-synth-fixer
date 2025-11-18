@@ -24,5 +24,10 @@
     "Amazon S3",
     "AWS Lambda",
     "Amazon SNS"
-  ]
+  ],
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "dockerS3Location": ""
 }
