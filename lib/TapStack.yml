@@ -83,8 +83,6 @@ Parameters:
 Conditions:
   IsProduction: !Equals [!Ref Environment, 'prod']
   IsStaging: !Equals [!Ref Environment, 'staging']
-  IsDevelopment: !Equals [!Ref Environment, 'dev']
-  EnableEnhancedMonitoring: !Or [!Condition IsProduction, !Condition IsStaging]
 
 Resources:
   # Requirement 2: DynamoDB table with on-demand billing and PITR
@@ -244,11 +242,6 @@ Resources:
   # Requirement 16: Reserved concurrency
   PaymentValidationFunction:
     Type: AWS::Lambda::Function
-    DependsOn:
-      - PaymentTransactionTable
-      - PaymentAlertTopic
-      - PaymentValidationDLQ
-      - PaymentValidationRole
     Properties:
       FunctionName: !Sub 'payment-validation-${EnvironmentSuffix}'
       Runtime: 'python3.11'
@@ -352,7 +345,6 @@ Resources:
   # Requirement 12: EventBridge rule for scheduled processing
   PaymentBatchProcessingRule:
     Type: AWS::Events::Rule
-    DependsOn: PaymentValidationFunction
     Properties:
       Name: !Sub 'payment-batch-processing-${EnvironmentSuffix}'
       Description: 'Triggers Lambda for scheduled payment batch processing'
