@@ -33,15 +33,26 @@ Parameters:
     Description: ALB Hosted Zone ID for DR region (ap-southeast-2)
     Default: Z1GM3OXH4ZPM65  # ALB hosted zone for ap-southeast-2
 
+  UseHTTPS:
+    Type: String
+    Description: Whether to use HTTPS for health checks (requires SSL certificate on ALB)
+    Default: 'false'
+    AllowedValues:
+      - 'true'
+      - 'false'
+
+Conditions:
+  UseHTTPSProtocol: !Equals [!Ref UseHTTPS, 'true']
+
 Resources:
   PrimaryHealthCheck:
     Type: AWS::Route53::HealthCheck
     Properties:
       HealthCheckConfig:
-        Type: HTTPS
+        Type: !If [UseHTTPSProtocol, HTTPS, HTTP]
         ResourcePath: /health
         FullyQualifiedDomainName: !Ref PrimaryALBDNS
-        Port: 443
+        Port: !If [UseHTTPSProtocol, 443, 80]
         RequestInterval: 30
         FailureThreshold: 3
       HealthCheckTags:
@@ -54,10 +65,10 @@ Resources:
     Type: AWS::Route53::HealthCheck
     Properties:
       HealthCheckConfig:
-        Type: HTTPS
+        Type: !If [UseHTTPSProtocol, HTTPS, HTTP]
         ResourcePath: /health
         FullyQualifiedDomainName: !Ref DRALBName
-        Port: 443
+        Port: !If [UseHTTPSProtocol, 443, 80]
         RequestInterval: 30
         FailureThreshold: 3
       HealthCheckTags:

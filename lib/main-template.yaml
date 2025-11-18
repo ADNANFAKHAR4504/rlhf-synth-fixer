@@ -32,6 +32,12 @@ Parameters:
     Description: ARN of existing Secrets Manager secret for database credentials
     Default: arn:aws:secretsmanager:ap-southeast-1:123456789012:secret:payment-db-credentials
 
+  HostedZoneId:
+    Type: String
+    Description: Route53 Hosted Zone ID for the domain
+    AllowedPattern: '^Z[0-9A-Z]+$'
+    ConstraintDescription: Must be a valid Route53 Hosted Zone ID starting with Z
+
 Resources:
   NetworkStack:
     Type: AWS::CloudFormation::Stack
@@ -54,6 +60,7 @@ Resources:
       Parameters:
         EnvironmentSuffix: !Ref EnvironmentSuffix
         VPCId: !GetAtt NetworkStack.Outputs.VPCId
+        VPCCIDR: !GetAtt NetworkStack.Outputs.VPCCIDR
         PrivateSubnet1: !GetAtt NetworkStack.Outputs.PrivateSubnet1
         PrivateSubnet2: !GetAtt NetworkStack.Outputs.PrivateSubnet2
         PrivateSubnet3: !GetAtt NetworkStack.Outputs.PrivateSubnet3
@@ -145,7 +152,7 @@ Resources:
         DomainName: !Sub 'payment-api-${EnvironmentSuffix}.example.com'
         PrimaryALBDNS: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
         DRALBName: !GetAtt ComputeStack.Outputs.LoadBalancerDNS
-        HostedZoneId: Z1234567890ABC  # Placeholder - should be replaced with actual hosted zone ID
+        HostedZoneId: !Ref HostedZoneId
       Tags:
         - Key: Environment
           Value: !Ref EnvironmentSuffix

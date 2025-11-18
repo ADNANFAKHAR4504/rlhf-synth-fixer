@@ -10,6 +10,13 @@ Parameters:
     Type: String
     Description: VPC ID
 
+  VPCCIDR:
+    Type: String
+    Description: CIDR block for VPC
+    Default: 10.0.0.0/16
+    AllowedPattern: '^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])/(1[6-9]|2[0-8])$'
+    ConstraintDescription: CIDR block parameter must be in the form x.x.x.x/16-28
+
   PrivateSubnet1:
     Type: String
     Description: Private Subnet 1 ID
@@ -109,7 +116,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 10.0.0.0/16
+          CidrIp: !Ref VPCCIDR
           Description: Allow MySQL access from VPC
       Tags:
         - Key: Name
