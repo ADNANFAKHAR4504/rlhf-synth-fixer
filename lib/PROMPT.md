@@ -93,4 +93,4 @@ Create a complete EKS cluster infrastructure using **Terraform with HCL** for a 
 - Variable definitions including environmentSuffix for resource naming
 - Outputs for cluster endpoint, security group IDs, and other important values
 - Unit tests for all Terraform modules
-- Documentation with deployment instructions and architecture overview
+- Documentation with deployment instructions and architecture overview.
