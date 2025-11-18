@@ -56,14 +56,21 @@ export class EcsMicroservicesStack extends cdk.Stack {
       this.node.tryGetContext('vpcName') ||
       process.env.VPC_NAME ||
       `microservices-vpc-${this.stackName}`;
+
+    // Use more conservative defaults for CI/CD to avoid resource limits
+    const defaultMaxAzs = this.isCiCd ? '2' : '3';
+    const defaultNatGateways = this.isCiCd ? '1' : '3';
+
     const maxAzs = parseInt(
-      this.node.tryGetContext('maxAzs') || process.env.VPC_MAX_AZS || '3',
+      this.node.tryGetContext('maxAzs') ||
+        process.env.VPC_MAX_AZS ||
+        defaultMaxAzs,
       10
     );
     const natGateways = parseInt(
       this.node.tryGetContext('natGateways') ||
-      process.env.VPC_NAT_GATEWAYS ||
-      '3',
+        process.env.VPC_NAT_GATEWAYS ||
+        defaultNatGateways,
       10
     );
     const vpcCidr =
@@ -393,11 +400,11 @@ export class EcsMicroservicesStack extends cdk.Stack {
       const appMeshService = this.isCiCd
         ? null
         : new AppMeshServiceConstruct(this, `${serviceConfig.name}AppMesh`, {
-          mesh: this.mesh!,
-          serviceName: serviceConfig.name,
-          port: serviceConfig.port,
-          healthCheckPath: serviceConfig.healthCheckPath,
-        });
+            mesh: this.mesh!,
+            serviceName: serviceConfig.name,
+            port: serviceConfig.port,
+            healthCheckPath: serviceConfig.healthCheckPath,
+          });
 
       const service = new MicroserviceConstruct(
         this,

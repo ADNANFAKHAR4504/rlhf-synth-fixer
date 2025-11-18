@@ -28,7 +28,7 @@ import {
   DescribeSecurityGroupsCommand,
   DescribeSubnetsCommand,
   DescribeVpcsCommand,
-  EC2Client
+  EC2Client,
 } from '@aws-sdk/client-ec2';
 import { DescribeRepositoriesCommand, ECRClient } from '@aws-sdk/client-ecr';
 import {
@@ -45,7 +45,11 @@ import {
   DescribeTargetGroupsCommand,
   ElasticLoadBalancingV2Client,
 } from '@aws-sdk/client-elastic-load-balancing-v2';
-import { GetRoleCommand, IAMClient, ListRolesCommand } from '@aws-sdk/client-iam';
+import {
+  GetRoleCommand,
+  IAMClient,
+  ListRolesCommand,
+} from '@aws-sdk/client-iam';
 import {
   ListSecretsCommand,
   SecretsManagerClient,
@@ -65,10 +69,13 @@ async function detectLocalStack(): Promise<boolean> {
   } catch {
     // Method 2: Check if LocalStack container is running
     try {
-      const result = execSync('docker ps --filter name=localstack --format "{{.Names}}"', {
-        encoding: 'utf8',
-        timeout: 2000,
-      });
+      const result = execSync(
+        'docker ps --filter name=localstack --format "{{.Names}}"',
+        {
+          encoding: 'utf8',
+          timeout: 2000,
+        }
+      );
       if (result.trim().includes('localstack')) {
         return true;
       }
@@ -161,7 +168,7 @@ const canRunTests = useLocalStack || !!account;
 const forceRunTests = process.env.FORCE_INTEGRATION_TESTS === 'true';
 
 // If neither available and not forced, skip the whole suite
-const describeOrSkip = (canRunTests || forceRunTests) ? describe : describe.skip;
+const describeOrSkip = canRunTests || forceRunTests ? describe : describe.skip;
 
 describeOrSkip('TapStack Integration Tests', () => {
   // runtime flags and outputs
@@ -186,7 +193,9 @@ describeOrSkip('TapStack Integration Tests', () => {
       console.warn(
         'Neither LocalStack nor AWS credentials are available - skipping integration tests'
       );
-      console.warn('💡 To force run tests anyway, set FORCE_INTEGRATION_TESTS=true');
+      console.warn(
+        '💡 To force run tests anyway, set FORCE_INTEGRATION_TESTS=true'
+      );
       return;
     }
 
@@ -202,13 +211,14 @@ describeOrSkip('TapStack Integration Tests', () => {
       process.env.USE_LOCALSTACK = 'true';
       process.env.AWS_ENDPOINT_URL =
         process.env.AWS_ENDPOINT_URL || 'http://localhost:4566';
-      process.env.AWS_ACCESS_KEY_ID =
-        process.env.AWS_ACCESS_KEY_ID || 'test';
+      process.env.AWS_ACCESS_KEY_ID = process.env.AWS_ACCESS_KEY_ID || 'test';
       process.env.AWS_SECRET_ACCESS_KEY =
         process.env.AWS_SECRET_ACCESS_KEY || 'test';
     } else if (forceRunTests) {
       console.log('⚡ Force-running integration tests (mock environment)');
-      console.warn('⚠️ Tests will use mock AWS credentials - may fail on actual AWS calls');
+      console.warn(
+        '⚠️ Tests will use mock AWS credentials - may fail on actual AWS calls'
+      );
       process.env.AWS_ACCESS_KEY_ID = 'test';
       process.env.AWS_SECRET_ACCESS_KEY = 'test';
       process.env.CDK_DEFAULT_ACCOUNT = '123456789012'; // Mock account
@@ -220,7 +230,8 @@ describeOrSkip('TapStack Integration Tests', () => {
     initClients();
 
     // Ensure CDK knows account/region
-    process.env.CDK_DEFAULT_ACCOUNT = account || process.env.CDK_DEFAULT_ACCOUNT || '123456789012';
+    process.env.CDK_DEFAULT_ACCOUNT =
+      account || process.env.CDK_DEFAULT_ACCOUNT || '123456789012';
     process.env.CDK_DEFAULT_REGION = region;
 
     if (!skipDeployment && !mockMode) {
@@ -375,8 +386,12 @@ describeOrSkip('TapStack Integration Tests', () => {
           process.env.TEST_VPC_MAX_AZS || process.env.VPC_MAX_AZS || '3',
           10
         );
-        const uniqueAzs = new Set(subnets.Subnets!.map(s => s.AvailabilityZone));
-        expect(uniqueAzs.size).toBeGreaterThanOrEqual(Math.min(expectedMaxAzs, 3));
+        const uniqueAzs = new Set(
+          subnets.Subnets!.map(s => s.AvailabilityZone)
+        );
+        expect(uniqueAzs.size).toBeGreaterThanOrEqual(
+          Math.min(expectedMaxAzs, 3)
+        );
       }
     });
 
@@ -391,7 +406,9 @@ describeOrSkip('TapStack Integration Tests', () => {
         })
       );
 
-      expect(logGroups.logGroups && logGroups.logGroups.length).toBeGreaterThan(0);
+      expect(logGroups.logGroups && logGroups.logGroups.length).toBeGreaterThan(
+        0
+      );
     });
   });
 
@@ -421,9 +438,9 @@ describeOrSkip('TapStack Integration Tests', () => {
         new ListServicesCommand({ cluster: clusterName })
       );
 
-      expect(servicesResponse.serviceArns && servicesResponse.serviceArns.length).toBeGreaterThanOrEqual(
-        servicesToTest.length
-      );
+      expect(
+        servicesResponse.serviceArns && servicesResponse.serviceArns.length
+      ).toBeGreaterThanOrEqual(servicesToTest.length);
 
       for (const service of servicesToTest) {
         const serviceResponse = await ecsClient.send(
@@ -433,14 +450,21 @@ describeOrSkip('TapStack Integration Tests', () => {
           })
         );
 
-        expect(serviceResponse.services && serviceResponse.services.length).toBe(1);
+        expect(
+          serviceResponse.services && serviceResponse.services.length
+        ).toBe(1);
         const ecsService = serviceResponse.services![0];
         expect(ecsService.serviceName).toBe(service.name);
         expect(ecsService.status).toBe('ACTIVE');
         expect(ecsService.desiredCount! > 0).toBeTruthy();
         expect(!!ecsService.taskDefinition).toBeTruthy();
-        expect(ecsService.loadBalancers && ecsService.loadBalancers.length > 0).toBeTruthy();
-        expect(ecsService.capacityProviderStrategy && ecsService.capacityProviderStrategy.length > 0).toBeTruthy();
+        expect(
+          ecsService.loadBalancers && ecsService.loadBalancers.length > 0
+        ).toBeTruthy();
+        expect(
+          ecsService.capacityProviderStrategy &&
+            ecsService.capacityProviderStrategy.length > 0
+        ).toBeTruthy();
       }
     }, 60000);
 
@@ -463,11 +487,14 @@ describeOrSkip('TapStack Integration Tests', () => {
             })
           );
           const service = serviceResponse.services![0];
-          if (service.taskDefinition) taskDefinitionArns.add(service.taskDefinition);
+          if (service.taskDefinition)
+            taskDefinitionArns.add(service.taskDefinition);
         }
       }
 
-      expect(taskDefinitionArns.size).toBeGreaterThanOrEqual(servicesToTest.length);
+      expect(taskDefinitionArns.size).toBeGreaterThanOrEqual(
+        servicesToTest.length
+      );
 
       for (const taskDefArn of Array.from(taskDefinitionArns)) {
         const taskDefResponse = await ecsClient.send(
@@ -476,16 +503,30 @@ describeOrSkip('TapStack Integration Tests', () => {
         const taskDef = taskDefResponse.taskDefinition;
         expect(taskDef).toBeDefined();
         expect(taskDef?.status).toBe('ACTIVE');
-        expect(taskDef?.requiresCompatibilities && taskDef?.requiresCompatibilities.includes('FARGATE')).toBeTruthy();
-        expect(taskDef?.containerDefinitions && taskDef.containerDefinitions.length > 0).toBeTruthy();
+        expect(
+          taskDef?.requiresCompatibilities &&
+            taskDef?.requiresCompatibilities.includes('FARGATE')
+        ).toBeTruthy();
+        expect(
+          taskDef?.containerDefinitions &&
+            taskDef.containerDefinitions.length > 0
+        ).toBeTruthy();
 
-        const appContainer = taskDef?.containerDefinitions!.find(c => c.name !== 'envoy');
+        const appContainer = taskDef?.containerDefinitions!.find(
+          c => c.name !== 'envoy'
+        );
         expect(appContainer).toBeDefined();
-        expect(appContainer?.portMappings && appContainer.portMappings.length > 0).toBeTruthy();
+        expect(
+          appContainer?.portMappings && appContainer.portMappings.length > 0
+        ).toBeTruthy();
 
-        const envoyContainer = taskDef?.containerDefinitions!.find(c => c.name === 'envoy');
+        const envoyContainer = taskDef?.containerDefinitions!.find(
+          c => c.name === 'envoy'
+        );
         expect(envoyContainer).toBeDefined();
-        expect(envoyContainer?.image && envoyContainer.image.includes('envoy')).toBeTruthy();
+        expect(
+          envoyContainer?.image && envoyContainer.image.includes('envoy')
+        ).toBeTruthy();
       }
     }, 60000);
   });
@@ -498,8 +539,10 @@ describeOrSkip('TapStack Integration Tests', () => {
       const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
       expect(lbs.LoadBalancers && lbs.LoadBalancers.length).toBeGreaterThan(0);
 
-      const alb = lbs.LoadBalancers!.find(lb =>
-        lb.LoadBalancerName?.includes('alb') || lb.LoadBalancerName?.includes('microservices')
+      const alb = lbs.LoadBalancers!.find(
+        lb =>
+          lb.LoadBalancerName?.includes('alb') ||
+          lb.LoadBalancerName?.includes('microservices')
       );
       expect(alb).toBeDefined();
       expect(alb?.State?.Code).toBe('active');
@@ -509,13 +552,19 @@ describeOrSkip('TapStack Integration Tests', () => {
 
     test('ALB should have HTTP listener configured', async () => {
       const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      const alb = lbs.LoadBalancers!.find(lb =>
-        lb.LoadBalancerName?.includes('alb') || lb.LoadBalancerName?.includes('microservices')
+      const alb = lbs.LoadBalancers!.find(
+        lb =>
+          lb.LoadBalancerName?.includes('alb') ||
+          lb.LoadBalancerName?.includes('microservices')
       );
 
       if (alb?.LoadBalancerArn) {
-        const listeners = await elbClient.send(new DescribeListenersCommand({ LoadBalancerArn: alb.LoadBalancerArn }));
-        expect(listeners.Listeners && listeners.Listeners.length).toBeGreaterThan(0);
+        const listeners = await elbClient.send(
+          new DescribeListenersCommand({ LoadBalancerArn: alb.LoadBalancerArn })
+        );
+        expect(
+          listeners.Listeners && listeners.Listeners.length
+        ).toBeGreaterThan(0);
 
         const httpListener = listeners.Listeners!.find(l => l.Port === 80);
         expect(httpListener).toBeDefined();
@@ -524,40 +573,58 @@ describeOrSkip('TapStack Integration Tests', () => {
     }, 30000);
 
     test('Target groups should be created for each service', async () => {
-      const targetGroups = await elbClient.send(new DescribeTargetGroupsCommand({}));
-      expect(targetGroups.TargetGroups && targetGroups.TargetGroups.length).toBeGreaterThanOrEqual(servicesToTest.length);
+      const targetGroups = await elbClient.send(
+        new DescribeTargetGroupsCommand({})
+      );
+      expect(
+        targetGroups.TargetGroups && targetGroups.TargetGroups.length
+      ).toBeGreaterThanOrEqual(servicesToTest.length);
 
       for (const service of servicesToTest) {
-        const tg = targetGroups.TargetGroups!.find(t => t.TargetGroupName === `${service.name}-tg`);
+        const tg = targetGroups.TargetGroups!.find(
+          t => t.TargetGroupName === `${service.name}-tg`
+        );
         expect(tg).toBeDefined();
         expect(tg?.Port).toBe(service.port);
         expect(tg?.Protocol).toBe('HTTP');
         expect(tg?.TargetType).toBe('ip');
         // health checks are optional in some local environments; assert if present
-        if (tg?.HealthCheckPath) expect(tg.HealthCheckPath).toBe(service.healthCheckPath);
+        if (tg?.HealthCheckPath)
+          expect(tg.HealthCheckPath).toBe(service.healthCheckPath);
       }
     }, 30000);
 
     test('ALB listener rules should be created for each service', async () => {
       const lbs = await elbClient.send(new DescribeLoadBalancersCommand({}));
-      const alb = lbs.LoadBalancers!.find(lb =>
-        lb.LoadBalancerName?.includes('alb') || lb.LoadBalancerName?.includes('microservices')
+      const alb = lbs.LoadBalancers!.find(
+        lb =>
+          lb.LoadBalancerName?.includes('alb') ||
+          lb.LoadBalancerName?.includes('microservices')
       );
 
       if (alb?.LoadBalancerArn) {
-        const listeners = await elbClient.send(new DescribeListenersCommand({ LoadBalancerArn: alb.LoadBalancerArn }));
+        const listeners = await elbClient.send(
+          new DescribeListenersCommand({ LoadBalancerArn: alb.LoadBalancerArn })
+        );
         const httpListener = listeners.Listeners!.find(l => l.Port === 80);
         expect(httpListener).toBeDefined();
 
         if (httpListener?.ListenerArn) {
-          const rules = await elbClient.send(new DescribeRulesCommand({ ListenerArn: httpListener.ListenerArn }));
-          expect(rules.Rules && rules.Rules.length).toBeGreaterThanOrEqual(servicesToTest.length + 1);
+          const rules = await elbClient.send(
+            new DescribeRulesCommand({ ListenerArn: httpListener.ListenerArn })
+          );
+          expect(rules.Rules && rules.Rules.length).toBeGreaterThanOrEqual(
+            servicesToTest.length + 1
+          );
 
           for (const service of servicesToTest) {
             const serviceRule = rules.Rules!.find(rule =>
-              rule.Conditions?.some(condition =>
-                condition.Field === 'path-pattern' &&
-                condition.PathPatternConfig?.Values?.some(path => path.includes(service.path))
+              rule.Conditions?.some(
+                condition =>
+                  condition.Field === 'path-pattern' &&
+                  condition.PathPatternConfig?.Values?.some(path =>
+                    path.includes(service.path)
+                  )
               )
             );
             expect(serviceRule).toBeDefined();
@@ -578,7 +645,9 @@ describeOrSkip('TapStack Integration Tests', () => {
       test('App Mesh should exist and be properly configured', async () => {
         if (!meshName) throw new Error('Mesh name not available');
 
-        const mesh = await appMeshClient.send(new DescribeMeshCommand({ meshName }));
+        const mesh = await appMeshClient.send(
+          new DescribeMeshCommand({ meshName })
+        );
         expect(mesh.mesh).toBeDefined();
         expect(mesh.mesh!.meshName).toBe(meshName);
         expect(mesh.mesh!.status?.status).toBe('ACTIVE');
@@ -644,10 +713,14 @@ describeOrSkip('TapStack Integration Tests', () => {
   describe('ECR Repositories', () => {
     test('ECR repositories should exist for each service', async () => {
       const repos = await ecrClient.send(new DescribeRepositoriesCommand({}));
-      expect(repos.repositories && repos.repositories.length).toBeGreaterThanOrEqual(servicesToTest.length);
+      expect(
+        repos.repositories && repos.repositories.length
+      ).toBeGreaterThanOrEqual(servicesToTest.length);
 
       for (const service of servicesToTest) {
-        const repo = repos.repositories!.find(r => r.repositoryName === service.name);
+        const repo = repos.repositories!.find(
+          r => r.repositoryName === service.name
+        );
         expect(repo).toBeDefined();
       }
     });
@@ -655,27 +728,47 @@ describeOrSkip('TapStack Integration Tests', () => {
 
   describe('Secrets Manager', () => {
     test('Database URL secret should exist', async () => {
-      const secretPrefix = process.env.TEST_SECRET_PREFIX || process.env.SECRET_PREFIX || '/microservices';
+      const secretPrefix =
+        process.env.TEST_SECRET_PREFIX ||
+        process.env.SECRET_PREFIX ||
+        '/microservices';
       const secrets = await secretsClient.send(new ListSecretsCommand({}));
-      const dbSecret = secrets.SecretList!.find(s => s.Name?.includes('database-url') || s.Name?.includes(`${secretPrefix}/database-url`));
+      const dbSecret = secrets.SecretList!.find(
+        s =>
+          s.Name?.includes('database-url') ||
+          s.Name?.includes(`${secretPrefix}/database-url`)
+      );
       expect(dbSecret).toBeDefined();
     });
 
     test('API Key secret should exist', async () => {
-      const secretPrefix = process.env.TEST_SECRET_PREFIX || process.env.SECRET_PREFIX || '/microservices';
+      const secretPrefix =
+        process.env.TEST_SECRET_PREFIX ||
+        process.env.SECRET_PREFIX ||
+        '/microservices';
       const secrets = await secretsClient.send(new ListSecretsCommand({}));
-      const apiKeySecret = secrets.SecretList!.find(s => s.Name?.includes('api-key') || s.Name?.includes(`${secretPrefix}/api-key`));
+      const apiKeySecret = secrets.SecretList!.find(
+        s =>
+          s.Name?.includes('api-key') ||
+          s.Name?.includes(`${secretPrefix}/api-key`)
+      );
       expect(apiKeySecret).toBeDefined();
     });
   });
 
   describe('CloudWatch Logs', () => {
     test('Log groups should exist for each service', async () => {
-      const logGroups = await logsClient.send(new DescribeLogGroupsCommand({ logGroupNamePrefix: '/ecs/' }));
-      expect(logGroups.logGroups && logGroups.logGroups.length).toBeGreaterThan(0);
+      const logGroups = await logsClient.send(
+        new DescribeLogGroupsCommand({ logGroupNamePrefix: '/ecs/' })
+      );
+      expect(logGroups.logGroups && logGroups.logGroups.length).toBeGreaterThan(
+        0
+      );
 
       for (const service of servicesToTest) {
-        const serviceLogGroup = logGroups.logGroups!.find(lg => lg.logGroupName === `/ecs/${service.name}`);
+        const serviceLogGroup = logGroups.logGroups!.find(
+          lg => lg.logGroupName === `/ecs/${service.name}`
+        );
         expect(serviceLogGroup).toBeDefined();
       }
     });
@@ -683,19 +776,29 @@ describeOrSkip('TapStack Integration Tests', () => {
 
   describe('IAM Roles', () => {
     test('Task execution roles should be created for each service', async () => {
-      const roles = await iamClient.send(new ListRolesCommand({ PathPrefix: '/' }));
+      const roles = await iamClient.send(
+        new ListRolesCommand({ PathPrefix: '/' })
+      );
       expect(roles.Roles && roles.Roles.length).toBeGreaterThan(0);
 
       for (const service of servicesToTest) {
-        const executionRole = roles.Roles!.find(r => r.RoleName?.includes(`${service.name}TaskExecutionRole`));
+        const executionRole = roles.Roles!.find(r =>
+          r.RoleName?.includes(`${service.name}TaskExecutionRole`)
+        );
         expect(executionRole).toBeDefined();
         expect(executionRole!.AssumeRolePolicyDocument).toBeDefined();
 
         // Verify the role can be assumed by ECS tasks
         if (executionRole!.RoleName) {
-          const roleDetails = await iamClient.send(new GetRoleCommand({ RoleName: executionRole!.RoleName }));
-          const policyDocument = JSON.parse(decodeURIComponent(roleDetails.Role!.AssumeRolePolicyDocument!));
-          expect(policyDocument.Statement[0].Principal.Service).toBe('ecs-tasks.amazonaws.com');
+          const roleDetails = await iamClient.send(
+            new GetRoleCommand({ RoleName: executionRole!.RoleName })
+          );
+          const policyDocument = JSON.parse(
+            decodeURIComponent(roleDetails.Role!.AssumeRolePolicyDocument!)
+          );
+          expect(policyDocument.Statement[0].Principal.Service).toBe(
+            'ecs-tasks.amazonaws.com'
+          );
         }
       }
     });
@@ -703,18 +806,23 @@ describeOrSkip('TapStack Integration Tests', () => {
 
   describe('CloudWatch Alarms', () => {
     // Skip alarm tests for CI/CD environments where alarms are disabled
-    const isCiCd = process.env.CI === 'true' || process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
+    const isCiCd =
+      process.env.CI === 'true' ||
+      process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
     const describeAlarms = isCiCd ? describe.skip : describe;
 
     describeAlarms('CPU and Memory Alarms', () => {
       test('CPU utilization alarms should exist for each service', async () => {
-        const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({}));
+        const alarms = await cloudWatchClient.send(
+          new DescribeAlarmsCommand({})
+        );
         expect(alarms.MetricAlarms).toBeDefined();
 
         for (const service of servicesToTest) {
-          const cpuAlarm = alarms.MetricAlarms!.find(alarm =>
-            alarm.AlarmName?.includes(`${service.name}-cpu`) ||
-            alarm.AlarmName?.includes('CpuAlarm')
+          const cpuAlarm = alarms.MetricAlarms!.find(
+            alarm =>
+              alarm.AlarmName?.includes(`${service.name}-cpu`) ||
+              alarm.AlarmName?.includes('CpuAlarm')
           );
           expect(cpuAlarm).toBeDefined();
           expect(cpuAlarm!.MetricName).toBe('CPUUtilization');
@@ -723,13 +831,16 @@ describeOrSkip('TapStack Integration Tests', () => {
       });
 
       test('Memory utilization alarms should exist for each service', async () => {
-        const alarms = await cloudWatchClient.send(new DescribeAlarmsCommand({}));
+        const alarms = await cloudWatchClient.send(
+          new DescribeAlarmsCommand({})
+        );
         expect(alarms.MetricAlarms).toBeDefined();
 
         for (const service of servicesToTest) {
-          const memoryAlarm = alarms.MetricAlarms!.find(alarm =>
-            alarm.AlarmName?.includes(`${service.name}-memory`) ||
-            alarm.AlarmName?.includes('MemoryAlarm')
+          const memoryAlarm = alarms.MetricAlarms!.find(
+            alarm =>
+              alarm.AlarmName?.includes(`${service.name}-memory`) ||
+              alarm.AlarmName?.includes('MemoryAlarm')
           );
           expect(memoryAlarm).toBeDefined();
           expect(memoryAlarm!.MetricName).toBe('MemoryUtilization');
@@ -741,21 +852,26 @@ describeOrSkip('TapStack Integration Tests', () => {
 
   describe('Auto Scaling', () => {
     // Skip auto scaling tests for CI/CD environments where scaling is disabled
-    const isCiCd = process.env.CI === 'true' || process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
+    const isCiCd =
+      process.env.CI === 'true' ||
+      process.env.CDK_DEFAULT_ACCOUNT === '123456789012';
     const describeScaling = isCiCd ? describe.skip : describe;
 
     describeScaling('Application Auto Scaling', () => {
       test('Scalable targets should exist for each service', async () => {
-        const targets = await autoScalingClient.send(new DescribeScalableTargetsCommand({
-          ServiceNamespace: 'ecs',
-        }));
+        const targets = await autoScalingClient.send(
+          new DescribeScalableTargetsCommand({
+            ServiceNamespace: 'ecs',
+          })
+        );
 
         expect(targets.ScalableTargets).toBeDefined();
 
         for (const service of servicesToTest) {
-          const target = targets.ScalableTargets!.find(t =>
-            t.ResourceId?.includes(service.name) &&
-            t.ScalableDimension === 'ecs:service:DesiredCount'
+          const target = targets.ScalableTargets!.find(
+            t =>
+              t.ResourceId?.includes(service.name) &&
+              t.ScalableDimension === 'ecs:service:DesiredCount'
           );
           expect(target).toBeDefined();
           expect(target!.MinCapacity).toBe(2);
@@ -764,23 +880,27 @@ describeOrSkip('TapStack Integration Tests', () => {
       });
 
       test('Scaling policies should exist for each service', async () => {
-        const policies = await autoScalingClient.send(new DescribeScalingPoliciesCommand({
-          ServiceNamespace: 'ecs',
-        }));
+        const policies = await autoScalingClient.send(
+          new DescribeScalingPoliciesCommand({
+            ServiceNamespace: 'ecs',
+          })
+        );
 
         expect(policies.ScalingPolicies).toBeDefined();
 
         for (const service of servicesToTest) {
-          const cpuPolicy = policies.ScalingPolicies!.find(p =>
-            p.ResourceId?.includes(service.name) &&
-            p.PolicyName?.includes('CpuScaling')
+          const cpuPolicy = policies.ScalingPolicies!.find(
+            p =>
+              p.ResourceId?.includes(service.name) &&
+              p.PolicyName?.includes('CpuScaling')
           );
           expect(cpuPolicy).toBeDefined();
           expect(cpuPolicy!.PolicyType).toBe('TargetTrackingScaling');
 
-          const memoryPolicy = policies.ScalingPolicies!.find(p =>
-            p.ResourceId?.includes(service.name) &&
-            p.PolicyName?.includes('MemoryScaling')
+          const memoryPolicy = policies.ScalingPolicies!.find(
+            p =>
+              p.ResourceId?.includes(service.name) &&
+              p.PolicyName?.includes('MemoryScaling')
           );
           expect(memoryPolicy).toBeDefined();
           expect(memoryPolicy!.PolicyType).toBe('TargetTrackingScaling');
@@ -791,12 +911,16 @@ describeOrSkip('TapStack Integration Tests', () => {
 
   describe('Security Groups', () => {
     test('Security groups should exist and be properly configured', async () => {
-      const securityGroups = await ec2Client.send(new DescribeSecurityGroupsCommand({}));
+      const securityGroups = await ec2Client.send(
+        new DescribeSecurityGroupsCommand({})
+      );
       expect(securityGroups.SecurityGroups).toBeDefined();
 
       // Should have at least one security group for services
-      const serviceSGs = securityGroups.SecurityGroups!.filter(sg =>
-        sg.GroupName?.includes('service') || sg.GroupName?.includes('microservice')
+      const serviceSGs = securityGroups.SecurityGroups!.filter(
+        sg =>
+          sg.GroupName?.includes('service') ||
+          sg.GroupName?.includes('microservice')
       );
       expect(serviceSGs.length).toBeGreaterThan(0);
 
@@ -804,8 +928,9 @@ describeOrSkip('TapStack Integration Tests', () => {
       for (const sg of serviceSGs) {
         if (sg.IpPermissions) {
           const hasServicePorts = servicesToTest.some(service =>
-            sg.IpPermissions!.some(perm =>
-              perm.FromPort === service.port && perm.ToPort === service.port
+            sg.IpPermissions!.some(
+              perm =>
+                perm.FromPort === service.port && perm.ToPort === service.port
             )
           );
           expect(hasServicePorts).toBeTruthy();
@@ -829,7 +954,7 @@ describeOrSkip('TapStack Integration Tests', () => {
     test('All CloudFormation stacks should be deployed successfully', async () => {
       const [mainStack, ecsStack] = await Promise.all([
         describeStack(mainStackName),
-        describeStack(ecsStackName)
+        describeStack(ecsStackName),
       ]);
 
       expect(mainStack).toBeDefined();
@@ -845,7 +970,9 @@ describeOrSkip('TapStack Integration Tests', () => {
 
       // ECS cluster
       if (clusterName) {
-        const clusters = await ecsClient.send(new DescribeClustersCommand({ clusters: [clusterName] }));
+        const clusters = await ecsClient.send(
+          new DescribeClustersCommand({ clusters: [clusterName] })
+        );
         expect(clusters.clusters?.[0]?.status).toBe('ACTIVE');
       }
 
@@ -855,7 +982,9 @@ describeOrSkip('TapStack Integration Tests', () => {
 
       // ECR repositories
       const repos = await ecrClient.send(new DescribeRepositoriesCommand({}));
-      expect(repos.repositories?.length).toBeGreaterThanOrEqual(servicesToTest.length);
+      expect(repos.repositories?.length).toBeGreaterThanOrEqual(
+        servicesToTest.length
+      );
 
       // Secrets
       const secrets = await secretsClient.send(new ListSecretsCommand({}));
@@ -869,17 +998,23 @@ describeOrSkip('TapStack Integration Tests', () => {
     test('All microservices should be properly registered', async () => {
       if (!clusterName) return;
 
-      const services = await ecsClient.send(new ListServicesCommand({ cluster: clusterName }));
-      const taskDefs = await ecsClient.send(new DescribeClustersCommand({ clusters: [clusterName] }));
+      const services = await ecsClient.send(
+        new ListServicesCommand({ cluster: clusterName })
+      );
+      const taskDefs = await ecsClient.send(
+        new DescribeClustersCommand({ clusters: [clusterName] })
+      );
 
-      expect(services.serviceArns?.length).toBeGreaterThanOrEqual(servicesToTest.length);
+      expect(services.serviceArns?.length).toBeGreaterThanOrEqual(
+        servicesToTest.length
+      );
 
       // Verify each service is running with correct configuration
       for (const service of servicesToTest) {
         const serviceDetails = await ecsClient.send(
           new DescribeServicesCommand({
             cluster: clusterName,
-            services: [service.name]
+            services: [service.name],
           })
         );
 
@@ -895,7 +1030,9 @@ describeOrSkip('TapStack Integration Tests', () => {
       if (useLocalStack || !meshName) return; // Skip for LocalStack or if mesh not available
 
       // Verify App Mesh components
-      const mesh = await appMeshClient.send(new DescribeMeshCommand({ meshName }));
+      const mesh = await appMeshClient.send(
+        new DescribeMeshCommand({ meshName })
+      );
       expect(mesh.mesh?.status?.status).toBe('ACTIVE');
 
       // Verify virtual nodes
@@ -960,7 +1097,9 @@ async function waitForStackReady(stackName: string, maxWaitTime = 600000) {
   throw new Error(`Timeout waiting for ${stackName}`);
 }
 
-async function getStackOutputs(stackName: string): Promise<Record<string, string>> {
+async function getStackOutputs(
+  stackName: string
+): Promise<Record<string, string>> {
   const s = await describeStack(stackName);
   const out: Record<string, string> = {};
   if (!s?.Outputs) return out;
