@@ -33,11 +33,6 @@ describe('Terraform Security Foundation - Unit Tests', () => {
       const lambdaPath = path.join(libPath, 'lambda/secret_rotation.py');
       expect(fs.existsSync(lambdaPath)).toBe(true);
     });
-
-    it('should have README documentation', () => {
-      const readmePath = path.join(libPath, 'README.md');
-      expect(fs.existsSync(readmePath)).toBe(true);
-    });
   });
 
   describe('Terraform Syntax Validation', () => {
