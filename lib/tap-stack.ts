@@ -48,6 +48,7 @@ export class TapStack extends pulumi.ComponentResource {
 
     const environmentSuffix = args.environmentSuffix || 'dev';
     const region = aws.getRegionOutput({}, { parent: this });
+    const awsRegion = process.env.AWS_REGION || 'us-east-1';
     const azs = ['us-east-1a', 'us-east-1b', 'us-east-1c'];
 
     // **Requirement 1: VPCs and Transit Gateway**
@@ -463,7 +464,7 @@ export class TapStack extends pulumi.ComponentResource {
     const transactionLogsBucket = new aws.s3.Bucket(
       `transaction-logs-${environmentSuffix}`,
       {
-        bucket: `transaction-logs-payment-${environmentSuffix}-${region.name}`,
+        bucket: `tx-logs-payment-${environmentSuffix}-${awsRegion}`,
         versioning: { enabled: true },
         serverSideEncryptionConfiguration: {
           rule: {
@@ -524,7 +525,7 @@ export class TapStack extends pulumi.ComponentResource {
     const complianceDocsBucket = new aws.s3.Bucket(
       `compliance-docs-${environmentSuffix}`,
       {
-        bucket: `compliance-docs-payment-${environmentSuffix}-${region.name}`,
+        bucket: `compliance-docs-pay-${environmentSuffix}-${awsRegion}`,
         versioning: { enabled: true },
         serverSideEncryptionConfiguration: {
           rule: {
@@ -2023,7 +2024,7 @@ def handler(event, context):
     const configBucket = new aws.s3.Bucket(
       `config-bucket-${environmentSuffix}`,
       {
-        bucket: `aws-config-payment-${environmentSuffix}-${region.name}`,
+        bucket: `aws-config-pay-${environmentSuffix}-${awsRegion}`,
         serverSideEncryptionConfiguration: {
           rule: {
             applyServerSideEncryptionByDefault: {
