@@ -1,0 +1,31 @@
+{
+  "platform": "Terraform",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912509",
+  "team": "synth",
+  "startedAt": "2025-11-17T13:19:03+00:00",
+  "subtask": "EC2",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "terraform",
+    "optimization",
+    "performance"
+  ],
+  "aws_services": [
+    "EC2",
+    "Auto Scaling",
+    "RDS",
+    "VPC",
+    "ALB",
+    "S3",
+    "DynamoDB",
+    "SSM",
+    "CloudFront",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 10
+}
