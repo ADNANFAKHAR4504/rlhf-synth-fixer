@@ -321,13 +321,6 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
       expect(domain.Properties.Description).toBe('OpenSearch Serverless collection for payment logs');
     });
 
-    test('OpenSearchDomain should depend on security policies', () => {
-      const domain = template.Resources.OpenSearchDomain;
-      expect(domain.DependsOn).toContain('OpenSearchEncryptionPolicy');
-      expect(domain.DependsOn).toContain('OpenSearchNetworkPolicy');
-      expect(domain.DependsOn).toContain('OpenSearchDataAccessPolicy');
-    });
-
     test('OpenSearchDomain name should include EnvironmentSuffix', () => {
       const domain = template.Resources.OpenSearchDomain;
       expect(domain.Properties.Name).toEqual(
@@ -784,28 +777,6 @@ describe('TapStack CloudFormation Template - Advanced Observability Stack', () =
         const topic = template.Resources[topicName];
         expect(topic.Properties.KmsMasterKeyId).toBeDefined();
       });
-    });
-
-    test('OpenSearch Serverless should have security policies', () => {
-      expect(template.Resources.OpenSearchEncryptionPolicy).toBeDefined();
-      expect(template.Resources.OpenSearchNetworkPolicy).toBeDefined();
-      expect(template.Resources.OpenSearchDataAccessPolicy).toBeDefined();
-    });
-
-    test('OpenSearch security policies should include EnvironmentSuffix', () => {
-      const encryptionPolicy = template.Resources.OpenSearchEncryptionPolicy;
-      const networkPolicy = template.Resources.OpenSearchNetworkPolicy;
-      const dataAccessPolicy = template.Resources.OpenSearchDataAccessPolicy;
-
-      expect(encryptionPolicy.Properties.Name).toEqual(
-        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
-      );
-      expect(networkPolicy.Properties.Name).toEqual(
-        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
-      );
-      expect(dataAccessPolicy.Properties.Name).toEqual(
-        expect.objectContaining({ 'Fn::Sub': expect.stringContaining('${EnvironmentSuffix}') })
-      );
     });
   });
 

@@ -298,12 +298,94 @@ Resources:
         KeyId: !Ref LogEncryptionKey
 
   # ========================================
+  # OpenSearch Security Policies
+  # ========================================
+
+  OpenSearchEncryptionPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub 'payment-logs-encryption-${EnvironmentSuffix}'
+      Type: encryption
+      Policy: !Sub |
+        {
+          "Rules": [
+            {
+              "ResourceType": "collection",
+              "Resource": [
+                "collection/payment-logs-${EnvironmentSuffix}"
+              ]
+            }
+          ],
+          "AWSOwnedKey": true
+        }
+
+  OpenSearchNetworkPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub 'payment-logs-network-${EnvironmentSuffix}'
+      Type: network
+      Policy: !Sub |
+        [
+          {
+            "Rules": [
+              {
+                "ResourceType": "collection",
+                "Resource": [
+                  "collection/payment-logs-${EnvironmentSuffix}"
+                ]
+              },
+              {
+                "ResourceType": "dashboard",
+                "Resource": [
+                  "collection/payment-logs-${EnvironmentSuffix}"
+                ]
+              }
+            ],
+            "AllowFromPublic": true
+          }
+        ]
+
+  OpenSearchDataAccessPolicy:
+    Type: AWS::OpenSearchServerless::SecurityPolicy
+    Properties:
+      Name: !Sub 'payment-logs-data-access-${EnvironmentSuffix}'
+      Type: data
+      Policy: !Sub |
+        [
+          {
+            "Rules": [
+              {
+                "Resource": [
+                  "collection/payment-logs-${EnvironmentSuffix}",
+                  "index/payment-logs-${EnvironmentSuffix}/*"
+                ],
+                "Permission": [
+                  "aoss:*"
+                ],
+                "Principal": [
+                  "arn:aws:iam::${AWS::AccountId}:role/KinesisFirehoseRole-${EnvironmentSuffix}",
+                  "arn:aws:iam::${AWS::AccountId}:root"
+                ]
+              }
+            ],
+            "Principal": [
+              "arn:aws:iam::${AWS::AccountId}:role/KinesisFirehoseRole-${EnvironmentSuffix}",
+              "arn:aws:iam::${AWS::AccountId}:root"
+            ]
+          }
+        ]
+
+  # ========================================
   # OpenSearch Domain
   # ========================================
 
   OpenSearchDomain:
     Type: AWS::OpenSearchServerless::Collection
     DeletionPolicy: Delete
+    DependsOn:
+      - OpenSearchEncryptionPolicy
+      - OpenSearchNetworkPolicy
+      - OpenSearchDataAccessPolicy
     Properties:
       Name: !Sub 'payment-logs-${EnvironmentSuffix}'
       Type: SEARCH
