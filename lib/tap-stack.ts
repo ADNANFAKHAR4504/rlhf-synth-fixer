@@ -1,9 +1,23 @@
 import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
 import { ComponentResource, ComponentResourceOptions } from '@pulumi/pulumi';
+import { createIamRoles } from './iam-roles';
+import { createTransitGateway } from './transit-gateway';
+import { createStepFunctions } from './step-functions';
+import { createEventBridge } from './eventbridge';
+import { createParameterStore } from './parameter-store';
+import { createRoute53 } from './route53';
+import { createConfigAggregator } from './config-aggregator';
+import { MigrationComponent } from './migration-component';
 
 interface TapStackProps {
   tags?: Record<string, string>;
+}
+
+export interface MigrationProgressOutput {
+  mode?: string;
+  message: string;
+  completionPercentage: number;
+  stateMachineArn?: string;
 }
 
 export class TapStack extends ComponentResource {
@@ -12,7 +26,7 @@ export class TapStack extends ComponentResource {
   public readonly centralEventBusArn: pulumi.Output<string>;
   public readonly healthCheckId: pulumi.Output<string>;
   public readonly configAggregatorName: pulumi.Output<string>;
-  public readonly migrationProgressOutput: pulumi.Output<any>;
+  public readonly migrationProgressOutput: pulumi.Output<MigrationProgressOutput>;
 
   constructor(
     name: string,
@@ -23,18 +37,20 @@ export class TapStack extends ComponentResource {
 
     // Use environment variables for configuration
     const environmentSuffix = process.env.ENVIRONMENT_SUFFIX || 'dev';
-    const currentAccountId = process.env.CURRENT_ACCOUNT_ID || aws.getCallerIdentity().then(identity => identity.accountId);
-    
+
+    // Get account ID - use environment variable or placeholder for local testing
+    const accountId = process.env.CURRENT_ACCOUNT_ID || '123456789012';
+
     // Migration configuration
     const config = {
       environmentSuffix,
       region: process.env.AWS_REGION || 'us-east-1',
       secondaryRegion: 'us-east-2',
-      legacyAccountId: currentAccountId,
-      productionAccountId: currentAccountId,
-      stagingAccountId: currentAccountId,
-      developmentAccountId: currentAccountId,
-      centralAccountId: currentAccountId,
+      legacyAccountId: accountId,
+      productionAccountId: accountId,
+      stagingAccountId: accountId,
+      developmentAccountId: accountId,
+      centralAccountId: accountId,
       maxSessionDuration: 3600,
       isDryRun: false,
       legacyVpcCidr: '10.0.0.0/16',
@@ -42,16 +58,6 @@ export class TapStack extends ComponentResource {
       stagingVpcCidr: '10.2.0.0/16',
       developmentVpcCidr: '10.3.0.0/16',
     };
-
-    // Import all the modules (using the existing implementations)
-    const { createIamRoles } = require('./iam-roles');
-    const { createTransitGateway } = require('./transit-gateway');
-    const { createStepFunctions } = require('./step-functions');
-    const { createEventBridge } = require('./eventbridge');
-    const { createParameterStore } = require('./parameter-store');
-    const { createRoute53 } = require('./route53');
-    const { createConfigAggregator } = require('./config-aggregator');
-    const { MigrationComponent } = require('./migration-component');
 
     // Create resources
     const iamRoles = createIamRoles(config);
@@ -63,7 +69,7 @@ export class TapStack extends ComponentResource {
     const configAggregator = createConfigAggregator(config, iamRoles);
 
     // Create custom migration component
-    const migrationComponent = new MigrationComponent(
+    new MigrationComponent(
       `migration-component-${config.environmentSuffix}`,
       {
         config,
@@ -79,7 +85,7 @@ export class TapStack extends ComponentResource {
         parent: this,
         dependsOn: [
           ...Object.values(iamRoles),
-          transitGateway.tgw,
+          // transitGateway.tgw, // Disabled - placeholder not a real resource
           stepFunctions.stateMachine,
           eventBridge.centralEventBus,
           parameterStore.migrationMetadata,

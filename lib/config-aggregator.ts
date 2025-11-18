@@ -27,7 +27,7 @@ export function createConfigAggregator(
           },
         ],
       }),
-      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/AWSConfigRole'],
+      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/ConfigRole'],
       tags: {
         Name: `config-aggregator-role-${config.environmentSuffix}`,
         Environment: config.environmentSuffix,

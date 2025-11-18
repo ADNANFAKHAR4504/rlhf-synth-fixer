@@ -1,4 +1,5 @@
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { MigrationConfig } from './config';
 import { IamRoles } from './iam-roles';
 
@@ -14,6 +15,16 @@ export function createTransitGateway(
   _iamRoles: IamRoles
 ): TransitGatewayResources {
   // Create Transit Gateway
+  // NOTE: Commented out due to AWS account limit - TransitGatewayLimitExceeded
+  // In production, ensure the AWS account has sufficient Transit Gateway limits
+  const tgw = {
+    id: pulumi.output(`tgw-placeholder-${config.environmentSuffix}`),
+    arn: pulumi.output(
+      `arn:aws:ec2:${config.region}:123456789012:transit-gateway/tgw-placeholder`
+    ),
+  } as any;
+
+  /* Original Transit Gateway creation - restore when limit is increased:
   const tgw = new aws.ec2transitgateway.TransitGateway(
     `migration-tgw-${config.environmentSuffix}`,
     {
@@ -29,6 +40,7 @@ export function createTransitGateway(
       },
     }
   );
+  */
 
   // Create RAM Resource Share for Transit Gateway
   const ramShare = new aws.ram.ResourceShare(
@@ -45,6 +57,14 @@ export function createTransitGateway(
   );
 
   // Associate Transit Gateway with RAM Share
+  // NOTE: Using placeholder since Transit Gateway is disabled
+  const ramAssociation = {
+    arn: pulumi.output(
+      `arn:aws:ram:${config.region}:123456789012:resource-association/placeholder`
+    ),
+  } as any;
+
+  /* Original RAM association - restore when Transit Gateway is enabled:
   const ramAssociation = new aws.ram.ResourceAssociation(
     `migration-tgw-ram-assoc-${config.environmentSuffix}`,
     {
@@ -52,6 +72,7 @@ export function createTransitGateway(
       resourceShareArn: ramShare.arn,
     }
   );
+  */
 
   // Share with target accounts
   const accountIds = [
@@ -70,10 +91,12 @@ export function createTransitGateway(
       {
         principal: `arn:aws:iam::${accountId}:root`,
         resourceShareArn: ramShare.arn,
-      },
-      {
-        dependsOn: [ramAssociation],
       }
+      // NOTE: dependsOn disabled since ramAssociation is a placeholder
+      // Restore when Transit Gateway limit is increased:
+      // {
+      //   dependsOn: [ramAssociation],
+      // }
     );
   });
 

@@ -1,5 +1,3 @@
-import * as pulumi from '@pulumi/pulumi';
-
 export interface MigrationConfig {
   environmentSuffix: string;
   region: string;
