@@ -1,0 +1,5 @@
+name: TapStack
+runtime:
+  name: nodejs
+description: Payment processing infrastructure with multi-environment support
+main: lib/index.ts
