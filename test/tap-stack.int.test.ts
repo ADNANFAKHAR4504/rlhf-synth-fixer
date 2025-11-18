@@ -362,7 +362,7 @@ describe('EKS Cluster Integration Tests', () => {
     });
 
     it('should have valid kubeconfig structure', () => {
-      const kubeconfig = JSON.parse(outputs.kubeconfig);
+      const kubeconfig = outputs.kubeconfig;
 
       expect(kubeconfig).toHaveProperty('apiVersion');
       expect(kubeconfig).toHaveProperty('clusters');
