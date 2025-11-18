@@ -1,0 +1,35 @@
+{
+  "platform": "CDK",
+  "language": "py",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "w8d7q1",
+  "team": "synth-2",
+  "startedAt": "2025-11-18T21:27:26+05:30",
+  "subtask": "Web Application Deployment",
+  "subject_labels": [
+    "Container images must be stored in private ECR repositories with vulnerability scanning enabled",
+    "Implement blue-green deployment strategy using ECS deployment configuration",
+    "Use AWS Service Discovery for internal service name resolution",
+    "Service-to-service communication must use AWS App Mesh with mTLS encryption",
+    "ECS services must use Fargate Spot instances for cost optimization",
+    "Container logs must be sent to CloudWatch Logs with 30-day retention",
+    "Implement circuit breaker pattern using App Mesh retry policies",
+    "Deploy across 3 availability zones for high availability",
+    "Use AWS Secrets Manager for database credentials and API keys",
+    "Each microservice must have its own auto-scaling policy based on custom CloudWatch metrics"
+  ],
+  "aws_services": [
+    "ECS",
+    "ECR",
+    "App Mesh",
+    "ALB",
+    "CloudWatch",
+    "Secrets Manager",
+    "Cloud Map",
+    "VPC",
+    "IAM",
+    "Auto Scaling"
+  ],
+  "training_quality": 10
+}
