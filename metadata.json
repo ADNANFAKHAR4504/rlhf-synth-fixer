@@ -1,0 +1,23 @@
+{
+  "task_id": "e0l6u1",
+  "platform": "pulumi",
+  "language": "ts",
+  "team": "synth-2",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "e0l6u1",
+  "startedAt": "2025-11-18T21:36:00-05:00",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Networking",
+    "Security Configuration"
+  ],
+  "aws_services": [
+    "VPC",
+    "EC2",
+    "S3",
+    "CloudWatch",
+    "IAM"
+  ],
+  "training_quality": 9
+}
