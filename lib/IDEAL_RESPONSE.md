@@ -5,6 +5,7 @@ I'll create a complete CI/CD pipeline infrastructure using Pulumi with Python th
 ## Complete Implementation
 
 This solution implements all MANDATORY requirements plus security best practices:
+
 - Code Pipeline with GitHub integration (3 stages: Source, Build, Deploy)
 - CodeBuild with complete buildspec (install, pre_build, build phases)
 - S3 buckets for artifacts (with versioning, encryption, lifecycle) and Pulumi state
@@ -37,11 +38,12 @@ Features:
 - Parameter Store for secure token management
 """
 
-from typing import Optional, Dict
 import json
+from typing import Dict, Optional
+
 import pulumi
-from pulumi import ResourceOptions, Output
 import pulumi_aws as aws
+from pulumi import Output, ResourceOptions
 
 
 class TapStackArgs:
@@ -65,6 +67,7 @@ class TapStackArgs:
         tags: Optional[dict] = None,
         github_owner: Optional[str] = None,
         github_repo: Optional[str] = None,
+        github_connection_arn: Optional[str] = None,
         github_branch: Optional[str] = 'main',
         notification_email: Optional[str] = None,
         pulumi_access_token: Optional[str] = None
@@ -73,6 +76,8 @@ class TapStackArgs:
         self.tags = tags or {}
         self.github_owner = github_owner or 'example-org'
         self.github_repo = github_repo or 'example-repo'
+        # GitHub CodeStar Connections ARN used by CodePipeline Source action
+        self.github_connection_arn = github_connection_arn
         self.github_branch = github_branch
         self.notification_email = notification_email or 'devops@example.com'
         self.pulumi_access_token = pulumi_access_token or 'placeholder-token'
@@ -104,8 +109,17 @@ class TapStack(pulumi.ComponentResource):
         self.env_suffix = args.environment_suffix
         self.github_owner = args.github_owner
         self.github_repo = args.github_repo
+        # Make the CodeStar Connections ARN available on the stack instance
+        self.github_connection_arn = args.github_connection_arn
         self.github_branch = args.github_branch
         self.notification_email = args.notification_email
+
+        # Fail fast with a clear message if the connection ARN is not provided
+        if not self.github_connection_arn:
+            raise ValueError(
+                'TapStack requires `github_connection_arn` (CodeStar Connections ARN).\n'
+                'Provide it via `TapStackArgs(github_connection_arn="arn:aws:codestar-connections:...")`'
+            )
 
         # Default tags for all resources
         self.default_tags = {
@@ -188,22 +202,43 @@ class TapStack(pulumi.ComponentResource):
         bucket = aws.s3.Bucket(
             f'pipeline-artifacts-{self.env_suffix}',
             bucket=f'pipeline-artifacts-{self.account_id}-{self.env_suffix}',
-            versioning={'enabled': True},
-            server_side_encryption_configuration={
-                'rule': {
-                    'apply_server_side_encryption_by_default': {
-                        'sse_algorithm': 'aws:kms',
-                        'kms_master_key_id': self.kms_key.arn
-                    },
-                    'bucket_key_enabled': True
-                }
+            tags={**self.default_tags, 'Name': f'pipeline-artifacts-{self.env_suffix}'},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Versioning
+        aws.s3.BucketVersioning(
+            f'pipeline-artifacts-versioning-{self.env_suffix}',
+            bucket=bucket.id,
+            versioning_configuration={
+                'status': 'Enabled'
             },
-            lifecycle_rules=[{
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Server-side encryption
+        aws.s3.BucketServerSideEncryptionConfiguration(
+            f'pipeline-artifacts-encryption-{self.env_suffix}',
+            bucket=bucket.id,
+            rules=[{
+                'apply_server_side_encryption_by_default': {
+                    'sse_algorithm': 'aws:kms',
+                    'kms_master_key_id': self.kms_key.arn
+                },
+                'bucket_key_enabled': True
+            }],
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Lifecycle configuration
+        aws.s3.BucketLifecycleConfiguration(
+            f'pipeline-artifacts-lifecycle-{self.env_suffix}',
+            bucket=bucket.id,
+            rules=[{
                 'id': 'expire-old-artifacts',
-                'enabled': True,
+                'status': 'Enabled',
                 'expiration': {'days': 30}
             }],
-            tags={**self.default_tags, 'Name': f'pipeline-artifacts-{self.env_suffix}'},
             opts=ResourceOptions(parent=self)
         )
 
@@ -225,17 +260,34 @@ class TapStack(pulumi.ComponentResource):
         bucket = aws.s3.Bucket(
             f'pulumi-state-{self.env_suffix}',
             bucket=f'pulumi-state-{self.account_id}-{self.env_suffix}',
-            versioning={'enabled': True},
-            server_side_encryption_configuration={
-                'rule': {
-                    'apply_server_side_encryption_by_default': {
-                        'sse_algorithm': 'aws:kms',
-                        'kms_master_key_id': self.kms_key.arn
-                    },
-                    'bucket_key_enabled': True
-                }
-            },
             tags={**self.default_tags, 'Name': f'pulumi-state-{self.env_suffix}'},
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Versioning
+        aws.s3.BucketVersioning(
+            f'pulumi-state-versioning-{self.env_suffix}',
+            bucket=bucket.id,
+            versioning_configuration={
+                'status': 'Enabled'
+            },
+            opts=ResourceOptions(parent=self)
+        )
+
+        # Server-side encryption
+        aws.s3.BucketServerSideEncryptionConfiguration(
+            f'pulumi-state-encryption-{self.env_suffix}',
+            bucket=bucket.id,
+            rules=[
+                aws.s3.BucketServerSideEncryptionConfigurationRuleArgs(
+                    apply_server_side_encryption_by_default=
+                        aws.s3.BucketServerSideEncryptionConfigurationRuleApplyServerSideEncryptionByDefaultArgs(
+                            sse_algorithm="aws:kms",
+                            kms_master_key_id=self.kms_key.arn
+                        ),
+                    bucket_key_enabled=True
+                )
+            ],
             opts=ResourceOptions(parent=self)
         )
 
@@ -421,31 +473,35 @@ class TapStack(pulumi.ComponentResource):
             'phases': {
                 'install': {
                     'runtime-versions': {
-                        'python': '3.11'
+                        'python': '3.12'
                     },
                     'commands': [
-                        'echo "Installing Pulumi..."',
+                        'echo "Installing pipenv..."',
+                        'pip install pipenv',
+                        'echo "Installing Python dependencies..."',
+                        'pipenv install --deploy',
+                        'echo "Installing Pulumi CLI..."',
                         'curl -fsSL https://get.pulumi.com | sh',
                         'export PATH=$PATH:$HOME/.pulumi/bin',
-                        'pulumi version',
-                        'echo "Installing Python dependencies..."',
-                        'pip install -r requirements.txt'
+                        'pipenv run pulumi version'
                     ]
                 },
                 'pre_build': {
                     'commands': [
+                        'cd lib',
                         'echo "Configuring Pulumi..."',
                         'export PULUMI_ACCESS_TOKEN=$PULUMI_TOKEN',
-                        'pulumi login',
-                        'pulumi stack select $PULUMI_STACK || pulumi stack init $PULUMI_STACK',
+                        'pipenv run pulumi login',
+                        'pipenv run pulumi stack select $PULUMI_STACK || pipenv run pulumi stack init $PULUMI_STACK',
                         'echo "Running Pulumi preview..."',
-                        'pulumi preview --non-interactive'
+                        'pipenv run pulumi preview --non-interactive'
                     ]
                 },
                 'build': {
                     'commands': [
+                        'cd lib',
                         'echo "Running Pulumi update..."',
-                        'pulumi up --yes --non-interactive',
+                        'pipenv run pulumi up --yes --non-interactive',
                         'echo "Pulumi deployment complete"'
                     ]
                 }
@@ -462,7 +518,7 @@ class TapStack(pulumi.ComponentResource):
             artifacts={'type': 'CODEPIPELINE'},
             environment={
                 'compute_type': 'BUILD_GENERAL1_SMALL',
-                'image': 'aws/codebuild/standard:5.0',
+                'image': 'aws/codebuild/standard:7.0',
                 'type': 'LINUX_CONTAINER',
                 'environment_variables': [
                     {
@@ -479,6 +535,11 @@ class TapStack(pulumi.ComponentResource):
                         'name': 'AWS_REGION',
                         'type': 'PLAINTEXT',
                         'value': self.region
+                    },
+                    {
+                        'name': 'PULUMI_BACKEND_URL',
+                        'type': 'PLAINTEXT',
+                        'value': self.state_bucket.bucket.apply(lambda b: f's3://{b}')
                     }
                 ]
             },
@@ -532,8 +593,7 @@ class TapStack(pulumi.ComponentResource):
                 'encryption_key': {
                     'id': self.kms_key.arn,
                     'type': 'KMS'
-                },
-                'region': self.region
+                }
             }],
             stages=[
                 {
@@ -541,16 +601,15 @@ class TapStack(pulumi.ComponentResource):
                     'actions': [{
                         'name': 'SourceAction',
                         'category': 'Source',
-                        'owner': 'ThirdParty',
-                        'provider': 'GitHub',
+                        'owner': 'AWS',
+                        'provider': 'CodeStarSourceConnection',
                         'version': '1',
                         'output_artifacts': ['source_output'],
                         'configuration': {
-                            'Owner': self.github_owner,
-                            'Repo': self.github_repo,
-                            'Branch': self.github_branch,
-                            'OAuthToken': '{{resolve:secretsmanager:github-token:SecretString:token}}'
-                        }
+                            'ConnectionArn': self.github_connection_arn,
+                            'FullRepositoryId': f'{self.github_owner}/{self.github_repo}',
+                            'BranchName': self.github_branch,
+                        },
                     }]
                 },
                 {
@@ -584,7 +643,11 @@ class TapStack(pulumi.ComponentResource):
                 }
             ],
             tags={**self.default_tags, 'Name': f'pulumi-pipeline-{self.env_suffix}'},
-            opts=ResourceOptions(parent=self, depends_on=[self.pipeline_role, self.codebuild_project, self.sns_topic])
+
+            opts=ResourceOptions(
+                parent=self,
+                depends_on=[self.pipeline_role, self.codebuild_project, self.sns_topic]
+            )
         )
 
         return pipeline
@@ -711,7 +774,7 @@ pulumi.export('connection_info', {
 })
 ```
 
-## File: lib/__init__.py
+## File: lib/**init**.py
 
 ```py
 """CI/CD Pipeline infrastructure package for Pulumi deployments."""

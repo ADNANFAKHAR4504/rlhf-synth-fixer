@@ -5,11 +5,12 @@ Integration tests for live deployed TapStack Pulumi infrastructure.
 Tests actual AWS resources created by the Pulumi stack using real deployment outputs.
 """
 
-import unittest
-import os
 import json
+import os
+import unittest
+from typing import Any, Dict
+
 import boto3
-from typing import Dict, Any
 
 
 class TestTapStackLiveIntegration(unittest.TestCase):
@@ -37,271 +38,267 @@ class TestTapStackLiveIntegration(unittest.TestCase):
         # Initialize AWS clients
         cls.region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
         cls.ec2_client = boto3.client('ec2', region_name=cls.region)
-        cls.rds_client = boto3.client('rds', region_name=cls.region)
-        cls.dynamodb_client = boto3.client('dynamodb', region_name=cls.region)
-        cls.elbv2_client = boto3.client('elbv2', region_name=cls.region)
-        cls.lambda_client = boto3.client('lambda', region_name=cls.region)
+        cls.codepipeline_client = boto3.client('codepipeline', region_name=cls.region)
+        cls.s3_client = boto3.client('s3', region_name=cls.region)
+        cls.codebuild_client = boto3.client('codebuild', region_name=cls.region)
+        cls.iam_client = boto3.client('iam')
+        cls.sns_client = boto3.client('sns', region_name=cls.region)
+        cls.logs_client = boto3.client('logs', region_name=cls.region)
         cls.kms_client = boto3.client('kms', region_name=cls.region)
-        cls.backup_client = boto3.client('backup', region_name=cls.region)
         cls.ssm_client = boto3.client('ssm', region_name=cls.region)
 
-    def test_01_vpc_exists_and_configured(self):
-        """Test VPC exists and is properly configured."""
-        vpc_id = self.outputs.get('VpcId')
-        self.assertIsNotNone(vpc_id, "VPC ID not found in outputs")
+    def test_01_pipeline_exists_and_configured(self):
+        """Test CodePipeline exists and is properly configured."""
+        pipeline_arn = self.outputs.get('pipeline_arn')
+        self.assertIsNotNone(pipeline_arn, "Pipeline ARN not found in outputs")
 
-        # Verify VPC exists (would throw exception if not)
+        pipeline_name = pipeline_arn.split(':')[-1]
+
+        # Verify pipeline exists
         try:
-            response = self.ec2_client.describe_vpcs(VpcIds=[vpc_id])
-            vpcs = response.get('Vpcs', [])
-            self.assertEqual(len(vpcs), 1, "VPC not found or multiple VPCs returned")
+            response = self.codepipeline_client.get_pipeline(name=pipeline_name)
+            pipeline = response['pipeline']
+            self.assertEqual(pipeline['name'], pipeline_name, "Pipeline name mismatch")
 
-            vpc = vpcs[0]
-            # Verify CIDR block
-            self.assertEqual(vpc['CidrBlock'], '10.0.0.0/16', "VPC CIDR block mismatch")
-            # Verify DNS support
-            self.assertTrue(vpc['EnableDnsHostnames'], "DNS hostnames not enabled")
-            self.assertTrue(vpc['EnableDnsSupport'], "DNS support not enabled")
+            # Verify stages exist
+            stages = pipeline['stages']
+            self.assertGreaterEqual(len(stages), 2, "Pipeline should have at least 2 stages")
+
+            # Check source stage
+            source_stage = stages[0]
+            self.assertEqual(source_stage['name'], 'Source', "First stage should be Source")
+            source_action = source_stage['actions'][0]
+            self.assertEqual(source_action['actionTypeId']['provider'], 'CodeStarSourceConnection', "Source provider mismatch")
+
         except Exception as e:
-            self.fail(f"VPC validation failed: {str(e)}")
+            self.fail(f"Pipeline validation failed: {str(e)}")
 
-    def test_02_subnets_across_availability_zones(self):
-        """Test subnets are distributed across 3 AZs."""
-        vpc_id = self.outputs.get('VpcId')
-        self.assertIsNotNone(vpc_id)
-
-        try:
-            # Get all subnets in VPC
-            response = self.ec2_client.describe_subnets(
-                Filters=[{'Name': 'vpc-id', 'Values': [vpc_id]}]
-            )
-            subnets = response.get('Subnets', [])
-
-            # Should have 6 subnets total (3 public + 3 private)
-            self.assertGreaterEqual(
-                len(subnets), 6,
-                f"Expected at least 6 subnets, found {len(subnets)}"
-            )
-
-            # Verify distribution across AZs
-            azs = set(subnet['AvailabilityZone'] for subnet in subnets)
-            self.assertGreaterEqual(
-                len(azs), 3,
-                f"Subnets should span at least 3 AZs, found {len(azs)}"
-            )
-        except Exception as e:
-            self.fail(f"Subnet validation failed: {str(e)}")
-
-    def test_03_rds_clusters_exist(self):
-        """Test both blue and green RDS Aurora clusters exist."""
-        blue_endpoint = self.outputs.get('BlueClusterEndpoint')
-        green_endpoint = self.outputs.get('GreenClusterEndpoint')
-
-        self.assertIsNotNone(blue_endpoint, "Blue cluster endpoint not found")
-        self.assertIsNotNone(green_endpoint, "Green cluster endpoint not found")
-
-        # Verify endpoints are different
-        self.assertNotEqual(
-            blue_endpoint, green_endpoint,
-            "Blue and green clusters should have different endpoints"
-        )
-
-        # Verify cluster endpoints follow expected pattern
-        self.assertIn('.rds.amazonaws.com', blue_endpoint, "Invalid blue endpoint format")
-        self.assertIn('.rds.amazonaws.com', green_endpoint, "Invalid green endpoint format")
-
-    def test_04_dynamodb_table_exists(self):
-        """Test DynamoDB table exists and has PITR enabled."""
-        table_name = self.outputs.get('DynamoDBTableName')
-        self.assertIsNotNone(table_name, "DynamoDB table name not found in outputs")
+    def test_02_s3_buckets_exist_and_configured(self):
+        """Test S3 buckets exist and are properly configured."""
+        artifact_bucket_name = self.outputs.get('artifact_bucket_name')
+        state_bucket_name = self.outputs.get('state_bucket_name')
+        self.assertIsNotNone(artifact_bucket_name, "Artifact bucket name not found in outputs")
+        self.assertIsNotNone(state_bucket_name, "State bucket name not found in outputs")
 
         try:
-            # Describe table
-            response = self.dynamodb_client.describe_table(TableName=table_name)
-            table = response['Table']
+            # Check artifact bucket versioning
+            response = self.s3_client.get_bucket_versioning(Bucket=artifact_bucket_name)
+            self.assertEqual(response.get('Status'), 'Enabled', "Artifact bucket versioning not enabled")
 
-            # Verify table status
-            self.assertEqual(
-                table['TableStatus'], 'ACTIVE',
-                f"Table status is {table['TableStatus']}, expected ACTIVE"
-            )
+            # Check artifact bucket encryption
+            response = self.s3_client.get_bucket_encryption(Bucket=artifact_bucket_name)
+            self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "Artifact bucket encryption not configured")
 
-            # Verify Point-in-Time Recovery
-            pitr_response = self.dynamodb_client.describe_continuous_backups(
-                TableName=table_name
-            )
-            pitr_status = pitr_response['ContinuousBackupsDescription'][
-                'PointInTimeRecoveryDescription'
-            ]['PointInTimeRecoveryStatus']
-            self.assertEqual(
-                pitr_status, 'ENABLED',
-                "Point-in-Time Recovery should be enabled"
-            )
+            # Check state bucket versioning
+            response = self.s3_client.get_bucket_versioning(Bucket=state_bucket_name)
+            self.assertEqual(response.get('Status'), 'Enabled', "State bucket versioning not enabled")
+
+            # Check state bucket encryption
+            response = self.s3_client.get_bucket_encryption(Bucket=state_bucket_name)
+            self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "State bucket encryption not configured")
+
         except Exception as e:
-            self.fail(f"DynamoDB table validation failed: {str(e)}")
+            self.fail(f"S3 bucket validation failed: {str(e)}")
 
-    def test_05_alb_exists_and_configured(self):
-        """Test Application Load Balancer exists and is configured."""
-        alb_dns_name = self.outputs.get('AlbDnsName')
-        self.assertIsNotNone(alb_dns_name, "ALB DNS name not found in outputs")
-
-        # Verify DNS name format
-        self.assertIn(
-            '.elb.amazonaws.com', alb_dns_name,
-            "Invalid ALB DNS name format"
-        )
-
-        # If ALB ARN is available, verify it exists
-        alb_arn = self.outputs.get('AlbArn')
-        if alb_arn:
-            try:
-                response = self.elbv2_client.describe_load_balancers(
-                    LoadBalancerArns=[alb_arn]
-                )
-                lbs = response.get('LoadBalancers', [])
-                self.assertEqual(len(lbs), 1, "ALB not found")
-
-                lb = lbs[0]
-                self.assertEqual(lb['State']['Code'], 'active', "ALB is not active")
-                self.assertEqual(lb['Scheme'], 'internet-facing', "ALB should be internet-facing")
-            except self.elbv2_client.exceptions.LoadBalancerNotFoundException:
-                self.skipTest("ALB ARN format may have changed, DNS validation sufficient")
-
-    def test_06_lambda_function_exists(self):
-        """Test Lambda function for environment switching exists."""
-        lambda_arn = self.outputs.get('LambdaFunctionArn')
-        self.assertIsNotNone(lambda_arn, "Lambda function ARN not found")
+    def test_03_codebuild_project_exists(self):
+        """Test CodeBuild project exists and is properly configured."""
+        codebuild_name = self.outputs.get('codebuild_project_name')
+        self.assertIsNotNone(codebuild_name, "CodeBuild project name not found in outputs")
 
         try:
-            # Get function configuration
-            function_name = lambda_arn.split(':')[-1]
-            response = self.lambda_client.get_function(FunctionName=function_name)
+            response = self.codebuild_client.describe_projects(names=[codebuild_name])
+            projects = response['projects']
+            self.assertEqual(len(projects), 1, "CodeBuild project not found")
 
-            # Verify function configuration
-            config = response['Configuration']
-            self.assertTrue(
-                config['Runtime'].startswith('python3'),
-                f"Lambda runtime should be Python 3.x, got {config['Runtime']}"
-            )
-            self.assertGreater(
-                config['Timeout'], 0,
-                "Lambda timeout should be configured"
-            )
-        except self.lambda_client.exceptions.ResourceNotFoundException:
-            self.skipTest("Lambda function may have been destroyed")
+            project = projects[0]
+            self.assertEqual(project['name'], codebuild_name, "CodeBuild project name mismatch")
+
+            # Verify environment
+            environment = project['environment']
+            self.assertEqual(environment['type'], 'LINUX_CONTAINER', "Environment type mismatch")
+            self.assertIn('python', environment['image'].lower(), "Environment image should include Python")
+
         except Exception as e:
-            self.fail(f"Lambda function validation failed: {str(e)}")
+            self.fail(f"CodeBuild project validation failed: {str(e)}")
+
+    def test_04_iam_roles_exist(self):
+        """Test IAM roles exist for pipeline and CodeBuild."""
+        # Assume environment suffix is 'dev' if not in outputs
+        env_suffix = self.outputs.get('env_suffix', 'dev')
+
+        pipeline_role_name = f'pipeline-role-{env_suffix}'
+        codebuild_role_name = f'codebuild-role-{env_suffix}'
+
+        try:
+            # Check pipeline role
+            response = self.iam_client.get_role(RoleName=pipeline_role_name)
+            self.assertIsNotNone(response['Role'], "Pipeline role not found")
+
+            # Check CodeBuild role
+            response = self.iam_client.get_role(RoleName=codebuild_role_name)
+            self.assertIsNotNone(response['Role'], "CodeBuild role not found")
+
+        except Exception as e:
+            self.fail(f"IAM role validation failed: {str(e)}")
+
+    def test_05_sns_topic_exists(self):
+        """Test SNS topic exists for notifications."""
+        sns_topic_arn = self.outputs.get('sns_topic_arn')
+        self.assertIsNotNone(sns_topic_arn, "SNS topic ARN not found in outputs")
+
+        try:
+            response = self.sns_client.get_topic_attributes(TopicArn=sns_topic_arn)
+            attributes = response['Attributes']
+            self.assertIsNotNone(attributes, "SNS topic attributes not found")
+
+            # Verify topic has subscriptions (email)
+            subscriptions_response = self.sns_client.list_subscriptions_by_topic(TopicArn=sns_topic_arn)
+            subscriptions = subscriptions_response['Subscriptions']
+            self.assertGreater(len(subscriptions), 0, "SNS topic should have subscriptions")
+
+        except Exception as e:
+            self.fail(f"SNS topic validation failed: {str(e)}")
+
+    def test_06_log_group_exists(self):
+        """Test CloudWatch log group exists."""
+        log_group_name = self.outputs.get('log_group_name')
+        self.assertIsNotNone(log_group_name, "Log group name not found in outputs")
+
+        try:
+            response = self.logs_client.describe_log_groups(logGroupNamePrefix=log_group_name)
+            log_groups = response['logGroups']
+            self.assertGreater(len(log_groups), 0, "Log group not found")
+
+            # Verify the specific log group exists
+            matching_groups = [lg for lg in log_groups if lg['logGroupName'] == log_group_name]
+            self.assertEqual(len(matching_groups), 1, "Exact log group not found")
+
+        except Exception as e:
+            self.fail(f"Log group validation failed: {str(e)}")
 
     def test_07_kms_key_exists(self):
         """Test KMS customer-managed key exists."""
-        kms_key_id = self.outputs.get('KmsKeyId')
-        self.assertIsNotNone(kms_key_id, "KMS key ID not found in outputs")
-
-        # Verify KMS key ID/ARN format
-        self.assertTrue(
-            kms_key_id.startswith('arn:aws:kms:') or len(kms_key_id) == 36,
-            "Invalid KMS key ID/ARN format"
-        )
-
-    def test_08_backup_vault_exists(self):
-        """Test AWS Backup vault exists."""
-        vault_name = self.outputs.get('BackupVaultName')
-        self.assertIsNotNone(vault_name, "Backup vault name not found")
+        env_suffix = self.outputs.get('env_suffix', 'dev')
+        alias_name = f'alias/pipeline-{env_suffix}'
 
         try:
-            # Describe backup vault
-            response = self.backup_client.describe_backup_vault(
-                BackupVaultName=vault_name
-            )
+            response = self.kms_client.describe_key(KeyId=alias_name)
+            key_metadata = response['KeyMetadata']
+            self.assertIsNotNone(key_metadata, "KMS key not found")
 
-            # Verify vault exists
-            self.assertEqual(
-                response['BackupVaultName'], vault_name,
-                "Backup vault name mismatch"
-            )
-        except self.backup_client.exceptions.ResourceNotFoundException:
-            self.skipTest("Backup vault may have been destroyed")
+            # Verify key rotation is enabled
+            self.assertTrue(key_metadata['KeyRotationEnabled'], "KMS key rotation should be enabled")
+
         except Exception as e:
-            self.fail(f"Backup vault validation failed: {str(e)}")
+            self.fail(f"KMS key validation failed: {str(e)}")
 
-    def test_09_active_environment_tracked(self):
-        """Test active environment is tracked in SSM Parameter."""
-        active_env = self.outputs.get('ActiveEnvironment')
-        self.assertIsNotNone(active_env, "Active environment not found")
+    def test_08_parameter_store_exists(self):
+        """Test SSM Parameter Store exists for Pulumi token."""
+        param_name = self.outputs.get('pulumi_token_parameter')
+        self.assertIsNotNone(param_name, "Parameter name not found in outputs")
 
-        # Verify active environment is either blue or green
-        self.assertIn(
-            active_env.lower(), ['blue', 'green'],
-            "Active environment should be 'blue' or 'green'"
-        )
+        try:
+            response = self.ssm_client.get_parameter(Name=param_name, WithDecryption=False)
+            parameter = response['Parameter']
+            self.assertIsNotNone(parameter, "Parameter not found")
 
-    def test_10_blue_green_workflow_integrity(self):
-        """Test blue-green deployment workflow components are complete."""
-        # Verify all required components for blue-green deployment exist
-        required_components = {
-            'VpcId': 'VPC for networking',
-            'BlueClusterEndpoint': 'Blue RDS cluster',
-            'GreenClusterEndpoint': 'Green RDS cluster',
-            'AlbDnsName': 'Application Load Balancer',
-            'DynamoDBTableName': 'DynamoDB for session data',
-            'LambdaFunctionArn': 'Lambda for environment switching',
-            'ActiveEnvironment': 'Active environment tracking'
-        }
+            # Verify parameter type
+            self.assertEqual(parameter['Type'], 'SecureString', "Parameter should be SecureString")
 
-        missing_components = []
-        for component, description in required_components.items():
-            if component not in self.outputs or not self.outputs[component]:
-                missing_components.append(f"{component} ({description})")
+        except Exception as e:
+            self.fail(f"Parameter Store validation failed: {str(e)}")
 
-        self.assertEqual(
-            len(missing_components), 0,
-            f"Missing required components: {', '.join(missing_components)}"
-        )
+    def test_09_pipeline_naming_convention(self):
+        """Test pipeline follows naming conventions."""
+        pipeline_name = self.outputs.get('pipeline_name')
+        self.assertIsNotNone(pipeline_name, "Pipeline name not found")
+
+        # Verify pipeline name includes expected components
+        self.assertIn('pulumi-cicd-pipeline', pipeline_name, "Pipeline name should include base name")
+
+    def test_10_pipeline_workflow_integrity(self):
+        """Test pipeline workflow components are complete."""
+        pipeline_arn = self.outputs.get('pipeline_arn')
+        self.assertIsNotNone(pipeline_arn, "Pipeline ARN not found")
+
+        pipeline_name = pipeline_arn.split(':')[-1]
+
+        try:
+            response = self.codepipeline_client.get_pipeline(name=pipeline_name)
+            pipeline = response['pipeline']
+            stages = pipeline['stages']
+
+            # Verify pipeline has source, build, and deploy stages
+            stage_names = [stage['name'] for stage in stages]
+            self.assertIn('Source', stage_names, "Pipeline should have Source stage")
+            self.assertIn('Build', stage_names, "Pipeline should have Build stage")
+
+        except Exception as e:
+            self.fail(f"Pipeline workflow validation failed: {str(e)}")
 
     def test_11_resource_naming_convention(self):
         """Test resources follow naming conventions with environment suffix."""
         # Verify environment suffix is used consistently
-        table_name = self.outputs.get('DynamoDBTableName')
-        lambda_arn = self.outputs.get('LambdaFunctionArn')
-        vault_name = self.outputs.get('BackupVaultName')
+        pipeline_name = self.outputs.get('pipeline_name')
+        artifact_bucket_name = self.outputs.get('artifact_bucket_name')
+        state_bucket_name = self.outputs.get('state_bucket_name')
+        codebuild_name = self.outputs.get('codebuild_project_name')
 
         # All resource names should contain consistent suffix
-        if table_name:
+        env_suffix = 'dev'  # default
+
+        if pipeline_name:
             self.assertIn(
-                'synth', table_name.lower(),
-                "DynamoDB table should include environment suffix"
+                env_suffix, pipeline_name.lower(),
+                "Pipeline name should include environment suffix"
             )
 
-        if lambda_arn:
-            lambda_name = lambda_arn.split(':')[-1]
+        if artifact_bucket_name:
             self.assertIn(
-                'synth', lambda_name.lower(),
-                "Lambda function should include environment suffix"
+                env_suffix, artifact_bucket_name.lower(),
+                "Artifact bucket should include environment suffix"
             )
 
-        if vault_name:
+        if state_bucket_name:
             self.assertIn(
-                'synth', vault_name.lower(),
-                "Backup vault should include environment suffix"
+                env_suffix, state_bucket_name.lower(),
+                "State bucket should include environment suffix"
+            )
+
+        if codebuild_name:
+            self.assertIn(
+                env_suffix, codebuild_name.lower(),
+                "CodeBuild project should include environment suffix"
             )
 
     def test_12_encryption_at_rest(self):
         """Test data encryption at rest is enabled."""
-        kms_key_id = self.outputs.get('KmsKeyId')
-        self.assertIsNotNone(kms_key_id, "KMS key should be created for encryption")
+        # Check S3 bucket encryption
+        artifact_bucket_name = self.outputs.get('artifact_bucket_name')
+        state_bucket_name = self.outputs.get('state_bucket_name')
 
-        # DynamoDB encryption
-        table_name = self.outputs.get('DynamoDBTableName')
-        if table_name:
+        if artifact_bucket_name:
             try:
-                response = self.dynamodb_client.describe_table(TableName=table_name)
-                sse_description = response['Table'].get('SSEDescription', {})
-                self.assertEqual(
-                    sse_description.get('Status'), 'ENABLED',
-                    "DynamoDB table encryption should be enabled"
-                )
+                response = self.s3_client.get_bucket_encryption(Bucket=artifact_bucket_name)
+                self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "Artifact bucket encryption should be enabled")
             except Exception:
-                self.skipTest("DynamoDB table may have been destroyed")
+                self.fail("Artifact bucket encryption check failed")
+
+        if state_bucket_name:
+            try:
+                response = self.s3_client.get_bucket_encryption(Bucket=state_bucket_name)
+                self.assertIsNotNone(response.get('ServerSideEncryptionConfiguration'), "State bucket encryption should be enabled")
+            except Exception:
+                self.fail("State bucket encryption check failed")
+
+        # Check KMS key rotation
+        env_suffix = 'dev'
+        alias_name = f'alias/pipeline-{env_suffix}'
+        try:
+            response = self.kms_client.describe_key(KeyId=alias_name)
+            self.assertTrue(response['KeyMetadata']['KeyRotationEnabled'], "KMS key rotation should be enabled")
+        except Exception:
+            self.fail("KMS key rotation check failed")
 
 
 if __name__ == '__main__':
