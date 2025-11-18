@@ -1,0 +1,409 @@
+2025-11-18 10:47:52,330 - INFO - Found credentials in environment variables.
+2025-11-18 10:47:52,387 - INFO - Starting CloudFront distribution analysis...
+2025-11-18 10:47:52,619 - INFO - Skipping QR4ZN7TRYQ8D3 - ExcludeFromAnalysis tag
+2025-11-18 10:47:52,623 - INFO - Skipping BB2LGGQE8M541 - Internal only distribution
+2025-11-18 10:47:52,637 - INFO - Analyzing distribution: LSG1NU0Z5LJ87
+2025-11-18 10:47:52,657 - INFO - Analyzing distribution: WKQYVMG6WFXMC
+2025-11-18 10:47:52,685 - INFO - Analyzing distribution: BLDI0QH2RY0Y2
+2025-11-18 10:47:52,717 - INFO - Analyzing distribution: PZT028QZJGA7Z
+2025-11-18 10:47:52,743 - INFO - Analyzing distribution: QKFR421TWIV85
+2025-11-18 10:47:52,769 - INFO - Analyzing distribution: WEM494NX3KS8K
+2025-11-18 10:47:52,789 - INFO - Analyzing distribution: JRNPCTYI8JKPM
+2025-11-18 10:47:52,810 - INFO - Analyzing distribution: UTPUQRAZESA8A
+2025-11-18 10:47:52,869 - INFO - Analyzing distribution: JHVZVC46UXGDF
+
+================================================================================
+Distribution: LSG1NU0Z5LJ87 (wtfkk7j2sie8h.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 92.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: WKQYVMG6WFXMC (iw2v7kdi84i25.cloudfront.net)
+Performance Score: 48/100
+Cache Hit Ratio: 60.0%
+Potential Monthly Savings: $1.25
+
+Top Issues:
+1. [HIGH] Low Cache Hit Ratio
+   Current: Cache hit ratio: 60.0%
+   Recommended: Improve caching strategy to achieve >80% cache hit ratio
+   Estimated Savings: $1.25/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: BLDI0QH2RY0Y2 (muzjfrg0g8nxv.cloudfront.net)
+Performance Score: 57/100
+Cache Hit Ratio: 78.0%
+Potential Monthly Savings: $0.89
+
+Top Issues:
+1. [HIGH] Low Cache Hit Ratio
+   Current: Cache hit ratio: 78.0%
+   Recommended: Improve caching strategy to achieve >80% cache hit ratio
+   Estimated Savings: $0.48/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+4. [MEDIUM] No Origin Shield
+   Current: Origin Shield disabled
+   Recommended: Enable Origin Shield for better cache efficiency
+   Estimated Savings: $0.41/month
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: PZT028QZJGA7Z (bg3rzx66jdngz.cloudfront.net)
+Performance Score: 63/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $2.98
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Compression
+   Current: Compression not enabled for text content
+   Recommended: Enable compression for HTML, CSS, JS files
+   Estimated Savings: $2.98/month
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: QKFR421TWIV85 (g9w7hu6uv2dkf.cloudfront.net)
+Performance Score: 58/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.60
+
+Top Issues:
+1. [HIGH] Inadequate TTL
+   Current: Default TTL < 3600 seconds
+   Recommended: Set default TTL to at least 3600 seconds for static assets
+   Estimated Savings: $0.60/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: WEM494NX3KS8K (m1i70l1fzvfy1.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: JRNPCTYI8JKPM (ij5b8ylaq4r5c.cloudfront.net)
+Performance Score: 58/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] HTTP Origin
+   Current: Origin using HTTP protocol
+   Recommended: Use HTTPS for all origins
+3. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: UTPUQRAZESA8A (a843r7pv9urym.cloudfront.net)
+Performance Score: 63/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $2.12
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] Inefficient Price Class
+   Current: Using PriceClass_All but traffic concentrated in fewer regions
+   Recommended: Use PriceClass_100
+   Estimated Savings: $2.12/month
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: JHVZVC46UXGDF (sjtuczeci8e4t.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+2025-11-18 10:47:52,889 - INFO - Analyzing distribution: VMW7ERX3ORJ08
+2025-11-18 10:47:52,913 - INFO - Analyzing distribution: O0DOXP749WF8V
+2025-11-18 10:47:52,939 - INFO - Analyzing distribution: AHIDKOT2HDA4X
+2025-11-18 10:47:52,959 - INFO - Analyzing distribution: Y3C85FS082NJQ
+2025-11-18 10:47:52,989 - INFO - Analyzing distribution: DVUU0SLY9EUCU
+2025-11-18 10:47:53,009 - INFO - Analyzing distribution: D66H85O7B6E2G
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: VMW7ERX3ORJ08 (g9oy4v18yxxkp.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: O0DOXP749WF8V (v7ylj8zhtrux6.cloudfront.net)
+Performance Score: 63/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [MEDIUM] No Lambda@Edge
+   Current: Serving dynamic content without edge compute
+   Recommended: Use Lambda@Edge for dynamic content optimization
+================================================================================
+
+================================================================================
+Distribution: AHIDKOT2HDA4X (aicv9v4ru28h3.cloudfront.net)
+Performance Score: 58/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [HIGH] Insecure Viewer Protocol Policy
+   Current: Allowing HTTP viewer requests
+   Recommended: Use redirect-to-https or https-only
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: Y3C85FS082NJQ (ftvpupwzq4893.cloudfront.net)
+Performance Score: 53/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.23
+
+Top Issues:
+1. [HIGH] Forward All Cookies
+   Current: Forwarding all cookies to origin
+   Recommended: Only forward necessary cookies
+   Estimated Savings: $0.23/month
+2. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+3. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+4. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+5. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+================================================================================
+
+================================================================================
+Distribution: DVUU0SLY9EUCU (k4iqxyjtkpgqb.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+================================================================================
+Distribution: D66H85O7B6E2G (dt47w7x714d6h.cloudfront.net)
+Performance Score: 68/100
+Cache Hit Ratio: 85.0%
+Potential Monthly Savings: $0.00
+
+Top Issues:
+1. [HIGH] Missing Security Headers
+   Current: No response headers policy configured
+   Recommended: Add security headers: X-Frame-Options, CSP, HSTS
+2. [HIGH] No WAF Integration
+   Current: No AWS WAF attached
+   Recommended: Attach AWS WAF for security
+3. [MEDIUM] No Origin Failover
+   Current: Single origin without failover
+   Recommended: Configure origin group with failover
+4. [MEDIUM] Logging Disabled
+   Current: CloudFront access logging disabled
+   Recommended: Enable access logging to S3
+5. [LOW] No Custom Error Pages
+   Current: Using default CloudFront error pages
+   Recommended: Configure custom branded error pages
+================================================================================
+
+CloudFront Optimization Summary
+2025-11-18 10:47:53,031 - INFO - JSON report saved to cloudfront_optimization.json
+2025-11-18 10:47:53,040 - INFO - HTML report saved to cache_efficiency_report.html
+2025-11-18 10:47:53,041 - INFO - CSV roadmap saved to cdn_optimization_roadmap.csv
+| Distribution   | Domain                       |   Score | Cache Hit   |   Issue Count | Potential Savings   |
+|----------------|------------------------------|---------|-------------|---------------|---------------------|
+| LSG1NU0Z5LJ87  | wtfkk7j2sie8h.cloudfront.net |      68 | 92.0%       |             5 | $0.00               |
+| WKQYVMG6WFXMC  | iw2v7kdi84i25.cloudfront.net |      48 | 60.0%       |             6 | $1.25               |
+| BLDI0QH2RY0Y2  | muzjfrg0g8nxv.cloudfront.net |      57 | 78.0%       |             6 | $0.89               |
+| PZT028QZJGA7Z  | bg3rzx66jdngz.cloudfront.net |      63 | 85.0%       |             6 | $2.98               |
+| QKFR421TWIV85  | g9w7hu6uv2dkf.cloudfront.net |      58 | 85.0%       |             6 | $0.60               |
+| WEM494NX3KS8K  | m1i70l1fzvfy1.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| JRNPCTYI8JKPM  | ij5b8ylaq4r5c.cloudfront.net |      58 | 85.0%       |             6 | $0.00               |
+| UTPUQRAZESA8A  | a843r7pv9urym.cloudfront.net |      63 | 85.0%       |             6 | $2.12               |
+| JHVZVC46UXGDF  | sjtuczeci8e4t.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| VMW7ERX3ORJ08  | g9oy4v18yxxkp.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| O0DOXP749WF8V  | v7ylj8zhtrux6.cloudfront.net |      63 | 85.0%       |             6 | $0.00               |
+| AHIDKOT2HDA4X  | aicv9v4ru28h3.cloudfront.net |      58 | 85.0%       |             6 | $0.00               |
+| Y3C85FS082NJQ  | ftvpupwzq4893.cloudfront.net |      53 | 85.0%       |             7 | $0.23               |
+| DVUU0SLY9EUCU  | k4iqxyjtkpgqb.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+| D66H85O7B6E2G  | dt47w7x714d6h.cloudfront.net |      68 | 85.0%       |             5 | $0.00               |
+Analyzed 15 distributions | Avg Cache Hit: 83.3% | Total Potential Savings: $8.06
