@@ -25,6 +25,10 @@ export class TapStack extends pulumi.ComponentResource {
     const environmentSuffix = args.environmentSuffix || 'dev';
     const tags = args.tags || {};
 
+    // Get database password from Pulumi config
+    const config = new pulumi.Config();
+    const dbPassword = config.requireSecret('dbPassword');
+
     // Primary region provider (us-east-1)
     const primaryProvider = new aws.Provider(
       `provider-primary-${environmentSuffix}`,
@@ -544,7 +548,7 @@ export class TapStack extends pulumi.ComponentResource {
         engineVersion: '14.6',
         globalClusterIdentifier: globalCluster.id,
         masterUsername: 'dbadmin',
-        masterPassword: pulumi.secret('TempPassword123!'),
+        masterPassword: dbPassword,
         dbSubnetGroupName: primaryDbSubnetGroup.name,
         vpcSecurityGroupIds: [primaryDbSg.id],
         storageEncrypted: true,
@@ -814,7 +818,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    // Lambda function to monitor replication lag
+    // Lambda function to monitor replication lag (using bundled AWS SDK v2)
     const monitorLambda = new aws.lambda.Function(
       `monitor-replication-${environmentSuffix}`,
       {
@@ -825,24 +829,22 @@ export class TapStack extends pulumi.ComponentResource {
         timeout: 30,
         code: new pulumi.asset.AssetArchive({
           'index.js': new pulumi.asset.StringAsset(`
-const { RDSClient, DescribeDBClustersCommand } = require('@aws-sdk/client-rds');
-const { CloudWatchClient, PutMetricDataCommand } = require('@aws-sdk/client-cloudwatch');
+const AWS = require('aws-sdk');
+const rds = new AWS.RDS({ region: 'us-east-1' });
+const cloudwatch = new AWS.CloudWatch({ region: 'us-east-1' });
 
 exports.handler = async (event) => {
-  const rds = new RDSClient({ region: 'us-east-1' });
-  const cloudwatch = new CloudWatchClient({ region: 'us-east-1' });
-
   try {
-    const result = await rds.send(new DescribeDBClustersCommand({
+    const result = await rds.describeDBClusters({
       DBClusterIdentifier: process.env.PRIMARY_CLUSTER_ID
-    }));
+    }).promise();
 
     const cluster = result.DBClusters[0];
     const replicationLag = cluster.ReplicationSourceIdentifier ?
       (cluster.LatestRestorableTime ?
         (Date.now() - new Date(cluster.LatestRestorableTime).getTime()) / 1000 : 0) : 0;
 
-    await cloudwatch.send(new PutMetricDataCommand({
+    await cloudwatch.putMetricData({
       Namespace: 'TradingPlatform',
       MetricData: [{
         MetricName: 'ReplicationLag',
@@ -850,7 +852,7 @@ exports.handler = async (event) => {
         Unit: 'Seconds',
         Timestamp: new Date()
       }]
-    }));
+    }).promise();
 
     return { statusCode: 200, body: JSON.stringify({ replicationLag }) };
   } catch (error) {
@@ -859,14 +861,6 @@ exports.handler = async (event) => {
   }
 };
         `),
-          'package.json': new pulumi.asset.StringAsset(
-            JSON.stringify({
-              dependencies: {
-                '@aws-sdk/client-rds': '^3.0.0',
-                '@aws-sdk/client-cloudwatch': '^3.0.0',
-              },
-            })
-          ),
         }),
         environment: {
           variables: {
@@ -878,11 +872,11 @@ exports.handler = async (event) => {
       { parent: this, provider: primaryProvider }
     );
 
-    // EventBridge rule to trigger Lambda every 1 minute
+    // EventBridge rule to trigger Lambda every 30 seconds
     const monitorRule = new aws.cloudwatch.EventRule(
       `monitor-rule-${environmentSuffix}`,
       {
-        scheduleExpression: 'rate(1 minute)',
+        scheduleExpression: 'rate(30 seconds)',
         tags: { ...tags, Environment: environmentSuffix },
       },
       { parent: this, provider: primaryProvider }
