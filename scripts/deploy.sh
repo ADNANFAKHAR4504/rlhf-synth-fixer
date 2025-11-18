@@ -353,11 +353,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
 
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
 
-    # Set GitHub connection ARN if provided
-    if [ -n "$GITHUB_CONNECTION_ARN" ]; then
-      pulumi config set github_connection_arn "$GITHUB_CONNECTION_ARN"
-    fi
-
     echo "Deploying infrastructure ..."
     if ! pulumi up --yes --refresh --stack "${PULUMI_ORG}/TapStack/TapStack${ENVIRONMENT_SUFFIX}"; then
       echo "⚠️ Deployment failed, attempting lock recovery..."
@@ -373,9 +368,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
   else
     echo "🔧 Python Pulumi project detected"
     export PYTHONPATH=.:bin
-    cd lib
-    pipenv install
-    pulumi login "$PULUMI_BACKEND_URL"
     pipenv run pulumi-create-stack
     
     # Clear any existing locks before deployment
@@ -383,11 +375,6 @@ elif [ "$PLATFORM" = "pulumi" ]; then
     pulumi cancel --yes 2>/dev/null || echo "No locks to clear or cancel failed"
 
     pulumi config set aws:defaultTags "{\"tags\":{\"Environment\":\"$ENVIRONMENT_SUFFIX\",\"Repository\":\"$REPOSITORY\",\"Author\":\"$COMMIT_AUTHOR\",\"PRNumber\":\"$PR_NUMBER\",\"Team\":\"$TEAM\",\"CreatedAt\":\"$(date -u +%Y-%m-%dT%H:%M:%SZ)\",\"ManagedBy\":\"pulumi\"}}"
-
-    # Set GitHub connection ARN if provided
-    if [ -n "$GITHUB_CONNECTION_ARN" ]; then
-      pulumi config set github_connection_arn "$GITHUB_CONNECTION_ARN"
-    fi
     
     echo "Deploying infrastructure ..."
     if ! pipenv run pulumi-deploy; then
@@ -396,11 +383,9 @@ elif [ "$PLATFORM" = "pulumi" ]; then
       echo "🔄 Retrying deployment after lock cancellation..."
       pipenv run pulumi-deploy || {
         echo "❌ Deployment failed after retry"
-        cd ..
         exit 1
       }
     fi
-    cd ..
   fi
 
 else
