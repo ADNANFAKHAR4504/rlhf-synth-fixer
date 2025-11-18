@@ -16,6 +16,21 @@
     "Lambda",
     "EventBridge",
     "CloudWatch LogGroup",
-    "VPC"
+    "VPC",
+    "KMS",
+    "Kinesis Stream",
+    "DynamoDB Table",
+    "VPC Subnet",
+    "VPC RouteTable",
+    "IAM Role",
+    "SQS Queue",
+    "Glue Database",
+    "Glue Crawler",
+    "Glue Job",
+    "Glue Trigger",
+    "SNS Topic",
+    "CloudWatch Alarm",
+    "CloudWatch Dashboard",
+    "Custom Resource"
   ]
 }
