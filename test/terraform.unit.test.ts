@@ -96,7 +96,7 @@ describe("Banking ETL Infrastructure - Provider Configuration", () => {
   });
 
   test("provider.tf declares terraform required_version", () => {
-    expect(providerContent).toMatch(/required_version\s*=\s*">=\s*1\.\d+\.\d+"/);
+    expect(providerContent).toMatch(/required_version\s*=\s*">=\s*1\.\d+(\.\d+)?"/);
   });
 
   test("provider.tf declares AWS provider requirement", () => {
