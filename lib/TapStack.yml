@@ -10,10 +10,12 @@ Parameters:
   StagingAccountId:
     Type: String
     Description: AWS Account ID for staging environment
+    Default: '123456789012'
 
   ProductionAccountId:
     Type: String
     Description: AWS Account ID for production environment
+    Default: '123456789012'
 
   SourceRepositoryName:
     Type: String
