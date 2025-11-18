@@ -77,24 +77,13 @@ data "aws_iam_policy_document" "kms" {
     resources = ["*"]
   }
 
-}
-
-# Combined KMS key policy that includes node group IAM role permissions
-data "aws_iam_policy_document" "kms_combined" {
-  # Include all statements from the base KMS policy
-  source_policy_documents = [data.aws_iam_policy_document.kms.json]
-
-  # Add node group IAM role permissions (this will be empty initially, then populated after roles are created)
   statement {
-    sid    = "AllowNodeGroupRoles"
+    sid    = "AllowAutoScaling"
     effect = "Allow"
 
     principals {
-      type = "AWS"
-      identifiers = [
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.cluster_name}-frontend-role",
-        "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${local.cluster_name}-backend-role"
-      ]
+      type        = "Service"
+      identifiers = ["autoscaling.amazonaws.com"]
     }
 
     actions = [
@@ -108,13 +97,44 @@ data "aws_iam_policy_document" "kms_combined" {
 
     resources = ["*"]
   }
+
+  statement {
+    sid    = "AllowAutoScalingServiceLinkedRole"
+    effect = "Allow"
+
+    principals {
+      type        = "AWS"
+      identifiers = ["arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/aws-service-role/autoscaling.amazonaws.com/AWSServiceRoleForAutoScaling"]
+    }
+
+    actions = [
+      "kms:Encrypt",
+      "kms:Decrypt",
+      "kms:ReEncrypt*",
+      "kms:GenerateDataKey*",
+      "kms:DescribeKey",
+      "kms:CreateGrant"
+    ]
+
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:GrantIsForAWSResource"
+      values   = ["true"]
+    }
+  }
+
 }
+
+# KMS key policy - node group roles don't need explicit permissions
+# since we use AWS-managed EBS encryption and EKS handles secrets encryption
 
 resource "aws_kms_key" "eks" {
   description             = "KMS key for ${local.cluster_name} secret encryption"
   deletion_window_in_days = 10
   enable_key_rotation     = true
-  policy                  = data.aws_iam_policy_document.kms_combined.json
+  policy                  = data.aws_iam_policy_document.kms.json
 
   tags = merge(local.common_tags, {
     Name = "${local.cluster_name}-kms"
@@ -128,6 +148,10 @@ resource "aws_kms_key" "eks" {
 resource "aws_kms_alias" "eks" {
   name          = local.kms_alias_name
   target_key_id = aws_kms_key.eks.key_id
+
+  lifecycle {
+    create_before_destroy = true
+  }
 }
 
 resource "aws_cloudwatch_log_group" "eks" {

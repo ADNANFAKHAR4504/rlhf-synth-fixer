@@ -45,11 +45,13 @@ resource "aws_eks_node_group" "frontend" {
     # Or delete them manually via AWS CLI: aws eks delete-nodegroup --cluster-name <cluster> --nodegroup-name <name>
   }
 
-  depends_on = [
-    aws_iam_role_policy_attachment.frontend_worker_node_policy,
-    aws_iam_role_policy_attachment.frontend_cni_policy,
-    aws_iam_role_policy_attachment.frontend_ecr_ro
-  ]
+      depends_on = [
+        aws_iam_role_policy_attachment.frontend_worker_node_policy,
+        aws_iam_role_policy_attachment.frontend_cni_policy,
+        aws_iam_role_policy_attachment.frontend_ecr_ro,
+        aws_kms_key.eks,
+        aws_cloudwatch_log_group.eks
+      ]
 }
 
 # Backend Node Group
@@ -102,7 +104,9 @@ resource "aws_eks_node_group" "backend" {
   depends_on = [
     aws_iam_role_policy_attachment.backend_worker_node_policy,
     aws_iam_role_policy_attachment.backend_cni_policy,
-    aws_iam_role_policy_attachment.backend_ecr_ro
+    aws_iam_role_policy_attachment.backend_ecr_ro,
+    aws_kms_key.eks,
+    aws_cloudwatch_log_group.eks
   ]
 }
 
