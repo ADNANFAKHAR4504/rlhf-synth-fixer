@@ -563,36 +563,40 @@ export class TapStack extends pulumi.ComponentResource {
     const clusterAutoscalerRole = new aws.iam.Role(
       `eks-cluster-autoscaler-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: pulumi.all([
-          cluster.core.oidcProvider,
-          cluster.eksCluster.arn,
-        ]).apply(([oidcProvider, clusterArn]) => {
+        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider) => {
           if (!oidcProvider || typeof oidcProvider !== 'object') {
             throw new Error('OIDC provider not available');
           }
           const provider = oidcProvider as any;
-          if (!provider.url || !provider.arn) {
-            throw new Error('OIDC provider URL or ARN not available');
-          }
-          const oidcUrl = provider.url.replace('https://', '');
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: provider.arn,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${oidcUrl}:sub`]:
-                      'system:serviceaccount:kube-system:cluster-autoscaler',
-                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+
+          // Extract the URL and ARN, handling both Output and plain string cases
+          return pulumi.all([
+            pulumi.output(provider.url),
+            pulumi.output(provider.arn)
+          ]).apply(([url, arn]) => {
+            if (!url || !arn) {
+              throw new Error('OIDC provider URL or ARN not available');
+            }
+            const oidcUrl = url.replace('https://', '');
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${oidcUrl}:sub`]:
+                        'system:serviceaccount:kube-system:cluster-autoscaler',
+                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+                    },
                   },
                 },
-              },
-            ],
+              ],
+            });
           });
         }),
         tags: {
@@ -667,36 +671,40 @@ export class TapStack extends pulumi.ComponentResource {
     const albControllerRole = new aws.iam.Role(
       `eks-alb-controller-role-${environmentSuffix}`,
       {
-        assumeRolePolicy: pulumi.all([
-          cluster.core.oidcProvider,
-          cluster.eksCluster.arn,
-        ]).apply(([oidcProvider, clusterArn]) => {
+        assumeRolePolicy: cluster.core.oidcProvider!.apply((oidcProvider) => {
           if (!oidcProvider || typeof oidcProvider !== 'object') {
             throw new Error('OIDC provider not available');
           }
           const provider = oidcProvider as any;
-          if (!provider.url || !provider.arn) {
-            throw new Error('OIDC provider URL or ARN not available');
-          }
-          const oidcUrl = provider.url.replace('https://', '');
-          return JSON.stringify({
-            Version: '2012-10-17',
-            Statement: [
-              {
-                Effect: 'Allow',
-                Principal: {
-                  Federated: provider.arn,
-                },
-                Action: 'sts:AssumeRoleWithWebIdentity',
-                Condition: {
-                  StringEquals: {
-                    [`${oidcUrl}:sub`]:
-                      'system:serviceaccount:kube-system:aws-load-balancer-controller',
-                    [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+
+          // Extract the URL and ARN, handling both Output and plain string cases
+          return pulumi.all([
+            pulumi.output(provider.url),
+            pulumi.output(provider.arn)
+          ]).apply(([url, arn]) => {
+            if (!url || !arn) {
+              throw new Error('OIDC provider URL or ARN not available');
+            }
+            const oidcUrl = url.replace('https://', '');
+            return JSON.stringify({
+              Version: '2012-10-17',
+              Statement: [
+                {
+                  Effect: 'Allow',
+                  Principal: {
+                    Federated: arn,
+                  },
+                  Action: 'sts:AssumeRoleWithWebIdentity',
+                  Condition: {
+                    StringEquals: {
+                      [`${oidcUrl}:sub`]:
+                        'system:serviceaccount:kube-system:aws-load-balancer-controller',
+                      [`${oidcUrl}:aud`]: 'sts.amazonaws.com',
+                    },
                   },
                 },
-              },
-            ],
+              ],
+            });
           });
         }),
         tags: {
