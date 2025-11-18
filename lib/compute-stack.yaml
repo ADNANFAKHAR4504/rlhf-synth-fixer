@@ -321,22 +321,18 @@ Resources:
 
   ALBTargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: ALBInvokeLambdaPermission
     Properties:
       Name: !Sub 'payment-tg-${EnvironmentSuffix}'
       TargetType: lambda
       HealthCheckEnabled: false  # Lambda targets don't support health checks
+      Targets:
+        - Id: !GetAtt PaymentGatewayFunction.Arn
       Tags:
         - Key: Name
           Value: !Sub 'payment-tg-${EnvironmentSuffix}'
         - Key: Environment
           Value: !Ref EnvironmentSuffix
-
-  # Target Group Attachment for Lambda
-  ALBTargetGroupAttachment:
-    Type: AWS::ElasticLoadBalancingV2::TargetGroupAttachment
-    Properties:
-      TargetGroupArn: !Ref ALBTargetGroup
-      TargetId: !GetAtt PaymentGatewayFunction.Arn
 
   # Permission for ALB to invoke Lambda
   ALBInvokeLambdaPermission:

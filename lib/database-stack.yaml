@@ -312,29 +312,6 @@ Resources:
         BlockPublicPolicy: true
         IgnorePublicAcls: true
         RestrictPublicBuckets: true
-      ReplicationConfiguration:
-        Role: !If [IsPrimaryRegion, !GetAtt ReplicationRole.Arn, !Ref 'AWS::NoValue']
-        Rules:
-          - Id: ReplicateTransactionLogs
-            Status: !If [IsPrimaryRegion, Enabled, Disabled]
-            Priority: 1
-            DeleteMarkerReplication:
-              Status: Enabled
-            Filter: {}
-            Destination:
-              Bucket: !If
-                - IsPrimaryRegion
-                - !Sub 'arn:aws:s3:::payment-transaction-logs-ap-southeast-2-${EnvironmentSuffix}'
-                - !Ref 'AWS::NoValue'
-              ReplicationTime:
-                Status: Enabled
-                Time:
-                  Minutes: 15
-              Metrics:
-                Status: Enabled
-                EventThreshold:
-                  Minutes: 15
-              StorageClass: STANDARD_IA
       LifecycleConfiguration:
         Rules:
           - Id: TransitionToIA
@@ -350,6 +327,7 @@ Resources:
         - Key: Environment
           Value: !Ref EnvironmentSuffix
 
+  # S3 Replication Role for cross-region replication
   ReplicationRole:
     Type: AWS::IAM::Role
     Condition: IsPrimaryRegion
@@ -370,12 +348,12 @@ Resources:
                 Action:
                   - 's3:GetReplicationConfiguration'
                   - 's3:ListBucket'
-                Resource: !GetAtt TransactionLogBucket.Arn
+                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-${AWS::Region}-${EnvironmentSuffix}'
               - Effect: Allow
                 Action:
                   - 's3:GetObjectVersionForReplication'
                   - 's3:GetObjectVersionAcl'
-                Resource: !Sub '${TransactionLogBucket.Arn}/*'
+                Resource: !Sub 'arn:aws:s3:::payment-transaction-logs-${AWS::Region}-${EnvironmentSuffix}/*'
               - Effect: Allow
                 Action:
                   - 's3:ReplicateObject'

@@ -169,11 +169,7 @@ Resources:
           Prefix: cf-logs/
           IncludeCookies: false
 
-        # Web Application Firewall
-        WebACLId: !If
-          - HasWebACL
-          - !Ref WebACL
-          - !Ref AWS::NoValue
+        # Web Application Firewall (placeholder for future integration)
 
       Tags:
         - Key: Name
@@ -206,8 +202,7 @@ Resources:
         DNSName: !GetAtt CloudFrontDistribution.DomainName
         EvaluateTargetHealth: false
 
-Conditions:
-  HasWebACL: !Not [!Equals ['', '']]  # Placeholder for future WAF integration
+# Note: HasWebACL condition removed - placeholder for future WAF integration
 
 Outputs:
   CloudFrontDistributionId:
