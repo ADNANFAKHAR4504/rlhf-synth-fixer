@@ -1,0 +1,3 @@
+name: market-analytics-pipeline
+runtime: nodejs
+description: Serverless data processing pipeline for financial analytics
