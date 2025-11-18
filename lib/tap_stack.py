@@ -157,15 +157,18 @@ class TapStack(TerraformStack):
             tags=self.common_tags
         )
 
+        # Create notification template with proper escaping for Terraform
+        notification_template_data = {
+            "subject": "Potential Fraud Alert",
+            "message": "We detected unusual activity on your account. Transaction ID: {transaction_id}. Amount: $${amount}. If this wasn't you, please contact us immediately."
+        }
+        
         self.notification_template = SsmParameter(
             self,
             f"notification-template-{self.resource_suffix}",
             name=f"/fraud-detection/{self.environment_suffix}/notification-template",
             type="SecureString",
-            value=json.dumps({
-                "subject": "Potential Fraud Alert",
-                "message": "We detected unusual activity on your account. Transaction ID: {transaction_id}. Amount: ${amount}. If this wasn't you, please contact us immediately."
-            }),
+            value=json.dumps(notification_template_data),
             description="Email notification template for fraud alerts",
             key_id=self.kms_key.key_id,
             tags=self.common_tags
