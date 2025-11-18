@@ -607,6 +607,50 @@ mv tests/unit/test_tap_stack.py tests/unit/test_tap_stack.legacy.bak
 
 **Result**: Unit tests now pass successfully with 38 tests passing and 94% coverage, exceeding the required 90% threshold.
 
+### Issue 19: DynamoDB Tables Already Exist During Deployment
+
+**Problem**: Deployment failed with ResourceInUseException because DynamoDB tables already existed from a previous deployment.
+
+**Error**:
+```
+ResourceInUseException: Table already exists: fraud_scores-pr6741
+ResourceInUseException: Table already exists: transactions-pr6741
+```
+
+**Solution**: Created a cleanup script to remove existing resources before deployment:
+
+```bash
+#!/bin/bash
+# scripts/cleanup-resources.sh
+aws dynamodb delete-table --table-name "transactions-$ENVIRONMENT_SUFFIX" --region "$AWS_REGION" 2>/dev/null
+aws dynamodb delete-table --table-name "fraud_scores-$ENVIRONMENT_SUFFIX" --region "$AWS_REGION" 2>/dev/null
+```
+
+**Result**: Provides a clean way to remove existing resources before redeployment.
+
+### Issue 20: S3 Backend Key Unit Test Failure
+
+**Problem**: Unit test `test_s3_backend_configuration` was failing because it wasn't providing the `TERRAFORM_STATE_BUCKET_KEY` environment variable.
+
+**Failed Test**:
+```
+FAILED tests/unit/test_tap_stack_unit_test.py::TestTapStackUnitTest::test_s3_backend_configuration
+AssertionError: assert '6741/test-stack.tfstate' == 'test/test-stack.tfstate'
+```
+
+**Root Cause**: The test was only setting `TERRAFORM_STATE_BUCKET` but not `TERRAFORM_STATE_BUCKET_KEY`, which defaults to 'test' in the implementation.
+
+**Solution**: Updated the test to properly set both environment variables:
+
+```python
+with patch.dict(os.environ, {
+    'TERRAFORM_STATE_BUCKET': 'test-bucket',
+    'TERRAFORM_STATE_BUCKET_KEY': 'test'
+}):
+```
+
+**Result**: Unit test now passes correctly, all 38 tests passing with 94% coverage.
+
 ## Conclusion
 
 MODEL_RESPONSE demonstrated understanding of CDKTF Python and AWS services but made critical architecture mistakes (missing ingestion Lambda), IAM configuration errors (role duplication, missing X-Ray), and Node.js 18+ runtime incompatibility (AWS SDK v2). IDEAL_RESPONSE corrected all issues and added comprehensive documentation, creating a production-ready serverless fraud detection system with proper monitoring, error handling, and multi-environment support.

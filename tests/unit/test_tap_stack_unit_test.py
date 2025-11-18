@@ -456,7 +456,10 @@ class TestTapStackUnitTest:
 
     def test_s3_backend_configuration(self):
         """Test that S3 backend is configured when environment variable is set"""
-        with patch.dict(os.environ, {'TERRAFORM_STATE_BUCKET': 'test-bucket'}):
+        with patch.dict(os.environ, {
+            'TERRAFORM_STATE_BUCKET': 'test-bucket',
+            'TERRAFORM_STATE_BUCKET_KEY': 'test'
+        }):
             with patch('builtins.open', mock_open(read_data=b'fake zip content')):
                 app = Testing.app()
                 stack = TapStack(
