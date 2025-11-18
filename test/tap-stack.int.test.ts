@@ -8,9 +8,11 @@ import {
   EC2Client,
 } from '@aws-sdk/client-ec2';
 import {
+  DescribeAddonCommand,
   DescribeClusterCommand,
   DescribeNodegroupCommand,
   EKSClient,
+  ListAddonsCommand,
   ListNodegroupsCommand,
 } from '@aws-sdk/client-eks';
 import {
@@ -168,7 +170,7 @@ describe('EKS Cluster Integration Tests', () => {
       expect(oidcId).toBeDefined();
     });
 
-    it('should have private subnet configuration', async () => {
+    it('should have both public and private subnet configuration', async () => {
       const command = new DescribeClusterCommand({
         name: clusterName,
       });
@@ -177,8 +179,10 @@ describe('EKS Cluster Integration Tests', () => {
       const resourcesVpcConfig = response.cluster?.resourcesVpcConfig;
 
       expect(resourcesVpcConfig?.subnetIds).toBeDefined();
-      expect(resourcesVpcConfig?.subnetIds?.length).toBeGreaterThanOrEqual(3);
+      // Should have at least 6 subnets (3 public + 3 private) for HA
+      expect(resourcesVpcConfig?.subnetIds?.length).toBeGreaterThanOrEqual(6);
       expect(resourcesVpcConfig?.endpointPrivateAccess).toBe(true);
+      expect(resourcesVpcConfig?.endpointPublicAccess).toBe(true);
     });
   });
 
@@ -292,6 +296,71 @@ describe('EKS Cluster Integration Tests', () => {
     });
   });
 
+  describe('EKS Addons', () => {
+    it('should have CoreDNS addon installed', async () => {
+      const command = new DescribeAddonCommand({
+        clusterName,
+        addonName: 'coredns',
+      });
+
+      const response = await eksClient.send(command);
+      expect(response.addon).toBeDefined();
+      expect(response.addon?.addonName).toBe('coredns');
+      expect(response.addon?.status).toMatch(/ACTIVE|CREATING|UPDATING/);
+    });
+
+    it('should have kube-proxy addon installed', async () => {
+      const command = new DescribeAddonCommand({
+        clusterName,
+        addonName: 'kube-proxy',
+      });
+
+      const response = await eksClient.send(command);
+      expect(response.addon).toBeDefined();
+      expect(response.addon?.addonName).toBe('kube-proxy');
+      expect(response.addon?.status).toMatch(/ACTIVE|CREATING|UPDATING/);
+    });
+
+    it('should have VPC CNI addon installed', async () => {
+      const command = new DescribeAddonCommand({
+        clusterName,
+        addonName: 'vpc-cni',
+      });
+
+      const response = await eksClient.send(command);
+      expect(response.addon).toBeDefined();
+      expect(response.addon?.addonName).toBe('vpc-cni');
+      expect(response.addon?.status).toMatch(/ACTIVE|CREATING|UPDATING/);
+    });
+
+    it('should have EBS CSI driver addon installed', async () => {
+      const command = new DescribeAddonCommand({
+        clusterName,
+        addonName: 'aws-ebs-csi-driver',
+      });
+
+      const response = await eksClient.send(command);
+      expect(response.addon).toBeDefined();
+      expect(response.addon?.addonName).toBe('aws-ebs-csi-driver');
+      expect(response.addon?.status).toMatch(/ACTIVE|CREATING|UPDATING/);
+    });
+
+    it('should list all expected addons', async () => {
+      const command = new ListAddonsCommand({
+        clusterName,
+      });
+
+      const response = await eksClient.send(command);
+      expect(response.addons).toBeDefined();
+
+      const addons = response.addons || [];
+      expect(addons).toContain('coredns');
+      expect(addons).toContain('kube-proxy');
+      expect(addons).toContain('vpc-cni');
+      expect(addons).toContain('aws-ebs-csi-driver');
+    });
+  });
+
   describe('CloudWatch Logs', () => {
     it('should have CloudWatch log group for cluster', async () => {
       const command = new DescribeLogGroupsCommand({
@@ -308,16 +377,18 @@ describe('EKS Cluster Integration Tests', () => {
       expect(clusterLogGroup).toBeDefined();
     });
 
-    it('should have log retention configured', async () => {
+    it('should have log retention configured to 90 days for compliance', async () => {
       const command = new DescribeLogGroupsCommand({
         logGroupNamePrefix: `/aws/eks/${clusterName}`,
       });
 
       const response = await logsClient.send(command);
-      const clusterLogGroup = response.logGroups?.[0];
+      const clusterLogGroup = response.logGroups?.find((lg) =>
+        lg.logGroupName?.includes(clusterName)
+      );
 
       expect(clusterLogGroup?.retentionInDays).toBeDefined();
-      expect(clusterLogGroup?.retentionInDays).toBe(7);
+      expect(clusterLogGroup?.retentionInDays).toBe(90);
     });
   });
 

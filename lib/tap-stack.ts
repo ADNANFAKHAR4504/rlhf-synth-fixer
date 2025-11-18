@@ -1,7 +1,7 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as k8s from '@pulumi/kubernetes';
+import * as pulumi from '@pulumi/pulumi';
 
 export interface TapStackArgs {
   environmentSuffix: string;
@@ -35,7 +35,7 @@ export class TapStack extends pulumi.ComponentResource {
       `eks-vpc-${environmentSuffix}`,
       {
         numberOfAvailabilityZones: 3,
-        natGateways: { strategy: 'Single' }, // Cost optimization with single NAT
+        natGateways: { strategy: 'OnePerAz' }, // HA with one NAT per AZ
         subnetSpecs: [
           {
             type: awsx.ec2.SubnetType.Public,
@@ -102,7 +102,7 @@ export class TapStack extends pulumi.ComponentResource {
       `eks-cluster-logs-${environmentSuffix}`,
       {
         name: `/aws/eks/eks-cluster-${environmentSuffix}/cluster`,
-        retentionInDays: 7,
+        retentionInDays: 90,
         tags: {
           ...resourceTags,
           Name: `eks-cluster-logs-${environmentSuffix}`,
@@ -119,7 +119,9 @@ export class TapStack extends pulumi.ComponentResource {
         version: '1.28',
         roleArn: clusterRole.arn,
         vpcConfig: {
-          subnetIds: vpc.privateSubnetIds.apply(ids => ids),
+          subnetIds: pulumi
+            .all([vpc.privateSubnetIds, vpc.publicSubnetIds])
+            .apply(([privateIds, publicIds]) => [...privateIds, ...publicIds]),
           endpointPrivateAccess: true,
           endpointPublicAccess: true,
         },
@@ -325,7 +327,7 @@ export class TapStack extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    void new aws.eks.Addon(
+    new aws.eks.Addon(
       `ebs-csi-addon-${environmentSuffix}`,
       {
         clusterName: cluster.name,
@@ -337,6 +339,54 @@ export class TapStack extends pulumi.ComponentResource {
         tags: {
           ...resourceTags,
           Name: `ebs-csi-addon-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Install CoreDNS addon (EKS managed)
+    new aws.eks.Addon(
+      `coredns-addon-${environmentSuffix}`,
+      {
+        clusterName: cluster.name,
+        addonName: 'coredns',
+        resolveConflictsOnCreate: 'OVERWRITE',
+        resolveConflictsOnUpdate: 'PRESERVE',
+        tags: {
+          ...resourceTags,
+          Name: `coredns-addon-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Install kube-proxy addon (EKS managed)
+    new aws.eks.Addon(
+      `kube-proxy-addon-${environmentSuffix}`,
+      {
+        clusterName: cluster.name,
+        addonName: 'kube-proxy',
+        resolveConflictsOnCreate: 'OVERWRITE',
+        resolveConflictsOnUpdate: 'PRESERVE',
+        tags: {
+          ...resourceTags,
+          Name: `kube-proxy-addon-${environmentSuffix}`,
+        },
+      },
+      { parent: this }
+    );
+
+    // Install VPC CNI addon (EKS managed)
+    new aws.eks.Addon(
+      `vpc-cni-addon-${environmentSuffix}`,
+      {
+        clusterName: cluster.name,
+        addonName: 'vpc-cni',
+        resolveConflictsOnCreate: 'OVERWRITE',
+        resolveConflictsOnUpdate: 'PRESERVE',
+        tags: {
+          ...resourceTags,
+          Name: `vpc-cni-addon-${environmentSuffix}`,
         },
       },
       { parent: this }
@@ -526,7 +576,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Deploy AWS Load Balancer Controller using Helm
-    void new k8s.helm.v3.Chart(
+    new k8s.helm.v3.Chart(
       `aws-lb-controller-${environmentSuffix}`,
       {
         chart: 'aws-load-balancer-controller',
@@ -612,7 +662,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Deploy Cluster Autoscaler
-    void new k8s.apps.v1.Deployment(
+    new k8s.apps.v1.Deployment(
       `cluster-autoscaler-${environmentSuffix}`,
       {
         metadata: {
@@ -640,8 +690,7 @@ export class TapStack extends pulumi.ComponentResource {
               containers: [
                 {
                   name: 'cluster-autoscaler',
-                  image:
-                    'registry.k8s.io/autoscaling/cluster-autoscaler:v1.28.2',
+                  image: pulumi.interpolate`registry.k8s.io/autoscaling/cluster-autoscaler:v${cluster.version}.2`,
                   command: [
                     './cluster-autoscaler',
                     '--v=4',
@@ -664,7 +713,7 @@ export class TapStack extends pulumi.ComponentResource {
                   volumeMounts: [
                     {
                       name: 'ssl-certs',
-                      mountPath: '/etc/ssl/certs/ca-certificates.crt',
+                      mountPath: '/etc/ssl/certs',
                       readOnly: true,
                     },
                   ],
@@ -674,7 +723,8 @@ export class TapStack extends pulumi.ComponentResource {
                 {
                   name: 'ssl-certs',
                   hostPath: {
-                    path: '/etc/ssl/certs/ca-bundle.crt',
+                    path: '/etc/ssl/certs',
+                    type: 'Directory',
                   },
                 },
               ],
@@ -685,7 +735,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: k8sProvider, parent: this }
     );
 
-    void new k8s.core.v1.ServiceAccount(
+    new k8s.core.v1.ServiceAccount(
       `cluster-autoscaler-sa-${environmentSuffix}`,
       {
         metadata: {
@@ -700,7 +750,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create ClusterRole for Cluster Autoscaler
-    void new k8s.rbac.v1.ClusterRole(
+    new k8s.rbac.v1.ClusterRole(
       `cluster-autoscaler-role-${environmentSuffix}`,
       {
         metadata: {
@@ -791,7 +841,7 @@ export class TapStack extends pulumi.ComponentResource {
       { provider: k8sProvider, parent: this }
     );
 
-    void new k8s.rbac.v1.ClusterRoleBinding(
+    new k8s.rbac.v1.ClusterRoleBinding(
       `cluster-autoscaler-binding-${environmentSuffix}`,
       {
         metadata: {
@@ -846,7 +896,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Deploy CloudWatch agent using Helm
-    void new k8s.helm.v3.Chart(
+    new k8s.helm.v3.Chart(
       `cloudwatch-agent-${environmentSuffix}`,
       {
         chart: 'aws-cloudwatch-metrics',
@@ -890,7 +940,7 @@ export class TapStack extends pulumi.ComponentResource {
     );
 
     // Create Network Policy for namespace isolation
-    void new k8s.networking.v1.NetworkPolicy(
+    new k8s.networking.v1.NetworkPolicy(
       `deny-all-${environmentSuffix}`,
       {
         metadata: {

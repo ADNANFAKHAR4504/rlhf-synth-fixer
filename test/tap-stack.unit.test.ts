@@ -1,5 +1,4 @@
 import * as pulumi from '@pulumi/pulumi';
-import * as aws from '@pulumi/aws';
 import { TapStack } from '../lib/tap-stack';
 
 pulumi.runtime.setMocks({
@@ -29,7 +28,11 @@ pulumi.runtime.setMocks({
         ];
         mockOutputs.vpcConfig = {
           clusterSecurityGroupId: 'sg-mock-cluster',
-          subnetIds: ['subnet-1', 'subnet-2', 'subnet-3'],
+          // Cluster uses both public and private subnets (6 total for HA)
+          subnetIds: [
+            'subnet-private-1', 'subnet-private-2', 'subnet-private-3',
+            'subnet-public-1', 'subnet-public-2', 'subnet-public-3'
+          ],
         };
         break;
       case 'awsx:ec2:Vpc':
@@ -42,6 +45,13 @@ pulumi.runtime.setMocks({
         break;
       case 'aws:eks/nodeGroup:NodeGroup':
         mockOutputs.arn = `arn:aws:eks:us-east-1:123456789012:nodegroup/${args.name}`;
+        break;
+      case 'aws:eks/addon:Addon':
+        mockOutputs.addonName = args.inputs.addonName;
+        mockOutputs.status = 'ACTIVE';
+        break;
+      case 'aws:cloudwatch/logGroup:LogGroup':
+        mockOutputs.retentionInDays = args.inputs.retentionInDays || 90;
         break;
     }
 
