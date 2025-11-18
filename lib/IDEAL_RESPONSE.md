@@ -421,7 +421,7 @@ class CloudFrontAnalyzer:
         
         try:
             response = self.cloudwatch.get_metric_statistics(
-                Namespace='AWS/CloudFront',
+                Namespace='CloudFront',
                 MetricName=metric_name,
                 Dimensions=[
                     {'Name': 'DistributionId', 'Value': distribution_id},

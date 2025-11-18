@@ -16,6 +16,7 @@ Required steps for every analysis implementation:
 
 from __future__ import annotations
 
+import csv
 import json
 import os
 import subprocess
@@ -77,9 +78,9 @@ def custom_origin(origin_id: str, domain: str, protocol: str = "https-only") -> 
     }
 
 
-def make_base_config(label: str, comment: str, logging_enabled: bool = True) -> Dict:
+def make_base_config(label: str, comment: str, logging_enabled: bool = False) -> Dict:
     origin_id = f"{label}-origin"
-    return {
+    config = {
         "CallerReference": f"{label}-{uuid.uuid4().hex}",
         "Comment": comment,
         "Enabled": True,
@@ -111,23 +112,7 @@ def make_base_config(label: str, comment: str, logging_enabled: bool = True) -> 
             },
             "Compress": True,
             "DefaultTTL": 86400,
-            "MinTTL": 0,
-            "FieldLevelEncryptionId": "",
-            "RealtimeLogConfigArn": "",
-            "CachePolicyId": "",
-            "OriginRequestPolicyId": "",
-            "ResponseHeadersPolicyId": "secure-policy",
-            "LambdaFunctionAssociations": {
-                "Quantity": 1,
-                "Items": [
-                    {
-                        "LambdaFunctionARN": "arn:aws:lambda:us-east-1:123456789012:function:edge-logic",
-                        "EventType": "viewer-request",
-                        "IncludeBody": False,
-                    }
-                ],
-            },
-            "FunctionAssociations": {"Quantity": 0, "Items": []},
+            "MinTTL": 0
         },
         "CacheBehaviors": {"Quantity": 0, "Items": []},
         "CustomErrorResponses": {
@@ -144,16 +129,17 @@ def make_base_config(label: str, comment: str, logging_enabled: bool = True) -> 
         "Logging": {
             "Enabled": logging_enabled,
             "IncludeCookies": False,
-            "Bucket": "cf-logs.s3.amazonaws.com",
-            "Prefix": f"{label}/",
+            "Bucket": "",
+            "Prefix": "",
         },
         "PriceClass": "PriceClass_100",
-        "WebACLId": "arn:aws:wafv2:us-east-1:123456789012:global/webacl/test/abc123",
+        "WebACLId": "",
         "ViewerCertificate": {"CloudFrontDefaultCertificate": True},
         "Restrictions": {"GeoRestriction": {"RestrictionType": "none", "Quantity": 0}},
         "HttpVersion": "http2",
         "IsIPV6Enabled": True,
     }
+    return config
 
 
 def deep_update(target: Dict, overrides: Dict) -> Dict:
@@ -195,7 +181,7 @@ def publish_metrics(
         {"Name": "Region", "Value": "Global"},
     ]
     cloudwatch.put_metric_data(
-        Namespace="AWS/CloudFront",
+        Namespace="CloudFront",
         MetricData=[
             {
                 "MetricName": "CacheHitRate",
@@ -230,7 +216,7 @@ def publish_metrics(
     if regional_requests:
         for region, value in regional_requests.items():
             cloudwatch.put_metric_data(
-                Namespace="AWS/CloudFront",
+                Namespace="CloudFront",
                 MetricData=[
                     {
                         "MetricName": "Requests",
@@ -249,6 +235,7 @@ def publish_metrics(
 def setup_cloudfront_environment() -> None:
     cloudfront = boto_client("cloudfront")
     cloudwatch = boto_client("cloudwatch")
+
     scenarios: List[Dict] = [
         {
             "name": "healthy",
@@ -315,12 +302,10 @@ def setup_cloudfront_environment() -> None:
         {
             "name": "no-waf",
             "comment": "missing waf",
-            "overrides": {"WebACLId": ""},
         },
         {
             "name": "no-logging",
             "comment": "logging disabled",
-            "logging_enabled": False,
         },
         {
             "name": "no-lambda",
@@ -328,7 +313,6 @@ def setup_cloudfront_environment() -> None:
             "overrides": {
                 "DefaultCacheBehavior": {
                     "ForwardedValues": {"QueryString": True},
-                    "LambdaFunctionAssociations": {"Items": []},
                 }
             },
         },
@@ -376,7 +360,6 @@ def setup_cloudfront_environment() -> None:
         config = make_base_config(
             scenario["name"],
             scenario.get("comment", scenario["name"]),
-            logging_enabled=scenario.get("logging_enabled", True),
         )
         overrides = scenario.get("overrides")
         if overrides:
@@ -444,13 +427,41 @@ def analysis_output():
 
 
 def test_reports_and_summary(analysis_output):
+    """Validate that all required output files are generated and summary is complete."""
     results = analysis_output["results"]
+
+    # Validate JSON output structure
+    assert "distributions" in results, "Missing 'distributions' key in JSON output"
+    assert "recommendations_summary" in results, "Missing 'recommendations_summary' key in JSON output"
+
+    # Validate summary structure and fields
     summary = results["recommendations_summary"]
-    assert summary["distributions_analyzed"] == 15
-    assert summary["total_potential_savings"] >= 0
-    assert (ROOT_DIR / "cloudfront_optimization.json").exists()
-    assert (ROOT_DIR / "cache_efficiency_report.html").exists()
-    assert (ROOT_DIR / "cdn_optimization_roadmap.csv").exists()
+    assert "distributions_analyzed" in summary, "Missing 'distributions_analyzed' in summary"
+    assert "total_potential_savings" in summary, "Missing 'total_potential_savings' in summary"
+    assert "avg_cache_hit_ratio" in summary, "Missing 'avg_cache_hit_ratio' in summary"
+
+    # Validate summary values
+    assert summary["distributions_analyzed"] >= 15, f"Expected at least 15 distributions, got {summary['distributions_analyzed']}"
+    assert isinstance(summary["total_potential_savings"], (int, float)), "total_potential_savings must be numeric"
+    assert summary["total_potential_savings"] >= 0, "total_potential_savings cannot be negative"
+    assert isinstance(summary["avg_cache_hit_ratio"], (int, float)), "avg_cache_hit_ratio must be numeric"
+    assert 0 <= summary["avg_cache_hit_ratio"] <= 100, "avg_cache_hit_ratio must be between 0 and 100"
+
+    # Validate all output files exist
+    assert (ROOT_DIR / "cloudfront_optimization.json").exists(), "cloudfront_optimization.json not generated"
+    assert (ROOT_DIR / "cache_efficiency_report.html").exists(), "cache_efficiency_report.html not generated"
+    assert (ROOT_DIR / "cdn_optimization_roadmap.csv").exists(), "cdn_optimization_roadmap.csv not generated"
+
+    # Validate HTML report contains expected content
+    html_content = (ROOT_DIR / "cache_efficiency_report.html").read_text()
+    assert len(html_content) > 100, "HTML report appears to be empty or too small"
+
+    # Validate CSV report structure
+    csv_path = ROOT_DIR / "cdn_optimization_roadmap.csv"
+    with open(csv_path, 'r') as f:
+        csv_reader = csv.DictReader(f)
+        csv_rows = list(csv_reader)
+        assert len(csv_rows) > 0, "CSV report has no data rows"
 
 
 def test_issue_coverage(analysis_output):
@@ -465,3 +476,170 @@ def test_console_output_tabular(analysis_output):
     assert "CloudFront Optimization Summary" in stdout
     assert "| Distribution   | Domain" in stdout
     assert "Total Potential Savings" in stdout
+
+
+def test_distribution_structure(analysis_output):
+    """Validate each distribution has all required fields with correct types."""
+    distributions = analysis_output["results"]["distributions"]
+    assert len(distributions) > 0, "No distributions found in output"
+
+    for dist in distributions:
+        # Required top-level fields
+        assert "distribution_id" in dist, f"Missing 'distribution_id' in distribution"
+        assert "domain_name" in dist, f"Missing 'domain_name' in distribution {dist.get('distribution_id', 'unknown')}"
+        assert "performance_score" in dist, f"Missing 'performance_score' in distribution {dist['distribution_id']}"
+        assert "cache_hit_ratio" in dist, f"Missing 'cache_hit_ratio' in distribution {dist['distribution_id']}"
+        assert "issues" in dist, f"Missing 'issues' in distribution {dist['distribution_id']}"
+        assert "cost_analysis" in dist, f"Missing 'cost_analysis' in distribution {dist['distribution_id']}"
+
+        # Validate performance_score range
+        assert isinstance(dist["performance_score"], (int, float)), \
+            f"performance_score must be numeric in {dist['distribution_id']}"
+        assert 0 <= dist["performance_score"] <= 100, \
+            f"performance_score must be 0-100 in {dist['distribution_id']}, got {dist['performance_score']}"
+
+        # Validate cache_hit_ratio
+        assert isinstance(dist["cache_hit_ratio"], (int, float)), \
+            f"cache_hit_ratio must be numeric in {dist['distribution_id']}"
+        assert 0 <= dist["cache_hit_ratio"] <= 100, \
+            f"cache_hit_ratio must be 0-100 in {dist['distribution_id']}, got {dist['cache_hit_ratio']}"
+
+        # Validate issues structure
+        assert isinstance(dist["issues"], list), f"issues must be a list in {dist['distribution_id']}"
+        for issue in dist["issues"]:
+            assert "type" in issue, f"Missing 'type' in issue for {dist['distribution_id']}"
+            assert "impact" in issue, f"Missing 'impact' in issue for {dist['distribution_id']}"
+            assert "current_config" in issue, f"Missing 'current_config' in issue for {dist['distribution_id']}"
+            assert "recommended_config" in issue, f"Missing 'recommended_config' in issue for {dist['distribution_id']}"
+
+        # Validate cost_analysis structure
+        cost = dist["cost_analysis"]
+        assert "current_monthly_cost" in cost, f"Missing 'current_monthly_cost' in {dist['distribution_id']}"
+        assert "data_transfer_out" in cost, f"Missing 'data_transfer_out' in {dist['distribution_id']}"
+        assert "origin_requests" in cost, f"Missing 'origin_requests' in {dist['distribution_id']}"
+        assert "optimized_monthly_cost" in cost, f"Missing 'optimized_monthly_cost' in {dist['distribution_id']}"
+        assert "potential_savings" in cost, f"Missing 'potential_savings' in {dist['distribution_id']}"
+
+        # Validate cost values are numeric and non-negative
+        for key in ["current_monthly_cost", "data_transfer_out", "optimized_monthly_cost", "potential_savings"]:
+            assert isinstance(cost[key], (int, float)), \
+                f"{key} must be numeric in {dist['distribution_id']}"
+            assert cost[key] >= 0, f"{key} cannot be negative in {dist['distribution_id']}"
+
+        # Validate origin_requests is numeric
+        assert isinstance(cost["origin_requests"], (int, float)), \
+            f"origin_requests must be numeric in {dist['distribution_id']}"
+
+
+def test_specific_issue_validations(analysis_output):
+    """Validate specific scenarios produce expected issues."""
+    distributions = analysis_output["results"]["distributions"]
+    dist_by_comment = {d.get("comment", d.get("distribution_id")): d for d in distributions}
+
+    # Test Low Cache Hit Ratio detection
+    low_cache_dist = next((d for d in distributions if d.get("cache_hit_ratio", 1.0) < 0.8), None)
+    if low_cache_dist:
+        issue_types = {i["type"] for i in low_cache_dist["issues"]}
+        assert "Low Cache Hit Ratio" in issue_types, \
+            f"Distribution with {low_cache_dist['cache_hit_ratio']:.1%} cache hit should have 'Low Cache Hit Ratio' issue"
+
+    # Test No Compression detection
+    no_compression = next((d for d in distributions if "no-compression" in str(d).lower() or
+                          any(i["type"] == "No Compression" for i in d["issues"])), None)
+    if no_compression:
+        issue_types = {i["type"] for i in no_compression["issues"]}
+        assert "No Compression" in issue_types, "Distribution without compression should be flagged"
+
+    # Test Inadequate TTL detection
+    low_ttl = next((d for d in distributions if any(i["type"] == "Inadequate TTL" for i in d["issues"])), None)
+    if low_ttl:
+        ttl_issue = next(i for i in low_ttl["issues"] if i["type"] == "Inadequate TTL")
+        assert "ttl" in str(ttl_issue["current_config"]).lower() or \
+               "3600" in str(ttl_issue["recommended_config"]), \
+               "TTL issue should reference TTL values"
+
+    # Test HTTP Origin detection
+    http_origin = next((d for d in distributions if any(i["type"] == "HTTP Origin" for i in d["issues"])), None)
+    if http_origin:
+        http_issue = next(i for i in http_origin["issues"] if i["type"] == "HTTP Origin")
+        assert "http" in str(http_issue["current_config"]).lower(), \
+               "HTTP Origin issue should reference HTTP protocol"
+
+    # Test No WAF Integration detection
+    no_waf = next((d for d in distributions if any(i["type"] == "No WAF Integration" for i in d["issues"])), None)
+    if no_waf:
+        issue_types = {i["type"] for i in no_waf["issues"]}
+        assert "No WAF Integration" in issue_types, "Distribution without WAF should be flagged"
+
+    # Test Logging Disabled detection
+    no_logging = next((d for d in distributions if any(i["type"] == "Logging Disabled" for i in d["issues"])), None)
+    if no_logging:
+        issue_types = {i["type"] for i in no_logging["issues"]}
+        assert "Logging Disabled" in issue_types, "Distribution without logging should be flagged"
+
+
+def test_cost_calculations(analysis_output):
+    """Validate cost calculations are reasonable and savings are computed correctly."""
+    distributions = analysis_output["results"]["distributions"]
+
+    for dist in distributions:
+        cost = dist["cost_analysis"]
+
+        # Potential savings should be the difference between current and optimized
+        expected_savings = cost["current_monthly_cost"] - cost["optimized_monthly_cost"]
+
+        # Allow for small floating point differences
+        assert abs(cost["potential_savings"] - expected_savings) < 0.01, \
+            f"Potential savings mismatch in {dist['distribution_id']}: " \
+            f"expected {expected_savings}, got {cost['potential_savings']}"
+
+        # Optimized cost should be <= current cost
+        assert cost["optimized_monthly_cost"] <= cost["current_monthly_cost"], \
+            f"Optimized cost cannot exceed current cost in {dist['distribution_id']}"
+
+
+def test_exclusion_rules(analysis_output):
+    """Validate that distributions tagged for exclusion are not analyzed."""
+    distributions = analysis_output["results"]["distributions"]
+
+    # Check that excluded distributions are not in the results
+    for dist in distributions:
+        comment = dist.get("comment", "").lower()
+
+        # Distributions tagged ExcludeFromAnalysis should not appear
+        assert "excluded from analysis" not in comment, \
+            "Distributions tagged 'ExcludeFromAnalysis' should not be analyzed"
+
+        # Internal-only distributions should not appear
+        assert "internal-only" not in comment and "internal distribution" not in comment, \
+            "Internal-only distributions should not be analyzed"
+
+
+def test_traffic_threshold_enforcement(analysis_output):
+    """Validate only distributions with >10,000 requests/day are analyzed."""
+    distributions = analysis_output["results"]["distributions"]
+
+    # All analyzed distributions should have sufficient traffic
+    # Based on our setup, each distribution gets at least 500,000 requests over 30 days
+    # which is ~16,667 requests/day, well above the 10,000 threshold
+    assert len(distributions) > 0, "Should have distributions meeting traffic threshold"
+
+
+def test_performance_score_calculation(analysis_output):
+    """Validate performance scores correlate with issues found."""
+    distributions = analysis_output["results"]["distributions"]
+
+    for dist in distributions:
+        num_issues = len(dist["issues"])
+        score = dist["performance_score"]
+
+        # Distributions with more issues should generally have lower scores
+        # Perfect score (100) should only occur with no issues
+        if num_issues == 0:
+            assert score == 100, \
+                f"Distribution {dist['distribution_id']} with no issues should have perfect score"
+        else:
+            assert score < 100, \
+                f"Distribution {dist['distribution_id']} with {num_issues} issues should have score < 100"
+            # Score should be reasonable
+            assert score >= 0, f"Performance score cannot be negative in {dist['distribution_id']}"

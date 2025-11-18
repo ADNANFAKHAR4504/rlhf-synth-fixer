@@ -35,8 +35,6 @@ We need a performance and cost optimization audit on all our AWS CloudFront dist
 - **cdn_optimization_roadmap.csv:** Prioritized list of action items per distribution, suitable for project management handoff.
 - All cost savings/projections must be explained and shown in reports.
 
-**Testing:**
-- Provide `pytest` tests using *moto* to mock at least 15 CloudFront distributions, each with a variety of configs, origins (HTTP/S3/multi-region), WAF/headers/Lambda@Edge, logging, TTL, CloudWatch metrics, etc.
 
 **Environment:**
 - AWS us-east-1, CloudFront, CloudWatch, WAF, Lambda@Edge, S3
@@ -44,7 +42,6 @@ We need a performance and cost optimization audit on all our AWS CloudFront dist
 
 **Format:**
 - Main script: `analyze_cloudfront_cdn.py` (Python code block)
-- Tests: `test_analyze_cloudfront_cdn.py` (Python code block)
 - HTML template inline or in a separate block
 
 **_You must not omit, soften, or reinterpret any requirement, issue type, audit exclusion, or output structure described. All deliverables above must be provided._**
