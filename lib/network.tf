@@ -1,8 +1,6 @@
 # Network security groups for the EKS deployment
 
-# Use the VPC ID from vpc.tf locals, which handles both new and existing VPCs
 locals {
-  vpc_id = local.base_vpc_id
   kubernetes_control_plane_ports = [
     {
       description = "Kubernetes API access"
