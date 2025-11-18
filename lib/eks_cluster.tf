@@ -190,6 +190,10 @@ resource "aws_eks_cluster" "main" {
 
   lifecycle {
     prevent_destroy = false
+    ignore_changes = [
+      vpc_config[0].subnet_ids,
+      vpc_config[0].security_group_ids
+    ]
   }
 
   depends_on = [
