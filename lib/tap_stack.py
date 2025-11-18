@@ -1,6 +1,9 @@
 from constructs import Construct
 from cdktf import App, TerraformStack, TerraformOutput, Fn, Token
 from cdktf_cdktf_provider_aws.provider import AwsProvider
+import hashlib
+import base64
+import zipfile
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
 from cdktf_cdktf_provider_aws.internet_gateway import InternetGateway
@@ -28,8 +31,6 @@ from cdktf_cdktf_provider_aws.s3_bucket_server_side_encryption_configuration imp
 from cdktf_cdktf_provider_aws.iam_role import IamRole
 from cdktf_cdktf_provider_aws.iam_role_policy_attachment import IamRolePolicyAttachment
 from cdktf_cdktf_provider_aws.lambda_function import LambdaFunction
-from cdktf_cdktf_provider_archive.provider import ArchiveProvider
-from cdktf_cdktf_provider_archive.data_archive_file import DataArchiveFile
 from cdktf_cdktf_provider_aws.cloudwatch_log_group import CloudwatchLogGroup
 from cdktf_cdktf_provider_aws.data_aws_iam_policy_document import DataAwsIamPolicyDocument
 from cdktf_cdktf_provider_aws.api_gateway_rest_api import ApiGatewayRestApi
@@ -90,9 +91,6 @@ class TradingPlatformStack(TerraformStack):
         AwsProvider(self, "aws",
             region=self.region
         )
-
-        # Archive Provider (for creating Lambda ZIP files)
-        ArchiveProvider(self, "archive")
 
         # Create all infrastructure components
         self.create_kms_key()
@@ -441,19 +439,15 @@ class TradingPlatformStack(TerraformStack):
             policy_arn="arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
         )
 
-        # Create ZIP file from Lambda source code automatically
-        lambda_archive = DataArchiveFile(self, f"lambda-archive-{self.environment_suffix}",
-            type="zip",
-            source_file="${path.module}/../../../lib/lambda/index.py",
-            output_path="${path.module}/../../../lib/lambda/lambda_function.zip"
-        )
+        # Create Lambda ZIP file at synthesis time
+        lambda_zip_path = self._create_lambda_zip()
+        lambda_source_hash = self._calculate_file_hash(lambda_zip_path)
 
         # Lambda Function
-        # Note: Lambda code is automatically zipped from ./lib/lambda/index.py
         self.lambda_function = LambdaFunction(self, f"lambda-function-{self.environment_suffix}",
             function_name=f"trading-processor-{self.environment_suffix}",
-            filename=lambda_archive.output_path,
-            source_code_hash=lambda_archive.output_base64_sha256,
+            filename=lambda_zip_path,
+            source_code_hash=lambda_source_hash,
             handler="index.handler",
             runtime="python3.11",
             role=self.lambda_role.arn,
@@ -477,6 +471,26 @@ class TradingPlatformStack(TerraformStack):
                 "Environment": self.environment_suffix
             }
         )
+
+    def _create_lambda_zip(self):
+        """Create Lambda deployment package at synthesis time"""
+        lambda_dir = os.path.join(os.path.dirname(__file__), "lambda")
+        source_file = os.path.join(lambda_dir, "index.py")
+        zip_file = os.path.join(lambda_dir, "lambda_function.zip")
+
+        # Create ZIP file using Python zipfile
+        with zipfile.ZipFile(zip_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+            zipf.write(source_file, "index.py")
+
+        return zip_file
+
+    def _calculate_file_hash(self, file_path):
+        """Calculate base64-encoded SHA256 hash of file"""
+        sha256_hash = hashlib.sha256()
+        with open(file_path, "rb") as f:
+            for byte_block in iter(lambda: f.read(4096), b""):
+                sha256_hash.update(byte_block)
+        return base64.b64encode(sha256_hash.digest()).decode('utf-8')
 
     def create_api_gateway(self):
         """Create API Gateway with Lambda integration"""
