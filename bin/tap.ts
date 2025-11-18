@@ -45,7 +45,7 @@ const provider = new aws.Provider('aws', {
 
 // Instantiate the main stack component for the infrastructure.
 // This encapsulates all the resources for the platform.
-new TapStack(
+const stack = new TapStack(
   'pulumi-infra',
   {
     tags: defaultTags,
@@ -53,6 +53,18 @@ new TapStack(
   { provider }
 );
 
-// To use the stack outputs, you can export them.
-// For example, if TapStack had an output `bucketName`:
-// export const bucketName = stack.bucketName;
+// Export all stack outputs so they appear in pulumi stack output and output files
+export const blueVpcId = stack.blueVpcId;
+export const greenVpcId = stack.greenVpcId;
+export const transitGatewayId = stack.transitGatewayId;
+export const blueDbEndpoint = stack.blueDbEndpoint;
+export const greenDbEndpoint = stack.greenDbEndpoint;
+export const blueAlbDns = stack.blueAlbDns;
+export const greenAlbDns = stack.greenAlbDns;
+export const transactionLogsBucketName = stack.transactionLogsBucketName;
+export const complianceDocsBucketName = stack.complianceDocsBucketName;
+export const sessionTableName = stack.sessionTableName;
+export const rateLimitTableName = stack.rateLimitTableName;
+export const dashboardUrl = stack.dashboardUrl;
+export const migrationTopicArn = stack.migrationTopicArn;
+export const apiDomainName = stack.apiDomainName;
