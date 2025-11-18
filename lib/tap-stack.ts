@@ -92,7 +92,7 @@ export default class TapStack extends pulumi.ComponentResource {
         name: `ProcessingQueue-${this.environmentSuffix}`,
         messageRetentionSeconds: 345600, // 4 days
         visibilityTimeoutSeconds: 300, // 5 minutes
-        redrivePolicy: deadLetterQueue.arn.apply((arn) =>
+        redrivePolicy: deadLetterQueue.arn.apply(arn =>
           JSON.stringify({
             deadLetterTargetArn: arn,
             maxReceiveCount: 3,
