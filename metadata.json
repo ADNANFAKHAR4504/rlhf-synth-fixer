@@ -1,0 +1,26 @@
+{
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912358",
+  "team": "synth",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "migration",
+    "multi-environment",
+    "terraform"
+  ],
+  "startedAt": "2025-11-18T08:12:58+00:00",
+  "aws_services": [
+    "ECS",
+    "S3",
+    "DynamoDB",
+    "VPC",
+    "IAM",
+    "Security Groups"
+  ],
+  "training_quality": 8
+}
