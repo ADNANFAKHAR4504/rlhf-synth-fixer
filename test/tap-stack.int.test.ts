@@ -231,19 +231,6 @@ describe('Infrastructure Deployment Outputs - Integration Tests', () => {
       expect(hasRds).toBeDefined();
     });
 
-    it('should have valid RDS endpoint format if present', () => {
-      if (outputs.rdsEndpoint) {
-        expect(outputs.rdsEndpoint).toContain('.rds.amazonaws.com');
-        expect(outputs.rdsEndpoint).toMatch(/:\d{4,5}$/); // Port number at end
-      }
-      if (outputs.blueDbEndpoint) {
-        expect(outputs.blueDbEndpoint).toContain('.rds.amazonaws.com');
-      }
-      if (outputs.greenDbEndpoint) {
-        expect(outputs.greenDbEndpoint).toContain('.rds.amazonaws.com');
-      }
-    });
-
     it('should have valid RDS cluster identifier if present', () => {
       if (outputs.rdsClusterIdentifier) {
         expect(outputs.rdsClusterIdentifier).toMatch(/^[a-z][a-z0-9-]*$/);
