@@ -27,7 +27,7 @@ export function createConfigAggregator(
           },
         ],
       }),
-      managedPolicyArns: ['arn:aws:iam::aws:policy/service-role/ConfigRole'],
+      managedPolicyArns: [],
       tags: {
         Name: `config-aggregator-role-${config.environmentSuffix}`,
         Environment: config.environmentSuffix,
@@ -36,7 +36,7 @@ export function createConfigAggregator(
     }
   );
 
-  // Additional policy for cross-account access
+  // Additional policy for Config aggregator
   const aggregatorPolicy = new aws.iam.RolePolicy(
     `config-aggregator-policy-${config.environmentSuffix}`,
     {
@@ -47,14 +47,17 @@ export function createConfigAggregator(
           {
             Effect: 'Allow',
             Action: [
-              'config:DescribeConfigurationAggregators',
-              'config:DescribeConfigurationAggregatorSourcesStatus',
-            ],
-            Resource: '*',
-          },
-          {
-            Effect: 'Allow',
-            Action: [
+              'config:*',
+              's3:GetBucketVersioning',
+              's3:GetBucketLocation',
+              's3:GetBucketNotification',
+              's3:ListAllMyBuckets',
+              's3:GetBucketAcl',
+              'ec2:Describe*',
+              'iam:GetRole',
+              'iam:GetRolePolicy',
+              'iam:ListRolePolicies',
+              'iam:ListAttachedRolePolicies',
               'organizations:ListAccounts',
               'organizations:DescribeOrganization',
             ],

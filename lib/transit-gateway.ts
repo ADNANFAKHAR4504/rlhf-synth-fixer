@@ -89,7 +89,7 @@ export function createTransitGateway(
     return new aws.ram.PrincipalAssociation(
       `migration-tgw-principal-${accountId}-${config.environmentSuffix}`,
       {
-        principal: `arn:aws:iam::${accountId}:root`,
+        principal: accountId, // Use account ID directly, not ARN format
         resourceShareArn: ramShare.arn,
       }
       // NOTE: dependsOn disabled since ramAssociation is a placeholder
