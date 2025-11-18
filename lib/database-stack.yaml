@@ -419,7 +419,7 @@ Outputs:
 
   SessionTableName:
     Description: DynamoDB Session Table Name
-    Value: !Ref SessionTable
+    Value: !If [IsPrimaryRegion, !Ref SessionTable, '']
 
   TransactionLogBucketName:
     Description: S3 Bucket for Transaction Logs

@@ -436,11 +436,10 @@ Resources:
       PayloadFormatVersion: '2.0'
       RequestTemplates:
         application/json: '{"statusCode": 200}'
-      TemplateSelectionExpression: '200'
-      IntegrationResponseOverrides:
-        200:
-          ResponseTemplates:
-            application/json: '{"status": "healthy", "timestamp": "$context.requestTime"}'
+      ResponseParameters:
+        '200':
+          ResponseParameters:
+            method.response.header.Content-Type: "'application/json'"
 
   PaymentAPIStage:
     Type: AWS::ApiGatewayV2::Stage

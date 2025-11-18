@@ -71,7 +71,6 @@ Resources:
 
   ComputeStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: DatabaseStack
     Properties:
       TemplateURL: !Sub 'https://s3.${AWS::Region}.amazonaws.com/cfn-templates-${EnvironmentSuffix}/compute-stack.yaml'
       Parameters:
