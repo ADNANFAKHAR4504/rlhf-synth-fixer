@@ -1,0 +1,30 @@
+{
+  "task_id": "101912493",
+  "platform": "tf",
+  "language": "hcl",
+  "complexity": "expert",
+  "turn_type": "single",
+  "po_id": "101912493",
+  "team": "synth",
+  "category": "Infrastructure as Code",
+  "subject_labels": [
+    "aws",
+    "infrastructure",
+    "ci/cd-pipeline-integration"
+  ],
+  "aws_services": [
+    "CodePipeline",
+    "CodeBuild",
+    "CodeStarConnections",
+    "S3",
+    "IAM",
+    "SNS",
+    "CloudWatch",
+    "EventBridge"
+  ],
+  "region": "us-east-1",
+  "description": "Create a Terraform configuration to deploy an AWS CodePipeline that automates Terraform infrastructure deployments. CRITICAL: Uses GitHub via CodeStar Connections (CodeCommit deprecated).",
+  "startedAt": "2025-11-18T08:27:00Z",
+  "subtask": "CI/CD Pipeline Integration",
+  "training_quality": 9
+}
