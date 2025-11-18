@@ -1,3 +1,7 @@
-name: market-analytics-pipeline
-runtime: nodejs
-description: Serverless data processing pipeline for financial analytics
+name: TapStack
+runtime:
+  name: nodejs
+description: Pulumi infrastructure for TAP
+main: bin/tap.ts
+ 
+ 
