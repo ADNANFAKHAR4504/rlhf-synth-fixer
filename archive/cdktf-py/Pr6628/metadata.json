@@ -1,0 +1,35 @@
+{
+  "platform": "cdktf",
+  "language": "py",
+  "complexity": "expert",
+  "team": "synth",
+  "turn_type": "single",
+  "startedAt": "2025-11-17T05:39:59+05:30",
+  "subtask": "Provisioning of Infrastructure Environments",
+  "subject_labels": [
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
+  ],
+  "po_id": "z0x1o2",
+  "aws_services": [
+    "vpc",
+    "subnet",
+    "vpc-peering",
+    "route-table",
+    "security-group",
+    "nat-gateway",
+    "vpc-flow-logs",
+    "s3",
+    "route53",
+    "network-acl",
+    "internet-gateway"
+  ],
+  "training_quality": 10,
+  "coverage": {
+    "lines": 100,
+    "branches": 100
+  },
+  "author": "mayanksethi-turing",
+  "dockerS3Location": ""
+}
