@@ -3,11 +3,13 @@
   "language": "ts",
   "complexity": "expert",
   "turn_type": "single",
-  "team": "synth",
+  "team": "synth-2",
   "startedAt": "2025-11-18T00:00:00Z",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Environment Migration"
+    "Environment Migration",
+    "Cloud Environment Setup",
+    "Multi-Environment Consistency and Replication"
   ],
   "po_id": "n94s7k",
   "aws_services": [

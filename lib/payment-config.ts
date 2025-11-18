@@ -42,6 +42,13 @@ export const ENV_CONFIGS: Record<string, EnvironmentConfig> = {
     s3LifecycleDays: 90,
     environment: 'prod',
   },
+  pr6742: {
+    vpcCidr: '10.3.0.0/16',
+    dbInstanceType: 'db.t3.medium',
+    messageRetentionDays: 1,
+    s3LifecycleDays: 7,
+    environment: 'pr6742',
+  },
 };
 
 /**

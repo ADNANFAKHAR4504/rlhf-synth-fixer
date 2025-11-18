@@ -131,7 +131,7 @@ export class TapStack extends cdk.Stack {
    */
   private createDatabase(
     environmentSuffix: string,
-    dbInstanceType: string
+    _dbInstanceType: string
   ): rds.DatabaseCluster {
     // Create security group for database
     const dbSecurityGroup = new ec2.SecurityGroup(
@@ -157,10 +157,19 @@ export class TapStack extends cdk.Stack {
           // Map environment to instance type (config has "db." prefix which ec2.InstanceType adds again)
           instanceType:
             environmentSuffix === 'dev'
-              ? ec2.InstanceType.of(ec2.InstanceClass.T3, ec2.InstanceSize.MEDIUM)
+              ? ec2.InstanceType.of(
+                  ec2.InstanceClass.T3,
+                  ec2.InstanceSize.MEDIUM
+                )
               : environmentSuffix === 'staging'
-                ? ec2.InstanceType.of(ec2.InstanceClass.R5, ec2.InstanceSize.LARGE)
-                : ec2.InstanceType.of(ec2.InstanceClass.R5, ec2.InstanceSize.XLARGE),
+                ? ec2.InstanceType.of(
+                    ec2.InstanceClass.R5,
+                    ec2.InstanceSize.LARGE
+                  )
+                : ec2.InstanceType.of(
+                    ec2.InstanceClass.R5,
+                    ec2.InstanceSize.XLARGE
+                  ),
           publiclyAccessible: false,
         }),
         vpc: this.vpc,
@@ -503,10 +512,10 @@ export class TapStack extends cdk.Stack {
       }
     );
 
-    // Ensure WAF association happens after API Gateway deployment
-    const apiDeployment = this.api.latestDeployment;
-    if (apiDeployment) {
-      wafAssociation.node.addDependency(apiDeployment);
+    // Ensure WAF association happens after API Gateway deployment and stage
+    const apiStage = this.api.deploymentStage;
+    if (apiStage) {
+      wafAssociation.node.addDependency(apiStage);
     }
 
     return webAcl;

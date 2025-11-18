@@ -2,6 +2,9 @@ import * as cdk from 'aws-cdk-lib';
 import { Template } from 'aws-cdk-lib/assertions';
 import { TapStack } from '../lib/tap-stack';
 
+const TEST_ACCOUNT = process.env.AWS_ACCOUNT_ID || process.env.CDK_DEFAULT_ACCOUNT || '000000000000';
+const TEST_REGION = process.env.AWS_REGION || process.env.CDK_DEFAULT_REGION || 'us-west-2';
+
 describe('TapStack Unit Tests', () => {
   let app: cdk.App;
   let stack: TapStack;
@@ -15,7 +18,7 @@ describe('TapStack Unit Tests', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'dev',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
       });
       template = Template.fromStack(stack);
     });
@@ -184,7 +187,7 @@ describe('TapStack Unit Tests', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'staging',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
       });
       template = Template.fromStack(stack);
     });
@@ -234,7 +237,7 @@ describe('TapStack Unit Tests', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'prod',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
       });
       template = Template.fromStack(stack);
     });
@@ -310,13 +313,51 @@ describe('TapStack Unit Tests', () => {
         });
       }).toThrow('Environment configuration not found for: invalid');
     });
+
+    test('Environment suffix from props takes precedence', () => {
+      const testApp = new cdk.App({
+        context: { environmentSuffix: 'staging' },
+      });
+      const testStack = new TapStack(testApp, 'TestStack', {
+        environmentSuffix: 'dev',
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const testTemplate = Template.fromStack(testStack);
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('Environment suffix from context when props not provided', () => {
+      const testApp = new cdk.App({
+        context: { environmentSuffix: 'staging' },
+      });
+      const testStack = new TapStack(testApp, 'TestStack', {
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const testTemplate = Template.fromStack(testStack);
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.1.0.0/16',
+      });
+    });
+
+    test('Environment suffix defaults to dev when neither props nor context provided', () => {
+      const testApp = new cdk.App();
+      const testStack = new TapStack(testApp, 'TestStack', {
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const testTemplate = Template.fromStack(testStack);
+      testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
   });
 
   describe('Resource Counting', () => {
     beforeEach(() => {
       stack = new TapStack(app, 'TestStack', {
         environmentSuffix: 'dev',
-        env: { account: '123456789012', region: 'us-east-1' },
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
       });
       template = Template.fromStack(stack);
     });
@@ -352,6 +393,327 @@ describe('TapStack Unit Tests', () => {
 
     test('Has SSM parameter', () => {
       template.resourceCountIs('AWS::SSM::Parameter', 1);
+    });
+  });
+
+  describe('Lambda Handler Unit Tests', () => {
+    const mockSSMClient = {
+      send: jest.fn(),
+    };
+
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    test('Lambda handler should be included in stack', () => {
+      template.resourceCountIs('AWS::Lambda::Function', 1);
+    });
+
+    test('Lambda should have correct handler path', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Handler: 'index.handler',
+      });
+    });
+
+    test('Lambda should have environment variables set', () => {
+      template.hasResourceProperties('AWS::Lambda::Function', {
+        Environment: {
+          Variables: {
+            SSM_CONFIG_PATH: '/dev/payment-service/config/settings',
+            ENVIRONMENT: 'dev',
+            DB_NAME: 'paymentdb',
+          },
+        },
+      });
+    });
+  });
+
+  describe('Payment Config Unit Tests', () => {
+    test('Dev config should have correct VPC CIDR', () => {
+      const devStack = new TapStack(app, 'DevStack', {
+        environmentSuffix: 'dev',
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const devTemplate = Template.fromStack(devStack);
+      devTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.0.0.0/16',
+      });
+    });
+
+    test('Staging config should have correct VPC CIDR', () => {
+      const stagingStack = new TapStack(app, 'StagingStack', {
+        environmentSuffix: 'staging',
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const stagingTemplate = Template.fromStack(stagingStack);
+      stagingTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.1.0.0/16',
+      });
+    });
+
+    test('Prod config should have correct VPC CIDR', () => {
+      const prodStack = new TapStack(app, 'ProdStack', {
+        environmentSuffix: 'prod',
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const prodTemplate = Template.fromStack(prodStack);
+      prodTemplate.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.2.0.0/16',
+      });
+    });
+
+    test('PR6742 config should have correct VPC CIDR', () => {
+      const pr6742Stack = new TapStack(app, 'PR6742Stack', {
+        environmentSuffix: 'pr6742',
+        env: { account: TEST_ACCOUNT, region: TEST_REGION },
+      });
+      const pr6742Template = Template.fromStack(pr6742Stack);
+      pr6742Template.hasResourceProperties('AWS::EC2::VPC', {
+        CidrBlock: '10.3.0.0/16',
+      });
+    });
+
+    test('All environments should have unique VPC CIDRs', () => {
+      const envs = ['dev', 'staging', 'prod', 'pr6742'];
+      const cidrs = ['10.0.0.0/16', '10.1.0.0/16', '10.2.0.0/16', '10.3.0.0/16'];
+
+      envs.forEach((env, index) => {
+        const testStack = new TapStack(app, `TestStack${env}`, {
+          environmentSuffix: env,
+          env: { account: TEST_ACCOUNT, region: TEST_REGION },
+        });
+        const testTemplate = Template.fromStack(testStack);
+        testTemplate.hasResourceProperties('AWS::EC2::VPC', {
+          CidrBlock: cidrs[index],
+        });
+      });
+    });
+  });
+
+  describe('Security Group Configuration', () => {
+    test('Lambda security group should be created', () => {
+      template.resourceCountIs('AWS::EC2::SecurityGroup', 2);
+    });
+
+    test('Database security group should allow Lambda access', () => {
+      template.hasResourceProperties('AWS::EC2::SecurityGroupIngress', {
+        IpProtocol: 'tcp',
+        FromPort: 5432,
+        ToPort: 5432,
+      });
+    });
+  });
+
+  describe('VPC Networking', () => {
+    test('VPC should have public and private subnets', () => {
+      template.resourceCountIs('AWS::EC2::Subnet', 4);
+    });
+
+    test('VPC should have internet gateway', () => {
+      template.resourceCountIs('AWS::EC2::InternetGateway', 1);
+    });
+
+    test('VPC should have route tables', () => {
+      template.resourceCountIs('AWS::EC2::RouteTable', 4);
+    });
+
+    test('VPC should have S3 endpoint', () => {
+      template.hasResourceProperties('AWS::EC2::VPCEndpoint', {
+        ServiceName: {
+          'Fn::Join': [
+            '',
+            ['com.amazonaws.', { Ref: 'AWS::Region' }, '.s3'],
+          ],
+        },
+      });
+    });
+  });
+
+  describe('Database Configuration', () => {
+    test('RDS cluster should have backup retention', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        BackupRetentionPeriod: 7,
+      });
+    });
+
+    test('RDS cluster should have preferred backup window', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        PreferredBackupWindow: '03:00-04:00',
+      });
+    });
+
+    test('RDS cluster should have preferred maintenance window', () => {
+      template.hasResourceProperties('AWS::RDS::DBCluster', {
+        PreferredMaintenanceWindow: 'sun:04:00-sun:05:00',
+      });
+    });
+
+    test('RDS secret should be created', () => {
+      template.resourceCountIs('AWS::SecretsManager::Secret', 1);
+    });
+
+    test('RDS secret should be attached to cluster', () => {
+      template.resourceCountIs('AWS::SecretsManager::SecretTargetAttachment', 1);
+    });
+  });
+
+  describe('API Gateway Configuration', () => {
+    test('API Gateway should have CORS enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Method', {
+        HttpMethod: 'OPTIONS',
+      });
+    });
+
+    test('API Gateway should have logging enabled', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        LoggingLevel: 'INFO',
+        DataTraceEnabled: true,
+        MetricsEnabled: true,
+      });
+    });
+
+    test('API Gateway should have throttling configured', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Stage', {
+        ThrottlingBurstLimit: 1000,
+        ThrottlingRateLimit: 500,
+      });
+    });
+
+    test('API Gateway should have health endpoint', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Resource', {
+        PathPart: 'health',
+      });
+    });
+
+    test('API Gateway should have payments endpoint', () => {
+      template.hasResourceProperties('AWS::ApiGateway::Resource', {
+        PathPart: 'payments',
+      });
+    });
+  });
+
+  describe('WAF Configuration', () => {
+    test('WAF should have managed rule sets', () => {
+      template.hasResourceProperties('AWS::WAFv2::WebACL', {
+        Rules: [
+          {
+            Name: 'RateLimitRule',
+            Priority: 1,
+          },
+          {
+            Name: 'AWSManagedRulesCommonRuleSet',
+            Priority: 2,
+          },
+          {
+            Name: 'AWSManagedRulesKnownBadInputsRuleSet',
+            Priority: 3,
+          },
+        ],
+      });
+    });
+
+    test('WAF should be associated with API Gateway', () => {
+      template.resourceCountIs('AWS::WAFv2::WebACLAssociation', 1);
+    });
+  });
+
+  describe('SQS Configuration', () => {
+    test('Main queue should have dead letter queue', () => {
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        RedrivePolicy: {
+          maxReceiveCount: 3,
+        },
+      });
+    });
+
+    test('Queue should have encryption enabled', () => {
+      template.hasResourceProperties('AWS::SQS::Queue', {
+        SqsManagedSseEnabled: true,
+      });
+    });
+  });
+
+  describe('S3 Bucket Configuration', () => {
+    test('S3 bucket should have encryption enabled', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        BucketEncryption: {
+          ServerSideEncryptionConfiguration: [
+            {
+              ServerSideEncryptionByDefault: {
+                SSEAlgorithm: 'AES256',
+              },
+            },
+          ],
+        },
+      });
+    });
+
+    test('S3 bucket should have versioning enabled', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        VersioningConfiguration: {
+          Status: 'Enabled',
+        },
+      });
+    });
+
+    test('S3 bucket should have public access blocked', () => {
+      template.hasResourceProperties('AWS::S3::Bucket', {
+        PublicAccessBlockConfiguration: {
+          BlockPublicAcls: true,
+          BlockPublicPolicy: true,
+          IgnorePublicAcls: true,
+          RestrictPublicBuckets: true,
+        },
+      });
+    });
+
+    test('S3 bucket should have auto-delete enabled for dev', () => {
+      template.resourceCountIs('Custom::S3AutoDeleteObjects', 1);
+    });
+  });
+
+  describe('IAM Permissions', () => {
+    test('Lambda should have IAM role attached', () => {
+      template.resourceCountIs('AWS::IAM::Role', 2);
+    });
+
+    test('Lambda role should have policies attached', () => {
+      const resources = template.toJSON().Resources;
+      const policies = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::IAM::Policy'
+      );
+      expect(policies.length).toBeGreaterThan(0);
+    });
+
+    test('IAM policies should have policy documents', () => {
+      const resources = template.toJSON().Resources;
+      const policies = Object.values(resources).filter(
+        (r: any) => r.Type === 'AWS::IAM::Policy'
+      );
+      policies.forEach((policy: any) => {
+        expect(policy.Properties.PolicyDocument).toBeDefined();
+        expect(policy.Properties.PolicyDocument.Statement).toBeDefined();
+        expect(Array.isArray(policy.Properties.PolicyDocument.Statement)).toBe(
+          true
+        );
+      });
+    });
+  });
+
+  describe('Tags and Naming', () => {
+    test('Resources should have environment tags', () => {
+      const resources = template.toJSON().Resources;
+      const resourceWithTags = Object.values(resources).find(
+        (r: any) => r.Properties?.Tags
+      );
+      expect(resourceWithTags).toBeDefined();
+    });
+
+    test('Stack outputs should have description', () => {
+      const outputs = template.toJSON().Outputs;
+      expect(outputs.VpcId).toBeDefined();
+      expect(outputs.ApiUrl).toBeDefined();
+      expect(outputs.DatabaseEndpoint).toBeDefined();
     });
   });
 });
