@@ -180,7 +180,9 @@ export class TapStack extends cdk.Stack {
         defaultDatabaseName: 'paymentdb',
         backup: {
           retention: cdk.Duration.days(7), // 7 days backup retention
+          preferredWindow: '03:00-04:00',
         },
+        preferredMaintenanceWindow: 'sun:04:00-sun:05:00',
         // CRITICAL: Must be destroyable for testing
         removalPolicy: cdk.RemovalPolicy.DESTROY,
         // Credentials automatically generated and stored in Secrets Manager
@@ -202,7 +204,7 @@ export class TapStack extends cdk.Stack {
     const dlq = new sqs.Queue(this, `PaymentDLQ-${environmentSuffix}`, {
       queueName: `payment-dlq-${environmentSuffix}`,
       retentionPeriod: cdk.Duration.days(14), // Longer retention for DLQ
-      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
       // CRITICAL: Must be destroyable
       removalPolicy: cdk.RemovalPolicy.DESTROY,
     });
@@ -212,7 +214,7 @@ export class TapStack extends cdk.Stack {
       queueName: `payment-queue-${environmentSuffix}`,
       retentionPeriod: cdk.Duration.days(retentionDays),
       visibilityTimeout: cdk.Duration.seconds(300),
-      encryption: sqs.QueueEncryption.KMS_MANAGED,
+      encryption: sqs.QueueEncryption.SQS_MANAGED,
       deadLetterQueue: {
         queue: dlq,
         maxReceiveCount: 3, // Move to DLQ after 3 failed attempts
@@ -242,8 +244,8 @@ export class TapStack extends cdk.Stack {
           enabled: true,
           expiration: cdk.Duration.days(lifecycleDays),
         },
-        // Only add transition rule if lifecycle is >= 60 days (minimum 30 days for STANDARD_IA)
-        ...(lifecycleDays >= 60
+        // Only add transition rule if lifecycle is >= 30 days (minimum 30 days for STANDARD_IA)
+        ...(lifecycleDays >= 30
           ? [
               {
                 id: `transition-to-infrequent-access-${environmentSuffix}`,
