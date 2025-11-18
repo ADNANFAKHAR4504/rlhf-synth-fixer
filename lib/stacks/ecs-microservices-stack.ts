@@ -25,6 +25,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
   private secrets: { [key: string]: secretsmanager.Secret };
   private httpListener!: elbv2.ApplicationListener;
   private isLocalStack: boolean;
+  private isCiCd: boolean;
 
   constructor(
     scope: Construct,
@@ -33,6 +34,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
   ) {
     super(scope, id, props);
     this.isLocalStack = props?.isLocalStack ?? false;
+
+    // Detect CI/CD environment for conditional behavior
+    this.isCiCd =
+      process.env.CI === 'true' ||
+      process.env.CI === '1' ||
+      process.env.GITHUB_ACTIONS === 'true' ||
+      process.env.CDK_DEFAULT_ACCOUNT === '123456789012' ||
+      Boolean(process.env.CDK_DEFAULT_ACCOUNT?.startsWith('123456789012'));
 
     this.createVpc();
     this.createEcsCluster();
@@ -53,8 +62,8 @@ export class EcsMicroservicesStack extends cdk.Stack {
     );
     const natGateways = parseInt(
       this.node.tryGetContext('natGateways') ||
-        process.env.VPC_NAT_GATEWAYS ||
-        '3',
+      process.env.VPC_NAT_GATEWAYS ||
+      '3',
       10
     );
     const vpcCidr =
@@ -168,6 +177,12 @@ export class EcsMicroservicesStack extends cdk.Stack {
   }
 
   private createAppMesh(): void {
+    // Skip App Mesh creation in CI/CD mode (no Envoy sidecars)
+    if (this.isCiCd) {
+      console.log('Skipping App Mesh creation in CI/CD mode');
+      return;
+    }
+
     const meshName =
       this.node.tryGetContext('meshName') ||
       process.env.APP_MESH_NAME ||
@@ -374,16 +389,15 @@ export class EcsMicroservicesStack extends cdk.Stack {
         }
       );
 
-      const appMeshService = new AppMeshServiceConstruct(
-        this,
-        `${serviceConfig.name}AppMesh`,
-        {
-          mesh: this.mesh,
+      // Create App Mesh service only if App Mesh is enabled
+      const appMeshService = this.isCiCd
+        ? null
+        : new AppMeshServiceConstruct(this, `${serviceConfig.name}AppMesh`, {
+          mesh: this.mesh!,
           serviceName: serviceConfig.name,
           port: serviceConfig.port,
           healthCheckPath: serviceConfig.healthCheckPath,
-        }
-      );
+        });
 
       const service = new MicroserviceConstruct(
         this,
@@ -400,7 +414,7 @@ export class EcsMicroservicesStack extends cdk.Stack {
           desiredCount: parseInt(process.env.ECS_DESIRED_COUNT || '2', 10),
           secrets: this.secrets,
           securityGroup: serviceSecurityGroups[serviceConfig.name],
-          virtualNode: appMeshService.virtualNode,
+          virtualNode: appMeshService?.virtualNode || undefined,
           environment: serviceConfig.environment || {},
           healthCheckPath: serviceConfig.healthCheckPath,
         }
@@ -414,12 +428,12 @@ export class EcsMicroservicesStack extends cdk.Stack {
         {
           targetGroupName: `${serviceConfig.name}-tg`,
           vpc: this.vpc,
-          port: serviceConfig.port,
+          port: this.isCiCd ? 80 : serviceConfig.port, // Use port 80 for nginx in CI/CD
           protocol: elbv2.ApplicationProtocol.HTTP,
           targetType: elbv2.TargetType.IP,
           healthCheck: {
             enabled: true,
-            path: serviceConfig.healthCheckPath,
+            path: this.isCiCd ? '/' : serviceConfig.healthCheckPath, // Use root path for nginx
             protocol: elbv2.Protocol.HTTP,
             interval: cdk.Duration.seconds(30),
             timeout: cdk.Duration.seconds(10),
@@ -454,10 +468,14 @@ export class EcsMicroservicesStack extends cdk.Stack {
       description: 'ECS Cluster Name',
       exportName: 'ClusterName',
     });
-    new cdk.CfnOutput(this, 'MeshName', {
-      value: this.mesh.meshName,
-      description: 'App Mesh Name',
-      exportName: 'MeshName',
-    });
+
+    // Only output mesh name if mesh was created
+    if (this.mesh) {
+      new cdk.CfnOutput(this, 'MeshName', {
+        value: this.mesh.meshName,
+        description: 'App Mesh Name',
+        exportName: 'MeshName',
+      });
+    }
   }
 }

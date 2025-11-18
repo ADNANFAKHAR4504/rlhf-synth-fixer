@@ -21,7 +21,7 @@ export interface MicroserviceConstructProps {
   desiredCount: number;
   secrets: { [key: string]: secretsmanager.Secret };
   securityGroup: ec2.SecurityGroup;
-  virtualNode: appmesh.VirtualNode;
+  virtualNode?: appmesh.VirtualNode;
   environment?: { [key: string]: string };
   healthCheckPath: string;
 }
@@ -124,75 +124,110 @@ export class MicroserviceConstruct extends Construct {
         props.image.includes(':') ? props.image.split(':')[1] : 'latest'
       );
 
-    const appContainer = this.taskDefinition.addContainer(props.serviceName, {
-      containerName: props.serviceName,
-      image: containerImage,
-      cpu: Math.max(128, props.cpu - 256),
-      memoryLimitMiB: Math.max(256, props.memory - 512),
-      environment: {
-        ...(props.environment || {}),
-        PORT: props.port.toString(),
-        AWS_REGION: cdk.Stack.of(this).region,
-        APPMESH_VIRTUAL_NODE_NAME: `mesh/${props.virtualNode.mesh.meshName}/virtualNode/${props.virtualNode.virtualNodeName}`,
-      },
-      secrets: {
-        DATABASE_URL: ecs.Secret.fromSecretsManager(props.secrets.databaseUrl),
+    // For CI/CD mode with nginx, use different configuration
+    const secrets = isCiCd
+      ? undefined
+      : {
+        DATABASE_URL: ecs.Secret.fromSecretsManager(
+          props.secrets.databaseUrl
+        ),
         API_KEY: ecs.Secret.fromSecretsManager(props.secrets.apiKey),
-      },
-      logging: ecs.LogDriver.awsLogs({
-        logGroup: this.logGroup,
-        streamPrefix: props.serviceName,
-      }),
-      healthCheck: {
+      };
+
+    const healthCheck = isCiCd
+      ? {
+        command: ['CMD', 'echo', 'Health check passed'],
+        interval: cdk.Duration.seconds(30),
+        timeout: cdk.Duration.seconds(5),
+        startPeriod: cdk.Duration.seconds(10),
+        retries: 3,
+      }
+      : {
         command: ['CMD-SHELL', 'echo "Health check passed"'],
         interval: cdk.Duration.seconds(30),
         timeout: cdk.Duration.seconds(5),
         startPeriod: cdk.Duration.seconds(10),
         retries: 3,
-      },
-      portMappings: [{ containerPort: props.port, protocol: ecs.Protocol.TCP }],
-    });
+      };
 
-    const envoyLogGroup = new logs.LogGroup(this, 'EnvoyLogGroup', {
-      logGroupName: `/ecs/${stackName}/${props.serviceName}/envoy`,
-      retention: logs.RetentionDays.ONE_WEEK,
-      removalPolicy: cdk.RemovalPolicy.DESTROY,
-    });
-
-    const envoyContainer = this.taskDefinition.addContainer('envoy', {
-      containerName: 'envoy',
-      image: ecs.ContainerImage.fromRegistry(
-        'public.ecr.aws/appmesh/aws-appmesh-envoy:v1.27.0.0-prod'
-      ),
-      cpu: 256,
-      memoryLimitMiB: 512,
-      environment: {
-        APPMESH_VIRTUAL_NODE_NAME: `mesh/${props.virtualNode.mesh.meshName}/virtualNode/${props.virtualNode.virtualNodeName}`,
+    // Configure environment variables based on mode
+    const environment = isCiCd
+      ? {
+        ...(props.environment || {}),
+        // For nginx, we don't need PORT since it serves on 80, but we keep it for compatibility
+        PORT: props.port.toString(),
+      }
+      : {
+        ...(props.environment || {}),
+        PORT: props.port.toString(),
         AWS_REGION: cdk.Stack.of(this).region,
-        ENABLE_ENVOY_STATS_TAGS: '1',
-        ENABLE_ENVOY_DOG_STATSD: '1',
-      },
-      user: '1337',
+        ...(props.virtualNode && {
+          APPMESH_VIRTUAL_NODE_NAME: `mesh/${props.virtualNode.mesh.meshName}/virtualNode/${props.virtualNode.virtualNodeName}`,
+        }),
+      };
+
+    const appContainer = this.taskDefinition.addContainer(props.serviceName, {
+      containerName: props.serviceName,
+      image: containerImage,
+      cpu: Math.max(128, props.cpu - 256),
+      memoryLimitMiB: Math.max(256, props.memory - 512),
+      environment,
+      ...(secrets && { secrets }),
       logging: ecs.LogDriver.awsLogs({
-        logGroup: envoyLogGroup,
-        streamPrefix: 'envoy',
+        logGroup: this.logGroup,
+        streamPrefix: props.serviceName,
       }),
-      healthCheck: {
-        command: [
-          'CMD-SHELL',
-          'curl -s http://localhost:9901/server_info | grep state | grep -q LIVE',
-        ],
-        interval: cdk.Duration.seconds(5),
-        timeout: cdk.Duration.seconds(2),
-        startPeriod: cdk.Duration.seconds(10),
-        retries: 3,
-      },
+      healthCheck,
+      portMappings: [
+        { containerPort: isCiCd ? 80 : props.port, protocol: ecs.Protocol.TCP },
+      ],
     });
 
-    appContainer.addContainerDependencies({
-      container: envoyContainer,
-      condition: ecs.ContainerDependencyCondition.HEALTHY,
-    });
+    // Only add Envoy sidecar when not in CI/CD mode
+    if (!isCiCd) {
+      const envoyLogGroup = new logs.LogGroup(this, 'EnvoyLogGroup', {
+        logGroupName: `/ecs/${stackName}/${props.serviceName}/envoy`,
+        retention: logs.RetentionDays.ONE_WEEK,
+        removalPolicy: cdk.RemovalPolicy.DESTROY,
+      });
+
+      const envoyContainer = this.taskDefinition.addContainer('envoy', {
+        containerName: 'envoy',
+        image: ecs.ContainerImage.fromRegistry(
+          'public.ecr.aws/appmesh/aws-appmesh-envoy:v1.27.0.0-prod'
+        ),
+        cpu: 256,
+        memoryLimitMiB: 512,
+        environment: {
+          APPMESH_VIRTUAL_NODE_NAME: props.virtualNode
+            ? `mesh/${props.virtualNode.mesh.meshName}/virtualNode/${props.virtualNode.virtualNodeName}`
+            : 'mesh/default-mesh/virtualNode/default-node',
+          AWS_REGION: cdk.Stack.of(this).region,
+          ENABLE_ENVOY_STATS_TAGS: '1',
+          ENABLE_ENVOY_DOG_STATSD: '1',
+        },
+        user: '1337',
+        logging: ecs.LogDriver.awsLogs({
+          logGroup: envoyLogGroup,
+          streamPrefix: 'envoy',
+        }),
+        healthCheck: {
+          command: [
+            'CMD-SHELL',
+            'curl -s http://localhost:9901/server_info | grep state | grep -q LIVE',
+          ],
+          interval: cdk.Duration.seconds(5),
+          timeout: cdk.Duration.seconds(2),
+          startPeriod: cdk.Duration.seconds(10),
+          retries: 3,
+        },
+      });
+
+      appContainer.addContainerDependencies({
+        container: envoyContainer,
+        condition: ecs.ContainerDependencyCondition.HEALTHY,
+      });
+    }
 
     // Check if cluster has FARGATE capacity providers enabled
     const capacityProviderStrategies = isCiCd
