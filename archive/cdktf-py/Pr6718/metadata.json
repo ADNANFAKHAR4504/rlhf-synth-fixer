@@ -4,10 +4,10 @@
   "complexity": "expert",
   "turn_type": "single",
   "po_id": "3f4k2j",
-  "team": "synth-2",
+  "team": "synth",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "Provisioning of Infrastructure Environments"
+    "Web Application Deployment"
   ],
   "startedAt": "2025-11-17T00:00:00-00:00",
   "aws_services": [
