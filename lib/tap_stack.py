@@ -762,7 +762,6 @@ class TapStack(TerraformStack):
             f"transaction-validator-logs-{self.resource_suffix}",
             name=f"/aws/lambda/transaction-validator-{self.resource_suffix}",
             retention_in_days=7,
-            kms_key_id=self.kms_key.arn,
             tags=self.common_tags
         )
 
@@ -772,7 +771,6 @@ class TapStack(TerraformStack):
             f"fraud-analyzer-logs-{self.resource_suffix}",
             name=f"/aws/lambda/fraud-analyzer-{self.resource_suffix}",
             retention_in_days=7,
-            kms_key_id=self.kms_key.arn,
             tags=self.common_tags
         )
 
@@ -782,7 +780,6 @@ class TapStack(TerraformStack):
             f"notification-sender-logs-{self.resource_suffix}",
             name=f"/aws/lambda/notification-sender-{self.resource_suffix}",
             retention_in_days=7,
-            kms_key_id=self.kms_key.arn,
             tags=self.common_tags
         )
 
@@ -792,7 +789,6 @@ class TapStack(TerraformStack):
             f"step-functions-logs-{self.resource_suffix}",
             name=f"/aws/stepfunctions/fraud-detection-{self.resource_suffix}",
             retention_in_days=7,
-            kms_key_id=self.kms_key.arn,
             tags=self.common_tags
         )
 
