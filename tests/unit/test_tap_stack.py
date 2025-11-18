@@ -43,11 +43,17 @@ class TestMultiRegionDRStack(unittest.TestCase):
     def setUp(self):
         """Set up test fixtures"""
         self.app = App()
-        self.stack = MultiRegionDRStack(
+        # Create a TapStack which contains the MultiRegionDRStack
+        self.tap_stack = TapStack(
             self.app,
-            'test-dr-stack',
-            environment_suffix='test123'
+            'test-stack',
+            environment_suffix='test123',
+            state_bucket='test-bucket',
+            state_bucket_region='us-east-1',
+            aws_region='us-east-1'
         )
+        # Get reference to the DR stack
+        self.stack = self.tap_stack.dr_stack
 
     def test_stack_initialization(self):
         """Test that DR stack initializes correctly"""

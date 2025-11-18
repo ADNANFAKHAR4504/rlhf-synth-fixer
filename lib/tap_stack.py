@@ -1,6 +1,6 @@
 """TAP Stack module for CDKTF Python infrastructure."""
 
-from cdktf import TerraformStack, S3Backend
+from cdktf import TerraformStack, S3Backend, TerraformOutput
 from constructs import Construct
 from lib.stacks.multi_region_dr_stack import MultiRegionDRStack
 
@@ -42,3 +42,18 @@ class TapStack(TerraformStack):
             "multi-region-dr",
             environment_suffix=environment_suffix
         )
+
+        # Define outputs at the stack level (without prefix)
+        TerraformOutput(self, 'vpc_primary_id', value=self.dr_stack.vpc_primary.id)
+        TerraformOutput(self, 'vpc_secondary_id', value=self.dr_stack.vpc_secondary.id)
+        TerraformOutput(self, 'aurora_primary_endpoint', value=self.dr_stack.aurora_primary.endpoint)
+        TerraformOutput(self, 'aurora_secondary_endpoint', value=self.dr_stack.aurora_secondary.endpoint)
+        TerraformOutput(self, 'dynamodb_table_name', value=self.dr_stack.dynamodb_table.name)
+        TerraformOutput(self, 'api_primary_endpoint', value=self.dr_stack.api_primary.api_endpoint)
+        TerraformOutput(self, 'api_secondary_endpoint', value=self.dr_stack.api_secondary.api_endpoint)
+        TerraformOutput(self, 'hosted_zone_id', value=self.dr_stack.hosted_zone.zone_id)
+        TerraformOutput(self, 'health_check_id', value=self.dr_stack.health_check.id)
+        TerraformOutput(self, 's3_primary_bucket', value=self.dr_stack.s3_primary.bucket)
+        TerraformOutput(self, 's3_secondary_bucket', value=self.dr_stack.s3_secondary.bucket)
+        TerraformOutput(self, 'sns_primary_topic_arn', value=self.dr_stack.sns_primary.arn)
+        TerraformOutput(self, 'sns_secondary_topic_arn', value=self.dr_stack.sns_secondary.arn)

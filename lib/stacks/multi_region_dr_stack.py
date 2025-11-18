@@ -4,7 +4,7 @@ Multi-Region Disaster Recovery Stack for Payment Processing
 Fixed version addressing all issues from MODEL_FAILURES.md
 """
 from constructs import Construct
-from cdktf import TerraformStack, TerraformOutput, TerraformAsset, AssetType
+from cdktf import TerraformOutput, TerraformAsset, AssetType
 from cdktf_cdktf_provider_aws.provider import AwsProvider
 from cdktf_cdktf_provider_aws.vpc import Vpc
 from cdktf_cdktf_provider_aws.subnet import Subnet
@@ -71,7 +71,7 @@ import hashlib
 import time
 
 
-class MultiRegionDRStack(TerraformStack):
+class MultiRegionDRStack(Construct):
     def __init__(self, scope: Construct, stack_id: str, **kwargs):
         super().__init__(scope, stack_id)
 
@@ -1261,17 +1261,6 @@ def lambda_handler(event, context):
         )
 
     def create_outputs(self):
-        """Create outputs"""
-        TerraformOutput(self, 'vpc_primary_id', value=self.vpc_primary.id)
-        TerraformOutput(self, 'vpc_secondary_id', value=self.vpc_secondary.id)
-        TerraformOutput(self, 'aurora_primary_endpoint', value=self.aurora_primary.endpoint)
-        TerraformOutput(self, 'aurora_secondary_endpoint', value=self.aurora_secondary.endpoint)
-        TerraformOutput(self, 'dynamodb_table_name', value=self.dynamodb_table.name)
-        TerraformOutput(self, 'api_primary_endpoint', value=self.api_primary.api_endpoint)
-        TerraformOutput(self, 'api_secondary_endpoint', value=self.api_secondary.api_endpoint)
-        TerraformOutput(self, 'hosted_zone_id', value=self.hosted_zone.zone_id)
-        TerraformOutput(self, 'health_check_id', value=self.health_check.id)
-        TerraformOutput(self, 's3_primary_bucket', value=self.s3_primary.bucket)
-        TerraformOutput(self, 's3_secondary_bucket', value=self.s3_secondary.bucket)
-        TerraformOutput(self, 'sns_primary_topic_arn', value=self.sns_primary.arn)
-        TerraformOutput(self, 'sns_secondary_topic_arn', value=self.sns_secondary.arn)
+        """Create outputs - outputs are now defined at the TapStack level"""
+        # Outputs moved to TapStack to avoid prefix issues
+        pass
