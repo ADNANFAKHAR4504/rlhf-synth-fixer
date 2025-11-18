@@ -116,7 +116,8 @@ class DatabaseModule(Construct):
             self.primary_instances.append(instance)
 
         # FIXED: Secondary Regional Cluster with encryption and security group
-        self.secondary_cluster = RdsCluster(self, "secondary-cluster",
+        # Force recreation by changing the resource name temporarily
+        self.secondary_cluster = RdsCluster(self, "secondary-cluster-v2",
             provider=secondary_provider,
             cluster_identifier=f"payment-cluster-secondary-{environment_suffix}",
             engine="aurora-postgresql",
@@ -140,7 +141,7 @@ class DatabaseModule(Construct):
         # Secondary Cluster Instances
         self.secondary_instances = []
         for i in range(2):
-            instance = RdsClusterInstance(self, f"secondary-instance-{i}",
+            instance = RdsClusterInstance(self, f"secondary-instance-v2-{i}",
                 provider=secondary_provider,
                 identifier=f"payment-db-secondary-{i}-{environment_suffix}",
                 cluster_identifier=self.secondary_cluster.id,
