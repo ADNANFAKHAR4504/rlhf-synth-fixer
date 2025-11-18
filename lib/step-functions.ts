@@ -429,7 +429,7 @@ export function createStepFunctions(
       roleArn: iamRoles.migrationOrchestratorRole.arn,
       definition: stateMachineDefinition,
       loggingConfiguration: {
-        logDestination: logGroup.arn,
+        logDestination: pulumi.interpolate`${logGroup.arn}:*`,
         includeExecutionData: true,
         level: 'ALL',
       },
