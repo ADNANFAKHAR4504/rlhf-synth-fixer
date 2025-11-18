@@ -350,7 +350,7 @@ export function createStepFunctions(
     );
 
   // Add a resource policy to the log group to allow Step Functions to write logs
-  new aws.cloudwatch.LogResourcePolicy(
+  const logResourcePolicy = new aws.cloudwatch.LogResourcePolicy(
     `migration-orchestrator-log-policy-${config.environmentSuffix}`,
     {
       policyName: `migration-orchestrator-log-policy-${config.environmentSuffix}`,
@@ -395,7 +395,11 @@ export function createStepFunctions(
       },
     },
     {
-      dependsOn: [logGroup],
+      dependsOn: [
+        logGroup,
+        logResourcePolicy,
+        iamRoles.migrationOrchestratorPolicy,
+      ],
     }
   );
 

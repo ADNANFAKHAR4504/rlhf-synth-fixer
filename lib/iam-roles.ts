@@ -8,6 +8,7 @@ export interface IamRoles {
   stagingAccountRole: aws.iam.Role;
   developmentAccountRole: aws.iam.Role;
   migrationOrchestratorRole: aws.iam.Role;
+  migrationOrchestratorPolicy: aws.iam.RolePolicy;
 }
 
 export function createIamRoles(config: MigrationConfig): IamRoles {
@@ -53,8 +54,7 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
   );
 
   // Policy for orchestrator to assume cross-account roles
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const _orchestratorPolicy = new aws.iam.RolePolicy(
+  const migrationOrchestratorPolicy = new aws.iam.RolePolicy(
     `migration-orchestrator-policy-${config.environmentSuffix}`,
     {
       role: migrationOrchestratorRole.id,
@@ -382,6 +382,7 @@ export function createIamRoles(config: MigrationConfig): IamRoles {
     stagingAccountRole,
     developmentAccountRole,
     migrationOrchestratorRole,
+    migrationOrchestratorPolicy,
   };
 }
 
