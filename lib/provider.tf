@@ -12,10 +12,6 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = ">= 2.27"
     }
-    random = {
-      source  = "hashicorp/random"
-      version = ">= 3.1"
-    }
   }
 
   # Partial backend config: values are injected at `terraform init` time
