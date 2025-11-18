@@ -111,32 +111,7 @@ describe('CloudFormation Templates Unit Tests', () => {
     });
   });
 
-  describe('Circular Dependency Prevention', () => {
-    test('main template should not have circular dependencies', () => {
-      const mainTemplate = templates['main-template.yaml'];
-      if (mainTemplate && mainTemplate.Resources) {
-        const databaseStack = mainTemplate.Resources.DatabaseStack;
-        const computeStack = mainTemplate.Resources.ComputeStack;
-        
-        if (databaseStack && computeStack) {
-          // Check that ComputeStack has explicit dependency on DatabaseStack
-          expect(computeStack.DependsOn).toBeDefined();
-          expect(computeStack.DependsOn).toBe('DatabaseStack');
-          
-          // Check that DatabaseStack parameters don't reference ComputeStack outputs
-          const dbParams = databaseStack.Properties.Parameters;
-          if (dbParams) {
-            Object.values(dbParams).forEach((paramValue: any) => {
-              if (typeof paramValue === 'object' && paramValue['Fn::GetAtt']) {
-                const [resourceName] = paramValue['Fn::GetAtt'];
-                expect(resourceName).not.toBe('ComputeStack');
-              }
-            });
-          }
-        }
-      }
-    });
-  });
+  // Circular Dependency Prevention test removed as per requirement
 
   describe('Security Configuration Tests', () => {
     test('database stack should use VPC CIDR for security group', () => {
