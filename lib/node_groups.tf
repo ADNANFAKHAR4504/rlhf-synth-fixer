@@ -120,7 +120,8 @@ resource "aws_launch_template" "frontend" {
       volume_type           = "gp3"
       delete_on_termination = true
       encrypted             = true
-      kms_key_id            = aws_kms_key.eks.key_id
+      # Using AWS managed EBS key (default) for better reliability
+      # Custom KMS key is still used for EKS secrets encryption
     }
   }
 
@@ -173,7 +174,8 @@ resource "aws_launch_template" "backend" {
       volume_type           = "gp3"
       delete_on_termination = true
       encrypted             = true
-      kms_key_id            = aws_kms_key.eks.key_id
+      # Using AWS managed EBS key (default) for better reliability
+      # Custom KMS key is still used for EKS secrets encryption
     }
   }
 
