@@ -7,11 +7,7 @@
   "team": "synth",
   "subtask": "Provisioning of Infrastructure Environments",
   "subject_labels": [
-    "aws",
-    "infrastructure",
-    "migration",
-    "multi-environment",
-    "terraform"
+    "Cloud Environment Setup"
   ],
   "startedAt": "2025-11-18T08:12:58+00:00",
   "aws_services": [
@@ -22,5 +18,7 @@
     "IAM",
     "Security Groups"
   ],
-  "training_quality": 8
+  "training_quality": 8,
+  "author": "iamarpit-turing",
+  "reviewer": "emmanuel-turing"
 }
