@@ -3,7 +3,7 @@
   "platform": "cdk",
   "language": "ts",
   "complexity": "expert",
-  "team": "synth-2",
+  "team": "synth",
   "turn_type": "single",
   "startedAt": "2025-11-18T00:24:03+05:30",
   "po_id": "7oy3e1",
@@ -23,5 +23,6 @@
     "KMS",
     "ALB"
   ],
-  "training_quality": 9
+  "training_quality": 9,
+  "author": "rajendrasingh-turing"
 }
